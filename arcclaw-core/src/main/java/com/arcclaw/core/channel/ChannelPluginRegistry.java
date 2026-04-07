@@ -12,12 +12,14 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
+import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 
 /**
  * Startup-validated registry of all channel plugins.
  * Fails fast at boot on duplicate channel type registrations.
  */
+@Startup
 @ApplicationScoped
 public class ChannelPluginRegistry {
 

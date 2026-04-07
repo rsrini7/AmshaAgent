@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -20,7 +19,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
-import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -52,15 +51,17 @@ class ReflexRegistryTest {
     GovernanceLayer governanceLayer;
 
     @InjectMock
-    AuditHashUtil hashUtil;
+    AuditService auditService;
     
     @InjectMock
     CheckpointApprovalService checkpointApprovalService;
 
+    // ── Setup ─────────────────────────────────────────────────────────────
+    
     @BeforeEach
     void setupMocks() {
-        doReturn("mock-sha256").when(hashUtil).sha256hex(anyString());
-        doReturn("mock-hmac").when(hashUtil).hmacHex(anyString());
+        // Higher-level mock handles all audit calls (Pass 1 and Pass 2)
+        // No hashUtil mocking needed
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

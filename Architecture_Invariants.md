@@ -578,6 +578,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
 - GraalVM attempts to store these objects in the "image heap" at build time, leading to `UnsupportedFeatureException` (An object of type ... was found in the image heap).
 - Use `@ApplicationScoped` instance fields or `@PostConstruct` lazy initialization to ensure these objects are created at run-time.
+- **6.7 Module-specific Reflection Config**: New modules that introduce CDI beans, DTOs (for JSON/REST), or external libraries that use reflection MUST include a dedicated `*ReflectionConfig` class annotated with `@RegisterForReflection` in a `.config` subpackage. This centralizes reachability for GraalVM and prevents dead-code elimination of critical runtime components across module boundaries. JVM-mode success is NOT evidence that these registrations are unnecessary.
 
 
 ---
@@ -654,7 +655,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 
 7.11 MUST NOT: Re-introduce a single-tool fast-path in `ReasoningStepParser`.
      All LLM tool-call responses are processed as a list (N ≥ 1).
-     The `getFirst()` fallback was removed in Phase 70 and MUST NOT be restored
+     The `getFirst()` fallback was removed and MUST NOT be restored
      as a silent fallback — it hides multi-tool responses from the batch pipeline.
 
 7.13 MUST: OpenTelemetry span context MUST be explicitly propagated
@@ -936,7 +937,7 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ---
 
-## 16. New Module Creation (Phase 83A+)
+## 16. New Module Creation
 
 ### 16.1 Dependency Cycle Prevention
 - NEW modules MUST NOT depend on `arcclaw-app`. 
@@ -979,6 +980,36 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `quarkiverse.mcp.server.stdio.enabled: false`
   - `quarkus.shutdown.timeout: 5S`
 
+### 16.7 App Indexing contract
+- For any new module providing CDI beans consumed by the main application, the module MUST be added to the `quarkus.index-dependency` section of `arcclaw-app/src/main/resources/application.yaml`.
+- Failure to do so may trigger `jakarta.enterprise.inject.UnsatisfiedResolutionException` for core beans (e.g. `DevSecretSeeder`) during the application's build validation phase, as the container boundary for bean discovery becomes inconsistent.
+
+### 16.8 Assertion and Assumption Standards
+- New modules MUST use `org.junit.jupiter.api.Assertions` and `org.junit.jupiter.api.Assumptions` for all tests.
+- **AssertJ is NOT used** in this project. Do not import or use `assertThat`.
+- This ensures consistency and reduces classpath bloat in the final native binary.
+
+### 16.9 beans.xml Schema Mapping
+- New modules MUST use the Jakarta EE 10 (version 4.0) schema for `src/main/resources/META-INF/beans.xml` to ensure consistency with `arcclaw-core`.
+- Example header: `<beans xmlns="https://jakarta.ee/xml/ns/jakartaee" version="4.0" bean-discovery-mode="annotated">`
+
+### 16.10 ToolResponse API
+- `ToolResponse` is a Java **Record**. Use canonical accessors:
+  - `success()` (instead of `isSuccess()`)
+  - `exitCode()` (instead of `status()`)
+  - `output()` (instead of `content()`)
+
+### 16.11 Bootstrap and Setup Integration (§16.11 INVARIANT)
+- New modules with required or optional user settings (API keys, toggles, binary paths) MUST be integrated into the interactive setup wizard in `BinaryBootstrap`.
+- Update `com.arcclaw.app.util.CliUtils.getMissingVarSpecs()` in `arcclaw-app` to include the `VarSpec` for these variables.
+- If the module requires binary dependencies (e.g., Chromium, specialized tools), implement an idempotent `*Installer` utility that:
+  - Uses `ProcessBuilder.inheritIO()` to stream progress to the user's terminal.
+  - Prefers `mvnw exec:java` if in a source tree, falling back to `java -cp` for binary distributions.
+  - Detects existing binaries to avoid redundant downloads.
+- **Interactive UI:** All bootstrap prompts MUST use `readLineWithFallback(System.console(), prompt)` to support environment-redirected terminals (e.g., `mise`, `podman exec`).
+- **Dependency Constraint:** Per §16.1, the new module MUST NOT depend on `arcclaw-app`. The integration logic is owned by `arcclaw-app` in `BinaryBootstrap`.
+
+
 ## 17. General Java Guards
 
 - Null-check `e.getMessage()` before use — several JVM exception types return `null`.
@@ -1016,7 +1047,7 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Does `AsyncPersistenceEngine` still bind `WorkspaceScopeHolder` per event, not per thread? (§5.17)
 ---
 
-## 20. Routing and Classification Consolidation (Phase 83B)
+## 20. Routing and Classification Consolidation
 
 ### 20.1 Implementation Proximity
 - Interface implementations for core SPIs (e.g. IntentClassifier) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in arcclaw-core).

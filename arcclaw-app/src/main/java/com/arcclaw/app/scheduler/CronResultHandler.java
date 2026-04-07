@@ -87,7 +87,8 @@ public class CronResultHandler {
             SecurityEventType.LOOP_AWAITING_APPROVAL,
             "cronId=" + job.id + " pendingTool=" + result.toolName());
 
-        String answer = AgentResultFormatter.formatCronHitl(job.id, job.goal, result.toolName());
+        String displayGoal = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "") : "";
+        String answer = AgentResultFormatter.formatCronHitl(job.id, displayGoal, result.toolName());
         // Fire delivery event — session intentionally kept alive for approval
         fireCompletionEvent(job, executionId, answer, null);
 

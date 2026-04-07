@@ -20,6 +20,7 @@
     <module>arcclaw-channel-telegram</module>
     <module>arcclaw-channel-web</module>
     <module>arcclaw-app</module>
+    <module>arcclaw-tool-playwright</module>
     <module>arcclaw-ui</module>
   </modules>
 

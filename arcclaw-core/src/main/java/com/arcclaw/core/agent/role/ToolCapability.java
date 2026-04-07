@@ -32,6 +32,11 @@ public enum ToolCapability {
     MEMORY_SEARCH("memory_search", "Semantic search across historical session memories"),
 
     /**
+     * Ability to navigate the web with a fully-featured headless browser.
+     */
+    BROWSER_NAVIGATE("browser_navigate", "Headless browser navigation (Playwright)"),
+
+    /**
      * Ability to execute untrusted code in an ephemeral Podman container.
      * <p>
      * <b>Note:</b> Deferred component; presence in schema does not imply

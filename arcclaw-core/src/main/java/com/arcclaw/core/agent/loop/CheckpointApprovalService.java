@@ -77,8 +77,11 @@ public class CheckpointApprovalService {
         List<String> pendingTools = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
         if (pendingTools != null) {
             for (String pending : pendingTools) {
-                if (pending != null)
+                if (pending != null) {
                     agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, "APPROVED");
+                    agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+                        sessionId, "APPROVED", pending, null, reason, Instant.now()));
+                }
             }
         }
         log.infof("Approved ALL tools for session %s reason %s", sessionId, reason);
@@ -99,8 +102,11 @@ public class CheckpointApprovalService {
         List<String> pendingTools = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
         if (pendingTools != null) {
             for (String pending : pendingTools) {
-                if (pending != null)
+                if (pending != null) {
                     agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, "DENIED");
+                    agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+                        sessionId, "DENIED", pending, null, reason, Instant.now()));
+                }
             }
         }
         log.infof("Denied ALL tools for session %s reason %s", sessionId, reason);
@@ -114,6 +120,9 @@ public class CheckpointApprovalService {
      */
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;
+        
+        // findLatestAwaitingApproval may return empty if resumeAfterBatchDecision
+        // already transitioned the status — fall back to the pre-transition cp safely.
         AgentCheckpoint fresh = agentStore.findLatestAwaitingApproval(cp.getSessionId())
             .orElse(cp);
 

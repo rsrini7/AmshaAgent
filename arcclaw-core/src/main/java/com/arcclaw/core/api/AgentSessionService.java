@@ -348,20 +348,31 @@ public class AgentSessionService {
                 }
 
                 MDC.put(MdcKeys.USER_ID, "rest:api");
-                return WorkspaceContext.run(sessionId, "rest:api", sessionId, AutonomyLevel.FULL, canonicalRole, ChannelType.REST_API, () -> {
-                    String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
-                    // Restore original budget. Minimum 3: 1 to observe tool result,
-                    // 1 to call FINISH, 1 buffer for a schema correction retry.
-                    // B6: apply safe ceiling on resume iterations to prevent unbounded loops
-                int resumeIterations = checkpoint.get().getMaxIterations() != null
-                        ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations)
-                        : maxResumeIterations;
-                    MessageContext context = createRestContext(sessionId, resumeGoal);
-                    context.setResumeSignal(true);
-                    AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
-                    return responseMapper.mapResult(result, false);
-                });
+
+                // ✅ FIX F17: write all batch decisions BEFORE agentLoop reads them
+                // Without this, resumeParallelBatch finds all tools still PENDING
+                // and executes them unconditionally, ignoring per-tool deny decisions.
+                checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
+
+                return WorkspaceContext.run(
+                    sessionId, "rest:api", sessionId, AutonomyLevel.FULL,
+                    canonicalRole, ChannelType.REST_API, () -> {
+                        String resumeGoal = checkpointResumeHandler
+                            .resolveResumeGoal(sessionId, canonicalRole);
+                        int resumeIterations = checkpoint.get().getMaxIterations() != null
+                            ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations)
+                            : maxResumeIterations;
+                        MessageContext context = createRestContext(sessionId, resumeGoal);
+                        context.setResumeSignal(true);
+                        AgentResult result = agentLoop.run(
+                            sessionId, agentRole, resumeGoal,
+                            reasoningEngine, resumeIterations, context);
+                        return responseMapper.mapResult(result, false);
+                    });
             });
+        } catch (CheckpointResolutionException e) {
+            return Response.status(Response.Status.CONFLICT)
+                .entity(Map.of("error", "No pending approval", "code", "NO_PENDING_APPROVAL")).build();
         } catch (BudgetExceededException e) {
             return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
         } catch (BudgetWarningException e) {

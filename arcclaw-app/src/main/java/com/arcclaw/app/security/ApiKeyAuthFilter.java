@@ -80,14 +80,19 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        if (!apiKeyRegistry.isAllowed(apiKey)) {
-            logAudit(safeKey, path, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
-            requestContext.abortWith(Response.status(429)
-                    .header("Retry-After", "60")
-                    .type(MediaType.APPLICATION_JSON)
-                    .entity(new RateLimitErrorResponse("RATE_LIMITED", "Too many requests. Retry after 60 seconds.", 60, clock.instant().toString()))
-                    .build());
-            return;
+        boolean isInternalUiKey = "internal".equals(apiKeyRegistry.getKeyName(apiKey));
+        boolean isReadOnlyPolling = "GET".equals(method) && SILENT_POLL_PATHS.stream().anyMatch(path::startsWith);
+
+        if (!(isReadOnlyPolling && isInternalUiKey)) {
+            if (!apiKeyRegistry.isAllowed(apiKey)) {
+                logAudit(safeKey, path, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
+                requestContext.abortWith(Response.status(429)
+                        .header("Retry-After", "60")
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(new RateLimitErrorResponse("RATE_LIMITED", "Too many requests. Retry after 60 seconds.", 60, clock.instant().toString()))
+                        .build());
+                return;
+            }
         }
 
         String userId = apiKeyRegistry.getKeyName(apiKey);

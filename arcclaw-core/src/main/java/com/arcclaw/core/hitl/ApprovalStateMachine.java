@@ -80,6 +80,7 @@ public class ApprovalStateMachine implements ApprovalGateway {
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         
         int remaining = pendingTools.size() - 1;
+        String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
         ApprovalOutcome outcome;
         if (allDecided) {
             // Check if there are any approvals
@@ -103,14 +104,12 @@ public class ApprovalStateMachine implements ApprovalGateway {
             outcome = anyApproved ? ApprovalOutcome.APPROVED : ApprovalOutcome.REJECTED;
                         
             String userId = cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : sessionId;
-            String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
             resumeHandler.resumeAfterBatchDecision(
                 sessionId, cp.getAgentRole(), userId, cp.getChannelPlatformId(), channelType);
         } else {
             outcome = ApprovalOutcome.PARTIAL_STILL_PENDING;
         }
 
-        String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
         String channelPlatformId = cp.getChannelPlatformId();
 
         // 7. Fire CDI ApprovalDecisionEvent for channel observers

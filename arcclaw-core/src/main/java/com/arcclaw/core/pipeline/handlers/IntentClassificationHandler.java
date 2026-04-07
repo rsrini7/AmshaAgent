@@ -12,6 +12,7 @@ import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.exception.HttpException;
 import org.jboss.logging.Logger;
@@ -27,6 +28,7 @@ public class IntentClassificationHandler implements MessageHandler {
     @Inject IntentClassifier classifier;
     @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
     @Inject ChannelPluginRegistry channelPluginRegistry;
+    @Inject StatefulAgentStore stateStore;
 
     @Override
     public int priority() {
@@ -59,6 +61,22 @@ public class IntentClassificationHandler implements MessageHandler {
 
         try {
             String role = classifier.classify(message.text());
+
+            if ("__CONTINUE__".equals(role)) {
+                String sid = context.getSessionId().orElseGet(() -> {
+                    log.debugf("No sessionId on context for continuity lookup for chat %s — using chatId", 
+                        context.getChatId());
+                    return context.getChatId();
+                });
+                String previousRole = stateStore.findLatestRole(sid).orElse(null);
+                log.infof("Handling continuity request for session %s — previous role: %s",
+                    sid, previousRole);
+                if (previousRole != null) {
+                    role = previousRole;
+                } else {
+                    role = AgentRoleEnum.COORDINATOR.toScopedName();
+                }
+            }
 
             // §78-fix-3: null guard — openrouter/free occasionally returns null
             // causing NPE in downstream .trim() calls

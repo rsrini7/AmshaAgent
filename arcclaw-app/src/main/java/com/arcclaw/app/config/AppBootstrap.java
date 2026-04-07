@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -23,7 +24,7 @@ import com.arcclaw.core.sandbox.SandboxStrategy;
  * Bootstraps the application by resolving the binary directory, loading .env files,
  * extracting default config, and setting up environment variables before Quarkus starts.
  */
-public class BinaryBootstrap {
+public class AppBootstrap {
 
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
@@ -48,6 +49,8 @@ public class BinaryBootstrap {
 
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
+        drainInputBuffer();
+        extractEnvExampleIfNeeded(binaryDir);
         
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
@@ -56,6 +59,7 @@ public class BinaryBootstrap {
         validateAndAutoFixEmbeddingConfig(binaryDir);
         validateSandboxTools();
         interactiveSetupIfNeeded(binaryDir, args);
+        promptPlaywrightSetupIfNeeded(binaryDir);
         
         // 1. Resolve and Provision Data Directory
         String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
@@ -191,13 +195,6 @@ public class BinaryBootstrap {
     }
 
     private static void interactiveSetupIfNeeded(Path binaryDir, String[] args) {
-        Console console = System.console();
-        // Non-interactive (CI / piped): extract example and exit early
-        if (console == null) {
-            extractEnvExampleIfNeeded(binaryDir);
-            return;
-        }
-
         // 1. Initial State: LLM Provider selection determines what VarSpecs we need.
         // We prompt this BEFORE getMissingVarSpecs so the key hints (Groq/OpenRouter/etc) are correct.
         if (System.getProperty("ARCCLAW_LLM_PROVIDER") == null && System.getenv("ARCCLAW_LLM_PROVIDER") == null) {
@@ -208,7 +205,7 @@ public class BinaryBootstrap {
             System.err.println("  │  3. OpenAI - direct connection");
             System.err.println("  │  4. Ollama - local only (no API key required)");
             System.err.println("  │");
-            String choice = console.readLine("  └─ Select provider [1-4, Default: 1]: ");
+            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-4, Default: 1]: ");
             String provider = switch (choice != null ? choice.trim() : "") {
                 case "2" -> "openrouter";
                 case "3" -> "openai";
@@ -246,164 +243,163 @@ public class BinaryBootstrap {
         }
 
         List<CliUtils.VarSpec> missing = CliUtils.getMissingVarSpecs(args);
-        if (missing.isEmpty()) return;
 
         Path envFile = binaryDir.resolve(".env");
 
         // Seed .env from example if missing so we have a place to patch
         if (!Files.exists(envFile)) {
-            try (InputStream in = BinaryBootstrap.class.getResourceAsStream("/env-example")) {
+            try (InputStream in = AppBootstrap.class.getResourceAsStream("/env-example")) {
                 if (in != null) Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException ignored) {}
         }
 
-        // Always ensure ARCCLAW_LLM_PROVIDER, ARCCLAW_LLM_BASE_URL, models and auto-seed are in .env
-        patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
-        patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", System.getProperty("ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1"));
-        patchEnvFile(envFile, "ARCCLAW_LLM_MODEL_NAME", System.getProperty("ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct"));
-        patchEnvFile(envFile, "ARCCLAW_COMPACTION_MODEL", System.getProperty("ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant"));
-        patchEnvFile(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", System.getProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant"));
-        initEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
-        
-        // Ensure Jina key is at least present as a placeholder so users see it
-        initEnvFile(envFile, "ARCCLAW_EMBED_API_KEY", "jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+        if (!missing.isEmpty()) {
 
-        initEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "host");
+            // Always ensure ARCCLAW_LLM_PROVIDER, ARCCLAW_LLM_BASE_URL, models and auto-seed are in .env
+            patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
+            patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", System.getProperty("ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1"));
+            patchEnvFile(envFile, "ARCCLAW_LLM_MODEL_NAME", System.getProperty("ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct"));
+            patchEnvFile(envFile, "ARCCLAW_COMPACTION_MODEL", System.getProperty("ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant"));
+            patchEnvFile(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", System.getProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant"));
+            initEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
+            
+            // Ensure Jina key is at least present as a placeholder so users see it
+            initEnvFile(envFile, "ARCCLAW_EMBED_API_KEY", "jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
 
-        // Use tmpdir specifically on macOS to avoid /run/arcclaw read-only warnings
-        String defaultTransport = System.getProperty("os.name", "").toLowerCase().contains("mac") ? "tmpdir" : "tmpfs";
-        initEnvFile(envFile, "ARCCLAW_SANDBOX_SECRET_TRANSPORT", defaultTransport);
+            initEnvFile(envFile, "ARCCLAW_SANDBOX_NETWORK", "host");
 
-        // Always ensure appropriate embedding provider for production (native)
-        // Migration: force 'jina' if user was on 'ollama' because native image doesn't support the ollama client
-        // This is now also handled in validateAndAutoFixEmbeddingConfig on every startup.
-        initEnvFile(envFile, "ARCCLAW_EMBED_PROVIDER", "jina");
-        initEnvFile(envFile, "ARCCLAW_EMBED_DIMENSIONS", "768");
-        initEnvFile(envFile, "ARCCLAW_EMBED_BASE_URL", "https://api.jina.ai/v1/");
+            // Use tmpdir specifically on macOS to avoid /run/arcclaw read-only warnings
+            String defaultTransport = System.getProperty("os.name", "").toLowerCase().contains("mac") ? "tmpdir" : "tmpfs";
+            initEnvFile(envFile, "ARCCLAW_SANDBOX_SECRET_TRANSPORT", defaultTransport);
 
-        System.err.println();
-        System.err.println("╔══════════════════════════════════════════════════════════╗");
-        System.err.println("║         ArcClaw — First-Run Interactive Setup            ║");
-        System.err.println("╚══════════════════════════════════════════════════════════╝");
-        System.err.println();
-        System.err.println("  " + missing.size() + " required value(s) need configuration.");
-        System.err.println("  Saved to: " + envFile);
-        System.err.println("  Press Enter to skip a value (you can fill it in .env later).");
-        System.err.println();
+            // Always ensure appropriate embedding provider for production (native)
+            // Migration: force 'jina' if user was on 'ollama' because native image doesn't support the ollama client
+            // This is now also handled in validateAndAutoFixEmbeddingConfig on every startup.
+            initEnvFile(envFile, "ARCCLAW_EMBED_PROVIDER", "jina");
+            initEnvFile(envFile, "ARCCLAW_EMBED_DIMENSIONS", "768");
+            initEnvFile(envFile, "ARCCLAW_EMBED_BASE_URL", "https://api.jina.ai/v1/");
 
-        boolean skipTelegram = false;
-        boolean askedTelegram = false;
-        for (CliUtils.VarSpec spec : missing) {
-            // Optional: Ask for Telegram enablement once
-            if (spec.key.startsWith("TELEGRAM_") || spec.key.startsWith("ARCCLAW_TELEGRAM_")) {
-                if (!askedTelegram) {
-                    System.err.println("  ┌─ Telegram Integration");
-                    System.err.println("  │  Would you like to enable the Telegram bot interface?");
+            System.err.println();
+            System.err.println("╔══════════════════════════════════════════════════════════╗");
+            System.err.println("║         ArcClaw — First-Run Interactive Setup            ║");
+            System.err.println("╚══════════════════════════════════════════════════════════╝");
+            System.err.println();
+            System.err.println("  " + missing.size() + " required value(s) need configuration.");
+            System.err.println("  Saved to: " + envFile);
+            System.err.println("  Press Enter to skip a value (you can fill it in .env later).");
+            System.err.println();
+
+            boolean skipTelegram = false;
+            boolean askedTelegram = false;
+            for (CliUtils.VarSpec spec : missing) {
+                // Optional: Ask for Telegram enablement once
+                if (spec.key.startsWith("TELEGRAM_") || spec.key.startsWith("ARCCLAW_TELEGRAM_")) {
+                    if (!askedTelegram) {
+                        System.err.println("  ┌─ Telegram Integration");
+                        System.err.println("  │  Would you like to enable the Telegram bot interface?");
+                        System.err.println("  │");
+                        String response = readLineWithFallback(System.console(), "  └─ Enable Telegram? [y/N]: ");
+                        askedTelegram = true;
+                        if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                            skipTelegram = true;
+                            patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "false");
+                            System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "false");
+                        } else {
+                            patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "true");
+                            System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "true");
+                            System.err.println();
+                        }
+                    }
+                    if (skipTelegram) continue;
+                }
+
+                // Optional: Ask for GitHub token
+                if (spec.key.equals("GITHUB_TOKEN")) {
+                    System.err.println("  ┌─ GitHub repository access");
+                    System.err.println("  │  Would you like to provide a GitHub token for the Coder/Researcher tools?");
+                    System.err.println("  │  (Search and edit repositories directly from ArcClaw)");
                     System.err.println("  │");
-                    String response = console.readLine("  └─ Enable Telegram? [y/N]: ");
-                    askedTelegram = true;
+                    String response = readLineWithFallback(System.console(), "  └─ Configure GitHub? [y/N]: ");
                     if (response == null || !response.trim().toLowerCase().startsWith("y")) {
-                        skipTelegram = true;
-                        patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "false");
-                        System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "false");
-                    } else {
-                        patchEnvFile(envFile, "ARCCLAW_TELEGRAM_ENABLED", "true");
-                        System.setProperty("ARCCLAW_TELEGRAM_ENABLED", "true");
+                        System.err.println("     [skipped]");
                         System.err.println();
+                        continue;
+                    }
+                    System.err.println();
+                }
+
+                if (spec.key.equals("ARCCLAW_SERPER_API_KEY")) {
+                    System.err.println("  ┌─ Serper Search Integration");
+                    System.err.println("  │  Enable Google Search for Researcher agent via Serper.dev?");
+                    System.err.println("  │");
+                    String response = readLineWithFallback(System.console(), "  └─ Configure Serper? [y/N]: ");
+                    if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                        System.err.println("     [skipped]");
+                        System.err.println();
+                        continue;
+                    }
+                    System.err.println();
+                }
+
+                if (spec.key.equals("ARCCLAW_BRAVE_API_KEY")) {
+                    System.err.println("  ┌─ Brave Search Integration");
+                    System.err.println("  │  Enable Brave Search for Researcher agent?");
+                    System.err.println("  │");
+                    String response = readLineWithFallback(System.console(), "  └─ Configure Brave? [y/N]: ");
+                    if (response == null || !response.trim().toLowerCase().startsWith("y")) {
+                        System.err.println("     [skipped]");
+                        System.err.println();
+                        continue;
+                    }
+                    System.err.println();
+                }
+
+                boolean sensitive = SENSITIVE_KEYS.contains(spec.key);
+                System.err.println("  ┌─ " + spec.key);
+                System.err.println("  │  " + spec.description);
+                for (String hint : spec.howToGet) {
+                    System.err.println("  │  " + hint);
+                }
+                if (spec.key.equals("ARCCLAW_VAULT_PEPPER")) {
+                    System.err.println("  │  ⚠️  WARNING: Changing this will make existing encrypted data undecryptable.");
+                }
+                System.err.println("  │");
+
+                String value;
+                if (sensitive) {
+                    String promptText = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key) ? " (Enter to auto-generate, input hidden): " : " (input hidden): ");
+                    value = readPasswordWithFallback(System.console(), promptText);
+                    if (value == null) value = "";
+                    if (value.isEmpty() && AUTO_GENERATABLE_KEYS.contains(spec.key)) {
+                        value = generateRandomValue();
+                    }
+                } else {
+                    String promptText = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key) ? " (Enter to auto-generate): " : ": ");
+                    String line = readLineWithFallback(System.console(), promptText);
+                    value = (line != null) ? line.trim() : "";
+                    if (value.isEmpty() && AUTO_GENERATABLE_KEYS.contains(spec.key)) {
+                        value = generateRandomValue();
                     }
                 }
-                if (skipTelegram) continue;
-            }
 
-            // Optional: Ask for GitHub token
-            if (spec.key.equals("GITHUB_TOKEN")) {
-                System.err.println("  ┌─ GitHub repository access");
-                System.err.println("  │  Would you like to provide a GitHub token for the Coder/Researcher tools?");
-                System.err.println("  │  (Search and edit repositories directly from ArcClaw)");
-                System.err.println("  │");
-                String response = console.readLine("  └─ Configure GitHub? [y/N]: ");
-                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
-                    System.err.println("     [skipped]");
-                    System.err.println();
-                    continue;
+                if (value.isBlank()) {
+                    System.err.println("     [skipped — add manually to: " + envFile + "]");
+                } else {
+                    patchEnvFile(envFile, spec.key, value);
+                    System.setProperty(spec.key, value);
+
+                    // For Quarkus Config Maps (like arcclaw.api.keys), we also set the dot-notation property
+                    // if the key follows the standard ARCCLAW_ prefix pattern.
+                    if (spec.key.startsWith("ARCCLAW_")) {
+                        String dotPath = spec.key.toLowerCase().replace("_", ".");
+                        System.setProperty(dotPath, value);
+                    }
+                    
+                    System.err.println("     ✓ Saved");
                 }
                 System.err.println();
             }
-
-            if (spec.key.equals("ARCCLAW_SERPER_API_KEY")) {
-                System.err.println("  ┌─ Serper Search Integration");
-                System.err.println("  │  Enable Google Search for Researcher agent via Serper.dev?");
-                System.err.println("  │");
-                String response = console.readLine("  └─ Configure Serper? [y/N]: ");
-                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
-                    System.err.println("     [skipped]");
-                    System.err.println();
-                    continue;
-                }
-                System.err.println();
-            }
-
-            if (spec.key.equals("ARCCLAW_BRAVE_API_KEY")) {
-                System.err.println("  ┌─ Brave Search Integration");
-                System.err.println("  │  Enable Brave Search for Researcher agent?");
-                System.err.println("  │");
-                String response = console.readLine("  └─ Configure Brave? [y/N]: ");
-                if (response == null || !response.trim().toLowerCase().startsWith("y")) {
-                    System.err.println("     [skipped]");
-                    System.err.println();
-                    continue;
-                }
-                System.err.println();
-            }
-
-            boolean sensitive = SENSITIVE_KEYS.contains(spec.key);
-            System.err.println("  ┌─ " + spec.key);
-            System.err.println("  │  " + spec.description);
-            for (String hint : spec.howToGet) {
-                System.err.println("  │  " + hint);
-            }
-            if (spec.key.equals("ARCCLAW_VAULT_PEPPER")) {
-                System.err.println("  │  ⚠️  WARNING: Changing this will make existing encrypted data undecryptable.");
-            }
-            System.err.println("  │");
-
-            String value;
-            if (sensitive) {
-                String promptText = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key) ? " (Enter to auto-generate, input hidden): " : " (input hidden): ");
-                char[] pw = console.readPassword(promptText);
-                value = (pw != null) ? new String(pw).trim() : "";
-                if (value.isEmpty() && AUTO_GENERATABLE_KEYS.contains(spec.key)) {
-                    value = generateRandomValue();
-                }
-            } else {
-                String promptText = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key) ? " (Enter to auto-generate): " : ": ");
-                String line = console.readLine(promptText);
-                value = (line != null) ? line.trim() : "";
-                if (value.isEmpty() && AUTO_GENERATABLE_KEYS.contains(spec.key)) {
-                    value = generateRandomValue();
-                }
-            }
-
-            if (value.isBlank()) {
-                System.err.println("     [skipped — add manually to: " + envFile + "]");
-            } else {
-                patchEnvFile(envFile, spec.key, value);
-                System.setProperty(spec.key, value);
-
-                // For Quarkus Config Maps (like arcclaw.api.keys), we also set the dot-notation property
-                // if the key follows the standard ARCCLAW_ prefix pattern.
-                if (spec.key.startsWith("ARCCLAW_")) {
-                    String dotPath = spec.key.toLowerCase().replace("_", ".");
-                    System.setProperty(dotPath, value);
-                }
-                
-                System.err.println("     ✓ Saved");
-            }
-            System.err.println();
-        }
-
-        System.err.println("[ArcClaw] ✓ Setup complete. Configuration saved to: " + envFile);
-        System.err.println();
+        } // end if (!missing.isEmpty())
     }
 
     private static void initEnvFile(Path envFile, String key, String value) {
@@ -442,7 +438,7 @@ public class BinaryBootstrap {
                         String currentValue = currentLine.substring(key.length() + 1).trim();
                         yield currentValue.isEmpty() || currentValue.contains("xxxx") || 
                               currentValue.contains("<") || currentValue.contains("changeme") ||
-                              currentValue.contains("_your_") || currentValue.contains("ABCdef");
+                              currentValue.contains("ABCdef");
                     }
                 };
 
@@ -475,7 +471,7 @@ public class BinaryBootstrap {
 
         Path exampleFile = dir.resolve(".env.example");
         if (!Files.exists(exampleFile)) {
-            try (InputStream in = BinaryBootstrap.class.getResourceAsStream("/env-example")) {
+            try (InputStream in = AppBootstrap.class.getResourceAsStream("/env-example")) {
                 if (in == null) {
                     System.err.println("[ArcClaw] ⚠️  Warning: env-example not found in classpath.");
                     return;
@@ -631,6 +627,114 @@ public class BinaryBootstrap {
                 }
             }
         }
+    }
+
+    /**
+     * Standalone Playwright setup — runs from bootstrap() directly,
+     * outside interactiveSetupIfNeeded(), so it is never blocked by
+     * the console==null or missing.isEmpty() early returns.
+     */
+    private static void promptPlaywrightSetupIfNeeded(Path binaryDir) {
+        if (System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null) return;
+
+        Path envFile = binaryDir.resolve(".env");
+        Path browsersPath = binaryDir.resolve(".playwright-browsers");
+        String playwrightProp = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED",
+                System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
+        boolean playwrightEnabled = "true".equalsIgnoreCase(playwrightProp);
+
+        boolean needsPrompt = (playwrightProp == null || playwrightProp.isBlank())
+                || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
+        
+        if (!needsPrompt) return;
+
+        System.err.println();
+        System.err.println("  ┌─ Playwright Browser Integration");
+        System.err.println("  │  Enable real headless browser (Chromium) for complex web crawling/scraping?");
+        System.err.println("  │  Required for JavaScript-heavy sites that simple fetchers cannot read.");
+        System.err.println("  │");
+
+        String response = readLineWithFallback(System.console(), playwrightEnabled
+                ? "  └─ Download and install Chromium now? [Y/n]: "
+                : "  └─ Enable Playwright? [y/N]: ");
+
+        if (response == null || response.trim().isEmpty()) {
+            if (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+                System.err.println("  │  (Non-interactive: auto-installing Chromium — already enabled in .env)");
+                System.err.println("  │");
+                PlaywrightBrowserInstaller.installChromium(browsersPath);
+            } else {
+                System.err.println();
+                System.err.println("  ⚠  Non-interactive stdin detected (running via mise/task runner?).");
+                System.err.println("     To enable Playwright, set in your .env:");
+                System.err.println("       ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true");
+                System.err.println("     Then re-run — Chromium will auto-install on next start.");
+            }
+            return;
+        }
+
+        String tr = response.trim().toLowerCase();
+
+        if (playwrightEnabled) {
+            if (tr.isEmpty() || tr.startsWith("y")) {
+                PlaywrightBrowserInstaller.installChromium(browsersPath);
+            }
+        } else if (tr.startsWith("y")) {
+            patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+            System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+            initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
+            initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+            if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+                System.err.println("  │");
+                System.err.println("  │  Chromium browser binary is not installed.");
+                String ins = readLineWithFallback(System.console(), "  └─ Download and install Chromium now? [Y/n]: ");
+                if (ins == null || ins.trim().isEmpty() || ins.trim().toLowerCase().startsWith("y")) {
+                    PlaywrightBrowserInstaller.installChromium(browsersPath);
+                }
+            }
+        } else if (tr.startsWith("n")) {
+            patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+            System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+        }
+        System.err.println();
+    }
+
+    private static String readLineWithFallback(Console console, String prompt) {
+        if (console != null) {
+            return console.readLine(prompt); // null = EOF, callers handle it
+        }
+        System.err.print(prompt);
+        System.err.flush();
+        try {
+            if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+                String line = reader.readLine();
+                return (line != null) ? line.trim() : null;
+            } else {
+                System.err.println(" (Non-interactive/CI detected)");
+                return null;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String readPasswordWithFallback(Console console, String prompt) {
+        if (console != null) {
+            char[] pw = console.readPassword(prompt);
+            return (pw != null) ? new String(pw).trim() : "";
+        }
+        // Fallback for non-TTY environments (like mise run)
+        return readLineWithFallback(null, prompt);
+    }
+
+    private static void drainInputBuffer() {
+        if (System.console() != null) return; // Console doesn't need draining usually
+        try {
+            while (System.in.available() > 0) {
+                System.in.read();
+            }
+        } catch (Exception ignored) {}
     }
 
     private static boolean canRun(String... cmd) {

@@ -35,6 +35,9 @@ quarkus:
     arcclaw-rag:
       group-id: com.arcclaw
       artifact-id: arcclaw-rag
+    arcclaw-tool-playwright:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-tool-playwright
 
   devservices:
     enabled: false
@@ -364,6 +367,10 @@ arcclaw:
       api-key: "${ARCCLAW_BRAVE_API_KEY:none}"
     serper:
       api-key: "${ARCCLAW_SERPER_API_KEY:none}"
+    playwright:
+      enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
+      headless: true
+      timeout-ms: 30000
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
@@ -396,7 +403,7 @@ arcclaw:
       require-auth: "${ARCCLAW_WEB_REQUIRE_AUTH:false}"
 
   pii:
-    mode: REDACT_AND_FORWARD   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY
+    mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Options: REDACT_AND_FORWARD (default), BLOCK_AND_NOTIFY
 
   vault:
     pepper: "${ARCCLAW_VAULT_PEPPER:dev-pepper-not-for-production-0000000000000000000000000000}"
@@ -445,11 +452,9 @@ arcclaw:
     timeout-seconds: "${ARCCLAW_SANDBOX_TIMEOUT_SECONDS:30}"
     network-timeout-seconds: "${ARCCLAW_SANDBOX_NETWORK_TIMEOUT_SECONDS:60}"
     network: "${ARCCLAW_SANDBOX_NETWORK:host}"
-    secret-transport: "${ARCCLAW_SANDBOX_SECRET_TRANSPORT:tmpfs}"
     tool-runner-user: "${ARCCLAW_SANDBOX_USER:sandbox}"
     memory-limit: "${ARCCLAW_SANDBOX_MEMORY_LIMIT:512m}"
     cpu-limit: "${ARCCLAW_SANDBOX_CPU_LIMIT:0.5}"
-    tmpfs-path: "${ARCCLAW_SANDBOX_TMPFS_PATH:/run/arcclaw/secrets}"
     # Executable overrides (auto-discovered on host PATH if omitted)
     python-executable: "${ARCCLAW_SANDBOX_PYTHON_EXECUTABLE:}"
     go-executable: "${ARCCLAW_SANDBOX_GO_EXECUTABLE:}"
@@ -608,10 +613,8 @@ mp:
         sql: false
 
   arcclaw:
-    rag:
-      embed-provider: ollama
     pii:
-      mode: REDACT_AND_FORWARD   # Dev — same as prod, see redacted output
+      mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Dev — same as prod, see redacted output
     sandbox:
       strategy: NONE        # no Podman in local dev
     governance:
@@ -686,7 +689,7 @@ mp:
         bot-token: "mock-bot-token"
         allowed-users: ""
     pii:
-      mode: REDACT_AND_FORWARD   # Tests use default
+      mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Tests use default
     sandbox:
       strategy: NONE
     vault:

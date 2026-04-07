@@ -100,10 +100,6 @@ public class GithubTool implements AgentTool {
                                 "'. To 'list' repositories, provide ONLY the owner name.");
             }
         } else if ("gist".equals(action)) {
-            if ("list".equals(command) && target != null && !target.isBlank()) {
-                log.warnf("Dropping target '%s' for 'gh gist list' — only lists authenticated user's gists.", target);
-                target = null;
-            }
             if ("view".equals(command) && (target == null || target.isBlank())) {
                 throw new IllegalArgumentException(
                         "To 'view' a gist, provide the Gist ID or URL as 'target'.");
@@ -141,7 +137,17 @@ public class GithubTool implements AgentTool {
             );
         }
 
-        // Case 4: gist list, gist view, etc. use gh CLI directly
+        // ── Case 4: gist list — allow querying other users' gists via API ──
+        if ("gist".equals(action) && "list".equals(command)) {
+            if (target != null && !target.isBlank() && !target.equals("@me")) {
+                // gh CLI can't list another user's gists — use API directly
+                return List.of("gh", "api", "users/" + target + "/gists", "--jq",
+                    "[.[:5] | .[] | {id, description, public, created_at, files: (.files | keys)}]");
+            }
+            return List.of("gh", "gist", "list", "--limit", "5"); // authenticated user
+        }
+
+        // Case 5: gist view, etc. use gh CLI directly
         cmd.add("gh");
         cmd.add(action);
         cmd.add(command);

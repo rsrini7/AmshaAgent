@@ -1,6 +1,7 @@
 package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -65,6 +66,29 @@ public class CronJobRunner {
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
         
         try {
+            String stripped = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "").trim() : "";
+            String normalized = stripped.toLowerCase();
+            
+            if (normalized.startsWith("output the following message:") || normalized.startsWith("say ") 
+                    || normalized.startsWith("tell ") || normalized.startsWith("send message:") || normalized.startsWith("send text:")) {
+                String text = stripped;
+                if (normalized.startsWith("output the following message:")) {
+                    text = stripped.substring("output the following message:".length()).trim();
+                } else if (normalized.startsWith("say ")) {
+                    text = stripped.substring("say ".length()).trim();
+                } else if (normalized.startsWith("tell ")) {
+                    text = stripped.substring("tell ".length()).trim();
+                } else if (normalized.startsWith("send message:")) {
+                    text = stripped.substring("send message:".length()).trim();
+                } else if (normalized.startsWith("send text:")) {
+                    text = stripped.substring("send text:".length()).trim();
+                }
+                
+                AgentResult result = AgentResult.finished(text, Collections.emptyList());
+                resultHandler.handleSuccess(job, cronSessionId, executionId, result);
+                return;
+            }
+
             String systemNote = 
                 "[SYSTEM CONSTRAINT: CRON EXECUTION MODE. " +
                 "Do NOT call any tools unless the goal explicitly requires data retrieval (github, memory_search). " +
@@ -114,22 +138,27 @@ public class CronJobRunner {
     }
 
     private String resolveRole(AgentCronEntity job) {
+        String normalized = job.goal.replaceFirst("^CRON\\s+", "").toLowerCase();
+        
+        // Output-only goals: unconditionally override to coordinator
+        if (normalized.startsWith("output") || normalized.startsWith("say ")
+                || normalized.startsWith("send ") || normalized.startsWith("tell ")) {
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+
         if (job.executionRole != null && !job.executionRole.isBlank()) {
             return job.executionRole;
         }
-        
-        // Legacy fallback heuristic
-        String goalLower = job.goal.toLowerCase();
-        
+
         // Priority 1 — Coordinator (Meta-scheduling / goal orchestration)
-        if (goalLower.contains("coordinator task") || goalLower.contains("meta-schedule") || goalLower.contains("schedule next")) {
+        if (normalized.contains("coordinator task") || normalized.contains("meta-schedule") || normalized.contains("schedule next")) {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
         
         // Priority 2 — Specific agent hints
-        if (goalLower.contains("researcher task") || goalLower.contains("fetch") || goalLower.contains("search") || goalLower.contains("discovery")) {
+        if (normalized.contains("researcher task") || normalized.contains("fetch") || normalized.contains("search") || normalized.contains("discovery")) {
             return AgentRoleEnum.RESEARCHER.toScopedName();
-        } else if (goalLower.contains("coder task") || goalLower.contains("write code") || goalLower.contains("fix bug") || goalLower.contains("refactor")) {
+        } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("fix bug") || normalized.contains("refactor")) {
             return AgentRoleEnum.CODER.toScopedName();
         }
         

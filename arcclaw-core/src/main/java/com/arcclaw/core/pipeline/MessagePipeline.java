@@ -10,11 +10,13 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
+import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the execution of {@link MessageHandler}s.
  */
+@Startup
 @ApplicationScoped
 public class MessagePipeline {
     private static final Logger log = Logger.getLogger(MessagePipeline.class);

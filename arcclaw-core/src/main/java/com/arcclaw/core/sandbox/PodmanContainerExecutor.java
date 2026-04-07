@@ -57,14 +57,8 @@ public class PodmanContainerExecutor {
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
-    @ConfigProperty(name = "arcclaw.sandbox.tmpfs-path", defaultValue = "/run/arcclaw/secrets")
-    String tmpfsPath;
-
     @ConfigProperty(name = "arcclaw.sandbox.network", defaultValue = "bridge")
     String containerNetwork;
-
-    @ConfigProperty(name = "arcclaw.sandbox.secret-transport", defaultValue = "tmpfs")
-    String secretTransportMode;
 
     @ConfigProperty(name = "arcclaw.sandbox.tool-runner-user", defaultValue = "sandbox")
     String toolRunnerUser;
@@ -116,7 +110,7 @@ public class PodmanContainerExecutor {
 
         // Use the unified Tier 1 tmpfs secure transport.
         // The transport strictly zeroes the memory arrays when closed.
-        try (var transport = new TmpfsSecretTransport(sessionId, tmpfsPath, secretTransportMode)) {
+        try (var transport = new TmpfsSecretTransport(sessionId)) {
             List<String> transportArgs = transport.prepare(resolvedSecrets);
 
             // Deterministic container name for tracking + graceful stop on shutdown.

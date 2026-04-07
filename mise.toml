@@ -30,6 +30,11 @@ powershell = "7.6"
 [env]
 _.file = ".env"
 
+# Enable it with `mise settings experimental=true`
+# [hooks]
+# # Fires automatically after `mise install`
+# postinstall = "mise run playwright-chrome-install"
+
 # ARCCLAW_VEC_EXT and ARCCLAW_DATA_DIR are intentionally NOT set here.
 # quarkus:dev forks Maven inside arcclaw-app/ → needs ../lib/vec0 and ../data.
 # jar and native tasks run from project root → need ./lib/vec0 and ./data.
@@ -54,7 +59,7 @@ run = [
     "echo   1. mise install                installs pwsh + java + maven + usage",
     "echo   2. mise run setup:profile      writes shell profile activate + completion",
     "echo   3. reload your shell",
-    "echo   4. mise run setup              .env + chmod mvnw + JDKs",
+    "echo   4. mise run setup              .env + chmod mvnw + JDKs + Playwright Chromium",
     "echo   5. mise run dev                hot-reload on :8080",
     "echo.",
     "echo   See MISE_README.md for full documentation.",
@@ -64,6 +69,10 @@ run = [
 # =============================================================================
 # SETUP
 # =============================================================================
+
+[tasks.setup]
+depends = ["setup:wsl-crlf", "playwright-chrome-install"]
+alias = "s"
 
 [tasks."setup:profile"]
 description = "One-time: write mise activate + completion to your shell profile. Run after mise install."
@@ -164,10 +173,6 @@ if ($IsWindows) {
     Write-Host "              mise run <TAB>       <- tab completion works"
 }
 """
-
-[tasks.setup]
-depends = ["setup:wsl-crlf"]
-alias = "s"
 
 [tasks."setup:env-check"]
 description = "Validate .env — warn about missing or placeholder values"
@@ -1123,7 +1128,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 [tasks."jar:run-dev-dep"]
 depends = ["env:recover", "build:full"]
 description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
+shell = "pwsh -NonInteractive -Command"
 dir = "{{config_root}}"
+quiet = true
 # We call mise directly, passing the argument the user provided (or defaulting to 'serve')
 run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
 

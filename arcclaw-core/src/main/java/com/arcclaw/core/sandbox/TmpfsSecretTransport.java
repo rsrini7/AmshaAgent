@@ -23,18 +23,42 @@ public class TmpfsSecretTransport implements SecretTransport {
 
     private static final Logger log = Logger.getLogger(TmpfsSecretTransport.class);
 
+    private static final String SECRET_DIR = resolveSecretDir();
+
+    private static String resolveSecretDir() {
+        String override = System.getenv("ARCCLAW_SANDBOX_SECRET_TRANSPORT");
+        if (override != null && !override.isBlank()) {
+            return switch (override.toLowerCase()) {
+                case "tmpfs"  -> "/run/arcclaw/secrets";        // explicit Linux prod
+                case "tmpdir" -> System.getProperty("java.io.tmpdir"); // explicit dev
+                default       -> override;                       // treat as a literal path
+            };
+        }
+        // Auto-detect: only use tmpfs path on Linux where it actually exists
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (os.contains("linux")) {
+            return "/run/arcclaw/secrets";
+        }
+        // macOS / Windows fall through silently — no WARN
+        return System.getProperty("java.io.tmpdir");
+    }
+
     private final String sessionId;
     private final Path tmpfsMountPath;
 
     private Map<String, byte[]> managedSecrets;
     private Path envFile;
 
-    private final String secretTransportMode;
+    public TmpfsSecretTransport(String sessionId) {
+        this(sessionId, null);
+    }
 
-    public TmpfsSecretTransport(String sessionId, String tmpfsMountPath, String secretTransportMode) {
+    /**
+     * Internal constructor allowing test-specific directory injection.
+     */
+    TmpfsSecretTransport(String sessionId, Path manualPath) {
         this.sessionId = sessionId;
-        this.tmpfsMountPath = Path.of(tmpfsMountPath);
-        this.secretTransportMode = secretTransportMode;
+        this.tmpfsMountPath = (manualPath != null) ? manualPath : Path.of(SECRET_DIR);
     }
 
     @Override
@@ -48,23 +72,14 @@ public class TmpfsSecretTransport implements SecretTransport {
         // 1. Ensure target path exists and is somewhat sane
         Path actualMountPath = tmpfsMountPath;
 
-        // Force tmpdir mode (suppresses warning) if explicitly requested in config
-        if ("tmpdir".equalsIgnoreCase(secretTransportMode)) {
-            actualMountPath = Path.of(System.getProperty("java.io.tmpdir"));
-        } else {
-            try {
-                if (!Files.exists(actualMountPath)) {
-                    // In a production Linux host, this is a distinct systemd tmpfs mount.
-                    Files.createDirectories(actualMountPath);
-                }
-            } catch (IOException e) {
-                // Graceful degradation: If /run/arcclaw is denied (running locally as non-root),
-                // fallback to the standard OS temp directory to prevent crashing the Podman pipeline.
-                log.warnf("Cannot access tmpfs path %s (%s). Falling back to java.io.tmpdir. " +
-                          "To suppress this warning in dev, set ARCCLAW_SANDBOX_SECRET_TRANSPORT=tmpdir",
-                          tmpfsMountPath, e.getMessage());
-                actualMountPath = Path.of(System.getProperty("java.io.tmpdir"));
+        try {
+            if (!Files.exists(actualMountPath)) {
+                Files.createDirectories(actualMountPath);
             }
+        } catch (IOException e) {
+            log.warnf("Cannot access tmpfs path %s (%s). Falling back to java.io.tmpdir.",
+                      tmpfsMountPath, e.getMessage());
+            actualMountPath = Path.of(System.getProperty("java.io.tmpdir"));
         }
 
         // 2. Atomically create the restricted file
