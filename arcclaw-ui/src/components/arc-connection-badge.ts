@@ -13,13 +13,25 @@ export class ArcConnectionBadge extends LitElement {
       font-size: 11px;
       padding: 6px 12px;
       border-radius: 99px;
-      background: var(--accent-glow);
-      border: 1px solid var(--accent);
-      color: var(--accent);
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
       font-weight: 600;
       letter-spacing: 0.02em;
       transition: var(--transition);
       cursor: default;
+    }
+    
+    :host([status="connected"]) {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    
+    :host([status="error"]) {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #ef4444;
     }
     
     .dot {

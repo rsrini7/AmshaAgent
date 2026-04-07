@@ -66,7 +66,8 @@ public class WebChatEndpoint {
             if (apiKey == null || apiKey.isBlank()) {
                 String query = conn.handshakeRequest().query();
                 if (query != null && query.contains("apiKey=")) {
-                    apiKey = query.split("apiKey=")[1].split("&")[0];
+                    String rawKey = query.split("apiKey=")[1].split("&")[0];
+                    apiKey = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
                 }
             }
 

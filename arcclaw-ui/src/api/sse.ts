@@ -17,8 +17,11 @@ export class SseManager {
     this._controller = new AbortController();
     
     try {
-      const response = await fetch(`${this.url}?apiKey=${encodeURIComponent(this.apiKey)}`, {
-        headers: { 'Accept': 'text/event-stream' },
+      const response = await fetch(this.url, {
+        headers: { 
+          'Accept': 'text/event-stream',
+          'X-ARCCLAW-API-KEY': this.apiKey
+        },
         signal: this._controller.signal
       });
 

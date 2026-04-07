@@ -21,19 +21,19 @@ export class ArcAgentStatus extends LitElement {
   @property({ type: Array }) agents: AgentStatusDto[] = [];
 
   static styles = css`
-    :host { display: block; padding: 32px; overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
-    h2 { color: var(--text-primary); margin-top: 0; margin-bottom: 24px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    :host { display: block; padding: var(--space-8); overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
+    h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 20px;
+      gap: var(--space-5);
     }
     .empty { color: var(--text-muted); font-style: italic; font-size: 14px; }
     
     .card {
-      background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; 
-      padding: 20px; border-top: 4px solid var(--autonomy-color, var(--border));
-      display: flex; flex-direction: column; gap: 16px;
+      background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-xl); 
+      padding: var(--space-5); border-top: 4px solid var(--autonomy-color, var(--border));
+      display: flex; flex-direction: column; gap: var(--space-4);
       transition: var(--transition);
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
@@ -107,11 +107,13 @@ export class ArcAgentStatus extends LitElement {
 
   render() {
     return html`
-      <h2>Active Agents</h2>
-      ${this.agents.length === 0
-        ? html`<p class="empty">No agents active. Send a message in Chat to start a session.</p>`
-        : html`<div class="grid">${this.agents.map(a => this.renderCard(a))}</div>`
-      }
+      <div style="max-width: 1200px; margin: 0 auto;">
+        <h2>Active Agents</h2>
+        ${this.agents.length === 0
+          ? html`<p class="empty">No agents active. Send a message in Chat to start a session.</p>`
+          : html`<div class="grid">${this.agents.map(a => this.renderCard(a))}</div>`
+        }
+      </div>
     `;
   }
 }

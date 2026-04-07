@@ -15,21 +15,21 @@ export class ArcSkillsPanel extends LitElement {
 
 
   static styles = css`
-    :host { display: block; padding: 32px; overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
-    h2 { color: var(--text-primary); margin-top: 0; margin-bottom: 24px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    :host { display: block; padding: var(--space-8); overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
+    h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
     h3.section-title {
       color: var(--text-primary); font-size: 15px; font-weight: 600;
-      letter-spacing: -0.01em; margin: 32px 0 16px 0;
-      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+      letter-spacing: -0.01em; margin: var(--space-8) 0 var(--space-4) 0;
+      padding-bottom: var(--space-2); border-bottom: 1px solid var(--border);
     }
-    h3.section-title:first-of-type { margin-top: 8px; }
+    h3.section-title:first-of-type { margin-top: var(--space-2); }
     .status-msg { color: var(--text-muted); font-style: italic; font-size: 14px; }
     .error { color: #ef4444; }
 
-    .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+    .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-5); }
     .card {
-      background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px;
-      padding: 20px; display: flex; flex-direction: column; gap: 16px;
+      background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-xl);
+      padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4);
       transition: var(--transition);
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
@@ -101,7 +101,7 @@ export class ArcSkillsPanel extends LitElement {
     return html`
       <div class="card">
         <div class="header">
-          <div class="tool-avatar">⚒</div>
+          <div class="tool-avatar">⚡</div>
           <div class="name-col">
             <span class="name">${t.name}</span>
           </div>
@@ -124,7 +124,7 @@ export class ArcSkillsPanel extends LitElement {
     return html`
       <div class="card">
         <div class="header">
-          <div class="tool-avatar">⚒</div>
+          <div class="tool-avatar">🔧</div>
           <div class="name-col">
             <span class="name">${t.name}</span>
           </div>
@@ -143,25 +143,27 @@ export class ArcSkillsPanel extends LitElement {
 
   render() {
     return html`
-      <h2>Skills & System Tools</h2>
+      <div style="max-width: 1200px; margin: 0 auto;">
+        <h2>Skills & System Tools</h2>
 
-      ${this._loading ? html`<p class="status-msg">Synchronizing skills catalogue...</p>` : ''}
-      ${this._error   ? html`<p class="status-msg error">${this._error}</p>`              : ''}
+        ${this._loading ? html`<p class="status-msg">Synchronizing skills catalogue...</p>` : ''}
+        ${this._error   ? html`<p class="status-msg error">${this._error}</p>`              : ''}
 
-      <h3 class="section-title">Agent Skills</h3>
-      ${!this._loading && !this._error && this._skills.length === 0
-        ? html`<p class="status-msg">No skills registered with the cluster.</p>`
-        : ''}
-      <div class="list">
-        ${this._skills.map(t => this._renderSkillCard(t))}
-      </div>
+        <h3 class="section-title">Agent Skills</h3>
+        ${!this._loading && !this._error && this._skills.length === 0
+          ? html`<p class="status-msg">No skills registered with the cluster.</p>`
+          : ''}
+        <div class="list">
+          ${this._skills.map(t => this._renderSkillCard(t))}
+        </div>
 
-      <h3 class="section-title">System Tools</h3>
-      ${!this._loading && !this._error && this._tools.length === 0
-        ? html`<p class="status-msg">No system tools loaded.</p>`
-        : ''}
-      <div class="list">
-        ${this._tools.map(t => this._renderToolCard(t))}
+        <h3 class="section-title">System Tools</h3>
+        ${!this._loading && !this._error && this._tools.length === 0
+          ? html`<p class="status-msg">No system tools loaded.</p>`
+          : ''}
+        <div class="list">
+          ${this._tools.map(t => this._renderToolCard(t))}
+        </div>
       </div>
     `;
   }
