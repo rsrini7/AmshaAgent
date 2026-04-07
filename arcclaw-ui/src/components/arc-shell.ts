@@ -24,7 +24,6 @@ export class ArcShell extends LitElement {
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
-  private _pollingInterval: number | null = null;
   private _hitlEs: EventSource | null = null;
   private _agentEs: EventSource | null = null;
 
@@ -140,7 +139,6 @@ export class ArcShell extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._stopPolling();
     this._sseManager?.disconnect();
     this._hitlEs?.close();
     this._hitlEs = null;
@@ -152,28 +150,23 @@ export class ArcShell extends LitElement {
 
   private _connectSse(
     url: string,
-    onEvent: (data: any) => void,
-    onFallback: () => void
+    onEvent: (data: any) => void
   ): EventSource | null {
     
     if (typeof EventSource === 'undefined') {
-      console.warn('EventSource not supported, using polling fallback');
-      onFallback();
+      console.warn('EventSource not supported');
       return null;
     }
 
     if (!this._sessionId || !this._apiKey) {
       console.warn('Session ID or API key not available, skipping SSE');
-      onFallback();
       return null;
     }
 
     const es = new EventSource(url);
     let sseActive = true;
-    let connected = false;
 
     es.onopen = () => {
-      connected = true;
       console.debug('SSE connected:', url);
     };
 
@@ -193,12 +186,7 @@ export class ArcShell extends LitElement {
       if (!sseActive) return;
       sseActive = false;
       es.close();
-      console.warn(
-        connected
-          ? 'SSE connection lost, falling back to polling: ' + url
-          : 'SSE initial connect failed, falling back to polling: ' + url
-      );
-      onFallback();
+      console.warn('SSE connection failed/lost: ' + url);
     };
 
     return es;
@@ -218,7 +206,6 @@ export class ArcShell extends LitElement {
     this._hitlEs = null;
     this._agentEs?.close();
     this._agentEs = null;
-    this._stopPolling();
 
     window.location.hash = '#/chat';
     this._fetchAgents();
@@ -251,25 +238,14 @@ export class ArcShell extends LitElement {
 
     if (!this._sessionId) return;
 
-    // Single fallback function — only starts polling once even if both SSEs fail
-    let pollingStarted = false;
-    const startPollingOnce = () => {
-      if (!pollingStarted) {
-        pollingStarted = true;
-        this._startPolling();
-      }
-    };
-
     this._hitlEs = this._connectSse(
       `/api/v1/hitl/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
-      (event) => this._handleHitlEvent(event),
-      startPollingOnce
+      (event) => this._handleHitlEvent(event)
     );
 
     this._agentEs = this._connectSse(
       `/api/v1/agents/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
-      (event) => this._handleAgentEvent(event),
-      startPollingOnce
+      (event) => this._handleAgentEvent(event)
     );
   }
 
@@ -347,25 +323,6 @@ export class ArcShell extends LitElement {
       if (err.message?.includes('401')) {
         this._handleUnauthorized();
       }
-    }
-  }
-
-  // ─── Polling (fallback only) ─────────────────────────────────────────────
-
-  private _startPolling() {
-    this._stopPolling();
-    const poll = async () => {
-      await this._fetchApprovals();
-      await this._fetchAgents();
-    };
-    poll(); // immediate first call
-    this._pollingInterval = window.setInterval(poll, 10000);
-  }
-
-  private _stopPolling() {
-    if (this._pollingInterval !== null) {
-      clearInterval(this._pollingInterval);
-      this._pollingInterval = null;
     }
   }
 
