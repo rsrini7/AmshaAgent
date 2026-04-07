@@ -26,7 +26,6 @@ import com.arcclaw.core.sandbox.SandboxStrategy;
 public class BinaryBootstrap {
 
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
-    private static final java.util.Scanner SHARED_INPUT_SCANNER = new java.util.Scanner(System.in);
 
     // Keys whose input should be hidden
     private static final Set<String> SENSITIVE_KEYS = Set.of(
@@ -708,10 +707,11 @@ public class BinaryBootstrap {
         System.err.flush();
         try {
             if (System.getenv("CI") == null && System.getenv("GITHUB_ACTIONS") == null) {
-                if (SHARED_INPUT_SCANNER.hasNextLine()) {
-                    return SHARED_INPUT_SCANNER.nextLine().trim();
-                }
-                return "";
+                // Use BufferedReader instead of Scanner to avoid aggressive pre-buffering
+                // which defeats the buffer drain attempts.
+                BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(System.in));
+                String line = reader.readLine();
+                return line != null ? line.trim() : "";
             } else {
                 System.err.println(" (Non-interactive/CI detected)");
                 return null;
