@@ -8,6 +8,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.control.ActivateRequestContext;
@@ -53,11 +57,22 @@ public class ChatCommand implements Runnable {
 
     private volatile String currentCliSessionId;
 
+    /**
+     * Guard flag: set to true when either the virtual HITL waiter thread OR the
+     * /approve reflex has already printed the approval result, so the other path
+     * suppresses its own print. Volatile is sufficient — only one CLI session runs
+     * at a time on the main thread.
+     */
+    private volatile boolean hitlResultPrinted = false;
+
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
 
     @ConfigProperty(name = "arcclaw.agent.default-timezone", defaultValue = "Asia/Kolkata")
     String defaultTimezone;
+
+    @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
+    long hitlTimeoutHours;
 
     @Override
     @ActivateRequestContext
@@ -89,22 +104,20 @@ public class ChatCommand implements Runnable {
     }
 
     /**
-     * Prioritized shutdown observer to ensure session cleanup happens BEFORE
-     * the Hibernate entity manager and connection pools are closed by Quarkus.
+     * Prioritized shutdown observer — cleans up session AND cancels any
+     * in-flight HITL virtual thread BEFORE Hibernate/connection pools close.
      */
     @ActivateRequestContext
     void onShutdown(@Observes @Priority(Integer.MIN_VALUE) ShutdownEvent event) {
         String sessionId = this.currentCliSessionId;
         if (sessionId == null) return;
-        this.currentCliSessionId = null; // Prevent run() from calling it again
+        this.currentCliSessionId = null;
 
         try {
             log.debugf("CLI ShutdownEvent triggered for session %s (absolute priority cleanup)", sessionId);
-            cliResultBridge.cancel(sessionId);
+            cliResultBridge.cancel(sessionId); // unblocks any HITL virtual thread immediately
             workspaceManager.terminateSession(sessionId);
         } catch (Exception e) {
-            // WorkspaceManager.markCheckpointsFailed now also guards with a catch(IllegalStateException)
-            // just in case this still runs late, but @Priority(Integer.MIN_VALUE) should prevent that.
             log.warnf("Session cleanup on shutdown incomplete for %s: %s", sessionId, e.getMessage());
         }
     }
@@ -117,8 +130,6 @@ public class ChatCommand implements Runnable {
                 AutonomyLevel.SUPERVISED,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 () -> {
-                    
-                    // Seeding handled by DevSecretSeederStartup (build-profile guarded)
                     chatLoop(sessionId);
                     return null;
                 }
@@ -152,7 +163,6 @@ public class ChatCommand implements Runnable {
 
             if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
                 if (statefulAgentStore.findLatestAwaitingApproval(sessionId).isPresent()) {
-                    // Defensive re-register in case session was lost (e.g. CLI crash/restart)
                     cliResultBridge.register(sessionId);
                     System.out.println("\n▶ ArcClaw> ⏸ Approval pending — type /approve or /deny before sending new messages.");
                     continue;
@@ -163,18 +173,17 @@ public class ChatCommand implements Runnable {
 
             MessageContext context = createCliContext(sessionId, input);
 
-            // Pre-compute scheduling metadata for CLI (Issue 1)
             ZonedDateTime nowUtc = ZonedDateTime.now(ZoneOffset.UTC);
             ZoneId userZone = ZoneId.of(defaultTimezone);
             ZonedDateTime targetUtc = CronTimeResolver.resolveTargetTime(input, nowUtc, userZone);
             if (targetUtc != null) {
-                context.setData("SUGGESTED_CRON", String.format("%d %d * * *", 
+                context.setData("SUGGESTED_CRON", String.format("%d %d * * *",
                         targetUtc.getMinute(), targetUtc.getHour()));
                 context.setData("TARGET_UTC_MINUTE", targetUtc.getMinute());
                 context.setData("TARGET_UTC_HOUR", targetUtc.getHour());
-                context.setData("SUGGESTED_NEXT_FIRE_TIME", 
+                context.setData("SUGGESTED_NEXT_FIRE_TIME",
                         targetUtc.toInstant().toString());
-                context.setData("CURRENT_LOCAL_TIME", 
+                context.setData("CURRENT_LOCAL_TIME",
                         ZonedDateTime.now(userZone).format(DateTimeFormatter.ofPattern("HH:mm z")));
             }
 
@@ -184,6 +193,10 @@ public class ChatCommand implements Runnable {
             if (reflexResult.commandResponse().isPresent()) {
                 String response = reflexResult.commandResponse().get();
                 if (!response.isBlank()) {
+                    // Set flag BEFORE printing so the HITL virtual thread (if racing)
+                    // sees it and suppresses its own print — avoids double-print when
+                    // user types /approve while a virtual waiter thread is also active.
+                    hitlResultPrinted = true;
                     System.out.println("\n▶ ArcClaw> " + response);
                 }
                 continue;
@@ -192,19 +205,28 @@ public class ChatCommand implements Runnable {
             dispatchToAgent(sessionId, reflexResult.sanitizedInput(), context);
         }
     }
+
     private void dispatchToAgent(String sessionId, String input, MessageContext context) {
         try {
             System.out.println("⚡ Thinking...");
-            cliResultBridge.register(sessionId);
+
+            // Register BEFORE agentLoop.run() so the future exists even if
+            // complete() fires on a REST thread before we reach the switch below.
+            // The virtual thread holds this reference directly — no second register() needed.
+            CompletableFuture<AgentResult> resultFuture = cliResultBridge.register(sessionId);
+
+            hitlResultPrinted = false; // reset for this dispatch cycle
+
             AgentResult result = agentLoop.run(
                 sessionId, role, input, reasoningEngine, maxIterations, context);
 
             String output = switch (result) {
-                case AgentResult.Finished f      -> f.answer();
+                case AgentResult.Finished f           -> f.answer();
                 case AgentResult.StructuredFinished sf -> sf.answer();
-                case AgentResult.Failed f        -> "❌ Error: " + f.reason();
-                case AgentResult.LoopExceeded l  -> "⏱ Timed out after " + l.maxIterations() + " steps.";
-                case AgentResult.AwaitingApproval a -> {
+                case AgentResult.Failed f             -> "❌ Error: " + f.reason();
+                case AgentResult.LoopExceeded l       -> "⏱ Timed out after " + l.maxIterations() + " steps.";
+                case AgentResult.AwaitingRetry r      -> "⏳ Rate limit hit. I'll automatically retry in " + (r.retryAfterMs() / 1000) + "s...";
+                case AgentResult.AwaitingApproval a   -> {
                     heartbeatTracker.recordHeartbeat(sessionId);
                     String truncatedParams = a.paramsJson() != null
                             && a.paramsJson().length() > 200
@@ -213,15 +235,48 @@ public class ChatCommand implements Runnable {
 
                     System.out.println("\n▶ ArcClaw> ⏸ Approval needed for tool: " + a.toolName() +
                             "\n   Params: " + truncatedParams +
-                            "\n   Type /approve or /deny");
-                    yield null;
+                            "\n   Type /approve or /deny (or approve via REST/UI — result will appear automatically)");
+
+                    // Spawn a virtual thread that holds the pre-registered future directly.
+                    // This is race-safe: even if complete() fires before get() is called,
+                    // the future is already in COMPLETED state and get() returns immediately.
+                    Thread.ofVirtual()
+                        .name("hitl-waiter-" + sessionId)
+                        .start(() -> {
+                            try {
+                                AgentResult hitlResult = resultFuture.get(hitlTimeoutHours, TimeUnit.HOURS);
+                                if (hitlResult == null || hitlResultPrinted) return;
+                                hitlResultPrinted = true;
+
+                                String hitlOutput = switch (hitlResult) {
+                                    case AgentResult.Finished f            -> f.answer();
+                                    case AgentResult.StructuredFinished sf -> sf.answer();
+                                    case AgentResult.Failed f              -> "❌ Error: " + f.reason();
+                                    case AgentResult.LoopExceeded l        -> "⏱ Timed out after " + l.maxIterations() + " steps.";
+                                    case AgentResult.AwaitingRetry r       -> "⏳ Rate limit hit. Retry in " + (r.retryAfterMs() / 1000) + "s...";
+                                    default                                -> null;
+                                };
+                                if (hitlOutput != null) {
+                                    System.out.println("\n▶ ArcClaw> " + hitlOutput);
+                                    System.out.print("\nYou> "); // re-prompt so user sees the cursor
+                                }
+                            } catch (CancellationException e) {
+                                log.debugf("HITL waiter cancelled for session %s (shutdown or GC)", sessionId);
+                            } catch (TimeoutException e) {
+                                log.debugf("HITL waiter timed out for session %s after %dh", sessionId, hitlTimeoutHours);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            } catch (Exception e) {
+                                log.warnf("HITL waiter error for session %s: %s", sessionId, e.getMessage());
+                            }
+                        });
+
+                    yield null; // main thread returns to scanner.nextLine()
                 }
-                case AgentResult.AwaitingRetry r -> "⏳ Rate limit hit. I'll automatically retry in " + (r.retryAfterMs() / 1000) + "s...";
             };
 
-            // Clean up registration unless we are actively blocking for HITL approval.
-            // If we are awaiting approval, we KEEP the registration so REST signals can wake us
-            // during the next You> prompt or a future /approve call.
+            // Cancel bridge state for all terminal results.
+            // For AwaitingApproval we intentionally skip — the virtual thread owns cleanup.
             if (!(result instanceof AgentResult.AwaitingApproval)) {
                 cliResultBridge.cancel(sessionId);
             }
@@ -242,4 +297,3 @@ public class ChatCommand implements Runnable {
         return new MessageContext("cli-chat", user, msg);
     }
 }
-
