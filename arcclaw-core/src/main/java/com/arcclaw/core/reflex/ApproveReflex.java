@@ -157,8 +157,14 @@ public class ApproveReflex implements AgentReflex {
                         } else {
                             cp = checkpointApprovalService.approveAll(sessionId, "CLI approve");
                         }
-                        checkpointApprovalService.triggerResume(cp);
-                        return "";
+                        if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
+                            AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
+                                sessionId, activeRole, userId, chatId, "cli");
+                            return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not resume — session may already be processing.";
+                        } else {
+                            checkpointApprovalService.triggerResume(cp);
+                            return "";
+                        }
                     } catch (CheckpointResolutionException e) {
                         return "No pending approval found for this session.";
                     }
@@ -348,7 +354,7 @@ public class ApproveReflex implements AgentReflex {
                         e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             }
 
-            return "";
+            return AgentResultFormatter.format(result);
         } finally {
             // Defensive: ensure lock is always released even on exceptions.
             statefulAgentStore.clearBatchResuming(cronSessionId);

@@ -5,6 +5,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import org.jboss.logging.Logger;
@@ -36,7 +37,14 @@ public class ChannelCronNotificationDispatcher {
             .map(ChannelPlugin::jobNotifier)
             .ifPresentOrElse(
                 n -> n.notifyJobCompleted(event.channelPlatformId(), event.renderedAnswer(), event.correlationId()),
-                () -> log.warnf("No ChannelPlugin for channelType [%s] — dropping notification", event.channelType())
+                () -> {
+                    if (ChannelType.CLI.id().equalsIgnoreCase(event.channelType().id())) {
+                        log.warnf("CRON-UNDELIVERABLE cronId=%s channel=cli — CLI interactive session has no background result receiver. Task completed but not printed to stderr/stdout.", event.cronId());
+                        System.err.println("\n[ArcClaw] Background task completed: " + event.renderedAnswer());
+                    } else {
+                        log.warnf("No ChannelPlugin for channelType [%s] — dropping notification", event.channelType());
+                    }
+                }
             );
     }
 }

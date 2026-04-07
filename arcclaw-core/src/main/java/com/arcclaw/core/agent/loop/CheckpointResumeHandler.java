@@ -170,6 +170,70 @@ public class CheckpointResumeHandler {
         }
     }
 
+    /**
+     * Synchronous version of resumeAfterBatchDecision.
+     * Returns the AgentResult directly instead of sending it to a channel.
+     * Used by the interactive CLI to avoid async delivery drops.
+     */
+    public AgentResult resumeAfterBatchDecisionSync(
+            String sessionId,
+            String agentRole,
+            String userId,
+            String chatId,
+            String channelType) throws Exception {
+
+        if (!agentStore.markBatchResuming(sessionId)) {
+            log.infof("BATCH-RESUME-SYNC-GUARD: session %s already resuming", sessionId);
+            return null;
+        }
+
+        try {
+            AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
+            if (checkpoint == null) {
+                log.warnf("resumeAfterBatchDecisionSync: no checkpoint found for session %s role %s", sessionId, agentRole);
+                return null;
+            }
+
+            String resumeGoal = resolveResumeGoal(checkpoint);
+            if (resumeGoal == null || resumeGoal.isBlank()) {
+                log.warnf("resumeAfterBatchDecisionSync: no resume goal found for session %s role %s",
+                    sessionId, agentRole);
+                return null;
+            }
+
+            ChannelType cType = ChannelType.fromString(channelType)
+                    .orElse(ChannelType.CLI);
+
+            ChannelUser user = new ChannelUser(
+                userId, chatId, "Operator", cType);
+
+            MessageContext context = new MessageContext(chatId, user, 
+                new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now()));
+            context.setResumeSignal(true);
+            context.setGoal(resumeGoal);
+
+            // Fetch budget for the resume.
+            int maxResumeIterations = 5;
+            int original = checkpoint.getMaxIterations() != null ? checkpoint.getMaxIterations() : maxResumeIterations;
+            int used = checkpoint.getIterationsUsed();
+            int remaining = Math.max(0, original - used);
+            int budget = Math.max(3, Math.min(remaining, maxResumeIterations));
+
+            log.infof("Synchronously resuming session=%s budget=%d (original=%d, used=%d)",
+                    sessionId, budget, original, used);
+
+            return WorkspaceContext.runWithFullAutonomy(
+                sessionId, userId, chatId, agentRole,
+                () -> agentLoop.run(
+                    sessionId, agentRole, resumeGoal,
+                    checkpoint.getSystemNote(),
+                    reasoningEngine, budget, context));
+
+        } finally {
+            agentStore.clearBatchResuming(sessionId);
+        }
+    }
+
     public String resolveResumeGoal(String sessionId, String agentRole) {
         return agentStore.load(sessionId, agentRole)
             .map(this::resolveResumeGoal)

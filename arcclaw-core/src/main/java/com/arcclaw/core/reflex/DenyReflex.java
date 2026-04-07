@@ -115,8 +115,14 @@ public class DenyReflex implements AgentReflex {
                         } else {
                             cp = checkpointApprovalService.denyAll(sessionId, "CLI deny");
                         }
-                        checkpointApprovalService.triggerResume(cp);
-                        return "";
+                        if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
+                            AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
+                                sessionId, activeRole, userId, chatId, "cli");
+                            return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not deny — session may already be processing.";
+                        } else {
+                            checkpointApprovalService.triggerResume(cp);
+                            return "";
+                        }
                     } catch (CheckpointResolutionException e) {
                         return "No pending denial found for this session.";
                     }
@@ -266,7 +272,7 @@ public class DenyReflex implements AgentReflex {
                     AgentResultFormatter.format(result),
                     null));
 
-            return "🚫 Cron task denied and cancelled.";
+            return AgentResultFormatter.format(result);
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
         }
