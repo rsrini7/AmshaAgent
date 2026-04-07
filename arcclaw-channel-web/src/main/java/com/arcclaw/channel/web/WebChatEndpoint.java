@@ -1,5 +1,7 @@
 package com.arcclaw.channel.web;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.io.StringReader;
 import java.time.Instant;
 import java.util.Map;
@@ -72,7 +74,16 @@ public class WebChatEndpoint {
         }
 
         // platformId is the stable per-connection identity (channelId + userId)
-        String platformId = UUID.randomUUID().toString();
+        String query = conn.handshakeRequest().query();
+        String platformId = null;
+        if (query != null && query.contains("sessionId=")) {
+            String rawId = query.split("sessionId=")[1].split("&")[0];
+            platformId = URLDecoder.decode(rawId, StandardCharsets.UTF_8);
+        }
+        if (platformId == null || platformId.isBlank()) {
+            platformId = UUID.randomUUID().toString();
+        }
+
         connectionToSession.put(conn.id(), platformId);
         sessionStore.register(platformId, conn);
 

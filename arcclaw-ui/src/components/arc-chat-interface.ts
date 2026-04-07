@@ -9,6 +9,7 @@ interface ChatMessage {
   text: string;
   timestamp: number;
   isApprovalPrompt?: boolean;
+  historic?: boolean;
 }
 
 @customElement('arc-chat-interface')
@@ -195,10 +196,31 @@ export class ArcChatInterface extends LitElement {
     textarea.deny-reason { width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; color: white; }
   `;
 
-  connectedCallback() {
-    super.connectedCallback();
-    if (this.apiKey) {
-      this._connect();
+  updated(changedProperties: Map<string, unknown>) {
+    const relevant = changedProperties.has('apiKey') || changedProperties.has('sessionId');
+    if (relevant && this.apiKey && this.sessionId && !this._ws) {
+      this._loadHistory().then(() => this._connect());
+    }
+  }
+
+  private async _loadHistory() {
+    try {
+      const res = await fetch(`/api/v1/chat/stream/history/${this.sessionId}?apiKey=${encodeURIComponent(this.apiKey)}`);
+      if (!res.ok) return;
+      const msgs = await res.json();
+      this._messages = msgs
+        .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+        .map((m: any) => ({
+          id: crypto.randomUUID(),
+          role: m.role,
+          text: m.text,
+          timestamp: Date.now(), // history doesn't have timestamps? we'll just use current for now
+          historic: true
+        }));
+      await this.updateComplete;
+      this._scrollToBottom();
+    } catch (e) {
+      console.warn('ArcClaw: chat history fetch failed', e);
     }
   }
   
@@ -210,7 +232,7 @@ export class ArcChatInterface extends LitElement {
   private _connect() {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host;
-    const wsUrl = `${proto}://${host}/ws/chat?apiKey=${encodeURIComponent(this.apiKey)}`;
+    const wsUrl = `${proto}://${host}/ws/chat?apiKey=${encodeURIComponent(this.apiKey)}&sessionId=${encodeURIComponent(this.sessionId)}`;
     this._ws = new WsManager(
       wsUrl,
       (frame) => this._handleFrame(frame),

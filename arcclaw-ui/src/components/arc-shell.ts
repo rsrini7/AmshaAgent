@@ -116,15 +116,24 @@ export class ArcShell extends LitElement {
 
     const storedKey = localStorage.getItem('arc-api-key');
     if (storedKey) {
+      this._apiKey = storedKey;
       this._client = new ArcClient('/api/v1', storedKey);
+      this._sessionId = this._resolveSessionId();
       this.updateComplete.then(() => {
         this._fetchAgents();
         this._fetchApprovals();
         this._startSse();
-        // No polling on startup — SSE handles live updates.
-        // Polling only starts as fallback if SSE fails.
       });
     }
+  }
+
+  private _resolveSessionId() {
+    let id = sessionStorage.getItem('arcclaw-chat-session');
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem('arcclaw-chat-session', id);
+    }
+    return id;
   }
 
   disconnectedCallback() {
@@ -223,7 +232,14 @@ export class ArcShell extends LitElement {
   }
 
   private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
-    this._sessionId = e.detail.sessionId;
+    // Only update if server assigned a different ID (fallback UUID case)
+    if (this._sessionId !== e.detail.sessionId) {
+        this._sessionId = e.detail.sessionId;
+        sessionStorage.setItem('arcclaw-chat-session', this._sessionId);
+    } else if (this._hitlEs || this._agentEs) {
+        // We already have matching session and active SSEs, skip re-init
+        return;
+    }
 
     // Close any previous SSE connections
     this._hitlEs?.close();

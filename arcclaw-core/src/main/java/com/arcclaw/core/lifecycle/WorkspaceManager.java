@@ -23,7 +23,6 @@ import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -96,10 +95,12 @@ public class WorkspaceManager {
         // 3. Wipe workspace directory
         wipeWorkspaceDir(sessionId);
 
-        // 4. Clear in-memory LangChain4j ChatMemory
-        clearInMemoryChatMemory(sessionId);
+        // 4. Clear in-memory LangChain4j ChatMemory — DISABLED (§85-persistence)
+        // clearInMemoryChatMemory(sessionId);
 
-        // 5. Delete chat memory from persistence
+        // 5. Delete chat memory from persistence — DISABLED to allow chat history persistence (§85-persistence)
+        // Handled by SessionReaper's Soft Retention Policy (purgeOldChatHistory) to prevent unbounded growth.
+        /*
         try {
             chatMemoryStore.deleteMessages(sessionId);
             log.debugf("Chat memory deleted for session=%s", sessionId);
@@ -107,6 +108,7 @@ public class WorkspaceManager {
             log.warnf("Failed to delete chat memory for session=%s: %s",
                       sessionId, e.getMessage());
         }
+        */
 
         // 6. Destroy CDI scope
         try {
@@ -146,20 +148,6 @@ public class WorkspaceManager {
         }
     }
 
-    private void clearInMemoryChatMemory(String sessionId) {
-        try {
-            MessageWindowChatMemory.builder()
-                    .id(sessionId)
-                    .maxMessages(maxMessages)
-                    .chatMemoryStore(chatMemoryStore)
-                    .build()
-                    .clear();
-            log.debugf("In-memory chat memory cleared for session=%s", sessionId);
-        } catch (Exception e) {
-            log.warnf("Failed to clear in-memory chat memory for session=%s (non-fatal): %s",
-                      sessionId, e.getMessage());
-        }
-    }
 
     /**
      * Marks only genuinely live checkpoints as FAILED during session teardown.
