@@ -16,33 +16,59 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class CliResultBridge {
     private static final Logger log = Logger.getLogger(CliResultBridge.class);
-    private final ConcurrentHashMap<String, CompletableFuture<AgentResult>> pending = new ConcurrentHashMap<>();
- 
-    public void register(String sessionId) {
+    
+    private final ConcurrentHashMap<String, CompletableFuture<AgentResult>> waiters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AgentResult> bufferedResults = new ConcurrentHashMap<>();
+
+    /**
+     * Registers interest in a session result. If a result arrived while no one was waiting, 
+     * it is returned as an already-completed future.
+     */
+    public CompletableFuture<AgentResult> register(String sessionId) {
         log.debugf("CliResultBridge: registering interest for session %s", sessionId);
-        pending.computeIfAbsent(sessionId, k -> new CompletableFuture<>());
+        
+        AgentResult buffered = bufferedResults.remove(sessionId);
+        if (buffered != null) {
+            log.infof("CliResultBridge: delivering buffered result for session %s immediately", sessionId);
+            return CompletableFuture.completedFuture(buffered);
+        }
+
+        return waiters.computeIfAbsent(sessionId, k -> new CompletableFuture<>());
     }
 
+    /** Clears any waiters or buffered results for an abandoned session. */
     public void cancel(String sessionId) {
-        pending.remove(sessionId);
+        waiters.remove(sessionId);
+        bufferedResults.remove(sessionId);
     }
 
+    /**
+     * Signals result completion. If a CLI waiter is active, it receives the result now.
+     * Otherwise, the result is buffered for later retrieval by a late-arriving register() call.
+     */
     public void complete(String sessionId, AgentResult result) {
-        CompletableFuture<AgentResult> future = pending.get(sessionId);
-        if (future != null) {
-            log.infof("CliResultBridge: signaling result for session %s", sessionId);
-            future.complete(result);
+        CompletableFuture<AgentResult> waiter = waiters.remove(sessionId);
+        if (waiter != null) {
+            log.infof("CliResultBridge: signaling active waiter for session %s", sessionId);
+            waiter.complete(result);
         } else {
-            log.debugf("CliResultBridge: no waiter for session %s (likely not a CLI-blocked session)", sessionId);
+            // No one waiting yet? Buffer it (e.g. REST approved before user typed /approve)
+            log.infof("CliResultBridge: no active waiter for session %s — buffering result", sessionId);
+            bufferedResults.put(sessionId, result);
         }
     }
 
+    /**
+     * Blocking wait for a result. MUST call register() correctly or this will wait on a fresh future.
+     */
     public AgentResult waitForResult(String sessionId, long timeoutMs) {
-        CompletableFuture<AgentResult> future = pending.get(sessionId);
-        if (future == null) {
-            log.warnf("CliResultBridge: attempt to wait for unregistered session %s", sessionId);
-            return null;
-        }
+        // computeIfAbsent ensures we are always waiting on a future
+        CompletableFuture<AgentResult> future = waiters.computeIfAbsent(sessionId, k -> {
+            AgentResult buffered = bufferedResults.remove(sessionId);
+            if (buffered != null) return CompletableFuture.completedFuture(buffered);
+            return new CompletableFuture<>();
+        });
+
         try {
             log.debugf("CliResultBridge: waiting %d ms for session %s", timeoutMs, sessionId);
             return future.get(timeoutMs, TimeUnit.MILLISECONDS);
@@ -50,7 +76,7 @@ public class CliResultBridge {
             log.debugf("CliResultBridge: timeout or interruption waiting for session %s", sessionId);
             return null;
         } finally {
-            pending.remove(sessionId);
+            waiters.remove(sessionId);
         }
     }
 }
