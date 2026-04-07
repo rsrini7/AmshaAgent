@@ -4,9 +4,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Playwright;
 import org.jboss.logging.Logger;
 
 /**
@@ -52,7 +57,7 @@ public class PlaywrightBrowserInstaller {
             if (mvnw != null) {
                 runMavenInstaller(mvnw, browsersPath);
             } else {
-                runClassInstaller(browsersPath);
+                runBinaryInstaller(browsersPath);
             }
         } catch (Exception e) {
             System.err.println();
@@ -115,9 +120,7 @@ public class PlaywrightBrowserInstaller {
     private static void runClassInstaller(Path browsersPath) throws Exception {
         String classpath = System.getProperty("java.class.path");
         if (classpath == null || classpath.isBlank()) {
-            throw new RuntimeException("Java classpath is unavailable. Install Chromium from a source checkout with ./mvnw "
-                    + "exec:java -pl arcclaw-tool-playwright -Dexec.mainClass=com.microsoft.playwright.CLI "
-                    + "-Dexec.args=\"install --with-deps chromium\"");
+            throw new RuntimeException("java.class.path is unavailable");
         }
 
         List<String> command = new ArrayList<>();
@@ -140,6 +143,37 @@ public class PlaywrightBrowserInstaller {
             System.err.println("  ✓ Playwright Chromium installed successfully.");
         } else {
             throw new RuntimeException("CLI returned exit code " + exitCode);
+        }
+    }
+
+    private static void runBinaryInstaller(Path browsersPath) throws Exception {
+        try {
+            runClassInstaller(browsersPath);
+            return;
+        } catch (RuntimeException classpathMissing) {
+            if (!isClasspathUnavailable(classpathMissing)) {
+                throw classpathMissing;
+            }
+        }
+        runInProcessInstaller(browsersPath);
+    }
+
+    private static boolean isClasspathUnavailable(RuntimeException e) {
+        String message = e.getMessage();
+        return message != null && message.contains("java.class.path is unavailable");
+    }
+
+    private static void runInProcessInstaller(Path browsersPath) {
+        Map<String, String> env = new HashMap<>(System.getenv());
+        env.put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
+        env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
+
+        Playwright.CreateOptions options = new Playwright.CreateOptions().setEnv(env);
+        try (Playwright playwright = Playwright.create(options)) {
+            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+            browser.close();
+            System.err.println();
+            System.err.println("  ✓ Playwright Chromium installed successfully.");
         }
     }
 

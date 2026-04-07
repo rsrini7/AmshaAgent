@@ -54,6 +54,7 @@ public class AppBootstrap {
         
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
+        ensureFallbackLlmDefaults();
         validateAndAutoFixSecurityKeys(binaryDir);
         validateAndAutoFixLlmConfig(binaryDir);
         validateAndAutoFixEmbeddingConfig(binaryDir);
@@ -577,6 +578,19 @@ public class AppBootstrap {
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
+        }
+    }
+
+    private static void ensureFallbackLlmDefaults() {
+        setIfMissing("arcclaw.llm.fallback-model", "");
+        setIfMissing("arcclaw.llm.fallback-base-url", "");
+        setIfMissing("arcclaw.llm.fallback-api-key", "");
+    }
+
+    private static void setIfMissing(String key, String value) {
+        String existing = System.getProperty(key);
+        if (existing == null || existing.isBlank()) {
+            System.setProperty(key, value);
         }
     }
 
