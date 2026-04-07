@@ -681,12 +681,15 @@ public class BinaryBootstrap {
             return;
         }
 
+        String tr = response.trim().toLowerCase();
+        // System.err.println("  DEBUG: playwright response=[" + tr + "]"); // Internal diagnostic
+
         if (playwrightEnabled) {
             // Already enabled, just asking about browser installation
-            if (response.isEmpty() || response.toLowerCase().startsWith("y")) {
+            if (tr.isEmpty() || tr.startsWith("y")) {
                 PlaywrightBrowserInstaller.installChromium(browsersPath);
             }
-        } else if (response.trim().toLowerCase().startsWith("y")) {
+        } else if (tr.startsWith("y")) {
             // Enabling for the first time
             patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
@@ -701,7 +704,7 @@ public class BinaryBootstrap {
                     PlaywrightBrowserInstaller.installChromium(browsersPath);
                 }
             }
-        } else {
+        } else if (tr.startsWith("n")) {
             patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
             System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
         }
