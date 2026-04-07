@@ -12,10 +12,7 @@ import java.util.UUID;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.event.Reception;
 import jakarta.inject.Inject;
-
-import io.quarkus.runtime.ShutdownEvent;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -34,6 +31,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.CronTimeResolver;
+import io.quarkus.runtime.ShutdownEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import picocli.CommandLine;
@@ -95,7 +93,7 @@ public class ChatCommand implements Runnable {
      * the Hibernate entity manager and connection pools are closed by Quarkus.
      */
     @ActivateRequestContext
-    void onShutdown(@Observes(notifyObserver = Reception.IF_EXISTS) @Priority(Integer.MIN_VALUE) ShutdownEvent event) {
+    void onShutdown(@Observes @Priority(Integer.MIN_VALUE) ShutdownEvent event) {
         String sessionId = this.currentCliSessionId;
         if (sessionId == null) return;
         this.currentCliSessionId = null; // Prevent run() from calling it again
