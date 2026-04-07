@@ -44,8 +44,9 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 - Any fallback to Telegram is LEGACY and should be removed, not copied.
 - **P82-85 SPI Enforcement:** Channel modules (e.g., `arcclaw-channel-telegram`, `arcclaw-channel-web`) MUST NOT import `com.arcclaw.core.*` directly. 
   - Interaction with core HITL state MUST flow through the `com.arcclaw.channel.api.hitl.ApprovalGateway` SPI.
+  - Querying pending HITL approval state MUST flow through the `com.arcclaw.channel.api.hitl.PendingApprovalChecker` SPI.
   - Identity validation (API keys) MUST flow through `com.arcclaw.channel.api.ChannelServices.isValidIdentity()`. 
-  - Direct injection of `com.arcclaw.core.security.SessionOwnerResolver` in channel modules is FORBIDDEN as it violates architectural boundaries and fails CDI resolution in module-level tests.
+  - Direct injection of core classes like `com.arcclaw.core.security.SessionOwnerResolver` or `com.arcclaw.core.state.StatefulAgentStore` in channel modules is FORBIDDEN as it violates architectural boundaries and fails CDI resolution in module-level tests.
 
 
 ### 1.5 Channel type policy
