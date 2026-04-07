@@ -514,7 +514,7 @@ mp:
         "io.quarkus.agroal":
           level: ERROR     # Silences "Agroal does not support..."
         "com.arcclaw":
-          level: ERROR     # Silences WorkspaceManager and SqliteWalConfigurer
+          level: DEBUG     # Silences WorkspaceManager and SqliteWalConfigurer
         "org.hibernate":
           level: ERROR
       file:
