@@ -56,8 +56,8 @@ public class BinaryBootstrap {
         validateAndAutoFixLlmConfig(binaryDir);
         validateAndAutoFixEmbeddingConfig(binaryDir);
         validateSandboxTools();
-        validatePlaywright(binaryDir);
         interactiveSetupIfNeeded(binaryDir, args);
+        promptPlaywrightSetupIfNeeded(binaryDir);
         
         // 1. Resolve and Provision Data Directory
         String rawDataDir = System.getProperty("ARCCLAW_DATA_DIR", 
@@ -410,56 +410,6 @@ public class BinaryBootstrap {
                 System.err.println();
             }
         } // end if (!missing.isEmpty())
-
-        // Dedicated block for Playwright setup - always check at end of interactive setup
-        Path browsersPath = binaryDir.resolve(".playwright-browsers");
-        String playwrightProp = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED",
-                System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
-        boolean playwrightEnabled = "true".equalsIgnoreCase(playwrightProp);
-
-        // Prompt if:
-        // - Variable is missing or default/placeholder
-        // - OR Playwright is enabled but Chromium is missing
-        boolean needsPlaywrightPrompt = (playwrightProp == null || playwrightProp.isBlank() || playwrightProp.equals("CHANGEME"))
-                || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
-
-        if (needsPlaywrightPrompt) {
-            System.err.println("  ┌─ Playwright Browser Integration");
-            System.err.println("  │  Enable real headless browser (Chromium) for complex web crawling/scraping?");
-            System.err.println("  │  Required for JavaScript-heavy sites that simple fetchers cannot read.");
-            System.err.println("  │");
-
-            String response = readLineWithFallback(console, playwrightEnabled
-                    ? "  └─ Download and install Chromium now? [Y/n]: "
-                    : "  └─ Enable Playwright? [y/N]: ");
-
-            if (playwrightEnabled) {
-                if (response == null || response.isEmpty() || response.toLowerCase().startsWith("y")) {
-                    PlaywrightBrowserInstaller.installChromium(browsersPath);
-                }
-            } else if (response != null && response.trim().toLowerCase().startsWith("y")) {
-                patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
-                System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
-                initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
-                initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
-
-                if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
-                    System.err.println("  │");
-                    System.err.println("  │  Chromium browser binary is not installed.");
-                    String ins = readLineWithFallback(console, "  └─ Download and install Chromium now? [Y/n]: ");
-                    if (ins == null || ins.trim().isEmpty() || ins.trim().toLowerCase().startsWith("y")) {
-                        PlaywrightBrowserInstaller.installChromium(browsersPath);
-                    }
-                }
-            } else {
-                patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
-                System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
-            }
-            System.err.println();
-        }
-
-        System.err.println("[ArcClaw] ✓ Setup complete. Configuration saved to: " + envFile);
-        System.err.println();
     }
 
     private static void initEnvFile(Path envFile, String key, String value) {
@@ -689,20 +639,73 @@ public class BinaryBootstrap {
         }
     }
 
-    private static void validatePlaywright(Path binaryDir) {
-        String enabled = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
-        if ("true".equalsIgnoreCase(enabled)) {
-            // Always set SKIP_BROWSER_DOWNLOAD if enabled, ensuring the running app
-            // doesn't try to trigger a background download if the binary is missing.
-            System.setProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+    /**
+     * Standalone Playwright setup — runs from bootstrap() directly,
+     * outside interactiveSetupIfNeeded(), so it is never blocked by
+     * the console==null or missing.isEmpty() early returns.
+     */
+    private static void promptPlaywrightSetupIfNeeded(Path binaryDir) {
+        // Skip in CI
+        if (System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null) return;
 
-            String pathStr = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
-            Path browsersPath = (pathStr != null) ? Path.of(pathStr) : binaryDir.resolve(".playwright-browsers");
-            if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
-                System.err.println("[ArcClaw] ⚠️  Warning: Playwright is ENABLED but Chromium browser binary is MISSING.");
-                System.err.println("[ArcClaw]     Path expected: " + browsersPath);
-            }
+        Path envFile = binaryDir.resolve(".env");
+        Path browsersPath = binaryDir.resolve(".playwright-browsers");
+        String playwrightProp = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED",
+                System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
+        boolean playwrightEnabled = "true".equalsIgnoreCase(playwrightProp);
+
+        // Always gate background downloads
+        if (playwrightEnabled) {
+            System.setProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
         }
+
+        // Prompt if: (a) not configured, or (b) enabled but browser missing
+        boolean needsPrompt = (playwrightProp == null || playwrightProp.isBlank())
+                || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
+
+        if (!needsPrompt) return;
+
+        System.err.println();
+        System.err.println("  ┌─ Playwright Browser Integration");
+        System.err.println("  │  Enable real headless browser (Chromium) for complex web crawling/scraping?");
+        System.err.println("  │  Required for JavaScript-heavy sites that simple fetchers cannot read.");
+        System.err.println("  │");
+
+        String response = readLineWithFallback(System.console(), playwrightEnabled
+                ? "  └─ Download and install Chromium now? [Y/n]: "
+                : "  └─ Enable Playwright? [y/N]: ");
+
+        if (response == null) {
+            // Could not read — skip silently
+            System.err.println("     [skipped — non-interactive]");
+            return;
+        }
+
+        if (playwrightEnabled) {
+            // Already enabled, just asking about browser installation
+            if (response.isEmpty() || response.toLowerCase().startsWith("y")) {
+                PlaywrightBrowserInstaller.installChromium(browsersPath);
+            }
+        } else if (response.trim().toLowerCase().startsWith("y")) {
+            // Enabling for the first time
+            patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+            System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
+            initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
+            initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+
+            if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+                System.err.println("  │");
+                System.err.println("  │  Chromium browser binary is not installed.");
+                String ins = readLineWithFallback(System.console(), "  └─ Download and install Chromium now? [Y/n]: ");
+                if (ins == null || ins.trim().isEmpty() || ins.trim().toLowerCase().startsWith("y")) {
+                    PlaywrightBrowserInstaller.installChromium(browsersPath);
+                }
+            }
+        } else {
+            patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+            System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+        }
+        System.err.println();
     }
 
     private static String readLineWithFallback(Console console, String prompt) {

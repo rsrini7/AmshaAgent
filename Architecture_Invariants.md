@@ -999,11 +999,15 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `exitCode()` (instead of `status()`)
   - `output()` (instead of `content()`)
 
-### 16.11 Bootstrap and Setup Integration
-- New modules with required or optional user settings (API keys, toggles, binary paths) MUST be integrated into the interactive setup wizard.
+### 16.11 Bootstrap and Setup Integration (§16.11 INVARIANT)
+- New modules with required or optional user settings (API keys, toggles, binary paths) MUST be integrated into the interactive setup wizard in `BinaryBootstrap`.
 - Update `com.arcclaw.app.util.CliUtils.getMissingVarSpecs()` in `arcclaw-app` to include the `VarSpec` for these variables.
-- If the module requires complex post-boot setup (e.g., downloading browser binaries, extracting native libs), implement an idempotent `*Installer` utility in `arcclaw-app` and call it during the `BinaryBootstrap` sequence.
-- **Dependency Constraint:** Per §16.1, the new module MUST NOT depend on `arcclaw-app`. The integration code (prompts and installer calls) resides in `arcclaw-app`, which is the correct layer for wiring and orchestration.
+- If the module requires binary dependencies (e.g., Chromium, specialized tools), implement an idempotent `*Installer` utility that:
+  - Uses `ProcessBuilder.inheritIO()` to stream progress to the user's terminal.
+  - Prefers `mvnw exec:java` if in a source tree, falling back to `java -cp` for binary distributions.
+  - Detects existing binaries to avoid redundant downloads.
+- **Interactive UI:** All bootstrap prompts MUST use `readLineWithFallback(System.console(), prompt)` to support environment-redirected terminals (e.g., `mise`, `podman exec`).
+- **Dependency Constraint:** Per §16.1, the new module MUST NOT depend on `arcclaw-app`. The integration logic is owned by `arcclaw-app` in `BinaryBootstrap`.
 
 
 ## 17. General Java Guards
