@@ -11,7 +11,9 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import io.quarkus.runtime.Startup;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * CDI producer for EmbeddingModel.
@@ -34,7 +36,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class EmbeddingModelProducer {
 
-    // private static final Logger log = Logger.getLogger(EmbeddingModelProducer.class);
+    private static final Logger log = Logger.getLogger(EmbeddingModelProducer.class);
 
     @Inject
     @Any
@@ -55,9 +57,11 @@ public class EmbeddingModelProducer {
     @ConfigProperty(name = "arcclaw.rag.embed-timeout-seconds", defaultValue = "10")
     int timeoutSeconds;
 
+    @Startup
     @Produces
     @ApplicationScoped
     public EmbeddingModel embeddingModel() {
+        log.infof("Eager initialization of %s embedding model: %s", provider, modelName);
         String targetProvider = provider.toLowerCase().trim();
         
         return factories.stream()

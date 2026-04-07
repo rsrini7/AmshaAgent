@@ -233,6 +233,24 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional
+    public Optional<String> findLatestRole(String sessionId) {
+        em.clear();
+        return em.createQuery(
+                "SELECT c.agentRole FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.status <> :archived " +
+                "ORDER BY c.id DESC",
+                String.class)
+                .setParameter("sid", sessionId)
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     @Deprecated
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
         if (checkpoint.getStateJson() == null || checkpoint.getStateJson().isBlank()) {

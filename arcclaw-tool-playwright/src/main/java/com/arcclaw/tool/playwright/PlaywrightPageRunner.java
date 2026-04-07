@@ -163,8 +163,25 @@ public class PlaywrightPageRunner {
     }
 
     private String extractText(Page page, String selector) {
-        String scope = (selector != null && !selector.isBlank()) ? selector : "body";
-        return normalizeWhitespace(page.locator(scope).innerText());
+        if (selector != null && !selector.isBlank() && !"body".equalsIgnoreCase(selector)) {
+            try {
+                // Try the LLM's custom selector with a short timeout to prevent 30s "black hole"
+                return normalizeWhitespace(page.locator(selector).innerText(
+                    new Locator.InnerTextOptions().setTimeout(3000)));
+            } catch (Exception e) {
+                log.warnf("LLM selector '%s' failed or timed out — falling back to h1", selector);
+            }
+        }
+
+        // Fallback 1: Primary heading
+        try {
+            return normalizeWhitespace(page.locator("h1").innerText(
+                new Locator.InnerTextOptions().setTimeout(1000)));
+        } catch (Exception e) {
+            // Fallback 2: Guaranteed full body (10s cap to prevent edge-case hangs)
+            return normalizeWhitespace(page.locator("body").innerText(
+                new Locator.InnerTextOptions().setTimeout(10000)));
+        }
     }
 
     private String captureScreenshot(Page page) {

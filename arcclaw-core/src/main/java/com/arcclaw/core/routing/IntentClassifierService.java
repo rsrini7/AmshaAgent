@@ -27,6 +27,10 @@ import org.jboss.logging.Logger;
 public class IntentClassifierService implements IntentClassifier {
 
     private static final Logger log = Logger.getLogger(IntentClassifierService.class);
+    
+    private static final Pattern CONTINUITY_PATTERN = Pattern.compile(
+        "(?i)^\\s*(try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue)(\\s+.*)?$"
+    );
 
     @Inject
     @Identifier("intent-classifier")
@@ -101,6 +105,11 @@ public class IntentClassifierService implements IntentClassifier {
 
     @Override
     public String classify(String userMessage) {
+        if (CONTINUITY_PATTERN.matcher(userMessage).matches()) {
+            log.debugf("CLASSIFIER: continuity phrase matched → fall back to previous role");
+            return "__CONTINUE__";
+        }
+
         // Fast-path routing via SPI triggers
         for (IntentRoutingProvider provider : sortedProviders) {
             // §4.11 Negation Safety Guard

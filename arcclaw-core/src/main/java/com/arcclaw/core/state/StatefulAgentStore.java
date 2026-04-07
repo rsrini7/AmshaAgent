@@ -172,6 +172,12 @@ public interface StatefulAgentStore {
     Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId);
 
     /**
+     * Returns the agentRole of the most recent non-archived checkpoint for this session.
+     * Used for continuity phrases (e.g. "try again") to preserve current agent role.
+     */
+    Optional<String> findLatestRole(String sessionId);
+
+    /**
      * Returns {@code true} if the latest AWAITING_APPROVAL checkpoint for this
      * session has been waiting longer than {@code timeoutHours}, or if no such
      * checkpoint exists (treat as expired — nothing to approve).
