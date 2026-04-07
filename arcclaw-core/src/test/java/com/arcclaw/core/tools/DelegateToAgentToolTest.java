@@ -14,6 +14,7 @@ import java.util.Map;
 
 import jakarta.enterprise.inject.Instance;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -55,7 +56,7 @@ class DelegateToAgentToolTest {
         );
 
         when(agentLoop.run(
-            ArgumentMatchers.startsWith(SESSION_ID + ":d:debugger"),
+            ArgumentMatchers.startsWith(SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "debugger"),
             eq(AgentRoleEnum.DEBUGGER.toScopedName()),
             eq("debug this"),
             eq(reasoningEngine),
@@ -121,7 +122,7 @@ class DelegateToAgentToolTest {
 
         when(agentLoop.run(
             any(), any(), any(), any(), anyInt()
-        )).thenReturn(AgentResult.awaitingApproval("sandbox_exec", "{}", SESSION_ID + ":d:coder", List.of()));
+        )).thenReturn(AgentResult.awaitingApproval("sandbox_exec", "{}", SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "coder", List.of()));
 
         ToolResponse response = WorkspaceContext.runWithFullAutonomy(SESSION_ID, USER_ID, CHAT_ID, "coordinator", () -> tool.execute(params));
 

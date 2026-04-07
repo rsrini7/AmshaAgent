@@ -74,6 +74,7 @@ public class AgentStateMachineRunner {
     @Inject AgentOtelContext agentOtelContext;
     @Inject Event<AgentStateChangedEvent> stateChangedEvent;
     @Inject StatefulAgentStore agentStore;
+    @Inject CliResultBridge cliResultBridge;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
@@ -121,6 +122,9 @@ public class AgentStateMachineRunner {
 
                 if (engineDecision.type() == DecisionType.TERMINAL) {
                     fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), engineDecision.result());
+                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
+                        cliResultBridge.complete(context.sessionId(), engineDecision.result());
+                    }
                     return engineDecision.result();
                 }
                 if (engineDecision.type() == DecisionType.CONTINUE) {
@@ -169,14 +173,21 @@ public class AgentStateMachineRunner {
                         continue;
                     }
 
-                    return handleFinishAction(context.sessionId(), context.agentRole(),
+                    AgentResult result = handleFinishAction(context.sessionId(), context.agentRole(),
                             history, step, iteration);
+                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
+                        cliResultBridge.complete(context.sessionId(), result);
+                    }
+                    return result;
                 }
 
                 StepDecision validationDecision = toolStepHandler.validateTool(
                         context, history, step, consecutiveFailures);
                 if (validationDecision.type() == DecisionType.TERMINAL) {
                     fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), validationDecision.result());
+                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
+                        cliResultBridge.complete(context.sessionId(), validationDecision.result());
+                    }
                     return validationDecision.result();
                 }
                 if (validationDecision.type() == DecisionType.CONTINUE) {
@@ -187,7 +198,11 @@ public class AgentStateMachineRunner {
 
                 // Re-dispatch if validateTool rewrote a hallucinated tool → FINISH
                 if (ReasoningStep.FINISH.equals(step.action())) {
-                    return handleFinishAction(context.sessionId(), context.agentRole(), history, step, iteration);
+                    AgentResult result =  handleFinishAction(context.sessionId(), context.agentRole(), history, step, iteration);
+                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
+                        cliResultBridge.complete(context.sessionId(), result);
+                    }
+                    return result;
                 }
 
                 // skillSnapshot fetched lazily — only when a real tool invocation is about to happen.
@@ -214,6 +229,9 @@ public class AgentStateMachineRunner {
                 }
                 if (invocationDecision.type() == DecisionType.TERMINAL) {
                     fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), invocationDecision.result());
+                    if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
+                        cliResultBridge.complete(context.sessionId(), invocationDecision.result());
+                    }
                     return invocationDecision.result();
                 }
                 consecutiveFailures = invocationDecision.consecutiveFailures();
@@ -232,6 +250,9 @@ public class AgentStateMachineRunner {
                 context.maxIterations(), context.sessionId());
         AgentResult loopRes = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
         fireTerminalEvent(context.sessionId(), context.agentRole(), context.goal(), loopRes);
+        if (!context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
+            cliResultBridge.complete(context.sessionId(), loopRes);
+        }
         return loopRes;
     }
 
@@ -387,7 +408,7 @@ public class AgentStateMachineRunner {
         // Inner sessions (:d: prefix) produce developer analysis — never sanitize.
         // A debugger analyzing a NullPointerException will contain "NullPointerException"
         // in its answer — that is expected and must reach the coordinator unmodified.
-        if (sessionId != null && sessionId.contains(":d:")) return answer;
+        if (sessionId != null && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) return answer;
         // For outer sessions: only fire on raw JVM exception form ("ExceptionType: message"),
         // NOT on prose discussion ("the NullPointerException occurs because...").
         if (INTERNAL_JVM_ERROR_PATTERN.matcher(answer).find()) {

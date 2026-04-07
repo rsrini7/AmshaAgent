@@ -91,7 +91,7 @@ public class SandboxExecTool implements AgentTool {
             System.getProperty("os.name", "").toLowerCase().contains("win");
 
     // Colons are illegal in Windows path components (drive-letter separator).
-    // Inner session IDs contain colons: {outer}:d:{role}:{uuid}
+    // Inner session IDs contain colons (the ':d:' sentinel).
     // Sanitize for filesystem use only — sessionId itself is never modified.
     private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
 

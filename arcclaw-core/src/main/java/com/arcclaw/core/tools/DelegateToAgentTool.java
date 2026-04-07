@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -58,15 +59,18 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        String agentName = (String) params.get("agent");
-        String goal = (String) params.get("goal");
+        Object agentObj = params.get("agent");
+        Object goalObj = params.get("goal");
 
-        if (agentName == null || agentName.isBlank()) {
-            return ToolResponse.failure(400, "Parameter 'agent' is required.");
+        if (agentObj == null || String.valueOf(agentObj).isBlank()) {
+            return ToolResponse.failure(400, "Parameter 'agent' is required. Valid agents: brahma, shiva, saraswati, brihaspati, dattatreya.");
         }
-        if (goal == null || goal.isBlank()) {
-            return ToolResponse.failure(400, "Parameter 'goal' is required.");
+        if (goalObj == null || String.valueOf(goalObj).isBlank()) {
+            return ToolResponse.failure(400, "Parameter 'goal' is required. Please provide a clear, specific goal for the sub-agent.");
         }
+
+        String agentName = String.valueOf(agentObj);
+        String goal = String.valueOf(goalObj);
 
         String normalized = agentName.trim().toLowerCase();
 
@@ -123,7 +127,7 @@ public class DelegateToAgentTool implements AgentTool {
         // NOTE: Inner sessions bypass SessionRegistry intentionally.
         // StatefulAgentStore.save() must not require a session_registry entry.
         // Verified: save() is keyed only on (sessionId, agentRole) — no FK constraint.
-        String innerSessionId = outerSessionId + ":d:" + targetRole.toScopedName()
+        String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + targetRole.toScopedName()
                                                + ":" + UUID.randomUUID().toString().substring(0, 8);
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",

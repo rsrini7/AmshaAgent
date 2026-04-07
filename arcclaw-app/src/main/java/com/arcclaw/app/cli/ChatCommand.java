@@ -26,7 +26,9 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.CronTimeResolver;
+import com.arcclaw.core.agent.loop.CliResultBridge;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import picocli.CommandLine;
@@ -43,6 +45,8 @@ public class ChatCommand implements Runnable {
     @Inject WorkspaceManager workspaceManager;
     @Inject SessionHeartbeatTracker heartbeatTracker;
     @Inject ReflexRegistry reflexRegistry;
+    @Inject StatefulAgentStore statefulAgentStore;
+    @Inject CliResultBridge cliResultBridge;
 
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
@@ -116,6 +120,15 @@ public class ChatCommand implements Runnable {
             }
             if (input.isBlank()) continue;
 
+            if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
+                if (statefulAgentStore.findLatestAwaitingApproval(sessionId).isPresent()) {
+                    // Defensive re-register in case session was lost (e.g. CLI crash/restart)
+                    cliResultBridge.register(sessionId);
+                    System.out.println("\n▶ ArcClaw> ⏸ Approval pending — type /approve or /deny before sending new messages.");
+                    continue;
+                }
+            }
+
             heartbeatTracker.recordHeartbeat(sessionId);
 
             MessageContext context = createCliContext(sessionId, input);
@@ -149,10 +162,10 @@ public class ChatCommand implements Runnable {
             dispatchToAgent(sessionId, reflexResult.sanitizedInput(), context);
         }
     }
-
     private void dispatchToAgent(String sessionId, String input, MessageContext context) {
         try {
             System.out.println("⚡ Thinking...");
+            cliResultBridge.register(sessionId);
             AgentResult result = agentLoop.run(
                 sessionId, role, input, reasoningEngine, maxIterations, context);
 
@@ -168,13 +181,24 @@ public class ChatCommand implements Runnable {
                             ? a.paramsJson().substring(0, 200) + "... [truncated]"
                             : a.paramsJson();
 
-                    yield "⏸ Approval needed for tool: " + a.toolName() +
+                    System.out.println("\n▶ ArcClaw> ⏸ Approval needed for tool: " + a.toolName() +
                             "\n   Params: " + truncatedParams +
-                            "\n   Type /approve or /deny";
+                            "\n   Type /approve or /deny");
+                    yield null;
                 }
                 case AgentResult.AwaitingRetry r -> "⏳ Rate limit hit. I'll automatically retry in " + (r.retryAfterMs() / 1000) + "s...";
             };
-            System.out.println("\n▶ ArcClaw> " + output);
+
+            // Clean up registration unless we are actively blocking for HITL approval.
+            // If we are awaiting approval, we KEEP the registration so REST signals can wake us
+            // during the next You> prompt or a future /approve call.
+            if (!(result instanceof AgentResult.AwaitingApproval)) {
+                cliResultBridge.cancel(sessionId);
+            }
+
+            if (output != null) {
+                System.out.println("\n▶ ArcClaw> " + output);
+            }
 
         } catch (Exception e) {
             log.errorf(e, "Agent error in session %s", sessionId);
