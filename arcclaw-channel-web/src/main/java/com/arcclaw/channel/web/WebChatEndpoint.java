@@ -1,8 +1,11 @@
 package com.arcclaw.channel.web;
 
 import java.io.StringReader;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,6 +18,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
@@ -34,9 +38,13 @@ public class WebChatEndpoint {
 
     // conn.id() → ArcClaw sessionId (resolved by SessionRegistry, used for REST/HITL calls)
     private final Map<String, String> connectionToArcclawSession = new ConcurrentHashMap<>();
+    
+    // Sessions currently undergoing termination
+    private final Set<String> terminatingSessions = ConcurrentHashMap.newKeySet();
 
     @Inject WebSocketSessionStore sessionStore;
     @Inject ChannelServices channelServices;
+    @Inject PendingApprovalChecker pendingApprovalChecker;
 
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
@@ -72,13 +80,24 @@ public class WebChatEndpoint {
         }
 
         // platformId is the stable per-connection identity (channelId + userId)
-        String platformId = UUID.randomUUID().toString();
+        String query = conn.handshakeRequest().query();
+        String platformId = null;
+        if (query != null && query.contains("sessionId=")) {
+            String rawId = query.split("sessionId=")[1].split("&")[0];
+            platformId = URLDecoder.decode(rawId, StandardCharsets.UTF_8);
+        }
+        if (platformId == null || platformId.isBlank()) {
+            platformId = UUID.randomUUID().toString();
+        }
+
         connectionToSession.put(conn.id(), platformId);
-        sessionStore.register(platformId, conn);
 
         String arcclawSessionId = channelServices.resolveOrCreateSession(
             ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
         connectionToArcclawSession.put(conn.id(), arcclawSessionId);
+
+        // Track connection and mapping in the globally accessible store (§85-C)
+        sessionStore.register(platformId, arcclawSessionId, conn);
 
         // §85-B: Proactively initialize session presence in the heartbeat tracker.
         // The browser WebSocket API cannot send custom headers, so ownership
@@ -157,9 +176,27 @@ public class WebChatEndpoint {
         }
         
         // Terminate using ArcClaw sessionId — not platformId (§78-fix-2)
-        if (arcclawSessionId != null) {
-            channelServices.terminateSession(arcclawSessionId);
-            log.infof("WebSocket %s: connId=%s arcclawSession=%s terminated",
+        if (arcclawSessionId != null && terminatingSessions.add(arcclawSessionId)) {
+            try {
+                // HITL sessions must survive WebSocket disconnects — user may reconnect
+                // from another tab or device to approve/deny.
+                if (pendingApprovalChecker.hasPendingApproval(arcclawSessionId)) {
+                    log.infof("WebSocket %s: connId=%s arcclawSession=%s — skipping termination (AWAITING_APPROVAL pending)",
+                        reason, connId, arcclawSessionId);
+                    return; // SessionReaper handles cleanup after HITL timeout
+                }
+
+                // Notify UI that this is an intentional server-side termination
+                conn.sendText("{\"type\":\"session_terminated\"}").subscribe().with(v -> {}, err -> {});
+                
+                channelServices.terminateSession(arcclawSessionId);
+                log.infof("WebSocket %s: connId=%s arcclawSession=%s terminated",
+                    reason, connId, arcclawSessionId);
+            } finally {
+                terminatingSessions.remove(arcclawSessionId);
+            }
+        } else if (arcclawSessionId != null) {
+            log.debugf("WebSocket %s: connId=%s arcclawSession=%s — termination already in progress",
                 reason, connId, arcclawSessionId);
         } else {
             log.debugf("WebSocket %s: connId=%s (platformId=%s) — no ArcClaw session found for termination",

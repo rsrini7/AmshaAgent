@@ -91,6 +91,7 @@ public class HitlResource {
         List<PendingApprovalDto> result = hitlService.getPendingApprovals(userId, 50).values().stream()
             .map(pending -> new PendingApprovalDto(
                 pending.taskId(),
+                pending.sessionId(),
                 pending.toolName(),
                 pending.params(),
                 pending.requestedAt(),

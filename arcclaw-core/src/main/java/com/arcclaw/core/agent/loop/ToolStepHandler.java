@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -269,7 +270,7 @@ public class ToolStepHandler {
                 context.sessionId(), context.agentRole(), blockedStep));
 
             if (context.sessionId() != null
-                    && context.sessionId().contains(":d:")
+                    && context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)
                     && ToolCapability.GITHUB.toolName().equals(step.action())) {
                 log.infof("[TOOL-GUARD] Inner session %s: github blocked " +
                           "— fast-pathing to FINISH", context.sessionId());

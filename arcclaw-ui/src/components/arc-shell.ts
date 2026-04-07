@@ -15,7 +15,8 @@ import './arc-settings';
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
   @state() private _apiKey = localStorage.getItem('arc-api-key') || '';
-  @state() private _sessionId = '';
+  @state() private _sessionId = sessionStorage.getItem('arcclaw-chat-session') || '';
+  @state() private _platformId = ''; // Stable ID for WebSocket
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
@@ -23,7 +24,6 @@ export class ArcShell extends LitElement {
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
-  private _pollingInterval: number | null = null;
   private _hitlEs: EventSource | null = null;
   private _agentEs: EventSource | null = null;
 
@@ -101,25 +101,44 @@ export class ArcShell extends LitElement {
       this._route = window.location.hash || '#/onboarding';
       if (!this._apiKey && this._route !== '#/onboarding') {
         window.location.hash = '#/onboarding';
+        return;
+      }
+
+      // Proactively refresh when navigating if not connected
+      if (this._apiKey) {
+        if (this._sseStatus !== 'connected') {
+          this._sseManager?.connect();
+        }
+        this._fetchAgents();
+        this._fetchApprovals();
       }
     });
 
     const storedKey = localStorage.getItem('arc-api-key');
     if (storedKey) {
+      this._apiKey = storedKey;
       this._client = new ArcClient('/api/v1', storedKey);
+      this._platformId = this._resolvePlatformId();
+      // _sessionId is already loaded from sessionStorage in @state()
       this.updateComplete.then(() => {
         this._fetchAgents();
         this._fetchApprovals();
         this._startSse();
-        // No polling on startup — SSE handles live updates.
-        // Polling only starts as fallback if SSE fails.
       });
     }
   }
 
+  private _resolvePlatformId() {
+    let id = sessionStorage.getItem('arcclaw-platform-id');
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem('arcclaw-platform-id', id);
+    }
+    return id;
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._stopPolling();
     this._sseManager?.disconnect();
     this._hitlEs?.close();
     this._hitlEs = null;
@@ -131,28 +150,23 @@ export class ArcShell extends LitElement {
 
   private _connectSse(
     url: string,
-    onEvent: (data: any) => void,
-    onFallback: () => void
+    onEvent: (data: any) => void
   ): EventSource | null {
     
     if (typeof EventSource === 'undefined') {
-      console.warn('EventSource not supported, using polling fallback');
-      onFallback();
+      console.warn('EventSource not supported');
       return null;
     }
 
     if (!this._sessionId || !this._apiKey) {
       console.warn('Session ID or API key not available, skipping SSE');
-      onFallback();
       return null;
     }
 
     const es = new EventSource(url);
     let sseActive = true;
-    let connected = false;
 
     es.onopen = () => {
-      connected = true;
       console.debug('SSE connected:', url);
     };
 
@@ -172,12 +186,7 @@ export class ArcShell extends LitElement {
       if (!sseActive) return;
       sseActive = false;
       es.close();
-      console.warn(
-        connected
-          ? 'SSE connection lost, falling back to polling: ' + url
-          : 'SSE initial connect failed, falling back to polling: ' + url
-      );
-      onFallback();
+      console.warn('SSE connection failed/lost: ' + url);
     };
 
     return es;
@@ -197,7 +206,6 @@ export class ArcShell extends LitElement {
     this._hitlEs = null;
     this._agentEs?.close();
     this._agentEs = null;
-    this._stopPolling();
 
     window.location.hash = '#/chat';
     this._fetchAgents();
@@ -213,7 +221,14 @@ export class ArcShell extends LitElement {
   }
 
   private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
-    this._sessionId = e.detail.sessionId;
+    // Only update if server assigned a different ID (fallback UUID case)
+    if (this._sessionId !== e.detail.sessionId) {
+        this._sessionId = e.detail.sessionId;
+        sessionStorage.setItem('arcclaw-chat-session', this._sessionId);
+    } else if (this._hitlEs || this._agentEs) {
+        // We already have matching session and active SSEs, skip re-init
+        return;
+    }
 
     // Close any previous SSE connections
     this._hitlEs?.close();
@@ -223,25 +238,14 @@ export class ArcShell extends LitElement {
 
     if (!this._sessionId) return;
 
-    // Single fallback function — only starts polling once even if both SSEs fail
-    let pollingStarted = false;
-    const startPollingOnce = () => {
-      if (!pollingStarted) {
-        pollingStarted = true;
-        this._startPolling();
-      }
-    };
-
     this._hitlEs = this._connectSse(
       `/api/v1/hitl/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
-      (event) => this._handleHitlEvent(event),
-      startPollingOnce
+      (event) => this._handleHitlEvent(event)
     );
 
     this._agentEs = this._connectSse(
       `/api/v1/agents/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
-      (event) => this._handleAgentEvent(event),
-      startPollingOnce
+      (event) => this._handleAgentEvent(event)
     );
   }
 
@@ -322,25 +326,6 @@ export class ArcShell extends LitElement {
     }
   }
 
-  // ─── Polling (fallback only) ─────────────────────────────────────────────
-
-  private _startPolling() {
-    this._stopPolling();
-    const poll = async () => {
-      await this._fetchApprovals();
-      await this._fetchAgents();
-    };
-    poll(); // immediate first call
-    this._pollingInterval = window.setInterval(poll, 10000);
-  }
-
-  private _stopPolling() {
-    if (this._pollingInterval !== null) {
-      clearInterval(this._pollingInterval);
-      this._pollingInterval = null;
-    }
-  }
-
   // ─── Chat SSE (existing) ─────────────────────────────────────────────────
 
   private _startSse() {
@@ -356,7 +341,12 @@ export class ArcShell extends LitElement {
         // heartbeat — no action needed
       },
       (status) => {
+        const wasDown = this._sseStatus !== 'connected';
         this._sseStatus = status;
+        if (wasDown && status === 'connected') {
+          this._fetchAgents();
+          this._fetchApprovals();
+        }
       }
     );
     this._sseManager.connect();
@@ -374,44 +364,48 @@ export class ArcShell extends LitElement {
 
   // ─── Routing ─────────────────────────────────────────────────────────────
 
-  private _renderRoute() {
-    if (!this._apiKey && this._route !== '#/onboarding') {
-      window.setTimeout(() => (window.location.hash = '#/onboarding'), 0);
-      return nothing;
+  private _renderViews() {
+    if (!this._apiKey) {
+      if (this._route !== '#/onboarding') {
+        window.setTimeout(() => (window.location.hash = '#/onboarding'), 0);
+      }
+      return html`<arc-onboarding class="content-area"></arc-onboarding>`;
     }
 
-    switch (this._route) {
-      case '#/chat':
-        return html`<arc-chat-interface
-          class="content-area"
-          .apiKey="${this._apiKey}"
-          .sessionId="${this._sessionId}"
-        ></arc-chat-interface>`;
-      case '#/agents':
-        return html`<arc-agent-status
-          class="content-area"
-          .agents="${this._agents}"
-        ></arc-agent-status>`;
-      case '#/hitl':
-        return html`<arc-hitl-panel
-          class="content-area"
-          .apiKey="${this._apiKey}"
-          .approvals="${this._pendingApprovals}"
-        ></arc-hitl-panel>`;
-      case '#/skills':
-        return html`<arc-skills-panel
-          class="content-area"
-          .apiKey="${this._apiKey}"
-        ></arc-skills-panel>`;
-      case '#/settings':
-        return html`<arc-settings
-          class="content-area"
-          .apiKey="${this._apiKey}"
-        ></arc-settings>`;
-      case '#/onboarding':
-      default:
-        return html`<arc-onboarding class="content-area"></arc-onboarding>`;
-    }
+    return html`
+      <arc-chat-interface
+        class="content-area"
+        style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+        .sessionId="${this._sessionId}"
+        .platformId="${this._platformId}"
+      ></arc-chat-interface>
+
+      <arc-agent-status
+        class="content-area"
+        style="display: ${this._route === '#/agents' ? 'flex' : 'none'}"
+        .agents="${this._agents}"
+      ></arc-agent-status>
+
+      <arc-hitl-panel
+        class="content-area"
+        style="display: ${this._route === '#/hitl' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+        .approvals="${this._pendingApprovals}"
+      ></arc-hitl-panel>
+
+      <arc-skills-panel
+        class="content-area"
+        style="display: ${this._route === '#/skills' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+      ></arc-skills-panel>
+
+      <arc-settings
+        class="content-area"
+        style="display: ${this._route === '#/settings' ? 'flex' : 'none'}"
+        .apiKey="${this._apiKey}"
+      ></arc-settings>
+    `;
   }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -449,15 +443,16 @@ export class ArcShell extends LitElement {
                         class="status-dot"
                         style="background: ${this._sseStatus === 'connected'
                           ? 'var(--accent-secondary)'
-                          : 'var(--text-muted)'}"
+                          : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'};
+                          box-shadow: 0 0 0 6px color-mix(in srgb, ${this._sseStatus === 'connected' ? 'var(--accent-secondary)' : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'} 18%, transparent);"
                       ></div>
-                      Connected to ArcClaw Agent Cluster
+                      ${this._sseStatus === 'connected' ? 'Connected to ArcClaw Agent Cluster' : 'ArcClaw Agent Cluster (Offline)'}
                     </div>
                   </div>
                 </header>
               `
             : nothing}
-          ${this._renderRoute()}
+          ${this._renderViews()}
         </main>
       </div>
     `;

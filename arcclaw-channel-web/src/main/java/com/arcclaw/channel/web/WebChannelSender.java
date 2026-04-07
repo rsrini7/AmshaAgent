@@ -11,6 +11,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import io.quarkus.websockets.next.WebSocketConnection;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -34,22 +35,57 @@ public class WebChannelSender implements ChannelSender {
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
-        String payload = Json.createObjectBuilder()
-            .add("type", "message")
-            .add("role", "assistant")
-            .add("text", text)
-            .build().toString();
+        String payload = buildMessageJson(text);
+        String platformId = recipient.platformId();
 
-        sessionStore.get(recipient.platformId()).ifPresentOrElse(
+        sessionStore.get(platformId).ifPresentOrElse(
             conn -> {
                 try {
                     conn.sendText(payload).await().atMost(Duration.ofSeconds(5));
                 } catch (Exception e) {
-                    log.warnf("Failed to send to session %s: %s", recipient.platformId(), e.getMessage());
-                    sessionStore.unregister(recipient.platformId());
+                    log.warnf("Failed to send to session %s: %s", platformId, e.getMessage());
+                    sessionStore.unregister(platformId);
                 }
             },
-            () -> log.warnf("WebChannelSender: no WS session for id=%s", recipient.platformId())
+            () -> {
+                // If the direct platformId is stale (e.g. refresh), try a broadcast based on the sessionId
+                // that is known to exist for the user's platform reference (§85-C)
+                sessionStore.getArcclawSessionId(platformId).ifPresentOrElse(
+                    sid -> sendBySession(sid, text),
+                    () -> log.warnf("WebChannelSender: no WS session for id=%s", platformId)
+                );
+            }
         );
+    }
+
+    @Override
+    public void sendBySession(String sessionId, String text) {
+        String payload = buildMessageJson(text);
+        List<WebSocketConnection> conns = sessionStore.getConnectionsByArcclawSession(sessionId);
+        
+        if (!conns.isEmpty()) {
+            conns.forEach(conn -> {
+                try {
+                    conn.sendText(payload).subscribe().with(
+                        v -> {},
+                        err -> log.warnf("Failed to push result to session %s conn %s: %s",
+                                         sessionId, conn.id(), err.getMessage())
+                    );
+                } catch (Exception e) {
+                    log.warnf("Exception pushing result to session %s: %s", sessionId, e.getMessage());
+                }
+            });
+            log.infof("Broadcast result for session %s to %d connection(s)", sessionId, conns.size());
+        } else {
+            log.warnf("WebChannelSender: no active connections found for session %s (async result dropped)", sessionId);
+        }
+    }
+
+    private String buildMessageJson(String text) {
+        return Json.createObjectBuilder()
+            .add("type", "message")
+            .add("role", "assistant")
+            .add("text", text)
+            .build().toString();
     }
 }

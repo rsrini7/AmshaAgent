@@ -86,6 +86,11 @@ public class AgentCronRepository {
         ).setParameter("userId", userId).getResultList();
     }
 
+    @Transactional(TxType.NOT_SUPPORTED)
+    public AgentCronEntity findById(String id) {
+        return em.find(AgentCronEntity.class, id);
+    }
+
 
     // ──────────────────────────────────────────────────────────────
     // WRITE — atomic micro-short transactions

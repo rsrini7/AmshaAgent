@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 
 /**
  * Contract for persisting and retrieving agent reasoning checkpoints.
@@ -13,7 +14,7 @@ import com.arcclaw.core.security.AutonomyLevel;
  * Implementations handle Jackson serialization of {@code List<ReasoningStep>}
  * to/from the {@link AgentCheckpoint#stateJson} field.
  */
-public interface StatefulAgentStore {
+public interface StatefulAgentStore extends PendingApprovalChecker {
 
     /**
      * Save or update a checkpoint with the current reasoning steps.
@@ -181,13 +182,27 @@ public interface StatefulAgentStore {
      * Returns {@code true} if the latest AWAITING_APPROVAL checkpoint for this
      * session has been waiting longer than {@code timeoutHours}, or if no such
      * checkpoint exists (treat as expired — nothing to approve).
-     * <p>
-     * Used by {@code TelegramCallbackHandler} as a fast pre-reflex guard to
-     * reject stale callback button presses without routing to any reflex. §7.35
      *
      * @param sessionId    the workspace session to check
      * @param timeoutHours the HITL approval window in hours
      * @return true if expired or missing; false if still within the window
      */
     boolean isCheckpointExpired(String sessionId, long timeoutHours);
+
+    /**
+     * Returns {@code true} if the session is currently active (has at least one
+     * non-terminal checkpoint). Terminal statuses: COMPLETED, FAILED,
+     * LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED.
+     *
+     * @param sessionId the workspace session to check
+     * @return true if active; false if completed or missing
+     */
+    boolean isSessionActive(String sessionId);
+
+    /**
+     * Returns true if the session has at least one checkpoint in
+     * AWAITING_APPROVAL status. Used to guard against premature session
+     * termination during tab navigation.
+     */
+    boolean hasPendingApproval(String sessionId);
 }

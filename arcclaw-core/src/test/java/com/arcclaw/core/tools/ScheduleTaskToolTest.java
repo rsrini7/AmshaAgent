@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 
 import java.util.Map;
 import java.util.concurrent.Callable;
+import jakarta.enterprise.event.Event;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.audit.AuditService;
@@ -32,6 +33,8 @@ class ScheduleTaskToolTest {
 
     private final AgentCronRepository cronRepository = mock(AgentCronRepository.class);
     private final AuditService auditService = mock(AuditService.class);
+    @SuppressWarnings("unchecked")
+    private final Event<com.arcclaw.core.cron.CronTaskScheduled> cronScheduledEvent = mock(Event.class);
 
     private ScheduleTaskTool createTool() {
         ScheduleTaskTool tool = new ScheduleTaskTool();
@@ -43,6 +46,10 @@ class ScheduleTaskToolTest {
             var auditField = ScheduleTaskTool.class.getDeclaredField("auditService");
             auditField.setAccessible(true);
             auditField.set(tool, auditService);
+
+            var eventField = ScheduleTaskTool.class.getDeclaredField("cronScheduledEvent");
+            eventField.setAccessible(true);
+            eventField.set(tool, cronScheduledEvent);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }

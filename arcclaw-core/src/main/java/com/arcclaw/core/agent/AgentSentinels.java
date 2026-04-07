@@ -8,6 +8,9 @@ import java.util.regex.Pattern;
  */
 public final class AgentSentinels {
     private AgentSentinels() {}
+    
+    /** sentinel for delegated sub-sessions. format: {parent_sid}:d:{role}:{uuid} */
+    public static final String DELEGATE_SESSION_SENTINEL = ":d:";
 
     /** User refused the tool execution. matches text in DenyReflex. */
     public static final String DENY_SENTINEL = "Human denied the tool execution.";

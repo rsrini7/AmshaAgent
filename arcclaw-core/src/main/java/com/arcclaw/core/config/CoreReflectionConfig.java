@@ -13,6 +13,8 @@ import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.AuditVerifier;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.persistence.ArcClawSQLiteDialect;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.skill.AgentSkillEntity;
@@ -76,7 +78,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         CompiledSkillEntry.class,
         SkillPromptParams.class,
         ArcClawSQLiteDialect.class,
-        SandboxResult.class
+        SandboxResult.class,
+        AgentJobCompleted.class,
+        CronTaskScheduled.class
     },
     classNames = {
         "com.github.benmanes.caffeine.cache.SSLMSA",

@@ -92,6 +92,7 @@ public class HitlService {
         }
         return new PendingApproval(
             cp.getId().toString(),
+            cp.getSessionId(),
             cp.getPendingToolName(),
             params,
             cp.getUpdatedAt().toInstant(ZoneOffset.UTC),
@@ -141,6 +142,7 @@ public class HitlService {
 
     public record PendingApproval(
             String taskId,
+            String sessionId,
             String toolName,
             Map<String, Object> params,
             Instant requestedAt,

@@ -289,6 +289,7 @@ public class SystemPromptBuilder {
         // refusing sandbox_exec calls while maintaining the boundary for text-only roles.
         baseSystemPrompt += SECURITY_RULES_PROMPT;
         baseSystemPrompt += buildExecutionBoundaryRule(roleEnum);
+        baseSystemPrompt += buildBrowserRetryRule(roleEnum);
 
         // Build compaction summary for template injection — cached for session duration
         // to prevent redundant DB hits during the multi-turn agent loop.
@@ -411,5 +412,30 @@ public class SystemPromptBuilder {
                 + "If you need a capability outside this list, use FINISH to tell the "
                 + "user that the task requires a different role or that they should "
                 + "rephrase the request.\n";
+    }
+
+    /**
+     * Returns a role-aware BROWSER EXTRACTION RETRY rule.
+     * <p>
+     * Only roles with {@code browser_navigate} permission see this rule. This prevents
+     * the Coordinator from hallucinating that it can call the browser directly based
+     * on global prompt context.
+     */
+    private String buildBrowserRetryRule(AgentRoleEnum roleEnum) {
+        boolean hasBrowser = roleEnum.definition().toolNames().contains("browser_navigate");
+
+        if (!hasBrowser) return "";
+
+        return """
+                BROWSER EXTRACTION RETRY RULE:
+                If a browser extraction (`browser_navigate` with action=extract_text) returns fewer
+                than 50 characters, the CSS selector likely failed to capture the main content.
+                In this case, do NOT give up or finish with an "unable to fetch" message.
+                Instead, attempt a second call with a broader selector (e.g. "h3", "article", or "body").
+                Only conclude the content is unavailable after multiple failed attempts with
+                different selectors.
+                NEVER suggest external scripts, Python code, or manual steps as a substitute
+                for using your browser tools to find the information.
+                """;
     }
 }

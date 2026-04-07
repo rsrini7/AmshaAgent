@@ -6,16 +6,23 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
@@ -58,11 +65,83 @@ public class AgentCronScheduler {
     @ConfigProperty(name = "arcclaw.cron.max-lookback-window", defaultValue = "PT5M")
     Duration maxLookbackWindow;
 
+    private ScheduledExecutorService preciseScheduler;
+
     Semaphore concurrencyLimiter;
 
     @PostConstruct
     void init() {
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
+        // Precise scheduler for one-shot jobs that are due soon.
+        this.preciseScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "precise-cron-scheduler");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (preciseScheduler != null) {
+            preciseScheduler.shutdown();
+            try {
+                if (!preciseScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    preciseScheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                preciseScheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    @Inject
+    Instance<AgentCronScheduler> selfProxy;
+
+    /**
+     * Schedules a one-shot job to fire exactly at its nextFireTime if it is due soon.
+     * <p>
+     * NOTE: must be called from a thread with an active CDI request context (e.g. tool execution thread)
+     */
+    public void scheduleSoon(String jobId) {
+        AgentCronEntity job = cronRepository.findById(jobId);
+        if (job == null || !job.runOnce || job.nextFireTime == null) return;
+        
+        long delayMillis = Duration.between(Instant.now(), job.nextFireTime).toMillis();
+        
+        // If it's already past due or due within 2 minutes, use the precise scheduler.
+        // We only do this for runOnce (one-shot) jobs. Recurring jobs still rely on the poll.
+        if (delayMillis < 120_000) {
+            log.infof("CRON-PRECISE-SCHEDULE id=%s, firing in %dms", job.id, Math.max(0, delayMillis));
+            preciseScheduler.schedule(() -> {
+                try {
+                    selfProxy.get().executeSoonInternal(jobId);
+                } catch (Exception e) {
+                    log.errorf(e, "CRON-PRECISE-FAIL id=%s", jobId);
+                }
+            }, Math.max(0, delayMillis), TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /**
+     * Internal precise fire handler. Wrapped in @ActivateRequestContext to ensure
+     * CDI context is available in the background thread. 
+     * Must be public and called via selfProxy to trigger interceptors.
+     */
+    @ActivateRequestContext
+    public void executeSoonInternal(String jobId) {
+        AgentCronEntity job = cronRepository.findById(jobId);
+        if (job == null) return;
+
+        MDC.put(MdcKeys.USER_ID, job.userId);
+        try {
+            // Atomic claim check happens inside claimForFire
+            if (cronRepository.claimForFire(job.id)) {
+                 jobRunner.execute(job);
+            }
+        } finally {
+            MdcCleaner.clearAll();
+        }
     }
 
     /**
@@ -77,6 +156,13 @@ public class AgentCronScheduler {
 
     int getAvailablePermits() {
         return this.concurrencyLimiter.availablePermits();
+    }
+
+    /**
+     * Entry point for new tasks: schedules them for precise firing if due soon.
+     */
+    void onTaskScheduled(@Observes CronTaskScheduled event) {
+        scheduleSoon(event.jobId());
     }
 
     /**

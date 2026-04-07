@@ -18,14 +18,15 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 @ApplicationScoped
 public class ResearcherRoutingProvider implements IntentRoutingProvider {
 
-    // Matches: fetch X, describe X, lookup X, research X,
-    //          github/gist/repo references, owner/repo format
+    // Matches: fetch X, describe X, lookup X, research X, browse X, navigate to X
+    //          github/gist/repo references, owner/repo format, and direct URL targets.
     private static final Pattern RESEARCHER_PATTERN = Pattern.compile(
         "(?i)(" +
-        // Action verbs for research/fetch
+        // Action verbs for research/fetch/browse
         "^\\s*(fetch|describe|lookup|look\\s+up|research|search|find\\s+info|get\\s+info|" +
         "get\\s+details|show\\s+info|what\\s+is|tell\\s+me\\s+about|" +
-        "summarize|summary\\s+of|overview\\s+of)" +
+        "summarize|summary\\s+of|overview\\s+of|" +
+        "browse|navigate|visit|open|scrape|check\\s+website|fetch\\s+page)" +
         "|" +
         // GitHub-specific patterns
         "\\bgithub\\b.*\\b(repo|gist|repository|desc|view|list)\\b" +
@@ -33,13 +34,14 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
         // owner/repo format (e.g. rsrini7/mermaid2gif)
         "\\b[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+\\b" +
         "|" +
+        // URL patterns (starts with or contains http)
+        "\\bhttps?://\\S+" +
+        "|" +
         // gh CLI patterns
         "\\bgh\\s+(repo|gist)\\b" +
-        "|" +
-        // Explicit research keywords
-        "\\b(repo|repository|gist)\\s+(desc|description|info|details|view)\\b" +
         ")"
     );
+
 
     @Override
     public List<Pattern> fastPathTriggers() {
@@ -61,6 +63,18 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
     @Override
     public Optional<String> fastPathRole() {
         return Optional.of(AgentRoleEnum.RESEARCHER.toScopedName());
+    }
+
+    @Override
+    public boolean shouldSkip(String userMessage) {
+        if (userMessage == null) return true;
+        String lower = userMessage.toLowerCase();
+        boolean hasUrl = lower.contains("http://") || lower.contains("https://");
+        boolean hasGithubRef = lower.contains("github") || lower.contains("/");
+        boolean hasBrowseVerbs = lower.contains("browse") || lower.contains("navigate") 
+                || lower.contains("visit") || lower.contains("scrape") || lower.contains("check website");
+        
+        return !hasUrl && !hasGithubRef && !hasBrowseVerbs;
     }
 
     @Override

@@ -80,6 +80,32 @@ public final class AgentErrorMessageUtil {
         return stripped;
     }
 
+    private static final Pattern LLM_ERROR_NARRATION_PATTERN = Pattern.compile(
+        "(?i).*(?:" +
+        "provided function definitions do not match the needs|" +
+        "function definitions were provided but no function call|" +
+        "model produced an invalid response|" +
+        "failed to call tool" +
+        ").*",
+        Pattern.DOTALL
+    );
+
+    /**
+     * Strips known Groq/OpenAI error phrases from FINISH answers.
+     * These phrases are sometimes hallucinated into the answer text when the LLM
+     * fails to use a tool properly in a cold-context session.
+     *
+     * TIGHTENING: Only sanitize if the response is short (< 500 chars), to avoid
+     * wiping long research answers that might incidentally contain these phrases.
+     */
+    public static String sanitizeLlmErrorPhrases(String answer) {
+        if (answer == null || answer.isBlank()) return answer;
+        if (answer.length() < 500 && LLM_ERROR_NARRATION_PATTERN.matcher(answer).find()) {
+            return "⚠️ I encountered an internal error and could not complete your request. Please try again.";
+        }
+        return answer;
+    }
+
     private static String formatTpdMessage(String apiMessage) {
         String waitTime = extractWaitTime(apiMessage);
         Matcher tokenMatcher = TOKEN_LIMIT_PATTERN.matcher(apiMessage);

@@ -146,7 +146,7 @@ class ApproveReflexTest {
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve " + cronId, ctx);
 
         assertTrue(result.commandResponse().isPresent());
-        assertTrue(result.commandResponse().get().isEmpty());
+        assertEquals("Cron Success", result.commandResponse().get());
         assertTrue(ctx.isResumeSignal());
         verify(cronRepository).markCompleted(eq(cronId), any(Instant.class));
         verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));

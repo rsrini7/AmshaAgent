@@ -19,6 +19,7 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
@@ -61,13 +62,17 @@ public class SessionReaper {
     @Inject SessionAuditSequencer auditSequencer;
     @Inject SqliteRetryTemplate retryTemplate;
     @Inject CompactionInFlightFlag compactionInFlight;
-    @Inject AgentSseService agentSseService;   // ← NEW
+    @Inject AgentSseService agentSseService;
+    @Inject CliResultBridge cliResultBridge;
 
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
 
     @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
     long hitlTimeoutHours;
+
+    @ConfigProperty(name = "arcclaw.chat-memory.retention-days", defaultValue = "30")
+    long retentionDays;
 
     void onShutdown(@Observes ShutdownEvent event) {
         shuttingDown = true;
@@ -176,6 +181,7 @@ public class SessionReaper {
                 return;
             }
             log.warnf("GC sweep: session=%s expired", sessionId);
+            cliResultBridge.cancel(sessionId); 
             compactionInFlight.remove(sessionId);
             workspaceManager.terminateSession(sessionId);
             heartbeatTracker.removeHeartbeat(sessionId);
@@ -249,5 +255,49 @@ public class SessionReaper {
         workspaceManager.terminateSession(cp.getSessionId());
         heartbeatTracker.removeHeartbeat(cp.getSessionId());
         auditSequencer.releaseStaleSession(cp.getSessionId());
+    }
+
+    // CHAT HISTORY RETENTION SWEEP — purges ChatMemoryEntity rows for old sessions
+    
+    /**
+     * Purge ChatMemoryEntity rows where sessionId has no active/recent checkpoint.
+     * This prevents the chat_memory table from growing unboundedly (§85-retention).
+     */
+    @Scheduled(every = "24h", delayed = "PT10M")
+    public void purgeOldChatHistory() {
+        if (shuttingDown) return;
+
+        LocalDateTime cutoff = LocalDateTime.ofInstant(
+                Instant.now().minus(Duration.ofDays(retentionDays)),
+                ZoneOffset.UTC);
+
+        log.infof("Purging chat history older than %d days (cutoff=%s)", retentionDays, cutoff);
+
+        try {
+            QuarkusTransaction.requiringNew().run(() -> {
+                int deleted = em.createQuery(
+                    "DELETE FROM ChatMemoryEntity m WHERE m.memoryId NOT IN (" +
+                    "  SELECT c.sessionId FROM AgentCheckpoint c " +
+                    "  WHERE c.updatedAt > :cutoff " +
+                    "     OR c.status NOT IN (:completed, :archived, :failed, :denied, :loop_exceeded, :compromised)" +
+                    ")")
+                    .setParameter("cutoff", cutoff)
+                    .setParameter("completed",     CheckpointStatus.COMPLETED)
+                    .setParameter("archived",      CheckpointStatus.ARCHIVED)
+                    .setParameter("failed",        CheckpointStatus.FAILED)
+                    .setParameter("denied",        CheckpointStatus.DENIED)
+                    .setParameter("loop_exceeded", CheckpointStatus.LOOP_EXCEEDED)
+                    // NOTE: If new terminal CheckpointStatus values are added to the enum,
+                    // update this list to include them or active sessions may be incorrectly purged.
+                    .setParameter("compromised",   CheckpointStatus.COMPROMISED)
+                    .executeUpdate();
+                
+                if (deleted > 0) {
+                    log.infof("Purge complete: removed %d stale chat memory row(s).", deleted);
+                }
+            });
+        } catch (Exception e) {
+            log.warnf("Failed to purge old chat history: %s", e.getMessage());
+        }
     }
 }

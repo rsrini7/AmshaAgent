@@ -22,4 +22,12 @@ public interface ChannelSender {
      * going through a renderer. Use for simple confirmations or error messages.
      */
     void sendRaw(ChannelUser recipient, String text);
+
+    /**
+     * Sends a result back to a session's communication channel (e.g. all WebSocket tabs).
+     * Default implementation does nothing if session-based delivery is not supported.
+     */
+    default void sendBySession(String sessionId, String text) {
+        // no-op by default
+    }
 }

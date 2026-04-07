@@ -1,7 +1,9 @@
 package com.arcclaw.tool.playwright;
 
 import java.util.Base64;
+import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -10,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.ScreenshotScale;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import io.quarkus.runtime.Startup;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -165,22 +168,48 @@ public class PlaywrightPageRunner {
     private String extractText(Page page, String selector) {
         if (selector != null && !selector.isBlank() && !"body".equalsIgnoreCase(selector)) {
             try {
-                // Try the LLM's custom selector with a short timeout to prevent 30s "black hole"
-                return normalizeWhitespace(page.locator(selector).innerText(
-                    new Locator.InnerTextOptions().setTimeout(3000)));
+                // Ensure visibility before extraction to avoid immediate empty returns on SPA/Lazy sites.
+                Locator loc = page.locator(selector);
+                loc.first().waitFor(new Locator.WaitForOptions()
+                    .setState(WaitForSelectorState.VISIBLE)
+                    .setTimeout(3000));
+
+                List<String> texts = loc.allInnerTexts();
+                String joined = texts.stream()
+                    .map(t -> normalizeWhitespace(t.strip()))
+                    .filter(t -> t.length() > 5)
+                    .collect(Collectors.joining("\n"));
+
+                if (joined.length() > 20) return joined;
+                log.warnf("LLM selector '%s' returned only %d chars — engaging fallback chain", 
+                        selector, joined.length());
             } catch (Exception e) {
-                log.warnf("LLM selector '%s' failed or timed out — falling back to h1", selector);
+                log.warnf("LLM selector '%s' failed or timed out — engaging fallback chain", selector);
             }
         }
 
-        // Fallback 1: Primary heading
+        // Expanded fallback chain for better discovery on modern blogs/SPAs
+        String[] fallbacks = {"h1", "h2", "h3", "article h2", "article h3", ".post-title", ".entry-title"};
+        for (String f : fallbacks) {
+            try {
+                // No waitFor on fallbacks — instant empty list if selector is absent.
+                // We only block on the primary LLM-provided selector (already protected above).
+                List<String> texts = page.locator(f).allInnerTexts();
+                String joined = texts.stream()
+                    .map(t -> normalizeWhitespace(t.strip()))
+                    .filter(t -> t.length() > 5)
+                    .collect(Collectors.joining("\n"));
+
+                if (joined.length() > 20) return joined;
+            } catch (Exception ignored) {}
+        }
+
+        // Final fallback: Guaranteed full body (10s cap to prevent edge-case hangs)
         try {
-            return normalizeWhitespace(page.locator("h1").innerText(
-                new Locator.InnerTextOptions().setTimeout(1000)));
-        } catch (Exception e) {
-            // Fallback 2: Guaranteed full body (10s cap to prevent edge-case hangs)
             return normalizeWhitespace(page.locator("body").innerText(
                 new Locator.InnerTextOptions().setTimeout(10000)));
+        } catch (Exception e) {
+            return "Error: Could not extract text from body.";
         }
     }
 

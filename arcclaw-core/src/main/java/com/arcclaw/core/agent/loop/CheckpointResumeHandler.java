@@ -43,6 +43,7 @@ public class CheckpointResumeHandler {
     private final AgentLoop agentLoop;
     private final ReasoningEngine reasoningEngine;
     private final ChannelPluginRegistry channelPluginRegistry;
+    private final CliResultBridge cliResultBridge;
 
     protected CheckpointResumeHandler() {
         this.agentStore = null;
@@ -51,6 +52,7 @@ public class CheckpointResumeHandler {
         this.agentLoop = null;
         this.reasoningEngine = null;
         this.channelPluginRegistry = null;
+        this.cliResultBridge = null;
     }
 
     @Inject
@@ -59,13 +61,15 @@ public class CheckpointResumeHandler {
                                    ObjectMapper objectMapper,
                                    AgentLoop agentLoop,
                                    ReasoningEngine reasoningEngine,
-                                   ChannelPluginRegistry channelPluginRegistry) {
+                                   ChannelPluginRegistry channelPluginRegistry,
+                                   CliResultBridge cliResultBridge) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
         this.channelPluginRegistry = channelPluginRegistry;
+        this.cliResultBridge = cliResultBridge;
     }
 
     public void resumeAfterBatchDecision(
@@ -155,15 +159,87 @@ public class CheckpointResumeHandler {
                                     new ReplyNode.Text(output),
                                     new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)
                                 ));
+                            } else if (ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
+                                // Prefer session-based broadcast for stable multi-tab sync on Web
+                                s.sendBySession(sessionId, output);
                             } else {
                                 s.sendRaw(user, output);
                             }
                         },
-                        () -> log.debugf("CheckpointResumeHandler: no sender for type %s — result reply dropped (async flow)", cType.id())
+                        () -> {
+                            log.debugf("CheckpointResumeHandler: no sender for type %s — check for CLI bridge", cType.id());
+                            if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
+                                cliResultBridge.complete(sessionId, result);
+                            }
+                        }
                     );
             } else {
                 log.warnf("resumeAfterBatchDecision: agentLoop.run() returned null for session %s", sessionId);
             }
+
+        } finally {
+            agentStore.clearBatchResuming(sessionId);
+        }
+    }
+
+    /**
+     * Synchronous version of resumeAfterBatchDecision.
+     * Returns the AgentResult directly instead of sending it to a channel.
+     * Used by the interactive CLI to avoid async delivery drops.
+     */
+    public AgentResult resumeAfterBatchDecisionSync(
+            String sessionId,
+            String agentRole,
+            String userId,
+            String chatId,
+            String channelType) throws Exception {
+
+        if (!agentStore.markBatchResuming(sessionId)) {
+            log.infof("BATCH-RESUME-SYNC-GUARD: session %s already resuming", sessionId);
+            return null;
+        }
+
+        try {
+            AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
+            if (checkpoint == null) {
+                log.warnf("resumeAfterBatchDecisionSync: no checkpoint found for session %s role %s", sessionId, agentRole);
+                return null;
+            }
+
+            String resumeGoal = resolveResumeGoal(checkpoint);
+            if (resumeGoal == null || resumeGoal.isBlank()) {
+                log.warnf("resumeAfterBatchDecisionSync: no resume goal found for session %s role %s",
+                    sessionId, agentRole);
+                return null;
+            }
+
+            ChannelType cType = ChannelType.fromString(channelType)
+                    .orElse(ChannelType.CLI);
+
+            ChannelUser user = new ChannelUser(
+                userId, chatId, "Operator", cType);
+
+            MessageContext context = new MessageContext(chatId, user, 
+                new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now()));
+            context.setResumeSignal(true);
+            context.setGoal(resumeGoal);
+
+            // Fetch budget for the resume.
+            int maxResumeIterations = 5;
+            int original = checkpoint.getMaxIterations() != null ? checkpoint.getMaxIterations() : maxResumeIterations;
+            int used = checkpoint.getIterationsUsed();
+            int remaining = Math.max(0, original - used);
+            int budget = Math.max(3, Math.min(remaining, maxResumeIterations));
+
+            log.infof("Synchronously resuming session=%s budget=%d (original=%d, used=%d)",
+                    sessionId, budget, original, used);
+
+            return WorkspaceContext.runWithFullAutonomy(
+                sessionId, userId, chatId, agentRole,
+                () -> agentLoop.run(
+                    sessionId, agentRole, resumeGoal,
+                    checkpoint.getSystemNote(),
+                    reasoningEngine, budget, context));
 
         } finally {
             agentStore.clearBatchResuming(sessionId);

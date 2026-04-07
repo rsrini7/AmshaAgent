@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.audit.AuditObserver;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
@@ -22,7 +23,6 @@ import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -50,6 +50,7 @@ public class WorkspaceManager {
     @Inject StatefulAgentStore statefulAgentStore;
     @Inject SqliteRetryTemplate retryTemplate;
     @Inject AuditObserver auditObserver;
+    @Inject CliResultBridge cliResultBridge;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -94,10 +95,12 @@ public class WorkspaceManager {
         // 3. Wipe workspace directory
         wipeWorkspaceDir(sessionId);
 
-        // 4. Clear in-memory LangChain4j ChatMemory
-        clearInMemoryChatMemory(sessionId);
+        // 4. Clear in-memory LangChain4j ChatMemory — DISABLED (§85-persistence)
+        // clearInMemoryChatMemory(sessionId);
 
-        // 5. Delete chat memory from persistence
+        // 5. Delete chat memory from persistence — DISABLED to allow chat history persistence (§85-persistence)
+        // Handled by SessionReaper's Soft Retention Policy (purgeOldChatHistory) to prevent unbounded growth.
+        /*
         try {
             chatMemoryStore.deleteMessages(sessionId);
             log.debugf("Chat memory deleted for session=%s", sessionId);
@@ -105,6 +108,7 @@ public class WorkspaceManager {
             log.warnf("Failed to delete chat memory for session=%s: %s",
                       sessionId, e.getMessage());
         }
+        */
 
         // 6. Destroy CDI scope
         try {
@@ -119,7 +123,8 @@ public class WorkspaceManager {
                       sessionId, e.getMessage());
         }
 
-        // §7.29: Clear any in-flight batch resume flag for this session.
+        // §7.29: Clear any in-flight batch resume flag and bridge state for this session.
+        cliResultBridge.cancel(sessionId);
         statefulAgentStore.clearBatchResuming(sessionId);
     }
 
@@ -143,20 +148,6 @@ public class WorkspaceManager {
         }
     }
 
-    private void clearInMemoryChatMemory(String sessionId) {
-        try {
-            MessageWindowChatMemory.builder()
-                    .id(sessionId)
-                    .maxMessages(maxMessages)
-                    .chatMemoryStore(chatMemoryStore)
-                    .build()
-                    .clear();
-            log.debugf("In-memory chat memory cleared for session=%s", sessionId);
-        } catch (Exception e) {
-            log.warnf("Failed to clear in-memory chat memory for session=%s (non-fatal): %s",
-                      sessionId, e.getMessage());
-        }
-    }
 
     /**
      * Marks only genuinely live checkpoints as FAILED during session teardown.
@@ -205,6 +196,10 @@ public class WorkspaceManager {
             retryTemplate.executeVoid("markFailed-" + sessionId, 5, 50, () -> {
                 self.doMarkCheckpointsFailedRequiresNew(sessionId);
             });
+        } catch (IllegalStateException e) {
+            // EntityManager already closed — JVM is shutting down, checkpoint
+            // status update is best-effort only. Process is dying anyway.
+            log.debugf("markCheckpointsFailed skipped for session=%s — EntityManager closed (shutdown in progress)", sessionId);
         } catch (Exception e) {
             log.errorf("Failed to mark checkpoints FAILED after retries for session=%s: %s",
                        sessionId, e.getMessage());

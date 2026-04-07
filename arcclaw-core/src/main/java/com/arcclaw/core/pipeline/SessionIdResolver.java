@@ -13,7 +13,7 @@ public interface SessionIdResolver {
     /**
      * Resolves or creates a stable session ID for the given triplet.
      *
-     * @param channelType channel type name (e.g. "TELEGRAM", "CLI")
+     * @param channelType channel type name (e.g. ChannelType.TELEGRAM.id(), ChannelType.CLI.id())
      * @param channelId   platform channel/chat identifier
      * @param userId      platform user identifier
      * @return a stable session ID string

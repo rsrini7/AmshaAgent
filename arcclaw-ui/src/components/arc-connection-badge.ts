@@ -58,7 +58,8 @@ export class ArcConnectionBadge extends LitElement {
   render() {
     let label = 'Offline';
     if (this.status === 'connected') label = 'Live';
-    else if (this.status === 'error') label = 'Error';
+    // If status is 'error' or 'disconnected', label remains 'Offline'
+
 
     return html`
       <div class="status-${this.status}" style="display: inherit; align-items: inherit; gap: inherit;">

@@ -354,7 +354,8 @@ arcclaw:
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
   chat-memory:
-    max-messages: 20
+    max-messages: ${ARCCLAW_CHAT_MEMORY_MAX_MESSAGES:20}
+    retention-days: ${ARCCLAW_CHAT_MEMORY_RETENTION_DAYS:30}
   api:
     keys:
       internal: "${ARCCLAW_API_KEYS_INTERNAL:key-internal-changeme}"

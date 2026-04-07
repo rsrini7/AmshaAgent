@@ -62,7 +62,7 @@ public record AgentRoleEnum(String id) {
             "Cross-domain synthesis tasks requiring code, debug, research, and architecture " +
             "simultaneously. Activated when a single task spans multiple specialist domains " +
             "and their outputs need integration or conflict resolution.",
-            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE), Set.of("dattatreya", "datta")
+            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER), Set.of("dattatreya", "datta")
         )
 
     );
