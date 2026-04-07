@@ -708,4 +708,24 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 ZoneOffset.UTC);
         return cp.getUpdatedAt().isBefore(cutoff);
     }
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public boolean isSessionActive(String sessionId) {
+        em.clear();
+        return !em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.status NOT IN (:failed, :completed, :archived, :compromised, :denied, :loop_exceeded)",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("failed",      CheckpointStatus.FAILED)
+                .setParameter("completed",   CheckpointStatus.COMPLETED)
+                .setParameter("archived",    CheckpointStatus.ARCHIVED)
+                .setParameter("compromised", CheckpointStatus.COMPROMISED)
+                .setParameter("denied",      CheckpointStatus.DENIED)
+                .setParameter("loop_exceeded", CheckpointStatus.LOOP_EXCEEDED)
+                .setMaxResults(1)
+                .getResultList()
+                .isEmpty();
+    }
 }

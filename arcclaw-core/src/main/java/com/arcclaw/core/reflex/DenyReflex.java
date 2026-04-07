@@ -122,7 +122,7 @@ public class DenyReflex implements AgentReflex {
                             cliResultBridge.register(sessionId);
                             try {
                                 AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
-                                    sessionId, activeRole, userId, chatId, "cli");
+                                    sessionId, activeRole, userId, chatId, ChannelType.CLI.id());
                                 
                                 if (result == null) {
                                     // Session is already resuming/cancelling.
@@ -143,6 +143,11 @@ public class DenyReflex implements AgentReflex {
                 }
 
                 // 2026-04-07: Bridge check for late-arriving results from other channels
+                if (!statefulAgentStore.isSessionActive(sessionId)) {
+                    log.debugf("DenyReflex: ignoring denial for already-completed session %s", sessionId);
+                    return "No pending tool executions require approval for this session.";
+                }
+
                 AgentResult bridgeResult = null;
                 cliResultBridge.register(sessionId);
                 try {

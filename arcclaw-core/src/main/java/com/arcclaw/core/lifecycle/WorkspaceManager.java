@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.audit.AuditObserver;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
@@ -50,6 +51,7 @@ public class WorkspaceManager {
     @Inject StatefulAgentStore statefulAgentStore;
     @Inject SqliteRetryTemplate retryTemplate;
     @Inject AuditObserver auditObserver;
+    @Inject CliResultBridge cliResultBridge;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -119,7 +121,8 @@ public class WorkspaceManager {
                       sessionId, e.getMessage());
         }
 
-        // §7.29: Clear any in-flight batch resume flag for this session.
+        // §7.29: Clear any in-flight batch resume flag and bridge state for this session.
+        cliResultBridge.cancel(sessionId);
         statefulAgentStore.clearBatchResuming(sessionId);
     }
 

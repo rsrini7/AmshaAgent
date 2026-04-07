@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +38,10 @@ public class CliResultBridge {
     private final ConcurrentHashMap<String, AgentResult> bufferedResults =
             new ConcurrentHashMap<>();
 
+    /** Track sessions that have already been signaled to prevent result corruption from double complete() */
+    private final Set<String> signaled = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
@@ -68,6 +74,10 @@ public class CliResultBridge {
      * Otherwise, the result is buffered for a late-arriving register() or waitForResult() call.
      */
     public void complete(String sessionId, AgentResult result) {
+        if (!signaled.add(sessionId)) {
+            log.debugf("CliResultBridge: duplicate complete() ignored for session %s", sessionId);
+            return;
+        }
         CompletableFuture<AgentResult> waiter = waiters.remove(sessionId);
         if (waiter != null) {
             log.infof("CliResultBridge: signaling active waiter for session %s", sessionId);
@@ -114,6 +124,7 @@ public class CliResultBridge {
      * </pre>
      */
     public void cancel(String sessionId) {
+        signaled.remove(sessionId);
         CompletableFuture<AgentResult> waiter = waiters.remove(sessionId);
         if (waiter != null) {
             log.debugf("CliResultBridge: cancelling active waiter for session %s", sessionId);

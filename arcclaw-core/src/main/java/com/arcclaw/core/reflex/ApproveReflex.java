@@ -166,7 +166,7 @@ public class ApproveReflex implements AgentReflex {
                             cliResultBridge.register(sessionId);
                             try {
                                 AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
-                                    sessionId, activeRole, userId, chatId, "cli");
+                                    sessionId, activeRole, userId, chatId, ChannelType.CLI.id());
                                 
                                 if (result == null) {
                                     // Session is already resuming (likely via Browser/REST). 
@@ -204,6 +204,11 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 // 5. Check if it was JUST completed via another channel (signal bridge)
+                if (!statefulAgentStore.isSessionActive(sessionId)) {
+                    log.debugf("ApproveReflex: ignoring approval for already-completed session %s", sessionId);
+                    return "No pending tool executions require approval.";
+                }
+
                 AgentResult bridgeResult = null;
                 cliResultBridge.register(sessionId);
                 try {

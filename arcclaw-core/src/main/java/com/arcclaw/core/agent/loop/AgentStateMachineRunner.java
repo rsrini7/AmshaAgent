@@ -11,6 +11,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.persona.Agent;
@@ -249,7 +250,11 @@ public class AgentStateMachineRunner {
     private void maybeSignalBridge(AgentExecutionContext context, AgentResult result) {
         if (context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) return;
         if (result instanceof AgentResult.AwaitingApproval) return;
-        cliResultBridge.complete(context.sessionId(), result);
+        // CLI sessions use the bridge to pass results back to blocking waits; other 
+        // channels (Telegram, WebSocket) deliver via their specific listeners.
+        if (ChannelType.CLI.id().equalsIgnoreCase(context.channelType())) {
+            cliResultBridge.complete(context.sessionId(), result);
+        }
     }
 
     private void fireTerminalEvent(String sessionId, String role, String goal, AgentResult result) {

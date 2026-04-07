@@ -66,7 +66,7 @@ public class ChatCommand implements Runnable {
         System.out.println("-------------------------------------------------");
 
         try {
-            ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, "CLI").run(
+            ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, ChannelType.CLI.id()).run(
                 () -> runChatLoop(sessionId)
             );
         } catch (Exception e) {

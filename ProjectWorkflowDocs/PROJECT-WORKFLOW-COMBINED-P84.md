@@ -63,7 +63,7 @@ Starts the Quarkus HTTP server (`quarkus.http.port=8080`) and blocks on `Quarkus
 Creates a UUID session, activates `WorkspaceContext`, calls `AgentLoop.run()` once, prints the final answer to stdout, and terminates the workspace session in the `finally` block.
 
 ### `arcclaw chat` → Interactive Terminal
-Opens a `Scanner` on stdin. Each line first passes through `ReflexRegistry.processIfReflex()` (handles `/approve`, `/deny`, `/reset`, `/status`, `/history`, etc.). Non-reflex input dispatches to `AgentLoop.run()`. Session remains alive across turns; `ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, "CLI")` is bound for the lifetime of the loop.
+Opens a `Scanner` on stdin. Each line first passes through `ReflexRegistry.processIfReflex()` (handles `/approve`, `/deny`, `/reset`, `/status`, `/history`, etc.). Non-reflex input dispatches to `AgentLoop.run()`. Session remains alive across turns; `ScopedValue.where(WorkspaceContext.CHANNEL_TYPE, ChannelType.CLI.id())` is bound for the lifetime of the loop.
 
 ### `arcclaw attach <channel>` → Channel Daemon
 Discovers the matching `ChannelDaemon` CDI bean by `channelId()` and calls `daemon.start()` (blocking).
