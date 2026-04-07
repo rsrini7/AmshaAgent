@@ -37,9 +37,10 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
         "\\bgh\\s+(repo|gist)\\b" +
         "|" +
         // Explicit research keywords
-        "\\b(repo|repository|gist)\\s+(desc|description|info|details|view)\\b" +
         ")"
     );
+
+    private static final Pattern GITHUB_REF_PATTERN = Pattern.compile("\\b[\\w.-]+/[\\w.-]+\\b");
 
     @Override
     public List<Pattern> fastPathTriggers() {
@@ -61,6 +62,16 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
     @Override
     public Optional<String> fastPathRole() {
         return Optional.of(AgentRoleEnum.RESEARCHER.toScopedName());
+    }
+
+    @Override
+    public boolean shouldSkip(String userMessage) {
+        if (userMessage == null) return true;
+        // Generic "search for X" with no URL is coordinator-level task.
+        // Researcher only fast-paths for browsing URLs or GitHub refs.
+        boolean hasUrl = userMessage.contains("http://") || userMessage.contains("https://");
+        boolean hasGithubRef = userMessage.toLowerCase().contains("github") || GITHUB_REF_PATTERN.matcher(userMessage).find();
+        return !hasUrl && !hasGithubRef;
     }
 
     @Override

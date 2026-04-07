@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
+import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
@@ -88,6 +89,9 @@ public class ApproveReflex implements AgentReflex {
     @Inject
     CheckpointResumeHandler checkpointResumeHandler;
 
+    @Inject
+    CliResultBridge cliResultBridge;
+
     @Override
     public boolean matches(String input) {
         ChannelCommand cmd = ChannelCommand.parse(input);
@@ -158,9 +162,21 @@ public class ApproveReflex implements AgentReflex {
                             cp = checkpointApprovalService.approveAll(sessionId, "CLI approve");
                         }
                         if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
-                            AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
-                                sessionId, activeRole, userId, chatId, "cli");
-                            return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not resume — session may already be processing.";
+                            // Register interest first to avoid race with concurrent REST resume
+                            cliResultBridge.register(sessionId);
+                            try {
+                                AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
+                                    sessionId, activeRole, userId, chatId, "cli");
+                                
+                                if (result == null) {
+                                    // Session is already resuming (likely via Browser/REST). 
+                                    // Wait for it to finish and signal us through the bridge.
+                                    result = cliResultBridge.waitForResult(sessionId, 10000);
+                                }
+                                return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not resume — session may already be processing.";
+                            } finally {
+                                cliResultBridge.cancel(sessionId);
+                            }
                         } else {
                             checkpointApprovalService.triggerResume(cp);
                             return "";
@@ -187,7 +203,20 @@ public class ApproveReflex implements AgentReflex {
                     return "⚠️ Multiple background tasks awaiting approval:\n\n" + list;
                 }
 
-                // 5. Nothing pending anywhere
+                // 5. Check if it was JUST completed via another channel (signal bridge)
+                AgentResult bridgeResult = null;
+                cliResultBridge.register(sessionId);
+                try {
+                    bridgeResult = cliResultBridge.waitForResult(sessionId, 200);
+                } finally {
+                    cliResultBridge.cancel(sessionId);
+                }
+
+                if (bridgeResult != null) {
+                    return AgentResultFormatter.format(bridgeResult);
+                }
+
+                // 6. Nothing pending anywhere
                 return "No pending tool executions require approval.";
             });
             return ReflexResult.respond(response, context);

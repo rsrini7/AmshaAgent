@@ -63,7 +63,7 @@ class CheckpointResumeHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry, new ObjectMapper(), null, null, null);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, new ObjectMapper(), null, null, null, null);
     }
 
     private MessageContext createContext(String input, boolean resume) {

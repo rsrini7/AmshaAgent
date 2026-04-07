@@ -49,6 +49,7 @@ public class DenyReflex implements AgentReflex {
     @Inject CheckpointResumeHandler checkpointResumeHandler;
     @Inject DelegateApprovalGuard delegateGuard;
     @Inject CheckpointApprovalService checkpointApprovalService;
+    @Inject com.arcclaw.core.agent.loop.CliResultBridge cliResultBridge;
 
     @Override
     public boolean matches(String input) {
@@ -116,9 +117,21 @@ public class DenyReflex implements AgentReflex {
                             cp = checkpointApprovalService.denyAll(sessionId, "CLI deny");
                         }
                         if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
-                            AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
-                                sessionId, activeRole, userId, chatId, "cli");
-                            return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not deny — session may already be processing.";
+                            // Register interest first to avoid race with concurrent REST deny
+                            cliResultBridge.register(sessionId);
+                            try {
+                                AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
+                                    sessionId, activeRole, userId, chatId, "cli");
+                                
+                                if (result == null) {
+                                    // Session is already resuming/cancelling.
+                                    // Wait for it to finish and signal us through the bridge.
+                                    result = cliResultBridge.waitForResult(sessionId, 10000);
+                                }
+                                return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not deny — session may already be processing.";
+                            } finally {
+                                cliResultBridge.cancel(sessionId);
+                            }
                         } else {
                             checkpointApprovalService.triggerResume(cp);
                             return "";
@@ -126,6 +139,19 @@ public class DenyReflex implements AgentReflex {
                     } catch (CheckpointResolutionException e) {
                         return "No pending denial found for this session.";
                     }
+                }
+
+                // 2026-04-07: Bridge check for late-arriving results from other channels
+                AgentResult bridgeResult = null;
+                cliResultBridge.register(sessionId);
+                try {
+                    bridgeResult = cliResultBridge.waitForResult(sessionId, 200);
+                } finally {
+                    cliResultBridge.cancel(sessionId);
+                }
+
+                if (bridgeResult != null) {
+                    return AgentResultFormatter.format(bridgeResult);
                 }
 
                 // 5. No session checkpoint — guide user to pending cron tasks

@@ -28,12 +28,22 @@ public class CompactionSummaryRepository {
 
     @Transactional
     public Optional<CompactionSummaryEntity> findLatestBySessionId(String sessionId) {
+        em.clear(); // A16 — Force read through L1 cache to avoid stale values during CLI polling
         CompactionSummaryEntity entity = em.find(CompactionSummaryEntity.class, sessionId);
         return Optional.ofNullable(entity);
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void upsertSummary(String sessionId, String userId, String summaryText, int compactedCount) {
+        // Main write unit
+        self.get().doUpsertSummary(sessionId, userId, summaryText, compactedCount);
+
+        // Manual FTS Sync (isolated tx to prevent indexing failure from rolling back main write)
+        self.get().syncFtsBestEffort(sessionId, summaryText);
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doUpsertSummary(String sessionId, String userId, String summaryText, int compactedCount) {
         CompactionSummaryEntity existing = em.find(CompactionSummaryEntity.class, sessionId);
 
         if (existing != null) {
@@ -47,13 +57,9 @@ public class CompactionSummaryRepository {
                     sessionId, summaryText, Instant.now(), compactedCount, userId, null);
             em.persist(newEntity);
         }
-        em.flush(); // Ensure main is written before FTS sync
-
-        // Manual FTS Sync (isolated tx to prevent indexing failure from rolling back main write)
-        self.get().syncFtsBestEffort(sessionId, summaryText);
     }
 
-    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void syncFtsBestEffort(String sessionId, String summaryText) {
         try {
             // Manual FTS Sync: DELETE then INSERT (standalone pattern)

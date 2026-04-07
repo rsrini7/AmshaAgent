@@ -43,6 +43,7 @@ public class CheckpointResumeHandler {
     private final AgentLoop agentLoop;
     private final ReasoningEngine reasoningEngine;
     private final ChannelPluginRegistry channelPluginRegistry;
+    private final CliResultBridge cliResultBridge;
 
     protected CheckpointResumeHandler() {
         this.agentStore = null;
@@ -51,6 +52,7 @@ public class CheckpointResumeHandler {
         this.agentLoop = null;
         this.reasoningEngine = null;
         this.channelPluginRegistry = null;
+        this.cliResultBridge = null;
     }
 
     @Inject
@@ -59,13 +61,15 @@ public class CheckpointResumeHandler {
                                    ObjectMapper objectMapper,
                                    AgentLoop agentLoop,
                                    ReasoningEngine reasoningEngine,
-                                   ChannelPluginRegistry channelPluginRegistry) {
+                                   ChannelPluginRegistry channelPluginRegistry,
+                                   CliResultBridge cliResultBridge) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
         this.channelPluginRegistry = channelPluginRegistry;
+        this.cliResultBridge = cliResultBridge;
     }
 
     public void resumeAfterBatchDecision(
@@ -159,7 +163,12 @@ public class CheckpointResumeHandler {
                                 s.sendRaw(user, output);
                             }
                         },
-                        () -> log.debugf("CheckpointResumeHandler: no sender for type %s — result reply dropped (async flow)", cType.id())
+                        () -> {
+                            log.debugf("CheckpointResumeHandler: no sender for type %s — check for CLI bridge", cType.id());
+                            if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
+                                cliResultBridge.complete(sessionId, result);
+                            }
+                        }
                     );
             } else {
                 log.warnf("resumeAfterBatchDecision: agentLoop.run() returned null for session %s", sessionId);
