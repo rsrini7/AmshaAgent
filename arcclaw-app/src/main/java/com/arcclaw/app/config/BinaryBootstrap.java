@@ -49,6 +49,7 @@ public class BinaryBootstrap {
 
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
+        extractEnvExampleIfNeeded(binaryDir);
         
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
@@ -193,13 +194,6 @@ public class BinaryBootstrap {
     }
 
     private static void interactiveSetupIfNeeded(Path binaryDir, String[] args) {
-        Console console = System.console();
-        // Non-interactive (CI / piped): extract example and exit early
-        if (console == null) {
-            extractEnvExampleIfNeeded(binaryDir);
-            return;
-        }
-
         // 1. Initial State: LLM Provider selection determines what VarSpecs we need.
         // We prompt this BEFORE getMissingVarSpecs so the key hints (Groq/OpenRouter/etc) are correct.
         if (System.getProperty("ARCCLAW_LLM_PROVIDER") == null && System.getenv("ARCCLAW_LLM_PROVIDER") == null) {
@@ -210,7 +204,7 @@ public class BinaryBootstrap {
             System.err.println("  │  3. OpenAI - direct connection");
             System.err.println("  │  4. Ollama - local only (no API key required)");
             System.err.println("  │");
-            String choice = console.readLine("  └─ Select provider [1-4, Default: 1]: ");
+            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-4, Default: 1]: ");
             String provider = switch (choice != null ? choice.trim() : "") {
                 case "2" -> "openrouter";
                 case "3" -> "openai";
@@ -303,7 +297,7 @@ public class BinaryBootstrap {
                         System.err.println("  ┌─ Telegram Integration");
                         System.err.println("  │  Would you like to enable the Telegram bot interface?");
                         System.err.println("  │");
-                        String response = console.readLine("  └─ Enable Telegram? [y/N]: ");
+                        String response = readLineWithFallback(System.console(), "  └─ Enable Telegram? [y/N]: ");
                         askedTelegram = true;
                         if (response == null || !response.trim().toLowerCase().startsWith("y")) {
                             skipTelegram = true;
@@ -324,7 +318,7 @@ public class BinaryBootstrap {
                     System.err.println("  │  Would you like to provide a GitHub token for the Coder/Researcher tools?");
                     System.err.println("  │  (Search and edit repositories directly from ArcClaw)");
                     System.err.println("  │");
-                    String response = console.readLine("  └─ Configure GitHub? [y/N]: ");
+                    String response = readLineWithFallback(System.console(), "  └─ Configure GitHub? [y/N]: ");
                     if (response == null || !response.trim().toLowerCase().startsWith("y")) {
                         System.err.println("     [skipped]");
                         System.err.println();
@@ -337,7 +331,7 @@ public class BinaryBootstrap {
                     System.err.println("  ┌─ Serper Search Integration");
                     System.err.println("  │  Enable Google Search for Researcher agent via Serper.dev?");
                     System.err.println("  │");
-                    String response = console.readLine("  └─ Configure Serper? [y/N]: ");
+                    String response = readLineWithFallback(System.console(), "  └─ Configure Serper? [y/N]: ");
                     if (response == null || !response.trim().toLowerCase().startsWith("y")) {
                         System.err.println("     [skipped]");
                         System.err.println();
@@ -355,7 +349,7 @@ public class BinaryBootstrap {
                     System.err.println("  ┌─ Brave Search Integration");
                     System.err.println("  │  Enable Brave Search for Researcher agent?");
                     System.err.println("  │");
-                    String response = console.readLine("  └─ Configure Brave? [y/N]: ");
+                    String response = readLineWithFallback(System.console(), "  └─ Configure Brave? [y/N]: ");
                     if (response == null || !response.trim().toLowerCase().startsWith("y")) {
                         System.err.println("     [skipped]");
                         System.err.println();
@@ -378,14 +372,14 @@ public class BinaryBootstrap {
                 String value;
                 if (sensitive) {
                     String promptText = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key) ? " (Enter to auto-generate, input hidden): " : " (input hidden): ");
-                    char[] pw = console.readPassword(promptText);
-                    value = (pw != null) ? new String(pw).trim() : "";
+                    value = readPasswordWithFallback(System.console(), promptText);
+                    if (value == null) value = "";
                     if (value.isEmpty() && AUTO_GENERATABLE_KEYS.contains(spec.key)) {
                         value = generateRandomValue();
                     }
                 } else {
                     String promptText = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key) ? " (Enter to auto-generate): " : ": ");
-                    String line = console.readLine(promptText);
+                    String line = readLineWithFallback(System.console(), promptText);
                     value = (line != null) ? line.trim() : "";
                     if (value.isEmpty() && AUTO_GENERATABLE_KEYS.contains(spec.key)) {
                         value = generateRandomValue();
@@ -654,14 +648,9 @@ public class BinaryBootstrap {
                 System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
         boolean playwrightEnabled = "true".equalsIgnoreCase(playwrightProp);
 
-        // Always gate background downloads
-        if (playwrightEnabled) {
-            System.setProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
-        }
-
         // Prompt if: (a) not configured, or (b) enabled but browser missing
         boolean needsPrompt = (playwrightProp == null || playwrightProp.isBlank())
-                || (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
+                || (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath));
 
         if (!needsPrompt) return;
 
@@ -682,7 +671,7 @@ public class BinaryBootstrap {
         }
 
         String tr = response.trim().toLowerCase();
-        // System.err.println("  DEBUG: playwright response=[" + tr + "]"); // Internal diagnostic
+        System.err.println("  DEBUG: playwright response=[" + tr + "]"); // Internal diagnostic
 
         if (playwrightEnabled) {
             // Already enabled, just asking about browser installation
@@ -729,6 +718,15 @@ public class BinaryBootstrap {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static String readPasswordWithFallback(Console console, String prompt) {
+        if (console != null) {
+            char[] pw = console.readPassword(prompt);
+            return (pw != null) ? new String(pw).trim() : "";
+        }
+        // Fallback for non-TTY environments (like mise run)
+        return readLineWithFallback(null, prompt);
     }
 
     private static boolean canRun(String... cmd) {
