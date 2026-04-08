@@ -49,7 +49,7 @@ public class AgentStateMachineRunner {
         "^\\s*\\{\\s*\"type\"\\s*:\\s*\"function\"", Pattern.DOTALL);
 
     private static final Pattern RAW_DELEGATE_CALL_PATTERN =
-        Pattern.compile("(?m)^\\s*\\w+\\s*\\(agent\\s*=", Pattern.CASE_INSENSITIVE);
+        Pattern.compile( "(?m)^\\s*delegate_to_agent\\s*\\(\\s*agent\\s*=", Pattern.CASE_INSENSITIVE);
 
     // ── Suspiciously short non-answers: "Done.", "OK.", "ok" etc.
     private static final Pattern SUSPICIOUSLY_SHORT =
@@ -410,7 +410,7 @@ public class AgentStateMachineRunner {
      */
    private String sanitizeErrorForUser(String answer, String sessionId) {
         if (answer == null) return null;
-        // Inner sessions (:d: prefix) produce developer analysis — never sanitize.
+        // Inner sessions (:delegate: prefix) produce developer analysis — never sanitize.
         // A debugger analyzing a NullPointerException will contain "NullPointerException"
         // in its answer — that is expected and must reach the coordinator unmodified.
         if (sessionId != null && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) return answer;

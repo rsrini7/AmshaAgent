@@ -97,10 +97,10 @@ public class ToolRegistry {
      *
      * Windows BUG FIX: Colons (':') are illegal in Windows path components —
      * they are reserved as drive letter separators (e.g. C:\).
-     * Delegate session IDs use the format "parentId:d:role:shortId", which
+     * Delegate session IDs use the format "parentId:delegate:agentname:timestamp", which
      * causes InvalidPathException on every sandbox tool call inside a sub-agent
      * on Windows. Example that crashed:
-     *   data/workspaces\c77013fc-...-2ad15af79f03:d:researcher:cf747207
+     *   data/workspaces\c77013fc-...-2ad15af79f03:delegate:researcher:38373837338
      *
      * Fix: replace ':' → '_' for the directory name only.
      * The session ID string itself is unchanged everywhere else

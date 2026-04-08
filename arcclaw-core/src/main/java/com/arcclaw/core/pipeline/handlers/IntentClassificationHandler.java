@@ -6,13 +6,13 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
-import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.exception.HttpException;
 import org.jboss.logging.Logger;
@@ -33,7 +33,7 @@ public class IntentClassificationHandler implements MessageHandler {
     @Inject IntentClassifier classifier;
     @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
     @Inject ChannelPluginRegistry channelPluginRegistry;
-    @Inject StatefulAgentStore stateStore;
+    @Inject AgentRoleCache roleCache;
 
     @Override
     public int priority() {
@@ -71,7 +71,7 @@ public class IntentClassificationHandler implements MessageHandler {
                     context.getChatId());
                 return context.getChatId();
             });
-            String previousRole = stateStore.findLatestRole(sid).orElse(null);
+            String previousRole = roleCache.findLatestRole(sid).orElse(null);
 
             // Bug 2 Fix: Short follow-up heuristics for sticky roles
             String lowerMsg = message.text().toLowerCase();
