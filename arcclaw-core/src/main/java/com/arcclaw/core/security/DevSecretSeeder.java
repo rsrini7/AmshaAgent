@@ -83,7 +83,8 @@ public class DevSecretSeeder {
                 "[DevSecretSeeder] Profile='%s', autoSeedEnabled=false — " +
                 "ARCCLAW_AUDIT_HMAC_KEY was NOT seeded into the vault. " +
                 "Audit log HMAC verification will fail until the key is " +
-                "provisioned manually via POST /api/v1/vault/system-keys.",
+                "provisioned manually. For production, set ARCCLAW_AUTO_SEED_SECRETS=true " +
+                "in your .env or insert directly into the vault database.",
                 profile
             );
         }
@@ -94,7 +95,7 @@ public class DevSecretSeeder {
             log.debugf(
                 "[DevSecretSeeder] Auto-seed disabled (arcclaw.auto-seed-secrets=false). " +
                 "Tool secrets (GITHUB_TOKEN, SERPER, BRAVE) were not seeded. " +
-                "Provision them manually via POST /api/v1/vault/keys if needed."
+                "Provision them manually by sending the bot a message: store GITHUB_TOKEN=your_token"
             );
         }
     }
