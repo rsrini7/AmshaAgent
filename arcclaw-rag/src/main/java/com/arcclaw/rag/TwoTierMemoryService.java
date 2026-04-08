@@ -136,7 +136,12 @@ public class TwoTierMemoryService {
         List<ScoredChunk> result = new ArrayList<>();
         for (int i = 0; i < entities.size(); i++) {
             var e = entities.get(i);
-            result.add(new ScoredChunk(e.getSessionId(), e.getSummary(), 1.0 / (i + 1)));
+            // Truncate summary at source — don't inject the whole compaction blob
+            String text = e.getSummary();
+            if (text != null && text.length() > 400) {
+                text = text.substring(0, 400) + "…";
+            }
+            result.add(new ScoredChunk(e.getSessionId(), text, 1.0 / (i + 1)));
         }
         return result;
     }
