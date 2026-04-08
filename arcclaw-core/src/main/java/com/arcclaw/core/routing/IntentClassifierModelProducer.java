@@ -17,9 +17,9 @@ import org.jboss.logging.Logger;
  * discovers the active {@link RoutingChatModelProvider} via CDI.
  */
 @ApplicationScoped
-public class ModelProducer {
+public class IntentClassifierModelProducer {
 
-    private static final Logger log = Logger.getLogger(ModelProducer.class);
+    private static final Logger log = Logger.getLogger(IntentClassifierModelProducer.class);
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.provider", defaultValue = "groq")
     String provider;
@@ -58,7 +58,7 @@ public class ModelProducer {
     @ApplicationScoped
     @Identifier("intent-classifier")
     public ChatModel intentClassifierModel() {
-        log.infof("ModelProducer intent-classifier provider=%s model=%s",
+        log.infof("IntentClassifierModelProducer intent-classifier provider=%s model=%s",
                   provider, intentModelName);
         return modelFactory.createModel(
             provider, intentBaseUrl, intentApiKey,
