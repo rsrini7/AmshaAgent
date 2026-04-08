@@ -63,6 +63,13 @@ rsync -a --delete \
 # Extra safety: remove any legacy .env that might have survived in the cache
 rm -f "$BUILD_DIR/.env" "$BUILD_DIR/arcclaw-app/.env"
 
+# ── build.env fallback (mirrors Windows build:native behavior) ──────────────
+# If build.env exists and no .env was shielded, activate it for the build
+if [ ! -f "$BUILD_DIR/.env" ] && [ -f "$OLDPWD/build.env" ]; then
+    echo "ℹ️   Activating build.env for native compilation (no secrets)."
+    cp "$OLDPWD/build.env" "$BUILD_DIR/.env"
+fi
+
 # ── Resolve build strategy ──────────────────────────────────────────
 # Check for --local flag in any position
 STRATEGY="container"
@@ -136,7 +143,7 @@ echo "🧠 Allocating ${TARGET_GB}G for native-image (80% of WSL2 RAM)..."
 
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
 
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.native.native-image-xmx=${TARGET_GB}g
+./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.profile=prod -Dquarkus.native.native-image-xmx=${TARGET_GB}g
 
 # 4. Copy ALL compiled artifacts directly back to Windows target/ AND dist/
 echo "🚚 Bringing build artifacts back to Windows..."
