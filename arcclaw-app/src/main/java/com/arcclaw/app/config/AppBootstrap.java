@@ -269,6 +269,9 @@ public class AppBootstrap {
             patchEnvFile(envFile, "ARCCLAW_COMPACTION_MODEL", System.getProperty("ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant"));
             patchEnvFile(envFile, "ARCCLAW_INTENT_CLASSIFIER_PROVIDER", System.getProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER", "groq"));
             patchEnvFile(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", System.getProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant"));
+            
+            initEnvFile(envFile, "QUARKUS_PROFILE", "prod");
+            initEnvFile(envFile, "ARCCLAW_DATA_DIR", "./data");
             initEnvFile(envFile, "ARCCLAW_AUTO_SEED_SECRETS", "true");
             
             // Ensure Jina key is at least present as a placeholder so users see it
