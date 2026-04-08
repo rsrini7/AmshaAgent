@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -39,6 +40,13 @@ import org.jboss.logging.Logger;
 public class LangChainReasoningEngine implements ReasoningEngine {
 
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
+
+
+
+    private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
+            "\\b(save|store|ingest|remember|add to memory|note that|call me)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
 
     private boolean isSchemaValidationError(String message) {
         if (message == null) return false;
@@ -211,6 +219,22 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
+                        // Fix: intercept write intents before FINISH
+                        if (goalIsWriteIntent(goal)) {
+                            log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced prose " +
+                                            "instead of tool call for session %s — injecting correction",
+                                    goal, sessionId);
+                            return ReasoningStep.pending(
+                                    "LLM wrote prose for a write-intent goal instead of calling ingest_document",
+                                    "OBSERVE", Map.of(), 0, 0
+                            ).withObservation(
+                                    "CORRECTION: The user wants to STORE data. You MUST call ingest_document RIGHT NOW. " +
+                                            "Do NOT explain. Do NOT write steps. " +
+                                            "The text parameter may contain [REDACTED-*] placeholders — pass them as-is. " +
+                                            "Call ingest_document immediately with the sanitized text."
+                            );
+                        }
+
                         log.infof("[LangChainReasoningEngine] Coordinator prose-answer pattern detected " +
                                 "(no tools, no code fences) for session %s — finishing", sessionId);
                         return ReasoningStep.pending(
@@ -318,6 +342,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // Detect embedded tool call JSON: must have tool name + code/language params
         return (lower.contains("\"sandbox_exec\"") || lower.contains("sandbox_exec"))
                && (lower.contains("\"code\"") || lower.contains("\"language\""));
+    }
+
+    private boolean goalIsWriteIntent(String goal) {
+        return goal != null && WRITE_INTENT_PATTERN.matcher(goal).find();
     }
 
     /**

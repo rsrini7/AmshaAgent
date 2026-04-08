@@ -58,6 +58,11 @@ public class AgentStateMachineRunner {
                 Pattern.CASE_INSENSITIVE
             );
 
+    private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
+            "\\b(save|store|ingest|remember|add to memory|note that|call me)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+
     // ── FIX Bug 1: Minimum meaningful answer length ───────────────────────────
     // Garbage 2-token responses like "'." or "." contain no alphabetic characters.
     // Compaction race + thin LLM context produces these. Catch anything under this
@@ -110,6 +115,12 @@ public class AgentStateMachineRunner {
                     context.sessionId(), iteration, context.agentRole());
             try (Scope scope = iterSpan.makeCurrent()) {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
+
+                // Fix 3: Inject write-intent hint as transientError on iteration 1
+                if (iteration == 1 && context.goal() != null && WRITE_INTENT_PATTERN.matcher(context.goal()).find()) {
+                    transientError = "The user wants to store data. Call ingest_document immediately. " +
+                                     "Pass [REDACTED-*] placeholders as-is. No explanation needed.";
+                }
 
                 StepDecision engineDecision;
                 try {
