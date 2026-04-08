@@ -51,8 +51,10 @@ rsync -a --delete \
     --exclude 'ProjectWorkflowDocs' \
     --exclude 'bruno-collections' \
     --exclude 'rest-http' \
-    --exclude 'recordings' \
+    --exclude '.playwright-browsers' \
     --exclude 'backups' \
+    --exclude '.gitignore' \
+    --exclude '.gitattributes' \
     --exclude '.env' \
     --exclude '.env.build-backup' \
     --exclude 'build.env' \
