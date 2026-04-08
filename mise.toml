@@ -558,7 +558,6 @@ if (Test-Path '.env') {
 """
 
 [tasks."build:native-wsl2-local"]
-depends = ["env:recover", "build:ui-copy"]
 description = "Native Linux binary via WSL2 — always local GraalVM, no container (fastest WSL2 build)"
 quiet = true
 dir = "{{config_root}}"
