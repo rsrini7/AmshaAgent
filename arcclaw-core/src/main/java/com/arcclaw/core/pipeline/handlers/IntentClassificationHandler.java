@@ -78,7 +78,7 @@ public class IntentClassificationHandler implements MessageHandler {
                 }
             }
 
-            // §78-fix-3: null guard — openrouter/free occasionally returns null
+            // §78-fix-3: null guard — openrouter/auto occasionally returns null
             // causing NPE in downstream .trim() calls
             if (role == null || role.isBlank()) {
                 log.warnf("IntentClassifier returned null/blank for chat %s — defaulting to coordinator",
