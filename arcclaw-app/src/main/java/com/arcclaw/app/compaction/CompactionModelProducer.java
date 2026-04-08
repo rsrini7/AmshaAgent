@@ -17,7 +17,7 @@ public class CompactionModelProducer {
 
     private static final Logger log = Logger.getLogger(CompactionModelProducer.class);
 
-    @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
+    @ConfigProperty(name = "arcclaw.memory.compaction.provider", defaultValue = "groq")
     String provider;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.base-url")

@@ -38,6 +38,9 @@ public class ChatModelProducer {
     @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT60S")
     Duration timeout;
 
+    @ConfigProperty(name = "arcclaw.llm.fallback-provider")
+    Optional<String> fallbackProvider;
+
     @ConfigProperty(name = "arcclaw.llm.fallback-model")
     Optional<String> fallbackModel;
 
@@ -81,8 +84,10 @@ public class ChatModelProducer {
             String configuredFallbackBaseUrl = fallbackBaseUrl.orElse("");
             String configuredFallbackApiKey = fallbackApiKey.orElse("");
             log.infof("ChatModelProducer: fallback configured model=%s", configuredFallbackModel);
-            String fbProvider = LlmModelFactory.inferProviderFromUrl(configuredFallbackBaseUrl);
+            String fbProvider = fallbackProvider.filter(p -> !p.isBlank())
+                .orElseGet(() -> LlmModelFactory.inferProviderFromUrl(configuredFallbackBaseUrl));
             
+            log.infof("ChatModelProducer: fallback provider=%s", fbProvider);
             ChatModel fallback = modelFactory.createModel(
                 fbProvider, configuredFallbackBaseUrl, configuredFallbackApiKey,
                 configuredFallbackModel, 8192, timeout, maxRetries,

@@ -215,6 +215,15 @@ public class CliUtils {
             ));
         }
 
+        if (!isSet("ARCCLAW_LLM_FALLBACK_API_KEY") && !isExplicitOptOut("ARCCLAW_LLM_FALLBACK_API_KEY")) {
+            missing.add(new VarSpec(
+                "ARCCLAW_LLM_FALLBACK_API_KEY",
+                "Optional Fallback LLM API key.",
+                "Secondary provider used when primary fails (429/5xx).",
+                "Required if ARCCLAW_LLM_FALLBACK_PROVIDER is set to an API provider."
+            ));
+        }
+
         return missing;
     }
 

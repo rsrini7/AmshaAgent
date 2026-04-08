@@ -21,7 +21,7 @@ public class ModelProducer {
 
     private static final Logger log = Logger.getLogger(ModelProducer.class);
 
-    @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.provider", defaultValue = "groq")
     String provider;
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.base-url",
