@@ -60,7 +60,7 @@ public class AppBootstrap {
         validateAndAutoFixSecurityKeys(binaryDir);
         validateAndAutoFixLlmConfig(binaryDir);
         validateAndAutoFixEmbeddingConfig(binaryDir);
-        validateSandboxTools();
+        validateSandboxTools(binaryDir);
         interactiveSetupIfNeeded(binaryDir, args);
         promptPlaywrightSetupIfNeeded(binaryDir);
         
@@ -299,6 +299,73 @@ public class AppBootstrap {
 
             boolean skipTelegram = false;
             boolean askedTelegram = false;
+
+            // ── Unified LLM API Key Shortcut ──────────────────────────────────
+            // If the main LLM key and at least one utility key (Intent/Compaction) are missing,
+            // we offer to unify them to save the user from pasting the same key 3 times.
+            boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key.equals("ARCCLAW_LLM_API_KEY"));
+            boolean intentKeyMissing = missing.stream().anyMatch(s -> s.key.equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY"));
+            boolean compactionKeyMissing = missing.stream().anyMatch(s -> s.key.equals("ARCCLAW_COMPACTION_API_KEY"));
+
+            if (llmKeyMissing && (intentKeyMissing || compactionKeyMissing)) {
+                System.err.println("  ┌─ Unified API Key Setup");
+                System.err.println("  │  ArcClaw uses LLMs for three different tasks:");
+                System.err.println("  │   1. Main Assistant (Reasoning & Tools)");
+                System.err.println("  │   2. Intent Classifier (Task routing)");
+                System.err.println("  │   3. Context Compaction (Memory management)");
+                System.err.println("  │");
+                System.err.println("  │  Would you like to use the same provider and API key for all of them?");
+                System.err.println("  │");
+                String resp = readLineWithFallback(System.console(), "  └─ Use a single key for all? [Y/n]: ");
+                
+                if (resp == null || resp.trim().isEmpty() || resp.trim().toLowerCase().startsWith("y")) {
+                    String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", "groq");
+                    String prompt = "  └─ Enter " + provider.toUpperCase() + " API key (input hidden): ";
+                    String key = readPasswordWithFallback(System.console(), prompt);
+                    
+                    if (key != null && !key.isBlank()) {
+                        // Apply to all missing services
+                        if (llmKeyMissing) {
+                            System.setProperty("ARCCLAW_LLM_API_KEY", key);
+                            patchEnvFile(envFile, "ARCCLAW_LLM_API_KEY", key);
+                        }
+                        if (intentKeyMissing) {
+                            System.setProperty("ARCCLAW_INTENT_CLASSIFIER_API_KEY", key);
+                            patchEnvFile(envFile, "ARCCLAW_INTENT_CLASSIFIER_API_KEY", key);
+                            
+                            String providerKey = "ARCCLAW_INTENT_CLASSIFIER_PROVIDER";
+                            System.setProperty(providerKey, provider);
+                            patchEnvFile(envFile, providerKey, provider);
+                            
+                            String baseUrlKey = "ARCCLAW_INTENT_CLASSIFIER_BASE_URL";
+                            String baseUrl = System.getProperty("ARCCLAW_LLM_BASE_URL");
+                            System.setProperty(baseUrlKey, baseUrl);
+                            patchEnvFile(envFile, baseUrlKey, baseUrl);
+                        }
+                        if (compactionKeyMissing) {
+                            System.setProperty("ARCCLAW_COMPACTION_API_KEY", key);
+                            patchEnvFile(envFile, "ARCCLAW_COMPACTION_API_KEY", key);
+
+                            String providerKey = "ARCCLAW_COMPACTION_PROVIDER";
+                            System.setProperty(providerKey, provider);
+                            patchEnvFile(envFile, providerKey, provider);
+
+                            String baseUrlKey = "ARCCLAW_COMPACTION_BASE_URL";
+                            String baseUrl = System.getProperty("ARCCLAW_LLM_BASE_URL");
+                            System.setProperty(baseUrlKey, baseUrl);
+                            patchEnvFile(envFile, baseUrlKey, baseUrl);
+                        }
+                        System.err.println("     ✓ Unified key saved to all services.");
+                        System.err.println();
+                        
+                        // Remove from missing list so we don't prompt again in the loop
+                        missing.removeIf(s -> s.key.equals("ARCCLAW_LLM_API_KEY") || 
+                                              s.key.equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") || 
+                                              s.key.equals("ARCCLAW_COMPACTION_API_KEY"));
+                    }
+                }
+            }
+
             for (CliUtils.VarSpec spec : missing) {
                 // Optional: Ask for Telegram enablement once
                 if (spec.key.startsWith("TELEGRAM_") || spec.key.startsWith("ARCCLAW_TELEGRAM_")) {
@@ -750,18 +817,56 @@ public class AppBootstrap {
         }
     }
 
-    private static void validateSandboxTools() {
+    private static void validateSandboxTools(Path binaryDir) {
         String strategyStr = System.getProperty("ARCCLAW_SANDBOX_STRATEGY", System.getenv("ARCCLAW_SANDBOX_STRATEGY"));
         SandboxStrategy strategy = SandboxStrategy.fromString(strategyStr);
 
         if (SandboxStrategy.PODMAN == strategy) {
-            if (!canRun("podman", "--version")) {
-                System.err.println("[ArcClaw] ⚠️  Podman not found — sandbox will be OFFLINE.");
-            } else {
+            boolean podmanReachable = canRun("podman", "info");
+            boolean fallbackEnabled = "true".equalsIgnoreCase(System.getProperty("arcclaw.sandbox.allow-insecure-fallback", 
+                                       System.getenv("ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK")));
+
+            if (!podmanReachable && !fallbackEnabled) {
+                System.err.println();
+                System.err.println("  ┌─ Podman Sandbox Environment");
+                System.err.println("  │  ⚠️  Podman is not reachable or not running.");
+                System.err.println("  │  ArcClaw uses Podman for secure code execution (Sandboxing).");
+                System.err.println("  │");
+                System.err.println("  │  Options:");
+                System.err.println("  │  1. Enable insecure host fallback (unsafe, local-dev only)");
+                System.err.println("  │  2. Skip sandbox for now (code tools will be OFFLINE)");
+                System.err.println("  │");
+                
+                String response = readLineWithFallback(System.console(), "  └─ Select option [1-2, Default: 2]: ");
+                if ("1".equals(response != null ? response.trim() : "")) {
+                    System.err.println("     ✓ Insecure fallback enabled.");
+                    patchEnvFile(binaryDir.resolve(".env"), "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK", "true");
+                    System.setProperty("arcclaw.sandbox.allow-insecure-fallback", "true");
+                    System.setProperty("ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK", "true");
+                } else {
+                    System.err.println("     [skipped - code execution will fail until Podman is started]");
+                }
+                
+                String os = System.getProperty("os.name").toLowerCase();
+                System.err.println();
+                System.err.println("  PRO-TIP: To fix Podman proper for " + (os.contains("win") ? "Windows" : "your OS") + ":");
+                if (os.contains("win")) {
+                    System.err.println("    1. Install Podman Desktop (or 'winget install RedHat.Podman')");
+                    System.err.println("    2. run: podman machine init");
+                    System.err.println("    3. run: podman machine start");
+                } else if (os.contains("mac")) {
+                    System.err.println("    1. brew install podman");
+                    System.err.println("    2. podman machine init");
+                    System.err.println("    3. podman machine start");
+                } else {
+                    System.err.println("    - Install podman via your package manager (apt/dnf/pacman)");
+                }
+                System.err.println();
+            } else if (podmanReachable) {
                 String image = System.getProperty("ARCCLAW_SANDBOX_IMAGE", 
                         System.getenv().getOrDefault("ARCCLAW_SANDBOX_IMAGE", "localhost/arcclaw-tool-runner:latest"));
                 if (!canRun("podman", "image", "inspect", image, "--format", "{{.Id}}")) {
-                    System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing.");
+                    System.err.println("[ArcClaw] ⚠️  Podman image '" + image + "' missing. Containers will fail at runtime.");
                 }
             }
         }
