@@ -22,8 +22,18 @@ fi
 
 mkdir -p "$BUILD_DIR"
 
-# Exclude .env to act as a "Shield" so secrets are never baked into the binary
-echo "📦 Syncing source code to Linux filesystem (ignoring target/ and .env)..."
+# ── The .env Shield ──────────────────────────────────────────────────
+# Renaming the local .env ensures it is NEVER synced to the build dir,
+# even if rsync flags are misconfigured, and prevents Quarkus from loading it.
+if [ -f ".env" ]; then
+    echo "🛡️  Shielding .env (temporarily renaming to .env.build-backup)..."
+    mv .env .env.build-backup
+    trap 'mv .env.build-backup .env 2>/dev/null || true' EXIT
+fi
+
+# Exclude .env explicitly. 
+# We also explicitly remove it from the destination later to be 100% safe.
+echo "📦 Syncing source code to Linux filesystem..."
 rsync -a --delete \
     --exclude '**/target' \
     --exclude '.git' \
@@ -34,17 +44,22 @@ rsync -a --delete \
     --exclude '*.md' \
     --exclude '*.py' \
     --exclude 'Prompts' \
+    --exclude 'docs' \
+    --exclude 'docs-main' \
     --exclude 'docs-test' \
     --exclude 'Ideas-Pending' \
     --exclude 'ProjectWorkflowDocs' \
     --exclude 'bruno-collections' \
     --exclude 'rest-http' \
+    --exclude 'recordings' \
+    --exclude 'backups' \
     --exclude '.env' \
+    --exclude '.env.build-backup' \
     --exclude 'build.env' \
-    --exclude 'docs' \
-    --exclude 'docs-main' \
-    --exclude 'docs-test' \
     ./ "$BUILD_DIR/"
+
+# Extra safety: remove any legacy .env that might have survived in the cache
+rm -f "$BUILD_DIR/.env" "$BUILD_DIR/arcclaw-app/.env"
 
 # ── Resolve build strategy ──────────────────────────────────────────
 # Check for --local flag in any position
@@ -107,8 +122,19 @@ fi
 
 echo "🔨 Compiling native Linux binary [$STRATEGY]..."
 cd "$BUILD_DIR"
+
+# ── Memory Scaling ───────────────────────────────────────────────
+# Calculate 80% of available WSL2 RAM to avoid OOM kills
+TOTAL_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+# Use 80% of total RAM, capped at 16G if hardware allows
+TARGET_GB=$(( TOTAL_KB / 1024 / 1024 * 80 / 100 ))
+[ "$TARGET_GB" -lt 4 ] && TARGET_GB=4 # Floor at 4G
+[ "$TARGET_GB" -gt 16 ] && TARGET_GB=16 # Ceiling at 16G
+echo "🧠 Allocating ${TARGET_GB}G for native-image (80% of WSL2 RAM)..."
+
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.native.native-image-xmx=12g
+
+./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.native.native-image-xmx=${TARGET_GB}g
 
 # 4. Copy ALL compiled artifacts directly back to Windows target/ AND dist/
 echo "🚚 Bringing build artifacts back to Windows..."
