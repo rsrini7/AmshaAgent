@@ -791,6 +791,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - Secrets must not be stored as immutable Strings when a zeroable `char[]` or byte[] lifecycle is required.
 - Clear sensitive material immediately after use where the implementation already expects this.
 
+
 ### 8.2 Vault session identity
 - System-level vault operations must use the dedicated system session identifier constant.
 - Do not inline magic literals for system-session behavior.
@@ -1089,3 +1090,15 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - The UI build process MUST output to `arcclaw-ui/dist/`.
 - The `mise build:ui-copy` task is the authoritative mechanism for moving the bundled UI into the `arcclaw-app` `META-INF/resources` directory for production packaging.
 - Do NOT commit the `dist/` folder to version control.
+
+### 21.7 Accessibility (a11y)
+- UI components MUST follow WAI-ARIA standards (labels, roles, current-page markers). 
+- Interactive elements (buttons, inputs) MUST have descriptive `aria-label` attributes if they do not contain text.
+
+### 21.8 Resource Lifecycle
+- Components establishing long-lived connections (WebSockets, SSE) MUST explicitly close/clean them up in `disconnectedCallback()` to prevent memory leaks and "ghost" sessions.
+
+### 21.9 UI Secret Handling
+- Sensitive credentials (API keys) MUST NOT be passed in URL query parameters where HTTP headers are supported (e.g. REST, SSE); prefer `X-ARCCLAW-API-KEY` or secure Cookies.
+- **Architectural Trade-off**: The use of **`localStorage`** for API keys is explicitly allowed to support persistent developer sessions across browser restarts/tab closures. This is an intentional choice for productivity given ArcClaw's primary usage as a local developer tool.
+- Non-secret transient data SHOULD prefer `sessionStorage`.
