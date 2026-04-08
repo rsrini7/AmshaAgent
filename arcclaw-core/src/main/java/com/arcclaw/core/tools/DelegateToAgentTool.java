@@ -127,11 +127,10 @@ public class DelegateToAgentTool implements AgentTool {
         // NOTE: Inner sessions bypass SessionRegistry intentionally.
         // StatefulAgentStore.save() must not require a session_registry entry.
         // Verified: save() is keyed only on (sessionId, agentRole) — no FK constraint.
-        String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + targetRole.toScopedName()
-                                               + ":" + UUID.randomUUID().toString().substring(0, 8);
+        String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + agentName + ":" + System.currentTimeMillis();
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",
-                  targetRole.toScopedName(), goal, outerSessionId);
+                  agentName, goal, outerSessionId);
 
         // CRITICAL: Rebind WorkspaceContext with AutonomyLevel.FULL for inner loop.
         // ToolInvocationGuard.evaluate() line 120 reads WorkspaceContext.autonomy()
