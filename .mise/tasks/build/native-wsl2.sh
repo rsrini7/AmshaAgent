@@ -41,6 +41,9 @@ rsync -a --delete \
     --exclude 'rest-http' \
     --exclude '.env' \
     --exclude 'build.env' \
+    --exclude 'docs' \
+    --exclude 'docs-main' \
+    --exclude 'docs-test' \
     ./ "$BUILD_DIR/"
 
 # ── Resolve build strategy ──────────────────────────────────────────
@@ -86,6 +89,20 @@ if [ "$STRATEGY" = "local" ]; then
     export JAVA_HOME="$GRAAL_PATH"
     export PATH="$GRAAL_PATH/bin:$PATH"
     echo "✅  Using GraalVM: $GRAALVM_HOME"
+
+    # ── Toolchain Guard ───────────────────────────────────────────────
+    echo "🔍  Checking for native toolchain (gcc, libz)..."
+    if ! command -v gcc >/dev/null 2>&1; then
+        echo "❌  FATAL: 'gcc' not found. Local native builds in WSL2 require 'build-essential'."
+        echo "    Run: sudo apt-get update && sudo apt-get install -y build-essential libz-dev"
+        exit 1
+    fi
+    # Quick check for zlib headers (common cause of failure after gcc is found)
+    if [ ! -f "/usr/include/zlib.h" ] && [ ! -d "/usr/include/x86_64-linux-gnu/zlib" ]; then
+        echo "❌  FATAL: 'zlib.h' not found. Local native builds in WSL2 require 'libz-dev'."
+        echo "    Run: sudo apt-get update && sudo apt-get install -y libz-dev"
+        exit 1
+    fi
 fi
 
 echo "🔨 Compiling native Linux binary [$STRATEGY]..."

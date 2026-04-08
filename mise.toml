@@ -538,6 +538,7 @@ try {
 [tasks."build:native-wsl2-local"]
 depends = ["env:recover", "build:ui-copy"]
 description = "Native Linux binary via WSL2 — always local GraalVM, no container (fastest WSL2 build)"
+quiet = true
 dir = "{{config_root}}"
 run = "mise run build:native-wsl2 --local"
 
