@@ -314,8 +314,11 @@ arcclaw:
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
-    min-score: 0.25f
-    context-chunks: 5
+    min-score: 0.55f
+    context-chunks: 3
+    max-total-chars: 800
+    max-chunk-chars: 300
+    max-source-chars: 400
     embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
     embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
     embed-base-url: ${ARCCLAW_EMBED_BASE_URL:http://localhost:11434}
