@@ -81,7 +81,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         boolean isInternalUiKey = "internal".equals(apiKeyRegistry.getKeyName(apiKey));
-        boolean isReadOnlyPolling = "GET".equals(method) && SILENT_POLL_PATHS.stream().anyMatch(path::startsWith);
+        boolean isReadOnlyPolling = "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(path::startsWith);
 
         if (!(isReadOnlyPolling && isInternalUiKey)) {
             if (!apiKeyRegistry.isAllowed(apiKey)) {
@@ -103,8 +103,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         logAudit(safeKey, path, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
     }
 
-    private static final Set<String> SILENT_POLL_PATHS = Set.of(
-        "/hitl", "/agents", "/skills", "/tools"
+    private static final Set<String> POLL_LIKE_PATHS = Set.of(
+        "/hitl", "/agents", "/skills", "/tools", "/chat/stream"
     );
 
     private void logAudit(String key, String endpoint, String method, String status, String ip, long durationMs) {
@@ -112,15 +112,22 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             "[API-AUTH] key=%s endpoint=%s method=%s status=%s ip=%s duration_ms=%d",
             key, endpoint, method, status, ip, durationMs);
 
-        boolean isSilentPoll = "ACCEPTED".equals(status)
-            && SILENT_POLL_PATHS.stream().anyMatch(endpoint::startsWith);
+        boolean isPollLike = POLL_LIKE_PATHS.stream().anyMatch(endpoint::startsWith);
 
-        if (isSilentPoll) {
-            log.trace(msg);
-        } else if ("ACCEPTED".equals(status)) {
-            log.debug(msg);   // FIX: accepted non-poll requests logged at debug, not warn
+        if ("ACCEPTED".equals(status)) {
+            if (isPollLike) {
+                log.trace(msg);
+            } else {
+                log.debug(msg);
+            }
         } else {
-            log.warn(msg);    // rejections and rate-limits remain warn
+            // Rejections: log at DEBUG for poll-like paths to avoid terminal spam during onboarding/stale tabs.
+            // Log at WARN for other paths (potential security issues).
+            if (isPollLike) {
+                log.debug(msg);
+            } else {
+                log.warn(msg);
+            }
         }
     }
 }

@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -172,9 +174,10 @@ public class OnboardingResource {
             return Response.ok(new Step3Response(4, true, null)).cookie(createCookie(sid)).build();
 
         } catch (Exception e) {
-            log.errorf(e, "Validation error for sid=%s", sid);
+            log.errorf("Validation error for sid=%s: %s", sid, ExceptionUtils.getRootCauseMessage(e));
             return Response.status(400).entity(new Step3Response(3, false, e.getMessage())).build();
         }
+
     }
 
     @POST @Path("/step/4")
@@ -226,8 +229,9 @@ public class OnboardingResource {
                     }
                     registered.add(s.name());
                 } catch (Exception e) {
-                    log.warnf("MCP registration failed for %s: %s", s.name(), e.getMessage());
+                    log.warnf("MCP registration failed for %s: %s", s.name(), ExceptionUtils.getRootCauseMessage(e));
                 }
+
             }
         }
 
