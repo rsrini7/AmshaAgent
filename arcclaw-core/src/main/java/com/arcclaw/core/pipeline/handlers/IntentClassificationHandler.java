@@ -24,6 +24,11 @@ import org.jboss.logging.Logger;
 public class IntentClassificationHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(IntentClassificationHandler.class);
+    
+    private static final java.util.Set<String> FOLLOWUP_SIGNALS = java.util.Set.of(
+        "same", "again", "retry", "execute", "run", "use sandbox", 
+        "in java", "in go", "in python", "in typescript", "in kotlin", "in rust"
+    );
 
     @Inject IntentClassifier classifier;
     @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
@@ -60,15 +65,29 @@ public class IntentClassificationHandler implements MessageHandler {
         }
 
         try {
-            String role = classifier.classify(message.text());
+            String role = null;
+            String sid = context.getSessionId().orElseGet(() -> {
+                log.debugf("No sessionId on context for continuity lookup for chat %s — using chatId", 
+                    context.getChatId());
+                return context.getChatId();
+            });
+            String previousRole = stateStore.findLatestRole(sid).orElse(null);
+
+            // Bug 2 Fix: Short follow-up heuristics for sticky roles
+            String lowerMsg = message.text().toLowerCase();
+            boolean isFollowUpHeuristic = lowerMsg.length() < 150 && 
+                FOLLOWUP_SIGNALS.stream().anyMatch(lowerMsg::contains);
+
+            if (isFollowUpHeuristic && previousRole != null && 
+               (AgentRoleEnum.CODER.toScopedName().equals(previousRole) || 
+                AgentRoleEnum.DEBUGGER.toScopedName().equals(previousRole))) {
+                log.infof("Short follow-up detected for chat %s — preserving sticky role: %s", context.getChatId(), previousRole);
+                role = previousRole;
+            } else {
+                role = classifier.classify(message.text());
+            }
 
             if ("__CONTINUE__".equals(role)) {
-                String sid = context.getSessionId().orElseGet(() -> {
-                    log.debugf("No sessionId on context for continuity lookup for chat %s — using chatId", 
-                        context.getChatId());
-                    return context.getChatId();
-                });
-                String previousRole = stateStore.findLatestRole(sid).orElse(null);
                 log.infof("Handling continuity request for session %s — previous role: %s",
                     sid, previousRole);
                 if (previousRole != null) {

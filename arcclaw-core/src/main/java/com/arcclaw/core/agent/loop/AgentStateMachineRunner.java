@@ -48,6 +48,9 @@ public class AgentStateMachineRunner {
     private static final Pattern RAW_TOOL_CALL_PATTERN = Pattern.compile(
         "^\\s*\\{\\s*\"type\"\\s*:\\s*\"function\"", Pattern.DOTALL);
 
+    private static final Pattern RAW_DELEGATE_CALL_PATTERN =
+        Pattern.compile("(?m)^\\s*\\w+\\s*\\(agent\\s*=", Pattern.CASE_INSENSITIVE);
+
     // ── Suspiciously short non-answers: "Done.", "OK.", "ok" etc.
     private static final Pattern SUSPICIOUSLY_SHORT =
             Pattern.compile(
@@ -270,7 +273,8 @@ public class AgentStateMachineRunner {
 
     private boolean isRawToolCallLeak(String answer) {
         if (answer == null || answer.isBlank()) return false;
-        return RAW_TOOL_CALL_PATTERN.matcher(answer).find();
+        return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
+            || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find();
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole,
