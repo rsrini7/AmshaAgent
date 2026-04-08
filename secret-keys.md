@@ -335,3 +335,37 @@ ARCCLAW_DATA_DIR=./data
 | `AUDIT_HMAC_KEY` | Yes | DevSecretSeeder already handles it |
 | `GITHUB_TOKEN` etc. | Yes ✅ | Already works today |
 | `DATA_DIR`, `QUARKUS_PROFILE` | N/A | Not secrets, just config |
+
+
+---
+
+## Why Two Different HMAC Seeders
+
+The audit HMAC key signs every audit log entry to prove it hasn't been tampered with. The **stability requirement** is completely different between dev and prod:
+
+### Dev/Test — `seedAuditHmacKey()` (random ephemeral)
+```java
+byte[] hmacKeyBytes = new byte[32];
+new SecureRandom().nextBytes(hmacKeyBytes);  // random every boot
+secretVault.storeSystemKey(keyName, hmacKeyBytes);
+```
+**Why random?** In dev you wipe the DB constantly. If you used a fixed key from `.env`, every DB wipe would leave orphaned audit entries signed with the old key. A fresh random key per boot matches the fresh DB — consistency within a session is all that matters.
+
+### Prod — `seedAuditHmacKeyFromEnv()` (stable from `.env`)
+```java
+String envValue = ConfigProvider.getConfig()
+    .getOptionalValue("ARCCLAW_AUDIT_HMAC_KEY", String.class)...
+secretVault.storeSystemKey(keyName, keyBytes);
+```
+**Why stable?** In prod, audit logs persist across reboots and must be **verifiable later**:
+
+```
+Boot 1 → HMAC key = X → signs entries 1-1000
+Boot 2 → HMAC key = X → signs entries 1001-2000  ← same key, chain intact
+Boot 3 → HMAC key = X → verifiable back to entry 1 ✅
+
+vs random key:
+Boot 1 → HMAC key = A → signs entries 1-1000
+Boot 2 → HMAC key = B → entries 1-1000 now UNVERIFIABLE ❌
+```
+

@@ -58,23 +58,44 @@ public class DevSecretSeeder {
      * which uses CDI default priority (2000) and therefore fires after this.
      */
     public void onStart(@Observes @Priority(100) StartupEvent ev) {
-        // 1. Dev/test — generate a random ephemeral HMAC key
-        if ("dev".equals(profile) || "test".equals(profile)) {
-            seedAuditHmacKey();
-        }
+        boolean isProdLike = !"dev".equals(profile) && !"test".equals(profile);
 
-        // 2. Prod/cli with auto-seed enabled — read stable key from .env
-        if (autoSeedEnabled && !"dev".equals(profile) && !"test".equals(profile)) {
+        if (!isProdLike) {
+            // Dev/test — ephemeral random HMAC key, fresh every boot
+            // Matches the wiped DB lifecycle — no cross-boot audit chain needed
+            seedAuditHmacKey();
+        } else if (autoSeedEnabled) {
+            // Prod/cli — stable HMAC key from .env, persists across reboots
+            // Required for a verifiable audit chain
             seedAuditHmacKeyFromEnv();
+        } else {
+            // Prod/cli with autoSeed=false
+            // ARCCLAW_AUDIT_HMAC_KEY will NOT be seeded automatically.
+            // Impact:
+            //   - Audit log entries will be written but their HMAC signatures
+            //     cannot be verified (no key in vault to verify against).
+            //   - StartupSecurityValidator may flag missing audit key depending
+            //     on your validation config.
+            //   - You must provision ARCCLAW_AUDIT_HMAC_KEY manually via:
+            //       POST /api/v1/vault/system-keys
+            //     before audit integrity checks will pass.
+            log.warnf(
+                "[DevSecretSeeder] Profile='%s', autoSeedEnabled=false — " +
+                "ARCCLAW_AUDIT_HMAC_KEY was NOT seeded into the vault. " +
+                "Audit log HMAC verification will fail until the key is " +
+                "provisioned manually via POST /api/v1/vault/system-keys.",
+                profile
+            );
         }
 
         if (autoSeedEnabled) {
             seedDevSecrets();
-        }
-
-        if (!autoSeedEnabled) {
-            log.debugf("Auto-seed disabled (arcclaw.auto-seed-secrets=false). " +
-                       "Skipping tool secret seeding.");
+        } else {
+            log.debugf(
+                "[DevSecretSeeder] Auto-seed disabled (arcclaw.auto-seed-secrets=false). " +
+                "Tool secrets (GITHUB_TOKEN, SERPER, BRAVE) were not seeded. " +
+                "Provision them manually via POST /api/v1/vault/keys if needed."
+            );
         }
     }
 
