@@ -261,7 +261,7 @@ smallrye:
       "org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase":
         level: ERROR   # suppress WARN → only show actual errors
       "dev.langchain4j.internal.RetryUtils":
-        level: WARN   # already WARN, so 520 retries show but don't spam
+        level: ERROR
       "org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext":
         level: ERROR  # suppress the unrecoverable exception noise at DEBUG
       "jdk.event.security":

@@ -31,6 +31,8 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
 import io.opentelemetry.api.trace.Span;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -248,8 +250,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         } catch (Exception e) {
             String rateLimitMsg = findRateLimitMessage(e);
             if (rateLimitMsg != null) {
-                log.warnf("[LangChainReasoningEngine] Rate limit detected in cause chain — " +
-                        "surfacing clean message: %s", rateLimitMsg);
+                Throwable rootCause = ExceptionUtils.getRootCause(e);
+                String rootMsg = rootCause != null ? rootCause.getMessage() : e.getMessage();
+                log.warnf("[LangChainReasoningEngine] Rate limit — root cause: %s", 
+                    AgentErrorMessageUtil.sanitizeErrorMessage(rootMsg));
                 rateLimitTracker.recordHit("primary");
                 String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
                 throw new RuntimeException(clean, e);
