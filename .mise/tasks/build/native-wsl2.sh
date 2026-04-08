@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="WSL2: Auto-sync to Linux home, build lock-free & fast, copy binary back"
+#MISE description="WSL2: Linux binary via rsync to local ext4 — auto-detects Podman vs local GraalVM"
 #MISE quiet=true
 #MISE depends=["setup:wsl-crlf", "build:ui-copy"]
 
@@ -43,10 +43,55 @@ rsync -a --delete \
     --exclude 'build.env' \
     ./ "$BUILD_DIR/"
 
-echo "🔨 Compiling native Linux binary..."
+# ── Resolve build strategy ──────────────────────────────────────────
+# Check for --local flag in any position
+STRATEGY="container"
+if [[ "$*" == *"--local"* ]] || [ "$ARCCLAW_NATIVE_BUILD" = "local" ]; then
+    echo "ℹ️   Strategy: local GraalVM (forced)."
+    STRATEGY="local"
+elif [ "$ARCCLAW_NATIVE_BUILD" = "container" ]; then
+    if command -v podman >/dev/null 2>&1; then
+        echo "ℹ️   Strategy: Podman container (forced)."
+        STRATEGY="container"
+    else
+        echo "❌  FATAL: ARCCLAW_NATIVE_BUILD=container but podman not found in WSL2."
+        exit 1
+    fi
+else
+    # Auto-detect
+    if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+        echo "ℹ️   Podman detected and running → using container build."
+        STRATEGY="container"
+    else
+        echo "⚠️   Podman not found or not running → falling back to local GraalVM build."
+        STRATEGY="local"
+    fi
+fi
+
+CONTAINER_FLAG="-Dquarkus.native.container-build=false"
+if [ "$STRATEGY" = "container" ]; then
+    CONTAINER_FLAG="-Dquarkus.native.container-build=true"
+fi
+
+# ── Environment Setup ───────────────────────────────────────────────
+if [ "$STRATEGY" = "local" ]; then
+    echo "🔍  Ensuring GraalVM is active via mise..."
+    GRAAL_PATH=$(mise where java@graalvm-community-25.0.2 2>/dev/null || true)
+    if [ -z "$GRAAL_PATH" ]; then
+        echo "ℹ️   GraalVM not found. Installing..."
+        mise install java@graalvm-community-25.0.2
+        GRAAL_PATH=$(mise where java@graalvm-community-25.0.2)
+    fi
+    export GRAALVM_HOME="$GRAAL_PATH"
+    export JAVA_HOME="$GRAAL_PATH"
+    export PATH="$GRAAL_PATH/bin:$PATH"
+    echo "✅  Using GraalVM: $GRAALVM_HOME"
+fi
+
+echo "🔨 Compiling native Linux binary [$STRATEGY]..."
 cd "$BUILD_DIR"
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow"
-./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests -Dquarkus.native.container-build=false -Dquarkus.native.native-image-xmx=12g
+./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests $CONTAINER_FLAG -Dquarkus.native.native-image-xmx=12g
 
 # 4. Copy ALL compiled artifacts directly back to Windows target/ AND dist/
 echo "🚚 Bringing build artifacts back to Windows..."
