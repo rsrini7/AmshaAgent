@@ -271,7 +271,8 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
   $ErrorActionPreference = 'Stop'
-  cd arcclaw-ui 
+  cd arcclaw-ui
+  npm install
   npm run build
   cd ..
   $target = "arcclaw-app/src/main/resources/META-INF/resources"
