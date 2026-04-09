@@ -424,7 +424,6 @@ arcclaw:
 
   workspace:
     root-dir: "${ARCCLAW_DATA_DIR:./data}/workspaces"
-    #base-dir: /home/srini/arcclaw-data/workspaces  # Native WSL2 path
     session-ttl-minutes: 30
     gc-interval: "5m"
     heartbeat-interval: "60s"

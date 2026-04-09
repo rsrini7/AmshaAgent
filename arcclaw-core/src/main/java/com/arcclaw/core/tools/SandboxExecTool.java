@@ -97,7 +97,7 @@ public class SandboxExecTool implements AgentTool {
 
     @Inject ProcessIsolationExecutor isolationExecutor;
 
-    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = ".data/workspaces")
+    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
     @ConfigProperty(name = "arcclaw.sandbox.python-executable")
