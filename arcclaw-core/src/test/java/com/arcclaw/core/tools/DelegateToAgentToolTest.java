@@ -56,7 +56,7 @@ class DelegateToAgentToolTest {
         );
 
         when(agentLoop.run(
-            ArgumentMatchers.startsWith(SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "debugger"),
+            ArgumentMatchers.startsWith(SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "shiva"),
             eq(AgentRoleEnum.DEBUGGER.toScopedName()),
             eq("debug this"),
             eq(reasoningEngine),

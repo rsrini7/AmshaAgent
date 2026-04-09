@@ -4,9 +4,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Playwright;
 import org.jboss.logging.Logger;
 
 /**
@@ -52,7 +57,7 @@ public class PlaywrightBrowserInstaller {
             if (mvnw != null) {
                 runMavenInstaller(mvnw, browsersPath);
             } else {
-                runClassInstaller(browsersPath);
+                runBinaryInstaller(browsersPath);
             }
         } catch (Exception e) {
             System.err.println();
@@ -113,13 +118,13 @@ public class PlaywrightBrowserInstaller {
     }
 
     private static void runClassInstaller(Path browsersPath) throws Exception {
-        // Fallback for binary distributions where mvnw is missing
-        String javaHome = System.getProperty("java.home");
-        String javaBin = javaHome + "/bin/java";
         String classpath = System.getProperty("java.class.path");
+        if (classpath == null || classpath.isBlank()) {
+            throw new RuntimeException("java.class.path is unavailable");
+        }
 
         List<String> command = new ArrayList<>();
-        command.add(javaBin);
+        command.add(resolveJavaExecutable());
         command.add("-cp");
         command.add(classpath);
         command.add("-DPLAYWRIGHT_BROWSERS_PATH=" + browsersPath.toString());
@@ -139,5 +144,136 @@ public class PlaywrightBrowserInstaller {
         } else {
             throw new RuntimeException("CLI returned exit code " + exitCode);
         }
+    }
+
+    private static void runBinaryInstaller(Path browsersPath) throws Exception {
+        StringBuilder attempts = new StringBuilder();
+        try {
+            runClassInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            attempts.append("classpath installer: ").append(safeMessage(e));
+        }
+
+        try {
+            runSystemPlaywrightInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("system playwright CLI: ").append(safeMessage(e));
+        }
+
+        try {
+            runNpxPlaywrightInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("npx playwright CLI: ").append(safeMessage(e));
+        }
+
+        try {
+            runInProcessInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("in-process installer: ").append(safeMessage(e));
+        }
+
+        throw new RuntimeException(
+                "Could not install Chromium in binary mode. Tried: " + attempts
+                + ". Install from source checkout with ./mvnw exec:java -pl arcclaw-tool-playwright "
+                + "-Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args=\"install --with-deps chromium\"");
+    }
+
+    private static void runSystemPlaywrightInstaller(Path browsersPath) throws Exception {
+        List<String> command = new ArrayList<>();
+        if (isWindows()) {
+            command.add("cmd.exe");
+            command.add("/c");
+            command.add("playwright");
+        } else {
+            command.add("playwright");
+        }
+        command.add("install");
+        command.add("chromium");
+        runExternalInstaller(command, browsersPath, "system playwright CLI");
+    }
+
+    private static void runNpxPlaywrightInstaller(Path browsersPath) throws Exception {
+        List<String> command = new ArrayList<>();
+        if (isWindows()) {
+            command.add("cmd.exe");
+            command.add("/c");
+            command.add("npx");
+        } else {
+            command.add("npx");
+        }
+        command.add("--yes");
+        command.add("playwright");
+        command.add("install");
+        command.add("chromium");
+        runExternalInstaller(command, browsersPath, "npx playwright CLI");
+    }
+
+    private static void runExternalInstaller(List<String> command, Path browsersPath, String label) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.environment().put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
+        pb.environment().put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
+        pb.inheritIO();
+        Process p = pb.start();
+        int exitCode = p.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException(label + " returned exit code " + exitCode);
+        }
+        System.err.println();
+        System.err.println("  ✓ Playwright Chromium installed successfully.");
+    }
+
+    private static void runInProcessInstaller(Path browsersPath) {
+        Map<String, String> env = new HashMap<>(System.getenv());
+        env.put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
+        env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
+
+        Playwright.CreateOptions options = new Playwright.CreateOptions().setEnv(env);
+        try (Playwright playwright = Playwright.create(options)) {
+            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+            browser.close();
+            System.err.println();
+            System.err.println("  ✓ Playwright Chromium installed successfully.");
+        }
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    private static String safeMessage(Throwable t) {
+        String msg = t.getMessage();
+        return (msg == null || msg.isBlank()) ? t.getClass().getSimpleName() : msg;
+    }
+
+    private static String resolveJavaExecutable() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        String javaName = os.contains("win") ? "java.exe" : "java";
+
+        String javaHome = System.getProperty("java.home");
+        if (javaHome != null && !javaHome.isBlank()) {
+            Path javaFromHome = Path.of(javaHome, "bin", javaName);
+            if (Files.exists(javaFromHome)) return javaFromHome.toString();
+        }
+
+        String currentCommand = ProcessHandle.current().info().command().orElse("");
+        if (!currentCommand.isBlank()) {
+            Path commandPath = Path.of(currentCommand);
+            Path fileName = commandPath.getFileName();
+            if (fileName != null) {
+                String runningName = fileName.toString().toLowerCase();
+                if ("java".equals(runningName) || "java.exe".equals(runningName)) {
+                    return commandPath.toString();
+                }
+            }
+        }
+
+        return javaName;
     }
 }

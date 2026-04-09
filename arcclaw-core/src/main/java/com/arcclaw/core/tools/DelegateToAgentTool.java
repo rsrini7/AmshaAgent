@@ -3,12 +3,9 @@ package com.arcclaw.core.tools;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
@@ -21,7 +18,10 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
-import org.jboss.logging.Logger;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 /**
  * Allows the coordinator to delegate specialized tasks (like coding or debugging)
@@ -127,11 +127,10 @@ public class DelegateToAgentTool implements AgentTool {
         // NOTE: Inner sessions bypass SessionRegistry intentionally.
         // StatefulAgentStore.save() must not require a session_registry entry.
         // Verified: save() is keyed only on (sessionId, agentRole) — no FK constraint.
-        String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + targetRole.toScopedName()
-                                               + ":" + UUID.randomUUID().toString().substring(0, 8);
+        String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + agentName + ":" + System.currentTimeMillis();
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",
-                  targetRole.toScopedName(), goal, outerSessionId);
+                  agentName, goal, outerSessionId);
 
         // CRITICAL: Rebind WorkspaceContext with AutonomyLevel.FULL for inner loop.
         // ToolInvocationGuard.evaluate() line 120 reads WorkspaceContext.autonomy()

@@ -93,7 +93,7 @@ ArcClaw has **535 tests** across two modules: 403 in `arcclaw-core` and 132 in `
 
 When the `%test` profile is active:
 
-- SQLite uses `:memory:` databases — no file cleanup required between test runs
+- SQLite uses `target/` databases — no file cleanup required between test runs
 - Telegram routes are disabled
 - Context compaction is disabled (`arcclaw.skills.hot-reload: false`)
 - Vault uses a fixed test pepper (`test-pepper-do-not-use-in-production`)

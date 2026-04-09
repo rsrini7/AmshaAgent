@@ -9,6 +9,7 @@ import com.arcclaw.core.persistence.FtsConnectionInterceptor;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -28,6 +29,9 @@ public class TwoTierMemoryService {
     @Inject CompactionSummaryRepository compactionRepo;
     @Inject GlobalKnowledgeBase globalKb;
     @Inject SessionKnowledgeBase sessionKb;
+
+    @ConfigProperty(name = "arcclaw.rag.max-source-chars", defaultValue = "400")
+    int maxSourceChars;
 
     /**
      * Search across FTS5 and vector tiers, merged via RRF.
@@ -136,7 +140,12 @@ public class TwoTierMemoryService {
         List<ScoredChunk> result = new ArrayList<>();
         for (int i = 0; i < entities.size(); i++) {
             var e = entities.get(i);
-            result.add(new ScoredChunk(e.getSessionId(), e.getSummary(), 1.0 / (i + 1)));
+            // Truncate summary at source — don't inject the whole compaction blob
+            String text = e.getSummary();
+            if (text != null && text.length() > maxSourceChars) {
+                text = text.substring(0, maxSourceChars) + "…";
+            }
+            result.add(new ScoredChunk(e.getSessionId(), text, 1.0 / (i + 1)));
         }
         return result;
     }

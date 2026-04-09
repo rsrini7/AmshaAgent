@@ -12,12 +12,8 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 
-import com.arcclaw.app.security.ApiKeyValidator;
 import com.arcclaw.app.ui.dto.AgentEvent;
 import com.arcclaw.app.ui.dto.ChatMessageDto;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
@@ -42,9 +38,6 @@ public class ChatStreamResource {
     @Inject
     StatefulAgentStore statefulAgentStore;
 
-    @Inject
-    ApiKeyValidator apiKeyValidator;
-
     private final UnicastProcessor<AgentEvent> processor = UnicastProcessor.create();
 
     // Subscribe to the UnicastProcessor ONCE — the resulting hotStream
@@ -62,10 +55,7 @@ public class ChatStreamResource {
     @GET
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
-    public Multi<AgentEvent> stream(@QueryParam("apiKey") String apiKey) {
-        if (!apiKeyValidator.isValid(apiKey)) {
-            return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
-        }
+    public Multi<AgentEvent> stream() {
         Multi<AgentEvent> heartbeat = Multi.createFrom().ticks().every(Duration.ofSeconds(20))
                 .map(t -> new AgentEvent("heartbeat", "system", "keep-alive"));
 
@@ -76,10 +66,7 @@ public class ChatStreamResource {
     @GET
     @Path("/history/{sessionId}")
     @Produces(MediaType.APPLICATION_JSON)
-    public List<ChatMessageDto> history(@PathParam("sessionId") String sessionId, @QueryParam("apiKey") String apiKey) {
-        if (!apiKeyValidator.isValid(apiKey)) {
-            throw new WebApplicationException(Response.Status.UNAUTHORIZED);
-        }
+    public List<ChatMessageDto> history(@PathParam("sessionId") String sessionId) {
 
         final Long actionIdForPause = statefulAgentStore.findLatestAwaitingApproval(sessionId)
                 .map(cp -> cp.getId())

@@ -42,6 +42,25 @@ public class CliUtils {
      */
     private static final VarSpec[] CORE_VARS = {
         new VarSpec(
+            "ARCCLAW_INTENT_CLASSIFIER_API_KEY",
+            "API key for the intent classifier LLM.",
+            "If empty, ArcClaw can use your main LLM API key.",
+            "Add:  ARCCLAW_INTENT_CLASSIFIER_API_KEY=gsk_..."
+        ),
+        new VarSpec(
+            "ARCCLAW_COMPACTION_API_KEY",
+            "API key for the context compaction LLM.",
+            "If empty, ArcClaw can use your main LLM API key.",
+            "Add:  ARCCLAW_COMPACTION_API_KEY=gsk_..."
+        ),
+        new VarSpec(
+            "ARCCLAW_EMBED_API_KEY",
+            "API key for the embedding provider (default: Jina AI).",
+            "1. Sign up at https://jina.ai — free tier: 1M tokens/month, no credit card",
+            "2. Copy your API key — it starts with 'jina_'",
+            "3. Add:  ARCCLAW_EMBED_API_KEY=jina_your_key_here"
+        ),
+        new VarSpec(
             "ARCCLAW_VAULT_PEPPER",
             "Secret pepper for the credential vault (>=32 random characters).",
             "Generate one with:",
@@ -74,13 +93,6 @@ public class CliUtils {
             "  Linux/macOS:  openssl rand -base64 32",
             "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
             "Then add:  ARCCLAW_API_KEYS_CI=<generated value>"
-        ),
-        new VarSpec(
-            "ARCCLAW_EMBED_API_KEY",
-            "API key for the embedding provider (default: Jina AI).",
-            "1. Sign up at https://jina.ai — free tier: 1M tokens/month, no credit card",
-            "2. Copy your API key — it starts with 'jina_'",
-            "3. Add:  ARCCLAW_EMBED_API_KEY=jina_your_key_here"
         ),
     };
 
@@ -146,10 +158,7 @@ public class CliUtils {
     public static List<VarSpec> getMissingVarSpecs(String[] args) {
         List<VarSpec> missing = new ArrayList<>();
 
-        for (VarSpec spec : CORE_VARS) {
-            if (!isSet(spec.key)) missing.add(spec);
-        }
-
+        // 1. LLM Primary Key (and Fallback) first
         String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
                 .orElseGet(() -> System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"))
                 .toLowerCase();
@@ -161,10 +170,25 @@ public class CliUtils {
             default           -> GROQ_KEY_SPEC;
         };
         if (providerKeySpec != null && !isSet(providerKeySpec.key)) missing.add(providerKeySpec);
+
+        if (!isSet("ARCCLAW_LLM_FALLBACK_API_KEY") && !isExplicitOptOut("ARCCLAW_LLM_FALLBACK_API_KEY")) {
+            missing.add(new VarSpec(
+                "ARCCLAW_LLM_FALLBACK_API_KEY",
+                "Optional Fallback LLM API key.",
+                "Secondary provider used when primary fails (429/5xx).",
+                "Required if ARCCLAW_LLM_FALLBACK_PROVIDER is set to an API provider."
+            ));
+        }
+
         if (providerKeySpec != null && !isSet("ARCCLAW_LLM_BASE_URL")) {
              missing.add(new VarSpec("ARCCLAW_LLM_BASE_URL", 
                  "Base URL for the selected LLM provider (" + llmProvider + ").",
                  "Example: " + providerKeySpec.howToGet[providerKeySpec.howToGet.length-1]));
+        }
+
+        // 2. Intent/Compaction/Embed and Security keys
+        for (VarSpec spec : CORE_VARS) {
+            if (!isSet(spec.key)) missing.add(spec);
         }
 
 
@@ -202,6 +226,8 @@ public class CliUtils {
                 "3. Add:  ARCCLAW_BRAVE_API_KEY=your_key_here"
             ));
         }
+
+
 
         return missing;
     }

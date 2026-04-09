@@ -261,7 +261,7 @@ smallrye:
       "org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase":
         level: ERROR   # suppress WARN → only show actual errors
       "dev.langchain4j.internal.RetryUtils":
-        level: WARN   # already WARN, so 520 retries show but don't spam
+        level: ERROR
       "org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext":
         level: ERROR  # suppress the unrecoverable exception noise at DEBUG
       "jdk.event.security":
@@ -306,6 +306,7 @@ arcclaw:
     max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
     timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
     fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL:}
+    fallback-provider: ${ARCCLAW_LLM_FALLBACK_PROVIDER:}
     fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL:}
     fallback-api-key: ${ARCCLAW_LLM_FALLBACK_API_KEY:}
     fallback-ollama-base-url: ${ARCCLAW_LLM_FALLBACK_OLLAMA_BASE_URL:http://localhost:11434}
@@ -313,8 +314,11 @@ arcclaw:
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
-    min-score: 0.25f
-    context-chunks: 5
+    min-score: 0.55f
+    context-chunks: 3
+    max-total-chars: 800
+    max-chunk-chars: 300
+    max-source-chars: 400
     embed-provider: ${ARCCLAW_EMBED_PROVIDER:ollama}
     embed-model: ${ARCCLAW_EMBED_MODEL:nomic-embed-text:v1.5}
     embed-base-url: ${ARCCLAW_EMBED_BASE_URL:http://localhost:11434}
@@ -336,6 +340,7 @@ arcclaw:
       base-url: ${ARCCLAW_INTENT_CLASSIFIER_BASE_URL:https://api.groq.com/openai/v1}
       api-key: ${ARCCLAW_INTENT_CLASSIFIER_API_KEY:not-configured}
       # Specific model alias for free tier ensures structured mode support (§OpenRouter-Fix)
+      provider: ${ARCCLAW_INTENT_CLASSIFIER_PROVIDER:groq}
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
       ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
       timeout-seconds: 5
@@ -350,6 +355,7 @@ arcclaw:
       max-chars: 96000 
       api-key: "${ARCCLAW_COMPACTION_API_KEY:${ARCCLAW_LLM_API_KEY}}"
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:${ARCCLAW_LLM_BASE_URL}}"
+      provider: "${ARCCLAW_COMPACTION_PROVIDER:groq}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
@@ -418,7 +424,6 @@ arcclaw:
 
   workspace:
     root-dir: "${ARCCLAW_DATA_DIR:./data}/workspaces"
-    #base-dir: /home/srini/arcclaw-data/workspaces  # Native WSL2 path
     session-ttl-minutes: 30
     gc-interval: "5m"
     heartbeat-interval: "60s"
@@ -666,7 +671,7 @@ mp:
           log-responses: false
 
   arcclaw:
-    data-dir: "target/data"
+    data-dir: "target/"
     agent:
       default-timezone: "UTC"
     rag:

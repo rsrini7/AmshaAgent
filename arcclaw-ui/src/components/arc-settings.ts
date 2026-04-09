@@ -185,7 +185,7 @@ export class ArcSettings extends LitElement {
     return html`
       <div class="section">
         <span class="field-label">Provider</span>
-        <div class="provider-grid">
+        <div class="provider-grid" role="radiogroup" aria-label="Select a provider">
           ${PROVIDERS.map(p => html`
             <div
               class="provider-card ${this._provider === p.id ? 'selected' : ''}"

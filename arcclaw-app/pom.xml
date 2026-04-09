@@ -369,7 +369,6 @@
           quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-25
         </quarkus.native.builder-image>
         <quarkus.native.additional-build-args>-H:+ReportExceptionStackTraces</quarkus.native.additional-build-args>
-        <quarkus.profile>prod</quarkus.profile>
         <quarkus.native.resources.includes>
           native/vec0/*,
           templates/**,

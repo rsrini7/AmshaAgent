@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { WsManager } from '../api/websocket';
 import { marked } from 'marked';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import DOMPurify from 'dompurify';
 
 interface ChatMessage {
   id: string;
@@ -74,7 +75,7 @@ export class ArcChatInterface extends LitElement {
     
     .msg-group {
       display: flex; flex-direction: column; gap: 6px;
-      max-width: 80%;
+      max-width: min(680px, 80%);
     }
     .msg-group-user { align-self: flex-end; }
     .msg-group-assistant { align-self: flex-start; }
@@ -202,13 +203,14 @@ export class ArcChatInterface extends LitElement {
     const relevant = changedProperties.has('apiKey') || changedProperties.has('platformId');
     if (relevant && this.apiKey && this.platformId && !this._ws && !this._connecting && !this._intentionalClose) {
       this._connecting = true;
-      this._loadHistory().then(() => this._connect());
+      this._connect();
     }
   }
 
   private async _loadHistory() {
+    if (!this.sessionId) return;
     try {
-      const res = await fetch(`/api/v1/chat/stream/history/${this.sessionId}?apiKey=${encodeURIComponent(this.apiKey)}`);
+      const res = await fetch(`/api/v1/chat/stream/history/${this.sessionId}`);
       if (!res.ok) return;
       const msgs = await res.json();
       this._messages = msgs
@@ -243,7 +245,14 @@ export class ArcChatInterface extends LitElement {
       (frame) => this._handleFrame(frame),
       (status) => {
         this._wsStatus = status;
-        // Don't null _ws here — updated() handles connection life via apiKey/platformId
+        this.dispatchEvent(new CustomEvent('ws-status-change', {
+          detail: { status },
+          bubbles: true,
+          composed: true
+        }));
+        if (status === 'closed' || status === 'error') {
+          this._ws = null;
+        }
       }
     );
     this._connecting = false;
@@ -252,10 +261,18 @@ export class ArcChatInterface extends LitElement {
 
   private _handleFrame(frame: any) {
     if (frame.type === 'connected') {
-      this.dispatchEvent(new CustomEvent('session-ready', {
-        detail: { sessionId: frame.sessionId, platformId: frame.platformId },
-        bubbles: true, composed: true
-      }));
+      this._wsStatus = 'open';
+      this._connecting = false;
+      this._isTyping = false;
+      
+      // We now have the server-assigned internal session ID
+      if (frame.sessionId && frame.sessionId !== this.sessionId) {
+        this.sessionId = frame.sessionId;
+        // Dispatch to parent shell to update SSE subscriptions
+        this.dispatchEvent(new CustomEvent('session-ready', { detail: { sessionId: frame.sessionId } }));
+        // Now we can safely load history
+        this._loadHistory();
+      }
     } else if (frame.type === 'session_terminated') {
       this._intentionalClose = true;
       this._ws?.disconnect();
@@ -306,39 +323,35 @@ export class ArcChatInterface extends LitElement {
   }
 
   private _scrollToBottom() {
-    setTimeout(() => {
-      const el = this.shadowRoot?.querySelector('.messages');
-      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    }, 50);
+    this.updateComplete.then(() => {
+      requestAnimationFrame(() => {
+        const el = this.shadowRoot?.querySelector('.messages');
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      });
+    });
   }
   
   private _renderMarkdown(text: string) {
-    try {
-      return unsafeHTML(marked.parse(text, { async: false }));
-    } catch { return text; }
+    if (!text) return nothing;
+    // Sanitized markdown for security (XSS prevention)
+    const rawHtml = marked.parse(text) as string;
+    const cleanHtml = DOMPurify.sanitize(rawHtml);
+    return unsafeHTML(cleanHtml);
   }
 
   private _formatTime(ts: number) {
      return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
+  public reconnect() {
+    this._ws = null; 
+    this._intentionalClose = false; 
+    this._connecting = true;
+    this._connect();
+  }
+
   render() {
     return html`
-      <div class="chat-header">
-        <div class="header-title">
-           Chat Session
-           <span class="status-badge status-${this._wsStatus}">${this._wsStatus}</span>
-        </div>
-        ${this._wsStatus === 'error' || this._wsStatus === 'closed' ? html`
-          <button class="btn-approve" style="width: auto; padding: 0 16px; font-size: 11px;" @click="${() => { 
-            this._ws = null; 
-            this._intentionalClose = false; 
-            this._connecting = true;
-            this._loadHistory().then(() => this._connect());
-          }}">Reconnect</button>
-        ` : nothing}
-      </div>
-
       <div class="messages">
         ${this._messages.map(m => m.role === 'system' ? html`
           <div class="msg-group msg-group-system">
@@ -349,7 +362,7 @@ export class ArcChatInterface extends LitElement {
              <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
                ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> ArcClaw Agent` : 'You'}
              </div>
-             ${m.isApprovalPrompt ? html`
+             ${m.isApprovalPrompt && !m.historic ? html`
                 <div class="approval-card">
                    <div class="approval-body">${this._renderMarkdown(m.text)}</div>
                    <div class="approval-actions">
@@ -377,6 +390,7 @@ export class ArcChatInterface extends LitElement {
         <div class="input-area">
           <div class="attach-btn">📎</div>
           <textarea
+            aria-label="Message ArcClaw"
             placeholder="Ask ArcClaw anything…"
             .value="${this._input}"
             ?disabled="${this._awaitingApproval}"
@@ -389,7 +403,7 @@ export class ArcChatInterface extends LitElement {
             }}"
             @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
           ></textarea>
-          <button class="send-btn" ?disabled="${!this._input.trim() || this._wsStatus !== 'open' || this._awaitingApproval}" @click="${this._send}">
+          <button aria-label="Send message" class="send-btn" ?disabled="${!this._input.trim() || this._wsStatus !== 'open' || this._awaitingApproval}" @click="${this._send}">
              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
           </button>
         </div>

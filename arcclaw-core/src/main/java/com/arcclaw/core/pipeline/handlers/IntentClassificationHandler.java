@@ -6,13 +6,13 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
-import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.exception.HttpException;
 import org.jboss.logging.Logger;
@@ -24,11 +24,16 @@ import org.jboss.logging.Logger;
 public class IntentClassificationHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(IntentClassificationHandler.class);
+    
+    private static final java.util.Set<String> FOLLOWUP_SIGNALS = java.util.Set.of(
+        "same", "again", "retry", "execute", "run", "use sandbox", 
+        "in java", "in go", "in python", "in typescript", "in kotlin", "in rust"
+    );
 
     @Inject IntentClassifier classifier;
     @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
     @Inject ChannelPluginRegistry channelPluginRegistry;
-    @Inject StatefulAgentStore stateStore;
+    @Inject AgentRoleCache roleCache;
 
     @Override
     public int priority() {
@@ -60,15 +65,29 @@ public class IntentClassificationHandler implements MessageHandler {
         }
 
         try {
-            String role = classifier.classify(message.text());
+            String role = null;
+            String sid = context.getSessionId().orElseGet(() -> {
+                log.debugf("No sessionId on context for continuity lookup for chat %s — using chatId", 
+                    context.getChatId());
+                return context.getChatId();
+            });
+            String previousRole = roleCache.findLatestRole(sid).orElse(null);
+
+            // Bug 2 Fix: Short follow-up heuristics for sticky roles
+            String lowerMsg = message.text().toLowerCase();
+            boolean isFollowUpHeuristic = lowerMsg.length() < 150 && 
+                FOLLOWUP_SIGNALS.stream().anyMatch(lowerMsg::contains);
+
+            if (isFollowUpHeuristic && previousRole != null && 
+               (AgentRoleEnum.CODER.toScopedName().equals(previousRole) || 
+                AgentRoleEnum.DEBUGGER.toScopedName().equals(previousRole))) {
+                log.infof("Short follow-up detected for chat %s — preserving sticky role: %s", context.getChatId(), previousRole);
+                role = previousRole;
+            } else {
+                role = classifier.classify(message.text());
+            }
 
             if ("__CONTINUE__".equals(role)) {
-                String sid = context.getSessionId().orElseGet(() -> {
-                    log.debugf("No sessionId on context for continuity lookup for chat %s — using chatId", 
-                        context.getChatId());
-                    return context.getChatId();
-                });
-                String previousRole = stateStore.findLatestRole(sid).orElse(null);
                 log.infof("Handling continuity request for session %s — previous role: %s",
                     sid, previousRole);
                 if (previousRole != null) {
@@ -78,7 +97,7 @@ public class IntentClassificationHandler implements MessageHandler {
                 }
             }
 
-            // §78-fix-3: null guard — openrouter/free occasionally returns null
+            // §78-fix-3: null guard — openrouter/auto occasionally returns null
             // causing NPE in downstream .trim() calls
             if (role == null || role.isBlank()) {
                 log.warnf("IntentClassifier returned null/blank for chat %s — defaulting to coordinator",

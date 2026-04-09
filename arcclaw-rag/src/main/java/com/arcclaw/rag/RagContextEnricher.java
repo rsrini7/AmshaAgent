@@ -17,19 +17,21 @@ import org.jboss.logging.Logger;
 public class RagContextEnricher implements ContextEnricher {
 
     private static final Logger log = Logger.getLogger(RagContextEnricher.class);
+    @ConfigProperty(name = "arcclaw.rag.max-chunk-chars", defaultValue = "300")
+    int maxChunkChars; // ~75 tokens per chunk from defaultValue
+
+    @ConfigProperty(name = "arcclaw.rag.max-total-chars", defaultValue = "800")
+    int maxTotalChars; // ~200 tokens total from defaultValue
 
     @Inject TwoTierMemoryService memoryService;
 
-    @ConfigProperty(name = "arcclaw.rag.context-chunks", defaultValue = "5")
+    @ConfigProperty(name = "arcclaw.rag.context-chunks", defaultValue = "3")
     int contextChunks;
 
-    // ── Fix Bug D: without a score floor, a single document ("My name is srini")
-    // is returned for every query regardless of relevance (weather, code, etc.).
     // Tune this value relative to what TwoTierMemoryService returns:
-    //   vec0 cosine similarity → [0.0, 1.0]  → 0.25 is a good floor
+    //   vec0 cosine similarity → [0.0, 1.0]  → 0.55 is a good floor
     //   FTS5 BM25 rank         → negative    → set arcclaw.rag.min-score=-1.0 to disable
-    // ingested (2 chunks found) but not injected because similarity score of "who am i" vs "User name: Srini" falls below 0.40
-    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "0.25")
+    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "0.55")
     double minScore;
 
     // ── Fix Bug A: write-intent goals must never be enriched with past RAG data.
@@ -74,9 +76,14 @@ public class RagContextEnricher implements ContextEnricher {
             String context = relevant.stream()
                     .map(ScoredChunk::text)
                     .filter(t -> t != null && !t.isBlank())
+                    .map(t -> t.length() > maxChunkChars ? t.substring(0, maxChunkChars) + "…" : t)
                     .collect(Collectors.joining("\n---\n"));
 
             if (context.isBlank()) return basePrompt;
+
+            if (context.length() > maxTotalChars) {
+                context = context.substring(0, maxTotalChars) + "\n…[truncated]";
+            }
 
             log.debugf("RagContextEnricher: injecting %d/%d chunks (min-score=%.2f) for session %s",
                     (Object) relevant.size(), chunks.size(), minScore, sessionId);

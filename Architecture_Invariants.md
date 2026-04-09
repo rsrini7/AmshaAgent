@@ -791,6 +791,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - Secrets must not be stored as immutable Strings when a zeroable `char[]` or byte[] lifecycle is required.
 - Clear sensitive material immediately after use where the implementation already expects this.
 
+
 ### 8.2 Vault session identity
 - System-level vault operations must use the dedicated system session identifier constant.
 - Do not inline magic literals for system-session behavior.
@@ -1058,3 +1059,46 @@ Run this checklist mentally before every major refactor touching persistence, ap
 ### 20.2 LLM Provider Dependencies
 - When moving routing logic into arcclaw-core, all required LLM provider extensions (e.g. quarkus-langchain4j-anthropic) MUST also be added to arcclaw-core.
 - Failure to do so leads to ClassNotFoundException or unresolved imports in the routing factories (e.g. ClaudeCodeProviderFactory).
+
+---
+
+## 21. UI Architecture Invariants
+
+### 21.1 Technology Stack
+- MUST use **Lit** (Web Components) for UI structure and logic.
+- MUST use **Vite** as the build tool and dev server.
+- MUST use **TypeScript** in `strict` mode for all frontend code.
+
+### 21.2 Component Communication & State
+- MUST use **`@lit/context`** for sharing application-wide state (e.g., `arcclawSessionId`, user profile) between nested components.
+- Direct `window` object state-sharing or global mutable stores SHOULD be avoided in favor of the context provider pattern.
+
+### 21.3 Security & Sanitization
+- Every dynamic HTML fragment rendered from LLM or agent output MUST be sanitized with **`dompurify`** before insertion into the DOM.
+- Markdown rendering (via `marked`) MUST be piped through the sanitizer to prevent XSS from unsafe agent outputs.
+
+### 21.4 Backend Communication
+- All data-plane interaction MUST flow through the **REST API** (`/api/v1`) or **WebSockets (`/ws/chat/{sessionId}`)**.
+- The UI MUST handle standard error codes (401 Unauthorized, 404 Not Found, 500 Server Error) gracefully, providing clear feedback to the user.
+
+### 21.5 Styling & Aesthetics
+- MUST use **Vanilla CSS** with CSS Custom Properties (Variables) for theming and layout.
+- MUST NOT introduce heavy utility frameworks (Tailwind, Bootstrap) unless explicitly requested and approved as a project-wide standard.
+- Aim for a premium, responsive design with smooth transitions and micro-animations.
+
+### 21.6 Packaging & Deployment
+- The UI build process MUST output to `arcclaw-ui/dist/`.
+- The `mise build:ui-copy` task is the authoritative mechanism for moving the bundled UI into the `arcclaw-app` `META-INF/resources` directory for production packaging.
+- Do NOT commit the `dist/` folder to version control.
+
+### 21.7 Accessibility (a11y)
+- UI components MUST follow WAI-ARIA standards (labels, roles, current-page markers). 
+- Interactive elements (buttons, inputs) MUST have descriptive `aria-label` attributes if they do not contain text.
+
+### 21.8 Resource Lifecycle
+- Components establishing long-lived connections (WebSockets, SSE) MUST explicitly close/clean them up in `disconnectedCallback()` to prevent memory leaks and "ghost" sessions.
+
+### 21.9 UI Secret Handling
+- Sensitive credentials (API keys) MUST NOT be passed in URL query parameters where HTTP headers are supported (e.g. REST, SSE); prefer `X-ARCCLAW-API-KEY` or secure Cookies.
+- **Architectural Trade-off**: The use of **`localStorage`** for API keys is explicitly allowed to support persistent developer sessions across browser restarts/tab closures. This is an intentional choice for productivity given ArcClaw's primary usage as a local developer tool.
+- Non-secret transient data SHOULD prefer `sessionStorage`.

@@ -153,6 +153,11 @@
           <version>3.5.5</version>
           <configuration>
             <argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
+            <systemPropertyVariables>
+              <arcclaw.data-dir>./target</arcclaw.data-dir>
+              <arcclaw.workspace.root-dir>./target/workspaces</arcclaw.workspace.root-dir>
+              <quarkus.test.profile>test</quarkus.test.profile>
+            </systemPropertyVariables>
             <!-- Kill the forked JVM immediately after System.exit instead of waiting 30s -->
             <shutdown>kill</shutdown>
             <!-- Ensure each test module gets a fresh JVM -->

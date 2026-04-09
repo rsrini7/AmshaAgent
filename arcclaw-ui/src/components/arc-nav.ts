@@ -1,4 +1,4 @@
-import { LitElement, css, html } from 'lit';
+import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import './arc-connection-badge';
 
@@ -6,6 +6,7 @@ import './arc-connection-badge';
 export class ArcNav extends LitElement {
   @property({ type: String }) route = '#/chat';
   @property({ type: String }) sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
+  @property({ type: Boolean, reflect: true }) open = false;
 
   static styles = css`
     :host {
@@ -15,6 +16,19 @@ export class ArcNav extends LitElement {
       padding: var(--space-4) var(--space-3); height: 100vh;
       box-sizing: border-box;
       transition: var(--transition);
+    }
+    @media (max-width: 640px) {
+      :host {
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        z-index: 100;
+        transform: translateX(-100%);
+        box-shadow: var(--shadow-lg);
+        width: 250px;
+      }
+      :host([open]) {
+        transform: translateX(0);
+      }
     }
     .logo {
       display: flex; align-items: center; gap: 10px;
@@ -64,7 +78,7 @@ export class ArcNav extends LitElement {
       background: var(--accent-glow);
       color: var(--text-primary);
     }
-    icon {
+    .icon {
       width: 16px; height: 16px;
       display: flex; align-items: center; justify-content: center;
     }
@@ -87,20 +101,20 @@ export class ArcNav extends LitElement {
         <span class="logo-text">ArcClaw</span>
       </div>
       <div class="links">
-        <a href="#/chat" class="${this.route === '#/chat' ? 'active' : ''}">
-          <span>💬</span> Chat
+        <a href="#/chat" class="${this.route === '#/chat' ? 'active' : ''}" aria-current="${this.route === '#/chat' ? 'page' : nothing}">
+          <span class="icon">💬</span> Chat
         </a>
-        <a href="#/agents" class="${this.route === '#/agents' ? 'active' : ''}">
-          <span>🤖</span> Agents
+        <a href="#/agents" class="${this.route === '#/agents' ? 'active' : ''}" aria-current="${this.route === '#/agents' ? 'page' : nothing}">
+          <span class="icon">🤖</span> Agents
         </a>
-        <a href="#/hitl" class="${this.route === '#/hitl' ? 'active' : ''}">
-          <span>✋</span> Approvals
+        <a href="#/hitl" class="${this.route === '#/hitl' ? 'active' : ''}" aria-current="${this.route === '#/hitl' ? 'page' : nothing}">
+          <span class="icon">✋</span> Approvals
         </a>
-        <a href="#/skills" class="${this.route === '#/skills' ? 'active' : ''}">
-          <span>🔧</span> Skills
+        <a href="#/skills" class="${this.route === '#/skills' ? 'active' : ''}" aria-current="${this.route === '#/skills' ? 'page' : nothing}">
+          <span class="icon">🔧</span> Skills
         </a>
-        <a href="#/settings" class="${this.route === '#/settings' ? 'active' : ''}">
-          <span>⚙</span> Settings
+        <a href="#/settings" class="${this.route === '#/settings' ? 'active' : ''}" aria-current="${this.route === '#/settings' ? 'page' : nothing}">
+          <span class="icon">⚙</span> Settings
         </a>
       </div>
       <div class="footer">

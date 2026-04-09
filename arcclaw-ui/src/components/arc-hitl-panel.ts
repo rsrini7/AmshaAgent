@@ -14,14 +14,14 @@ export class ArcHitlPanel extends LitElement {
   @state() private _error: Record<string, string> = {};
 
   static styles = css`
-    :host { display: block; padding: 32px; overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
-    h2 { color: var(--text-primary); margin-top: 0; margin-bottom: 24px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    :host { display: block; padding: var(--space-8); overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
+    h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
     .empty { color: var(--text-muted); font-style: italic; font-size: 14px; }
     
     .card {
-      background: var(--bg-surface); border: 1px solid var(--border); border-radius: 16px; 
-      padding: 24px; margin-bottom: 20px;
-      display: flex; flex-direction: column; gap: 16px;
+      background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-xl); 
+      padding: var(--space-6); margin-bottom: var(--space-5);
+      display: flex; flex-direction: column; gap: var(--space-4);
       transition: var(--transition);
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
@@ -134,56 +134,58 @@ export class ArcHitlPanel extends LitElement {
 
   render() {
     return html`
-      <h2>Pending Approvals (${this.approvals.length})</h2>
-      
-      ${this.approvals.length === 0
-        ? html`<p class="empty">✓ No pending approvals. All agents running autonomously.</p>`
-        : this.approvals.map(a => html`
-          <div class="card">
-            <div class="card-header">
-              <div class="tool-group">
-                <span class="tool-icon">⬢</span>
-                <span class="tool-name">${a.toolName}</span>
-                <span class="agent-name">by ${a.agentName}</span>
-              </div>
-              <span class="requested-at">${this._formatTime(a.requestedAt)}</span>
-            </div>
-            
-            <pre class="params">${Object.keys(a.params).length === 0 
-                ? 'No parameters'
-                : Object.entries(a.params).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n')}</pre>
-            
-            <div class="actions">
-              ${this._processing.has(a.taskId)
-                ? html`<span class="empty">Syncing with cluster...</span>`
-                : html`
-                  <button class="btn btn-approve" @click="${() => this._approve(a.taskId)}">Approve Sequence</button>
-                  <button class="btn btn-reject" @click="${() => this._toggleReject(a.taskId)}" ?disabled="${this._rejecting.has(a.taskId)}">Abort</button>
-                `
-              }
-            </div>
-            
-            ${this._rejecting.has(a.taskId) && !this._processing.has(a.taskId)
-              ? html`
-                <div class="reason-form">
-                  <div style="font-size: 13px; font-weight: 700; color: #ef4444;">ABORT SEQUENCE</div>
-                  <input class="reason-input" type="text" placeholder="Provide reason for abortion (optional)..."
-                    .value="${this._rejectReason[a.taskId] || ''}"
-                    @input="${(e: Event) => this._rejectReason = { ...this._rejectReason, [a.taskId]: (e.target as HTMLInputElement).value }}"
-                    @keydown="${(e: KeyboardEvent) => e.key === 'Enter' && this._submitReject(a.taskId)}"
-                  />
-                  <div class="reason-actions">
-                     <button class="btn" style="background: transparent; border: none; color: var(--text-muted);" @click="${() => this._toggleReject(a.taskId)}">Cancel</button>
-                     <button class="btn" style="background: #ef4444; color: white;" @click="${() => this._submitReject(a.taskId)}">Confirm Abort</button>
-                  </div>
+      <div style="max-width: 1200px; margin: 0 auto;">
+        <h2>Pending Approvals (${this.approvals.length})</h2>
+        
+        ${this.approvals.length === 0
+          ? html`<p class="empty">✓ No pending approvals. All agents running autonomously.</p>`
+          : this.approvals.map(a => html`
+            <div class="card">
+              <div class="card-header">
+                <div class="tool-group">
+                  <span class="tool-icon">⬢</span>
+                  <span class="tool-name">${a.toolName}</span>
+                  <span class="agent-name">by ${a.agentName}</span>
                 </div>
-              ` : ''
-            }
-            
-            ${this._error[a.taskId] ? html`<div class="error-msg">${this._error[a.taskId]}</div>` : ''}
-          </div>
-        `)
-      }
+                <span class="requested-at">${this._formatTime(a.requestedAt)}</span>
+              </div>
+              
+              <pre class="params">${Object.keys(a.params).length === 0 
+                  ? 'No parameters'
+                  : Object.entries(a.params).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n')}</pre>
+              
+              <div class="actions">
+                ${this._processing.has(a.taskId)
+                  ? html`<span class="empty">Syncing with cluster...</span>`
+                  : html`
+                    <button class="btn btn-approve" @click="${() => this._approve(a.taskId)}">Approve Sequence</button>
+                    <button class="btn btn-reject" @click="${() => this._toggleReject(a.taskId)}" ?disabled="${this._rejecting.has(a.taskId)}">Abort</button>
+                  `
+                }
+              </div>
+              
+              ${this._rejecting.has(a.taskId) && !this._processing.has(a.taskId)
+                ? html`
+                  <div class="reason-form">
+                    <div style="font-size: 13px; font-weight: 700; color: #ef4444;">ABORT SEQUENCE</div>
+                    <input class="reason-input" type="text" placeholder="Provide reason for abortion (optional)..."
+                      .value="${this._rejectReason[a.taskId] || ''}"
+                      @input="${(e: Event) => this._rejectReason = { ...this._rejectReason, [a.taskId]: (e.target as HTMLInputElement).value }}"
+                      @keydown="${(e: KeyboardEvent) => e.key === 'Enter' && this._submitReject(a.taskId)}"
+                    />
+                    <div class="reason-actions">
+                       <button class="btn" style="background: transparent; border: none; color: var(--text-muted);" @click="${() => this._toggleReject(a.taskId)}">Cancel</button>
+                       <button class="btn" style="background: #ef4444; color: white;" @click="${() => this._submitReject(a.taskId)}">Confirm Abort</button>
+                    </div>
+                  </div>
+                ` : ''
+              }
+              
+              ${this._error[a.taskId] ? html`<div class="error-msg">${this._error[a.taskId]}</div>` : ''}
+            </div>
+          `)
+        }
+      </div>
     `;
   }
 }

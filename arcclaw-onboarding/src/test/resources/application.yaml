@@ -1,3 +1,5 @@
+ARCCLAW_LLM_API_KEY: "dummy-test-key"
+
 quarkiverse:
   mcp:
     server:
@@ -5,7 +7,7 @@ quarkiverse:
         enabled: false
       stdio:
         enabled: false
-ARCCLAW_LLM_API_KEY: "dummy-test-key"
+
 arcclaw:
   auto-seed-secrets: false
   api:
@@ -14,7 +16,9 @@ arcclaw:
   vault:
     pepper: "test-pepper-value-not-used-in-tests"
     master-key: "test-master-key-32-chars-padded!"
-  data-dir: "target/data"
+  data-dir: "./target"
+  workspace:
+    root-dir: "./target/workspaces"
   channel:
     telegram:
       bot-token: "test-bot-token"

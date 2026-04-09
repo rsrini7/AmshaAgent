@@ -13,7 +13,6 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import com.arcclaw.app.security.ApiKeyValidator;
 import com.arcclaw.app.ui.dto.AgentStatusDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -33,17 +32,12 @@ public class AgentStatusResource {
 
     @Inject SessionHeartbeatTracker sessionHeartbeatTracker;
     @Inject AgentSseService agentSseService;
-    @Inject ApiKeyValidator apiKeyValidator;
 
     @GET
     @Path("/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
-    public Multi<AgentSseService.SseEvent> agentEvents(@QueryParam("sessionId") String sessionId, @QueryParam("apiKey") String apiKey) {
-        if (!apiKeyValidator.isValid(apiKey)) {
-            return Multi.createFrom().failure(
-            new WebApplicationException(Response.Status.UNAUTHORIZED));
-         }
+    public Multi<AgentSseService.SseEvent> agentEvents(@QueryParam("sessionId") String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return Multi.createFrom().failure(
                 new WebApplicationException(Response.Status.BAD_REQUEST));
@@ -58,7 +52,9 @@ public class AgentStatusResource {
                 long totalTokens = 0L;
                 if (s.sessionId() != null) {
                     long[] tokens = sessionHeartbeatTracker.getTokens(s.sessionId());
-                    totalTokens = tokens[0] + tokens[1]; // input + output
+                    if (tokens != null && tokens.length >= 2) {
+                        totalTokens = tokens[0] + tokens[1]; // input + output
+                    }
                 }
                 return new AgentStatusDto(
                     s.name(),

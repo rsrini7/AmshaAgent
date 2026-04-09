@@ -11,6 +11,7 @@ import './arc-agent-status';
 import './arc-hitl-panel';
 import './arc-skills-panel';
 import './arc-settings';
+import './arc-theme-toggle';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
@@ -21,11 +22,11 @@ export class ArcShell extends LitElement {
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
   @state() private _route = window.location.hash || (localStorage.getItem('arc-api-key') ? '#/chat' : '#/onboarding');
+  @state() private _isNavOpen = false;
+  @state() private _chatWsStatus: string = 'closed';
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
-  private _hitlEs: EventSource | null = null;
-  private _agentEs: EventSource | null = null;
 
   static styles = css`
     :host { 
@@ -45,7 +46,6 @@ export class ArcShell extends LitElement {
       gap: 1rem;
       min-height: 64px;
       padding: 0 1.5rem;
-      padding-right: 5.5rem;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       background: var(--bg-base);
@@ -84,11 +84,20 @@ export class ArcShell extends LitElement {
       flex-shrink: 0;
     }
     @media (max-width: 900px) {
-      .topbar { padding-right: 4.75rem; }
       .connection-pill { max-width: 220px; font-size: var(--font-size-xs); }
     }
     @media (max-width: 640px) {
       .connection-pill { display: none; }
+      .menu-toggle { display: block; }
+    }
+    .menu-toggle {
+      display: none; background: transparent; border: none; color: var(--text-primary);
+      font-size: 1.25rem; cursor: pointer; padding: 0.5rem; border-radius: 8px;
+    }
+    .menu-toggle:hover { background: var(--bg-elevated); }
+    .nav-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90;
+      backdrop-filter: blur(4px);
     }
   `;
 
@@ -97,8 +106,10 @@ export class ArcShell extends LitElement {
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
     this.addEventListener('session-ready', this._onSessionReady as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
+    this.addEventListener('ws-status-change', ((e: CustomEvent) => this._chatWsStatus = e.detail.status) as EventListener);
     window.addEventListener('hashchange', () => {
       this._route = window.location.hash || '#/onboarding';
+      this._isNavOpen = false; // Close nav on route change
       if (!this._apiKey && this._route !== '#/onboarding') {
         window.location.hash = '#/onboarding';
         return;
@@ -140,57 +151,11 @@ export class ArcShell extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._sseManager?.disconnect();
-    this._hitlEs?.close();
-    this._hitlEs = null;
-    this._agentEs?.close();
-    this._agentEs = null;
   }
 
   // ─── SSE ─────────────────────────────────────────────────────────────────
 
-  private _connectSse(
-    url: string,
-    onEvent: (data: any) => void
-  ): EventSource | null {
-    
-    if (typeof EventSource === 'undefined') {
-      console.warn('EventSource not supported');
-      return null;
-    }
 
-    if (!this._sessionId || !this._apiKey) {
-      console.warn('Session ID or API key not available, skipping SSE');
-      return null;
-    }
-
-    const es = new EventSource(url);
-    let sseActive = true;
-
-    es.onopen = () => {
-      console.debug('SSE connected:', url);
-    };
-
-    es.onmessage = (e) => {
-      try {
-        const payload = typeof e.data === 'string' ? e.data.trim() : '';
-        if (!payload || (payload[0] !== '{' && payload[0] !== '[')) return;
-        const data = JSON.parse(payload);
-        if (!data.type && !data.status) return; // heartbeat — ignore
-        onEvent(data);
-      } catch (err) {
-        console.warn('SSE message parse error:', err);
-      }
-    };
-
-    es.onerror = () => {
-      if (!sseActive) return;
-      sseActive = false;
-      es.close();
-      console.warn('SSE connection failed/lost: ' + url);
-    };
-
-    return es;
-  }
 
   // ─── Lifecycle / Auth ────────────────────────────────────────────────────
 
@@ -200,12 +165,9 @@ export class ArcShell extends LitElement {
     localStorage.setItem('arc-api-key', key);
     this._client = new ArcClient('/api/v1', this._apiKey);
 
-    // Close stale HITL/Agent SSE connections bound to the previous key.
+    // Close stale SSE connections bound to the previous key.
     // They will be re-opened with the new key once session-ready fires.
-    this._hitlEs?.close();
-    this._hitlEs = null;
-    this._agentEs?.close();
-    this._agentEs = null;
+    this._sseManager?.disconnect();
 
     window.location.hash = '#/chat';
     this._fetchAgents();
@@ -225,28 +187,22 @@ export class ArcShell extends LitElement {
     if (this._sessionId !== e.detail.sessionId) {
         this._sessionId = e.detail.sessionId;
         sessionStorage.setItem('arcclaw-chat-session', this._sessionId);
-    } else if (this._hitlEs || this._agentEs) {
-        // We already have matching session and active SSEs, skip re-init
-        return;
     }
 
-    // Close any previous SSE connections
-    this._hitlEs?.close();
-    this._hitlEs = null;
-    this._agentEs?.close();
-    this._agentEs = null;
-
     if (!this._sessionId) return;
+    this._startSse(); // Re-start all SSEs with new session context
+  }
 
-    this._hitlEs = this._connectSse(
-      `/api/v1/hitl/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
-      (event) => this._handleHitlEvent(event)
-    );
-
-    this._agentEs = this._connectSse(
-      `/api/v1/agents/events?sessionId=${encodeURIComponent(this._sessionId)}&apiKey=${encodeURIComponent(this._apiKey)}`,
-      (event) => this._handleAgentEvent(event)
-    );
+  // SSE event handlers
+  private _handleSseEvent(event: any) {
+    if (event.type === 'status_change') {
+       this._fetchAgents();
+       this._fetchApprovals();
+    } else if (event.type === 'AWAITING_APPROVAL') {
+       this._handleHitlEvent(event);
+    } else if (event.type === 'agent_status') {
+       this._handleAgentEvent(event);
+    }
   }
 
     // ─── SSE Event Handlers ──────────────────────────────────────────────────
@@ -331,14 +287,14 @@ export class ArcShell extends LitElement {
   private _startSse() {
     this._sseManager?.disconnect();
     this._sseManager = new SseManager(
-      '/api/v1/chat/stream',
+      `/api/v1/chat/stream?sessionId=${encodeURIComponent(this._sessionId)}`,
       this._apiKey,
       (event: AgentEvent) => {
         if (event.eventType === 'status_change') {
           this._fetchAgents();
           this._fetchApprovals();
         }
-        // heartbeat — no action needed
+        this._handleSseEvent(event);
       },
       (status) => {
         const wasDown = this._sseStatus !== 'connected';
@@ -350,16 +306,6 @@ export class ArcShell extends LitElement {
       }
     );
     this._sseManager.connect();
-  }
-
-  // ─── Context ─────────────────────────────────────────────────────────────
-
-  private _provideContext() {
-    return {
-      apiKey: this._apiKey,
-      sessionId: this._sessionId,
-      sseStatus: this._sseStatus,
-    };
   }
 
   // ─── Routing ─────────────────────────────────────────────────────────────
@@ -381,80 +327,83 @@ export class ArcShell extends LitElement {
         .platformId="${this._platformId}"
       ></arc-chat-interface>
 
-      <arc-agent-status
-        class="content-area"
-        style="display: ${this._route === '#/agents' ? 'flex' : 'none'}"
-        .agents="${this._agents}"
-      ></arc-agent-status>
+      ${this._route === '#/agents' ? html`
+        <arc-agent-status class="content-area" .agents="${this._agents}"></arc-agent-status>
+      ` : nothing}
 
-      <arc-hitl-panel
-        class="content-area"
-        style="display: ${this._route === '#/hitl' ? 'flex' : 'none'}"
-        .apiKey="${this._apiKey}"
-        .approvals="${this._pendingApprovals}"
-      ></arc-hitl-panel>
+      ${this._route === '#/hitl' ? html`
+        <arc-hitl-panel class="content-area" .apiKey="${this._apiKey}" .approvals="${this._pendingApprovals}"></arc-hitl-panel>
+      ` : nothing}
 
-      <arc-skills-panel
-        class="content-area"
-        style="display: ${this._route === '#/skills' ? 'flex' : 'none'}"
-        .apiKey="${this._apiKey}"
-      ></arc-skills-panel>
+      ${this._route === '#/skills' ? html`
+        <arc-skills-panel class="content-area" .apiKey="${this._apiKey}"></arc-skills-panel>
+      ` : nothing}
 
-      <arc-settings
-        class="content-area"
-        style="display: ${this._route === '#/settings' ? 'flex' : 'none'}"
-        .apiKey="${this._apiKey}"
-      ></arc-settings>
+      ${this._route === '#/settings' ? html`
+        <arc-settings class="content-area" .apiKey="${this._apiKey}"></arc-settings>
+      ` : nothing}
     `;
   }
 
-    // ─── Render ──────────────────────────────────────────────────────────────
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   render() {
-    const ctx = this._provideContext();
     return html`
-      <div
-        @arc-app-context="${(e: any) => e.detail.callback(ctx)}"
-        style="display: contents;"
-      >
+      ${this._apiKey
+        ? html`
+            <arc-nav .route="${this._route}" .sseStatus="${this._sseStatus}" ?open="${this._isNavOpen}"></arc-nav>
+            ${this._isNavOpen ? html`<div class="nav-overlay" @click="${() => this._isNavOpen = false}"></div>` : ''}
+          `
+        : ''}
+      <main>
         ${this._apiKey
-          ? html`<arc-nav .route="${this._route}" .sseStatus="${this._sseStatus}"></arc-nav>`
-          : ''}
-        <main>
-          ${this._apiKey
-            ? html`
-                <header class="topbar">
-                  <div style="font-weight: 600; font-size: 0.9rem;">
-                    ${this._route === '#/chat'
-                      ? 'Chat Session'
-                      : this._route === '#/agents'
-                      ? 'Agent Status'
-                      : this._route === '#/hitl'
-                      ? 'Approvals'
-                      : this._route === '#/skills'
-                      ? 'Skills'
-                      : this._route === '#/settings'
-                      ? 'Settings'
-                      : ''}
+          ? html`
+              <header class="topbar">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                   <button class="menu-toggle" aria-label="Toggle menu" @click="${() => this._isNavOpen = !this._isNavOpen}">☰</button>
+                   <div style="font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                     ${this._route === '#/chat'
+                       ? html`
+                         Chat Session 
+                         <span class="status-badge status-${this._chatWsStatus}" style="font-size: 10px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">${this._chatWsStatus}</span>
+                         ${this._chatWsStatus === 'error' || this._chatWsStatus === 'closed' ? html`
+                            <button @click="${() => (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect()}" 
+                                    style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;">
+                              Reconnect
+                            </button>
+                         ` : nothing}
+                       `
+                       : this._route === '#/agents'
+                       ? 'Agent Status'
+                       : this._route === '#/hitl'
+                       ? 'Approvals'
+                       : this._route === '#/skills'
+                       ? 'Skills'
+                       : this._route === '#/settings'
+                       ? 'Settings'
+                       : ''}
+                   </div>
+                </div>
+                <div class="topbar-right">
+                  <div class="connection-pill">
+                    <div
+                      class="status-dot"
+                      style="background: ${this._sseStatus === 'connected'
+                        ? 'var(--accent-secondary)'
+                        : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'};
+                        box-shadow: 0 0 0 6px color-mix(in srgb, ${this._sseStatus === 'connected' ? 'var(--accent-secondary)' : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'} 18%, transparent);"
+                    ></div>
+                    ${this._sseStatus === 'connected' ? 'Connected to ArcClaw Agent Cluster' : 'ArcClaw Agent Cluster (Offline)'}
                   </div>
-                  <div class="topbar-right">
-                    <div class="connection-pill">
-                      <div
-                        class="status-dot"
-                        style="background: ${this._sseStatus === 'connected'
-                          ? 'var(--accent-secondary)'
-                          : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'};
-                          box-shadow: 0 0 0 6px color-mix(in srgb, ${this._sseStatus === 'connected' ? 'var(--accent-secondary)' : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'} 18%, transparent);"
-                      ></div>
-                      ${this._sseStatus === 'connected' ? 'Connected to ArcClaw Agent Cluster' : 'ArcClaw Agent Cluster (Offline)'}
-                    </div>
-                  </div>
-                </header>
-              `
-            : nothing}
-          ${this._renderViews()}
-        </main>
-      </div>
+                  <arc-theme-toggle></arc-theme-toggle>
+                </div>
+              </header>
+            `
+          : html`
+              <arc-theme-toggle style="position: fixed; top: 16px; right: 16px; z-index: 1000;"></arc-theme-toggle>
+            `}
+        ${this._renderViews()}
+      </main>
     `;
   }
 }

@@ -179,6 +179,13 @@ TOOL CALL GATE — ingest_document:
   Generating content (essays, summaries, code) does NOT qualify as an
   ingest request, even if the content is long or detailed.
 
+REDACTED PII — MANDATORY BEHAVIOR:
+If the goal contains [REDACTED-PHONE], [REDACTED-EMAIL], [REDACTED-AADHAAR], 
+or any [REDACTED-*] token, this means PII was sanitized by the system.
+The user's intent to store this data is VALID.
+You MUST call ingest_document with the [REDACTED-*] placeholder as the text value.
+NEVER say "the number is redacted". NEVER explain. Just call the tool.
+
 INGEST_DOCUMENT RULES (NON-NEGOTIABLE):
 These rules apply every time the user asks you to ingest, store, remember,
 add to knowledge, or save something.
@@ -233,14 +240,6 @@ SANITIZATION (before every ingest_document call):
   - Pass only clean, readable plain text
   - NEVER pass raw GitHub API output, README markdown, or
     shell command output directly as the text parameter.
-
-IMPORTANT — REDACTED PII PLACEHOLDERS:
-   The text you receive may contain placeholders such as [REDACTED-PHONE], [REDACTED-EMAIL],
-   [REDACTED-AADHAAR], etc. These are NOT errors. They indicate that PII was sanitized
-   by the system before reaching you. You MUST still call ingest_document with the
-   sanitized text as-is. Do NOT refuse to ingest because the content contains redaction
-   placeholders — the user intended to store this information and you must honour their
-   intent using the sanitized form.
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 

@@ -91,13 +91,13 @@ public class SandboxExecTool implements AgentTool {
             System.getProperty("os.name", "").toLowerCase().contains("win");
 
     // Colons are illegal in Windows path components (drive-letter separator).
-    // Inner session IDs contain colons (the ':d:' sentinel).
+    // Inner session IDs contain colons (the ':delegate:' sentinel).
     // Sanitize for filesystem use only — sessionId itself is never modified.
     private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
 
     @Inject ProcessIsolationExecutor isolationExecutor;
 
-    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = ".data/workspaces")
+    @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
     @ConfigProperty(name = "arcclaw.sandbox.python-executable")
@@ -208,10 +208,14 @@ public class SandboxExecTool implements AgentTool {
     private void compileJavaOnHost(Path javaFile, Path outputDir) throws IOException {
         Path javacExe = resolveHostJavac();
         if (javacExe == null) {
-            // Extremely unusual — host JRE-only means Quarkus itself couldn't have started.
-            // Skip compilation; the container will fail with a clear class-not-found error.
-            log.warnf("[SandboxExecTool] javac not found at java.home — skipping host compilation. " +
-                      "The sandbox container will likely fail. Verify the host has a full JDK.");
+            // In native GraalVM binary mode, java.home points to the embedded JRE (no javac).
+            // This is expected and harmless since compilation usually happens in the container.
+            // We only warn if NOT in native mode, as it suggests a missing host JDK.
+            boolean isNative = System.getProperty("org.graalvm.nativeimage.imagecode") != null;
+            if (!isNative) {
+                log.warnf("[SandboxExecTool] javac not found at java.home — skipping host compilation. " +
+                          "The sandbox container will likely fail. Verify the host has a full JDK.");
+            }
             return;
         }
 

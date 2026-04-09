@@ -58,6 +58,11 @@ export class ArcOnboarding extends LitElement {
     overflow: hidden;
     position: relative;
     animation: card-in 0.4s cubic-bezier(0.16,1,0.3,1) both;
+    transition: max-width var(--transition);
+  }
+
+  .wizard-card.wide {
+    max-width: 600px;
   }
 
   [data-theme="dark"] .wizard-card,
@@ -583,9 +588,15 @@ export class ArcOnboarding extends LitElement {
       const res = await this._client.onboardingStep(this._currentStep, body);
       
       // Step 3 specific validation feedback
-      if (this._currentStep === 3 && res.valid === false) {
-        this._error = res.error || 'Invalid API Key';
-        return; // Don't advance if invalid
+      if (this._currentStep === 3) {
+        if (res.valid === false) {
+          this._error = res.error || 'Invalid API Key';
+          return; // Don't advance if invalid
+        } else {
+          this._validationOk = true;
+          this._error = 'Key is valid!';
+          await new Promise(r => setTimeout(r, 600));
+        }
       }
 
       this._currentStep = res.nextStep;
@@ -642,26 +653,28 @@ export class ArcOnboarding extends LitElement {
   render() {
     return html`
       <div class="wizard-card ${this._currentStep === 5 ? 'wide' : ''}">
-        <div class="wizard-header">
-          <div class="brand-mark">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-          </div>
-          <h1 class="wizard-title">ArcClaw</h1>
-          <p class="wizard-subtitle">AI Agent Infrastructure</p>
-        </div>
-
-        <div class="stepper">
-          ${[1, 2, 3, 4, 5].map(s => html`
-            <div class="step-dot-wrap">
-              <div class="step-dot ${this._currentStep === s ? 'active' : this._currentStep > s ? 'done' : ''}">
-                ${this._currentStep > s ? '✓' : s}
-              </div>
-              ${s < 5 ? html`<div class="step-connector ${this._currentStep > s ? 'done' : ''}"></div>` : ''}
+        ${this._currentStep !== 6 ? html`
+          <div class="wizard-header">
+            <div class="brand-mark">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
             </div>
-          `)}
-        </div>
+            <h1 class="wizard-title">ArcClaw</h1>
+            <p class="wizard-subtitle">AI Agent Infrastructure</p>
+          </div>
+
+          <div class="stepper">
+            ${[1, 2, 3, 4, 5].map(s => html`
+              <div class="step-dot-wrap">
+                <div class="step-dot ${this._currentStep === s ? 'active' : this._currentStep > s ? 'done' : ''}">
+                  ${this._currentStep > s ? '✓' : s}
+                </div>
+                ${s < 5 ? html`<div class="step-connector ${this._currentStep > s ? 'done' : ''}"></div>` : ''}
+              </div>
+            `)}
+          </div>
+        ` : ''}
 
         ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
 
@@ -756,7 +769,7 @@ export class ArcOnboarding extends LitElement {
     ];
     return html`
       <span class="field-label">Provider</span>
-      <div class="provider-grid">
+      <div class="provider-grid" role="radiogroup" aria-label="Select a provider">
         ${providers.map(p => html`
           <div
             class="provider-card ${this._provider === p.id ? 'selected' : ''}"
@@ -873,7 +886,7 @@ export class ArcOnboarding extends LitElement {
         ` : ''}
       </div>
 
-      ${this._error ? html`
+      ${this._error || this._validationOk ? html`
         <div class="status-msg ${this._validationOk ? 'success' : 'error'}">
           ${this._validationOk ? html`
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1063,7 +1076,7 @@ export class ArcOnboarding extends LitElement {
         </button>
         <button class="btn-ghost"
           style="color:var(--text-muted)"
-          @click="${this._finish}">
+          @click="${() => this._next({ mcpServers: [] })}">
           Skip
         </button>
         <button class="btn-primary"

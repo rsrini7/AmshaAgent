@@ -72,16 +72,13 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
             if (!attached) {
                 String ftsPath;
-                if (dataDir.contains(":memory:")) {
-                    ftsPath = ":memory:";
-                } else {
-                    try {
-                        Files.createDirectories(Path.of(dataDir));
-                    } catch (IOException e) {
-                        log.warn("Failed to create data directory for FTS: " + dataDir, e);
-                    }
-                    ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString();
+                try {
+                    Files.createDirectories(Path.of(dataDir));
+                } catch (IOException e) {
+                    log.warn("Failed to create data directory for FTS: " + dataDir, e);
                 }
+                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+
                 try (Statement stmt = connection.createStatement()) {
                     stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
                 }

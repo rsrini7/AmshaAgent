@@ -8,7 +8,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -18,7 +17,8 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import com.arcclaw.app.security.ApiKeyValidator;
+import com.arcclaw.core.util.MdcKeys;
+import org.jboss.logging.MDC;
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
@@ -36,29 +36,21 @@ public class HitlResource {
 
     @Inject HitlService hitlService;
     @Inject AgentSseService agentSseService;
-    @Inject ApiKeyValidator apiKeyValidator;
     @Inject SessionHeartbeatTracker heartbeatTracker;
 
     @GET
     @Path("/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
-    public Multi<AgentSseService.SseEvent> hitlEvents(@QueryParam("sessionId") String sessionId, @QueryParam("apiKey") String apiKey) {
-        if (!apiKeyValidator.isValid(apiKey)) {
-            return Multi.createFrom().failure(
-            new WebApplicationException(Response.Status.UNAUTHORIZED));
-         }
+    public Multi<AgentSseService.SseEvent> hitlEvents(@QueryParam("sessionId") String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return Multi.createFrom().failure(
                 new WebApplicationException(Response.Status.BAD_REQUEST));
         }
 
         // §85-B: Lazy ownership binding for SSE subscription.
-        // The browser WebSocket API cannot send custom headers, so ownership
-        // is NOT established at WebSocket open time. Instead, the first SSE
-        // request that carries a valid apiKey lazily binds the owner.
-        // If the session already has a different owner, reject.
-        String userId = apiKeyValidator.resolveUserId(apiKey);
+        // ApiKeyAuthFilter has already validated the key and put userId in MDC.
+        String userId = (String) MDC.get(MdcKeys.USER_ID);
         if (userId == null) {
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
@@ -72,16 +64,9 @@ public class HitlResource {
     }
 
     @GET
-    public Response listPending(@HeaderParam("X-ARCCLAW-API-KEY") String apiKey,
-                                @QueryParam("apiKey") String apiKeyParam) {
-        // Header first, fall back to query param (same pattern as ApiKeyAuthFilter)
-        String key = (apiKey != null && !apiKey.isBlank()) ? apiKey : apiKeyParam;
-        if (!apiKeyValidator.isValid(key)) {
-            return Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(Map.of("error", "Missing or invalid API key"))
-                    .build();
-        }
-        String userId = apiKeyValidator.resolveUserId(key);
+    public Response listPending() {
+        // ApiKeyAuthFilter has already validated the key and put userId in MDC.
+        String userId = (String) MDC.get(MdcKeys.USER_ID);
         if (userId == null) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", "Cannot resolve user identity"))

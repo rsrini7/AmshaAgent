@@ -77,18 +77,43 @@ public class PlaywrightPageRunner {
 
     @PreDestroy
     void destroy() {
-        if (browser != null) browser.close();
-        if (playwright != null) playwright.close();
+        browser = null;
+        playwright = null;
     }
 
     @Scheduled(every = "6h")
     void refreshBrowser() {
         if (!enabled || playwright == null) return;
         log.info("Playwright browser refresh");
-        if (browser != null) browser.close();
+        closeBrowserQuietly(browser, "refresh");
         browser = playwright.chromium().launch(
             new BrowserType.LaunchOptions().setHeadless(headless)
         );
+    }
+
+    private void closeBrowserQuietly(Browser browserRef, String phase) {
+        if (browserRef == null) return;
+        try {
+            browserRef.close();
+        } catch (Exception e) {
+            if (isBenignCloseError(e)) {
+                log.debugf("Playwright browser close skipped benign error during %s: %s", phase, safeMessage(e));
+            } else {
+                log.warnf("Playwright browser close failed during %s: %s", phase, safeMessage(e));
+            }
+        }
+    }
+
+    private boolean isBenignCloseError(Throwable t) {
+        String msg = safeMessage(t).toLowerCase();
+        return msg.contains("stream closed")
+            || msg.contains("pipe closed")
+            || msg.contains("target page, context or browser has been closed");
+    }
+
+    private String safeMessage(Throwable t) {
+        String msg = t.getMessage();
+        return (msg == null || msg.isBlank()) ? t.getClass().getSimpleName() : msg;
     }
 
     /**
