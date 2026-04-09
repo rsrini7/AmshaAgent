@@ -1,30 +1,31 @@
 ARCCLAW_LLM_API_KEY: "dummy-test-key"
 ARCCLAW_LLM_BASE_URL: "http://localhost:9999"
  
-arcclaw:
-  data-dir: "target/data"
-  workspace:
-    root-dir: "target/data/workspaces"
-  rag:
-    vec-extension-path: "target/lib/vec0"
-  skills:
-    hot-reload: false
-  auto-seed-secrets: false
-  api:
-    keys:
-      internal: "key-internal-changeme"
-      ci: "key-ci-changeme"
-  audit:
-    hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
-  channel:
-    telegram:
-      enabled: false
-      bot-token: "mock-telegram-token"
-  vault:
-    pepper: "test-pepper"
-    master-key: "test-master-key-32-chars-padded!"
-  cron:
-    max-lookback-window: PT999H
+"%test":
+  arcclaw:
+    data-dir: "./target/data"
+    workspace:
+      root-dir: "./target/data/workspaces"
+    rag:
+      vec-extension-path: "./target/lib/vec0"
+    skills:
+      hot-reload: false
+    auto-seed-secrets: false
+    api:
+      keys:
+        internal: "key-internal-changeme"
+        ci: "key-ci-changeme"
+    audit:
+      hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
+    channel:
+      telegram:
+        enabled: false
+        bot-token: "mock-telegram-token"
+    vault:
+      pepper: "test-pepper"
+      master-key: "test-master-key-32-chars-padded!"
+    cron:
+      max-lookback-window: PT999H
       
 quarkus:
   arc:
@@ -65,7 +66,7 @@ quarkus:
     additional-build-args: --enable-native-access=ALL-UNNAMED
   datasource:
     jdbc:
-      url: "jdbc:sqlite:./target/app-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      url: "jdbc:sqlite:./target/data/app-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
       additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
       min-size: 1
       max-size: 4

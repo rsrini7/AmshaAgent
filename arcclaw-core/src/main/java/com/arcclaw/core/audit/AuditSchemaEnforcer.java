@@ -72,7 +72,7 @@ public class AuditSchemaEnforcer {
         
         if (ftsFound == 0) {
             log.info("fts schema missing on startup, attaching fallback memory database");
-            em.createNativeQuery("ATTACH DATABASE ':memory:' AS fts").executeUpdate();
+            em.createNativeQuery("ATTACH DATABASE 'target/data/arcclaw-fts.db' AS fts").executeUpdate();
         }
 
         // FTS5 standalone table — stores sessionId for manual mapping

@@ -52,16 +52,13 @@ public class SqliteWalConfigurer {
 
             // Isolated FTS schema attachment
             String ftsPath;
-            if (":memory:".equals(dataDir)) {
-                ftsPath = ":memory:";
-            } else {
-                try {
-                    Files.createDirectories(Path.of(dataDir));
-                } catch (IOException e) {
-                    log.error("Failed to create data directory: " + dataDir, e);
-                }
-                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+            try {
+                Files.createDirectories(Path.of(dataDir));
+            } catch (IOException e) {
+                log.error("Failed to create data directory: " + dataDir, e);
             }
+            ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+
             try {
                 stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
                 log.info("FTS database attached: " + ftsPath);

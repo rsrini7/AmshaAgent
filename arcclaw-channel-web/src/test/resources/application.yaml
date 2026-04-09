@@ -12,7 +12,7 @@ quarkus:
   datasource:
     db-kind: sqlite
     jdbc:
-      url: "jdbc:sqlite:./target/web-test.db"
+      url: "jdbc:sqlite:./target/data/web-test.db"
 
   hibernate-orm:
     dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
@@ -37,16 +37,17 @@ quarkus:
       timeout: 30s
 
 # Mock/Dummy config for core handlers that are bean-scanned
-arcclaw:
-  llm:
-    provider: mock
-  channel:
-    telegram:
-      bot-token: "mock"
-  data-dir: "target/data"
-  workspace:
-    root-dir: "target/data/workspaces"  
-  vault:
-    pepper: "mock-pepper"
-  cron:
-    max-lookback-window: PT1M
+"%test":
+  arcclaw:
+    llm:
+      provider: mock
+    channel:
+      telegram:
+        bot-token: "mock"
+    data-dir: "./target/data"
+    workspace:
+      root-dir: "./target/data/workspaces"  
+    vault:
+      pepper: "mock-pepper"
+    cron:
+      max-lookback-window: PT1M

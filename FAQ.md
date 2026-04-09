@@ -676,7 +676,7 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 | Profile | When Active | Key Differences |
 |---|---|---|
 | `%dev` | `quarkus:dev` | Sandbox `strategy=NONE`, verbose LLM logging, hot reload, budget=$999 |
-| `%test` | `mvn verify` | In-memory SQLite (`:memory:`), Telegram disabled, compaction disabled, vault with test pepper |
+| `%test` | `mvn verify` | In-memory SQLite (`target/data/`), Telegram disabled, compaction disabled, vault with test pepper |
 | `%cli` | `arcclaw-cli.ps1` wrapper | All banners and INFO logs silenced; OTEL SDK disabled |
 | `%staging` | Manual `-Dquarkus.profile=staging` | Sandbox=PODMAN, budget=$50, supervised autonomy |
 | `%prod` | Docker Compose (`QUARKUS_PROFILE=prod`) | Sandbox=PODMAN, startup security validation strict, console color off |
@@ -692,7 +692,7 @@ Tests live in two modules:
 - **`arcclaw-core/src/test`** — pure unit and integration tests with zero Quarkus startup. Covers agent loop state machines, reasoning engine, reflex system, sandbox circuit breaker, secret vault, context compaction, FTS5 search, audit HMAC, governance budget, workspace lifecycle, and tool implementations.
 - **`arcclaw-app/src/test`** — `@QuarkusTest` integration tests that start the full CDI context. Covers REST API end-to-end (`AgentResourceTest`), Telegram route startup and routing, API key auth, rate limiting, security validators, and scheduler concurrency.
 
-Both test modules use an **in-memory SQLite** database (`:memory:`) so no file cleanup is required between tests.
+Both test modules use an **in-memory SQLite** database (`target/data/`) so no file cleanup is required between tests.
 
 ---
 

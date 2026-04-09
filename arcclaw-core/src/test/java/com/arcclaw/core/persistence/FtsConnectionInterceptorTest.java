@@ -43,8 +43,8 @@ class FtsConnectionInterceptorTest {
     @BeforeEach
     void setUp() {
         interceptor = new FtsConnectionInterceptor();
-        interceptor.dataDir    = ":memory:";
-        interceptor.vecExtensionPath = "./lib/vec0-test";
+        interceptor.dataDir    = "target/data/";
+        interceptor.vecExtensionPath = "target/lib/vec0-test";
     }
 
     // =========================================================================

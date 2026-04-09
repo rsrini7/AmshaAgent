@@ -17,6 +17,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
@@ -32,6 +33,7 @@ class IntentClassificationHandlerTest {
     private IntentClassifier classifier;
     private ChannelSender sender;
     private ChannelPluginRegistry registry;
+    private AgentRoleCache roleCache;
 
     @BeforeEach
     void setUp() {
@@ -39,6 +41,7 @@ class IntentClassificationHandlerTest {
         classifier = mock(IntentClassifier.class);
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
+        roleCache = mock(AgentRoleCache.class);
 
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
@@ -46,6 +49,7 @@ class IntentClassificationHandlerTest {
 
         handler.classifier = classifier;
         handler.channelPluginRegistry = registry;
+        handler.roleCache = roleCache;
 
         var destructiveFilter = mock(DestructiveVocabularyFilter.class);
         when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
@@ -61,6 +65,7 @@ class IntentClassificationHandlerTest {
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg);
 
+        when(roleCache.findLatestRole(anyString())).thenReturn(Optional.empty());
         when(classifier.classify(anyString())).thenThrow(new HttpException(429, "Too many requests"));
 
         HandleResult result = handler.handle(context);
@@ -76,13 +81,12 @@ class IntentClassificationHandlerTest {
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "c1", Instant.now());
         MessageContext context = new MessageContext("c1", user, msg);
 
-        // "developer" is not a valid AgentRoleEnum — use a real scoped name
         when(classifier.classify(anyString()))
-                .thenReturn(AgentRoleEnum.CODER.toScopedName());
+                .thenReturn(AgentRoleEnum.COORDINATOR.toScopedName());
 
         handler.handle(context);
 
-        assertEquals(AgentRoleEnum.CODER.toScopedName(), context.getAgentRole().get());
+        assertEquals(AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
     }
 
 }

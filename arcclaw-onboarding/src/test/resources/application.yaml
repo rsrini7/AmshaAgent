@@ -6,24 +6,25 @@ quarkiverse:
       stdio:
         enabled: false
 ARCCLAW_LLM_API_KEY: "dummy-test-key"
-arcclaw:
-  auto-seed-secrets: false
-  api:
-    keys:
-      internal: "key-internal-changeme"
-  vault:
-    pepper: "test-pepper-value-not-used-in-tests"
-    master-key: "test-master-key-32-chars-padded!"
-  data-dir: "target/data"
-  workspace:
-    root-dir: "target/data/workspaces"
-  channel:
-    telegram:
-      bot-token: "test-bot-token"
-  cron:
-    max-lookback-window: PT999H
-  mcp:
-    server-enabled: false
+"%test":
+  arcclaw:
+    auto-seed-secrets: false
+    api:
+      keys:
+        internal: "key-internal-changeme"
+    vault:
+      pepper: "test-pepper-value-not-used-in-tests"
+      master-key: "test-master-key-32-chars-padded!"
+    data-dir: "./target"
+    workspace:
+      root-dir: "./target/workspaces"
+    channel:
+      telegram:
+        bot-token: "test-bot-token"
+    cron:
+      max-lookback-window: PT999H
+    mcp:
+      server-enabled: false
 quarkus:
   langchain4j:
     openai:
