@@ -1311,14 +1311,22 @@ Write-Host '--------------------------------------------------------------------
 Write-Host '    Build the missing platform binary and re-run: mise run dist'
 """
 
-[tasks."zip:source"]
-description = "Generate source archive (zip) with standard exclusions"
+[tasks."7z:source"]
+description = "Generate source archive (7z) with standard exclusions"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$out = 'arcclaw-source.zip'
+$out = 'arcclaw-source.7z'
+
+$argPass = '{{ arg(i=0, default="") }}'
+
+if ([string]::IsNullOrWhiteSpace($argPass)) {
+    Write-Host "❌ ERROR: No password provided!" -ForegroundColor Red
+    Write-Host "Usage: mise run 7z:source -- YOUR_PASSWORD"
+    exit 1
+}
 
 # ── Combined Exclusions (Git + Manual) ───────────────────────────────────────
 $excludes = @(
@@ -1337,13 +1345,9 @@ $excludes = @(
     'npm',
     '.playwright-browsers',
     '*.md',
-    '*.bat',
-    '*.cmd',
-    '*.sh',
     '*.jar',
     '*.exe',
     '*.dll',
-    '*.ps1',
     'Prompts',
     'docs',
     'docs-main',
@@ -1358,7 +1362,8 @@ $excludes = @(
     'build.env',
     'arcclaw-app/src/main/resources/META-INF/resources',
     'arcclaw-app/src/main/resources/native',
-    'arcclaw-source.zip'
+    'arcclaw-source.zip',
+    'arcclaw-source.7z'
 )
 
 Write-Host "📦  Generating $out with exclusions..."
@@ -1398,12 +1403,18 @@ Get-ChildItem -Path . -Recurse | ForEach-Object {
 }
 
 if (Test-Path $out) { Remove-Item $out -Force }
-Compress-Archive -Path "$stage/*" -DestinationPath $out -Force
+$zipPath = "C:\\Program Files\\7-Zip\\7z.exe"
+
+& $zipPath a "$out" "$stage\\*" "-p$argPass" -mhe=on | Out-Null
+# Compress-Archive -Path "$stage/*" -DestinationPath $out -Force
 Remove-Item $stage -Recurse -Force
 
-Write-Host ""
-Write-Host "✅  Archive created: $out"
-Get-Item $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
+if (Test-Path $out) {
+    Write-Host "✅ Archive created successfully: $out"
+    Get-Item $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
+} else {
+    Write-Host "❌ Failed to create archive." -ForegroundColor Red
+}
 """
 
 [tasks."dist:pack"]
