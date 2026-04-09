@@ -1,5 +1,7 @@
 arcclaw:
   data-dir: "target/data"
+  workspace:
+    root-dir: "target/data/workspaces"  
   auto-seed-secrets: false
   audit:
     hmac-key: "dev-audit-hmac-key-min-32-bytes-00000"

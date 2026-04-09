@@ -44,6 +44,8 @@ arcclaw:
     telegram:
       bot-token: "mock"
   data-dir: "target/data"
+  workspace:
+    root-dir: "target/data/workspaces"  
   vault:
     pepper: "mock-pepper"
   cron:

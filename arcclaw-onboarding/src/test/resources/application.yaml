@@ -15,6 +15,8 @@ arcclaw:
     pepper: "test-pepper-value-not-used-in-tests"
     master-key: "test-master-key-32-chars-padded!"
   data-dir: "target/data"
+  workspace:
+    root-dir: "target/data/workspaces"
   channel:
     telegram:
       bot-token: "test-bot-token"

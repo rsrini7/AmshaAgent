@@ -3,6 +3,8 @@ ARCCLAW_LLM_BASE_URL: "http://localhost:9999"
  
 arcclaw:
   data-dir: "target/data"
+  workspace:
+    root-dir: "target/data/workspaces"
   rag:
     vec-extension-path: "target/lib/vec0"
   skills:
