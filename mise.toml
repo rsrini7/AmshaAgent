@@ -1322,7 +1322,6 @@ $out = 'arcclaw-source.zip'
 
 # ── Combined Exclusions (Git + Manual) ───────────────────────────────────────
 $excludes = @(
-    # --- From .gitignore (manual list to ensure consistency across environments) ---
     '**/target',
     'dist',
     '.vscode',
@@ -1351,7 +1350,10 @@ $excludes = @(
     'backups',
     '.gitignore',
     '.gitattributes',
-    'build.env'
+    'build.env',
+    'arcclaw-app/src/main/resources/META-INF/resources',
+    'arcclaw-app/src/main/resources/native',
+    'arcclaw-source.zip'
 )
 
 Write-Host "📦  Generating $out with exclusions..."
