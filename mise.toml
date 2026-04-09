@@ -1365,7 +1365,8 @@ New-Item -ItemType Directory $stage | Out-Null
 Write-Host "-- Filtering files (this may take a moment)..."
 Get-ChildItem -Path . -Recurse | ForEach-Object {
     $relPath = $_.FullName.Replace($root, '').TrimStart('\\')
-    if ($relPath -eq '' -or $relPath -eq '.git' -or $relPath.StartsWith('.git\\')) { return }
+    
+    if ($relPath -eq '' -or $relPath -eq '.git' -or $relPath.StartsWith('.git\\') -or $_.Name -eq $out) { return }
     
     # Normalize for comparison (forward slashes)
     $normalizedRelPath = $relPath.Replace('\\', '/')
