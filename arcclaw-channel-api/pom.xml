@@ -13,7 +13,7 @@
   </parent>
 
   <artifactId>arcclaw-channel-api</artifactId>
-  <name>ArcClaw Channel API</name>
+  <name>arcclaw-channel-api</name>
   <description>Zero-dependency channel-agnostic API contracts (interfaces, sealed types, enums). No framework dependencies.</description>
 
   <dependencies>
