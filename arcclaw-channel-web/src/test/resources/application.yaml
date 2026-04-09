@@ -12,7 +12,7 @@ quarkus:
   datasource:
     db-kind: sqlite
     jdbc:
-      url: "jdbc:sqlite:./target/data/web-test.db"
+      url: "jdbc:sqlite:./target/web-test.db"
 
   hibernate-orm:
     dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
@@ -43,9 +43,9 @@ arcclaw:
   channel:
     telegram:
       bot-token: "mock"
-  data-dir: "./target/data"
+  data-dir: "./target"
   workspace:
-    root-dir: "./target/data/workspaces"  
+    root-dir: "./target/workspaces"  
   vault:
     pepper: "mock-pepper"
   cron:

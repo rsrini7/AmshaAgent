@@ -10,8 +10,6 @@ import jakarta.ws.rs.Path;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentClassifier;
-import com.arcclaw.core.audit.AuditSchemaEnforcer;
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -31,9 +29,7 @@ public class RestResourceBuildStepFailureTest {
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-            .addClasses(InvalidResource.class, TestProducers.class,
-                FtsConnectionInterceptor.class,
-                AuditSchemaEnforcer.class))
+            .addClasses(InvalidResource.class, TestProducers.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
         .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite:target/arcclaw.db")
         .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
@@ -93,6 +89,12 @@ public class RestResourceBuildStepFailureTest {
         @ApplicationScoped
         public IntentClassifier classifier() {
             return Mockito.mock(IntentClassifier.class);
+        }
+
+        @Produces
+        @ApplicationScoped
+        public EntityManager em() {
+            return Mockito.mock(EntityManager.class);
         }
     }
 }

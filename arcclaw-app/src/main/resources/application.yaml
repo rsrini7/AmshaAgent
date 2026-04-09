@@ -671,7 +671,7 @@ mp:
           log-responses: false
 
   arcclaw:
-    data-dir: "target/data"
+    data-dir: "target/"
     agent:
       default-timezone: "UTC"
     rag:

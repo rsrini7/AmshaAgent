@@ -1,43 +1,19 @@
 package com.arcclaw.deployment;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.Dependent;
-import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Inject;
-import jakarta.inject.Named;
-import jakarta.persistence.EntityManager;
-import jakarta.ws.rs.Path;
-
-import com.arcclaw.channel.api.ChannelAllowlist;
-import com.arcclaw.channel.api.IntentClassifier;
-import com.arcclaw.core.audit.AuditSchemaEnforcer;
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.chat.ChatModel;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.quarkus.qute.Template;
 import io.quarkus.test.QuarkusUnitTest;
-import io.smallrye.common.annotation.Identifier;
-import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.mockito.Mockito;
 
 public class RestResourceBuildStepSuccessTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-            .addClasses(ValidResource.class, NonJpaResource.class, TestProducers.class,
-                FtsConnectionInterceptor.class,
-                AuditSchemaEnforcer.class))
+            .addClasses(ValidResource.class, NonJpaResource.class, TestProducers.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
-        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite:target/arcclaw.db")
-        .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
-        .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.core.persistence.ArcClawSQLiteDialect")
+        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
         .overrideConfigKey("arcclaw.data-dir", "target/")
         .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
@@ -46,61 +22,5 @@ public class RestResourceBuildStepSuccessTest {
     @Test
     public void testBuildSucceeds() {
         // No-op, just verifying build success
-    }
-
-    @Path("/valid")
-    @RunOnVirtualThread
-    public static class ValidResource {
-        @Inject
-        EntityManager em;
-    }
-
-    @Path("/non-jpa")
-    public static class NonJpaResource {
-        // No JPA fields, should be ignored by build step
-    }
-
-    @Dependent
-    public static class TestProducers {
-        @Produces
-        @ApplicationScoped
-        public ObjectMapper mapper() {
-            return new ObjectMapper();
-        }
-
-        @Produces
-        @ApplicationScoped
-        public MeterRegistry registry() {
-            return new SimpleMeterRegistry();
-        }
-
-        @Produces
-        @ApplicationScoped
-        @Named("compaction") // Or @Identifier if using that
-        @Identifier("compaction")
-        public ChatModel compactionModel() {
-            return mock(ChatModel.class);
-        }
-
-        @Produces
-        public Template dummyTemplate() {
-            return mock(Template.class);
-        }
-        
-        @Produces
-        @ApplicationScoped
-        public ChannelAllowlist allowlist() {
-            return mock(ChannelAllowlist.class);
-        }
-
-        @Produces
-        @ApplicationScoped
-        public IntentClassifier classifier() {
-            return mock(IntentClassifier.class);
-        }
-
-        private <T> T mock(Class<T> clazz) {
-            return Mockito.mock(clazz);
-        }
     }
 }

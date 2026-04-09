@@ -1,7 +1,7 @@
 arcclaw:
-  data-dir: "./target/data"
+  data-dir: "./target"
   workspace:
-    root-dir: "./target/data/workspaces"  
+    root-dir: "./target/workspaces"  
   auto-seed-secrets: false
   audit:
     hmac-key: "dev-audit-hmac-key-min-32-bytes-00000"
@@ -36,7 +36,7 @@ quarkus:
     remove-unused-beans: all
   datasource:
     jdbc:
-      url: "jdbc:sqlite:./target/data/telegram-test.db"
+      url: "jdbc:sqlite:./target/telegram-test.db"
   hibernate-orm:
     schema-management:
       strategy: update

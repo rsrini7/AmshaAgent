@@ -1,9 +1,9 @@
 ARCCLAW_LLM_API_KEY: "dummy-test-key"
 
 arcclaw:
-  data-dir: "./target/data"
+  data-dir: "./target"
   workspace:
-    root-dir: "./target/data/workspaces"
+    root-dir: "./target/workspaces"
   auto-seed-secrets: false
   vault:
     pepper: "test-pepper-value-not-used-in-tests"
