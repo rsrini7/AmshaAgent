@@ -1319,13 +1319,27 @@ quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 $out = 'arcclaw-source.zip'
+
+# ── Combined Exclusions (Git + Manual) ───────────────────────────────────────
 $excludes = @(
+    # --- From .gitignore (manual list to ensure consistency across environments) ---
     '**/target',
-    '.git',
-    '.idea',
-    '.vscode',
     'dist',
+    '.vscode',
+    '.idea',
+    'out',
+    '.quarkus',
+    'quarkus-app',
+    'workspaces',
     'data',
+    'lib',
+    '.env*',
+    'node_modules',
+    'node',
+    'npm',
+    '.playwright-browsers',
+    
+    # --- Additional exclusions from native-wsl2.sh + request ---
     '*.md',
     '*.py',
     'Prompts',
@@ -1336,15 +1350,9 @@ $excludes = @(
     'ProjectWorkflowDocs',
     'bruno-collections',
     'rest-http',
-    'arcclaw-ui/node_modules',
-    'arcclaw-ui/dist',
-    'arcclaw-ui/node',
-    '.playwright-browsers',
     'backups',
     '.gitignore',
     '.gitattributes',
-    '.env',
-    '.env.build-backup',
     'build.env'
 )
 
@@ -1353,15 +1361,15 @@ $root = Get-Location | Select-Object -ExpandProperty Path
 $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
 New-Item -ItemType Directory $stage | Out-Null
 
-# ── Use PowerShell for reliability (Handles exclusions consistently) ─────────
-Write-Host "-- Collecting files (this may take a moment)..."
+# ── Use PowerShell to filter and copy ─────────────────────────────────────────
+Write-Host "-- Filtering files (this may take a moment)..."
 Get-ChildItem -Path . -Recurse | ForEach-Object {
     $relPath = $_.FullName.Replace($root, '').TrimStart('\\')
-    if ($relPath -eq '') { return }
+    if ($relPath -eq '' -or $relPath -eq '.git' -or $relPath.StartsWith('.git\\')) { return }
     
     $exclude = $false
     foreach ($pattern in $excludes) {
-        # Convert glob (e.g. **/target) to PowerShell -like pattern
+        # Normalize pattern for PowerShell -like
         $pwshPattern = $pattern.Replace('**/', '*').Replace('/*', '*')
         if ($relPath -like "*$pwshPattern*" -or $_.Name -like "$pwshPattern") {
             $exclude = $true; break
@@ -1375,7 +1383,7 @@ Get-ChildItem -Path . -Recurse | ForEach-Object {
         } else {
             $destDir = Split-Path $dest
             if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-            Copy-Item $_.FullName $dest
+            Copy-Item $_.FullName $dest -Force
         }
     }
 }
