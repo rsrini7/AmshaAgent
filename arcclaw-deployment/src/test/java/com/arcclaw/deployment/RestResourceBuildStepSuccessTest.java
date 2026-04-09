@@ -35,11 +35,11 @@ public class RestResourceBuildStepSuccessTest {
                 FtsConnectionInterceptor.class,
                 AuditSchemaEnforcer.class))
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
-        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite:target/data/arcclaw.db")
+        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite:target/arcclaw.db")
         .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
         .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.core.persistence.ArcClawSQLiteDialect")
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
-        .overrideConfigKey("arcclaw.data-dir", "target/data/")
+        .overrideConfigKey("arcclaw.data-dir", "target/")
         .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
         .overrideConfigKey("quarkus.langchain4j.timeout", "10s");
 
