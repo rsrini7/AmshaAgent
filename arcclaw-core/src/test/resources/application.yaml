@@ -1,14 +1,13 @@
 ARCCLAW_LLM_API_KEY: "dummy-test-key"
 
-"%test":
-  arcclaw:
-    auto-seed-secrets: false
-    vault:
-      pepper: "test-pepper-value-not-used-in-tests"
-      master-key: "test-master-key-32-chars-padded!"
-    data-dir: "./target"
-    workspace:
-      root-dir: "./target/workspaces"
+arcclaw:
+  data-dir: "./target/data"
+  workspace:
+    root-dir: "./target/data/workspaces"
+  auto-seed-secrets: false
+  vault:
+    pepper: "test-pepper-value-not-used-in-tests"
+    master-key: "test-master-key-32-chars-padded!"
   channel:
     telegram:
       bot-token: "test-bot-token"

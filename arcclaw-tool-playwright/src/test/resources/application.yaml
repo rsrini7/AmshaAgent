@@ -1,12 +1,11 @@
-"%test":
-  arcclaw:
-    vault:
-      pepper: "mock-pepper"
-    data-dir: "./target/data"
-    workspace:
-      root-dir: "./target/data/workspaces"  
-    skills:
-      hot-reload: false
+arcclaw:
+  vault:
+    pepper: "mock-pepper"
+  data-dir: "./target/data"
+  workspace:
+    root-dir: "./target/data/workspaces"  
+  skills:
+    hot-reload: false
 
 quarkus:
   langchain4j:

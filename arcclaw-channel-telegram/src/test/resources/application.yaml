@@ -1,20 +1,19 @@
-"%test":
-  arcclaw:
-    data-dir: "./target/data"
-    workspace:
-      root-dir: "./target/data/workspaces"  
-    auto-seed-secrets: false
-    audit:
-      hmac-key: "dev-audit-hmac-key-min-32-bytes-00000"
-    vault:
-      pepper: "test-pepper"
-      master-key: "test-master-key-32-chars-padded!"
-    channel:
-      telegram:
-        bot-token: "fake-token"
-        bot-username: "ArcClawBot"
-        allowed-users: "admin"
-        allowed-user-ids: "12345,67890"
+arcclaw:
+  data-dir: "./target/data"
+  workspace:
+    root-dir: "./target/data/workspaces"  
+  auto-seed-secrets: false
+  audit:
+    hmac-key: "dev-audit-hmac-key-min-32-bytes-00000"
+  vault:
+    pepper: "test-pepper"
+    master-key: "test-master-key-32-chars-padded!"
+  channel:
+    telegram:
+      bot-token: "fake-token"
+      bot-username: "ArcClawBot"
+      allowed-users: "admin"
+      allowed-user-ids: "12345,67890"
 
 quarkus:
   log:

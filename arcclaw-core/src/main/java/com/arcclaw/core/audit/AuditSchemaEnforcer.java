@@ -9,6 +9,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -25,6 +26,9 @@ public class AuditSchemaEnforcer {
 
     @Inject
     Logger log;
+
+    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
+    String dataDir;
 
     @Transactional
     public void onStart(
@@ -71,8 +75,9 @@ public class AuditSchemaEnforcer {
             .getSingleResult()).intValue();
         
         if (ftsFound == 0) {
-            log.info("fts schema missing on startup, attaching fallback memory database");
-            em.createNativeQuery("ATTACH DATABASE 'target/data/arcclaw-fts.db' AS fts").executeUpdate();
+            String ftsPath = java.nio.file.Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+            log.info("fts schema missing on startup, attaching fallback database at: " + ftsPath);
+            em.createNativeQuery("ATTACH DATABASE '" + ftsPath + "' AS fts").executeUpdate();
         }
 
         // FTS5 standalone table — stores sessionId for manual mapping
