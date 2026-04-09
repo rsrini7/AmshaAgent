@@ -24,7 +24,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         BLOCK_AND_NOTIFY
     }
 
-    @ConfigProperty(name = "arcclaw.pii.mode", defaultValue = "REDACT_AND_FORWARD")
+    @ConfigProperty(name = "arcclaw.pii.mode", defaultValue = "BLOCK_AND_NOTIFY")
     PiiMode piiMode;
 
     @Inject
