@@ -1311,6 +1311,84 @@ Write-Host '--------------------------------------------------------------------
 Write-Host '    Build the missing platform binary and re-run: mise run dist'
 """
 
+[tasks."zip:source"]
+description = "Generate source archive (zip) with standard exclusions"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$out = 'arcclaw-source.zip'
+$excludes = @(
+    '**/target',
+    '.git',
+    '.idea',
+    '.vscode',
+    'dist',
+    'data',
+    '*.md',
+    '*.py',
+    'Prompts',
+    'docs',
+    'docs-main',
+    'docs-test',
+    'Ideas-Pending',
+    'ProjectWorkflowDocs',
+    'bruno-collections',
+    'rest-http',
+    'arcclaw-ui/node_modules',
+    'arcclaw-ui/dist',
+    'arcclaw-ui/node',
+    '.playwright-browsers',
+    'backups',
+    '.gitignore',
+    '.gitattributes',
+    '.env',
+    '.env.build-backup',
+    'build.env'
+)
+
+Write-Host "📦  Generating $out with exclusions..."
+$root = Get-Location | Select-Object -ExpandProperty Path
+$stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
+New-Item -ItemType Directory $stage | Out-Null
+
+# ── Use PowerShell for reliability (Handles exclusions consistently) ─────────
+Write-Host "-- Collecting files (this may take a moment)..."
+Get-ChildItem -Path . -Recurse | ForEach-Object {
+    $relPath = $_.FullName.Replace($root, '').TrimStart('\\')
+    if ($relPath -eq '') { return }
+    
+    $exclude = $false
+    foreach ($pattern in $excludes) {
+        # Convert glob (e.g. **/target) to PowerShell -like pattern
+        $pwshPattern = $pattern.Replace('**/', '*').Replace('/*', '*')
+        if ($relPath -like "*$pwshPattern*" -or $_.Name -like "$pwshPattern") {
+            $exclude = $true; break
+        }
+    }
+    
+    if (-not $exclude) {
+        $dest = Join-Path $stage $relPath
+        if ($_.PSIsContainer) {
+            if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+        } else {
+            $destDir = Split-Path $dest
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+            Copy-Item $_.FullName $dest
+        }
+    }
+}
+
+if (Test-Path $out) { Remove-Item $out -Force }
+Compress-Archive -Path "$stage/*" -DestinationPath $out -Force
+Remove-Item $stage -Recurse -Force
+
+Write-Host ""
+Write-Host "✅  Archive created: $out"
+Get-Item $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
+"""
+
 [tasks."dist:pack"]
 description = "Create OS-specific release archives from dist/ for GitHub releases"
 dir = "{{config_root}}"
