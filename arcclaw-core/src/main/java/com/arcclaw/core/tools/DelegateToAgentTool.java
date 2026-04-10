@@ -61,8 +61,10 @@ public class DelegateToAgentTool implements AgentTool {
         Object agentObj = params.get("agent");
         Object goalObj = params.get("goal");
 
+        String delegatableList = getDelegatableAgentList();
+
         if (agentObj == null || String.valueOf(agentObj).isBlank()) {
-            return ToolResponse.failure(400, "Parameter 'agent' is required. Valid agents: brahma, shiva, saraswati, brihaspati, dattatreya.");
+            return ToolResponse.failure(400, "Parameter 'agent' is required. Valid agents: " + delegatableList + ".");
         }
         if (goalObj == null || String.valueOf(goalObj).isBlank()) {
             return ToolResponse.failure(400, "Parameter 'goal' is required. Please provide a clear, specific goal for the sub-agent.");
@@ -73,18 +75,17 @@ public class DelegateToAgentTool implements AgentTool {
 
         String normalized = agentName.trim().toLowerCase();
 
-        // 1. Self-delegation guard
-        if ("coordinator".equals(normalized) || "vishnu".equals(normalized)) {
+        // 1. Self-delegation guard using registry metadata
+        if (isSelfDelegation(normalized)) {
             return ToolResponse.failure(400,
-                "Cannot delegate to yourself (coordinator/vishnu). " +
-                "Route to a specialist: brahma, shiva, saraswati, brihaspati, dattatreya.");
+                String.format("Cannot delegate to yourself (%s). Route to a specialist: %s.",
+                             normalized, delegatableList));
         }
 
         // 2. Role validation
         if (!AgentRoleEnum.isKnownRole(agentName)) {
             return ToolResponse.failure(400,
-                "Unknown agent '" + agentName + "'. Valid agents: " +
-                "brahma, shiva, saraswati, brihaspati, dattatreya.");
+                "Unknown agent '" + agentName + "'. Valid agents: " + delegatableList + ".");
         }
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
@@ -185,5 +186,19 @@ public class DelegateToAgentTool implements AgentTool {
         log.infof("[DELEGATE] agent=%s completed for session=%s",
                   targetRole.toScopedName(), outerSessionId);
         return ToolResponse.success(formatted);
+    }
+
+    private String getDelegatableAgentList() {
+        return AgentRoleEnum.values().stream()
+                .filter(role -> !role.equals(AgentRoleEnum.COORDINATOR))
+                .flatMap(role -> role.definition().aliases().stream())
+                .sorted()
+                .collect(Collectors.joining(", "));
+    }
+
+    private boolean isSelfDelegation(String normalized) {
+        AgentRoleEnum current = AgentRoleEnum.COORDINATOR;
+        return current.id().equals(normalized) ||
+               current.definition().aliases().contains(normalized);
     }
 }
