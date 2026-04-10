@@ -3,6 +3,7 @@ package com.arcclaw.core.state;
 import org.junit.jupiter.api.Test;
 import java.util.Set;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -60,5 +61,25 @@ public class CheckpointStatusTest {
         assertEquals(expectedNonTerminal, nonTerminal,
             "Non-terminal status set has changed. New statuses must be explicitly " +
             "classified as terminal or non-terminal in this snapshot test.");
+    }
+
+    @Test
+    void testIsTerminalExactSet(){
+        Set<CheckpointStatus> terminalStatuses = EnumSet.allOf(CheckpointStatus.class).stream()
+            .filter(s -> s.isTerminal())
+            .collect(Collectors.toSet());
+        
+        Set<CheckpointStatus> expectedTerminal = Set.of(
+            CheckpointStatus.COMPLETED,
+            CheckpointStatus.FAILED,
+            CheckpointStatus.LOOP_EXCEEDED,
+            CheckpointStatus.DENIED,
+            CheckpointStatus.COMPROMISED,
+            CheckpointStatus.ARCHIVED
+        );
+
+        assertEquals(expectedTerminal, terminalStatuses,
+            "Terminal status set has changed. This snapshot test must be explicitly updated " +
+            "to acknowledge the change in terminal lifecycle states.");
     }
 }
