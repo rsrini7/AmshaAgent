@@ -14,6 +14,9 @@ public final class UserMessages {
     public static final String PII_DETECTED = "🔒 PII detected in your request. Please remove sensitive data.";
     public static final String PROMPT_INJECTION_DETECTED = "⚠️ adversarial instruction (prompt injection) detected. Request blocked.";
     public static final String TARGET_SESSION_NOT_AWAITING = "❌ Target session not found or not awaiting approval.";
+    public static final String DESTRUCTIVE_GUARD_REPLY = "⛔ I can only perform read operations (view, list). " +
+                                                         "Destructive operations such as deleting repositories are not supported.";
+    public static final String CLASSIFICATION_RATE_LIMITED = "⏳ Rate limited on classification — defaulting to coordinator.";
 
     // Approval & Session Control
     public static final String RESUMING_TASK = "✅ Resuming task...";

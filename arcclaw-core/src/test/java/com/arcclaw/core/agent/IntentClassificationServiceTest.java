@@ -37,4 +37,31 @@ class IntentClassificationServiceTest {
         assertFalse(intentClassifier.isWriteIntent(null));
         assertFalse(intentClassifier.isWriteIntent(""));
     }
+
+    @Test
+    void testFollowUpHeuristic() {
+        assertTrue(intentClassifier.isFollowUpHeuristic("retry same command"));
+        assertTrue(intentClassifier.isFollowUpHeuristic("run it again"));
+        assertTrue(intentClassifier.isFollowUpHeuristic("in java please"));
+        assertTrue(intentClassifier.isFollowUpHeuristic("use sandbox for this"));
+        
+        // Too long
+        assertFalse(intentClassifier.isFollowUpHeuristic("a".repeat(151)));
+        
+        // No signals
+        assertFalse(intentClassifier.isFollowUpHeuristic("hello world"));
+    }
+
+    @Test
+    void testContinuityCommand() {
+        assertTrue(intentClassifier.isContinuityCommand("retry"));
+        assertTrue(intentClassifier.isContinuityCommand("  proceed  "));
+        assertTrue(intentClassifier.isContinuityCommand("try again"));
+        assertTrue(intentClassifier.isContinuityCommand("redo"));
+        assertTrue(intentClassifier.isContinuityCommand("continue"));
+        
+        // Pattern uses matches() with optional suffix so it matches full phrases starting with signal
+        assertTrue(intentClassifier.isContinuityCommand("retry the task"));
+        assertTrue(intentClassifier.isContinuityCommand("retry carefully"));
+    }
 }

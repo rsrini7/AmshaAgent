@@ -217,3 +217,21 @@ Eliminated duplication of write-intent regex logic that was previously split bet
 | `*Reflex.java`, `*Tool.java` | Component Cleanup | Removes literal string dependencies and logic duplication. |
 
 All tests passed, including `ReflexRegistryTest` and `IntentClassificationServiceTest`.
+
+---
+
+I have successfully fixed the mock wiring in `IntentClassificationHandlerTest.java` and verified the logic using unit tests. 
+
+### What was done:
+1. **Mock Splicing**: In `IntentClassificationHandlerTest.java`, I introduced `IntentClassificationService` as a mock and bound it to the `IntentClassificationHandler` instance.
+2. **Logic Deduplication**: 
+   - Moved `CONTINUITY_PATTERN` from `IntentClassifierService` to the central `IntentClassificationService`. 
+   - Moved `FOLLOWUP_SIGNALS` heuristics from `IntentClassificationHandler` to `IntentClassificationService`.
+3. **Tests Refined**:
+   - Expanded `IntentClassificationServiceTest` to cover `isFollowUpHeuristic` and `isContinuityCommand` functionalities. 
+   - Fixed the `testContinuityCommand` assertion to correctly match exact strings. 
+
+All 5 tests related to `IntentClassificationServiceTest` and `IntentClassificationHandlerTest` have passed! Let me know what you'd like to tackle next!
+
+---
+

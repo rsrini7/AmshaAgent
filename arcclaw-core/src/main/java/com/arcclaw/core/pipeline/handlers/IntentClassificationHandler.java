@@ -1,6 +1,6 @@
 package com.arcclaw.core.pipeline.handlers;
 
-import java.util.Set;
+import static com.arcclaw.core.message.UserMessages.*;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
@@ -27,15 +28,12 @@ public class IntentClassificationHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(IntentClassificationHandler.class);
     
-    private static final Set<String> FOLLOWUP_SIGNALS = Set.of(
-        "same", "again", "retry", "execute", "run", "use sandbox", 
-        "in java", "in go", "in python", "in typescript", "in kotlin", "in rust"
-    );
 
     @Inject IntentClassifier classifier;
     @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
     @Inject ChannelPluginRegistry channelPluginRegistry;
     @Inject AgentRoleCache roleCache;
+    @Inject IntentClassificationService intentClassifier;
 
     @Override
     public int priority() {
@@ -58,11 +56,9 @@ public class IntentClassificationHandler implements MessageHandler {
         if (destructiveVocabularyFilter.isDestructive(message.text())) {
             log.warnf("[IntentClassificationHandler] Destructive vocabulary detected " +
                     "— blocking before agent dispatch. chat=%s", context.getChatId());
-            String safeReply = "⛔ I can only perform read operations (view, list). " +
-                    "Destructive operations such as deleting repositories are not supported.";
             channelPluginRegistry.find(context.getChannelType())
                 .map(ChannelPlugin::sender)
-                .ifPresent(s -> s.sendRaw(context.getUser(), safeReply));
+                .ifPresent(s -> s.sendRaw(context.getUser(), DESTRUCTIVE_GUARD_REPLY));
             return HandleResult.STOP;
         }
 
@@ -76,9 +72,7 @@ public class IntentClassificationHandler implements MessageHandler {
             String previousRole = roleCache.findLatestRole(sid).orElse(null);
 
             // Bug 2 Fix: Short follow-up heuristics for sticky roles
-            String lowerMsg = message.text().toLowerCase();
-            boolean isFollowUpHeuristic = lowerMsg.length() < 150 && 
-                FOLLOWUP_SIGNALS.stream().anyMatch(lowerMsg::contains);
+            boolean isFollowUpHeuristic = intentClassifier.isFollowUpHeuristic(message.text());
 
             if (isFollowUpHeuristic && previousRole != null && 
                (AgentRoleEnum.CODER.toScopedName().equals(previousRole) || 
@@ -122,7 +116,7 @@ public class IntentClassificationHandler implements MessageHandler {
                 channelPluginRegistry.find(context.getChannelType())
                     .map(ChannelPlugin::sender)
                     .ifPresent(s -> s.sendRaw(context.getUser(),
-                        "⏳ Rate limited on classification — defaulting to coordinator."));
+                        CLASSIFICATION_RATE_LIMITED));
             } else {
                 String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
                 log.errorf("Intent classification failed (HTTP %d) for chat %s: %s",
