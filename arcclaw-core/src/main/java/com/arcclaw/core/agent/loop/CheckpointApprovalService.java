@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -40,10 +41,10 @@ public class CheckpointApprovalService {
             throw new CheckpointResolutionException(
                 "No pending checkpoint found for session " + sessionId, 404);
         AgentCheckpoint cp = cpOpt.get();
-        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "APPROVED");
+        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, AgentSentinels.TOOL_DECISION_APPROVED);
         log.infof("Approved tool %s for session %s reason %s", toolName, sessionId, reason);
         agentSseService.publish(sessionId,
-            new AgentSseService.HitlEvent(sessionId, "APPROVED", toolName, null, reason, Instant.now()));
+            new AgentSseService.HitlEvent(sessionId, AgentSentinels.TOOL_DECISION_APPROVED, toolName, null, reason, Instant.now()));
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         return allDecided ? cp : null;
     }
@@ -55,10 +56,10 @@ public class CheckpointApprovalService {
             throw new CheckpointResolutionException(
                 "No pending checkpoint found for session " + sessionId, 404);
         AgentCheckpoint cp = cpOpt.get();
-        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, "DENIED");
+        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, AgentSentinels.TOOL_DECISION_DENIED);
         log.infof("Denied tool %s for session %s reason %s", toolName, sessionId, reason);
         agentSseService.publish(sessionId,
-            new AgentSseService.HitlEvent(sessionId, "DENIED", toolName, null, reason, Instant.now()));
+            new AgentSseService.HitlEvent(sessionId, AgentSentinels.TOOL_DECISION_DENIED, toolName, null, reason, Instant.now()));
         boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
         return allDecided ? cp : null;
     }
@@ -78,9 +79,9 @@ public class CheckpointApprovalService {
         if (pendingTools != null) {
             for (String pending : pendingTools) {
                 if (pending != null) {
-                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, "APPROVED");
+                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, AgentSentinels.TOOL_DECISION_APPROVED);
                     agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                        sessionId, "APPROVED", pending, null, reason, Instant.now()));
+                        sessionId, AgentSentinels.TOOL_DECISION_APPROVED, pending, null, reason, Instant.now()));
                 }
             }
         }
@@ -103,9 +104,9 @@ public class CheckpointApprovalService {
         if (pendingTools != null) {
             for (String pending : pendingTools) {
                 if (pending != null) {
-                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, "DENIED");
+                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, AgentSentinels.TOOL_DECISION_DENIED);
                     agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                        sessionId, "DENIED", pending, null, reason, Instant.now()));
+                        sessionId, AgentSentinels.TOOL_DECISION_DENIED, pending, null, reason, Instant.now()));
                 }
             }
         }

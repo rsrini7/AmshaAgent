@@ -45,7 +45,7 @@ class StatefulAgentStoreConcurrencyTest {
         managed.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         // Managed has one APPROVED, one PENDING
         Map<String, String> managedDecisions = Map.of(
-            "tool1", "APPROVED",
+            "tool1", AgentSentinels.TOOL_DECISION_APPROVED,
             "tool2", AgentSentinels.TOOL_DECISION_PENDING
         );
         managed.setBatchToolDecisions(objectMapper.writeValueAsString(managedDecisions));
@@ -70,7 +70,7 @@ class StatefulAgentStoreConcurrencyTest {
             managed.getBatchToolDecisions(),
             new TypeReference<Map<String, String>>() {});
         
-        assertEquals("APPROVED", result.get("tool1"));
+        assertEquals(AgentSentinels.TOOL_DECISION_APPROVED, result.get("tool1"));
         assertEquals(AgentSentinels.TOOL_DECISION_PENDING, result.get("tool2"));
     }
 
@@ -90,7 +90,7 @@ class StatefulAgentStoreConcurrencyTest {
         incoming.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         // Incoming has a NEW decision
         Map<String, String> incomingDecisions = Map.of(
-            "tool1", "DENIED"
+            "tool1", AgentSentinels.TOOL_DECISION_DENIED
         );
         incoming.setBatchToolDecisions(objectMapper.writeValueAsString(incomingDecisions));
 
@@ -104,6 +104,6 @@ class StatefulAgentStoreConcurrencyTest {
             managed.getBatchToolDecisions(),
             new TypeReference<Map<String, String>>() {});
         
-        assertEquals("DENIED", result.get("tool1"));
+        assertEquals(AgentSentinels.TOOL_DECISION_DENIED, result.get("tool1"));
     }
 }

@@ -310,7 +310,7 @@ public class AgentStateMachineRunner {
         if (answer != null && isGeneratedCodeBlock(answer, agentRole)) {
             if (!AgentRoleEnum.fromString(agentRole).definition().canGenerateCode()) {
                 String refusal = "I'm " + agentRole + " — I don't generate code. " +
-                        "Please ask Brahma (coder) for code generation tasks.";
+                        "Please ask " + AgentRoleEnum.CODER.definition().displayName() + " ("+AgentRoleEnum.CODER.id()+") for code generation tasks.";
                 writer.saveAnswer(sessionId, refusal);
                 history.add(step.withObservation("Blocked: code generation by non-coder role"));
                 return AgentResult.finished(refusal, List.copyOf(history));

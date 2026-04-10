@@ -1,5 +1,7 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import java.util.Set;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -25,7 +27,7 @@ public class IntentClassificationHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(IntentClassificationHandler.class);
     
-    private static final java.util.Set<String> FOLLOWUP_SIGNALS = java.util.Set.of(
+    private static final Set<String> FOLLOWUP_SIGNALS = Set.of(
         "same", "again", "retry", "execute", "run", "use sandbox", 
         "in java", "in go", "in python", "in typescript", "in kotlin", "in rust"
     );

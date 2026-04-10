@@ -13,11 +13,13 @@ import static org.mockito.Mockito.verify;
 
 import java.util.Map;
 import java.util.concurrent.Callable;
+
 import jakarta.enterprise.event.Event;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
@@ -34,7 +36,7 @@ class ScheduleTaskToolTest {
     private final AgentCronRepository cronRepository = mock(AgentCronRepository.class);
     private final AuditService auditService = mock(AuditService.class);
     @SuppressWarnings("unchecked")
-    private final Event<com.arcclaw.core.cron.CronTaskScheduled> cronScheduledEvent = mock(Event.class);
+    private final Event<CronTaskScheduled> cronScheduledEvent = mock(Event.class);
 
     private ScheduleTaskTool createTool() {
         ScheduleTaskTool tool = new ScheduleTaskTool();

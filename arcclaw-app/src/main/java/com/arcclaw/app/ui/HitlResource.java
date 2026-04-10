@@ -17,15 +17,15 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import com.arcclaw.core.util.MdcKeys;
-import org.jboss.logging.MDC;
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.util.MdcKeys;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
+import org.jboss.logging.MDC;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 @ApplicationScoped

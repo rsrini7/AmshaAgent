@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
@@ -192,7 +193,7 @@ public class CompactionService {
                 "{ \"messagesCompacted\": %d, \"keptRecent\": %d, \"summaryLength\": %d }",
                 toCompact.size(), filteredKeep.size(), newSummary.length());
 
-        auditService.record(sessionId, "system", "system",
+        auditService.record(sessionId, AgentSentinels.SYSTEM_USER, AgentSentinels.SYSTEM_ROLE,
                 SecurityEventType.CONTEXT_COMPACTED, detail);
 
         log.infof("Context compacted for session %s. Compacted %d messages, kept %d.",

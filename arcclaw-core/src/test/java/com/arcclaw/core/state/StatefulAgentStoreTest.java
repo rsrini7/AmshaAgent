@@ -7,6 +7,7 @@ import java.util.Map;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -158,7 +159,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Thinking 1", "github",
                             Map.of("repo", "old"), "obs", 0, 0)
             );
-            var cp1 = store.save("cron-" + cronId + "-old", role, steps1);
+            var cp1 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-old", role, steps1);
             cp1.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             store.save(cp1);
 
@@ -167,7 +168,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Thinking 2", "github",
                             Map.of("repo", "new"), "obs", 0, 0)
             );
-            var cp2 = store.save("cron-" + cronId + "-new", role, steps2);
+            var cp2 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new", role, steps2);
             cp2.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             store.save(cp2);
 
@@ -176,7 +177,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Done", ReasoningStep.FINISH,
                             Map.of("answer", "42"), "Task completed.", 0, 0)
             );
-            var cp3 = store.save("cron-" + cronId + "-completed", role, steps3);
+            var cp3 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-completed", role, steps3);
             cp3.setStatus(CheckpointStatus.COMPLETED);
             store.save(cp3);
 
@@ -186,7 +187,7 @@ class StatefulAgentStoreTest {
             // Then: we get the newest AWAITING_APPROVAL checkpoint (cp2)
             assertTrue(found.isPresent(), "Expected an awaiting-approval checkpoint");
             AgentCheckpoint checkpoint = found.get();
-            assertEquals("cron-" + cronId + "-new", checkpoint.getSessionId(),
+            assertEquals(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new", checkpoint.getSessionId(),
                         "Should return the latest AWAITING_APPROVAL cron session");
             assertEquals(CheckpointStatus.AWAITING_APPROVAL, checkpoint.getStatus());
             assertEquals(role, checkpoint.getAgentRole());

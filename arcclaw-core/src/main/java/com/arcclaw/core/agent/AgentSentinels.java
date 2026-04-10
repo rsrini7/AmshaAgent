@@ -23,7 +23,12 @@ public final class AgentSentinels {
     public static final String GOAL_RESUME_APPROVED = "Resuming task after approval";
     public static final String GOAL_RESUME_DENIED   = "Resuming task after denial";
     public static final String GOAL_DENY_APPROVED   = "DENY_APPROVED_SENTINEL_V1";
+    
+    // goal detection
     public static final String CRON_PREFIX = "CRON ";
+
+    // session ID prefix
+    public static final String CRON_SESSION_PREFIX = "cron-";
 
     /** Per-tool decision: tool has not yet been acted on. §7.20 */
     public static final String TOOL_DECISION_PENDING  = "PENDING";
@@ -53,6 +58,10 @@ public final class AgentSentinels {
         "^##\\s*Retrieved Context[^\\n]*\\n+(?:<context>[\\s\\S]*?</context>\\s*)?",
         Pattern.CASE_INSENSITIVE
     );
+
+    public static final String SYSTEM_ROLE = "system";
+    public static final String SYSTEM_USER = "system";
+    public static final String SYSTEM_SESSION = "system";
 
 }
 

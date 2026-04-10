@@ -65,4 +65,10 @@ public class DestructiveVocabularyFilterTest {
         String result = filter.filter("researcher", "write a function to list files");
         Assertions.assertEquals("researcher", result);
     }
+
+    @Test
+    void testDestructiveFilterFallbackToCoordinator() {
+        String result = filter.filter("researcher", "delete the repo");
+        Assertions.assertEquals(AgentRoleEnum.COORDINATOR.id(), result);
+    }
 }

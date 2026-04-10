@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -102,7 +103,7 @@ public class SecretVaultImpl implements SecretVault {
             // missing context
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 String userId = (String) MDC.get(MdcKeys.USER_ID);
-                auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
+                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_STORE, "keyName=" + keyName);
             }
 
         } catch (Exception e) {
@@ -120,7 +121,7 @@ public class SecretVaultImpl implements SecretVault {
         String userId = (String) MDC.get(MdcKeys.USER_ID);
 
         if (entity == null) {
-            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE_MISS,
+            auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
                     "keyName=" + keyName);
             return Optional.empty();
         }
@@ -130,7 +131,7 @@ public class SecretVaultImpl implements SecretVault {
         try {
             // 3. Decrypt
             byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, sessionKey, keyName);
-            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
+            auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
             // Log security event?

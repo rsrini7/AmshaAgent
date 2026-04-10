@@ -302,7 +302,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = "cron-" + cronId + "-";
+        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
 
         TypedQuery<AgentCheckpoint> q = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +

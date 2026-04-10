@@ -3,10 +3,10 @@ package com.arcclaw.core.agent.loop;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.arcclaw.core.agent.event.AgentStateChangedEvent;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+
+import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 
 @ApplicationScoped
 public class AgentRoleCache {

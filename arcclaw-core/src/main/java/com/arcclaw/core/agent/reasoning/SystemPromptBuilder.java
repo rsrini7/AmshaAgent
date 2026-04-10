@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -422,7 +423,7 @@ public class SystemPromptBuilder {
      * on global prompt context.
      */
     private String buildBrowserRetryRule(AgentRoleEnum roleEnum) {
-        boolean hasBrowser = roleEnum.definition().toolNames().contains("browser_navigate");
+        boolean hasBrowser = roleEnum.definition().toolNames().contains(ToolCapability.BROWSER_NAVIGATE.toolName());
 
         if (!hasBrowser) return "";
 

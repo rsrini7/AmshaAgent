@@ -68,7 +68,7 @@ public class DestructiveVocabularyFilter {
             Log.warnf("Destructive vocabulary detected in message routed to '%s' (%s). " +
                     "Overriding to 'coordinator' with no-tool mode.",
                     role, resolvedRole.toScopedName());
-            return "coordinator";
+            return AgentRoleEnum.COORDINATOR.id();
         }
         return role;
     }

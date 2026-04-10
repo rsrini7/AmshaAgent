@@ -16,6 +16,7 @@ import java.util.Optional;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -72,7 +73,7 @@ class CheckpointResumeHandlerPreExecTest {
         cp.setPreExecutedResults(objectMapper.writeValueAsString(preResults));
         
         // Mock 'unsafe' decision as APPROVED
-        Map<String, String> decisions = Map.of("unsafe", "APPROVED");
+        Map<String, String> decisions = Map.of("unsafe", AgentSentinels.TOOL_DECISION_APPROVED);
         cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
 
         when(agentStore.load(sessionId, agentRole)).thenReturn(Optional.of(cp));

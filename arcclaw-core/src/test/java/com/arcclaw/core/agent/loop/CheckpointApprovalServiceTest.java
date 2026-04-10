@@ -1,10 +1,13 @@
 package com.arcclaw.core.agent.loop;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -42,7 +45,7 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", AgentSentinels.TOOL_DECISION_APPROVED);
         // resumeHandler verification removed: approveTool now returns CP, triggerResume handles activation.
     }
 
@@ -57,7 +60,7 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", AgentSentinels.TOOL_DECISION_APPROVED);
         verify(resumeHandler, never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
     }
 
@@ -88,8 +91,8 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveAll("s1", "bulk approve");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "sandboxexec", "APPROVED");
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", AgentSentinels.TOOL_DECISION_APPROVED);
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "sandboxexec", AgentSentinels.TOOL_DECISION_APPROVED);
     }
 
     @Test

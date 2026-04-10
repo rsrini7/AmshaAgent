@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -56,7 +57,7 @@ public class CronJobRunner {
         // approval routing will break if setup fails mid-execution.
         cronRepository.setDeliveryId(job.id, executionId);
 
-        String cronSessionId = "cron-" + job.id + "-" + executionId;
+        String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.id + "-" + executionId;
 
         // Register session in heartbeat tracker so it is visible in the UI Approvals tab.
         // Background/cron sessions are intentionally left UNOWNED so they appear via
@@ -168,7 +169,7 @@ public class CronJobRunner {
 
     private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal, ChannelType channelType) {
         ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", channelType);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "cron-" + job.id, Instant.now());
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.id, Instant.now());
         return new MessageContext(job.chatId, user, msg);
     }
 }

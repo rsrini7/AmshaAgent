@@ -1,5 +1,7 @@
 package com.arcclaw.core.audit;
 
+import java.nio.file.Path;
+
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -75,7 +77,7 @@ public class AuditSchemaEnforcer {
             .getSingleResult()).intValue();
         
         if (ftsFound == 0) {
-            String ftsPath = java.nio.file.Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+            String ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
             log.info("fts schema missing on startup, attaching fallback database at: " + ftsPath);
             em.createNativeQuery("ATTACH DATABASE '" + ftsPath + "' AS fts").executeUpdate();
         }

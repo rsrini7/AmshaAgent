@@ -4,9 +4,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 
 /**
  * Contract for persisting and retrieving agent reasoning checkpoints.

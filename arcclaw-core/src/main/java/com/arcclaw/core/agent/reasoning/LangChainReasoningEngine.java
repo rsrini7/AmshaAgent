@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -32,7 +33,6 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
 import io.opentelemetry.api.trace.Span;
-
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
@@ -134,7 +134,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // from the tool list so the LLM cannot see or call them in its schema.
         boolean isBackgroundSession = 
             context.autonomyLevel() == AutonomyLevel.BACKGROUND
-            || (context.sessionId() != null && context.sessionId().startsWith("cron-"));
+            || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
  
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .filter(allowedTools::contains)

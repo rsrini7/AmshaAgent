@@ -73,7 +73,7 @@ public class ApprovalStateMachine implements ApprovalGateway {
         }
 
         // 5. Record decision per tool
-        String decisionStr = decision == ApprovalDecision.APPROVE ? "APPROVED" : "DENIED";
+        String decisionStr = decision == ApprovalDecision.APPROVE ? AgentSentinels.TOOL_DECISION_APPROVED : AgentSentinels.TOOL_DECISION_PENDING;
         agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, decisionStr);
 
         // 6. If all tools decided -> transition to APPROVED or REJECTED

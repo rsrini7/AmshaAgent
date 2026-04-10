@@ -1,7 +1,11 @@
 package com.arcclaw.app.api;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 
@@ -15,6 +19,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -292,5 +297,10 @@ class AgentResourceTest {
                                 .statusCode(202)
                                 .body("toolName", equalTo("gh-tool"))
                                 .body("sessionId", equalTo("sess-123"));
+        }
+        
+        @Test
+        void testDefaultRoleMatchesCoordinatorEnum() {
+                assertEquals("coordinator",AgentRoleEnum.COORDINATOR.id(),"JAX-RS @DefaultValue in AgentResource must match coordinator ID");
         }
 }

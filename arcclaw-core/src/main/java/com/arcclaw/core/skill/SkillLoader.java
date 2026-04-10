@@ -17,6 +17,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -91,7 +92,7 @@ public class SkillLoader {
         SecurityEventType eventType = isRefresh
                 ? SecurityEventType.SKILL_REFRESHED
                 : SecurityEventType.SKILL_LOADED;
-        telemetryAuditService.record("system", "system", "system", eventType,
+        telemetryAuditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER, AgentSentinels.SYSTEM_ROLE, eventType,
                 "Loaded " + finalList.size() + " skills");
 
         return List.copyOf(allWarnings);
