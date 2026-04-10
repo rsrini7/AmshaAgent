@@ -191,3 +191,29 @@ I have successfully centralized the ArcClaw user messages into a unified catalog
 
 This refactor significantly improves maintainability and provides a clean foundation for future internationalization (i18n) efforts.
 
+---
+
+I have successfully refactored the ArcClaw framework to centralize user-facing strings and shared intent detection logic, improving maintainability and ensuring behavioral consistency.
+
+### 1. Centralized User Messages (`UserMessages.java`)
+Created a unified catalog in `com.arcclaw.core.message.UserMessages` to eliminate ~60 hardcoded string literals across the core module.
+*   **Centralized Patterns**: Moved emoji-prefixed alerts, success messages, and complex error templates (e.g., status tables, token limits, delegation errors) into static constants and formatting helpers.
+*   **Refactored Components**: Migrated all 10 `AgentReflex` implementations (including `Approve`, `Deny`, `PromptInjection`, `PiiScan`, `Status`, `History`, etc.) and key tools like `ManageScheduleTool` and `DelegateToAgentTool`.
+*   **System Stability**: Implemented priority-based sorting in `ReflexRegistry` to ensure consistent execution order (e.g., catching prompt injections before scanning for PII), resolving flaky test failures.
+
+### 2. Centralized Intent Classification (`IntentClassificationService.java`)
+Eliminated duplication of write-intent regex logic that was previously split between the state machine and the reasoning engine.
+*   **Extracted Shared Logic**: Created `IntentClassificationService` to own the `WRITE_INTENT_PATTERN` and provide an `isWriteIntent()` check.
+*   **Synchronized Behavior**: Updated both `AgentStateMachineRunner` (for transient error injection) and `LangChainReasoningEngine` (for tool-call enforcement) to use the new service.
+*   **Automated Validation**: Added a new unit test suite `IntentClassificationServiceTest` to guarantee that the centralized regex correctly identifies memory/ingest intents across all use cases.
+
+### Summary of Changes
+
+| Artifact | Purpose | Impact |
+| :--- | :--- | :--- |
+| `UserMessages.java` | Message Catalog | Ensures consistent UI/UX and enables future i18n support. |
+| `IntentClassificationService.java` | Semantic Registry | Prevents behavioral drift in goal interpretation logic. |
+| `ReflexRegistry.java` | Priority Orchestration | Guarantees deterministic reflex firing order. |
+| `*Reflex.java`, `*Tool.java` | Component Cleanup | Removes literal string dependencies and logic duplication. |
+
+All tests passed, including `ReflexRegistryTest` and `IntentClassificationServiceTest`.

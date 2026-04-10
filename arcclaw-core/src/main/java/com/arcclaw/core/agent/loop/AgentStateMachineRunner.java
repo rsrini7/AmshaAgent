@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.persona.Agent;
 import com.arcclaw.core.agent.persona.AgentRole;
@@ -58,10 +59,6 @@ public class AgentStateMachineRunner {
                 Pattern.CASE_INSENSITIVE
             );
 
-    private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
-            "\\b(save|store|ingest|remember|add to memory|note that|call me)\\b",
-            Pattern.CASE_INSENSITIVE
-    );
 
     // ── FIX Bug 1: Minimum meaningful answer length ───────────────────────────
     // Garbage 2-token responses like "'." or "." contain no alphabetic characters.
@@ -84,6 +81,7 @@ public class AgentStateMachineRunner {
     @Inject Event<AgentStateChangedEvent> stateChangedEvent;
     @Inject StatefulAgentStore agentStore;
     @Inject CliResultBridge cliResultBridge;
+    @Inject IntentClassificationService intentClassifier;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
@@ -117,7 +115,7 @@ public class AgentStateMachineRunner {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
                 // Inject write-intent hint as transientError on iteration 1
-                if (iteration == 1 && context.goal() != null && WRITE_INTENT_PATTERN.matcher(context.goal()).find()) {
+                if (iteration == 1 && intentClassifier.isWriteIntent(context.goal())) {
                     transientError = "The user wants to store data. Call ingest_document immediately. " +
                                      "Pass [REDACTED-*] placeholders as-is. No explanation needed.";
                 }

@@ -4,13 +4,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -43,10 +43,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
 
 
-    private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
-            "\\b(save|store|ingest|remember|add to memory|note that|call me)\\b",
-            Pattern.CASE_INSENSITIVE
-    );
 
     private boolean isSchemaValidationError(String message) {
         if (message == null) return false;
@@ -105,6 +101,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
     @Inject AgentOtelContext otelContext;
+    @Inject IntentClassificationService intentClassifier;
 
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
@@ -345,7 +342,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     private boolean goalIsWriteIntent(String goal) {
-        return goal != null && WRITE_INTENT_PATTERN.matcher(goal).find();
+        return intentClassifier.isWriteIntent(goal);
     }
 
     /**
