@@ -2,7 +2,7 @@ services:
   init-perms:
     image: registry.access.redhat.com/ubi9/ubi-minimal:9.3
     user: "0:0"
-    # FIX: Explicitly create the workspaces directory before taking ownership
+    # Explicitly create the workspaces directory before taking ownership
     command: sh -c "mkdir -p /app/data/workspaces && chown -R 1000:1000 /app/data"
     volumes:
       - arcclaw_data:/app/data
@@ -18,7 +18,7 @@ services:
     environment:
       - QUARKUS_PROFILE=prod
       - ARCCLAW_DATA_DIR=/app/data
-      # FIX: Explicitly override the prod profile default (/var/arcclaw)
+      # Explicitly override the prod profile default (/var/arcclaw)
       - ARCCLAW_SANDBOX_WORKSPACE_ROOT=/app/data/workspaces
       - OLLAMA_BASE_URL=http://ollama:11434
       #- OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
@@ -26,7 +26,7 @@ services:
       #- QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${OLLAMA_MODEL:-llama3.2:1b}
       - QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
       - ARCCLAW_LLM_API_KEY=${ARCCLAW_LLM_API_KEY:-}
-      # FIX: Added Jina embedding key missing from previous env setups
+      # Added Jina embedding key missing from previous env setups
       - ARCCLAW_EMBED_API_KEY=${ARCCLAW_EMBED_API_KEY:-}
       - QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317
       # LangChain credentials
@@ -56,7 +56,7 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - arcclaw-net
-    # FIX: GPU deployment block moved here from ollama-init!
+    # GPU deployment block moved here from ollama-init!
     # deploy:
     #   resources:
     #     reservations:

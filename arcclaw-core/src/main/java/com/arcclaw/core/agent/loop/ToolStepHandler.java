@@ -99,12 +99,12 @@ public class ToolStepHandler {
         }
 
         // ── TOOL-GUARD: coordinator calling github directly
-        // FIX §1: Silently rewrite github → delegate_to_agent instead of
+        // Silently rewrite github → delegate_to_agent instead of
         // returning retryEngine(hint). Hint-based redirect requires LLM compliance —
         // Groq follows it in 1 shot, OpenRouter free-tier ignores it and loops until
         // the iteration budget is exhausted, producing a garbage FINISH answer.
         //
-        // FIX §2: Use "agent" as the parameter key, NOT "role".
+        //  §2: Use "agent" as the parameter key, NOT "role".
         // DelegateToAgentTool.execute() does params.get("agent") — using "role"
         // caused every cron HITL resume to fail with "Parameter 'agent' is required."
         if (AgentRoleEnum.COORDINATOR.toScopedName().equals(context.agentRole())
@@ -333,7 +333,7 @@ public class ToolStepHandler {
         int consecutiveFailures) {
 
         // schedule_task
-        // FIX: Only fast-path on SUCCESS. On failure (e.g. invalid cron expression,
+        // Only fast-path on SUCCESS. On failure (e.g. invalid cron expression,
         // blank timezone) fall through so the LLM can self-correct on the next iteration.
         // Previously fast-pathed unconditionally, sending raw error messages like
         // "❌ Tool execution failed: Invalid ID for ZoneOffset" to the user as a

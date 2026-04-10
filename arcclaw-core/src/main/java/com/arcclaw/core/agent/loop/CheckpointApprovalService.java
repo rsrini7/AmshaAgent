@@ -27,7 +27,7 @@ public class CheckpointApprovalService {
     @Inject ObjectMapper objectMapper;
     @Inject AgentSseService agentSseService;
 
-    // ✅ FIX: NOT_SUPPORTED instead of @Transactional (REQUIRED)
+    // ✅ NOT_SUPPORTED instead of @Transactional (REQUIRED)
     // doUpdateBatchToolDecision is @Transactional(REQUIRES_NEW) and manages
     // its own connection. An outer REQUIRED tx on Connection-1 holds a reserved
     // SQLite write lock (XA BEGIN IMMEDIATE) that blocks the inner COMMIT.

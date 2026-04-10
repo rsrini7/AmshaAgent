@@ -86,7 +86,7 @@ public class WorkspaceManager {
         }
 
         // 2. Mark only truly live checkpoints FAILED — not terminal ones.
-        //    FIX: doMarkCheckpointsFailedRequiresNew now excludes COMPLETED, ARCHIVED,
+        //    doMarkCheckpointsFailedRequiresNew now excludes COMPLETED, ARCHIVED,
         //    and COMPROMISED in addition to FAILED. Previously, a cron job that
         //    finalized as COMPLETED would be immediately clobbered to FAILED here
         //    if the JPA transaction hadn't fully flushed before terminateSession ran.
@@ -95,22 +95,7 @@ public class WorkspaceManager {
         // 3. Wipe workspace directory
         wipeWorkspaceDir(sessionId);
 
-        // 4. Clear in-memory LangChain4j ChatMemory — DISABLED (§85-persistence)
-        // clearInMemoryChatMemory(sessionId);
-
-        // 5. Delete chat memory from persistence — DISABLED to allow chat history persistence (§85-persistence)
-        // Handled by SessionReaper's Soft Retention Policy (purgeOldChatHistory) to prevent unbounded growth.
-        /*
-        try {
-            chatMemoryStore.deleteMessages(sessionId);
-            log.debugf("Chat memory deleted for session=%s", sessionId);
-        } catch (Exception e) {
-            log.warnf("Failed to delete chat memory for session=%s: %s",
-                      sessionId, e.getMessage());
-        }
-        */
-
-        // 6. Destroy CDI scope
+        // 4. Destroy CDI scope
         try {
             var context = (WorkspaceScopeContext) Arc.container()
                     .getActiveContext(WorkspaceScoped.class);
@@ -123,7 +108,7 @@ public class WorkspaceManager {
                       sessionId, e.getMessage());
         }
 
-        // §7.29: Clear any in-flight batch resume flag and bridge state for this session.
+        // 5. Clear any in-flight batch resume flag and bridge state for this session.
         cliResultBridge.cancel(sessionId);
         statefulAgentStore.clearBatchResuming(sessionId);
     }
@@ -152,7 +137,7 @@ public class WorkspaceManager {
     /**
      * Marks only genuinely live checkpoints as FAILED during session teardown.
      *
-     * FIX: Excludes COMPLETED, ARCHIVED, and COMPROMISED in addition to FAILED.
+     * Excludes COMPLETED, ARCHIVED, and COMPROMISED in addition to FAILED.
      *
      * Root cause of the bug: AgentCronScheduler calls WorkspaceManager.terminateSession()
      * immediately after CronResultHandler marks the job COMPLETED. If the finalize

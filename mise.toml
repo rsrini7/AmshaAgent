@@ -1443,7 +1443,7 @@ if (Test-Path "dist/$runner.exe") {
 }
 
 # Linux
-# FIX: use ReadAllText/WriteAllText to preserve LF line endings in run.sh
+# use ReadAllText/WriteAllText to preserve LF line endings in run.sh
 if (Test-Path "dist/$runner") {
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
     New-Item -ItemType Directory $stage | Out-Null

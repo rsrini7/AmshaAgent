@@ -141,7 +141,7 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 // 3. Session checkpoint — interactive approval.
-                // FIX: replaced enum loop with findLatestAwaitingApproval() to avoid
+                // replaced enum loop with findLatestAwaitingApproval() to avoid
                 // stale-row ambiguity. When multiple rows exist for the same
                 // (sessionId, agentRole), the old loop called load() which returned
                 // the first (oldest = COMPLETED) row, never finding the newer
@@ -239,7 +239,7 @@ public class ApproveReflex implements AgentReflex {
             String toolName, String sessionId, String userId,
             String chatId, MessageContext context) throws Exception {
 
-        // FIX: replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
+        // replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
         // Additionally filter for hasBatchToolDecisions() since per-tool approval
         // only applies to parallel batch checkpoints.
         Optional<AgentCheckpoint> latestPending =
@@ -401,7 +401,7 @@ public class ApproveReflex implements AgentReflex {
 
         log.infof("[DELEGATE-APPROVE] admin=%s approving session=%s", adminId, targetSid);
 
-        // FIX: replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
+        // replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
         Optional<AgentCheckpoint> latestPending =
             statefulAgentStore.findLatestAwaitingApproval(targetSid);
         String activeRole = latestPending

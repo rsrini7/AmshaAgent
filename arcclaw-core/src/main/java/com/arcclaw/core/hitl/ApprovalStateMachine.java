@@ -36,7 +36,7 @@ public class ApprovalStateMachine implements ApprovalGateway {
     @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
     long hitlTimeoutHours;
 
-    // ✅ FIX: Split the write and the resume — write inside NOT_SUPPORTED,
+    // ✅ Split the write and the resume — write inside NOT_SUPPORTED,
     // resume after the write is committed
     @Override
     @Transactional(TxType.NOT_SUPPORTED)   // was @Transactional

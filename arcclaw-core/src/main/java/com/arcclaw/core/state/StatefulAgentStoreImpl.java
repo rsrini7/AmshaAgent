@@ -148,7 +148,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
             managed.setIterationsUsed(checkpoint.getIterationsUsed());
             managed.setRetryAfterMs(checkpoint.getRetryAfterMs());
-            // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
+            //  2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
             managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
         }
@@ -501,7 +501,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     /**
      * Finds the most-recent non-ARCHIVED checkpoint for a (sessionId, agentRole) pair.
      * <p>
-     * FIX: Added {@code ORDER BY c.id DESC} so the newest row is always returned.
+     * Added {@code ORDER BY c.id DESC} so the newest row is always returned.
      * Previously, LIMIT 1 with no ordering caused SQLite to return the oldest row
      * (lowest checkpoint_id = first inserted = often COMPLETED), which shadowed
      * any newer AWAITING_APPROVAL row and broke the "/approve" flow.

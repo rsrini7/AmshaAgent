@@ -182,7 +182,7 @@ public class DenyReflex implements AgentReflex {
             });
             return ReflexResult.respond(response, context);
         } catch (Exception e) {
-            // Fix 1: e.getMessage() can be null for bare exception construction
+            //  1: e.getMessage() can be null for bare exception construction
             String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             log.errorf("Failed to process denial for session %s: %s", sessionId, errMsg);
             log.debug("Full denial processing failure stack trace:", e);
@@ -270,7 +270,7 @@ public class DenyReflex implements AgentReflex {
         }
 
         String cronSessionId = pendingCheckpoint.getSessionId();
-        // Fix 2: use the actual agent role stored in the checkpoint.
+        //  2: use the actual agent role stored in the checkpoint.
         // Hardcoding COORDINATOR caused resolveResumeGoal() to look up the wrong
         // checkpoint row. Consistent with the same fix applied to ApproveReflex.
         String cronRole = pendingCheckpoint.getAgentRole();

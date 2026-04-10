@@ -316,7 +316,7 @@ public class SystemPromptBuilder {
                 + "list above is a critical failure and will break the orchestration pipeline.\n"
                 + "When in doubt, output text only.\n\n"
 
-                // FIX: Cross-turn tool contamination guard.
+                // Cross-turn tool contamination guard.
                 // Groq error "attempted to call tool X which was not in request.tools" is caused
                 // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
                 // a prior coordinator turn and trying to call it in a role that does not have it.

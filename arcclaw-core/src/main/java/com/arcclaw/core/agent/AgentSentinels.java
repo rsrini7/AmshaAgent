@@ -52,7 +52,7 @@ public final class AgentSentinels {
     // The LLM occasionally pastes the injected "## Retrieved Context" compaction
     // header verbatim into its FINISH answer instead of writing a fresh response.
     // Observed: TELEGRAM-SEND text=[## Retrieved Context\nYou initiated a session...]
-    // Fix: strip the header (and anything before the first real content line) so
+    // strip the header (and anything before the first real content line) so
     // the user sees the summary without the raw template heading.
     public static final Pattern CONTEXT_RETRIEVED_ECHO_PATTERN = Pattern.compile(
         "^##\\s*Retrieved Context[^\\n]*\\n+(?:<context>[\\s\\S]*?</context>\\s*)?",

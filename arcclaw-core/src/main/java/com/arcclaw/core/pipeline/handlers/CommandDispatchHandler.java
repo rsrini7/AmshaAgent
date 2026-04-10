@@ -140,7 +140,7 @@ public class CommandDispatchHandler implements MessageHandler {
                             targetUtc.getHour(), targetUtc.getMinute(), context.getMessage().text());
                 }
 
-                // FIX: Check reflexes for ALL unknown inputs, not just slashes.
+                // Check reflexes for ALL unknown inputs, not just slashes.
                 // This allows 'store FOO=bar' to be pre-parsed by reflexes.
                 String sessionId = context.getSessionId().orElse("");
                 String userId = context.getUser().platformId();
@@ -154,7 +154,7 @@ public class CommandDispatchHandler implements MessageHandler {
                         () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
                     );
                         
-                        // Fix — Capture sanitized input for the Agent loop even if it's not a direct reply.
+                        //  — Capture sanitized input for the Agent loop even if it's not a direct reply.
                         if (result != null && result.sanitizedInput() != null) {
                             context.setGoal(result.sanitizedInput());
                         }
@@ -219,7 +219,7 @@ public class CommandDispatchHandler implements MessageHandler {
 
         log.infof("[CommandDispatch] command='%s' session=%s", input, sessionId);
 
-        // FIX: Wrap the execution in WorkspaceContext so the Reflexes can access user/chat IDs
+        // Wrap the execution in WorkspaceContext so the Reflexes can access user/chat IDs
         ReflexResult result = null;
         try {
             result = WorkspaceContext.run(

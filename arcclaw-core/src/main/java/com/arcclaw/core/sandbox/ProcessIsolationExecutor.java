@@ -128,7 +128,7 @@ public class ProcessIsolationExecutor {
                         return SandboxResult.success(result);
 
                     } catch (SandboxImageMissingException e) {
-                        // FIX: do NOT record a circuit-breaker failure for a missing image.
+                        // do NOT record a circuit-breaker failure for a missing image.
                         log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, e.getMessage());
                         if (allowInsecureFallback) {
                             log.warnf("[SANDBOX] allow-insecure-fallback enabled — degrading to host execution for session %s", sessionId);

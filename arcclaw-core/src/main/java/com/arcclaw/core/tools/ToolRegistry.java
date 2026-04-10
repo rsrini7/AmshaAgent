@@ -95,7 +95,7 @@ public class ToolRegistry {
     /**
      * Converts a session ID to a safe directory name for all OS platforms.
      *
-     * Windows BUG FIX: Colons (':') are illegal in Windows path components —
+     * Windows BUG Colons (':') are illegal in Windows path components —
      * they are reserved as drive letter separators (e.g. C:\).
      * Delegate session IDs use the format "parentId:delegate:agentname:timestamp", which
      * causes InvalidPathException on every sandbox tool call inside a sub-agent
@@ -237,7 +237,7 @@ public class ToolRegistry {
             recordToolAudit(toolName);
             var requiredSecrets = extractRequiredSecrets(tool);
 
-            // FIX: Use toSafeDirName() to strip colons from the session ID.
+            // Use toSafeDirName() to strip colons from the session ID.
             // Windows treats ':' as a drive separator — delegate sub-agent session IDs
             // like "parentId:d:researcher:cf747207" crash Path.of() on Windows with
             // InvalidPathException. The safe dir name is only used for the filesystem

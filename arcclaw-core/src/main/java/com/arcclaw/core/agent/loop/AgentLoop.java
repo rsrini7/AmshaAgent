@@ -144,7 +144,7 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
-        // Fix 2 — Ensure storage goals have enough budget (min 3 steps)
+        // Ensure storage goals have enough budget (min 3 steps)
         int budget = maxIterations;
         if (goal != null && (goal.toLowerCase().contains("store") || goal.toLowerCase().contains("remember"))) {
             budget = Math.max(budget, 3);
@@ -204,7 +204,7 @@ public class AgentLoop {
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
 
-        // FIX: Capture userId early into a local variable so the finally block can
+        // Capture userId early into a local variable so the finally block can
         // pass it to observers without re-reading MDC (which may be unreliable in finally).
         // Initialized to "unknown" in case WorkspaceContext.userId() throws before assignment.
         // WorkspaceContext.userId() is already called unconditionally later in this method
@@ -212,7 +212,7 @@ public class AgentLoop {
         final String capturedUserId = WorkspaceContext.resolveUserId();
 
         try {
-            // FIX: Store userId in MDC so it appears in structured log output alongside
+            // Store userId in MDC so it appears in structured log output alongside
             // SESSION_ID and AGENT_ROLE. Previously USER_ID was never set here,
             // meaning MDC.get(MdcKeys.USER_ID) in the finally block always returned null
             // and observers always received "unknown".
@@ -245,7 +245,7 @@ public class AgentLoop {
                                 resumedHistory.size(), sessionId);
 
                     } else {
-                        // ── FIX: new message arrived while a stale approval is pending.
+                        // ── new message arrived while a stale approval is pending.
                         //    This happens after a JVM restart (SessionReaper leaves the
                         //    checkpoint alive for SSE replay) or when the user simply
                         //    sends a new goal without approving the previous tool.
@@ -397,7 +397,7 @@ public class AgentLoop {
             return result;
 
         } catch (Exception e) {
-            // FIX: null-guard e.getMessage() — NullPointerException and several other JVM
+            // null-guard e.getMessage() — NullPointerException and several other JVM
             // exception types return null from getMessage(), which would produce
             // "SYSTEM_ERROR: null" in both the AgentResult and the checkpoint failure record.
             String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -415,7 +415,7 @@ public class AgentLoop {
             if (result != null) {
                 String goalHash = hashUtil.sha256hex(goal);
                 final AgentResult finalResult = result;
-                // FIX: use capturedUserId (set early in try block) instead of
+                // use capturedUserId (set early in try block) instead of
                 // MDC.get(MdcKeys.USER_ID) — cleaner and not subject to MDC lifecycle.
                 observers.forEach(o -> o.onLoopComplete(
                     sessionId, capturedUserId, canonicalRole, goalHash, finalResult));
@@ -423,7 +423,7 @@ public class AgentLoop {
             // --- CONTEXT TEARDOWN ---
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.AGENT_ROLE);
-            MDC.remove(MdcKeys.USER_ID); // FIX: was missing — leaked into next request on same thread
+            MDC.remove(MdcKeys.USER_ID); // was missing — leaked into next request on same thread
             otelContext.endSessionSpan(sessionId);
         }
     }

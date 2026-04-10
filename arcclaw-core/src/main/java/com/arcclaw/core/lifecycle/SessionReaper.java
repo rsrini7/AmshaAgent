@@ -97,7 +97,7 @@ public class SessionReaper {
         // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
         // D1.2: Added 15-minute grace period based on updatedAt to protect
         // active checkpoints running on other nodes during rolling/canary deployments.
-        // FIX: Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
+        // Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
         // Without this, SQLite compares TEXT representations of Instant vs LocalDateTime incorrectly.
         LocalDateTime cutoff = LocalDateTime.ofInstant(
                 Instant.now().minus(Duration.ofMinutes(15)),

@@ -219,7 +219,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
-                        // Fix: intercept write intents before FINISH
+                        // intercept write intents before FINISH
                         if (goalIsWriteIntent(goal)) {
                             log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced prose " +
                                             "instead of tool call for session %s — injecting correction",

@@ -116,7 +116,7 @@ public class AgentStateMachineRunner {
             try (Scope scope = iterSpan.makeCurrent()) {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
-                // Fix 3: Inject write-intent hint as transientError on iteration 1
+                // Inject write-intent hint as transientError on iteration 1
                 if (iteration == 1 && context.goal() != null && WRITE_INTENT_PATTERN.matcher(context.goal()).find()) {
                     transientError = "The user wants to store data. Call ingest_document immediately. " +
                                      "Pass [REDACTED-*] placeholders as-is. No explanation needed.";
@@ -368,7 +368,7 @@ public class AgentStateMachineRunner {
 
         String stripped = answer.strip();
 
-        // FIX Bug 1: garbage punctuation-only response from thin-context LLM output
+        // garbage punctuation-only response from thin-context LLM output
         // e.g. "'." (2 tokens) produced when compaction race starves the LLM of context.
         if (stripped.length() < MIN_ANSWER_ALPHA_LENGTH
                 && !stripped.chars().anyMatch(Character::isLetterOrDigit)) {

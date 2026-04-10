@@ -152,7 +152,7 @@ public class ScheduleTaskTool implements AgentTool {
 
         String goal           = (String) params.get("goal");
 
-        // FIX §1: parseTimezone() — normalize blank/null/invalid to UTC.
+        //  §1: parseTimezone() — normalize blank/null/invalid to UTC.
         // ZoneId.of("") throws DateTimeException: "Invalid ID for ZoneOffset, invalid format: "
         // OpenRouter free-tier models frequently emit "timezone": "" when they don't know
         // the timezone. The old code passed the raw value directly to ZoneId.of() and the
@@ -271,7 +271,7 @@ public class ScheduleTaskTool implements AgentTool {
      *
      * Normalization rules (in order):
      * 1. null or missing              → UTC
-     * 2. blank string ("")            → UTC  ← FIX: OpenRouter free emits this frequently
+     * 2. blank string ("")            → UTC  ← OpenRouter free emits this frequently
      * 3. literal string "null"        → UTC
      * 4. valid IANA ID                → ZoneId.of(raw)
      * 5. unrecognized ID              → UTC  (warn + fallback, never propagate exception)
