@@ -9,16 +9,21 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.RequiresApprovalException;
@@ -41,6 +46,7 @@ import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonSchemaElement;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -70,6 +76,8 @@ public class ToolRegistry {
     @Inject ObjectMapper objectMapper;
     @Inject ProcessIsolationExecutor isolationExecutor;
     @Inject AuditService auditService;
+    @Inject CapabilityRegistry capabilityRegistry;
+    @Inject RoleRegistry roleRegistry;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -81,11 +89,43 @@ public class ToolRegistry {
     private Map<String, Map<String, String>> secretsCache;
 
     @PostConstruct
-    void buildSecretsCache() {
+    void initialize() {
+        log.info("ToolRegistry: Initializing and discovering tool capabilities...");
+        doInitialize();
+    }
+
+    void onStart(@Observes StartupEvent ev) {
+        // Accessing the bean triggers @PostConstruct if it hasn't run yet
+        log.info("ToolRegistry: Eager startup verification complete.");
+    }
+
+    private void doInitialize() {
         Map<String, Map<String, String>> cache = new HashMap<>();
         for (AgentTool tool : discoveredTools) {
+            String name = tool.name();
+            
+            // 1. Build secrets cache
             if (tool.isEnabled()) {
-                cache.put(tool.name(), extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+                cache.put(name, extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+            }
+
+            // 2. Discover metadata-driven capabilities
+            var meta = tool.getClass().getAnnotation(ToolMetadata.class);
+            if (meta == null) {
+                Class<?> current = tool.getClass();
+                while (current != null && current != Object.class) {
+                    meta = current.getAnnotation(ToolMetadata.class);
+                    if (meta != null) break;
+                    current = current.getSuperclass();
+                }
+            }
+
+            if (meta != null) {
+                log.infof("Discovered dynamic tool capability: %s (granting to: %s)",
+                          meta.capabilityId(), String.join(", ", meta.defaultRoles()));
+                for (String roleId : meta.defaultRoles()) {
+                    capabilityRegistry.grant(roleId, name);
+                }
             }
         }
         this.secretsCache = Collections.unmodifiableMap(cache);
@@ -176,8 +216,8 @@ public class ToolRegistry {
                 return ToolResponse.failure(403, "Unknown agent role: " + agentRole);
             }
             AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
-            boolean roleAllowed = role.definition().capabilities().stream()
-                    .anyMatch(cap -> cap.toolName().equals(toolName));
+            Set<String> allowedTools = roleRegistry.permittedTools(role);
+            boolean roleAllowed = allowedTools.contains(toolName);
             if (!roleAllowed) {
                 log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
                         agentRole, toolName);
