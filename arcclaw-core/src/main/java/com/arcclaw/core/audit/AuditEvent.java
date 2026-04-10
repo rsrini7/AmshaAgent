@@ -64,6 +64,9 @@ public class AuditEvent {
 
     @Column(name = "app_version", length = 32)
     public String appVersion;
+    
+    @Column(name = "idempotency_key", updatable = false, length = 128)
+    public String idempotencyKey;
 
     // Monotonic per-session insert order — set exclusively by AuditEventRepository.record()
     @Column(nullable = false, updatable = false)

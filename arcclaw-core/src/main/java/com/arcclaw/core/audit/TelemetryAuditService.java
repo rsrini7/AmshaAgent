@@ -41,10 +41,19 @@ public class TelemetryAuditService {
      * Swallows all exceptions to prevent crashing the caller.
      */
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
-        log.infof("[AUDIT-PROBE] type=%s session=%s", type, sessionId);
+        recordWithIdempotency(sessionId, userId, agentRole, type, detail, null);
+    }
+
+    /**
+     * Records a point-in-time security event with an optional idempotency key.
+     */
+    public void recordWithIdempotency(String sessionId, String userId, String agentRole,
+                                      SecurityEventType type, String detail, String idempotencyKey) {
+        log.infof("[AUDIT-PROBE] type=%s session=%s idempotency=%s", type, sessionId, idempotencyKey);
         try {
             AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
             event.appVersion = registry.getAppVersion();
+            event.idempotencyKey = idempotencyKey;
             PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, type, em -> {
                 auditEventRepository.record(event);
             });

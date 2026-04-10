@@ -33,6 +33,11 @@ public class AuditService {
         telemetryAuditService.record(sessionId, userId, agentRole, type, detail);
     }
 
+    public void recordWithIdempotency(String sessionId, String userId, String agentRole,
+                                      SecurityEventType type, String detail, String idempotencyKey) {
+        telemetryAuditService.recordWithIdempotency(sessionId, userId, agentRole, type, detail, idempotencyKey);
+    }
+
     public void recordMandatory(String sessionId, String userId, String agentRole,
                                 SecurityEventType type, String detail) {
         complianceAuditService.recordMandatory(sessionId, userId, agentRole, type, detail);

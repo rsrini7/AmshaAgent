@@ -99,8 +99,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             em.persist(checkpoint);
 
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole,
-                SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
+            String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
+            auditService.recordWithIdempotency(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy, idempotencyKey);
 
             log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s",
                       sessionId, agentRole, autonomy);
@@ -322,8 +323,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         checkpoint.setFailReason(reason);
 
         String userId = (String) MDC.get(MdcKeys.USER_ID);
-        auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
-            SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
+        String idempotencyKey = "CP_FAILED:" + checkpoint.getId();
+        auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+            SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason, idempotencyKey);
 
         log.warnf("Checkpoint session=%s role=%s marked FAILED: %s",
                   checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
@@ -346,8 +348,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setCompletedAt(Instant.now());
 
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
-                SecurityEventType.CHECKPOINT_COMPLETED, null);
+            String idempotencyKey = "CP_COMPLETED:" + checkpointId;
+            auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+                SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
 
             log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
         }
@@ -394,8 +397,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             em.persist(checkpoint);
 
             String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole,
-                SecurityEventType.CHECKPOINT_CREATED, null);
+            String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
+            auditService.recordWithIdempotency(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, null, idempotencyKey);
             log.infof("Created new checkpoint for finalization: session=%s, role=%s",
                       sessionId, agentRole);
         }
@@ -423,7 +427,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
                 ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;
-        auditService.record(sessionId, userId, agentRole, eventType, null);
+        String idempotencyKey = (finalStatus == CheckpointStatus.COMPLETED ? "CP_COMPLETED:" : "CP_FAILED:") + cpId;
+        auditService.recordWithIdempotency(sessionId, userId, agentRole, eventType, null, idempotencyKey);
 
         log.infof("Checkpoint session=%s role=%s finalized with status=%s",
                   sessionId, agentRole, finalStatus);
