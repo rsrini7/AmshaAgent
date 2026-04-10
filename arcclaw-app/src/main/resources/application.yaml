@@ -359,6 +359,12 @@ arcclaw:
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
+  chat:
+    default-observation-max-length: 4000
+    tool-specific-limits:
+      github_search: 10000
+      read_file: 8000
+      web_search: 5000
   chat-memory:
     max-messages: ${ARCCLAW_CHAT_MEMORY_MAX_MESSAGES:20}
     retention-days: ${ARCCLAW_CHAT_MEMORY_RETENTION_DAYS:30}

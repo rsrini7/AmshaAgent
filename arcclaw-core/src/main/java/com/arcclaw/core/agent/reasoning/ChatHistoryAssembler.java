@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -19,6 +20,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -38,7 +40,12 @@ public class ChatHistoryAssembler {
         this.objectMapper = null;
     }
 
-    @Inject
+    @ConfigProperty(name = "arcclaw.chat.default-observation-max-length", defaultValue = "4000")
+    int defaultObservationMaxLength;
+
+    @ConfigProperty(name = "arcclaw.chat.tool-specific-limits")
+    Optional<Map<String, Integer>> toolSpecificLimits;
+
     public ChatHistoryAssembler(ChatMemoryStore chatMemoryStore, ObjectMapper objectMapper) {
         this.chatMemoryStore = chatMemoryStore;
         this.objectMapper = objectMapper;
@@ -129,9 +136,7 @@ public class ChatHistoryAssembler {
 
                     // N ToolExecutionResultMessages — one per callId in order
                     for (ParallelToolCall call : calls) {
-                        String rawObs = call.observation();
-                        String safeObs = (rawObs == null || rawObs.isBlank()) ? "(no output)" : rawObs;
-                        if (safeObs.length() > 4000) safeObs = safeObs.substring(0, 4000) + "...";
+                        String safeObs = truncateObservation(call.observation(), call.toolName());
                         messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(
                             call.callId(), call.toolName(), safeObs));
                     }
@@ -175,10 +180,7 @@ public class ChatHistoryAssembler {
 
                 String rawObs = step.observation();
                 if (rawObs != null) {
-                    String safeObs = rawObs.isBlank() ? "(no output)" : rawObs;
-                    if (safeObs.length() > 4000) {
-                        safeObs = safeObs.substring(0, 4000) + "... [TRUNCATED FOR LENGTH]";
-                    }
+                    String safeObs = truncateObservation(rawObs, step.action());
                     // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                     messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(callId, step.action(), safeObs));
                 }
@@ -220,5 +222,23 @@ public class ChatHistoryAssembler {
                       e.getMessage());
             return null;
         }
+    }
+
+    private String truncateObservation(String observation, String toolName) {
+        if (observation == null || observation.isBlank()) {
+            return "(no output)";
+        }
+
+        int maxLength = toolSpecificLimits
+            .flatMap(map -> Optional.ofNullable(map.get(toolName)))
+            .orElse(defaultObservationMaxLength);
+
+        if (observation.length() <= maxLength) {
+            return observation;
+        }
+
+        String truncated = observation.substring(0, maxLength);
+        String indicator = "\n[... truncated " + (observation.length() - maxLength) + " chars]";
+        return truncated + indicator;
     }
 }

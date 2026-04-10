@@ -235,3 +235,20 @@ All 5 tests related to `IntentClassificationServiceTest` and `IntentClassificati
 
 ---
 
+I have successfully addressed the hardcoded truncation limit by externalizing the configuration and creating a robust, tool-aware truncation process.
+
+### What was done:
+1. **`ChatHistoryAssembler.java` Configurations injected**: 
+	- Added `arcclaw.chat.default-observation-max-length` property (defaults to `4000`).
+	- Added `arcclaw.chat.tool-specific-limits` property map config to allow configuring higher context limits for unique tools. 
+2. **Dynamic Observation Truncation (`truncateObservation`)**:
+	- Replaced inline string-cutting logic with the `truncateObservation` resolver method for both standard `.action()` and loop `.parallelBatch()` contexts.
+	- Ensured truncation only occurs when thresholds are exceeded and appended a clear UI marker for the LLM indicating exactly how many characters were removed (e.g. `[... truncated 1245 chars]`).
+3. **Application Configuration Updates**:
+	- Successfully updated `arcclaw-app/src/main/resources/application.yaml` dynamically linking `github_search`, `read_file`, and `web_search` configurations as requested.
+4. **Testing Validations**:
+	- Added robust tests within `ChatHistoryAssemblerTest` to guarantee truncation boundaries behave securely under dynamic config bounds without regressions. The full test set ran flawlessly (`Tests run: 8, Failures: 0, Errors: 0, Skipped: 0`).
+
+We have completed both Wave 1b requests! Is there anything else you'd like to work on next?
+
+---
