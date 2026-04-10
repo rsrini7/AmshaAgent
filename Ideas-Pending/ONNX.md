@@ -271,3 +271,166 @@ The `onnxruntime` JAR bundles platform native libs (`.so`/`.dylib`/`.dll`) which
 | Zero Python in production | Single binary goal fully preserved |
 | LangChain4J `EmbeddingModel` interface | Drops in as a swap for existing embedding provider with no pipeline changes |
 
+---
+
+
+Perfect — clean swap it is then.
+
+## Confirmed Approach
+
+```
+Delete SQLite data folder  →  Re-embed everything fresh  →  ONNX 768-dim going forward
+```
+
+## Best Free 768-dim ONNX Model
+
+```bash
+optimum-cli export onnx \
+  --model sentence-transformers/all-mpnet-base-v2 \
+  --task feature-extraction \
+  ./models/embeddings/
+```
+
+`all-mpnet-base-v2` is the standard recommendation for 768-dim free embeddings — consistently outperforms Jina v2 base on most MTEB benchmarks and is ~420MB on disk. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
+
+## Swap Checklist for ArcClaw
+
+**1. Export model** (one time, Python dev machine):
+```bash
+pip install optimum sentence-transformers
+optimum-cli export onnx \
+  --model sentence-transformers/all-mpnet-base-v2 \
+  --task feature-extraction \
+  ./models/embeddings/
+```
+
+**2. Drop files into resources:**
+```
+src/main/resources/models/embeddings/
+├── model.onnx
+├── tokenizer.json
+└── tokenizer_config.json
+```
+
+**3. In `application.yaml` — disable Jina:**
+```properties
+# Remove or comment out:
+# quarkus.langchain4j.jina.api-key=...
+# quarkus.langchain4j.jina.embedding-model.model-name=...
+```
+
+**4. Wire `LocalEmbeddingModel` bean** — exactly as shown in Step 3 from the previous message. Since it implements LangChain4J's `EmbeddingModel` interface, your `IngestDocumentTool` and memory search inject it with zero pipeline changes.
+
+**5. Delete data folder, restart** — fresh embeddings from first use.
+
+That's the complete swap — no API key, no network call, no cost, same 768-dim vector space throughout.
+
+---
+
+Clean design — use Quarkus CDI with a config-driven selector. Here's the complete pattern:
+
+## `application.properties` Toggle
+
+```properties
+# User chooses: jina | onnx
+arcclaw.embedding.provider=onnx
+```
+
+***
+
+## Interface + Two Implementations
+
+LangChain4J's `EmbeddingModel` is already the common interface — both implementations just need a CDI qualifier to disambiguate.
+
+**Qualifier annotation:**
+```java
+@Qualifier
+@Retention(RUNTIME)
+@Target({FIELD, METHOD, TYPE})
+public @interface EmbeddingProvider {
+    String value(); // "jina" or "onnx"
+}
+```
+
+**Jina implementation** (existing, just add qualifier):
+```java
+@ApplicationScoped
+@EmbeddingProvider("jina")
+public class JinaEmbeddingModel implements EmbeddingModel {
+    // your existing Jina wiring — unchanged
+}
+```
+
+**ONNX implementation** (new):
+```java
+@ApplicationScoped
+@EmbeddingProvider("onnx")
+public class OnnxEmbeddingModel implements EmbeddingModel {
+    // Step 3 bean from previous message — unchanged
+}
+```
+
+***
+
+## Selector Bean — Single Inject Point
+
+```java
+@ApplicationScoped
+public class EmbeddingModelSelector {
+
+    @ConfigProperty(name = "arcclaw.embedding.provider", defaultValue = "jina")
+    String provider;
+
+    @Inject @EmbeddingProvider("jina")
+    EmbeddingModel jinaModel;
+
+    @Inject @EmbeddingProvider("onnx")
+    EmbeddingModel onnxModel;
+
+    public EmbeddingModel get() {
+        return switch (provider.toLowerCase()) {
+            case "onnx" -> onnxModel;
+            case "jina" -> jinaModel;
+            default -> throw new IllegalStateException(
+                "Unknown embedding provider: " + provider + ". Use 'jina' or 'onnx'.");
+        };
+    }
+}
+```
+
+***
+
+## Usage in Your Pipeline
+
+Anywhere that currently injects `EmbeddingModel` directly, swap to the selector:
+
+```java
+// Before:
+@Inject EmbeddingModel embeddingModel;
+
+// After:
+@Inject EmbeddingModelSelector embeddingSelector;
+
+// Usage — identical call site:
+embeddingSelector.get().embed(segment);
+```
+
+***
+
+## Native Image Safety
+
+One caveat — in native image, **both beans get compiled in** regardless of which provider is configured. That means:
+
+- ONNX model file must always be present in `src/main/resources/models/` even if Jina is selected
+- Jina API key config must exist (can be a blank placeholder) even if ONNX is selected
+
+If binary size is a concern later, you can use `@IfBuildProperty` to conditionally exclude one:
+
+```java
+@ApplicationScoped
+@EmbeddingProvider("onnx")
+@IfBuildProperty(name = "arcclaw.embedding.provider", stringValue = "onnx")
+public class OnnxEmbeddingModel implements EmbeddingModel { ... }
+```
+
+But for development this is unnecessary — the simple selector bean above is sufficient and gives you instant runtime switching by changing one property.
