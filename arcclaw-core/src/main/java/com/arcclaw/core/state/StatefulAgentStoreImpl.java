@@ -713,15 +713,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         return !em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
-                "  AND c.status NOT IN (:failed, :completed, :archived, :compromised, :denied, :loop_exceeded)",
+                "  AND c.status NOT IN (:terminalStatuses)",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
-                .setParameter("failed",      CheckpointStatus.FAILED)
-                .setParameter("completed",   CheckpointStatus.COMPLETED)
-                .setParameter("archived",    CheckpointStatus.ARCHIVED)
-                .setParameter("compromised", CheckpointStatus.COMPROMISED)
-                .setParameter("denied",      CheckpointStatus.DENIED)
-                .setParameter("loop_exceeded", CheckpointStatus.LOOP_EXCEEDED)
+                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .setMaxResults(1)
                 .getResultList()
                 .isEmpty();

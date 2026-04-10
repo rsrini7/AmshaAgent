@@ -155,13 +155,10 @@ public class WorkspaceManager {
         List<AgentCheckpoint> checkpoints = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
-                "  AND c.status NOT IN (:failed, :completed, :archived, :compromised)",
+                "  AND c.status NOT IN (:terminalStatuses)",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
-                .setParameter("failed",      CheckpointStatus.FAILED)
-                .setParameter("completed",   CheckpointStatus.COMPLETED)
-                .setParameter("archived",    CheckpointStatus.ARCHIVED)
-                .setParameter("compromised", CheckpointStatus.COMPROMISED)
+                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .getResultList();
 
         Instant now = Instant.now();

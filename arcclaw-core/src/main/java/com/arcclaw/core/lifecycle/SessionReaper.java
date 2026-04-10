@@ -279,17 +279,10 @@ public class SessionReaper {
                     "DELETE FROM ChatMemoryEntity m WHERE m.memoryId NOT IN (" +
                     "  SELECT c.sessionId FROM AgentCheckpoint c " +
                     "  WHERE c.updatedAt > :cutoff " +
-                    "     OR c.status NOT IN (:completed, :archived, :failed, :denied, :loop_exceeded, :compromised)" +
+                    "     OR c.status NOT IN (:terminalStatuses)" +
                     ")")
                     .setParameter("cutoff", cutoff)
-                    .setParameter("completed",     CheckpointStatus.COMPLETED)
-                    .setParameter("archived",      CheckpointStatus.ARCHIVED)
-                    .setParameter("failed",        CheckpointStatus.FAILED)
-                    .setParameter("denied",        CheckpointStatus.DENIED)
-                    .setParameter("loop_exceeded", CheckpointStatus.LOOP_EXCEEDED)
-                    // NOTE: If new terminal CheckpointStatus values are added to the enum,
-                    // update this list to include them or active sessions may be incorrectly purged.
-                    .setParameter("compromised",   CheckpointStatus.COMPROMISED)
+                    .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                     .executeUpdate();
                 
                 if (deleted > 0) {
