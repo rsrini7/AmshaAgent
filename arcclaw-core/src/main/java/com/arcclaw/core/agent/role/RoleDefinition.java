@@ -27,6 +27,7 @@ public record RoleDefinition(
         String intentDescription,
         int maxIterations,
         boolean requiresApproval,
+        boolean codeCapable,
         Set<ToolCapability> capabilities,
         Set<String> aliases
 ) {
@@ -60,6 +61,6 @@ public record RoleDefinition(
 
     /** Returns true if this role is permitted to generate or fix source code blocks. */
     public boolean canGenerateCode() {
-        return "coder".equals(canonicalName) || "debugger".equals(canonicalName);
+        return codeCapable;
     }
 }

@@ -122,6 +122,7 @@ public class SkillLoader {
                     def.description(),
                     def.maxIterations(),
                     false,
+                    false, // codeCapable
                     toolsResult.valid(),
                     Set.of(def.name().toLowerCase())
             );

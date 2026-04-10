@@ -30,31 +30,31 @@ public record AgentRoleEnum(String id) {
             "architect",
             "Brihaspati (System Designer)",
             "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
-            7, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH), Set.of("brihaspati", "brahaspati")
+            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH), Set.of("brihaspati", "brahaspati")
         ),
         "coordinator", new RoleDefinition(
             "coordinator",
             "Vishnu (Coordinator)",
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
-            7, true, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT, ToolCapability.DELEGATE_TO_AGENT), Set.of("vishnu")
+            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT, ToolCapability.DELEGATE_TO_AGENT), Set.of("vishnu")
         ),
         "researcher", new RoleDefinition(
             "researcher",
             "Saraswati (Researcher)",
             "Perform information retrieval, web searches, and documentation lookups.",
-            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.BROWSER_NAVIGATE), Set.of("saraswati")
+            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.BROWSER_NAVIGATE), Set.of("saraswati")
         ),
         "coder", new RoleDefinition(
             "coder",
             "Brahma (Creator)",
             "Writes new architectural code, features from scratch, and logic implementations.",
-            15, false, Set.of(ToolCapability.SANDBOX_EXEC), Set.of("brahma")
+            15, false, true, Set.of(ToolCapability.SANDBOX_EXEC), Set.of("brahma")
         ),
         "debugger", new RoleDefinition(
             "debugger",
             "Shiva (Destroyer/Debugger)",
             "Analyzes stack traces, finds bugs, and fixes broken code.",
-            15, false, Set.of(ToolCapability.GITHUB, ToolCapability.SANDBOX_EXEC), Set.of("shiva")
+            15, false, true, Set.of(ToolCapability.GITHUB, ToolCapability.SANDBOX_EXEC), Set.of("shiva")
         ),
         "synthesizer", new RoleDefinition(
             "synthesizer",
@@ -62,7 +62,7 @@ public record AgentRoleEnum(String id) {
             "Cross-domain synthesis tasks requiring code, debug, research, and architecture " +
             "simultaneously. Activated when a single task spans multiple specialist domains " +
             "and their outputs need integration or conflict resolution.",
-            10, true, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER), Set.of("dattatreya", "datta")
+            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER), Set.of("dattatreya", "datta")
         )
 
     );
@@ -80,7 +80,7 @@ public record AgentRoleEnum(String id) {
         if (def != null) {
             return def;
         }
-        return new RoleDefinition(this.id, "Dynamic Role", "", 5, true, Set.of(), Set.of());
+        return new RoleDefinition(this.id, "Dynamic Role", "", 5, true, false, Set.of(), Set.of());
     }
 
     /** Never throws — unknown names produce a dynamic role. */

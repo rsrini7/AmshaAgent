@@ -66,7 +66,7 @@ class SkillReflexTest {
     void testPopulatedRegistryOutput() {
         SkillDefinition def1 = new SkillDefinition("id1", "reviewer", "Reviews PRs", List.of("pattern"), List.of(), 5, "prompt");
         RoleDefinition role1 = new RoleDefinition(
-            "skill:reviewer", "Reviewer", "Reviews PRs", 5, false, Set.of(), Set.of()
+            "skill:reviewer", "Reviewer", "Reviews PRs", 5, false, false, Set.of(), Set.of()
         );
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[]{Pattern.compile("pattern")}, role1, "db");
 
@@ -81,7 +81,7 @@ class SkillReflexTest {
     void testBlankDescriptionFallback() {
         SkillDefinition def1 = new SkillDefinition("id1", "minimal", "", List.of(), List.of(), 5, "prompt");
         RoleDefinition role1 = new RoleDefinition(
-            "skill:minimal", "Minimal", "", 5, false, Set.of(), Set.of()
+            "skill:minimal", "Minimal", "", 5, false, false, Set.of(), Set.of()
         );
         CompiledSkillEntry e1 = new CompiledSkillEntry(def1, new Pattern[0], role1, "db");
 
