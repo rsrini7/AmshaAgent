@@ -1,6 +1,9 @@
 package com.arcclaw.core.reflex;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -23,11 +26,25 @@ public class ReflexRegistry {
     @Inject
     AuditService auditService;
 
+    private List<AgentReflex> sortedReflexes;
+
+    @Inject
+    void init() {
+        this.sortedReflexes = reflexes.stream()
+            .sorted(Comparator.comparingInt(AgentReflex::priority))
+            .collect(Collectors.toList());
+        log.infof("Initialized ReflexRegistry with %d reflexes: %s",
+            sortedReflexes.size(),
+            sortedReflexes.stream()
+                .map(r -> r.getClass().getSimpleName().replace("_ClientProxy", "") + "(" + r.priority() + ")")
+                .collect(Collectors.joining(" -> ")));
+    }
+
     public ReflexResult processIfReflex(String sessionId, String userId, String chatId,
                                         String input, MessageContext context) {
 
         // PASS 1 — find first matching reflex and dispatch
-        for (AgentReflex reflex : reflexes) {
+        for (AgentReflex reflex : sortedReflexes) {
             if (!reflex.matches(input)) continue;
             try {
                 auditService.record(
@@ -49,7 +66,7 @@ public class ReflexRegistry {
 
         // PASS 2 — no reflex matched; run sanitization chain
         String sanitized = input;
-        for (AgentReflex reflex : reflexes) {
+        for (AgentReflex reflex : sortedReflexes) {
             try {
                 String before = sanitized;
                 sanitized = reflex.sanitize(sessionId, userId, sanitized);

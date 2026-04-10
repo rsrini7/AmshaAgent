@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCronEntity;
@@ -42,12 +43,12 @@ public class ListCronsReflex implements AgentReflex {
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         if (!WorkspaceScopeHolder.USER_ID.isBound()) {
-            return ReflexResult.respond("Cannot list schedules — user context not available.", context);
+            return ReflexResult.respond(UserMessages.LIST_CONTEXT_NOT_AVAILABLE, context);
         }
         String uid = WorkspaceScopeHolder.USER_ID.get();
         List<AgentCronEntity> jobs = cronRepository.findByUserId(uid);
         if (jobs.isEmpty()) {
-            return ReflexResult.respond("No scheduled tasks found.", context);
+            return ReflexResult.respond(UserMessages.NO_SCHEDULE_FOUND, context);
         }
         String output = jobs.stream()
                 .map(AgentCronEntity::toDisplayString)

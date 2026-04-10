@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -124,7 +126,7 @@ public class ApproveReflex implements AgentReflex {
                     if (!delegateGuard.isDelegate(userId)) {
                         log.warnf("[DELEGATE-DENIED] admin=%s attempted to approve session=%s",
                                   userId, targetSid);
-                        return "❌ You are not authorized to use approval delegation.";
+                        return NOT_AUTHORIZED_DELEGATION;
                     }
                     return handleDelegateApproval(targetSid, userId, chatId, context);
                 }
@@ -173,7 +175,7 @@ public class ApproveReflex implements AgentReflex {
                                     // Wait for it to finish and signal us through the bridge.
                                     result = cliResultBridge.waitForResult(sessionId, 10000);
                                 }
-                                return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not resume — session may already be processing.";
+                                return result != null ? AgentResultFormatter.format(result) : COULD_NOT_RESUME;
                             } finally {
                                 cliResultBridge.cancel(sessionId);
                             }
@@ -182,7 +184,7 @@ public class ApproveReflex implements AgentReflex {
                             return "";
                         }
                     } catch (CheckpointResolutionException e) {
-                        return "No pending approval found for this session.";
+                        return NO_PENDING_APPROVAL;
                     }
                 }
 
@@ -191,22 +193,18 @@ public class ApproveReflex implements AgentReflex {
                     cronRepository.findAwaitingApprovalByUserId(userId);
                 if (pending.size() == 1) {
                     AgentCronEntity cron = pending.getFirst();
-                    return "⚠️ No active approval in this chat session.\n\n" +
-                           "A background task is waiting for your approval:\n" +
-                           "• " + cron.goal + "\n\n" +
-                           "Use: `/approve " + cron.id + "` to approve, " +
-                           "or `/deny " + cron.id + "` to cancel.";
+                    return String.format(CRON_SINGLE_AWAITING_GUIDE, cron.goal, cron.id, cron.id);
                 } else if (pending.size() > 1) {
                     String list = pending.stream()
                             .map(c -> "• `/approve " + c.id + "` — " + c.goal)
                             .collect(Collectors.joining("\n"));
-                    return "⚠️ Multiple background tasks awaiting approval:\n\n" + list;
+                    return String.format(CRON_MULTIPLE_AWAITING, list);
                 }
 
                 // 5. Check if it was JUST completed via another channel (signal bridge)
                 if (!statefulAgentStore.isSessionActive(sessionId)) {
                     log.debugf("ApproveReflex: ignoring approval for already-completed session %s", sessionId);
-                    return "No pending tool executions require approval.";
+                    return NO_PENDING_ANYWHERE;
                 }
 
                 AgentResult bridgeResult = null;
@@ -222,7 +220,7 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 // 6. Nothing pending anywhere
-                return "No pending tool executions require approval.";
+                return NO_PENDING_ANYWHERE;
             });
             return ReflexResult.respond(response, context);
         } catch (Exception e) {
@@ -230,7 +228,7 @@ public class ApproveReflex implements AgentReflex {
             log.errorf("Failed to process approval for session %s: %s", sessionId, errMsg);
             log.debug("Full approval processing failure stack trace:", e);
             return ReflexResult.respond(
-                "❌ **Approval Error**: An internal fault occurred while resuming the task.",
+                APPROVAL_ERROR,
                 context);
         }
     }
@@ -250,7 +248,7 @@ public class ApproveReflex implements AgentReflex {
             .orElse(null);
 
         if (activeRole == null) {
-            return "No parallel batch awaiting per-tool approval for this session.";
+            return NO_BATCH_AWAITING;
         }
 
         try {
@@ -258,7 +256,7 @@ public class ApproveReflex implements AgentReflex {
             checkpointApprovalService.triggerResume(cp);
             return "";
         } catch (CheckpointResolutionException e) {
-            return "No pending approval found for this session.";
+            return NO_PENDING_APPROVAL;
         }
     }
 
@@ -286,7 +284,7 @@ public class ApproveReflex implements AgentReflex {
             sessionId, agentRole, context.getUser().platformId(), context.getChatId(),
             context.getUser().channel().name()
         );
-        return "✅ Resuming task...";
+        return RESUMING_TASK;
     }
 
     private String handleCronApproval(
@@ -299,11 +297,11 @@ public class ApproveReflex implements AgentReflex {
                 .orElse(null);
 
         if (cron == null) {
-            return "❌ Cron task not found or not yours.";
+            return CRON_NOT_FOUND;
         }
 
         if (!CronStatus.AWAITING_APPROVAL.equals(cron.status)) {
-            return "❌ This task is not awaiting approval (status=" + cron.status + ").";
+            return String.format(CRON_NOT_AWAITING, cron.status);
         }
 
         var pendingCheckpoint = statefulAgentStore
@@ -311,8 +309,7 @@ public class ApproveReflex implements AgentReflex {
                 .orElse(null);
 
         if (pendingCheckpoint == null) {
-            return "❌ No pending checkpoint found for this task. " +
-                "It may have already been processed.";
+            return CRON_NO_CHECKPOINT;
         }
 
         String cronSessionId = pendingCheckpoint.getSessionId();
@@ -321,7 +318,7 @@ public class ApproveReflex implements AgentReflex {
         if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
             log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
                     "ignoring duplicate trigger.", cronSessionId);
-            return "⏳ Already processing your approval. Please wait.";
+            return ALREADY_PROCESSING;
         }
 
         try {
@@ -409,7 +406,7 @@ public class ApproveReflex implements AgentReflex {
             .orElse(null);
 
         if (activeRole == null) {
-            return "❌ Target session not found or not awaiting approval.";
+            return TARGET_SESSION_NOT_AWAITING;
         }
 
         AgentCheckpoint cp = latestPending.orElseThrow(() ->

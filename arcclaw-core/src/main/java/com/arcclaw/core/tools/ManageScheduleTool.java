@@ -1,5 +1,7 @@
 package com.arcclaw.core.tools;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -11,6 +13,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
@@ -91,7 +94,7 @@ public class ManageScheduleTool implements AgentTool {
             case "list" -> {
                 List<AgentCronEntity> jobs = cronRepository.findByUserId(userId);
                 if (jobs.isEmpty()) {
-                    yield ToolResponse.success("No scheduled tasks found.");
+                    yield ToolResponse.success(NO_SCHEDULE_FOUND);
                 }
                 String listing = jobs.stream()
                         .map(AgentCronEntity::toDisplayString)
@@ -108,7 +111,7 @@ public class ManageScheduleTool implements AgentTool {
 
                 if (deleted == 0) {
                     yield ToolResponse.failure(404,
-                        "Cron job not found: " + cronId + ". Use action='list' to see valid IDs.");
+                        UserMessages.cronNotFound(cronId));
                 }
 
                 String sessionId = WorkspaceScopeHolder.getIfActive();
@@ -117,7 +120,7 @@ public class ManageScheduleTool implements AgentTool {
                         SecurityEventType.CRONDELETED,
                         "cronId=" + cronId);
 
-                yield ToolResponse.success("✅ Cron job " + cronId + " deleted.");
+                yield ToolResponse.success(UserMessages.cronDeleted(cronId));
             }
 
             default -> ToolResponse.failure(400,

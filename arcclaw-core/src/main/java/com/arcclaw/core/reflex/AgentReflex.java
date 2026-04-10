@@ -10,6 +10,14 @@ public interface AgentReflex {
     boolean matches(String input);
 
     /**
+     * Execution priority for Pass 1 matching. Lower value means higher priority.
+     * Prompt injection should usually be first (e.g. 10).
+     */
+    default int priority() {
+        return 100;
+    }
+
+    /**
      * Executes the deterministic logic and returns the structured result.
      */
     ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context);

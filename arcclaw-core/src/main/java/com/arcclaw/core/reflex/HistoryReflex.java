@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -43,37 +45,34 @@ public class HistoryReflex implements AgentReflex {
 
         // Use findLatestBySessionId for consistency
         compactionSummaryRepository.findLatestBySessionId(sessionId).ifPresent(s -> {
-            sb.append("🗜️ *Compacted Summary* (")
-              .append(s.getMessagesCompacted())
-              .append(" messages):\n")
-              .append(s.getSummary())
+            sb.append(String.format(COMPACTED_SUMMARY_FORMAT, 
+                      s.getMessagesCompacted(), s.getSummary()))
               .append("\n\n");
         });
 
         List<ChatMessage> messages = chatMemoryStore.getMessages(sessionId);
         if (messages == null || messages.isEmpty()) {
             if (sb.isEmpty()) {
-                return ReflexResult.respond("📭 No conversation history found for this session.", context);
+                return ReflexResult.respond(NO_HISTORY_FOUND, context);
             }
             return ReflexResult.respond(sb.toString().trim(), context);
         }
 
-        sb.append("💬 *Active Window* (")
-          .append(messages.size())
-          .append(" messages):\n");
+        sb.append(String.format(ACTIVE_WINDOW_FORMAT, messages.size()))
+          .append("\n");
 
         AtomicInteger idx = new AtomicInteger(1);
         for (ChatMessage msg : messages) {
             if (msg instanceof UserMessage um) {
                 String text =  um.singleText();
                 sb.append(idx.getAndIncrement())
-                .append(". 👤 *You:* ")
+                .append(HISTORY_YOU_PREFIX)
                 .append(truncate(text, 200))
                 .append("\n");
             } else if (msg instanceof AiMessage am) {
                 String text = am.text();
                 sb.append(idx.getAndIncrement())
-                .append(". 🤖 *ArcClaw:* ")
+                .append(HISTORY_AI_PREFIX)
                 .append(truncate(text, 200))
                 .append("\n");
             }

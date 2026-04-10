@@ -9,6 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Default;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.InputSanitizer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -91,6 +92,11 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     }
 
     @Override
+    public int priority() {
+        return 20;
+    }
+
+    @Override
     public boolean emitsSanitizeAudit() {
         return true;
     }
@@ -103,7 +109,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId,
             String input, MessageContext context) {
-        return ReflexResult.respond("⚠️ PII detected. Message has been sanitized and blocked.", context);
+        return ReflexResult.respond(UserMessages.PII_DETECTED, context);
     }
 
     /** Sanitizes input: strips markdown links, masks UUIDs, applies PII rules, restores UUIDs. */

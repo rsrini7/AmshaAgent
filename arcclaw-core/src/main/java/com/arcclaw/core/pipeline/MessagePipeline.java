@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
+import com.arcclaw.core.message.UserMessages;
 import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 
@@ -59,7 +60,7 @@ public class MessagePipeline {
                     channelPluginRegistry.find(context.getChannelType())
                         .map(ChannelPlugin::sender)
                         .ifPresentOrElse(
-                            s -> s.sendRaw(context.getUser(), "⚠️ An internal error occurred. Please try again."),
+                            s -> s.sendRaw(context.getUser(), UserMessages.INTERNAL_ERROR),
                             () -> log.warnf("MessagePipeline: no sender for type %s — error notification dropped", context.getChannelType())
                         );
                 } catch (Exception notifyEx) {

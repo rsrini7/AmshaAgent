@@ -1,11 +1,14 @@
 package com.arcclaw.core.reflex;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -41,7 +44,7 @@ public class DeleteCronReflex implements AgentReflex {
 
         if (!WorkspaceScopeHolder.USER_ID.isBound()) {
             return ReflexResult.respond(
-                    "Cannot delete schedule — user context not available.", context);
+                    DELETE_CONTEXT_NOT_AVAILABLE, context);
         }
 
         String uid = WorkspaceScopeHolder.USER_ID.get();
@@ -58,23 +61,21 @@ public class DeleteCronReflex implements AgentReflex {
 
         if (cronId.isBlank()) {
             return ReflexResult.respond(
-                    "Usage: deletecron <id>  |  Use /crons to see valid IDs.", context);
+                    USAGE_DELETE_CRON, context);
         }
 
         // UUID format guard — prevents DB roundtrip for garbage input
         if (!cronId.matches(
                 "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
             return ReflexResult.respond(
-                    "❌ Invalid cron ID format: " + cronId
-                    + ". Use /crons to see valid IDs.", context);
+                    UserMessages.cronInvalid(cronId), context);
         }
 
         // Tenant-isolated delete — user B cannot delete user A's job
         int deleted = cronRepository.deleteByIdAndUserId(cronId, uid);
         if (deleted == 0) {
             return ReflexResult.respond(
-                    "❌ Cron job not found: " + cronId
-                    + ". Use /crons to see valid IDs.", context);
+                    UserMessages.cronNotFound(cronId), context);
         }
 
         auditService.record(sessionId, uid,
@@ -82,7 +83,7 @@ public class DeleteCronReflex implements AgentReflex {
                 SecurityEventType.CRONDELETED,
                 "cronId=" + cronId + " via=reflex");
 
-        return ReflexResult.respond("✅ Cron job " + cronId + " deleted.", context);
+        return ReflexResult.respond(UserMessages.cronDeleted(cronId), context);
     }
 
     @Override

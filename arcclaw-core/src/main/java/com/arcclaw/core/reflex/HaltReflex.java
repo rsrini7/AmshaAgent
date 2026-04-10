@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import org.jboss.logging.Logger;
 
@@ -25,6 +26,6 @@ public class HaltReflex implements AgentReflex {
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.errorf("[HaltReflex] SYSTEM HALT issued by user=%s for session=%s", userId, sessionId);
         workspaceManager.terminateSession(sessionId);
-        return ReflexResult.respond("🛑 System Halted. Workspace terminated.", context);
+        return ReflexResult.respond(UserMessages.SESSION_HALTED, context);
     }
 }

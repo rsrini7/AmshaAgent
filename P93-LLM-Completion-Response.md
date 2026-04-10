@@ -171,3 +171,23 @@ The ArcClaw core is now fully decoupled from tool extensions; adding a new tool 
 
 ---
 
+Viewed UserMessages.java:1-191
+
+I have successfully centralized the ArcClaw user messages into a unified catalog and refactored the codebase to eliminate duplicated, hardcoded strings.
+
+### Key Accomplishments:
+
+1.  **Centralized Message Catalog**: Created `com.arcclaw.core.message.UserMessages` as a single source of truth for all user-facing emoji-prefixed strings, error templates, and status formats.
+2.  **Refactored Reflexes**: Updated `ApproveReflex`, `DenyReflex`, `DeleteCronReflex`, `PiiScanReflex`, `PromptInjectionReflex`, `ResetReflex`, `HaltReflex`, `StatusReflex`, `ListCronsReflex`, and `HistoryReflex` to use the new catalog.
+3.  **Refactored Tools & Utilities**: Updated `ManageScheduleTool`, `DelegateToAgentTool`, `AgentErrorMessageUtil`, and `MessagePipeline` to remove hardcoded message literals. 
+4.  **Priority-Based Execution**: Enhanced `ReflexRegistry` to enforce a deterministic execution order using a new `priority()` field in the `AgentReflex` interface. This ensures that critical security checks like `PromptInjectionReflex` always fire before secondary checks like `PiiScanReflex`.
+5.  **Verified Stability**: Resolved test failures in `ReflexRegistryTest` caused by case-sensitivity and non-deterministic execution order. The final test suite passes with 15/15 successful tests.
+
+### Implementation Details:
+
+*   **`UserMessages.java`**: Contains ~50 constants and helper methods for formatting complex messages (e.g., status tables, delegation errors, token limit details).
+*   **`ReflexRegistry.java`**: Now sorts reflexes upon initialization, guaranteeing that high-priority security reflexes (Priority 10) win over standard command reflexes (Default Priority 100).
+*   **Case Sensitivity**: Adjusted `PROMPT_INJECTION_DETECTED` to maintain compatibility with existing tests that rely on specific keyword fragments.
+
+This refactor significantly improves maintainability and provides a clean foundation for future internationalization (i18n) efforts.
+
