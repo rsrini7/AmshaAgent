@@ -31,6 +31,7 @@ import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.RequiresSecrets;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonArraySchema;
@@ -110,8 +111,7 @@ public class ToolRegistry {
      * makes workspace dirs portable across platforms.
      */
     static String toSafeDirName(String sessionId) {
-        if (sessionId == null) return sessionId;
-        return sessionId.replace(':', '_');
+        return PathSanitizer.sanitizeForFilesystem(sessionId);
     }
 
     // Tool listing / lookup 

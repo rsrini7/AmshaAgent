@@ -23,6 +23,7 @@ import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.PathSanitizer;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -117,6 +118,9 @@ public class WorkspaceManager {
      * Reset the session state while keeping the session record (WORM compliance).
      */
     public void resetSessionState(String sessionId) {
+        if (sessionId != null && (sessionId.contains("..") || sessionId.contains("/") || sessionId.contains("\\"))) {
+            throw new SecurityException("Potential path traversal detected in sessionId: " + sessionId);
+        }
         log.infof("Soft-resetting session state for: %s", sessionId);
 
         wipeWorkspaceDir(sessionId);
@@ -195,7 +199,8 @@ public class WorkspaceManager {
     }
 
     private void wipeWorkspaceDir(String sessionId) {
-        Path workspaceDir = Path.of(workspaceRootDir, sessionId);
+        String safeName = PathSanitizer.sanitizeForFilesystem(sessionId);
+        Path workspaceDir = Path.of(workspaceRootDir, safeName);
         if (!Files.exists(workspaceDir)) return;
         try {
             Files.walkFileTree(workspaceDir, new SimpleFileVisitor<>() {

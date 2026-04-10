@@ -1,19 +1,14 @@
 package com.arcclaw.core.audit;
 
-import java.sql.SQLException;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-
-import com.arcclaw.core.state.CheckpointStatus;
-import io.quarkus.test.junit.QuarkusTest;
-import org.hibernate.exception.LockAcquisitionException;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 
 @QuarkusTest
 public class AuditIdempotencyTest {

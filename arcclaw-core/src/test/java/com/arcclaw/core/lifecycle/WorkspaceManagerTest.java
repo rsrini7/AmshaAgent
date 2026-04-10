@@ -2,6 +2,7 @@ package com.arcclaw.core.lifecycle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
@@ -227,5 +228,13 @@ class WorkspaceManagerTest {
             assertEquals(CheckpointStatus.AWAITING_APPROVAL, loaded.get().getStatus(), 
                 "AWAITING_APPROVAL should survive zombie recovery (new invariant)");
         });
+    }
+
+    @Test
+    void testResetSessionState_pathTraversalRejected() {
+        assertThrows(SecurityException.class,
+            () -> workspaceManager.resetSessionState("../../../etc/passwd"));
+        assertThrows(SecurityException.class,
+            () -> workspaceManager.resetSessionState("session-1/../../escape"));
     }
 }

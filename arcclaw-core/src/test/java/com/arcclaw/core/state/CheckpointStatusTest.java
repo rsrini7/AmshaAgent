@@ -1,12 +1,13 @@
 package com.arcclaw.core.state;
 
-import org.junit.jupiter.api.Test;
-import java.util.Set;
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Snapshot test for {@link CheckpointStatus} terminal states.
