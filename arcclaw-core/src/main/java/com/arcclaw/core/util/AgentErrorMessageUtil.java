@@ -22,7 +22,17 @@ public final class AgentErrorMessageUtil {
             "^(For input string:|null|Cannot invoke|NullPointerException|NumberFormatException)");
 
     private AgentErrorMessageUtil() {}
-
+ 
+    /**
+     * Returns a safe message from a Throwable.
+     * Returns e.getMessage() if present, otherwise returns the class simple name.
+     * If the throwable is null, returns "Unknown Error".
+     */
+    public static String safeMessage(Throwable t) {
+        if (t == null) return "Unknown Error";
+        return t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
+    }
+ 
     public static String sanitizeErrorMessage(String raw) {
         if (raw == null) return TASK_FAILED;
 

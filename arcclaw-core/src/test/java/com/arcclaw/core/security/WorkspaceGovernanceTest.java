@@ -24,7 +24,7 @@ public class WorkspaceGovernanceTest {
     @Test
     void testAutonomyBoundCorrectly() {
         WorkspaceContext.run(TEST_SESSION_ID, "gov-user", "gov-chat", AutonomyLevel.SUPERVISED, "coordinator", () -> {
-            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.autonomy());
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.requireAutonomyOrSupervised());
         });
     }
 

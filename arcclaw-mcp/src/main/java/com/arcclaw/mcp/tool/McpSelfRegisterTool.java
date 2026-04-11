@@ -80,7 +80,7 @@ public class McpSelfRegisterTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        String userId = WorkspaceContext.userId();
+        String userId = WorkspaceContext.requireUserId();
         if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
@@ -130,7 +130,7 @@ public class McpSelfRegisterTool implements AgentTool {
                 return ToolResponse.failure(400, "Unsupported transport: " + transportStr);
             }
 
-            auditService.record(sessionId, userId, WorkspaceContext.agentRole(), 
+            auditService.record(sessionId, userId, WorkspaceContext.requireAgentRole(), 
                 SecurityEventType.TOOL_EXECUTED, "MCP server registered: " + name);
 
             return ToolResponse.success("MCP server '" + name + "' registered successfully. tools/list handshake completed.");

@@ -71,7 +71,7 @@ class MemorySearchToolTest {
 
         assertFalse(response.success());
         assertEquals(403, response.exitCode());
-        assertTrue(response.output().contains("USER_ID not bound"));
+        assertTrue(response.output().contains("Security violation: tenant context not bound."));
     }
 
     @Test

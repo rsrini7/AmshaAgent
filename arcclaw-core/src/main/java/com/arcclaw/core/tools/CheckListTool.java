@@ -78,11 +78,24 @@ public class CheckListTool implements AgentTool {
     @Override
     @SuppressWarnings("unchecked")
     public ToolResponse execute(Map<String, Object> params) {
-        String userId = WorkspaceContext.userId();
-        if (userId == null || userId.isBlank()) {
-            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-        }
+        String userId;
+        String sessionId;
+        String agentRole;
 
+        try {
+            // Step 1 — Extract and validate tenant context
+            // NS2: Fail fast on missing context
+            userId    = WorkspaceContext.requireUserId();
+            sessionId = WorkspaceContext.requireSessionId();
+            agentRole = WorkspaceContext.requireAgentRole();
+        } catch (IllegalStateException e) {
+            // NS2 backward compatibility: convert missing context into 403 ToolResponse
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
+        }
+ 
         Object checkListRaw = params.get("checkList");
         if (checkListRaw == null) {
             throw new IllegalArgumentException("checkList must not be null or empty.");
@@ -135,15 +148,14 @@ public class CheckListTool implements AgentTool {
         }
 
         CheckList checkList = new CheckList(items);
-        String sessionId = WorkspaceContext.requireSessionId();
 
         // Fire event
         checkListEvents.fire(new CheckListEvent(sessionId, checkList));
 
-        // Audit
-        auditService.record(sessionId, userId, WorkspaceContext.agentRole(), 
+        // Audit — NS2: Fail fast on missing role
+        auditService.record(sessionId, userId, agentRole, 
             SecurityEventType.TOOL_EXECUTED, "Checklist updated with " + items.size() + " items");
-
+ 
         return ToolResponse.success("Checklist updated. Continue tracking progress.");
     }
 }

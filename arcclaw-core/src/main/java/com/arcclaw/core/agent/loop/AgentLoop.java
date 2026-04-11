@@ -35,6 +35,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcKeys;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.micrometer.core.instrument.Counter;
@@ -171,8 +172,8 @@ public class AgentLoop {
                     : resolvedRole.toScopedName();
         } catch (IllegalArgumentException e) {
             log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
-
-            auditService.record(sessionId, WorkspaceContext.userId(), agentRole,
+ 
+            auditService.record(sessionId, WorkspaceContext.requireUserId(), agentRole,
                 SecurityEventType.INVALID_ROLE_FALLBACK,
                 "Unknown agentRole '" + agentRole + "' — defaulted to COORDINATOR");
 
@@ -300,10 +301,10 @@ public class AgentLoop {
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
                     capturedUserId,  // reuse already-captured value
-                    WorkspaceContext.chatId(),
+                    WorkspaceContext.requireChatId(),
                     canonicalRole,
                     goal,
-                    WorkspaceContext.autonomy(),
+                    WorkspaceContext.requireAutonomyOrSupervised(),
                     maxIterations,
                     channelType,
                     channelPlatformId,
@@ -373,8 +374,9 @@ public class AgentLoop {
             return result;
 
         } catch (StructuredOutputException e) {
-            log.errorf("Structured output failure for session %s: %s", sessionId, e.getMessage());
-            result = AgentResult.failed(e.getMessage(),
+            String msg = AgentErrorMessageUtil.safeMessage(e);
+            log.errorf("Structured output failure for session %s: %s", sessionId, msg);
+            result = AgentResult.failed(msg,
                     AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
             return result;
 
@@ -386,7 +388,7 @@ public class AgentLoop {
         } catch (ComplianceViolationException cve) {
             log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s " +
                        "— halting agent.", sessionId, cve.getEventType());
-            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + cve.getMessage(),
+            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + AgentErrorMessageUtil.safeMessage(cve),
                     AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
@@ -400,7 +402,7 @@ public class AgentLoop {
             // null-guard e.getMessage() — NullPointerException and several other JVM
             // exception types return null from getMessage(), which would produce
             // "SYSTEM_ERROR: null" in both the AgentResult and the checkpoint failure record.
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String errMsg = AgentErrorMessageUtil.safeMessage(e);
             log.errorf("Agent execution failed for session %s: %s", sessionId, errMsg, e);
             result = AgentResult.failed("SYSTEM_ERROR: " + errMsg,
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
@@ -453,7 +455,7 @@ public class AgentLoop {
                     .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
         } catch (Exception e) {
             log.warnf("notifyStaleApprovalDiscarded: could not notify user for session=%s — %s",
-                    sessionId, e.getMessage());
+                    sessionId, AgentErrorMessageUtil.safeMessage(e));
         }
     }
 
@@ -533,7 +535,7 @@ public class AgentLoop {
         } catch (Exception e) {
             log.warnf("Failed to stamp channel info for session %s — " +
                       "timeout notification may be skipped. Cause: %s",
-                      sessionId, e.getMessage());
+                      sessionId, AgentErrorMessageUtil.safeMessage(e));
             // Never re-throw — channel stamping must not corrupt the AwaitingApproval result.
         }
     }

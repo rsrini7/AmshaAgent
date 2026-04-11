@@ -209,7 +209,7 @@ public class ToolRegistry {
         // Role-capability hard block 
         // Schema filter is soft (LLM can hallucinate past it).
         // This is the hard enforcement layer — role must explicitly own the capability.
-        String agentRole = WorkspaceContext.agentRole();
+        String agentRole = WorkspaceContext.requireAgentRole();
         if (agentRole != null) {
             if (!AgentRoleEnum.isKnownRole(agentRole)) {
                 log.warnf("SECURITY: Unknown agentRole=%s — blocking tool=%s", agentRole, toolName);
@@ -232,7 +232,7 @@ public class ToolRegistry {
         }
 
         // Autonomy governance check
-        var level      = WorkspaceContext.autonomy();
+        var level      = WorkspaceContext.requireAutonomyOrSupervised();
         var requiredOp = tool.requiredOperation();
 
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
@@ -255,7 +255,7 @@ public class ToolRegistry {
                     toolName, requiredOp, level);
             auditService.record(
                     WorkspaceContext.requireSessionId(), resolveUserId(),
-                    WorkspaceContext.agentRole(),
+                    WorkspaceContext.requireAgentRole(),
                     SecurityEventType.TOOL_BLOCKED,
                     "tool=" + toolName + " op=" + requiredOp);
             throw new SecurityException(
@@ -383,7 +383,7 @@ public class ToolRegistry {
     private void recordToolAudit(String toolName) {
         auditService.record(
                 WorkspaceContext.requireSessionId(), resolveUserId(),
-                WorkspaceContext.agentRole(),
+                WorkspaceContext.requireAgentRole(),
                 SecurityEventType.TOOL_INVOKED,
                 "tool=" + toolName);
     }

@@ -107,31 +107,55 @@ public final class WorkspaceContext {
         return SESSION_ID.get();
     }
 
+    // Currently not used anywhere, but need tocheck the usecase and use it during scenario based testing.... 
+    public static AutonomyLevel requireAutonomy() {
+        if (!AUTONOMY.isBound() || AUTONOMY.get() == null) {
+            throw new IllegalStateException("WorkspaceContext AUTONOMY is unbound");
+        }
+        return AUTONOMY.get();
+    }
 
-    public static AutonomyLevel autonomy() {
-        return AUTONOMY.isBound() && AUTONOMY.get() != null ? AUTONOMY.get() : AutonomyLevel.SUPERVISED;
+    public static AutonomyLevel requireAutonomyOrSupervised() {
+        if (!AUTONOMY.isBound() || AUTONOMY.get() == null) {
+            return AutonomyLevel.SUPERVISED;
+        }
+        return AUTONOMY.get();
     }
 
     public static String resolveUserId() {
         try {
-            return WorkspaceContext.userId();
+            return USER_ID.isBound() && USER_ID.get() != null ? USER_ID.get() : "";
         } catch (Exception e) {
             return "unknown";
         }
     }
 
-    public static String userId() {
-        return USER_ID.isBound() && USER_ID.get() != null ? USER_ID.get() : "";
+    public static String requireUserId() {
+        if (!USER_ID.isBound() || USER_ID.get() == null || USER_ID.get().isBlank()) {
+            throw new IllegalStateException("WorkspaceContext USER_ID is unbound");
+        }
+        return USER_ID.get();
     }
 
-
-    public static String chatId() {
-        return CHAT_ID.isBound() && CHAT_ID.get() != null ? CHAT_ID.get() : "";
+    public static String requireChatId() {
+        if (!CHAT_ID.isBound() || CHAT_ID.get() == null || CHAT_ID.get().isBlank()) {
+            throw new IllegalStateException("WorkspaceContext CHAT_ID is unbound");
+        }
+        return CHAT_ID.get();
     }
 
-
-    public static String agentRole() {
-        return AGENT_ROLE.isBound() && AGENT_ROLE.get() != null ? AGENT_ROLE.get() : "";
+    public static String requireChatIdOrUserId() {
+        if (!CHAT_ID.isBound() || CHAT_ID.get() == null) {
+            return requireUserId();
+        }
+        return CHAT_ID.get();
+    }
+ 
+    public static String requireAgentRole() {
+        if (!AGENT_ROLE.isBound() || AGENT_ROLE.get() == null || AGENT_ROLE.get().isBlank()) {
+            throw new IllegalStateException("WorkspaceContext AGENT_ROLE is unbound");
+        }
+        return AGENT_ROLE.get();
     }
 
 

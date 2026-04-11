@@ -120,7 +120,7 @@ public class ToolInvocationGuard {
 
         if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
                 && !isSchedulingTool
-                && !AutonomyLevel.FULL.equals(WorkspaceContext.autonomy())) {
+                && !AutonomyLevel.FULL.equals(WorkspaceContext.requireAutonomyOrSupervised())) {
 
             try {
                 String paramsJson = objectMapper.writeValueAsString(params);

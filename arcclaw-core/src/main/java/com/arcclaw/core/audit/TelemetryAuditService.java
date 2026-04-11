@@ -9,6 +9,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.config.SystemMetadataRegistry;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -59,8 +60,9 @@ public class TelemetryAuditService {
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("[TEST-EXPECTED]")) {
-                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)", type, sessionId, e.getMessage());
+            String msg = AgentErrorMessageUtil.safeMessage(e);
+            if (msg.contains("[TEST-EXPECTED]")) {
+                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)", type, sessionId, msg);
             } else {
                 log.warnf(e, "[AUDIT] Failed to submit TELEMETRY event %s for session %s", type, sessionId);
             }
@@ -91,8 +93,9 @@ public class TelemetryAuditService {
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("[TEST-EXPECTED]")) {
-                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)", sessionId, e.getMessage());
+            String msg = AgentErrorMessageUtil.safeMessage(e);
+            if (msg.contains("[TEST-EXPECTED]")) {
+                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)", sessionId, msg);
             } else {
                 log.warnf(e, "[AUDIT] Failed to submit loop completion TELEMETRY for session %s", sessionId);
             }

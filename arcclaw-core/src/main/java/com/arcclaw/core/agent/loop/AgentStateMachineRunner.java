@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -243,8 +244,7 @@ public class AgentStateMachineRunner {
 
             } catch (Exception e) {
                 iterSpan.recordException(e);
-                iterSpan.setStatus(StatusCode.ERROR,
-                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                iterSpan.setStatus(StatusCode.ERROR, AgentErrorMessageUtil.safeMessage(e));
                 throw e;
             } finally {
                 iterSpan.end();
@@ -289,9 +289,18 @@ public class AgentStateMachineRunner {
     private AgentResult handleFinishAction(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step, int iteration) {
         log.infof("Agent reached FINISH at iteration %d", iteration);
+ 
+        // NS3: Null-safe actionInput map dereference
+        Optional<Map<String, Object>> inputOpt = Optional.ofNullable(step.actionInput());
+        if (inputOpt.isEmpty()) {
+            log.errorf("LLM sent FINISH without actionInput map for session %s", sessionId);
+            return AgentResult.failed("Malformed LLM response: FINISH action missing input payload.",
+                    AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history));
+        }
+
         String answer = step.thought();
-        if (step.actionInput() != null && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
-            answer = String.valueOf(step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
+        if (inputOpt.get().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+            answer = String.valueOf(inputOpt.get().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
         }
 
         if (answer != null) {

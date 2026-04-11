@@ -52,7 +52,7 @@ public class RagContextEnricher implements ContextEnricher {
             return basePrompt;
         }
 
-        String userId = WorkspaceContext.userId();
+        String userId = WorkspaceContext.requireUserId();
         if (userId == null || userId.isBlank()) {
             userId = sessionId;
         }

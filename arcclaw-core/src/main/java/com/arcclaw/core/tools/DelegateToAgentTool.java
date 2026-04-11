@@ -60,6 +60,25 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
+        String currentRoleName;
+        String outerSessionId;
+        String userId;
+        String chatId;
+
+        try {
+            // NS2: Fail fast on missing context
+            currentRoleName = WorkspaceContext.requireAgentRole();
+            outerSessionId  = WorkspaceContext.requireSessionId();
+            userId          = WorkspaceContext.requireUserId();
+            chatId          = WorkspaceContext.requireChatId();
+        } catch (IllegalStateException e) {
+            // NS2 backward compatibility: convert missing context into 403 ToolResponse
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
+        }
+
         Object agentObj = params.get("agent");
         Object goalObj = params.get("goal");
 
@@ -92,11 +111,6 @@ public class DelegateToAgentTool implements AgentTool {
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
 
         // 2a. Governance Guard: Capability Escalation Check (§4.10)
-        // Coordinator is the root orchestrator — it can delegate to ANY
-        // registered role. Capability escalation guard only applies when
-        // non-coordinator roles attempt delegation (prevents lateral
-        // privilege escalation between specialists).
-        String currentRoleName = WorkspaceContext.agentRole();
         AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
 
         if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
@@ -120,7 +134,6 @@ public class DelegateToAgentTool implements AgentTool {
         
         // AgentExecutionContext constructor throws on maxIterations <= 0
         int maxIterations = Math.max(1, targetRole.definition().maxIterations());
-        String outerSessionId = WorkspaceContext.requireSessionId();
 
         // NOTE: Inner sessions bypass SessionRegistry intentionally.
         // StatefulAgentStore.save() must not require a session_registry entry.
@@ -146,8 +159,8 @@ public class DelegateToAgentTool implements AgentTool {
         try {
             result = WorkspaceContext.run(
                 innerSessionId,
-                WorkspaceContext.userId(),
-                WorkspaceContext.chatId(),
+                userId,
+                chatId,
                 AutonomyLevel.FULL,
                 targetRole.toScopedName(),
                 () -> agentLoop.get().run(
@@ -158,6 +171,11 @@ public class DelegateToAgentTool implements AgentTool {
                     maxIterations
                 )
             );
+        } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
         } catch (BudgetExceededException e) {
             throw e; // MUST propagate to top level
         } catch (Exception e) {

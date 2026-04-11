@@ -19,6 +19,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -88,7 +89,10 @@ class CheckpointResumeHandlerPreExecTest {
         msgContext.setSessionId(sessionId);
         msgContext.setResumeSignal(true);
 
-        handler.handle(context, new ArrayList<>(), msgContext);
+        WorkspaceContext.runWithFullAutonomy(sessionId, "user1", "chat1", agentRole, () -> {
+            handler.handle(context, new ArrayList<>(), msgContext);
+            return null;
+        });
 
         // Verify toolRegistry.invokeTool was ONLY called for 'unsafe', NOT for 'safe'
         verify(toolRegistry, never()).invokeTool(eq("safe"), any(), any());

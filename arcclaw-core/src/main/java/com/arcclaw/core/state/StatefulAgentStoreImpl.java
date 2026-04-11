@@ -78,7 +78,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpoint checkpoint;
-        AutonomyLevel autonomy = WorkspaceContext.autonomy();
+        AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
 
         if (existing.isPresent()) {
             checkpoint = existing.get();

@@ -19,7 +19,7 @@ class WorkspaceContextTest {
 
         Thread t1 = new Thread(() -> {
             WorkspaceContext.runWithFullAutonomy("sess-1", "user-1", "chat-1", "coordinator", () -> {
-                thread1Level.set(WorkspaceContext.autonomy());
+                thread1Level.set(WorkspaceContext.requireAutonomyOrSupervised());
                 latch1.countDown();
                 try { latch2.await(); } catch (InterruptedException _) {}
             });
@@ -28,7 +28,7 @@ class WorkspaceContextTest {
         Thread t2 = new Thread(() -> {
             try { latch1.await(); } catch (InterruptedException _) {}
             WorkspaceContext.run("sess-2", "user-2", "chat-2", AutonomyLevel.READONLY, "researcher", () -> {
-                thread2Level.set(WorkspaceContext.autonomy());
+                thread2Level.set(WorkspaceContext.requireAutonomyOrSupervised());
                 latch2.countDown();
             });
         });
@@ -52,18 +52,26 @@ class WorkspaceContextTest {
     void testNestedScopesDoNotLeak() {
         WorkspaceContext.run("sess-outer", "user-1", "chat-1", AutonomyLevel.SUPERVISED, "coordinator", () -> {
             assertEquals("sess-outer", WorkspaceContext.requireSessionId());
-            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.autonomy());
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.requireAutonomyOrSupervised());
 
             WorkspaceContext.runWithFullAutonomy("sess-inner", "user-2", "chat-2", "coder", () -> {
                 assertEquals("sess-inner", WorkspaceContext.requireSessionId());
-                assertEquals(AutonomyLevel.FULL, WorkspaceContext.autonomy());
-                assertEquals("user-2", WorkspaceContext.userId());
+                assertEquals(AutonomyLevel.FULL, WorkspaceContext.requireAutonomyOrSupervised());
+                assertEquals("user-2", WorkspaceContext.requireUserId());
             });
 
             // Outer restored
             assertEquals("sess-outer", WorkspaceContext.requireSessionId());
-            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.autonomy());
-            assertEquals("user-1", WorkspaceContext.userId());
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.requireAutonomyOrSupervised());
+            assertEquals("user-1", WorkspaceContext.requireUserId());
         });
+    }
+ 
+    @Test
+    void testRequireMethodsThrowsIfUnbound() {
+        assertThrows(IllegalStateException.class, WorkspaceContext::requireUserId, "USER_ID should fail fast if unbound");
+        assertThrows(IllegalStateException.class, WorkspaceContext::requireChatId, "CHAT_ID should fail fast if unbound");
+        assertThrows(IllegalStateException.class, WorkspaceContext::requireAutonomy, "AUTONOMY should fail fast if unbound");
+        assertThrows(IllegalStateException.class, WorkspaceContext::requireAgentRole, "AGENT_ROLE should fail fast if unbound");
     }
 }

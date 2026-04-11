@@ -137,17 +137,22 @@ public class ScheduleTaskTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        // Step 1 — Extract and validate tenant context
-        String userId    = WorkspaceContext.userId();
-        String chatId    = WorkspaceContext.chatId();
-        String sessionId = WorkspaceContext.requireSessionId();
+        String userId;
+        String chatId;
+        String sessionId;
 
-        if (userId == null || userId.isBlank()) {
-            return ToolResponse.failure(403,
-                    "Security violation: tenant context not bound. Operation rejected.");
-        }
-        if (chatId.isBlank()) {
-            chatId = userId; // REST/CLI fallback
+        try {
+            // Step 1 — Extract and validate tenant context
+            // NS2: Fail fast on missing context
+            userId    = WorkspaceContext.requireUserId();
+            chatId    = WorkspaceContext.requireChatIdOrUserId(); // REST/CLI fallback 
+            sessionId = WorkspaceContext.requireSessionId();
+        } catch (IllegalStateException e) {
+            // NS2 backward compatibility: convert missing context into 403 ToolResponse
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
         }
 
         String goal           = (String) params.get("goal");
