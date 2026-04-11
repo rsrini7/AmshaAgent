@@ -14,6 +14,7 @@ import org.jboss.logging.Logger;
  * when values contain equal signs (e.g. JWT tokens).
  */
 @ApplicationScoped
+@ReflexPriority(500)
 public class StoreReflex implements AgentReflex {
 
     private static final Logger log = Logger.getLogger(StoreReflex.class);

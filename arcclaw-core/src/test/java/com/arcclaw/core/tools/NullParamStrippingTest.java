@@ -52,6 +52,10 @@ class NullParamStrippingTest {
         when(instance.iterator()).thenReturn(List.of(mockTool).iterator());
         when(instance.spliterator()).thenReturn(List.of(mockTool).spliterator());
         registry.discoveredTools = instance;
+        registry.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        registry.isolationExecutor = mock(com.arcclaw.core.sandbox.ProcessIsolationExecutor.class);
+        
+        registry.initialize();
     }
 
     @Test

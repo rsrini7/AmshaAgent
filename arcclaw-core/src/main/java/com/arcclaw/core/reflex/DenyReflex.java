@@ -41,6 +41,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@ReflexPriority(200)
 public class DenyReflex implements AgentReflex {
 
     @Inject Logger log;

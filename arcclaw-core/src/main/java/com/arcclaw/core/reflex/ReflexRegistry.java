@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -25,17 +26,31 @@ public class ReflexRegistry {
     @Inject
     AuditService auditService;
 
+    private List<AgentReflex> sortedReflexes;
+
+    @PostConstruct
+    void init() {
+        this.sortedReflexes = reflexes.stream()
+            .sorted(Comparator.comparingInt(this::getPriority))
+            .toList();
+        log.infof("ReflexRegistry: Initialized with %d sorted reflexes.", sortedReflexes.size());
+    }
+
+    private int getPriority(AgentReflex reflex) {
+        // Unwrap proxy for annotation check
+        Class<?> actualClass = reflex.getClass();
+        while (actualClass.getName().contains("_ClientProxy") || actualClass.getName().contains("_Subclass")) {
+            actualClass = actualClass.getSuperclass();
+        }
+        ReflexPriority annotation = actualClass.getAnnotation(ReflexPriority.class);
+        return annotation != null ? annotation.value() : reflex.priority();
+    }
+
     public ReflexResult processIfReflex(String sessionId, String userId, String chatId,
                                         String input, MessageContext context) {
 
-        // Snapshot and sort reflex instances once per request (H5 priority ordering)
-        // Eliminates hot-reload race conditions between Match and Sanitize passes.
-        List<AgentReflex> snapshot = reflexes.stream()
-            .sorted(Comparator.comparingInt(AgentReflex::priority))
-            .toList();
-
         // PASS 1 — find first matching reflex and dispatch
-        for (AgentReflex reflex : snapshot) {
+        for (AgentReflex reflex : sortedReflexes) {
             if (!reflex.matches(input)) continue;
             try {
                 auditService.record(
@@ -57,7 +72,7 @@ public class ReflexRegistry {
 
         // PASS 2 — no reflex matched; run sanitization chain
         String sanitized = input;
-        for (AgentReflex reflex : snapshot) {
+        for (AgentReflex reflex : sortedReflexes) {
             try {
                 String before = sanitized;
                 sanitized = reflex.sanitize(sessionId, userId, sanitized);

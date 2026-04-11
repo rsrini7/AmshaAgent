@@ -17,6 +17,7 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@ReflexPriority(500)
 public class ResetReflex implements AgentReflex {
 
     @Inject

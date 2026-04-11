@@ -21,6 +21,7 @@ import com.arcclaw.core.state.AgentCronRepository;
  *   - "/cron delete <id>"     — Telegram command dispatch form
  */
 @ApplicationScoped
+@ReflexPriority(500)
 public class DeleteCronReflex implements AgentReflex {
 
     @Inject

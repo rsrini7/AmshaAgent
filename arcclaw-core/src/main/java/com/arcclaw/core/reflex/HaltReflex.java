@@ -9,6 +9,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@ReflexPriority(500)
 public class HaltReflex implements AgentReflex {
 
     @Inject

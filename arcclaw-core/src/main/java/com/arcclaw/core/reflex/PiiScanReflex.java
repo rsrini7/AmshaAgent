@@ -18,6 +18,7 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 @Default
 @InputSanitizer.PII
+@ReflexPriority(20)
 public class PiiScanReflex implements AgentReflex, InputSanitizer {
 
     public enum PiiMode {
