@@ -181,3 +181,25 @@ I introduced two precise integration tests in `SecretVaultImplTest.java` that ex
 I augmented `Architecture_Invariants.md` with **§ 5.20 SecretVault Transaction Contract**. It formalizes the rule preventing future regressions:
 - Any `vault.store()` call acts implicitly as a decoupled persist operation.
 - Code blocks must respect the fact that vault writes commit directly and will not be reversed if an encompassing transaction rolls back.
+
+---
+
+I've successfully rewritten `StructuredRetryLoop` to use a bounded retry state machine and verified the changes via tests.
+
+### Key Changes Implemented
+
+**1. Flattened the Retry State Machine:**
+I migrated the unbounded, infinitely-nestable try/catch blocks into a clear `while` loop that bounds execution exactly. It allows a maximum of 2 retries (capped at 3 total execution attempts).
+
+**2. Audit Tracing for Debugging:**
+The loop now explicitly maintains a list of previously thrown exceptions (`retryReasons`). If the LLM successfully self-corrects—or fails outright after hitting `maxRetries`—the entire list of accumulated exceptions is compiled into the telemetry event. This makes debugging extraction loops much easier by seeing the full timeline of failures.
+
+**3. Verified Call Amplification Guard:**
+I updated the mock behavior in `StructuredRetryLoopTest.java` to explicitly `verify(call, times(3)).get()`. If the while loop breaks or amplifies beyond the expected bounds, this mock will loudly fail. 
+
+**4. Modeled New Edge Cases:**
+I added `testBudgetWarningFollowedByExtractionFailure()` demonstrating the exact scenario flagged in H11 where dual failure paths were previously compounding. This test explicitly verifies that alternating exceptions still increment the single tracker cleanly, never exceeding the limit.
+
+---
+
+
