@@ -20,6 +20,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import io.opentelemetry.api.trace.Span;
@@ -84,6 +85,7 @@ class StructuredRetryLoopTest {
 
         assertThrows(StructuredOutputException.class, () -> retryLoop.execute(sessionId, "role", "op", call));
         verify(mockSpan).end();
+        verify(call, times(3)).get();
     }
 
     @Test
@@ -120,5 +122,20 @@ class StructuredRetryLoopTest {
 
         retryLoop.execute(sessionId, "role", "op", call);
         verify(auditService, times(1)).record(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void testBudgetWarningFollowedByExtractionFailure() {
+        @SuppressWarnings("unchecked")
+        Supplier<String> call = mock(Supplier.class);
+        when(call.get())
+            .thenThrow(new BudgetWarningException("Low budget"))
+            .thenThrow(new JsonExtractionException("fail", "raw", String.class, null, null))
+            .thenReturn("success");
+
+        String result = retryLoop.execute(sessionId, "role", "op", call);
+
+        assertEquals("success", result);
+        verify(call, times(3)).get();
     }
 }

@@ -1,6 +1,9 @@
 package com.arcclaw.core.structured;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -43,43 +46,46 @@ public class StructuredRetryLoop {
      */
     public <T> T execute(String sessionId, String agentRole, String operationName, Supplier<T> call) {
         Span span = otelContext.childSpan(sessionId, operationName);
+        int attempt = 0;
+        int maxRetries = 2;
+        List<Exception> retryReasons = new ArrayList<>();
+        
         try {
-            // Attempt 1
-            return executeWithBudgetGate(sessionId, call);
-        } catch (BudgetWarningException e1) {
-            log.warnf("Budget warning for session %s during %s: %s", sessionId, operationName, e1.getMessage());
-            return executeWithBudgetGate(sessionId, call);
-        } catch (JsonExtractionException e1) {
-            log.warnf("First extraction attempt failed for %s. Retrying...", operationName);
-            
-            // Attempt 2 (Single Retry)
-            try {
-                T result = executeWithBudgetGate(sessionId, call);
-                
-                // Record success after retry in Audit
-                String userId = WorkspaceScopeHolder.getUserIdOrUnknown();
-                auditService.record(sessionId, userId, agentRole, 
-                        SecurityEventType.STRUCTURED_OUTPUT_RETRY, 
-                        "Success after recovery: " + e1.getMessage());
-                
-                return result;
-            } catch (BudgetWarningException ew) {
-                log.warnf("Budget warning during retry for %s: %s", operationName, ew.getMessage());
-                return executeWithBudgetGate(sessionId, call);
-            } catch (JsonExtractionException e2) {
-                log.errorf("Extraction failed after retry for %s. Raw: %s", operationName, e2.getRawResponse());
-                throw new StructuredOutputException("Failed to extract structured output after retry: " + e2.getMessage(), e2);
+            while (attempt <= maxRetries) {
+                try {
+                    // Hard budget Check BEFORE call
+                    governanceLayer.assertWithinBudget(sessionId);
+                    T result = call.get();
+                    
+                    if (attempt > 0) {
+                        log.infof("LLM call for %s succeeded on retry attempt %d", operationName, attempt);
+                        String userId = WorkspaceScopeHolder.getUserIdOrUnknown();
+                        auditService.record(sessionId, userId, agentRole, 
+                                SecurityEventType.STRUCTURED_OUTPUT_RETRY, 
+                                "Success after recovery. Attempt " + attempt + ". Reasons: " + retryReasons.stream().map(Exception::getMessage).collect(Collectors.joining("; ")));
+                    }
+                    return result;
+                } catch (BudgetWarningException | JsonExtractionException e) {
+                    attempt++;
+                    retryReasons.add(e);
+                    
+                    if (attempt > maxRetries) {
+                        log.errorf("Extraction failed after max retries (%d) for %s. Last error: %s", maxRetries, operationName, e.getMessage());
+                        String userId = WorkspaceScopeHolder.getUserIdOrUnknown();
+                        auditService.record(sessionId, userId, agentRole, 
+                                SecurityEventType.STRUCTURED_OUTPUT_RETRY, 
+                                "Failed after max retries (" + maxRetries + "). Reasons: " + retryReasons.stream().map(Exception::getMessage).collect(Collectors.joining("; ")));
+                        throw new StructuredOutputException("Failed to extract structured output after " + maxRetries + " retries: " + e.getMessage(), e);
+                    }
+                    
+                    log.warnf("Retrying LLM call for %s (attempt %d/%d): %s", operationName, attempt, maxRetries, e.getMessage());
+                }
             }
+            throw new IllegalStateException("Should not reach here");
         } finally {
             if (span != null) {
                 span.end();
             }
         }
-    }
-
-    private <T> T executeWithBudgetGate(String sessionId, Supplier<T> call) {
-        // Hard budget Check BEFORE call
-        governanceLayer.assertWithinBudget(sessionId);
-        return call.get();
     }
 }
