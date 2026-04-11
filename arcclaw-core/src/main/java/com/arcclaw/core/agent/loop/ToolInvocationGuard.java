@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -37,6 +39,9 @@ public class ToolInvocationGuard {
     @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
     @Inject public Instance<ToolGuardInterceptor> interceptors;
 
+    // Session-scoped deduplication cache: SessionId -> (DedupeKey -> Observation)
+    private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
+
     public sealed interface GuardDecision
             permits GuardDecision.Allow, GuardDecision.Deduplicate,
             GuardDecision.PauseForApproval, GuardDecision.Blocked {
@@ -66,36 +71,26 @@ public class ToolInvocationGuard {
             }
         }
 
-        // 1. DEDUPLICATION CHECK
-        for (ReasoningStep past : history) {
-            if (toolName.equals(past.action())
-                    && past.observation() != null
-                    && !past.observation().isBlank()) {
-
-                // Primary check: Map equality (fast)
-                boolean argsMatch = Objects.equals(params, past.actionInput());
-
-                // Fallback check: JSON string equality (handles LinkedHashMap ordering
-                // differences)
-                if (!argsMatch) {
-                    try {
-                        String currentArgs = objectMapper.writeValueAsString(params);
-                        String pastArgs    = objectMapper.writeValueAsString(past.actionInput());
-                        argsMatch = currentArgs.equals(pastArgs);
-                    } catch (Exception e) {
-                        log.debugf("DEDUP-GUARD: JSON comparison failed for tool '%s' in session %s: %s",
-                                toolName, sessionId, e.getMessage());
-                    }
-                }
-
-                if (argsMatch) {
-                    log.warnf("[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — returning cached observation.",
-                            toolName, sessionId);
-                    String cachedObs = past.observation() + "\n\n[NOTE: This result was retrieved from " +
-                            "the current session cache. The tool was not re-executed.]";
-                    return new GuardDecision.Deduplicate(cachedObs);
+        // 1. DEDUPLICATION CHECK (O(1) with stable hash/JSON key)
+        Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
+            Map<String, String> index = new ConcurrentHashMap<>();
+            // Build index from history on first access in this turn
+            for (ReasoningStep past : history) {
+                if (past.observation() != null && !past.observation().isBlank()) {
+                    index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
                 }
             }
+            return index;
+        });
+
+        String currentKey = buildDedupeKey(toolName, params);
+        if (dedupeIndex.containsKey(currentKey)) {
+            String pastObservation = dedupeIndex.get(currentKey);
+            log.warnf("[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — returning cached observation.",
+                    toolName, sessionId);
+            String cachedObs = pastObservation + "\n\n[NOTE: This result was retrieved from " +
+                    "the current session cache. The tool was not re-executed.]";
+            return new GuardDecision.Deduplicate(cachedObs);
         }
 
         // 1.5 TOOL EXISTENCE CHECK (Internal and Dynamic)
@@ -134,6 +129,39 @@ public class ToolInvocationGuard {
         }
 
         return new GuardDecision.Allow();
+    }
+    /**
+     * Clears cached deduplication data for a terminated session.
+     */
+    public void clearSession(String sessionId) {
+        sessionDedupeCache.remove(sessionId);
+    }
+
+    /**
+     * Records a new tool call in the deduplication cache so subsequent or parallel calls
+     * with identical parameters can be skipped.
+     */
+    public void recordToolCall(String sessionId, String toolName, Map<String, Object> params, String observation) {
+        Map<String, String> index = sessionDedupeCache.computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
+        if (observation != null) {
+            index.put(buildDedupeKey(toolName, params), observation);
+        }
+    }
+
+    private String buildDedupeKey(String toolName, Map<String, Object> params) {
+        if (params == null || params.isEmpty()) {
+            return toolName + ":empty";
+        }
+        try {
+            // Normalize params: sort keys for consistent JSON representation
+            TreeMap<String, Object> sorted = new TreeMap<>(params);
+            String normalizedJson = objectMapper.writeValueAsString(sorted);
+            // Use stable hash suffix to keep keys manageable but deterministic
+            return toolName + ":" + normalizedJson.hashCode();
+        } catch (Exception e) {
+            // Fallback for non-serializable content (unlikely in ToolInvocationGuard)
+            return toolName + ":err:" + Objects.hash(params);
+        }
     }
 }
 

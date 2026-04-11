@@ -192,7 +192,10 @@ public class ParallelToolStepExecutor {
                     try (Scope _ = otelContext.makeCurrent()) {
                         try {
                             ToolResponse response = toolInvoker.invoke(
-                                call.toolName(), call.params(), context.sessionId());
+                                 call.toolName(), call.params(), context.sessionId());
+                            if (response.success()) {
+                                guard.recordToolCall(context.sessionId(), call.toolName(), call.params(), response.output());
+                            }
                             return call.withResult(response.output(), response.success());
                         } catch (Exception e) {
                             log.warnf("[PARALLEL-EXEC] session=%s tool=%s failed: %s",

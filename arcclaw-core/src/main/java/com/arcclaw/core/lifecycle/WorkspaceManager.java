@@ -15,6 +15,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.loop.CliResultBridge;
+import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.audit.AuditObserver;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
@@ -52,6 +53,7 @@ public class WorkspaceManager {
     @Inject SqliteRetryTemplate retryTemplate;
     @Inject AuditObserver auditObserver;
     @Inject CliResultBridge cliResultBridge;
+    @Inject ToolInvocationGuard toolInvocationGuard;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -78,8 +80,9 @@ public class WorkspaceManager {
         // 1. Remove from heartbeat tracking
         heartbeatTracker.removeHeartbeat(sessionId);
 
-        // 1a. Clear budget memory
+        // 1a. Clear budget and dedup memory
         governanceLayer.clearSession(sessionId);
+        toolInvocationGuard.clearSession(sessionId);
 
         // 1b. Cleanup audit observer
         if (sessionId != null) {
@@ -130,6 +133,7 @@ public class WorkspaceManager {
                     .getActiveContext(WorkspaceScoped.class);
             if (context != null) {
                 context.destroySession(sessionId);
+                toolInvocationGuard.clearSession(sessionId);
             }
         } catch (Exception e) {
             log.warnf("CDI scope reset failed for session=%s: %s",
