@@ -550,6 +550,14 @@ This applies to:
 
 MUST NOT use `getFirstResult()` or `stream().findFirst()` without an explicit ORDER BY.
 
+## 5.20 SecretVault Transaction Contract
+
+SecretVault operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST use `@Transactional(REQUIRES_NEW)` to prevent nesting with active tool or checkpoint transactions.
+
+- Caller transactions MUST NOT rely on vault writes rolling back with their transaction. Vault writes are committed immediately.
+- Calling `vault.store(...)` from within a `REQUIRED` transaction suspends the outer transaction and gets its own write lock, preventing `SQLITE_BUSY` errors during concurrent tool execution or onboarding initialization.
+- This explicit boundary satisfies the anti-nesting requirements described in §5.8.
+
 ---
 
 ## 6. Native image and reflection rules

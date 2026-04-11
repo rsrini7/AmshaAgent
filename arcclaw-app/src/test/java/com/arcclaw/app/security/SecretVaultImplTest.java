@@ -242,4 +242,46 @@ public class SecretVaultImplTest {
             assertArrayEquals(payload, key.get(), "System key payload must match");
         }
     }
+    @Test
+    @Transactional
+    void testVaultWriteDuringToolExecution() {
+        // Enclosing transaction simulates tool execution
+        cleanDb();
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+        });
+        
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, API_KEY_NAME));
+        });
+    }
+
+    @Test
+    void testConcurrentVaultWrites() throws InterruptedException {
+        String key = "CONCURRENT_BENCHMARK";
+        int threadCount = 10;
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            cleanDb();
+        });
+
+        for (int i = 0; i < threadCount; i++) {
+            Thread.ofVirtual().start(() -> {
+                try {
+                    WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+                        vault.store(key, SECRET_PAYLOAD);
+                    });
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "All threads should finish without deadlock");
+        
+        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, key));
+        });
+    }
 }

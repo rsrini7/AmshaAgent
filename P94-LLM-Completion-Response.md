@@ -164,3 +164,20 @@ This guarantees that every MCP operation's audit trail is strictly tied to its d
 
 ---
 
+I have successfully resolved the transaction nesting risk in the Secret Vault storage logic.
+
+### Key Fixes Implemented
+
+**1. Defined Explicit Transaction Boundaries:**
+I updated `SecretVaultImpl.java` to explicitly define its own database write lifecycle. By adding `@Transactional(Transactional.TxType.REQUIRES_NEW)` to `store()`, `storeSystemKey()`, and `removeSystemKey()`, these operations now seamlessly suspend any caller's outer transaction (such as a tool execution sequence), independently borrow their own SQLite connection, and immediately perform the write + commit.
+This natively cures the `SQLITE_BUSY` contention trigger specified in the architectural invariants.
+
+**2. Added Vault Concurrency Guards:**
+I introduced two precise integration tests in `SecretVaultImplTest.java` that exercise the `REQUIRES_NEW` suspension capabilities perfectly:
+- `testVaultWriteDuringToolExecution()`: Proves that invoking `vault.store()` inside an existing encompassing transaction completes correctly by dropping into the `REQUIRES_NEW` connection safely.
+- `testConcurrentVaultWrites()`: Spawns 10 parallel Virtual Threads that continuously rewrite to the exact same vault key concurrently, validating that thread connections do not experience SQLite locks or deadlocks. (With all 8 tests passing ✅).
+
+**3. Architectural Invariants Update:**
+I augmented `Architecture_Invariants.md` with **§ 5.20 SecretVault Transaction Contract**. It formalizes the rule preventing future regressions:
+- Any `vault.store()` call acts implicitly as a decoupled persist operation.
+- Code blocks must respect the fact that vault writes commit directly and will not be reversed if an encompassing transaction rolls back.

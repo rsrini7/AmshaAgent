@@ -76,7 +76,7 @@ public class SecretVaultImpl implements SecretVault {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void store(String keyName, byte[] secret) {
         String sessionId = WorkspaceScopeHolder.getRequired();
 
@@ -168,7 +168,7 @@ public class SecretVaultImpl implements SecretVault {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void storeSystemKey(String keyName, byte[] secret) {
         String sessionId = VaultConstants.SYSTEM_SESSION_ID;
 
@@ -194,7 +194,7 @@ public class SecretVaultImpl implements SecretVault {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void removeSystemKey(String keyName) {
         repository.deleteByKey(VaultConstants.SYSTEM_SESSION_ID, keyName);
     }
