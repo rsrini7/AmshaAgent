@@ -24,6 +24,8 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tool.InterceptorPriority;
 import com.arcclaw.core.tool.ToolGuardInterceptor;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Subclass;
@@ -96,26 +98,35 @@ public class ToolInvocationGuard {
             }
         }
 
-        // 1. DEDUPLICATION CHECK (O(1) with stable hash/JSON key)
-        Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
-            Map<String, String> index = new ConcurrentHashMap<>();
-            // Build index from history on first access in this turn
-            for (ReasoningStep past : history) {
-                if (past.observation() != null && !past.observation().isBlank()) {
-                    index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
-                }
-            }
-            return index;
-        });
+        // 0.5 RESOLVE IDEMPOTENCY MODE
+        IdempotencyMode mode = toolRegistry.findTool(toolName)
+                .map(AgentTool::idempotencyMode)
+                .orElse(IdempotencyMode.NON_IDEMPOTENT);
 
-        String currentKey = buildDedupeKey(toolName, params);
-        if (dedupeIndex.containsKey(currentKey)) {
-            String pastObservation = dedupeIndex.get(currentKey);
-            log.warnf("[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — returning cached observation.",
-                    toolName, sessionId);
-            String cachedObs = pastObservation + "\n\n[NOTE: This result was retrieved from " +
-                    "the current session cache. The tool was not re-executed.]";
-            return new GuardDecision.Deduplicate(cachedObs);
+        // 1. DEDUPLICATION CHECK (O(1) with stable hash/JSON key)
+        // Skip for NON_IDEMPOTENT tools as they should run every time if requested.
+        if (mode != IdempotencyMode.NON_IDEMPOTENT) {
+            Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
+                Map<String, String> index = new ConcurrentHashMap<>();
+                // Build index from history on first access in this turn
+                for (ReasoningStep past : history) {
+                    if (past.observation() != null && !past.observation().isBlank()) {
+                        index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
+                    }
+                }
+                return index;
+            });
+
+            String currentKey = buildDedupeKey(toolName, params);
+            if (dedupeIndex.containsKey(currentKey)) {
+                String pastObservation = dedupeIndex.get(currentKey);
+                log.warnf("[DEDUP-GUARD] Duplicate call '%s' (mode=%s) detected for session=%s — bypassing re-execution.",
+                        toolName, mode, sessionId);
+                String cachedObs = pastObservation + "\n\n[NOTE: This result was retrieved from " +
+                        "the session cache. The " + (mode == IdempotencyMode.AT_MOST_ONCE ? "AT_MOST_ONCE " : "") +
+                        "tool was not re-executed.]";
+                return new GuardDecision.Deduplicate(cachedObs);
+            }
         }
 
         // 1.5 TOOL EXISTENCE CHECK (Internal and Dynamic)

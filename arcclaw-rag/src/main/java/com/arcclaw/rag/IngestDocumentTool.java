@@ -11,6 +11,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolResponse;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
@@ -42,6 +43,12 @@ public class IngestDocumentTool implements AgentTool {
     public boolean requiresSandbox() {
         return false;
     }
+
+    @Override
+    public IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.AT_MOST_ONCE;
+    }
+
 
     @Override
     public JsonObjectSchema parametersSchema() {

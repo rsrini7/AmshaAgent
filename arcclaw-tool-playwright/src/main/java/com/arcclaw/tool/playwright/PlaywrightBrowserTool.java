@@ -13,6 +13,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolResponse;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -59,6 +60,12 @@ public class PlaywrightBrowserTool implements AgentTool {
     public boolean requiresManualApproval(Map<String, Object> params) {
         return false;
     }
+
+    @Override
+    public IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.IDEMPOTENT;
+    }
+
 
     @Override
     public boolean isEnabled() {

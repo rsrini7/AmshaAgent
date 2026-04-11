@@ -68,6 +68,12 @@ public class GithubTool implements AgentTool {
     }
 
     @Override
+    public IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.IDEMPOTENT;
+    }
+
+
+    @Override
     @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
     public List<String> sandboxCommand(Map<String, Object> params) {
         String action  = (String) params.getOrDefault("action", "repo");

@@ -71,6 +71,11 @@ public class SerperWebSearchTool implements AgentTool {
     }
 
     @Override
+    public IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.IDEMPOTENT;
+    }
+
+    @Override
     public boolean isEnabled() {
         return apiKey != null && !apiKey.isBlank() && !"none".equalsIgnoreCase(apiKey);
     }
