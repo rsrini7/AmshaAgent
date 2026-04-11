@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -21,6 +22,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tool.ToolGuardInterceptor;
 import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +45,7 @@ class ToolInvocationGuardTest {
         mockToolRegistry = mock(ToolRegistry.class);
         mockInterceptors = mock(Instance.class);
         when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
+        when(mockInterceptors.stream()).thenReturn(Stream.empty());
 
         guard.roleRegistry = roleRegistry;
         guard.objectMapper = objectMapper;
@@ -54,8 +57,11 @@ class ToolInvocationGuardTest {
 
         // Root Cause 1: Assume tool exists by default to allow hitl/autonomy tests to proceed
         var mockTool = mock(AgentTool.class);
+        when(mockTool.idempotencyMode()).thenReturn(IdempotencyMode.IDEMPOTENT);
         when(mockToolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
         when(mockToolRegistry.findTool("tool")).thenReturn(Optional.of(mockTool));
+
+        guard.init(); // Initialize sortedInterceptors
     }
 
     @Test
@@ -115,6 +121,8 @@ class ToolInvocationGuardTest {
                 .thenReturn(Optional.of(new ToolInvocationGuard.GuardDecision.Blocked("interceptor-blocked")));
         
         when(mockInterceptors.iterator()).thenReturn(List.of(interceptor).iterator());
+        when(mockInterceptors.stream()).thenReturn(Stream.of(interceptor));
+        guard.init(); // Re-initialize with new interceptor mock
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
                 "s1", "coordinator", "guarded-tool", Map.of(), List.of(), "goal", List.of());

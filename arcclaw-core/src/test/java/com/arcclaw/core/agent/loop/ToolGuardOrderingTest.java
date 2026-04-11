@@ -60,7 +60,7 @@ class ToolGuardOrderingTest {
         }
 
         List<ToolGuardInterceptor> interceptors = List.of(new InterceptorA(executionOrder), new InterceptorB(executionOrder));
-        when(mockInstance.spliterator()).thenReturn(interceptors.spliterator());
+        when(mockInstance.stream()).thenReturn(interceptors.stream());
         
         manualGuard.interceptors = mockInstance;
         manualGuard.roleRegistry = mock(RoleRegistry.class);

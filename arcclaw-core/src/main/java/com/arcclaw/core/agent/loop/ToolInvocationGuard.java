@@ -7,7 +7,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.StreamSupport;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -52,12 +51,17 @@ public class ToolInvocationGuard {
     private List<ToolGuardInterceptor> sortedInterceptors;
 
     @PostConstruct
-    void init() {
-        this.sortedInterceptors = StreamSupport.stream(interceptors.spliterator(), false)
+    public void init() {
+        if (interceptors == null) {
+            this.sortedInterceptors = List.of();
+            return;
+        }
+        this.sortedInterceptors = interceptors.stream()
             .sorted(Comparator.comparingInt(this::getPriority))
             .toList();
         log.infof("ToolInvocationGuard initialized with %d sorted interceptors.", sortedInterceptors.size());
     }
+
 
     private int getPriority(ToolGuardInterceptor interceptor) {
         Class<?> clazz = interceptor.getClass();

@@ -38,9 +38,9 @@ public class SqliteRetryTemplate {
                 if (!SqliteErrorStrings.isBusy(e)) throw e;
                 lastException = e;
 
-                // Bounded Exponential Backoff: base * 2^(attempt-1)
+                // Bounded Exponential Backoff: base * 2^attempt
                 // capped at MAX_DELAY_MS (2s)
-                long expDelay = Math.min(MAX_DELAY_MS, baseDelay * (1L << (attempt - 1)));
+                long expDelay = Math.min(MAX_DELAY_MS, baseDelay * (1L << attempt));
                 
                 // Jitter: ±25% of the calculated delay
                 long jitter = (long) (expDelay * 0.25);

@@ -1,5 +1,7 @@
 package com.arcclaw.core.state;
 
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Set;
 
 /**
@@ -101,19 +103,24 @@ public enum CheckpointStatus {
      ORPHANED;
 
     /**
+     * Set of statuses that represent an end-of-life state for a checkpoint.
+     * No further transitions are permitted once these are reached.
+     */
+    private static final Set<CheckpointStatus> TERMINAL_STATES = EnumSet.of(
+        COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED
+    );
+
+    /**
      * @return true if this status represents an end-of-life state for a checkpoint.
      */
     public boolean isTerminal() {
-        return switch (this) {
-            case COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED -> true;
-            case NOT_STARTED, IN_PROGRESS, AWAITING_APPROVAL, AWAITING_RETRY -> false;
-        };
+        return TERMINAL_STATES.contains(this);
     }
 
     /**
      * @return The immutable set of all terminal statuses.
      */
     public static Set<CheckpointStatus> terminalStatuses() {
-        return Set.of(COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED);
+        return Collections.unmodifiableSet(TERMINAL_STATES);
     }
 }
