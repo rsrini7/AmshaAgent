@@ -301,6 +301,40 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public void markFailed(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
+        withRetry(() -> {
+            self.doMarkFailedIdDiagnostics(checkpointId, reason, errorCode, traceId, rootCauseClass);
+            return null;
+        }, "markFailed-diagnostics-id");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkFailedIdDiagnostics(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
+        em.clear();
+        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
+        if (checkpoint != null) {
+            doMarkFailed(checkpoint, reason, errorCode, traceId, rootCauseClass);
+        }
+    }
+
+    @Override
+    public void markFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
+        withRetry(() -> {
+            self.doMarkFailedEntityDiagnostics(checkpoint, reason, errorCode, traceId, rootCauseClass);
+            return null;
+        }, "markFailed-diagnostics-entity");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkFailedEntityDiagnostics(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
+        em.clear();
+        AgentCheckpoint managed = em.find(AgentCheckpoint.class, checkpoint.getId());
+        if (managed != null) {
+            doMarkFailed(managed, reason, errorCode, traceId, rootCauseClass);
+        }
+    }
+
+    @Override
     @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
         String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
@@ -318,17 +352,25 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     private void doMarkFailed(AgentCheckpoint checkpoint, String reason) {
+        doMarkFailed(checkpoint, reason, null, null, null);
+    }
+
+    private void doMarkFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
         checkpoint.setStatus(CheckpointStatus.FAILED);
         checkpoint.setFailedAt(Instant.now());
         checkpoint.setFailReason(reason);
+        checkpoint.setErrorCode(errorCode);
+        checkpoint.setTraceId(traceId);
+        checkpoint.setRootCauseClass(rootCauseClass);
 
         String userId = (String) MDC.get(MdcKeys.USER_ID);
-        String idempotencyKey = "CP_FAILED:" + checkpoint.getId();
+        String idempotencyKey = "CP_FAILED:" + (checkpoint.getId() != null ? checkpoint.getId() : "null");
+        String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
         auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
-            SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason, idempotencyKey);
+            SecurityEventType.CHECKPOINT_FAILED, details, idempotencyKey);
 
-        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s",
-                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
+        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s (errorCode=%s, traceId=%s)",
+                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason, errorCode, traceId);
     }
 
     @Override
@@ -420,6 +462,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             entity.setObservation(step.observation());
             entity.setInputTokens(step.inputTokens());
             entity.setOutputTokens(step.outputTokens());
+            entity.setSuccess(step.success());
+            entity.setErrorCode(step.errorCode());
+            entity.setTraceId(step.traceId());
+            entity.setRootCauseClass(step.rootCauseClass());
             em.persist(entity);
         }
 
@@ -456,7 +502,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     new TypeReference<Map<String, Object>>() {}),
                 entity.getObservation(),
                 entity.getInputTokens(),
-                entity.getOutputTokens()
+                entity.getOutputTokens(),
+                entity.getSuccess(),
+                entity.getErrorCode(),
+                entity.getTraceId(),
+                entity.getRootCauseClass()
         );
     }
 

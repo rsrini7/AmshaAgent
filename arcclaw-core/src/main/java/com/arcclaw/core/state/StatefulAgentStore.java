@@ -68,6 +68,16 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     void markFailed(AgentCheckpoint checkpoint, String reason);
 
     /**
+     * Mark a checkpoint as failed with full diagnostic context.
+     */
+    void markFailed(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass);
+
+    /**
+     * Mark a checkpoint as failed with full diagnostic context.
+     */
+    void markFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass);
+
+    /**
      * Mark a checkpoint as completed.
      *
      * @param checkpointId The checkpoint entity ID.

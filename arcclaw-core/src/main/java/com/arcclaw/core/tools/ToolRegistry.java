@@ -46,6 +46,7 @@ import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonSchemaElement;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import io.opentelemetry.api.trace.Span;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -331,15 +332,32 @@ public class ToolRegistry {
                 log.errorf("Tool '%s' execution failed: %s", toolName, raw);
                 log.debugf(e, "Full stacktrace for tool '%s' failure in session %s",
                            toolName, WorkspaceContext.requireSessionId());
-                return ToolResponse.failure(1, friendly);
+                
+                String traceId = Span.current().getSpanContext().getTraceId();
+                ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, e.getClass().getSimpleName());
+                recordToolFailureAudit(toolName, response);
+                return response;
             }
         }
 
         // Direct (non-sandbox) path
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         recordToolAudit(toolName);
-        ToolResponse response = tool.execute(sanitizedParams);
-        return response;
+        try {
+            ToolResponse response = tool.execute(sanitizedParams);
+            if (!response.success()) {
+                 recordToolFailureAudit(toolName, response);
+            }
+            return response;
+        } catch (Exception e) {
+            String raw = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String friendly = "EXECUTION_FAILED: " + raw;
+            log.errorf("Tool '%s' (direct) execution failed: %s", toolName, raw, e);
+            String traceId = Span.current().getSpanContext().getTraceId();
+            ToolResponse response = ToolResponse.failure(1, friendly, "DIRECT_TOOL_FAILED", traceId, e.getClass().getSimpleName());
+            recordToolFailureAudit(toolName, response);
+            return response;
+        }
     }
 
     /**
@@ -386,6 +404,16 @@ public class ToolRegistry {
                 WorkspaceContext.requireAgentRole(),
                 SecurityEventType.TOOL_INVOKED,
                 "tool=" + toolName);
+    }
+
+    private void recordToolFailureAudit(String toolName, ToolResponse response) {
+        String details = String.format("tool=%s errorCode=%s traceId=%s rootCause=%s",
+                toolName, response.errorCode(), response.traceId(), response.rootCauseClass());
+        auditService.record(
+                WorkspaceContext.requireSessionId(), resolveUserId(),
+                WorkspaceContext.requireAgentRole(),
+                SecurityEventType.TOOL_FAILED,
+                details);
     }
 
     /**

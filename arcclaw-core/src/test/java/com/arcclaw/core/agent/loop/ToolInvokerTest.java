@@ -46,7 +46,7 @@ class ToolInvokerTest {
 
     @Test
     void testInvokeTool_success() {
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenReturn(new ToolResponse(0, "success", true, false));
+        when(toolRegistry.invokeTool(anyString(), anyMap())).thenReturn(ToolResponse.success("success"));
 
         ToolResponse response = invoker.invoke("tool", Map.of(), "s1");
 

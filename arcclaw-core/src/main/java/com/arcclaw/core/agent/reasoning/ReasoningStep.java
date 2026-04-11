@@ -13,12 +13,16 @@ import io.quarkus.qute.TemplateData;
  * the parameters for that action ({@code actionInput}), and the
  * result observed after execution ({@code observation}).
  *
- * @param thought      The agent's internal reasoning for this step.
- * @param action       Tool name to invoke, or {@code "FINISH"} to end the loop.
- * @param actionInput  Parameters for the tool (may be empty for FINISH).
- * @param observation  The result of executing the action (filled by the loop).
- * @param inputTokens  LLM input tokens consumed in this step.
- * @param outputTokens LLM output tokens generated in this step.
+ * @param thought         The agent's internal reasoning for this step.
+ * @param action          Tool name to invoke, or {@code "FINISH"} to end the loop.
+ * @param actionInput     Parameters for the tool (may be empty for FINISH).
+ * @param observation     The result of executing the action (filled by the loop).
+ * @param inputTokens     LLM input tokens consumed in this step.
+ * @param outputTokens    LLM output tokens generated in this step.
+ * @param success         Optional: True if the tool execution succeeded.
+ * @param errorCode       Optional: Categorized error code for diagnostics.
+ * @param traceId         Optional: OTel traceId for log correlation.
+ * @param rootCauseClass  Optional: Simple name of the Java exception causing a failure.
  */
 @TemplateData
 public record ReasoningStep(
@@ -28,7 +32,10 @@ public record ReasoningStep(
         String observation,
         int inputTokens,
         int outputTokens,
-        Boolean success) {
+        Boolean success,
+        String errorCode,
+        String traceId,
+        String rootCauseClass) {
 
     /** Action value indicating the loop should terminate with a final answer. */
     public static final String FINISH = "FINISH";
@@ -71,7 +78,7 @@ public record ReasoningStep(
             null,          // observation filled in after execution
             inputTokens,
             outputTokens,
-            null
+            null, null, null, null
         );
     }
 
@@ -80,41 +87,53 @@ public record ReasoningStep(
      * until known.
      */
     public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput) {
-        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null);
+        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null, null, null, null);
     }
 
     /** Create a step with tokens explicitly provided. */
     public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput, int inputTk,
             int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk, null);
+        return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk, null, null, null, null);
     }
 
     /** Create a step representing a schema/parsing error to trigger LLM retry. */
     public static ReasoningStep schemaError(String observation, int inputTk, int outputTk) {
-        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk, false);
+        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk, false, "SCHEMA_ERROR", null, null);
     }
 
     /** Create a copy of this step with the observation filled in, without success metadata. */
     public ReasoningStep withObservation(String observation) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, this.success);
+                this.outputTokens, this.success, this.errorCode, this.traceId, this.rootCauseClass);
     }
 
     /** Create a copy of this step with the observation and success metadata filled in. */
     public ReasoningStep withObservation(String observation, Boolean success) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, success);
+                this.outputTokens, success, this.errorCode, this.traceId, this.rootCauseClass);
+    }
+
+    /** Create a copy of this step with full diagnostics metadata. */
+    public ReasoningStep withDiagnostics(String observation, Boolean success, String errorCode, String traceId, String rootCauseClass) {
+        return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
+                this.outputTokens, success, errorCode, traceId, rootCauseClass);
     }
 
     /** Mapping factory: constructs a ReasoningStep from all its constituent fields (legacy). */
     public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
             int inputTk, int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, null);
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, null, null, null, null);
     }
 
     /** Mapping factory: constructs a ReasoningStep from all its constituent fields. */
     public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
             int inputTk, int outputTk, Boolean success) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success);
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, null, null, null);
+    }
+
+    /** Mapping factory: constructs a ReasoningStep with diagnostics. */
+    public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
+            int inputTk, int outputTk, Boolean success, String errorCode, String traceId, String rootCauseClass) {
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass);
     }
 }

@@ -40,6 +40,7 @@ import com.arcclaw.core.util.MdcKeys;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -388,13 +389,15 @@ public class AgentLoop {
         } catch (ComplianceViolationException cve) {
             log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s " +
                        "— halting agent.", sessionId, cve.getEventType());
-            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + AgentErrorMessageUtil.safeMessage(cve),
+            String msg = AgentErrorMessageUtil.safeMessage(cve);
+            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + msg,
                     AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
+            String traceId = Span.current().getSpanContext().getTraceId();
             try {
-                agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
-                    cp.setStatus(CheckpointStatus.COMPROMISED);
-                    agentStore.save(cp);
-                });
+                agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
+                    agentStore.markFailed(cp.getId(), "COMPLIANCE_VIOLATION: " + msg, 
+                        "COMPLIANCE_VIOLATION", traceId, cve.getClass().getSimpleName())
+                );
             } catch (Exception ignored) {}
             return result;
 
@@ -406,9 +409,11 @@ public class AgentLoop {
             log.errorf("Agent execution failed for session %s: %s", sessionId, errMsg, e);
             result = AgentResult.failed("SYSTEM_ERROR: " + errMsg,
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+            String traceId = Span.current().getSpanContext().getTraceId();
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
-                    agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg)
+                    agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg,
+                        "SYSTEM_ERROR", traceId, e.getClass().getSimpleName())
                 );
             } catch (Exception ignored) {}
             return result;

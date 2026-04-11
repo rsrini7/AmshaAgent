@@ -160,6 +160,21 @@ public class AgentCheckpoint {
     @Nullable
     private String systemNote;
 
+    /** Categorized error code for diagnostics (e.g. AUTH_FAILED, TOOL_TIMEOUT). */
+    @Column(name = "error_code", length = 64)
+    @Nullable
+    private String errorCode;
+
+    /** Correlation ID for tracking failures across logs (OTel traceId). */
+    @Column(name = "trace_id", length = 128)
+    @Nullable
+    private String traceId;
+
+    /** Simple name of the Java exception causing the failure. */
+    @Column(name = "root_cause_class", length = 128)
+    @Nullable
+    private String rootCauseClass;
+
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -334,6 +349,15 @@ public class AgentCheckpoint {
 
     public String getPreExecutedResults() { return preExecutedResults; }
     public void setPreExecutedResults(String v) { this.preExecutedResults = v; }
+
+    public String getErrorCode() { return errorCode; }
+    public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
+
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
+
+    public String getRootCauseClass() { return rootCauseClass; }
+    public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
 
     public boolean hasPreExecutedResults() {
         return preExecutedResults != null && !preExecutedResults.isBlank();
