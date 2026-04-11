@@ -809,3 +809,17 @@ To wrap things up, here's a quick summary of the MDC lifecycle refactoring:
 3. **MDC Testing Validation**: Added the isolated test in `MdcManagedInterceptorTest` that proves MDC context is completely wiped even if the captured `InvocationContext` invocation throws an exception.
 
 Let me know if there's any other component of the orchestration you'd like to dive into!
+
+---
+
+Viewed ReflexRegistry.java:1-88
+Edited ReflexRegistry.java
+
+I have fixed the non-atomic iteration race condition! 
+
+Here's an overview of what was updated in `ReflexRegistry.java`:
+1. **Removed Global Caching:** I deleted the `sortedReflexes` field and the `init()` method. Previously, caching the result at bean initialization made it completely blind to hot-reloads dynamically refreshing the `Instance<AgentReflex>` container list under the hood!
+2. **Snapshot Per Request:** The incoming `Instance<AgentReflex>` elements are streamed and correctly sorted by `AgentReflex::priority` (maintaining the strict H5 priority constraint) into an immutable array snapshot directly inside `processIfReflex()`.
+3. **Atomic Evaluation**: Both Pass 1 (Matching) and Pass 2 (Sanitization) loops now iterate exclusively over the exact same local `snapshot` variable instead of querying the container or relying on stale initialization arrays. This robustly ensures consistency even if a concurrent reload occurs precisely during a long-running reflex loop.
+
+Let me know if there's any other optimizations needed!
