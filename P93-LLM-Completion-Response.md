@@ -781,3 +781,16 @@ I've addressed the `AgentRoleEnum` (L4) ambiguity by adopting the **strict capab
 
 This ensures unknown roles are securely rejected or defaulted safely at the perimeter rather than slipping into the logic pipeline with zero capabilities. Let me know if you run into any compilation hiccups or need me to proceed to the next item!
 
+---
+
+I've completed the extraction of the markdown escaping logic!
+
+Here is a summary of the changes:
+
+1. **Created `MarkdownProfile`**: Defines configuration combinations (`TELEGRAM_V2` with its specific required escape characters).
+2. **Extracted `MarkdownEscapeService`**: A plain, stateless Java class in `arcclaw-channel-api` to process markdown escaping dynamically based on the current `MarkdownProfile`. (I removed the Jakarta `@ApplicationScoped` annotation to respect the pure API dependency scope).
+3. **Refactored `TelegramMarkdownV2Renderer`**: Migrated its internal static escaping functionality over to the shared `MarkdownEscapeService`, removing the hardcoded static `Set` characters from the Telegram module directly.
+4. **Added Corpus Tests**: Added comprehensive test coverage inside `MarkdownEscapeServiceTest` directly in the `arcclaw-channel-api` module. It includes parameterized escaping, double-escape prevention, and processing of standard and nested mock Markdown inputs.
+
+Please let me know if there's anything else you need adjusting!
+

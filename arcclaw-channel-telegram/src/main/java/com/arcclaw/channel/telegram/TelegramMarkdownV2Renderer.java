@@ -1,12 +1,12 @@
 package com.arcclaw.channel.telegram;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.MarkdownEscapeService;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
 
@@ -20,6 +20,8 @@ import com.arcclaw.channel.api.ReplyRenderer;
  */
 @ApplicationScoped
 public class TelegramMarkdownV2Renderer implements ReplyRenderer {
+
+    private final MarkdownEscapeService escapeService = new MarkdownEscapeService();
 
     @Override
     public ChannelType supports() {
@@ -75,39 +77,10 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
         };
     }
 
-    private static final Set<Character> ESCAPE_CHARS = Set.of(
-        '_', '*', '[', ']', '(', ')', '~', '`', '>',
-        '#', '+', '-', '=', '|', '{', '}', '.', '!'
-    );
-
     /**
      * Escapes mandatory characters for Telegram MarkdownV2.
      */
     String esc(String text) {
-        if (text == null || text.isEmpty()) return "";
-        StringBuilder sb = new StringBuilder(text.length() + 16);
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            
-            // Check if this is an existing escape sequence
-            if (c == '\\' && i + 1 < text.length()) {
-                char next = text.charAt(i + 1);
-                if (ESCAPE_CHARS.contains(next) || next == '\\') {
-                    sb.append('\\').append(next);
-                    i++; // skip the escaped character
-                    continue;
-                }
-            }
-            
-            // If it's a lone backslash, escape it
-            if (c == '\\') { 
-                sb.append('\\').append('\\'); 
-                continue; 
-            }
-            
-            if (ESCAPE_CHARS.contains(c)) sb.append('\\');
-            sb.append(c);
-        }
-        return sb.toString();
+        return escapeService.escape(text, com.arcclaw.channel.api.MarkdownProfile.TELEGRAM_V2);
     }
 }
