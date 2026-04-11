@@ -24,6 +24,7 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@InterceptorPriority(100)
 public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
 
     private static final Logger log = Logger.getLogger(GithubToolGuardInterceptor.class);

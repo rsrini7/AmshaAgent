@@ -484,3 +484,37 @@ With this optimization, ArcClaw remains highly responsive even in long-context s
 
 ---
 
+I have finalized the hardening of the ArcClaw governance and agentic loop layers, focusing on deterministic interceptor execution and performance scalability.
+
+### Hardening & Determinism Final Report
+
+#### 1. Deterministic Tool Guard Interceptors (M8)
+- **Priority Orchestration**: Introduced the `@InterceptorPriority` annotation to establish a strict execution order for all `ToolGuardInterceptor` implementations.
+- **Sorted Pipeline**: Refactored `ToolInvocationGuard` to sort all discovered interceptors at startup via `@PostConstruct`. This ensures that security-critical guards (e.g., repository intent checks) always have the opportunity to block or rewrite calls before secondary utility interceptors fire.
+- **CDI Transparency**: Implemented robust proxy-unwrapping to ensure priorities are correctly detected even when interceptors are wrapped by the CDI container.
+- **Verification**: Verified via `ToolGuardOrderingTest.java` that interceptors are executed in the exact order of their priority values (lowest first).
+
+#### 2. Advanced Tool Deduplication (H8)
+- **Quadratic Delay Elimination**: Replaced the $O(N^2)$ history-based string comparison with a session-scoped hash-index ($O(1)$ lookup per call). 
+- **Param Normalization**: Integrated `TreeMap` normalization in the deduplication key generation, making the system resilient to LLM-induced JSON key reordering.
+- **Seamless Lifecycle**: Tied deduplication cache cleanup to the session termination path in `WorkspaceManager`, preventing memory leaks in high-turnover environments.
+
+#### 3. Core Reliability Upgrades
+- **Tool Registry (H1)**: Continued performance benefits from the startup-indexed tool cache and pre-serialized JSON schemas.
+- **Budget Integrity (H4)**: Ensured thread-safe budget accounting and automated cleanup of stale session budgets.
+- **Reflex Determinism (H5)**: Maintained a strictly ordered reflex pipeline where security guardrails (Prompt Injection, PII) always preempt command execution.
+
+### Verification Matrix
+
+| Component | Architecture Improvement | Test Status |
+| :--- | :--- | :--- |
+| **Tool Guard SPI** | Deterministic Interceptor Order | ✅ **PASS** |
+| **Deduplication** | Linear Scaling ($O(N)$) | ✅ **PASS** |
+| **Reflex Registry** | Priority-Weighted Dispatch | ✅ **PASS** |
+| **Governance** | Memory-Bounded Budgeting | ✅ **PASS** |
+| **Secret Vault** | Atomic Transaction Isolation | ✅ **PASS** |
+
+The ArcClaw framework is now architecturally hardened against nondeterministic behavior, performance degradation in long sessions, and common concurrency failures in agentic pipelines.
+
+---
+

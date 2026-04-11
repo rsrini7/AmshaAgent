@@ -19,9 +19,12 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
+import com.arcclaw.core.tool.InterceptorPriority;
 import com.arcclaw.core.tool.ToolGuardInterceptor;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.Subclass;
+import jakarta.annotation.PostConstruct;
 import org.jboss.logging.Logger;
 
 /**
@@ -38,9 +41,29 @@ public class ToolInvocationGuard {
     @Inject public ToolRegistry toolRegistry;
     @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
     @Inject public Instance<ToolGuardInterceptor> interceptors;
-
+    
     // Session-scoped deduplication cache: SessionId -> (DedupeKey -> Observation)
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
+
+    private List<ToolGuardInterceptor> sortedInterceptors;
+
+    @PostConstruct
+    void init() {
+        this.sortedInterceptors = java.util.stream.StreamSupport.stream(interceptors.spliterator(), false)
+            .sorted(java.util.Comparator.comparingInt(this::getPriority))
+            .toList();
+        log.infof("ToolInvocationGuard initialized with %d sorted interceptors.", sortedInterceptors.size());
+    }
+
+    private int getPriority(ToolGuardInterceptor interceptor) {
+        Class<?> clazz = interceptor.getClass();
+        // Handle CDI proxies
+        if (interceptor instanceof Subclass) {
+            clazz = clazz.getSuperclass();
+        }
+        InterceptorPriority priority = clazz.getAnnotation(InterceptorPriority.class);
+        return priority != null ? priority.value() : 1000;
+    }
 
     public sealed interface GuardDecision
             permits GuardDecision.Allow, GuardDecision.Deduplicate,
@@ -59,8 +82,8 @@ public class ToolInvocationGuard {
             String toolName, Map<String, Object> params,
             List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
-        // 0. RUN REGISTERED INTERCEPTORS (SPI)
-        for (ToolGuardInterceptor interceptor : interceptors) {
+        // 0. RUN REGISTERED INTERCEPTORS (SPI) - now sorted by priority
+        for (ToolGuardInterceptor interceptor : sortedInterceptors) {
             if (interceptor.handledToolNames().isEmpty()
                     || interceptor.handledToolNames().contains(toolName)) {
                 Optional<GuardDecision> decision = interceptor.evaluate(
