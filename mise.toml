@@ -23,7 +23,7 @@
 # =============================================================================
 
 [tools]
-java       = "temurin-25"
+java       = "graalvm-community-25.0.2"
 maven      = "3.9"
 powershell = "7.6"
 node       = "22"
@@ -452,7 +452,7 @@ if ($strategy -eq 'container') {
     Write-Host 'ℹ️   Container build: host GraalVM not needed — skipping JDK switch.'
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
-        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
+        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
         $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
         if ($targetGB -lt 4) { $targetGB = 4 }
         if ($targetGB -gt 16) { $targetGB = 16 }
@@ -470,7 +470,7 @@ if ($strategy -eq 'container') {
 } else {
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
-        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
+        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
         $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
         if ($targetGB -lt 4) { $targetGB = 4 }
         if ($targetGB -gt 16) { $targetGB = 16 }
@@ -531,7 +531,7 @@ if (Test-Path '.env') {
 }
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
-        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
+        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
         $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
         if ($targetGB -lt 4) { $targetGB = 4 }
         if ($targetGB -gt 16) { $targetGB = 16 }
@@ -596,8 +596,8 @@ if (Test-Path '.env') {
 }
 try {
     # ── Memory Scaling (Low-Mem Mode) ──────────────────────────────────────
-    $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
-    $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.4) # Only 40% for low-mem
+    $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
+    $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.6) # Only 60% for low-mem
     if ($targetGB -lt 2) { $targetGB = 2 }
     if ($targetGB -gt 6) { $targetGB = 6 } # Cap at 6G
     Write-Host "🧠 Allocating ${targetGB}G for native-image (Smart Low-Mem mode)..."
