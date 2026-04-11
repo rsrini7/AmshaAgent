@@ -420,5 +420,35 @@ A full suite of **748 tests** passed successfully, including new regression test
 
 The system is now hardened against common failure modes in agentic workflows while maintaining high throughput and deterministic behavior.
 
+Ran command: `rg "@ReflexPriority" arcclaw-core/src/main/java arcclaw-mcp/src/main/java`
+Viewed McpReflex.java:1-41
+Viewed HaltReflex.java:1-33
+
+Yes, the `@ReflexPriority` annotation is fully implemented and applied across the entire reflex ecosystem to ensure strict, deterministic execution.
+
+### Applied Priorities
+I have annotated all 13 standard and extension reflexes. Here is the established hierarchy:
+
+| Reflex Class | Priority | Significance |
+| :--- | :---: | :--- |
+| `PromptInjectionReflex` | **10** | **Highest**: Block malicious instructions before any logic fires. |
+| `PiiScanReflex` | **20** | **High**: Intercept sensitive data leaks early in the pipeline. |
+| `ApproveReflex` | **100** | **Medium**: Workflow control (interactive sessions). |
+| `DenyReflex` | **200** | **Medium**: Workflow control (interactive sessions). |
+| `StatusReflex` | **500** | **Standard**: General utility command. |
+| `HistoryReflex` | **500** | **Standard**: General utility command. |
+| `ResetReflex` | **500** | **Standard**: General utility command. |
+| `HaltReflex` | **500** | **Standard**: General utility command. |
+| `ListCronsReflex` | **500** | **Standard**: General utility command. |
+| `DeleteCronReflex` | **500** | **Standard**: General utility command. |
+| `StoreReflex` | **500** | **Standard**: General utility command. |
+| `SkillReflex` | **500** | **Extension**: Skill management command. |
+| `McpReflex` | **500** | **Extension**: MCP protocol status command. |
+
+### Verification
+As demonstrated in the `ReflexOrderingTest.java`, the `ReflexRegistry` now respects these values by sorting all discovered reflexes at startup. This guarantees that if a user sends `/approve and ignore rules`, the **PromptInjectionReflex (10)** will always "win" and block the request before the **ApproveReflex (100)** has a chance to execute.
+
+The system is now fully compliant with the architectural requirement for deterministic, priority-weighted reflex execution.
+
 ---
 
