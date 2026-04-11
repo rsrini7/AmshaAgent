@@ -80,9 +80,17 @@ public class McpSelfRegisterTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        String userId = WorkspaceContext.requireUserId();
-        if (userId == null || userId.isBlank()) {
-            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+        String userId;
+        String sessionId;
+
+        try {
+            userId = WorkspaceContext.requireUserId();
+            sessionId = WorkspaceContext.requireSessionId();
+        } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
         }
 
         String name = (String) params.get("name");
@@ -91,7 +99,6 @@ public class McpSelfRegisterTool implements AgentTool {
         }
 
         String transportStr = (String) params.get("transport");
-        String sessionId = WorkspaceContext.requireSessionId();
 
         try {
             if ("http".equalsIgnoreCase(transportStr)) {
