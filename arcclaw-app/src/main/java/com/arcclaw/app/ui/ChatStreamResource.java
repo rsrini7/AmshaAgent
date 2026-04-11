@@ -3,7 +3,6 @@ package com.arcclaw.app.ui;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -20,6 +19,7 @@ import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.state.PersistentChatMemoryStore;
 import com.arcclaw.core.state.StatefulAgentStore;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
@@ -72,11 +72,19 @@ public class ChatStreamResource {
                 .map(cp -> cp.getId())
                 .orElse(null);
 
-        List<ChatMessageDto> dtos = chatMemoryStore.getMessages(sessionId)
-                .stream()
-                .filter(m -> m instanceof UserMessage || m instanceof AiMessage)
-                .map(ChatMessageDto::from)
-                .collect(Collectors.toCollection(ArrayList::new));
+        List<ChatMessage> messages = chatMemoryStore.getMessages(sessionId);
+        List<Long> timestamps = chatMemoryStore.getTimestamps(sessionId);
+
+        List<ChatMessageDto> dtos = new ArrayList<>();
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessage m = messages.get(i);
+            if (!(m instanceof UserMessage || m instanceof AiMessage)) continue;
+
+            // Offset alignment for system messages (since we filter them for DTOs but they might be in memory)
+            // However ArcClaw system messages are never stored in memory according to PersistentChatMemoryStore docs.
+            Long ts = (i < timestamps.size()) ? timestamps.get(i) : null;
+            dtos.add(ChatMessageDto.from(m, ts));
+        }
 
         // Only attach actionId to the LAST matching message (§ Option A refined)
         if (actionIdForPause != null) {
@@ -90,7 +98,7 @@ public class ChatStreamResource {
             }
             if (lastIdx >= 0) {
                 ChatMessageDto d = dtos.get(lastIdx);
-                dtos.set(lastIdx, new ChatMessageDto(d.role(), d.text(), actionIdForPause));
+                dtos.set(lastIdx, new ChatMessageDto(d.role(), d.text(), actionIdForPause, d.timestamp()));
             }
         }
         return dtos;

@@ -46,6 +46,7 @@ public class ChatHistoryAssembler {
     @ConfigProperty(name = "arcclaw.chat.tool-specific-limits")
     Optional<Map<String, Integer>> toolSpecificLimits;
 
+    @Inject
     public ChatHistoryAssembler(ChatMemoryStore chatMemoryStore, ObjectMapper objectMapper) {
         this.chatMemoryStore = chatMemoryStore;
         this.objectMapper = objectMapper;
