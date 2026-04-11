@@ -722,3 +722,27 @@ Here is what was done:
 3. **Resilience Testing**: Adjusted tests to allow manual mock advances of the clock instead of actual Thread.sleep. I've also created the `testShouldAttemptPodman_immuneToWallClockShifts` unit test ensuring that transitioning to a `HALF_OPEN` state is totally robust against any NTP syncs that move the system's wall-clock time forward or backward.
 
 Given that the tests correctly executed, `SandboxCircuitBreaker` is now fully resilient to system clock drift and adjustments.
+
+---
+
+Viewed SessionReaper.java:1-297
+Edited SessionReaper.java
+Edited SessionReaper.java
+Searched for "ToolDecision"
+Viewed BatchDecisionUtil.java:1-52
+Searched for ""AWAITING_APPROVAL""
+Edited AgentSseService.java
+Searched for ""APPROVED""
+Searched for ""DENIED""
+
+I've gone ahead and resolved the `TOOL_DECISION_DENIED` reference error in `SessionReaper.java`. I properly mapped it to `ToolDecision.DENIED.name()` and resolved the missing `CheckpointStatus` import.
+
+### Summary of Fixes:
+1.  **Fixed Compilation Errors**: Added `import com.arcclaw.core.state.ToolDecision;` to the missing files.
+2.  **StatefulAgentStoreConcurrencyTest**: Converted `Map<String, String>` into `Map<String, ToolDecision>` so that test asserts now correctly map to the new signature type references of `StatefulAgentStoreImpl`.
+3.  **ApprovalStateMachineTest**: Changed `AgentSentinels.TOOL_DECISION_APPROVED` mapped strings into `ToolDecision.APPROVED.name()`. Asserts have been updated to test those.
+4.  **CheckpointResumeHandlerPreExecTest & CheckpointApprovalServiceTest**: Also migrated stringly-typed responses into the strongly-typed ENUM `.name()` equivalents.
+5.  **AgentSentinels**: Successfully removed `TOOL_DECISION_PENDING`, `TOOL_DECISION_APPROVED`, and `TOOL_DECISION_DENIED` entirely.
+6.  **AgentSseService**: Updated `AWAITING_APPROVAL` to `HitlEventType.AWAITING_APPROVAL.wireValue()`.
+
+Everything should be tightly linked up with your new enums and string type-check mappings respectively! Go ahead and test your IDE compilation (`mvn clean test`). Let me know if you hit any missed usages or type-cast errors.

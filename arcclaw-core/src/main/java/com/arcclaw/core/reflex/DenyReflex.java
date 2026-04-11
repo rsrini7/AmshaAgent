@@ -34,6 +34,7 @@ import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -229,7 +230,7 @@ public class DenyReflex implements AgentReflex {
         BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
             statefulAgentStore.updateBatchToolDecision(
                 sessionId, agentRole, toolName,
-                AgentSentinels.TOOL_DECISION_DENIED));
+                ToolDecision.DENIED.name()));
     }
 
     private String triggerBatchResume(

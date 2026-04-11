@@ -41,6 +41,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.MdcKeys;
 import io.quarkus.virtual.threads.VirtualThreads;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -263,7 +264,7 @@ public class AgentSessionService {
                         // via SSE/channel. HTTP caller gets an acknowledgement only.
                         checkpointApprovalService.triggerResume(cp);
                         response.resume(Response.ok(
-                            Map.of("status", AgentSentinels.TOOL_DECISION_DENIED,
+                            Map.of("status", ToolDecision.DENIED.name(),
                                 "message", "Tool execution denied. Result will be delivered via session channel."))
                             .build());
                     } catch (CheckpointResolutionException e) {
@@ -290,7 +291,7 @@ public class AgentSessionService {
                         // APPROVED/DENIED decisions map from batchToolDecisions.
                         checkpointApprovalService.triggerResume(cp);
                         response.resume(Response.accepted(
-                            Map.of("status", AgentSentinels.TOOL_DECISION_APPROVED,
+                            Map.of("status", ToolDecision.APPROVED.name(),
                                 "message", "Tool execution approved. Results will be delivered via session channel."))
                             .build());
                     } catch (CheckpointResolutionException e) {
@@ -412,7 +413,7 @@ public class AgentSessionService {
                 MDC.put(MdcKeys.USER_ID, REST_USER_ID);
                 AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                 checkpointApprovalService.triggerResume(cp);
-                return Response.ok(Map.of("status", AgentSentinels.TOOL_DECISION_DENIED, "session", sessionId)).build();
+                return Response.ok(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId)).build();
             });
         } catch (Exception e) {
             log.errorf("Failed to deny session %s: %s", sessionId, e.getMessage());

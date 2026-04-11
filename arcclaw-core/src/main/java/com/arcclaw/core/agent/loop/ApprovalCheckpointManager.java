@@ -9,14 +9,15 @@ import java.util.Map;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.agent.sse.HitlEventType;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
@@ -59,8 +60,8 @@ public class ApprovalCheckpointManager {
         cp.setPendingToolParametersJson(paramsJson);
 
         try {
-            Map<String, String> decisions = new LinkedHashMap<>();
-            decisions.put(toolName, AgentSentinels.TOOL_DECISION_PENDING);
+            Map<String, ToolDecision> decisions = new LinkedHashMap<>();
+            decisions.put(toolName, ToolDecision.PENDING);
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
         } catch (Exception e) {
             log.errorf("Failed to serialize batch decisions for single tool %s: %s",
@@ -83,7 +84,7 @@ public class ApprovalCheckpointManager {
                   sessionId, toolName, channelType, channelPlatformId);
 
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-            sessionId, "AWAITING_APPROVAL", toolName, paramsJson, null, Instant.now()
+            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), toolName, paramsJson, null, Instant.now()
         ));
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
     }
@@ -104,9 +105,9 @@ public class ApprovalCheckpointManager {
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
 
-        Map<String, String> decisions = new LinkedHashMap<>();
+        Map<String, ToolDecision> decisions = new LinkedHashMap<>();
         calls.forEach(call -> decisions.put(
-            call.toolName(), AgentSentinels.TOOL_DECISION_PENDING));
+            call.toolName(), ToolDecision.PENDING));
 
         String decisionsJson;
         try {
@@ -139,7 +140,7 @@ public class ApprovalCheckpointManager {
                   sessionId, compositeName, channelType, channelPlatformId);
 
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-            sessionId, "AWAITING_APPROVAL", compositeName, batchJson, null, Instant.now()
+            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), compositeName, batchJson, null, Instant.now()
         ));
         return AgentResult.awaitingApproval(
             compositeName, batchJson, sessionId, List.copyOf(history));
@@ -163,9 +164,9 @@ public class ApprovalCheckpointManager {
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
 
-        Map<String, String> decisions = new LinkedHashMap<>();
+        Map<String, ToolDecision> decisions = new LinkedHashMap<>();
         hitlCalls.forEach(call ->
-            decisions.put(call.toolName(), AgentSentinels.TOOL_DECISION_PENDING));
+            decisions.put(call.toolName(), ToolDecision.PENDING));
 
         String decisionsJson;
         try {
@@ -198,7 +199,7 @@ public class ApprovalCheckpointManager {
                   sessionId, hitlCalls.size(), compositeName, channelType, channelPlatformId);
 
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-            sessionId, "AWAITING_APPROVAL", compositeName, originalBatchJson, null, Instant.now()
+            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), compositeName, originalBatchJson, null, Instant.now()
         ));
         return AgentResult.awaitingApproval(
             compositeName, originalBatchJson, sessionId,

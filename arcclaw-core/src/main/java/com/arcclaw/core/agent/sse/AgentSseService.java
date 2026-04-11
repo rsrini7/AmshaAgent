@@ -60,7 +60,7 @@ public class AgentSseService {
             proc.onNext(event);
         }
         // Store AWAITING_APPROVAL so UI gets it even if SSE connects after event fires
-        if (event instanceof HitlEvent h && "AWAITING_APPROVAL".equals(h.type())) {
+        if (event instanceof HitlEvent h && HitlEventType.AWAITING_APPROVAL.wireValue().equals(h.type())) {
             pendingEvents.put(sessionId, event);
         }
     }
@@ -72,7 +72,7 @@ public class AgentSseService {
     public void republishOnSubscribe(String sessionId, String toolName, String toolParams) {
         pendingEvents.put(sessionId, new HitlEvent(
             sessionId,
-            "AWAITING_APPROVAL",
+            HitlEventType.AWAITING_APPROVAL.wireValue(),
             toolName,
             toolParams,
             null,

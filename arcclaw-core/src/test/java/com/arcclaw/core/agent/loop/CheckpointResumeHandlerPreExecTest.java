@@ -13,10 +13,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -24,14 +29,10 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class CheckpointResumeHandlerPreExecTest {
@@ -74,7 +75,7 @@ class CheckpointResumeHandlerPreExecTest {
         cp.setPreExecutedResults(objectMapper.writeValueAsString(preResults));
         
         // Mock 'unsafe' decision as APPROVED
-        Map<String, String> decisions = Map.of("unsafe", AgentSentinels.TOOL_DECISION_APPROVED);
+        Map<String, String> decisions = Map.of("unsafe", ToolDecision.APPROVED.name());
         cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
 
         when(agentStore.load(sessionId, agentRole)).thenReturn(Optional.of(cp));

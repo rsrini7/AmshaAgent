@@ -25,6 +25,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -257,13 +258,13 @@ public class CheckpointResumeHandler {
         // If all decisions in the batch are DENIED, route to the denial handler
         if (cp.hasBatchToolDecisions()) {
             try {
-                Map<String, String> decisions = objectMapper.readValue(
+                Map<String, ToolDecision> decisions = objectMapper.readValue(
                     cp.getBatchToolDecisions(),
-                    new TypeReference<Map<String, String>>() {}
+                    new TypeReference<Map<String, ToolDecision>>() {}
                 );
                 boolean allDenied = !decisions.isEmpty() &&
                     decisions.values().stream()
-                        .allMatch(AgentSentinels.TOOL_DECISION_DENIED::equals);
+                        .allMatch(ToolDecision.DENIED::equals);
                 if (allDenied) return AgentSentinels.GOAL_DENY_APPROVED;
             } catch (Exception e) {
                 log.warnf("resolveResumeGoal: failed to parse batch decisions for session %s", cp.getSessionId());
@@ -402,12 +403,12 @@ public class CheckpointResumeHandler {
                 List.copyOf(history));
         }
 
-        Map<String, String> decisions = Map.of();
+        Map<String, ToolDecision> decisions = Map.of();
         if (checkpoint.hasBatchToolDecisions()) {
             try {
                 decisions = objectMapper.readValue(
                     checkpoint.getBatchToolDecisions(),
-                    new TypeReference<Map<String, String>>() {}
+                    new TypeReference<Map<String, ToolDecision>>() {}
                 );
             } catch (Exception e) {
                 log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions — " +
@@ -448,10 +449,10 @@ public class CheckpointResumeHandler {
                 }
             }
 
-            String decision = decisions.getOrDefault(
-                call.toolName(), AgentSentinels.TOOL_DECISION_PENDING);
+            ToolDecision decision = decisions.getOrDefault(
+                call.toolName(), ToolDecision.PENDING);
 
-            if (AgentSentinels.TOOL_DECISION_DENIED.equals(decision)) {
+            if (ToolDecision.DENIED == decision) {
                 completed.add(call.withResult("User denied this tool execution.", false));
                 continue;
             }

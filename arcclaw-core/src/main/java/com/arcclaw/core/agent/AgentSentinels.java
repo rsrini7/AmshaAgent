@@ -30,15 +30,6 @@ public final class AgentSentinels {
     // session ID prefix
     public static final String CRON_SESSION_PREFIX = "cron-";
 
-    /** Per-tool decision: tool has not yet been acted on. §7.20 */
-    public static final String TOOL_DECISION_PENDING  = "PENDING";
-
-    /** Per-tool decision: tool was explicitly approved by the user. §7.20 */
-    public static final String TOOL_DECISION_APPROVED = "APPROVED";
-
-    /** Per-tool decision: tool was explicitly denied by the user. §7.20 */
-    public static final String TOOL_DECISION_DENIED   = "DENIED";
-
     public static boolean isCronGoal(String goal) {
         return goal != null && goal.toUpperCase().startsWith(CRON_PREFIX);
     }

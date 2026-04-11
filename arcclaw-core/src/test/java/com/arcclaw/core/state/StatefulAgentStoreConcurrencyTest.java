@@ -5,13 +5,6 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
-import jakarta.persistence.EntityManager;
-
-import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.persistence.SqliteRetryTemplate;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +12,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.persistence.SqliteRetryTemplate;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.persistence.EntityManager;
 
 @ExtendWith(MockitoExtension.class)
 class StatefulAgentStoreConcurrencyTest {
@@ -44,9 +44,9 @@ class StatefulAgentStoreConcurrencyTest {
         managed.setId(id);
         managed.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         // Managed has one APPROVED, one PENDING
-        Map<String, String> managedDecisions = Map.of(
-            "tool1", AgentSentinels.TOOL_DECISION_APPROVED,
-            "tool2", AgentSentinels.TOOL_DECISION_PENDING
+        Map<String, ToolDecision> managedDecisions = Map.of(
+            "tool1", ToolDecision.APPROVED,
+            "tool2", ToolDecision.PENDING
         );
         managed.setBatchToolDecisions(objectMapper.writeValueAsString(managedDecisions));
 
@@ -54,9 +54,9 @@ class StatefulAgentStoreConcurrencyTest {
         incoming.setId(id);
         incoming.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         // Incoming is stale: both still PENDING
-        Map<String, String> incomingDecisions = Map.of(
-            "tool1", AgentSentinels.TOOL_DECISION_PENDING,
-            "tool2", AgentSentinels.TOOL_DECISION_PENDING
+        Map<String, ToolDecision> incomingDecisions = Map.of(
+            "tool1", ToolDecision.PENDING,
+            "tool2", ToolDecision.PENDING
         );
         incoming.setBatchToolDecisions(objectMapper.writeValueAsString(incomingDecisions));
 
@@ -66,12 +66,12 @@ class StatefulAgentStoreConcurrencyTest {
         store.doSaveEntity(incoming);
 
         // Verify tool1 remains APPROVED (from managed), tool2 remains PENDING
-        Map<String, String> result = objectMapper.readValue(
+        Map<String, ToolDecision> result = objectMapper.readValue(
             managed.getBatchToolDecisions(),
-            new TypeReference<Map<String, String>>() {});
+            new TypeReference<Map<String, ToolDecision>>() {});
         
-        assertEquals(AgentSentinels.TOOL_DECISION_APPROVED, result.get("tool1"));
-        assertEquals(AgentSentinels.TOOL_DECISION_PENDING, result.get("tool2"));
+        assertEquals(ToolDecision.APPROVED, result.get("tool1"));
+        assertEquals(ToolDecision.PENDING, result.get("tool2"));
     }
 
     @Test
@@ -80,8 +80,8 @@ class StatefulAgentStoreConcurrencyTest {
         AgentCheckpoint managed = new AgentCheckpoint();
         managed.setId(id);
         managed.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        Map<String, String> managedDecisions = Map.of(
-            "tool1", AgentSentinels.TOOL_DECISION_PENDING
+        Map<String, ToolDecision> managedDecisions = Map.of(
+            "tool1", ToolDecision.PENDING
         );
         managed.setBatchToolDecisions(objectMapper.writeValueAsString(managedDecisions));
 
@@ -89,8 +89,8 @@ class StatefulAgentStoreConcurrencyTest {
         incoming.setId(id);
         incoming.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         // Incoming has a NEW decision
-        Map<String, String> incomingDecisions = Map.of(
-            "tool1", AgentSentinels.TOOL_DECISION_DENIED
+        Map<String, ToolDecision> incomingDecisions = Map.of(
+            "tool1", ToolDecision.DENIED
         );
         incoming.setBatchToolDecisions(objectMapper.writeValueAsString(incomingDecisions));
 
@@ -100,10 +100,10 @@ class StatefulAgentStoreConcurrencyTest {
         store.doSaveEntity(incoming);
 
         // Verify DENIED is kept (it was a progress from PENDING)
-        Map<String, String> result = objectMapper.readValue(
+        Map<String, ToolDecision> result = objectMapper.readValue(
             managed.getBatchToolDecisions(),
-            new TypeReference<Map<String, String>>() {});
+            new TypeReference<Map<String, ToolDecision>>() {});
         
-        assertEquals(AgentSentinels.TOOL_DECISION_DENIED, result.get("tool1"));
+        assertEquals(ToolDecision.DENIED, result.get("tool1"));
     }
 }

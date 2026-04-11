@@ -162,22 +162,22 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             return;
         }
         try {
-            Map<String, String> managedMap = objectMapper.readValue(
+            Map<String, ToolDecision> managedMap = objectMapper.readValue(
                 managed.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
-            Map<String, String> incomingMap = objectMapper.readValue(
+                new TypeReference<Map<String, ToolDecision>>() {});
+            Map<String, ToolDecision> incomingMap = objectMapper.readValue(
                 incoming.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
+                new TypeReference<Map<String, ToolDecision>>() {});
 
             boolean changed = false;
-            for (Map.Entry<String, String> entry : managedMap.entrySet()) {
+            for (Map.Entry<String, ToolDecision> entry : managedMap.entrySet()) {
                 String tool = entry.getKey();
-                String managedDecision = entry.getValue();
-                String incomingDecision = incomingMap.get(tool);
+                ToolDecision managedDecision = entry.getValue();
+                ToolDecision incomingDecision = incomingMap.get(tool);
 
                 // If managed has a real decision, and incoming is still pending, keep the decision
-                if (!AgentSentinels.TOOL_DECISION_PENDING.equals(managedDecision)
-                        && AgentSentinels.TOOL_DECISION_PENDING.equals(incomingDecision)) {
+                if (ToolDecision.PENDING != managedDecision
+                        && ToolDecision.PENDING == incomingDecision) {
                     incomingMap.put(tool, managedDecision);
                     changed = true;
                 }
@@ -654,11 +654,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         }
 
         try {
-            Map<String, String> map = objectMapper.readValue(
+            Map<String, ToolDecision> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
+                new TypeReference<Map<String, ToolDecision>>() {});
             if (!map.containsKey(toolName)) return false;
-            map.put(toolName, decision);
+            map.put(toolName, ToolDecision.valueOf(decision));
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
             em.merge(cp);
             return true;
@@ -684,11 +684,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         if (!cp.hasBatchToolDecisions()) return false;
 
         try {
-            Map<String, String> map = objectMapper.readValue(
+            Map<String, ToolDecision> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
+                new TypeReference<Map<String, ToolDecision>>() {});
             return map.values().stream()
-                .noneMatch(val -> AgentSentinels.TOOL_DECISION_PENDING.equals(val));
+                .noneMatch(val -> ToolDecision.PENDING == val);
         } catch (Exception e) {
             log.errorf("Failed to check if batch decided: %s",
                e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());

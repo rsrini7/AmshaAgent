@@ -18,7 +18,6 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.SessionAuditSequencer;
@@ -27,6 +26,7 @@ import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -228,7 +228,7 @@ public class SessionReaper {
             BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
                 agentStore.updateBatchToolDecision(
                     cp.getSessionId(), cp.getAgentRole(), toolName,
-                    AgentSentinels.TOOL_DECISION_DENIED));
+                    ToolDecision.DENIED.name()));
         }
 
         AgentCheckpoint fresh = agentStore.load(cp.getSessionId(), cp.getAgentRole())

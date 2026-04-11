@@ -36,6 +36,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.core.util.CronScheduleUtil;
@@ -279,7 +280,7 @@ public class ApproveReflex implements AgentReflex {
         BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
             statefulAgentStore.updateBatchToolDecision(
                 sessionId, agentRole, toolName,
-                AgentSentinels.TOOL_DECISION_APPROVED));
+                ToolDecision.APPROVED.name()));
     }
 
     private String triggerBatchResume(
