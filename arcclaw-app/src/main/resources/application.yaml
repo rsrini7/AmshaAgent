@@ -360,7 +360,7 @@ arcclaw:
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
   chat:
-    default-observation-max-length: 4000
+    default-observation-max-length: 2000
     tool-specific-limits:
       github_search: 10000
       read_file: 8000
