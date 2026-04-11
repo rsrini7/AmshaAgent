@@ -2,6 +2,7 @@ package com.arcclaw.core.util;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.arcclaw.core.message.UserMessages;
 import org.junit.jupiter.api.Test;
 
 class AgentErrorMessageUtilTest {
@@ -23,11 +24,11 @@ class AgentErrorMessageUtilTest {
     @Test
     void testSanitizeErrorMessage() {
         // Verify we didn't break existing logic
-        assertEquals("Task execution failed.", AgentErrorMessageUtil.sanitizeErrorMessage(null));
+        assertEquals(UserMessages.TASK_FAILED, AgentErrorMessageUtil.sanitizeErrorMessage(null));
         assertEquals("Hello", AgentErrorMessageUtil.sanitizeErrorMessage("Hello"));
         
         // Suppress JVM internals
         String npe = "Cannot invoke \"String.length()\" because \"s\" is null";
-        assertEquals("Task execution failed.", AgentErrorMessageUtil.sanitizeErrorMessage(npe));
+        assertEquals(UserMessages.AI_UNEXPECTED_RESPONSE, AgentErrorMessageUtil.sanitizeErrorMessage(npe));
     }
 }

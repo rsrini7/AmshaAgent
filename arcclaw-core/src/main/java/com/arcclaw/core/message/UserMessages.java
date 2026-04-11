@@ -23,6 +23,8 @@ public final class UserMessages {
     public static final String APPROVAL_NEEDED = "⏸ Approval needed: %s";
     public static final String TASK_DENIED = "❌ Task denied by user.";
     public static final String ALREADY_PROCESSING = "⏳ Already processing your request. Please wait.";
+    public static final String ALREADY_PROCESSING_APPROVAL = "⏳ Already processing your approval. Please wait.";
+    public static final String ALREADY_PROCESSING_DENIAL = "⏳ Already processing your denial. Please wait.";
     public static final String SESSION_HALTED = "🛑 System Halted. Workspace terminated.";
     public static final String DELEGATION_AGENT_REQUIRED_FORMAT = "Parameter 'agent' is required. Valid agents: %s.";
     public static final String DELEGATION_GOAL_REQUIRED = "Parameter 'goal' is required. Please provide a clear, specific goal for the sub-agent.";

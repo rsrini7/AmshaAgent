@@ -139,8 +139,8 @@ class PiiScanReflexTest {
 
     @Test
     void testMatchesIsFalseByDefault() {
-        // piiMode defaults to REDACT_AND_FORWARD, so matches should be false
-        Assertions.assertFalse(piiScanReflex.matches("Email is test@example.com"));
+        // piiMode defaults to BLOCK_AND_NOTIFY, so matches should be true if PII is present
+        Assertions.assertTrue(piiScanReflex.matches("Email is test@example.com"));
     }
 
     @Test

@@ -318,7 +318,7 @@ public class ApproveReflex implements AgentReflex {
         if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
             log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
                     "ignoring duplicate trigger.", cronSessionId);
-            return ALREADY_PROCESSING;
+            return ALREADY_PROCESSING_APPROVAL;
         }
 
         try {

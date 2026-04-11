@@ -12,6 +12,7 @@ import java.util.Optional;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -53,6 +54,7 @@ class AgentStateMachineRunnerTest {
     private SkillRegistry skillRegistry;
     private PiiScanReflex piiScanReflex;
     private AgentOtelContext agentOtelContext;
+    private IntentClassificationService intentClassifier;
 
 
     @SuppressWarnings("unchecked")
@@ -83,6 +85,7 @@ class AgentStateMachineRunnerTest {
         skillRegistry    = mock(SkillRegistry.class);
         piiScanReflex    = mock(PiiScanReflex.class);
         agentOtelContext = mock(AgentOtelContext.class);
+        intentClassifier = mock(IntentClassificationService.class);
 
 
         // Wire ApprovalCheckpointManager
@@ -119,6 +122,7 @@ class AgentStateMachineRunnerTest {
         runner.agentOtelContext = agentOtelContext;
         runner.stateChangedEvent = stateChangedEvent;
         runner.agentStore       = agentStore;
+        runner.intentClassifier = intentClassifier;
 
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());

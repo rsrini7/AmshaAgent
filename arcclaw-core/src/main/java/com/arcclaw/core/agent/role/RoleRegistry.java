@@ -36,9 +36,15 @@ public class RoleRegistry {
     public Set<String> permittedTools(AgentRoleEnum role) {
         if (role == null) return Set.of();
         Set<String> coreTools = role.definition().toolNames();
+        
+        // Null-safe for unit testing
+        if (capabilityRegistry == null) {
+            return coreTools;
+        }
+
         Set<String> supplemental = capabilityRegistry.getSupplementalTools(role.id());
 
-        if (supplemental.isEmpty()) {
+        if (supplemental == null || supplemental.isEmpty()) {
             return coreTools;
         }
 
