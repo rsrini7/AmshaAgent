@@ -219,11 +219,6 @@ public class SecretVaultImplTest {
         });
     }
 
-    @Test
-    void testRotateSecrets_ThrowsException() {
-        assertThrows(UnsupportedOperationException.class, () -> 
-            vault.rotateSecrets(TEST_SESSION_ID));
-    }
 
     @Test
     void testSystemKeyLifeCycle() {

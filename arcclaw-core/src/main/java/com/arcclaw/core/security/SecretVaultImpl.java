@@ -140,17 +140,6 @@ public class SecretVaultImpl implements SecretVault {
         // sessionKey NOT auto-closed here
     }
 
-    @Override
-    public void rotateSecrets(String sessionId) {
-        // Key rotation is tracked for Phase 64.
-        // All documentation references to "24-hour automatic rotation" are incorrect
-        // and have been removed in Phase 63.
-        // Do not call this method — it will always throw until Phase 64 ships.
-        throw new UnsupportedOperationException(
-                "Vault key rotation is not yet implemented. " +
-                        "Tracked in Phase 64 backlog. " +
-                        "Remove all callers until Phase 64 is complete.");
-    }
 
     @Override
     public Optional<VaultKey> retrieveSystemKey(String keyName) {

@@ -67,6 +67,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 
 - **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files — never as process arguments.
 - **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
+  - **Operational Key-Rotation Policy:** ArcClaw currently does *not* support automatic or manual vault key rotation (deferred to Phase 64). In the event of a suspected compromise, the official operational policy requires a complete wipe of the `EncryptedSecret` table and out-of-band re-provisioning of all tenant secrets. No rotation APIs are exposed by the system contract at runtime.
 - **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JDK 25 `ScopedValue` (not `ThreadLocal`) alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage per-session state across thousands of lightweight virtual threads.
 - **💰 Financial Governance:** Hard USD circuit breakers and **Human-in-the-Loop** approvals. Sensitive operations (e.g., `NETWORK_OUTBOUND`) pause execution until a user clicks `/approve` via Telegram or REST.
 - **🔍 Observability:** Real-time Prometheus metrics at `/q/metrics` track token consumption and agent invocations, while OTLP distributed tracing provides HTTP spans via Jaeger.

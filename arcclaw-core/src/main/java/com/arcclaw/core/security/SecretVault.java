@@ -26,13 +26,7 @@ public interface SecretVault {
      */
     Optional<VaultKey> get(String keyName);
 
-    /**
-     * Rotates all secrets for the given session to a NEW derived key.
-     * This is an expensive operation: decrypt all -> re-encrypt with new pepper ->
-     * save.
-     */
-    void rotateSecrets(String sessionId);
-
+    // rotateSecrets removed as per key-rotation policy deferral
     /**
      * Retrieves a system-level key (not tied to any specific workspace session).
      */
