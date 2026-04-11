@@ -267,11 +267,17 @@ public class ToolRegistry {
 
         // NULL PARAM STRIP
         // Some LLMs send optional fields as explicit null (e.g. "ref": null)
-        // instead of omitting them. This can break downstream validators or 
-        // cause 400 errors from strict APIs. Strip them here for all tools.
-        Map<String, Object> sanitizedParams = params.entrySet().stream()
-                .filter(e -> e.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        // instead of omitting them. This can break downstream validators or
+        // cause 400 errors from strict APIs. Strip them here for all tools by default,
+        // but allow tools to opt-out if they differentiate null vs omitted.
+        Map<String, Object> sanitizedParams;
+        if (tool.shouldStripNullParams()) {
+            sanitizedParams = params.entrySet().stream()
+                    .filter(e -> e.getValue() != null)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        } else {
+            sanitizedParams = new HashMap<>(params);
+        }
 
         // Sandbox path 
         if (tool.requiresSandbox()) {

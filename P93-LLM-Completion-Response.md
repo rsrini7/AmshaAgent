@@ -700,3 +700,17 @@ if (lower.matches(".*(my name|who am i|user name|user identity).*")) {
 ```
 
 That keeps identity lookups properly routed to `"user name identity"` while leaving actual conversational `i am...` searches completely intact. The update has been applied!
+
+---
+
+I've finished implementing the changes for M5. 
+
+Here is what was done:
+1. **Tool-Specific Null Handling**: Added `shouldStripNullParams()` default method to the `AgentTool` interface. This allows tools to choose whether explicit `null`s should be stripped or preserved. By default, it returns `true` for cleanliness, preserving prior behavior.
+2. **Registry Preservation**: Updated `ToolRegistry` to check the tool's `shouldStripNullParams()` preference before stripping any null values from the parameters map. 
+3. **Regression Tests**: Added a new unit test class `NullParamStrippingTest` with tests `testDefaultBehavior_StripsNulls` and `testOptOutBehavior_PreservesNulls` to properly verify that nulls are retained only when the target tool explicitly opts out.
+
+The tests have successfully executed and passed! Parameter semantics are now completely faithful to specific tool/API contracts in arcclaw. All criteria for M5 are satisfied.
+
+---
+

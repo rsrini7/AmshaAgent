@@ -128,4 +128,18 @@ public interface AgentTool {
      * Override this to write files that the sandbox command needs.
      */
     default void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {}
+
+    /**
+     * Whether the registry should strip explicit 'null' values from parameters.
+     * Some LLMs send optional fields as 'null' instead of omitting them.
+     * <p>
+     * Default is true for safety/cleanliness. Set to false if the target API
+     * differentiates between an omitted field and an explicit 'null' (e.g.
+     * using null to explicitly clear a value).
+     *
+     * @return true to strip nulls, false to preserve them.
+     */
+    default boolean shouldStripNullParams() {
+        return true;
+    }
 }
