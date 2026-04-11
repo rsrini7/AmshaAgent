@@ -1,5 +1,6 @@
 package com.arcclaw.core.sandbox;
 
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -19,7 +20,8 @@ public class SandboxCircuitBreaker {
 
     private final AtomicReference<CircuitBreakerState> state = new AtomicReference<>(CircuitBreakerState.CLOSED);
     private final AtomicInteger podmanFailures = new AtomicInteger(0);
-    private final AtomicLong openedAt = new AtomicLong(0L);
+    private final AtomicLong openedAtWallClock = new AtomicLong(0L);
+    private final AtomicLong openedAtNano = new AtomicLong(0L);
 
     @ConfigProperty(name = "arcclaw.sandbox.podman.failure-threshold", defaultValue = "3")
     int podmanFailureThreshold;
@@ -27,9 +29,19 @@ public class SandboxCircuitBreaker {
     @ConfigProperty(name = "arcclaw.sandbox.podman.reset-timeout-seconds", defaultValue = "30")
     int resetTimeoutSeconds;
 
+    // For testability
+    protected long currentNanoTime() {
+        return System.nanoTime();
+    }
+
+    protected long currentTimeMillis() {
+        return System.currentTimeMillis();
+    }
+
     public void openCircuit() {
         state.set(CircuitBreakerState.OPEN);
-        openedAt.set(System.currentTimeMillis());
+        openedAtWallClock.set(currentTimeMillis());
+        openedAtNano.set(currentNanoTime());
     }
 
     public int getPodmanFailureThreshold() {
@@ -48,9 +60,10 @@ public class SandboxCircuitBreaker {
     public boolean shouldAttemptPodman() {
         CircuitBreakerState current = state.get();
         if (current == CircuitBreakerState.OPEN) {
-            long elapsed = System.currentTimeMillis() - openedAt.get();
-            if (elapsed >= TimeUnit.SECONDS.toMillis(resetTimeoutSeconds)) {
-                log.infof("Podman circuit breaker reset timeout reached. Transitioning to HALF_OPEN.");
+            long elapsedNanos = currentNanoTime() - openedAtNano.get();
+            if (elapsedNanos >= TimeUnit.SECONDS.toNanos(resetTimeoutSeconds)) {
+                log.infof("Podman circuit breaker reset timeout reached (circuit was opened at wall-clock %s). Transitioning to HALF_OPEN.",
+                        Instant.ofEpochMilli(openedAtWallClock.get()));
                 state.compareAndSet(CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN);
                 return true;
             }

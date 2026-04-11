@@ -714,3 +714,11 @@ The tests have successfully executed and passed! Parameter semantics are now com
 
 ---
 
+I have completed the changes for M6. 
+
+Here is what was done:
+1. **Monotonic Measurement**: Refactored `SandboxCircuitBreaker` to track initialization time using `System.nanoTime()` along with `System.currentTimeMillis()`. The `elapsedNanos` variable is calculated entirely from monotonic nanoseconds to make the actual timeout checks immune to clock shifts.
+2. **Wall-clock For Logging**: Time tracked by `System.currentTimeMillis()` is maintained as `openedAtWallClock` and is still used effectively to output readable timestamps in logic/logger outputs.
+3. **Resilience Testing**: Adjusted tests to allow manual mock advances of the clock instead of actual Thread.sleep. I've also created the `testShouldAttemptPodman_immuneToWallClockShifts` unit test ensuring that transitioning to a `HALF_OPEN` state is totally robust against any NTP syncs that move the system's wall-clock time forward or backward.
+
+Given that the tests correctly executed, `SandboxCircuitBreaker` is now fully resilient to system clock drift and adjustments.
