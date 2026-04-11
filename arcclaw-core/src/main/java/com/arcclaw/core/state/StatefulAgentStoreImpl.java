@@ -25,12 +25,10 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.util.MdcKeys;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
 
 /**
  * JPA EntityManager-based implementation of {@link StatefulAgentStore}.
@@ -98,7 +96,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setIterationsUsed(steps.size());
             em.persist(checkpoint);
 
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
+            String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
             auditService.recordWithIdempotency(sessionId, userId, agentRole,
                 SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy, idempotencyKey);
@@ -379,7 +377,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         checkpoint.setTraceId(traceId);
         checkpoint.setRootCauseClass(rootCauseClass);
 
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String userId = WorkspaceContext.resolveUserId();
         String idempotencyKey = "CP_FAILED:" + (checkpoint.getId() != null ? checkpoint.getId() : "null");
         String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
         auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
@@ -405,7 +403,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStatus(CheckpointStatus.COMPLETED);
             checkpoint.setCompletedAt(Instant.now());
 
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
+            String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_COMPLETED:" + checkpointId;
             auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
                 SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
@@ -454,7 +452,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             }
             em.persist(checkpoint);
 
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
+            String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
             auditService.recordWithIdempotency(sessionId, userId, agentRole,
                 SecurityEventType.CHECKPOINT_CREATED, null, idempotencyKey);
@@ -485,7 +483,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             em.persist(entity);
         }
 
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String userId = WorkspaceContext.resolveUserId();
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
                 ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;

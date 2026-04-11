@@ -133,8 +133,7 @@ public class AgentSessionService {
         heartbeatTracker.recordHeartbeat(sessionId, level);
 
         // Bind the requesting API key identity as owner — used for per-key isolation
-        Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
-        String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+        String requestingKey = WorkspaceContext.resolveUserId();
         if (requestingKey != null && !requestingKey.isBlank()) {
             heartbeatTracker.tryBindOwner(sessionId, requestingKey);
         }
@@ -142,8 +141,7 @@ public class AgentSessionService {
     }
 
     public Map<String, Instant> listSessions() {
-        Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
-        String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+        String requestingKey = WorkspaceContext.resolveUserId();
 
         if (requestingKey == null || requestingKey.isBlank()) {
             return Map.of(); // Anonymous/System can't list active sessions via REST
@@ -494,8 +492,7 @@ public class AgentSessionService {
         // CLI and Telegram sessions have null owner → open access (correct).
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
-            Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
-            String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+            String requestingKey = WorkspaceContext.resolveUserId();
             if (requestingKey != null && !owner.get().equals(requestingKey)) {
                 log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
                           requestingKey, sessionId, owner.get());

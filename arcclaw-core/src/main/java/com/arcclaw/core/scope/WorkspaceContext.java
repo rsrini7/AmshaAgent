@@ -5,6 +5,8 @@ import java.util.concurrent.Callable;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.MdcKeys;
+import org.jboss.logging.MDC;
 
 /**
  * Pure static utility backed by ScopedValue constants to hold Workspace Context.
@@ -124,7 +126,13 @@ public final class WorkspaceContext {
 
     public static String resolveUserId() {
         try {
-            return USER_ID.isBound() && USER_ID.get() != null ? USER_ID.get() : "";
+            if (USER_ID.isBound() && USER_ID.get() != null) {
+                return USER_ID.get();
+            }
+            // Fallback for non-virtual threads (e.g. Filters) where ScopedValue is not yet bound.
+            // Also supports test suites that populate MDC but not ScopedValues.
+            String mdcUser = (String) MDC.get(MdcKeys.USER_ID);
+            return mdcUser != null ? mdcUser : "";
         } catch (Exception e) {
             return "unknown";
         }

@@ -11,9 +11,8 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.util.MdcKeys;
-import org.jboss.logging.MDC;
 
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
@@ -102,7 +101,7 @@ public class SecretVaultImpl implements SecretVault {
             // Only record audit for non-system sessions to avoid infinite recursion or
             // missing context
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
-                String userId = (String) MDC.get(MdcKeys.USER_ID);
+                String userId = WorkspaceContext.resolveUserId();
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_STORE, "keyName=" + keyName);
             }
 
@@ -118,7 +117,7 @@ public class SecretVaultImpl implements SecretVault {
 
         // 1. Fetch
         EncryptedSecret entity = repository.findByKey(sessionId, keyName);
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String userId = WorkspaceContext.resolveUserId();
 
         if (entity == null) {
             auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,

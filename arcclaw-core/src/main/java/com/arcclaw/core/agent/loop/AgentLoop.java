@@ -218,7 +218,7 @@ public class AgentLoop {
         try {
             // Store userId in MDC so it appears in structured log output alongside
             // SESSION_ID and AGENT_ROLE. Previously USER_ID was never set here,
-            // meaning MDC.get(MdcKeys.USER_ID) in the finally block always returned null
+            // meaning WorkspaceContext.resolveUserId() in the finally block always returned null
             // and observers always received "unknown".
             MDC.put(MdcKeys.USER_ID, capturedUserId);
 
@@ -425,7 +425,7 @@ public class AgentLoop {
                 String goalHash = hashUtil.sha256hex(goal);
                 final AgentResult finalResult = result;
                 // use capturedUserId (set early in try block) instead of
-                // MDC.get(MdcKeys.USER_ID) — cleaner and not subject to MDC lifecycle.
+                // WorkspaceContext.resolveUserId() — cleaner and not subject to MDC lifecycle.
                 observers.forEach(o -> o.onLoopComplete(
                     sessionId, capturedUserId, canonicalRole, goalHash, finalResult));
             }

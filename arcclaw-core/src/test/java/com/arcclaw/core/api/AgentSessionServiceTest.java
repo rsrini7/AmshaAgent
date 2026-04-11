@@ -105,6 +105,9 @@ class AgentSessionServiceTest {
         mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
         
+        mockedContext.when(WorkspaceContext::resolveUserId)
+                .thenAnswer(inv -> MDC.get(MdcKeys.USER_ID));
+        
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
                 .thenAnswer(inv -> {
                     ((Runnable) inv.getArgument(1)).run();
