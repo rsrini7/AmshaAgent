@@ -5,6 +5,12 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
+import jakarta.persistence.EntityManager;
+
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.persistence.SqliteRetryTemplate;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,13 +18,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.persistence.SqliteRetryTemplate;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.persistence.EntityManager;
 
 @ExtendWith(MockitoExtension.class)
 class StatefulAgentStoreConcurrencyTest {

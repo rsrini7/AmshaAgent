@@ -34,9 +34,8 @@ class AgentRoleTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"unknown", "kali"})
-    void testFromStringUnknownReturnsDynamicRole(String bad) {
-        AgentRoleEnum role = AgentRoleEnum.fromString(bad);
-        assertEquals(bad, role.id());
+    void testFromStringUnknownThrows(String bad) {
+        assertThrows(IllegalArgumentException.class, () -> AgentRoleEnum.fromString(bad));
     }
 
     @Test

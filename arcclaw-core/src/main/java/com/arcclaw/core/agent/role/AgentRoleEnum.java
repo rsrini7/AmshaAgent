@@ -83,7 +83,7 @@ public record AgentRoleEnum(String id) {
         return new RoleDefinition(this.id, "Dynamic Role", "", 5, true, false, Set.of(), Set.of());
     }
 
-    /** Never throws — unknown names produce a dynamic role. */
+    /** Throws IllegalArgumentException for unknown roles, defaulting handled by callers. */
     public static AgentRoleEnum fromString(String roleStr) {
         if (roleStr == null || roleStr.isBlank()) {
             return COORDINATOR;
@@ -103,7 +103,7 @@ public record AgentRoleEnum(String id) {
             }
         }
 
-        return new AgentRoleEnum(normalized);
+        throw new IllegalArgumentException("Unknown agent role: " + roleStr);
     }
 
     /** Returns true only if the role string maps to a known built-in role. */

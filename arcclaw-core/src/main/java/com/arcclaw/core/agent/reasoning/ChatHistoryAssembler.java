@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -29,16 +30,9 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class ChatHistoryAssembler {
 
-    @Inject
-    Logger log;
-
-    private final ChatMemoryStore chatMemoryStore;
-    private final ObjectMapper objectMapper;
-
-    protected ChatHistoryAssembler() {
-        this.chatMemoryStore = null;
-        this.objectMapper = null;
-    }
+    @Inject Logger log;
+    @Inject ChatMemoryStore chatMemoryStore;
+    @Inject ObjectMapper objectMapper;
 
     @ConfigProperty(name = "arcclaw.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -46,10 +40,11 @@ public class ChatHistoryAssembler {
     @ConfigProperty(name = "arcclaw.chat.tool-specific-limits")
     Optional<Map<String, Integer>> toolSpecificLimits;
 
-    @Inject
-    public ChatHistoryAssembler(ChatMemoryStore chatMemoryStore, ObjectMapper objectMapper) {
-        this.chatMemoryStore = chatMemoryStore;
-        this.objectMapper = objectMapper;
+    @PostConstruct
+    void validate() {
+        if (chatMemoryStore == null || objectMapper == null || log == null) {
+            throw new IllegalStateException("ChatHistoryAssembler required dependencies are null");
+        }
     }
 
     /**

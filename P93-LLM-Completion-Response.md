@@ -746,3 +746,38 @@ I've gone ahead and resolved the `TOOL_DECISION_DENIED` reference error in `Sess
 6.  **AgentSseService**: Updated `AWAITING_APPROVAL` to `HitlEventType.AWAITING_APPROVAL.wireValue()`.
 
 Everything should be tightly linked up with your new enums and string type-check mappings respectively! Go ahead and test your IDE compilation (`mvn clean test`). Let me know if you hit any missed usages or type-cast errors.
+
+---
+
+Searched for "class ChatHistoryAssembler"
+Viewed ChatHistoryAssembler.java:1-246
+Edited ChatHistoryAssembler.java
+
+I've addressed the `ChatHistoryAssembler` (L3) issue:
+
+1. **Refactored Injection Pattern**: Removed the `protected ChatHistoryAssembler()` no-arg constructor that set fields to `null`.
+2. **Simplified CDI Fields**: Removed the constructor-based autowiring entirely in favor of Quarkus field injection (`@Inject ChatMemoryStore` and `@Inject ObjectMapper`). This is totally normal behavior for CDI, avoids the proxy proxy-initialization woes where final fields require null-assignments, and creates leaner instantiation.
+3. **Startup Validation Guard**: Added a new `@PostConstruct void validate()` block that throws an `IllegalStateException` preventing start-up sequence continuation if any of `chatMemoryStore`, `objectMapper`, or `log` injectables are null.
+
+The codebase correctly applies proxy-compatible field injections for this component now! Please feel free to compile and verify.
+
+---
+
+Viewed AgentRoleEnum.java:1-141
+Viewed AgentLoop.java:1-556
+Searched for "fromString"
+Viewed AgentRoleTest.java:1-73
+Viewed AgentRoleRegistryTest.java:1-54
+Edited AgentRoleEnum.java
+Edited AgentRoleTest.java
+Edited AgentRoleRegistryTest.java
+
+I've addressed the `AgentRoleEnum` (L4) ambiguity by adopting the **strict capabilities policy**. 
+
+### Summary of Fixes:
+1. **Removed Silent Dynamic Roles**: `AgentRoleEnum.fromString()` now explicitly throws an `IllegalArgumentException("Unknown agent role: " + roleStr)` instead of returning an anonymous `new AgentRoleEnum()` that had zero capabilities assigned.
+2. **Re-Activated Dead Code**: By making `.fromString()` throw the exception intentionally, the `throw/catch` block handling in `AgentLoop.run()` (lines 168-173) is now fully **active code**. This correctly triggers the observability pipeline (default to COORDINATOR, emit logs, log audit trail `SecurityEventType.INVALID_ROLE_FALLBACK`, record metric `arcclaw.agent.role.unknown`).
+3. **Aligned the Test Suite**: Updated `AgentRoleTest.java` and `AgentRoleRegistryTest.java` to expect `IllegalArgumentException.class` during invalid/unregistered role retrieval instead of verifying the rogue pseudo-dynamic configurations.
+
+This ensures unknown roles are securely rejected or defaulted safely at the perimeter rather than slipping into the logic pipeline with zero capabilities. Let me know if you run into any compilation hiccups or need me to proceed to the next item!
+
