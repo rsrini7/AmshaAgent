@@ -36,10 +36,9 @@ export interface ApprovalResultDto {
 }
 
 // WebSocket Message Shapes
-export interface WsOutboundMessage {
-  type: 'message';
-  text: string;
-}
+export type WsOutboundMessage = 
+  | { type: 'message'; text: string; }
+  | { type: 'AUTH'; token: string; };
 
 export interface WsConnectedEvent {
   type: 'connected';

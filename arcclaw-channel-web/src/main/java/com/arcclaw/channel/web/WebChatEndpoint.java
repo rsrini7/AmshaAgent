@@ -45,6 +45,10 @@ public class WebChatEndpoint {
     @Inject WebSocketSessionStore sessionStore;
     @Inject ChannelServices channelServices;
     @Inject PendingApprovalChecker pendingApprovalChecker;
+    @Inject WsTokenStore wsTokenStore;
+
+    // conn.id() → authenticated boolean
+    private final Map<String, Boolean> connectionAuthenticated = new ConcurrentHashMap<>();
 
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
@@ -57,29 +61,6 @@ public class WebChatEndpoint {
 
     @OnOpen
     public void onOpen(WebSocketConnection conn) {
-        if (requireAuth) {
-            String apiKey = conn.handshakeRequest().header("X-ArcClaw-API-Key");
-            // browsers can't send custom headers, so check subprotocol and query param
-            if (apiKey == null || apiKey.isBlank()) {
-                apiKey = conn.handshakeRequest().header("Sec-WebSocket-Protocol");
-            }
-            if (apiKey == null || apiKey.isBlank()) {
-                String query = conn.handshakeRequest().query();
-                if (query != null && query.contains("apiKey=")) {
-                    String rawKey = query.split("apiKey=")[1].split("&")[0];
-                    apiKey = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
-                }
-            }
-
-            if (!channelServices.isValidIdentity(apiKey)) {
-                log.warnf("WebSocket rejected: invalid API key from connId=%s", conn.id());
-                // We must send error then close
-                conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid API key\"}");
-                conn.close();
-                return;
-            }
-        }
-
         // platformId is the stable per-connection identity (channelId + userId)
         String query = conn.handshakeRequest().query();
         String platformId = null;
@@ -97,13 +78,20 @@ public class WebChatEndpoint {
             ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
         connectionToArcclawSession.put(conn.id(), arcclawSessionId);
 
+        if (!requireAuth) {
+            setupAuthenticatedSession(conn, platformId, arcclawSessionId);
+        } else {
+            log.debugf("WebSocket pending auth: connId=%s platformId=%s", conn.id(), platformId);
+        }
+    }
+
+    private void setupAuthenticatedSession(WebSocketConnection conn, String platformId, String arcclawSessionId) {
+        connectionAuthenticated.put(conn.id(), true);
+        
         // Track connection and mapping in the globally accessible store (§85-C)
         sessionStore.register(platformId, arcclawSessionId, conn);
 
         // §85-B: Proactively initialize session presence in the heartbeat tracker.
-        // The browser WebSocket API cannot send custom headers, so ownership
-        // binding happens lazily when the UI hits HitlResource/AgentResource SSE
-        // endpoints (which DO carry the apiKey as a query param).
         channelServices.recordHeartbeat(arcclawSessionId);
 
         conn.sendText(buildConnectedJson(platformId, arcclawSessionId))
@@ -113,7 +101,7 @@ public class WebChatEndpoint {
                     conn.id(), err.getMessage())
             );
 
-        log.infof("WebSocket opened: connId=%s platformId=%s arcclawSession=%s",
+        log.infof("WebSocket ready: connId=%s platformId=%s arcclawSession=%s",
             conn.id(), platformId, arcclawSessionId);
     }
 
@@ -121,7 +109,27 @@ public class WebChatEndpoint {
     public void onMessage(String message, WebSocketConnection conn) {
         try (JsonReader reader = Json.createReader(new StringReader(message))) {
             JsonObject json = reader.readObject();
-            if (!"message".equals(json.getString("type", ""))) {
+            String type = json.getString("type", "");
+
+            if (requireAuth && !connectionAuthenticated.containsKey(conn.id())) {
+                if ("AUTH".equals(type)) {
+                    String token = json.getString("token", "");
+                    if (wsTokenStore.validateAndConsumeToken(token)) {
+                        String platformId = connectionToSession.get(conn.id());
+                        String arcclawSessionId = connectionToArcclawSession.get(conn.id());
+                        setupAuthenticatedSession(conn, platformId, arcclawSessionId);
+                    } else {
+                        conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid or expired token\"}");
+                        conn.close();
+                    }
+                } else {
+                    conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Authentication required\"}");
+                    conn.close();
+                }
+                return;
+            }
+
+            if (!"message".equals(type)) {
                 return;
             }
             String text = json.getString("text", "");
@@ -169,6 +177,7 @@ public class WebChatEndpoint {
 
     private void cleanup(WebSocketConnection conn, String reason) {
         String connId = conn.id();
+        connectionAuthenticated.remove(connId);
         String platformId = connectionToSession.remove(connId);
         String arcclawSessionId = connectionToArcclawSession.remove(connId);
 
