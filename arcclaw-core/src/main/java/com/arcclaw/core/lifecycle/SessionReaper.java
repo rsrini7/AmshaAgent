@@ -222,6 +222,7 @@ public class SessionReaper {
         }
     }
 
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
         if (cp.hasBatchToolDecisions()) {
             BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
