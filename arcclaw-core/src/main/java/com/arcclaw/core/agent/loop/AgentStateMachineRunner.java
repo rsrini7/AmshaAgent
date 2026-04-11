@@ -181,13 +181,20 @@ public class AgentStateMachineRunner {
                                   "tool call JSON — retrying with correction (schema attempt %d)",
                                   context.sessionId(), llmSchemaErrorCount + 1);
                         history.add(step);
+                        String leakedTool = "the intended tool";
+                        Matcher nameMatcher = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"").matcher(candidateAnswer);
+                        if (nameMatcher.find()) {
+                            leakedTool = nameMatcher.group(1);
+                        } else if (candidateAnswer.contains("delegate_to_agent")) {
+                            leakedTool = "delegate_to_agent";
+                        }
+
                         transientError =
                                 "System: Your last response was a raw JSON tool call object " +
                                 "written as plain text, not a valid FINISH answer. " +
                                 "You MUST invoke tools through the tool mechanism — " +
-                                "NEVER write {\"type\": \"function\", ...} as your answer text. " +
-                                "If you need to search memory, call memory_search properly as a tool. " +
-                                "Retry now: call the tool correctly, or FINISH with a plain text answer.";
+                                "NEVER write {\"type\": \"function\", ...} or raw JSON as your answer text. " +
+                                "Retry now: call " + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
                         llmSchemaErrorCount++;
                         if (llmSchemaErrorCount >= 2) {
                             log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +

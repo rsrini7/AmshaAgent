@@ -56,3 +56,36 @@ I've corrected this in:
 2. `WsAuthService.java` (the backend annotation parameter)
 
 Both now utilize `X-ArcClaw-API-Key`. The authorization bypass should now succeed, granting the one-time WebSocket token properly!
+
+---
+
+Edited P94-LLM-Completion-Response.md
+Searched for "FINISH answer contains raw tool call JSON"
+Ran command: `Get-ChildItem -Recurse -Filter "AgentStateMachineRunner.java" -Path "C:\Users\Srini\ws\ArcClawInternal"`
+Viewed AgentStateMachineRunner.java:1-525
+Edited AgentStateMachineRunner.java
+
+I have resolved the issue causing the agent to get stuck and return a blank answer. 
+
+**Root Cause:**
+When the LLM accidentally output a raw JSON body as a simple `FINISH` string (which often happens when it's under constraint to "not explain itself"), the `isRawToolCallLeak` guard correctly intercepted it and commanded a retry with a correction prompt. 
+
+However, the previous correction prompt was hardcoded to give this example:
+> `"If you need to search memory, call memory_search properly as a tool."`
+
+Since the goal here was `"save my name as Srini"`, the LLM was actually trying to call `ingest_document`. When it received a system directive explicitly suggesting it should use `memory_search`, it got confused. The conflicting directions led it to abandon calling the tool altogether. Finding itself with nothing sensical to write, it returned a blank text response.
+
+**The Fix:**
+I updated `AgentStateMachineRunner.java` to dynamically parse the JSON out of the leaked tool call, extract the actual intended tool (e.g., `ingest_document`), and inject it into the retry prompt dynamically:
+
+```java
+String leakedTool = "the intended tool";
+Matcher nameMatcher = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"").matcher(candidateAnswer);
+if (nameMatcher.find()) {
+    leakedTool = nameMatcher.group(1);
+} ...
+
+transientError = "System: Your last response was a raw JSON tool call object... Retry now: call " + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
+```
+
+The state machine will now correctly instruct the LLM to route its original intent (`ingest_document`) through the proper function schema.
