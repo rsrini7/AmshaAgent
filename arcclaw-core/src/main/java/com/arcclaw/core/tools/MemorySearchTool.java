@@ -38,9 +38,14 @@ public class MemorySearchTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Search the user's long-term memory (past session summaries) for specific keywords, " +
-               "topics, or historical context. Use this when the user asks about past decisions, " +
-               "previous sessions, or historical context.";
+        return """
+            Search the user's long-term memory (past session summaries) for specific keywords,
+            topics, or historical context.
+            IMPORTANT: Use concrete factual keywords that would appear in stored data —
+            e.g. for 'who am I' use query='user name identity', NOT 'your name' or 'my name'.
+            For 'what did I work on' use query='project task work'.
+            Use noun phrases and keywords, never pronouns or self-referential phrases.
+            """;
     }
 
     @Override
@@ -85,6 +90,9 @@ public class MemorySearchTool implements AgentTool {
             return ToolResponse.failure(400, "query parameter is required for memory_search");
         }
 
+        // Normalise self-referential queries to factual equivalents
+        query = normaliseMemoryQuery(query);
+
         String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
 
         // 4. Search
@@ -120,5 +128,19 @@ public class MemorySearchTool implements AgentTool {
         }
 
         return ToolResponse.success(formatted);
+    }
+
+    private String normaliseMemoryQuery(String query) {
+        if (query == null) return query;
+        String lower = query.toLowerCase().strip();
+        // Self-referential identity queries
+        if (lower.matches(".*(my name|who am i|user name|user identity).*")) {
+            return "user name identity";
+        }
+        // Self-referential work queries
+        if (lower.matches(".*(what did i|what have i|my work|my project|my task).*")) {
+            return "project task work history";
+        }
+        return query;
     }
 }

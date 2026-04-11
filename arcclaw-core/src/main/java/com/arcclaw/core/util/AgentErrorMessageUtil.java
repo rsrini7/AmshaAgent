@@ -67,7 +67,7 @@ public final class AgentErrorMessageUtil {
             return formatTpdMessage(apiMessage);
         }
 
-        if (apiMessage.contains("rate limit") || apiMessage.contains("Rate limit") || apiMessage.contains("throttled")) {
+        if (isRateLimitError(apiMessage)) {
             return UserMessages.rateLimited(extractWaitTime(apiMessage));
         }
 
@@ -144,6 +144,11 @@ public final class AgentErrorMessageUtil {
             return humanReadableWait(timeStr);
         }
         return "a few moments";
+    }
+
+    public static boolean isRateLimitError(String msg) {
+        if (msg == null) return false;
+        return msg.contains("rate limit") || msg.contains("Rate limit") || msg.contains("throttled");
     }
 
     private static String humanReadableWait(String rawInterval) {

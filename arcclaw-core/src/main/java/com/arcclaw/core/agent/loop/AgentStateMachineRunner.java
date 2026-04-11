@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -22,6 +23,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.InputSanitizer;
@@ -53,6 +55,9 @@ public class AgentStateMachineRunner {
     private static final Pattern RAW_DELEGATE_CALL_PATTERN =
         Pattern.compile( "(?m)^\\s*delegate_to_agent\\s*\\(\\s*agent\\s*=", Pattern.CASE_INSENSITIVE);
 
+    private static final Pattern RAW_TOOL_JSON_PATTERN = 
+        Pattern.compile("^\\s*\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"\\s*:", Pattern.DOTALL);
+
     // ── Suspiciously short non-answers: "Done.", "OK.", "ok" etc.
     private static final Pattern SUSPICIOUSLY_SHORT =
             Pattern.compile(
@@ -83,6 +88,7 @@ public class AgentStateMachineRunner {
     @Inject StatefulAgentStore agentStore;
     @Inject CliResultBridge cliResultBridge;
     @Inject IntentClassificationService intentClassifier;
+    @Inject RateLimitTracker rateLimitTracker;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
@@ -163,6 +169,14 @@ public class AgentStateMachineRunner {
                     }
 
                     if (isRawToolCallLeak(candidateAnswer)) {
+                        if (RAW_TOOL_JSON_PATTERN.matcher(candidateAnswer).find() && rateLimitTracker.isBackingOff("primary")) {
+                            log.warnf("FINISH answer has raw tool JSON but rate-limited — stripping instead of retrying for session %s", context.sessionId());
+                            candidateAnswer = stripRawToolJson(candidateAnswer);
+                            AgentResult result = AgentResult.finished(candidateAnswer, List.copyOf(history));
+                            maybeSignalBridge(context, result);
+                            return result;
+                        }
+
                         log.warnf("[STATE-MACHINE] session %s: FINISH answer contains raw " +
                                   "tool call JSON — retrying with correction (schema attempt %d)",
                                   context.sessionId(), llmSchemaErrorCount + 1);
@@ -283,7 +297,21 @@ public class AgentStateMachineRunner {
     private boolean isRawToolCallLeak(String answer) {
         if (answer == null || answer.isBlank()) return false;
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
-            || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find();
+            || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
+            || RAW_TOOL_JSON_PATTERN.matcher(answer).find();
+    }
+
+    private String stripRawToolJson(String answer) {
+        if (answer == null) return "";
+        Matcher m = RAW_TOOL_JSON_PATTERN.matcher(answer);
+        if (m.find()) {
+            String stripped = answer.substring(m.end())
+                .replaceFirst("^[^}]*\\}", "")
+                .replaceAll("^[}\\s]+", "")
+                .strip();
+            return stripped.isBlank() ? "I have completed the task." : stripped;
+        }
+        return answer;
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole,

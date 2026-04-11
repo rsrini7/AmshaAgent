@@ -234,6 +234,22 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
+    public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<String> findLatestRole(String sessionId) {
         return em.createQuery(
                 "SELECT c.agentRole FROM AgentCheckpoint c " +

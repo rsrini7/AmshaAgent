@@ -33,6 +33,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
@@ -199,6 +200,14 @@ public class ApproveReflex implements AgentReflex {
                             .map(c -> "• `/approve " + c.id + "` — " + c.goal)
                             .collect(Collectors.joining("\n"));
                     return String.format(CRON_MULTIPLE_AWAITING, list);
+                }
+
+                // Check if last checkpoint is FAILED — guide user to retry
+                Optional<AgentCheckpoint> lastCheckpoint = statefulAgentStore.findLatestCheckpoint(sessionId);
+                if (lastCheckpoint.isPresent() && lastCheckpoint.get().getStatus() == CheckpointStatus.FAILED) {
+                    log.debugf("ApproveReflex: last checkpoint is FAILED for session %s — guiding user to retry", sessionId);
+                    return "⚠️ My last attempt failed before it could be approved (likely due to a rate limit). " +
+                           "Please **resend your original message** to retry — I'll ask for approval again.";
                 }
 
                 // 5. Check if it was JUST completed via another channel (signal bridge)

@@ -23,6 +23,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,6 +45,7 @@ public class EngineStepHandler {
     @Inject GovernanceStrategy governanceLayer;
     @Inject Instance<AgentObserver> observers;
     @Inject ObjectMapper objectMapper;
+    @Inject RateLimitTracker rateLimitTracker;
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
         Pattern.compile("^([A-Za-z*#\\[]).*\\s.*[.!?]\\s*$", Pattern.DOTALL);
@@ -273,7 +275,14 @@ public class EngineStepHandler {
         }
 
         log.errorf("ReasoningEngine failed at iteration %d: %s", iteration, ExceptionUtils.getRootCauseMessage(e));
-        String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+        String rawError = e.getMessage() != null ? e.getMessage() : "";
+        if (AgentErrorMessageUtil.isRateLimitError(rawError)
+                || rateLimitTracker.isBackingOff("primary")) {
+            return StepDecision.terminal(AgentResult.failed(
+                    "⚠️ I hit a rate limit. Please resend your message to retry.",
+                    AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+        }
+        String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(rawError);
         return StepDecision.terminal(AgentResult.failed(
                 sanitizedMsg,
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
