@@ -15,13 +15,7 @@ public final class MdcCleaner {
      * Exhaustively clears all known MDC keys defined in MdcKeys.
      */
     public static void clearAll() {
-        MDC.remove(MdcKeys.USER_ID);
-        MDC.remove(MdcKeys.SESSION_ID);
-        MDC.remove(MdcKeys.CHAT_ID);
-        MDC.remove(MdcKeys.AGENT_ROLE);
-        MDC.remove(MdcKeys.ROLE);
-        MDC.remove(MdcKeys.PARALLEL_BATCH_SIZE);
-        MDC.remove(MdcKeys.PARALLEL_TOOLS);
+        MdcKeys.ALL_KEYS.forEach(MDC::remove);
     }
 
     /**

@@ -43,12 +43,14 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.MdcKeys;
+import com.arcclaw.core.util.MdcManaged;
 import io.quarkus.virtual.threads.VirtualThreads;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 @ApplicationScoped
+@MdcManaged
 public class AgentSessionService {
 
     private final Logger log;
@@ -388,8 +390,6 @@ public class AgentSessionService {
             log.errorf("Failed to approve session %s: %s", sessionId, e.getMessage());
             log.debug("Full approval failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
-        } finally {
-            MDC.remove(MdcKeys.USER_ID);
         }
     }
 
@@ -419,8 +419,6 @@ public class AgentSessionService {
             log.errorf("Failed to deny session %s: %s", sessionId, e.getMessage());
             log.debug("Full denial failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
-        } finally {
-            MDC.remove(MdcKeys.USER_ID);
         }
     }
 

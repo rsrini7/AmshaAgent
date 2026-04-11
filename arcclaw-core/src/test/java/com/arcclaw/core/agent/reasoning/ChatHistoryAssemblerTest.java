@@ -22,6 +22,7 @@ import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
@@ -37,12 +38,12 @@ class ChatHistoryAssemblerTest {
     @Mock
     Logger log;
 
+    @InjectMocks
     ChatHistoryAssembler assembler;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        assembler = new ChatHistoryAssembler(chatMemoryStore, objectMapper);
         assembler.log = log;
         assembler.defaultObservationMaxLength = 4000;
         assembler.toolSpecificLimits = Optional.empty();

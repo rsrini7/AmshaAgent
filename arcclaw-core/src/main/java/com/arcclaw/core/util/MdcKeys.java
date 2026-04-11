@@ -1,5 +1,7 @@
 package com.arcclaw.core.util;
 
+import java.util.List;
+
 /**
  * Centered constants for MDC (Mapped Diagnostic Context) keys used in logging.
  */
@@ -17,4 +19,10 @@ public final class MdcKeys {
 
     /** Comma-separated tool names in current parallel batch. */
     public static final String PARALLEL_TOOLS = "parallelTools";
+
+    /** All known ArcClaw MDC keys for safe cleanup. */
+    public static final List<String> ALL_KEYS = List.of(
+        USER_ID, SESSION_ID, CHAT_ID, AGENT_ROLE, ROLE,
+        PARALLEL_BATCH_SIZE, PARALLEL_TOOLS
+    );
 }

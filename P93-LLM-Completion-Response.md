@@ -794,3 +794,18 @@ Here is a summary of the changes:
 
 Please let me know if there's anything else you need adjusting!
 
+---
+
+Edited ChatHistoryAssemblerTest.java
+Edited ChatHistoryAssemblerTest.java
+Edited MdcManaged.java
+Edited MdcManagedInterceptorTest.java
+
+Awesome! I'm glad to see the tests successfully pass.
+
+To wrap things up, here's a quick summary of the MDC lifecycle refactoring:
+1. **Introduced `@MdcManaged` & Interceptor**: Built out the custom `@MdcManaged` CDI interceptor to automatically wrap method calls and guarantee `MDC` cleanup down the entire invocation stack, replacing repetitive and fragile `finally` blocks in `AgentLoop` and `AgentSessionService`.
+2. **Hardened `MdcCleaner.clearAll()`**: Refactored `MdcKeys` to act as the central source of truth for safe MDC cleanup by introducing the immutable `ALL_KEYS` registry list. `MdcCleaner` now safely iterates this list, making it idiot-proof for future expansions without risking deletion of critical OpenTelemetry/framework spans.
+3. **MDC Testing Validation**: Added the isolated test in `MdcManagedInterceptorTest` that proves MDC context is completely wiped even if the captured `InvocationContext` invocation throws an exception.
+
+Let me know if there's any other component of the orchestration you'd like to dive into!

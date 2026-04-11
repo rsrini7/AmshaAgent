@@ -37,6 +37,7 @@ import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcKeys;
+import com.arcclaw.core.util.MdcManaged;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -57,6 +58,7 @@ import org.jboss.logging.MDC;
  * {@link #run(String, String, String, ReasoningEngine, int)} unchanged.
  */
 @ApplicationScoped
+@MdcManaged
 public class AgentLoop {
 
     private static final Logger log = Logger.getLogger(AgentLoop.class);
@@ -427,10 +429,6 @@ public class AgentLoop {
                 observers.forEach(o -> o.onLoopComplete(
                     sessionId, capturedUserId, canonicalRole, goalHash, finalResult));
             }
-            // --- CONTEXT TEARDOWN ---
-            MDC.remove(MdcKeys.SESSION_ID);
-            MDC.remove(MdcKeys.AGENT_ROLE);
-            MDC.remove(MdcKeys.USER_ID); // was missing — leaked into next request on same thread
             otelContext.endSessionSpan(sessionId);
         }
     }

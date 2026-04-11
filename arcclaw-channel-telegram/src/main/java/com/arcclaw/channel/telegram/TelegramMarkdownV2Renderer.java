@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.MarkdownEscapeService;
+import com.arcclaw.channel.api.MarkdownProfile;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
 
@@ -81,6 +82,6 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
      * Escapes mandatory characters for Telegram MarkdownV2.
      */
     String esc(String text) {
-        return escapeService.escape(text, com.arcclaw.channel.api.MarkdownProfile.TELEGRAM_V2);
+        return escapeService.escape(text, MarkdownProfile.TELEGRAM_V2);
     }
 }
