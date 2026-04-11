@@ -932,3 +932,46 @@ The original code was missing audit logging entirely, and option 1 would likely 
 
 ---
 
+Viewed AgentRoleEnum.java:1-141
+Viewed AgentLoop.java:165-195
+Viewed AgentRoleEnum.java:80-110
+Ran command: `rg "public (record|class|enum) AgentRoleEnum" arcclaw-core arcclaw-app`
+Ran command: `rg "AgentRoleEnum\.fromString" arcclaw-core arcclaw-app`
+Edited TestRole.java
+Viewed AgentRoleEnum.java:1-141
+Edited AgentLoop.java
+
+I have completed all the requested hardening tasks.
+
+### Summary of Improvements
+
+#### 1. Identity Resolution Hardening (XC1)
+- **Problem**: Replaced virtual-thread unsafe `MDC.get(MdcKeys.USER_ID)` calls with `WorkspaceContext.resolveUserId()`. 
+- **Solution**: Centralized identity resolution in `WorkspaceContext` using `ScopedValue`. Added a safe `MDC` fallback to support non-virtual thread contexts (like Filters and JAX-RS resources) and ensure consistent audit logging.
+- **Verification**: Updated `AgentSessionServiceTest` to correctly mock the new resolution logic.
+
+#### 2. Transactional Integrity in Session Management (XC2)
+- **Problem**: `SessionReaper.markApprovalTimedOut()` was performing database updates (`em.merge`) without an active transaction, risking silent failures or data inconsistency.
+- **Solution**: Refactored the method to use `agentStore.markFailed()`. This leverages the repository's existing `REQUIRES_NEW` transaction boundaries, automated retry logic, and mandatory audit logging.
+
+#### 3. Role Validation Policy Hardening (XC3)
+- **Problem**: `AgentLoop.run()` contained a catch block for `IllegalArgumentException` from `AgentRoleEnum.fromString()` which appeared as dead code or used exceptions for business logic.
+- **Solution**: 
+    - Refactored `AgentLoop.java` to use an explicit `isKnownRole()` check for validation before attempting resolution.
+    - Eliminated the `try-catch` block, making the "Invalid Role Fallback" logic explicit, traceable, and easier to maintain.
+    - Maintained the **Strict Policy (L4 Fix)** by ensuring `AgentRoleEnum.fromString()` continues to throw for truly unknown roles to protect against invalid state propagation.
+    - Fixed a potential `NullPointerException` in counter tagging by adding a null-guard for `agentRole`.
+
+```java
+// AgentLoop.java refactored logic:
+if (!AgentRoleEnum.isKnownRole(agentRole)) {
+    // Audit, metrics, and explicit fallback
+    canonicalRole = AgentRoleEnum.COORDINATOR.toScopedName();
+} else {
+    AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
+    canonicalRole = AgentRoleEnum.isSkillRole(agentRole) ? agentRole : resolvedRole.toScopedName();
+}
+```
+
+These changes ensure the ArcClaw framework is more robust, thread-safe, and transactionally sound.
+

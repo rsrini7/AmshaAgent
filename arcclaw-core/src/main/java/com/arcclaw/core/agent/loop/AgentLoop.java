@@ -168,25 +168,24 @@ public class AgentLoop {
 
         // --- Resolve agentRole at the API boundary ---
         final String canonicalRole;
-        try {
-            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
-            canonicalRole = AgentRoleEnum.isSkillRole(agentRole)
-                    ? agentRole
-                    : resolvedRole.toScopedName();
-        } catch (IllegalArgumentException e) {
+        if (!AgentRoleEnum.isKnownRole(agentRole)) {
             log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
- 
+
             auditService.record(sessionId, WorkspaceContext.requireUserId(), agentRole,
                 SecurityEventType.INVALID_ROLE_FALLBACK,
                 "Unknown agentRole '" + agentRole + "' — defaulted to COORDINATOR");
 
             Counter.builder("arcclaw.agent.role.unknown")
-                .tag("role", agentRole)
+                .tag("role", agentRole != null ? agentRole : "null")
                 .register(meterRegistry)
                 .increment();
 
-            return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                               goal, systemNote, engine, maxIterations, context);
+            canonicalRole = AgentRoleEnum.COORDINATOR.toScopedName();
+        } else {
+            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
+            canonicalRole = AgentRoleEnum.isSkillRole(agentRole)
+                    ? agentRole
+                    : resolvedRole.toScopedName();
         }
 
         return runWithRole(sessionId, canonicalRole, goal, systemNote, engine, maxIterations, context);
