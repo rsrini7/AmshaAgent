@@ -38,7 +38,7 @@ That is why `ARCCLAW_LLM_API_KEY` "just works" in the native binary. It relies o
 ### 2. What is `SecretVaultImpl` used for?
 The `SecretVault` is **not** used to store the core application configuration (like the LLM API key, database path, or server ports). 
 
-The vault is an **encrypted database table** specifically designed for **Agent-specific Tool Secrets** (like `GITHUB_TOKEN`, `ARCCLAW_SERPER_API_KEY`, etc.). 
+The vault is an **encrypted database table** specifically designed for **Agent-specific Tool Secrets** (like `GITHUB_TOKEN`, `ARCCLAW_TOOLS_SERPER_API_KEY`, etc.). 
 
 If you are running ArcClaw as a real production server with multiple users:
 * You **would never** put a single global `GITHUB_TOKEN` in the `.env` file.
@@ -49,7 +49,7 @@ If you are running ArcClaw as a real production server with multiple users:
 ### 3. What does `DevSecretSeeder` actually do?
 Since having to manually upload your GitHub or Serper API keys via a REST API every time you wipe your local database is incredibly annoying for developers, we created `DevSecretSeeder`.
 
-If `DevSecretSeeder` is active, it reads the tool keys (`GITHUB_TOKEN`, `ARCCLAW_SERPER_API_KEY`) out of your `.env` file and **automatically injects them into the `SecretVault`** on boot.
+If `DevSecretSeeder` is active, it reads the tool keys (`GITHUB_TOKEN`, `ARCCLAW_TOOLS_SERPER_API_KEY`) out of your `.env` file and **automatically injects them into the `SecretVault`** on boot.
 
 **You asked why it only works in `dev`?**
 Looking closely at the code in `DevSecretSeeder`, it actually **can** run in `prod`:
@@ -111,7 +111,7 @@ If you set `ARCCLAW_AUTO_SEED_SECRETS=false` in the `prod` profile, here is exac
 ### 2. Tool Agents Will Be Blind
 If the Coder agent tries to search a repository, or the Researcher tries to run a Google search via Serper, they will **immediately fail** and return an error like: *"Missing credential GITHUB_TOKEN"*. 
 
-Because `DevSecretSeeder` was turned off, the `SecretVault` Starts completely empty. It did not copy your `GITHUB_TOKEN` or `ARCCLAW_SERPER_API_KEY` from your `.env` file.
+Because `DevSecretSeeder` was turned off, the `SecretVault` Starts completely empty. It did not copy your `GITHUB_TOKEN` or `ARCCLAW_TOOLS_SERPER_API_KEY` from your `.env` file.
 
 ### 3. How do you fix it (in true Prod)?
 In a true multi-tenant production environment (e.g., hosted on a cloud server for 100 different users), you don't *want* a global `GITHUB_TOKEN` in a `.env` file. 
@@ -159,8 +159,8 @@ This is a great security question. Let me give you the complete picture with cle
 │  Read by agents AFTER full boot, via SecretVaultImpl    │
 │                                                         │
 │  GITHUB_TOKEN           ← coder agent                  │
-│  ARCCLAW_SERPER_API_KEY ← researcher agent              │
-│  ARCCLAW_BRAVE_API_KEY  ← researcher agent              │
+│  ARCCLAW_TOOLS_SERPER_API_KEY ← researcher agent              │
+│  ARCCLAW_TOOLS_BRAVE_API_KEY  ← researcher agent              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -231,8 +231,8 @@ ARCCLAW_LLM_API_KEY=<key>            # needed at boot for LangChain4J
 
 # ── Tool secrets (remove after first boot) ─────
 # GITHUB_TOKEN=...                   ← delete after boot 1
-# ARCCLAW_SERPER_API_KEY=...         ← delete after boot 1
-# ARCCLAW_BRAVE_API_KEY=...          ← delete after boot 1
+# ARCCLAW_TOOLS_SERPER_API_KEY=...         ← delete after boot 1
+# ARCCLAW_TOOLS_BRAVE_API_KEY=...          ← delete after boot 1
 ```
 
 `DevSecretSeeder` already handles the missing-key case gracefully with a `log.warnf` and a skip, so removing them from `.env` after seeding is safe with zero code changes.

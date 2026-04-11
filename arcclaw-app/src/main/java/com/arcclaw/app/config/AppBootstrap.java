@@ -33,7 +33,7 @@ public class AppBootstrap {
         "ARCCLAW_LLM_API_KEY", "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
         "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
         "TELEGRAM_BOT_TOKEN",
-        "ARCCLAW_BRAVE_API_KEY", "ARCCLAW_SERPER_API_KEY", "GITHUB_TOKEN",
+        "ARCCLAW_TOOLS_BRAVE_API_KEY", "ARCCLAW_TOOLS_SERPER_API_KEY", "GITHUB_TOKEN",
         "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY",
         "ARCCLAW_LLM_FALLBACK_API_KEY"
     );
@@ -406,7 +406,7 @@ public class AppBootstrap {
                     System.err.println();
                 }
 
-                if (spec.key.equals("ARCCLAW_SERPER_API_KEY")) {
+                if (spec.key.equals("ARCCLAW_TOOLS_SERPER_API_KEY")) {
                     System.err.println("  ┌─ Serper Search Integration");
                     System.err.println("  │  Enable Google Search for Researcher agent via Serper.dev?");
                     System.err.println("  │");
@@ -419,7 +419,7 @@ public class AppBootstrap {
                     System.err.println();
                 }
 
-                if (spec.key.equals("ARCCLAW_BRAVE_API_KEY")) {
+                if (spec.key.equals("ARCCLAW_TOOLS_BRAVE_API_KEY")) {
                     System.err.println("  ┌─ Brave Search Integration");
                     System.err.println("  │  Enable Brave Search for Researcher agent?");
                     System.err.println("  │");

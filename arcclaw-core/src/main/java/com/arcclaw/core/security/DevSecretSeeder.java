@@ -174,8 +174,8 @@ public class DevSecretSeeder {
             return;
         }
         seedFromHostEnvAsSystemKey("GITHUB_TOKEN");
-        seedFromHostEnvAsSystemKey("ARCCLAW_SERPER_API_KEY");
-        seedFromHostEnvAsSystemKey("ARCCLAW_BRAVE_API_KEY");
+        seedFromHostEnvAsSystemKey("ARCCLAW_TOOLS_SERPER_API_KEY");
+        seedFromHostEnvAsSystemKey("ARCCLAW_TOOLS_BRAVE_API_KEY");
     }
 
     private void seedFromHostEnvAsSystemKey(String vaultKeyName) {
@@ -191,7 +191,9 @@ public class DevSecretSeeder {
 
         if (hostValue == null || hostValue.isBlank()) {
             log.warnf("Secret seeder: %s not found in config or .env. " +
-                      "Provide it manually via the vault tool.", vaultKeyName);
+                      "Provide it manually: send 'store %s=<value>' via chat, " +
+                      "or set it in .env and restart with ARCCLAW_AUTO_SEED_SECRETS=true.", 
+                      vaultKeyName, vaultKeyName);
             return;
         }
 

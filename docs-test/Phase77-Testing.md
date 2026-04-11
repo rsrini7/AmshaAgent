@@ -87,7 +87,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ```bash
 # In .env, set real key:
-ARCCLAW_SERPER_API_KEY=your-real-key
+ARCCLAW_TOOLS_SERPER_API_KEY=your-real-key
 ```
 
 Restart dev server, then:

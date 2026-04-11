@@ -3,6 +3,7 @@ package com.arcclaw.core.tools;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -34,12 +35,16 @@ class BraveWebSearchToolTest {
     @Mock
     AuditService auditService;
 
+    @Mock
+    com.arcclaw.core.security.SecretVault vault;
+
     @InjectMocks
     BraveWebSearchTool tool;
 
     @BeforeEach
     void setup() {
-        tool.apiKey = "fake-key";
+        tool.configApiKey = "fake-key";
+        lenient().when(vault.retrieveSystemKey("ARCCLAW_TOOLS_BRAVE_API_KEY")).thenReturn(java.util.Optional.empty());
         // Setup HttpClient field via reflection as Mockito @InjectMocks 
         // doesn't typically run @PostConstruct
         try {
@@ -63,7 +68,7 @@ class BraveWebSearchToolTest {
 
     @Test
     void testBlankApiKeyFails() throws Exception {
-        tool.apiKey = "none";
+        tool.configApiKey = "none";
         Map<String, Object> params = Map.of("query", "test");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 

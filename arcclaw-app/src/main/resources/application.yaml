@@ -377,9 +377,9 @@ arcclaw:
   
   tools:
     brave:
-      api-key: "${ARCCLAW_BRAVE_API_KEY:none}"
+      api-key: "${ARCCLAW_TOOLS_BRAVE_API_KEY:none}"
     serper:
-      api-key: "${ARCCLAW_SERPER_API_KEY:none}"
+      api-key: "${ARCCLAW_TOOLS_SERPER_API_KEY:none}"
     playwright:
       enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
       headless: true

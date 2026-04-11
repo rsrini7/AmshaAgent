@@ -49,4 +49,14 @@ public final class VaultConstants {
      * Key for LLM Model.
      */
     public static final String LLM_MODEL_KEY = "llm.model";
+
+    /**
+     * A set of all system-level keys that can be set via the vault tool / reflex.
+     */
+    public static final java.util.Set<String> KNOWN_TOOL_SECRET_NAMES = java.util.Set.of(
+        "GITHUB_TOKEN",
+        "ARCCLAW_TOOLS_SERPER_API_KEY",
+        "ARCCLAW_TOOLS_BRAVE_API_KEY",
+        LLM_API_KEY
+    );
 }
