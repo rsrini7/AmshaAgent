@@ -222,7 +222,6 @@ public class SessionReaper {
         }
     }
 
-    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
         if (cp.hasBatchToolDecisions()) {
             BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
@@ -231,12 +230,7 @@ public class SessionReaper {
                     ToolDecision.DENIED.name()));
         }
 
-        AgentCheckpoint fresh = agentStore.load(cp.getSessionId(), cp.getAgentRole())
-            .orElse(cp);
-        fresh.setStatus(CheckpointStatus.FAILED);
-        fresh.setFailedAt(Instant.now());
-        fresh.setFailReason("Approval timed out after " + hitlTimeoutHours + " hours.");
-        em.merge(fresh);
+        agentStore.markFailed(cp.getId(), "Approval timed out after " + hitlTimeoutHours + " hours.");
 
         // Notify channel
         decisionEvents.fireAsync(new ApprovalDecisionEvent(

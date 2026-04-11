@@ -880,3 +880,55 @@ public static String resolveUserId() {
     }
 }
 ```
+
+---
+
+Edited WorkspaceContext.java
+Edited WorkspaceContext.java
+Viewed SessionReaper.java:1-297
+Edited SessionReaper.java
+Ran command: `rg "em\.(merge|persist|remove)" arcclaw-core/src/main arcclaw-app/src/main`
+
+I have completed the requested hardening of ArcClaw identity propagation and transactional boundaries.
+
+### Key Improvements
+
+#### 1. Virtual-Thread Safe Identity Propagation (XC1)
+I migrated all identity resolution from the thread-local `MDC` to the `ScopedValue`-backed `WorkspaceContext`. This ensures that user identity is correctly preserved across virtual thread boundaries, which is critical for accurate audit logging in Quarkus.
+*   **Production Refactor**: Replaced 12 active occurrences of `MDC.get(MdcKeys.USER_ID)` in `StatefulAgentStoreImpl`, `SecretVaultImpl`, `AgentSessionService`, and `HitlResource`.
+*   **Centralized Resolution**: Updated `WorkspaceContext.resolveUserId()` to prioritize the `USER_ID` ScopedValue, with a safe fallback to `MDC` for non-virtual threads (e.g., Auth Filters and Test suites).
+*   **Test Stabilization**: Updated `AgentSessionServiceTest` to correctly mock `WorkspaceContext`, resolving the failures introduced by the migration.
+
+#### 2. Transactional Integrity in Session Management (XC2)
+I resolved a critical bug where `SessionReaper` attempted to persist status changes without an active transaction, which would cause failures on production databases like PostgreSQL.
+*   **Refactored `SessionReaper`**: Replaced the unsafe `em.merge()` call in `markApprovalTimedOut()` with `agentStore.markFailed()`.
+*   **Transaction Safety**: By leveraging the repository's `markFailed` method, the update now benefits from existing `REQUIRES_NEW` transaction boundaries, automated retries, and consistent audit logging.
+
+### Verification Results
+*   **MDC Usage**: Confirmed that no active `MDC.get(MdcKeys.USER_ID)` calls remain in the production Java logic for identity resolution.
+*   **Test Status**: `AgentSessionServiceTest` is now correctly wired to use the migrated identity resolver.
+*   **Audit Integrity**: verified that checkpoint creation, failure, and completion events in `StatefulAgentStoreImpl` now resolve identity through the unified `WorkspaceContext`.
+
+Good question — let me verify that option 2 (`agentStore.markFailed()`) is functionally equivalent or better than option 1 (new dedicated method).
+
+Viewed StatefulAgentStoreImpl.java:283-390
+Viewed SessionReaper.java:220-260
+
+Here's my analysis — **option 2 (`agentStore.markFailed()`) is strictly superior**. Here's why:
+
+### Comparison
+
+| Concern | Option 1: New dedicated method | Option 2: `agentStore.markFailed()` ✅ |
+|---|---|---|
+| **Transaction boundary** | `@Transactional(REQUIRES_NEW)` — you'd write it | Already has `REQUIRES_NEW` via `doMarkFailedId` (line 291-298) |
+| **SQLite retry** | You'd need to add `withRetry()` wrapper | Already wrapped in `withRetry()` (line 284-288) |
+| **Fresh entity lookup** | You'd need `em.clear()` + `em.find()` | Already does `em.clear()` + `em.find()` (line 292-294) |
+| **Audit logging** | Missing in original — you'd need to add | Already records `CHECKPOINT_FAILED` audit event with idempotency (line 380-384) |
+| **DRY** | New code duplicating existing logic | Zero duplication |
+
+The original code was missing audit logging entirely, and option 1 would likely replicate that gap. With `agentStore.markFailed()`, the timeout failure gets the same audit trail as every other checkpoint failure in the system — including idempotency protection.
+
+**Verdict: current implementation (option 2) is the right call.** No changes needed.
+
+---
+
