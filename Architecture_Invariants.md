@@ -1102,3 +1102,8 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - Sensitive credentials (API keys) MUST NOT be passed in URL query parameters where HTTP headers are supported (e.g. REST, SSE); prefer `X-ARCCLAW-API-KEY` or secure Cookies.
 - **Architectural Trade-off**: The use of **`localStorage`** for API keys is explicitly allowed to support persistent developer sessions across browser restarts/tab closures. This is an intentional choice for productivity given ArcClaw's primary usage as a local developer tool.
 - Non-secret transient data SHOULD prefer `sessionStorage`.
+
+### 21.10 MCP Tenant Isolation
+- External MCP calls MUST operate within isolated sessions linked to specific client IDs. Hardware sharing or default/synthetic session identifiers (like "mcp-external") are strictly prohibited.
+- Role assignment for MCP requests MUST dynamically reflect capability headers to preserve least-privilege principles, rather than defaulting to max-privilege roles like `COORDINATOR`.
+- Any external request tunneling into the workspace via the bridge MUST generate unique audit telemetry tying the payload execution to the specific source client and its requested capabilities, completely avoiding budget crossover or blind file-access scenarios across concurrent clients.
