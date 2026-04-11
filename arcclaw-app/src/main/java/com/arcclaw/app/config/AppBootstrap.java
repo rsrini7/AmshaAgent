@@ -928,7 +928,7 @@ public class AppBootstrap {
         } else if (tr.startsWith("y")) {
             patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
-            initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", ".playwright-browsers");
+            initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", browsersPath.toAbsolutePath().toString());
             initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
             if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
                 System.err.println("  │");

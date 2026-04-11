@@ -855,3 +855,90 @@ I have standardized the Micrometer metric naming convention across the framework
 These changes unify telemetry data under a single root prefix, making it easier to filter and aggregate ArcClaw-specific operational alerts in monitoring tools like Prometheus or Grafana.
 
 ---
+
+Listed directory ArcClawInternal
+Searched for "browser_navigate"
+Searched for "browser_navigate"
+Listed directory playwright
+Viewed PlaywrightBrowserTool.java:1-173
+Viewed PlaywrightPageRunner.java:1-259
+Listed directory tools
+Viewed ToolRegistry.java:1-561
+Viewed AgentRoleEnum.java:1-141
+
+Based on the logs provided, here is the technical analysis of why the `browser_navigate` tool failed and why the agent responded with that specific message.
+
+### Core Reason: Instant Initialization Failure
+The logs show that the tool failed within the **same millisecond** it was invoked:
+*   `22:21:58,604 INFO`: Invoking tool `browser_navigate` directly.
+*   `22:21:58,605 INFO`: Audit Probe `TOOL_INVOKED`.
+*   `22:21:58,605 INFO`: Audit Probe `TOOL_FAILED`.
+
+This speed (0-1ms) confirms that the failure was internal to the application and not related to the website being browsed (which would involve network latency).
+
+### Technical Breakdown
+1.  **Binary Absence:** In this codebase, the `PlaywrightPageRunner` is configured to initialize a headless Chromium browser at startup. If the Chromium binary is not installed (a common state after a fresh setup or a `mise` install without the optional browser hook), the `browser` object remains `null`.
+2.  **Tool Guardrail:** When the tool is executed, it first checks if the browser is initialized:
+    ```java
+    if (!enabled || browser == null) {
+        throw new PlaywrightException("Playwright is not correctly initialized. " +
+            "Check if Chromium browser binary is installed properly.");
+    }
+    ```
+    This exception is caught by the `PlaywrightBrowserTool` and returned to the LLM as a `502 Browser navigation failed` error.
+3.  **Agent Logic:** The `researcher` agent's primary task was to browse the Spring blog. When its only tool for direct web interaction returned a failure message stating that the browser was not initialized, the LLM concluded it could not fulfill the request. It then generated the fallback response: *"I am not able to execute this task as it exceeds the limitations of the functions I have been given."*
+
+### Summary of Findings
+The `browser_navigate` tool is **enabled** in your configuration (otherwise it wouldn't have been invoked), but the **browser environment is broken** (missing binaries). Since the tool failed immediately with an initialization error, the agent gave up on the task.
+
+---
+
+
+Viewed mise.toml:1-800
+Searched for "playwright-chrome-install"
+Viewed mise.toml:1500-1757
+Searched for "\[tasks.playwright-chrome-install\]"
+Ran command: `grep -in "playwright" /Users/srini/Ws/ArcClawInternal/mise.toml`
+Viewed mise.toml:1300-1400
+Ran command: `grep -in "playwright-chrome-install" /Users/srini/Ws/ArcClawInternal/mise.toml`
+Listed directory .mise
+Listed directory tasks
+Viewed playwright-chrome-install.ps1:1-35
+Viewed mise.toml:1250-1310
+Searched for "PLAYWRIGHT_BROWSERS_PATH"
+Viewed PlaywrightBrowserInstaller.java:1-280
+Viewed pom.xml:1-71
+Viewed AppBootstrap.java:1-800
+Viewed AppBootstrap.java:801-995
+
+The reason the `browser_navigate` tool is failing on your M1 Mac, despite Playwright appearing to be installed, is due to a **detection and configuration mismatch** between the application's bootstrap logic and the modern Playwright folder structure for Apple Silicon.
+
+### 1. Folder Name Mismatch (The "Invisible" Browser)
+In `PlaywrightBrowserInstaller.java`, the code that verifies the installation is hardcoded to look for a specific folder prefix:
+
+```java
+// From PlaywrightBrowserInstaller.java line 36
+return files.anyMatch(p -> Files.isDirectory(p) && p.getFileName().toString().startsWith("chromium-"));
+```
+
+Your `tree` output shows correctly that on M1 (and with recent Playwright/Chromium versions), the folder is named **`chromium_headless_shell-1217`**. Because it starts with `chromium_headless_shell-` instead of just `chromium-`, the application's check returns `false`. This leads the system to believe the browser is missing even when it is physically present.
+
+### 2. Environment Variable Isolation
+When you run in "binary mode" (the native `arcclaw` binary), the application loads your `.env` file and sets the values as **Java System Properties**. However, the Playwright library primarily looks at **OS Environment Variables** (`System.getenv`).
+
+Even if you have `PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers` in your `.env`, the `PlaywrightPageRunner` (which handles the tool execution) initializes the library using default options:
+
+```java
+// From PlaywrightPageRunner.java line 61
+playwright = Playwright.create(); // Uses default system environment
+```
+
+Because the explicit path to your local folder is not being passed from the system properties to the Playwright driver during the tool's invocation, it falls back to looking in the default system cache (`~/Library/Caches/ms-playwright`), doesn't find the browser there, and returns a failure instantly.
+
+### 3. Binary Structure (Headless Shell)
+The folder `chromium_headless_shell-1217` contains a specialized version of Chromium (`chrome-headless-shell`). On macOS, standard Playwright usually expects a `.app` bundle structure (e.g., `chromium-XXXX/chrome-mac-arm64/Contents/MacOS/Chromium`). If the library version in the binary varies significantly from the version that produced that specific headless shell folder, Playwright will report that the executable is invalid or missing during the `launch()` step.
+
+### Summary
+The **instant failure (1ms)** occurs because `PlaywrightPageRunner` fails to initialize the `browser` object at startup. It skips your local `.playwright-browsers` folder due to the naming mismatch and environment variable shadowing, encounters an empty default cache, and sets the tool to a failed state. The agent then gives up because its "eyes" (the browser) are effectively closed.
+
+---

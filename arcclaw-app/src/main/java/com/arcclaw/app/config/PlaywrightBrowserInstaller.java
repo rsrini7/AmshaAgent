@@ -33,7 +33,10 @@ public class PlaywrightBrowserInstaller {
     public static boolean isChromiumInstalled(Path browsersPath) {
         if (!Files.exists(browsersPath)) return false;
         try (Stream<Path> files = Files.list(browsersPath)) {
-            return files.anyMatch(p -> Files.isDirectory(p) && p.getFileName().toString().startsWith("chromium-"));
+            return files.anyMatch(p -> {
+                String name = p.getFileName().toString();
+                return Files.isDirectory(p) && (name.startsWith("chromium-") || name.startsWith("chromium_headless_shell-"));
+            });
         } catch (IOException e) {
             return false;
         }

@@ -1,7 +1,9 @@
 package com.arcclaw.tool.playwright;
 
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -57,13 +59,25 @@ public class PlaywrightPageRunner {
 
         try {
             long t0 = System.currentTimeMillis();
+            
+            // Map system properties from .env (loaded by AppBootstrap) to Playwright's env
+            Map<String, String> env = new HashMap<>(System.getenv());
+            String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH");
+            if (browsersPath != null && !browsersPath.isBlank()) {
+                env.put("PLAYWRIGHT_BROWSERS_PATH", browsersPath);
+            }
+            String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD");
+            if (skipDownload != null && !skipDownload.isBlank()) {
+                env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", skipDownload);
+            }
+
             // Since this runs during Quarkus startup, it warms up the browser instantly.
-            playwright = Playwright.create();
+            playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
             browser = playwright.chromium().launch(
                 new BrowserType.LaunchOptions().setHeadless(headless)
             );
-            log.infof("Playwright Chromium cached in %dms (headless=%s)", 
-                    System.currentTimeMillis() - t0, headless);
+            log.infof("Playwright Chromium cached in %dms (headless=%s, path=%s)", 
+                    System.currentTimeMillis() - t0, headless, browsersPath != null ? browsersPath : "default");
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             if (msg.contains("Executable doesn't exist")) {
