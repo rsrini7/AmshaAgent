@@ -236,3 +236,28 @@ To recap the resolution for **H12**:
 
 ---
 
+I have refactored the **Governance Layer** to implement a robust atomic update strategy, fulfilling the requirements for **RC3**.
+
+### Refactoring Summary: Atomic Budget Accounting
+
+**1. Eliminated Mixed Locking Strategy:**
+I replaced the fragile combination of `computeIfAbsent` followed by an explicit `synchronized(budget)` block in `GovernanceLayer.recordLlmCall()`. This was replaced with a single, atomic `ConcurrentHashMap.compute()` call. Doing so eliminates the window where a budget object could exist in an inconsistent or uninitialized state and reduces lock contention by utilizing the fine-grained entry-level locking of `ConcurrentHashMap`.
+
+**2. Thread-Safe Budget State:**
+- Migrated all fields in the `SessionBudget` internal class (`input`, `output`, `totalCost`, `warningSent`) to use the `volatile` modifier.
+- Removed the `synchronized` keywords from the budget getters (`getTotalCost`, etc.), ensuring that readers (like audit loggers or telemetry) see the most recent values without incurring lock overhead.
+- Leveraged the `compute` lambda to ensure that multi-field transitions (e.g., updating both `input` tokens and `totalCost`) are atomic for all writers.
+
+**3. Preserved Exception Contracts:**
+The budget reporting logic now uses a local `BudgetUpdateResult` carrier to capture the outcome of the atomic transaction. This allows the system to:
+- Persist the cost update even if a budget limit is hit.
+- Throw the appropriate `BudgetExceededException` or `BudgetWarningException` immediately following the atomic update, preserving the exact financial state in the error message.
+
+### Verification Results
+- **Atomic Cost Accumulation:** Verified via `testConcurrentCostAccumulationIsAtomic` (10 concurrent threads) that total USD cost and token counts remain monotonic and precisely correct under load.
+- **Warning Thresholds:** Verified that the percentage calculation precision remains consistent with existing tests, correctly triggering the "81% consumed" warning for the standard test case.
+- **Regression Testing:** All tests in `GovernanceLayerTest` (9/9) and `GovernanceLayerAssertBudgetTest` (4/4) passed successfully.
+
+This change ensures that ArcClaw's financial governance is resilient to execution amplification and provides a predictable, thread-safe audit trail for all AI consumption.
+
+---
