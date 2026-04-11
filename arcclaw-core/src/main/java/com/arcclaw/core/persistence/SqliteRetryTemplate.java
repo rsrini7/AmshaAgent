@@ -67,7 +67,7 @@ public class SqliteRetryTemplate {
                   operationName, limit);
         
         if (meterRegistry != null && !meterRegistry.isUnsatisfied()) {
-            meterRegistry.get().counter("persistence.sqlite.retry.exhausted", 
+            meterRegistry.get().counter("arcclaw.persistence.sqlite.retry.exhausted", 
                 "operation", operationName).increment();
         }
 

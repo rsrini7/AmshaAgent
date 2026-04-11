@@ -810,4 +810,48 @@ I have resolved the remaining three test failures to align the test suite with t
     *   **Context**: The introduction of adaptive jitter (±25%) means that a series of retries that previously totaled exactly 300ms can now legitimately take as little as 225ms. The test now correctly accounts for this statistical variance while still verifying that backoff is occurring.
 
 The entire core test suite should now be green across all persistence, state, and governance modules.
+
+---
+
+Viewed RateLimitRetryScheduler.java:1-102
+Edited RateLimitRetryScheduler.java
+Viewed RateLimitRetryScheduler.java:1-30
+Edited RateLimitRetryScheduler.java
+Viewed RateLimitRetryScheduler.java:1-45
+
+I have resolved the Micrometer logging noise caused by duplicate gauge registration.
+
+### Fix Applied: Metric State Decoupling
+
+*   **Avoided Re-registration**: The `retry.backlog.max_age_seconds` gauge was previously being "re-defined" during every 30-second polling cycle, triggering Micrometer's duplicate registration warnings.
+*   **Atomic State Backing**: Introduced a `private final AtomicLong backlogMaxAge` field. The gauge is now registered exactly once during the `@PostConstruct` initialization phase, pointing to this atomic variable.
+*   **Silent Updates**: The scheduler now simply updates the value of the `AtomicLong` using `.set(maxAgeSec)`. Micrometer automatically polls this value when collecting metrics, eliminating all registration-related log noise while maintaining real-time accuracy.
+
+The `RateLimitRetryScheduler` is now silent during normal operation, only logging when sessions are actively being resumed or when stale retries are orphaned.
+
+Edited RateLimitRetryScheduler.java
+Edited GovernanceLayer.java
+Edited GovernanceLayer.java
+Edited SqliteRetryTemplate.java
+
+I have standardized the Micrometer metric naming convention across the framework to follow the established `arcclaw.*` namespace, ensuring consistent visibility in operational dashboards.
+
+### Standardized Metrics
+
+| Logic Area | New Metric Name | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Retry Subsystem** | `arcclaw.retry.backlog.max_age_seconds` | Gauge | Age of oldest pending rate-limit retry. |
+| **Retry Subsystem** | `arcclaw.retry.orphaned.count` | Counter | Total sessions abandoned due to stall. |
+| **Governance** | `arcclaw.governance.budget.map.size` | Gauge | Count of active session budgets in memory. |
+| **Governance** | `arcclaw.governance.budget.evictions` | Counter | Budgets evicted by the 24h TTL policy. |
+| **Persistence** | `arcclaw.persistence.sqlite.retry.exhausted` | Counter | SQLite lock contention failure count. |
+
+### Component Updates
+
+1.  **RateLimitRetryScheduler**: Migrated `retry.backlog` and `retry.orphaned` counters.
+2.  **GovernanceLayer**: Migrated `governance.budget` map size and eviction metrics.
+3.  **SqliteRetryTemplate**: Migrated `persistence.sqlite` contention exhausting metrics.
+
+These changes unify telemetry data under a single root prefix, making it easier to filter and aggregate ArcClaw-specific operational alerts in monitoring tools like Prometheus or Grafana.
+
 ---

@@ -3,7 +3,9 @@ package com.arcclaw.core.agent.loop;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -32,6 +34,13 @@ public class RateLimitRetryScheduler {
     @Inject
     MeterRegistry meterRegistry;
 
+    private final AtomicLong backlogMaxAge = new AtomicLong(0);
+
+    @PostConstruct
+    void init() {
+        meterRegistry.gauge("arcclaw.retry.backlog.max_age_seconds", backlogMaxAge);
+    }
+
     /**
      * Polls every 30 seconds for rate-limited sessions that are ready to resume.
      */
@@ -39,7 +48,7 @@ public class RateLimitRetryScheduler {
     public void processPendingRetries() {
         List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
         if (awaiting.isEmpty()) {
-            meterRegistry.gauge("retry.backlog.max_age_seconds", 0);
+            backlogMaxAge.set(0);
             return;
         }
 
@@ -74,7 +83,7 @@ public class RateLimitRetryScheduler {
             }
         }
         
-        meterRegistry.gauge("retry.backlog.max_age_seconds", maxAgeSec);
+        backlogMaxAge.set(maxAgeSec);
     }
 
     /**
@@ -94,7 +103,7 @@ public class RateLimitRetryScheduler {
                 agentStore.markOrphaned(cp.getId(), 
                     "Abandoned after 30 minutes in AWAITING_RETRY (potential scheduler outage)");
                 
-                meterRegistry.counter("retry.orphaned.count").increment();
+                meterRegistry.counter("arcclaw.retry.orphaned.count").increment();
             }
         }
     }

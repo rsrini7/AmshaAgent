@@ -32,7 +32,7 @@ public class GovernanceLayer implements GovernanceStrategy {
 
     @PostConstruct
     void initMetrics() {
-        registry.gauge("governance.budget.map.size", budgets, Map::size);
+        registry.gauge("arcclaw.governance.budget.map.size", budgets, Map::size);
     }
 
     @Scheduled(every = "1h")
@@ -57,7 +57,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         
         if (evicted > 0) {
             log.infof("Cleaned up %d stale budget(s) older than %d hours.", evicted, maxAgeHours);
-            registry.counter("governance.budget.evictions").increment(evicted);
+            registry.counter("arcclaw.governance.budget.evictions").increment(evicted);
         }
     }
 
