@@ -2,6 +2,7 @@ package com.arcclaw.core.persistence;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.sql.SQLException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -52,5 +53,35 @@ class SqliteRetryTemplateTest {
         });
         assertTrue(ex.getMessage().contains("after 3 attempts"));
         assertEquals(3, attempts.get());
+    }
+
+     @Test
+    void testRetryExhaustion() {
+        AtomicInteger calls = new AtomicInteger(0);
+        
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> {
+            template.execute("test-op", 3, 1, () -> {
+                calls.incrementAndGet();
+                throw new SQLException("database is locked");
+            });
+        });
+        
+        assertEquals(3, calls.get(), "Should have attempted 3 times");
+        assertEquals("SQLite BUSY after 3 attempts on [test-op]", ex.getMessage());
+    }
+
+    @Test
+    void testSuccessAfterRetry() throws Exception {
+        AtomicInteger calls = new AtomicInteger(0);
+        
+        String result = template.execute("test-op", 5, 1, () -> {
+            if (calls.incrementAndGet() < 3) {
+                throw new SQLException("sqlite_busy");
+            }
+            return "success";
+        });
+        
+        assertEquals(3, calls.get(), "Should have succeeded on 3rd attempt");
+        assertEquals("success", result);
     }
 }

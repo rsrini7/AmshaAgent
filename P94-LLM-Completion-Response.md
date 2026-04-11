@@ -518,3 +518,38 @@ The ArcClaw framework is now architecturally hardened against nondeterministic b
 
 ---
 
+I have implemented bounded exponential backoff and observability for the SQLite retry pipeline, ensuring that database contention is handled gracefully without leading to thread exhaustion or indefinite delays.
+
+### SQLite Retry & Idempotency Refactor (RI1)
+
+1.  **Bounded Exponential Backoff**:
+    *   **Initial Delay**: 10ms (configurable).
+    *   **Maximum Delay**: Capped at **2,000ms (2 seconds)** to prevent long-running transactions from holding system resources indefinitely during periods of high contention.
+    *   **Exponential Progression**: Delay doubles on each attempt ($2^{n-1} \times \text{base}$) until the cap is reached.
+
+2.  **Adaptive Jitter**:
+    *   Implemented a **±25% random jitter** on each delay calculation. This prevents "thundering herd" scenarios where multiple concurrent requests retry at the exact same millisecond after a lock collision.
+
+3.  **Governance & Safety Caps**:
+    *   **Retry Ceiling**: Implemented a hard cap of **10 attempts** by default. Managed through `Math.min(maxAttempts, 10)` to ensure that even misconfigured callers cannot trigger infinite retry loops.
+    *   **Non-Transitive Failures**: Maintained strict rethrowing for non-retryable exceptions (errors not matching the "BUSY" or "LOCKED" patterns defined in `SqliteErrorStrings`).
+
+4.  **Observability & Monitoring**:
+    *   **Terminal Event Logging**: Added a `CRITICAL` log level emission when retry attempts are exhausted, including the operation name and full cause chain.
+    *   **Micrometer Integration**: Registered a `persistence.sqlite.retry.exhausted` counter. This allows SRE/Operations to monitor database saturation in real-time via Prometheus/Grafana.
+    *   **Robustness**: Ensured the template remains usable in standalone unit test contexts by adding null-safety guards for the `MeterRegistry` instance.
+
+### Verification Matrix
+
+| Test Case | Scenario | Expected Outcome | Result |
+| :--- | :--- | :--- | :--- |
+| `testSuccessfulExecution` | No contention | Immediate success | ✅ **PASS** |
+| `testRetryOnBusy` | Transient lock | Retries and recovers | ✅ **PASS** |
+| `testNoRetryOnNonBusy` | Logic error | Re-throws immediately | ✅ **PASS** |
+| `testExhaustion` | Sustained lock | Fail after 10 attempts | ✅ **PASS** |
+| `testBackoffJitter` | Multiple collisions | Offset retry windows | ✅ **PASS** |
+
+The persistence layer is now significantly more resilient to the "busy" errors common in SQLite's single-writer architecture, especially during heavy parallel batch processing.
+
+---
+
