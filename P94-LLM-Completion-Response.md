@@ -288,3 +288,36 @@ I have completed the H1 hardening task. Would you like to proceed with the next 
 
 ---
 
+I have successfully implemented **H4: Bounding the Governance Budget Map**, eliminating the risk of memory leaks from abandoned sessions.
+
+### Hardening Summary: Managed Budget Lifecycle
+
+**1. Time-Based Eviction Policy (TTL):**
+I implemented a scheduled cleanup mechanism in `GovernanceLayer.java` that automatically evicts abandoned budget records.
+- **Access Tracking**: Added a `lastAccessedAt` timestamp to the `SessionBudget` state. This timestamp is refreshed on every interaction (LLM calls, cost lookups, or token queries).
+- **Scheduled GC**: Integrated a `@Scheduled` task (`cleanupStaleBudgets`) that runs every hour to remove any session inactive for more than 24 hours.
+
+**2. Observability & Metrics:**
+Integrated the **Micrometer MeterRegistry** to provide visibility into the budget map's health:
+- **Gauge (`governance.budget.map.size`)**: Real-time tracking of the number of active sessions in memory.
+- **Counter (`governance.budget.evictions`)**: Tracks the total number of sessions auto-evicted by the TTL policy for capacity planning.
+
+**3. Verified Robustness:**
+Added a new test suite, `GovernanceBoundingTest.java`, which confirms:
+- **Explicit Cleanup**: `clearSession()` still correctly and immediately removes session data.
+- **Automated TTL Eviction**: Verified that sessions older than the 24-hour cutoff are successfully removed by the background task while fresh sessions are preserved.
+- **Consistency**: All existing 9 governance tests remain passing ✅.
+
+### Final Wave Status
+| Task | Result |
+| :--- | :--- |
+| **C7** | Resolved transaction nesting deadlocks in Secret Vault |
+| **H11** | Bounded Structured Retry Loop to prevent triple/quadruple execution |
+| **H12** | Migrated Virtual Thread identity propagation to ScopedValue |
+| **RC3** | Atomic budget accounting via `ConcurrentHashMap.compute` |
+| **H1** | Tool discovery cache implemented ($>10x$ latency improvement) |
+| **H4** | Bounded Governance map memory with TTL and background GC |
+
+This concludes the hardening of ArcClaw's transactional integrity, budget governance, and identity propagation. The system is now significantly more resilient to high-concurrency tool execution and virtual-thread environments.
+
+---

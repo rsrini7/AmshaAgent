@@ -1,9 +1,16 @@
 package com.arcclaw.core.governance;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -19,6 +26,44 @@ public class GovernanceLayer implements GovernanceStrategy {
     private static final double WARNING_THRESHOLD = 0.80;
 
     private final ConcurrentHashMap<String, SessionBudget> budgets = new ConcurrentHashMap<>();
+
+    @Inject
+    MeterRegistry registry;
+
+    @PostConstruct
+    void initMetrics() {
+        registry.gauge("governance.budget.map.size", budgets, Map::size);
+    }
+
+    @Scheduled(every = "1h")
+    void cleanupStaleBudgets() {
+        int maxAgeHours = 24;
+        cleanupStaleBudgets(maxAgeHours);
+    }
+
+    void cleanupStaleBudgets(int maxAgeHours) {
+        Instant cutoff = Instant.now().minus(maxAgeHours, ChronoUnit.HOURS);
+        int evicted = 0;
+        
+        // entrySet().removeIf is safe for ConcurrentHashMap
+        var it = budgets.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            if (entry.getValue().getLastAccessedAt().isBefore(cutoff)) {
+                it.remove();
+                evicted++;
+            }
+        }
+        
+        if (evicted > 0) {
+            log.infof("Cleaned up %d stale budget(s) older than %d hours.", evicted, maxAgeHours);
+            registry.counter("governance.budget.evictions").increment(evicted);
+        }
+    }
+
+    Map<String, SessionBudget> getBudgetsInternal() {
+        return budgets;
+    }
 
     @ConfigProperty(name = "arcclaw.governance.price-per-1k-input", defaultValue = "0.003")
     double pricePer1kInput;
@@ -55,6 +100,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         final BudgetUpdateResult[] resultWrapper = new BudgetUpdateResult[1];
         budgets.compute(sessionId, (id, existing) -> {
             SessionBudget budget = (existing == null) ? new SessionBudget(budgetUsd, WARNING_THRESHOLD) : existing;
+            budget.setLastAccessedAt(Instant.now());
 
             // 1. HARD LIMIT CHECK (Before applying update)
             if (budget.totalCost >= budget.hardLimit) {
@@ -123,7 +169,11 @@ public class GovernanceLayer implements GovernanceStrategy {
      */
     public double getSessionCost(String sessionId) {
         SessionBudget budget = budgets.get(sessionId);
-        return budget != null ? budget.getTotalCost() : 0.0;
+        if (budget != null) {
+            budget.setLastAccessedAt(Instant.now());
+            return budget.getTotalCost();
+        }
+        return 0.0;
     }
 
     public double getBudgetUsd() { 
@@ -132,12 +182,20 @@ public class GovernanceLayer implements GovernanceStrategy {
 
     public int getSessionInputTokens(String sessionId) {
         SessionBudget b = budgets.get(sessionId);
-        return b != null ? (int) b.getInput() : 0;
+        if (b != null) {
+            b.setLastAccessedAt(Instant.now());
+            return (int) b.getInput();
+        }
+        return 0;
     }
 
     public int getSessionOutputTokens(String sessionId) {
         SessionBudget b = budgets.get(sessionId);
-        return b != null ? (int) b.getOutput() : 0;
+        if (b != null) {
+            b.setLastAccessedAt(Instant.now());
+            return (int) b.getOutput();
+        }
+        return 0;
     }
 
     /**
@@ -154,17 +212,26 @@ public class GovernanceLayer implements GovernanceStrategy {
     /**
      * Internal state representation of a session's budget.
      */
-    private static final class SessionBudget {
+    static final class SessionBudget {
         volatile long input = 0;
         volatile long output = 0;
         final double hardLimit;
         final double warningLimit;
         volatile boolean warningSent = false;
         volatile double totalCost = 0.0;
+        volatile Instant lastAccessedAt = Instant.now();
 
-        public SessionBudget(double hardLimit, double warningThreshold) {
+        SessionBudget(double hardLimit, double warningThreshold) {
             this.hardLimit = hardLimit;
             this.warningLimit = hardLimit * warningThreshold;
+        }
+
+        Instant getLastAccessedAt() {
+            return this.lastAccessedAt;
+        }
+
+        void setLastAccessedAt(Instant lastAccessedAt) {
+            this.lastAccessedAt = lastAccessedAt;
         }
 
         double getTotalCost() {
