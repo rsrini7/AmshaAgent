@@ -5,13 +5,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
-
-import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.jboss.logging.Logger;
-
-import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class SqliteRetryTemplate {

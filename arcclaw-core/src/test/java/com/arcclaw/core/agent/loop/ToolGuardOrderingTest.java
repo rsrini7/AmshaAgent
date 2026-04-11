@@ -11,15 +11,20 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.junit.jupiter.api.Test;
-
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.tool.InterceptorPriority;
-import com.arcclaw.core.tool.ToolGuardInterceptor;
-
-import io.quarkus.test.junit.QuarkusTest;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.skill.CompiledSkillEntry;
+import com.arcclaw.core.tool.DynamicToolLookup;
+import com.arcclaw.core.tool.InterceptorPriority;
+import com.arcclaw.core.tool.ToolGuardInterceptor;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class ToolGuardOrderingTest {
@@ -58,13 +63,13 @@ class ToolGuardOrderingTest {
         when(mockInstance.spliterator()).thenReturn(interceptors.spliterator());
         
         manualGuard.interceptors = mockInstance;
-        manualGuard.roleRegistry = mock(com.arcclaw.core.agent.role.RoleRegistry.class);
-        manualGuard.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        manualGuard.toolRegistry = mock(com.arcclaw.core.tools.ToolRegistry.class);
-        when(manualGuard.toolRegistry.findTool(any())).thenReturn(java.util.Optional.of(mock(com.arcclaw.core.tools.AgentTool.class)));
+        manualGuard.roleRegistry = mock(RoleRegistry.class);
+        manualGuard.objectMapper = new ObjectMapper();
+        manualGuard.toolRegistry = mock(ToolRegistry.class);
+        when(manualGuard.toolRegistry.findTool(any())).thenReturn(Optional.of(mock(AgentTool.class)));
         
         @SuppressWarnings("unchecked")
-        Instance<com.arcclaw.core.tool.DynamicToolLookup> mockLookup = mock(Instance.class);
+        Instance<DynamicToolLookup> mockLookup = mock(Instance.class);
         when(mockLookup.isUnsatisfied()).thenReturn(true);
         manualGuard.dynamicToolLookup = mockLookup;
         
@@ -83,7 +88,7 @@ class ToolGuardOrderingTest {
         public MockInterceptor(String name, List<String> order) { this.name = name; this.order = order; }
         @Override public Set<String> handledToolNames() { return Set.of(); }
         @Override public Optional<ToolInvocationGuard.GuardDecision> evaluate(
-                String s, String r, String t, Map<String, Object> p, List<ReasoningStep> h, String g, List<com.arcclaw.core.skill.CompiledSkillEntry> sk) {
+                String s, String r, String t, Map<String, Object> p, List<ReasoningStep> h, String g, List<CompiledSkillEntry> sk) {
             order.add(name);
             return Optional.empty(); // Continue
         }

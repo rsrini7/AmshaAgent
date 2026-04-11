@@ -78,6 +78,11 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     void markFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass);
 
     /**
+     * Mark a checkpoint as ORPHANED due to scheduler abandonement or process crash.
+     */
+    void markOrphaned(Long checkpointId, String reason);
+
+    /**
      * Mark a checkpoint as completed.
      *
      * @param checkpointId The checkpoint entity ID.

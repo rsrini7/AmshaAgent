@@ -1,12 +1,15 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.StreamSupport;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -24,7 +27,6 @@ import com.arcclaw.core.tool.ToolGuardInterceptor;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Subclass;
-import jakarta.annotation.PostConstruct;
 import org.jboss.logging.Logger;
 
 /**
@@ -49,8 +51,8 @@ public class ToolInvocationGuard {
 
     @PostConstruct
     void init() {
-        this.sortedInterceptors = java.util.stream.StreamSupport.stream(interceptors.spliterator(), false)
-            .sorted(java.util.Comparator.comparingInt(this::getPriority))
+        this.sortedInterceptors = StreamSupport.stream(interceptors.spliterator(), false)
+            .sorted(Comparator.comparingInt(this::getPriority))
             .toList();
         log.infof("ToolInvocationGuard initialized with %d sorted interceptors.", sortedInterceptors.size());
     }
