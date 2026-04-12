@@ -893,18 +893,6 @@ The `browser_navigate` tool is **enabled** in your configuration (otherwise it w
 
 ---
 
-
-Viewed mise.toml:1-800
-Searched for "playwright-chrome-install"
-Viewed mise.toml:1500-1757
-Searched for "\[tasks.playwright-chrome-install\]"
-Ran command: `grep -in "playwright" /Users/srini/Ws/ArcClawInternal/mise.toml`
-Viewed mise.toml:1300-1400
-Ran command: `grep -in "playwright-chrome-install" /Users/srini/Ws/ArcClawInternal/mise.toml`
-Listed directory .mise
-Listed directory tasks
-Viewed playwright-chrome-install.ps1:1-35
-Viewed mise.toml:1250-1310
 Searched for "PLAYWRIGHT_BROWSERS_PATH"
 Viewed PlaywrightBrowserInstaller.java:1-280
 Viewed pom.xml:1-71

@@ -1,0 +1,42 @@
+[
+  { 
+    "name": "com.microsoft.playwright.impl.Message",            
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.PlaywrightImpl",     
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.BrowserImpl",        
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.BrowserTypeImpl",    
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.BrowserContextImpl", 
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.PageImpl",           
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.FrameImpl",          
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.Connection",         
+    "unsafeAllocated": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.SerializedError",         
+    "unsafeAllocated": true, "allDeclaredFields": true 
+  },
+  { 
+    "name": "com.microsoft.playwright.impl.SerializedError$Error",   
+    "unsafeAllocated": true, "allDeclaredFields": true 
+  }
+]

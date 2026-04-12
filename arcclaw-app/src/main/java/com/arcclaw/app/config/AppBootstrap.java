@@ -57,6 +57,7 @@ public class AppBootstrap {
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
         normalizePlaywrightPath(binaryDir);
+        PlaywrightBrowserInstaller.extractDriverIfNeeded(binaryDir);
         ensureFallbackLlmDefaults();
         validateAndAutoFixSecurityKeys(binaryDir);
         validateAndAutoFixLlmConfig(binaryDir);

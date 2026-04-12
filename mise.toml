@@ -37,7 +37,7 @@ trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
 # Enable it with `mise settings experimental=true`
 # [hooks]
 # # Fires automatically after `mise install`
-# postinstall = "mise run playwright-chrome-install"
+# postinstall = "mise run <task-name>"
 
 # ARCCLAW_VEC_EXT and ARCCLAW_DATA_DIR are intentionally NOT set here.
 # quarkus:dev forks Maven inside arcclaw-app/ → needs ../lib/vec0 and ../data.
@@ -75,7 +75,7 @@ run = [
 # =============================================================================
 
 [tasks.setup]
-depends = ["setup:wsl-crlf", "playwright-chrome-install"]
+depends = ["setup:wsl-crlf"]
 alias = "s"
 
 [tasks."setup:profile"]
