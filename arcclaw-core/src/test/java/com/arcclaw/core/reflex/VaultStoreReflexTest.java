@@ -31,14 +31,14 @@ public class VaultStoreReflexTest {
 
     @Test
     void testMatchesKnownSecrets() {
-        assertTrue(reflex.matches("store GITHUB_TOKEN=abc"));
-        assertTrue(reflex.matches("store ARCCLAW_TOOLS_BRAVE_API_KEY=sk-123"));
-        assertTrue(reflex.matches("STORE ARCCLAW_TOOLS_BRAVE_API_KEY = xyz"));
+        assertTrue(reflex.matches("vault GITHUB_TOKEN=abc"));
+        assertTrue(reflex.matches("vault ARCCLAW_TOOLS_BRAVE_API_KEY=sk-123"));
+        assertTrue(reflex.matches("VAULT ARCCLAW_TOOLS_BRAVE_API_KEY = xyz"));
     }
 
     @Test
     void testDoesNotMatchRandomWords() {
-        assertFalse(reflex.matches("store some_random_key=value"));
+        assertFalse(reflex.matches("vault some_random_key=value"));
         assertFalse(reflex.matches("remember my name is srini"));
         assertFalse(reflex.matches("help me"));
     }
