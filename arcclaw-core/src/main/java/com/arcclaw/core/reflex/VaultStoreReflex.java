@@ -28,7 +28,7 @@ public class VaultStoreReflex implements AgentReflex {
 
     private static final Logger log = Logger.getLogger(VaultStoreReflex.class);
 
-    // Matches commands like "vault ARCCLAW_BRAVE_API_KEY=sk-xxxx" or "vault ... --force"
+    // Matches commands like "vault ARCCLAW_TOOLS_BRAVE_API_KEY=sk-xxxx" or "vault ... --force"
     // Supports various dash types (-, --, —) to handle platform auto-formatting.
     private static final Pattern VAULT_STORE_PATTERN =
             Pattern.compile("^vault\\s+(\\w+)\\s*=\\s*(.+?)(?:\\s+([-—]{1,2}force))?$", Pattern.CASE_INSENSITIVE);
