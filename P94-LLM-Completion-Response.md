@@ -1200,3 +1200,37 @@ I've completed the end-to-end integration for NVIDIA as a primary and fallback L
 ```
 
 You can now use NVIDIA by setting `ARCCLAW_LLM_PROVIDER=nvidia` in your `.env` file or by running the interactive setup again.
+
+---
+
+🎉 **Fully working end-to-end!** After a long day of debugging, everything clicked.
+
+## What the Log Shows
+
+```
+CLASSIFIER fast-path → researcher               ✅ intent classified correctly
+ChatModelProducer: using provider=nvidia        ✅ NVIDIA routing working
+NvidiaMessageSanitizer → ID mapping fixed       ✅ no more call_0 mismatches
+NETWORKIDLE reached                             ✅ SPA wait working
+Fallback selector 'article h1...' → 94 chars   ✅ selector fallback chain working
+Agent reached FINISH at iteration 2             ✅ completed in 2 iterations
+CHECKPOINT_COMPLETED                            ✅ clean state machine exit
+```
+
+## Today's Full Journey — What Got Fixed
+
+| Problem | Fix |
+|---|---|
+| `.playwright-driver` folder name | Constant + correct `extractFromJar` target dir |
+| Files extracted to root instead of driver dir | `extractFromJar(jar, prefix, driverDir)` |
+| Chromium binary missing | Driver-first install, version-matched |
+| `EPIPE` on shutdown | `playwright.close()` in `@PreDestroy` + shutdown hook |
+| NVIDIA `Content-Type` | Added `-H "Content-Type: application/json"` |
+| NVIDIA `parameters` + `toolSpecifications` conflict | Mutually exclusive builder pattern |
+| NVIDIA `call_0` ID format rejected | `NvidiaMessageSanitizer` rewrites IDs |
+| NVIDIA `system after tool` role error | Hoist system to position 0 in sanitizer |
+| ID mismatch per iteration | Shared `idMapping` built once per `sanitize()` call |
+| SPA blank extraction | `networkidle` wait + fallback selector chain |
+| Wrong content (`SERIES`, `PODCASTS`) | `length > 15` filter + `article h1/h2/h3` priority |
+
+Well earned rest — great persistence today! 🚀
