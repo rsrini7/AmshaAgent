@@ -1,5 +1,6 @@
 package com.arcclaw.tool.playwright;
 
+import java.nio.file.Path;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -46,6 +47,13 @@ public class PlaywrightPageRunner {
     private Playwright playwright;
     private Browser browser;
 
+    /**
+     * Guards @Scheduled refreshBrowser against the scheduler-vs-startup race in native mode.
+     * The scheduler can fire before @PostConstruct completes — this flag plus delayed="PT5M"
+     * together prevent refreshBrowser from acting before init() has finished.
+     */
+    private volatile boolean startupComplete = false;
+
     public boolean isInitialized() {
         return browser != null;
     }
@@ -54,50 +62,76 @@ public class PlaywrightPageRunner {
     void init() {
         if (!enabled) {
             log.info("Playwright is disabled — skipping browser warmup.");
+            startupComplete = true;
             return;
         }
 
         try {
             long t0 = System.currentTimeMillis();
-            
+
             // Map system properties from .env (loaded by AppBootstrap) to Playwright's env
             Map<String, String> env = new HashMap<>(System.getenv());
-            String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH");
-            if (browsersPath != null && !browsersPath.isBlank()) {
-                env.put("PLAYWRIGHT_BROWSERS_PATH", browsersPath);
+            String browsersPathProp = System.getProperty("PLAYWRIGHT_BROWSERS_PATH");
+            String resolvedPath = null;
+
+            if (browsersPathProp != null && !browsersPathProp.isBlank()) {
+                // Ensure the path is absolute for consistency across launch environments (Fix for Windows Binary)
+                Path p = Path.of(browsersPathProp).toAbsolutePath().normalize();
+                resolvedPath = p.toString();
+                env.put("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
+                System.setProperty("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
             }
+
             String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD");
             if (skipDownload != null && !skipDownload.isBlank()) {
                 env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", skipDownload);
             }
 
-            // Since this runs during Quarkus startup, it warms up the browser instantly.
+            log.infof("Initializing Playwright with BROWSERS_PATH=%s",
+                    resolvedPath != null ? resolvedPath : "default");
+
             playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
             browser = playwright.chromium().launch(
                 new BrowserType.LaunchOptions().setHeadless(headless)
             );
-            log.infof("Playwright Chromium cached in %dms (headless=%s, path=%s)", 
-                    System.currentTimeMillis() - t0, headless, browsersPath != null ? browsersPath : "default");
+            log.infof("Playwright Chromium cached in %dms (headless=%s)",
+                    System.currentTimeMillis() - t0, headless);
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
+            log.errorf(e, "Playwright initialization failed: %s", msg);
             if (msg.contains("Executable doesn't exist")) {
-                log.warn("Playwright Chromium binary not found. Run 'mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args=\"install\"' to fix.");
-            } else {
-                log.warnf("Playwright failed to initialize: %s. Tool will be unavailable.", msg);
+                log.warn("Playwright Chromium binary not found. Run 'playwright install chromium' " +
+                         "or install via npx before launching ArcClaw.");
             }
-            destroy(); // Clean up if playwright was created but launch failed
+            destroy();
+        } finally {
+            startupComplete = true;
         }
     }
 
     @PreDestroy
     void destroy() {
+        // Close browser before playwright to avoid orphaned subprocesses
+        closeBrowserQuietly(browser, "destroy");
         browser = null;
-        playwright = null;
+        if (playwright != null) {
+            try {
+                playwright.close();
+            } catch (Exception e) {
+                log.debugf("Playwright close during destroy: %s", safeMessage(e));
+            }
+            playwright = null;
+        }
     }
 
-    @Scheduled(every = "6h")
+    /**
+     * Periodic browser refresh to avoid stale state accumulating over long uptimes.
+     * delayed="PT5M" provides the primary guard against the scheduler-vs-startup race
+     * in native mode. startupComplete is the secondary guard.
+     */
+    @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
-        if (!enabled || playwright == null) return;
+        if (!startupComplete || !enabled || playwright == null) return;
         log.info("Playwright browser refresh");
         closeBrowserQuietly(browser, "refresh");
         browser = playwright.chromium().launch(
@@ -131,8 +165,7 @@ public class PlaywrightPageRunner {
     }
 
     /**
-     * Launches a fresh Chromium browser context, navigates to url, returns result.
-     * Each call creates and destroys its own Playwright + Browser instance — no shared state.
+     * Reuses the cached Chromium browser context, navigates to url, returns result.
      *
      * @param url       target URL (must match SAFE_URL_PATTERN — caller pre-validates)
      * @param action    "navigate" | "extract_text" | "screenshot"
@@ -195,7 +228,7 @@ public class PlaywrightPageRunner {
             String result = switch (action) {
                 case "screenshot" -> captureScreenshot(page);
                 case "navigate"   -> normalizeWhitespace(page.content());
-                default           -> extractText(page, selector); // extract_text + fallback
+                default           -> extractText(page, selector);
             };
 
             log.infof("Playwright completed action=%s for %s in %dms (result=%d chars)",
@@ -220,7 +253,7 @@ public class PlaywrightPageRunner {
                     .collect(Collectors.joining("\n"));
 
                 if (joined.length() > 20) return joined;
-                log.warnf("LLM selector '%s' returned only %d chars — engaging fallback chain", 
+                log.warnf("LLM selector '%s' returned only %d chars — engaging fallback chain",
                         selector, joined.length());
             } catch (Exception e) {
                 log.warnf("LLM selector '%s' failed or timed out — engaging fallback chain", selector);

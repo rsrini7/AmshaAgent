@@ -226,7 +226,7 @@ smallrye:
         - "skills/**.md"
         - "env-example"
         - "native/vec0/**"
-        # - "*.yaml"
+        - "com/microsoft/playwright/impl/driver/jar/**"
 
   # ---------------------------------------------------------------------------
   # LOGGING

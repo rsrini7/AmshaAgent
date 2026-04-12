@@ -16,10 +16,10 @@ import org.jboss.logging.Logger;
 
 /**
  * Handles the idempotent installation of Playwright browser binaries (specifically Chromium).
- * 
- * <p>Addressing module boundaries: Since the Playwright dependency is contained within the 
- * 'arcclaw-tool-playwright' module, we attempt to use 'mvnw' if available in the source tree 
- * to ensure all dependencies are correctly resolved via Maven. For binary distributions, 
+ *
+ * <p>Addressing module boundaries: Since the Playwright dependency is contained within the
+ * 'arcclaw-tool-playwright' module, we attempt to use 'mvnw' if available in the source tree
+ * to ensure all dependencies are correctly resolved via Maven. For binary distributions,
  * we fall back to invoking the CLI from the current classpath.
  */
 public class PlaywrightBrowserInstaller {
@@ -35,7 +35,10 @@ public class PlaywrightBrowserInstaller {
         try (Stream<Path> files = Files.list(browsersPath)) {
             return files.anyMatch(p -> {
                 String name = p.getFileName().toString();
-                return Files.isDirectory(p) && (name.startsWith("chromium-") || name.startsWith("chromium_headless_shell-"));
+                return Files.isDirectory(p) && (
+                    name.startsWith("chromium-") ||
+                    name.startsWith("chromium_headless_shell-")
+                );
             });
         } catch (IOException e) {
             return false;
@@ -82,7 +85,7 @@ public class PlaywrightBrowserInstaller {
     private static void runMavenInstaller(Path mvnw, Path browsersPath) throws Exception {
         List<String> command = new ArrayList<>();
         String os = System.getProperty("os.name", "").toLowerCase();
-        
+
         if (os.contains("win")) {
             command.add("cmd.exe");
             command.add("/c");
@@ -100,7 +103,7 @@ public class PlaywrightBrowserInstaller {
         command.add("-DPLAYWRIGHT_BROWSERS_PATH=" + browsersPath.toString());
 
         ProcessBuilder pb = new ProcessBuilder(command);
-        pb.directory(mvnw.getParent().toFile()); // Run from project root
+        pb.directory(mvnw.getParent().toFile());
         pb.inheritIO();
         Process p = pb.start();
         int exitCode = p.waitFor();
@@ -118,6 +121,55 @@ public class PlaywrightBrowserInstaller {
         System.err.println("  ✓ Browser ready — starting ArcClaw...");
         System.err.println("  ─────────────────────────────────────────────────────");
         System.err.println();
+    }
+
+    private static void runBinaryInstaller(Path browsersPath) throws Exception {
+        StringBuilder attempts = new StringBuilder();
+
+        // Classpath installer — naturally skipped on native image because
+        // java.class.path is blank/unavailable, causing an immediate exception
+        // that falls through to the next installer.
+        try {
+            runClassInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            attempts.append("classpath installer: ").append(safeMessage(e));
+        }
+
+        try {
+            runSystemPlaywrightInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("system playwright CLI: ").append(safeMessage(e));
+        }
+
+        try {
+            runNpxPlaywrightInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("npx playwright CLI: ").append(safeMessage(e));
+        }
+
+        // In-process installer — works on native image only when native binary was built
+        // with com/microsoft/playwright/impl/driver/jar/** in native.resources.includes.
+        // Without that, DriverJar.getDriverResourceURI() returns null (NPE). The exception
+        // is caught below and reported as a failed attempt — no crash.
+        try {
+            runInProcessInstaller(browsersPath);
+            return;
+        } catch (Exception e) {
+            if (!attempts.isEmpty()) attempts.append(" | ");
+            attempts.append("in-process installer: ").append(safeMessage(e));
+        }
+
+        throw new RuntimeException(
+            "Could not install Chromium. Tried: " + attempts +
+            ". Install manually: playwright install chromium  " +
+            "or from source: ./mvnw exec:java -pl arcclaw-tool-playwright" +
+            " -Dexec.mainClass=com.microsoft.playwright.CLI" +
+            " -Dexec.args=\"install --with-deps chromium\"");
     }
 
     private static void runClassInstaller(Path browsersPath) throws Exception {
@@ -147,45 +199,6 @@ public class PlaywrightBrowserInstaller {
         } else {
             throw new RuntimeException("CLI returned exit code " + exitCode);
         }
-    }
-
-    private static void runBinaryInstaller(Path browsersPath) throws Exception {
-        StringBuilder attempts = new StringBuilder();
-        try {
-            runClassInstaller(browsersPath);
-            return;
-        } catch (Exception e) {
-            attempts.append("classpath installer: ").append(safeMessage(e));
-        }
-
-        try {
-            runSystemPlaywrightInstaller(browsersPath);
-            return;
-        } catch (Exception e) {
-            if (!attempts.isEmpty()) attempts.append(" | ");
-            attempts.append("system playwright CLI: ").append(safeMessage(e));
-        }
-
-        try {
-            runNpxPlaywrightInstaller(browsersPath);
-            return;
-        } catch (Exception e) {
-            if (!attempts.isEmpty()) attempts.append(" | ");
-            attempts.append("npx playwright CLI: ").append(safeMessage(e));
-        }
-
-        try {
-            runInProcessInstaller(browsersPath);
-            return;
-        } catch (Exception e) {
-            if (!attempts.isEmpty()) attempts.append(" | ");
-            attempts.append("in-process installer: ").append(safeMessage(e));
-        }
-
-        throw new RuntimeException(
-                "Could not install Chromium in binary mode. Tried: " + attempts
-                + ". Install from source checkout with ./mvnw exec:java -pl arcclaw-tool-playwright "
-                + "-Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args=\"install --with-deps chromium\"");
     }
 
     private static void runSystemPlaywrightInstaller(Path browsersPath) throws Exception {
@@ -218,7 +231,8 @@ public class PlaywrightBrowserInstaller {
         runExternalInstaller(command, browsersPath, "npx playwright CLI");
     }
 
-    private static void runExternalInstaller(List<String> command, Path browsersPath, String label) throws Exception {
+    private static void runExternalInstaller(List<String> command, Path browsersPath, String label)
+            throws Exception {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.environment().put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
         pb.environment().put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
@@ -234,12 +248,16 @@ public class PlaywrightBrowserInstaller {
 
     private static void runInProcessInstaller(Path browsersPath) {
         Map<String, String> env = new HashMap<>(System.getenv());
-        env.put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
+        // Ensure path is absolute for the installer subprocess (Fix for Windows Binary)
+        String absolutePath = browsersPath.toAbsolutePath().normalize().toString();
+        env.put("PLAYWRIGHT_BROWSERS_PATH", absolutePath);
         env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
 
+        log.infof("Running in-process Playwright installer with BROWSERS_PATH=%s", absolutePath);
         Playwright.CreateOptions options = new Playwright.CreateOptions().setEnv(env);
         try (Playwright playwright = Playwright.create(options)) {
-            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+            Browser browser = playwright.chromium().launch(
+                new BrowserType.LaunchOptions().setHeadless(true));
             browser.close();
             System.err.println();
             System.err.println("  ✓ Playwright Chromium installed successfully.");

@@ -56,6 +56,7 @@ public class AppBootstrap {
         
         reexecWithLdPreloadIfNeeded(args);
         loadDotEnv(binaryDir);
+        normalizePlaywrightPath(binaryDir);
         ensureFallbackLlmDefaults();
         validateAndAutoFixSecurityKeys(binaryDir);
         validateAndAutoFixLlmConfig(binaryDir);
@@ -943,6 +944,17 @@ public class AppBootstrap {
             System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
         }
         System.err.println();
+    }
+
+    private static void normalizePlaywrightPath(Path binaryDir) {
+        String path = System.getProperty("PLAYWRIGHT_BROWSERS_PATH");
+        if (path != null && !path.isBlank()) {
+            Path p = Path.of(path);
+            if (!p.isAbsolute()) {
+                Path absolute = binaryDir.resolve(p).toAbsolutePath().normalize();
+                System.setProperty("PLAYWRIGHT_BROWSERS_PATH", absolute.toString());
+            }
+        }
     }
 
     private static String readLineWithFallback(Console console, String prompt) {
