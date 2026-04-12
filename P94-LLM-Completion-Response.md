@@ -1072,3 +1072,42 @@ I have fixed the lint warning by using the Java 25 unnamed variable (`_`) for th
 *   **Verified Tests**: Updated the test suite to cover multiple scenarios (first store, protected overwrite, and forced overwrite) and resolved all compilation issues.
 
 The system is now hardened against accidental plaintext storage of these specific API keys.
+
+---
+
+The user is absolutely right—using a dedicated keyword for the vault is much clearer and prevents any accidental overlap with the RAG "store" command.
+
+### New Design:
+*   **`store` / `/store`**: Always routes to **RAG (Knowledge Base)** via the agent.
+*   **`vault` / `/vault`**: Routes directly to the **Secure Secret Vault** (bypassing the AI).
+
+### Plan:
+1.  Update the `VaultStoreReflex` pattern to match `vault` / `/vault` instead of `store`.
+2.  Update the help message and logic to reflect the new command name.
+3.  Update the unit tests to use the new `vault` syntax.
+
+I'll start by updating the `VaultStoreReflex` implementation.
+
+Edited VaultStoreReflex.java
+Viewed VaultStoreReflex.java:1-112
+Edited VaultStoreReflex.java
+Edited VaultStoreReflexTest.java
+Edited VaultStoreReflexTest.java
+Edited VaultStoreReflexTest.java
+
+I have successfully decoupled the **Vault** and **RAG** storage commands for a cleaner user experience:
+
+### Updated Commands:
+1.  **`vault` / `/vault`**: Direct access to the encrypted Secret Vault.
+    *   **Usage**: `vault KEY=VALUE`
+    *   **Features**: Bypasses the AI entirely, prevents secret leakage, supports `--force` for overwrites, and has its own help guide.
+2.  **`store` / `/store`**: Returns to its original purpose—**RAG (Knowledge Base)** ingestion.
+    *   **Usage**: `store [your facts or documents here]`
+    *   **Behavior**: Always routes to the AI coordinator for processing into the knowledge base.
+
+### What's Changed:
+*   **Reflex Logic**: Updated `VaultStoreReflex` to only trigger on the `vault` keyword.
+*   **Instructional Guides**: Sending just `vault` or `/vault` now explains exactly how to store secrets versus general documents.
+*   **Tests**: All `VaultStoreReflexTest` cases have been updated to use the new `vault` syntax.
+
+This distinction eliminates any ambiguity about where your data is being stored. You can now use `vault` for your API keys and `store` for your research notes safely.
