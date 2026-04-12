@@ -91,7 +91,7 @@ public class PlaywrightBrowserInstaller {
             // FIRST: use extracted driver — guarantees version match with driver-bundle
             // binaryDir is parent of .playwright-browsers
             Path binaryDir = browsersPath.getParent();
-            Path driverDir = binaryDir.resolve(".playwright-driver").resolve(detectPlatform());
+            Path driverDir = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION).resolve(detectPlatform());
             Path nodeExe   = driverDir.resolve(isWindows() ? "node.exe" : "node");
             Path cliJs     = driverDir.resolve("package").resolve("cli.js");
 
@@ -479,15 +479,19 @@ public class PlaywrightBrowserInstaller {
         return null;
     }
 
-    private static void extractFromJar(Path jar, String prefix, Path targetParent) throws Exception {
-        Files.createDirectories(targetParent);
+    private static void extractFromJar(Path jar, String jarPrefix, Path targetDir) throws Exception {
+        Files.createDirectories(targetDir);
+        String prefixWithSlash = jarPrefix + "/";
         try (var zf = new ZipFile(jar.toFile())) {
             Enumeration<? extends ZipEntry> entries = zf.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                if (!entry.getName().startsWith(prefix + "/")) continue;
-                Path out = targetParent.resolve(entry.getName()).normalize();
-                if (!out.startsWith(targetParent)) continue; // zip-slip guard
+                if (!entry.getName().startsWith(prefixWithSlash)) continue;
+                // Strip "driver/win32_x64/" prefix → relative path under targetDir
+                String relative = entry.getName().substring(prefixWithSlash.length());
+                if (relative.isEmpty()) continue;
+                Path out = targetDir.resolve(relative).normalize();
+                if (!out.startsWith(targetDir)) continue; // zip-slip guard
                 if (entry.isDirectory()) {
                     Files.createDirectories(out);
                 } else {
