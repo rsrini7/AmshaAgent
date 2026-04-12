@@ -35,6 +35,8 @@ public class PlaywrightBrowserInstaller {
 
     private static final Logger log = Logger.getLogger(PlaywrightBrowserInstaller.class);
 
+    private static final String PLAYWRIGHT_DRIVER_LOCATION = ".playwright-driver";
+
     /**
      * Checks if Chromium is already installed in the specified path.
      * Looks for any directory starting with 'chromium-' in the browsers path.
@@ -52,7 +54,7 @@ public class PlaywrightBrowserInstaller {
                     : name.startsWith("chromium-") ||
                     name.startsWith("chromium_headless_shell-");
                 if (!nameMatch) return false;
-                // ← ADD THIS: verify the actual executable exists, not just the folder
+                // verify the actual executable exists, not just the folder
                 Path exe = isWindows()
                     ? p.resolve("chrome-headless-shell-win64").resolve("chrome-headless-shell.exe")
                     : p.resolve("chrome-headless-shell").resolve("chrome-headless-shell");
@@ -63,7 +65,7 @@ public class PlaywrightBrowserInstaller {
 
     private static String readExpectedRevision(Path binaryDir) {
         // The extracted driver's package.json has the expected browser revision
-        Path pkgJson = binaryDir.resolve(".playwright-driver")
+        Path pkgJson = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION)
             .resolve(detectPlatform()).resolve("package").resolve("package.json");
         if (!Files.exists(pkgJson)) return null;
         try {
@@ -376,7 +378,7 @@ public class PlaywrightBrowserInstaller {
         if (!"true".equalsIgnoreCase(playwrightEnabled)) return;
 
         String platform  = detectPlatform();          // "win32_x64", "mac", "mac-arm64", "linux"
-        Path  driverDir  = binaryDir.resolve(".playwright-driver").resolve(platform);
+        Path  driverDir  = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION).resolve(platform);
         Path  markerFile = driverDir.resolve(".playwright-version");
 
         // Detect current version from driver-bundle JAR on classpath
