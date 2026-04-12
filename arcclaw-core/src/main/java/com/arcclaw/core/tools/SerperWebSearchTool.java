@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +44,7 @@ public class SerperWebSearchTool implements AgentTool {
         return vault.retrieveSystemKey("ARCCLAW_TOOLS_SERPER_API_KEY")
             .map(vk -> {
                 try (vk) {
-                    return new String(vk.get(), java.nio.charset.StandardCharsets.UTF_8);
+                    return new String(vk.get(), StandardCharsets.UTF_8);
                 }
             })
             .orElse(configApiKey);

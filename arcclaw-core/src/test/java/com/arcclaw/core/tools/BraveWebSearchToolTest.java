@@ -10,10 +10,12 @@ import static org.mockito.Mockito.when;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.SecretVault;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +38,7 @@ class BraveWebSearchToolTest {
     AuditService auditService;
 
     @Mock
-    com.arcclaw.core.security.SecretVault vault;
+    SecretVault vault;
 
     @InjectMocks
     BraveWebSearchTool tool;
@@ -44,7 +46,7 @@ class BraveWebSearchToolTest {
     @BeforeEach
     void setup() {
         tool.configApiKey = "fake-key";
-        lenient().when(vault.retrieveSystemKey("ARCCLAW_TOOLS_BRAVE_API_KEY")).thenReturn(java.util.Optional.empty());
+        lenient().when(vault.retrieveSystemKey("ARCCLAW_TOOLS_BRAVE_API_KEY")).thenReturn(Optional.empty());
         // Setup HttpClient field via reflection as Mockito @InjectMocks 
         // doesn't typically run @PostConstruct
         try {

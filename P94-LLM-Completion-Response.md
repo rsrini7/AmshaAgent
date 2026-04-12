@@ -1111,3 +1111,65 @@ I have successfully decoupled the **Vault** and **RAG** storage commands for a c
 *   **Tests**: All `VaultStoreReflexTest` cases have been updated to use the new `vault` syntax.
 
 This distinction eliminates any ambiguity about where your data is being stored. You can now use `vault` for your API keys and `store` for your research notes safely.
+
+---
+
+You're right — the bot is leaking internal system prompt details (persona, working directory, Java version, etc.) directly to the user. That's a serious UX and security issue.
+
+Let me trace the exact leak path through the answer guard.
+
+Searched for "ANSWER-GUARD"
+Viewed AgentStateMachineRunner.java:1-532
+
+Now I can see the full picture. The `guardFinalAnswer()` method catches several types of bad answers but is **missing a filter for system prompt echoes**. The LLM is leaking two things:
+
+1. **Raw tool observation**: `label=user_name, text=srini`
+2. **System prompt context**: `## Current Context`, `You are Vishnu`, `**Working Directory**`, etc.
+
+I need to add a guard that strips system prompt patterns from the final answer. Let me also check what the system prompt looks like so I can build an accurate pattern.
+
+Searched for "Current Context"
+Searched for "Current Context"
+Searched for "Current Context"
+Searched for "System Status"
+Searched for "System Status"
+Searched for "Working Directory"
+Viewed SystemEnvironmentContextEnricher.java:1-58
+Searched for "CONTEXT_RETRIEVED_ECHO_PATTERN"
+Viewed AgentSentinels.java:1-59
+
+Now I can see the full picture. The answer guard catches compaction headers (`## Retrieved Context`) but has **no guard for system prompt echoes** (`## Host Environment Context`, `## Current Context`, `**Working Directory**`, etc.) or **raw tool observation echoes** (`label=user_name, text=srini`).
+
+I'll add two new guards to `AgentSentinels` and wire them into the answer guard:
+
+Edited AgentSentinels.java
+
+Now I'll wire this into the answer guard in `AgentStateMachineRunner`:
+
+Edited AgentStateMachineRunner.java
+
+Now let me also check the `AgentResponseMapper` which handles the web/REST channel — it should get the same guard:
+
+Viewed AgentResponseMapper.java:1-131
+
+I should add the system prompt echo guard to `AgentResponseMapper.sanitizeAnswer()` as well, for the web channel:
+
+Edited AgentResponseMapper.java
+
+Done. Here's what I've implemented:
+
+### Summary of the Fix
+
+**Problem**: The LLM (Llama on Groq) was echoing back its own system prompt — including persona name ("You are Vishnu"), working directory, Java version, Git status, OS info, and tool list — as part of its answer to the user.
+
+**Root Cause**: The existing `guardFinalAnswer()` only caught compaction context echoes (`## Retrieved Context`), not system prompt echoes (`## Host Environment Context`, `## Current Context`).
+
+**Changes Made**:
+
+| File | Change |
+|---|---|
+| [AgentSentinels.java](file:///Users/srini/Ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/AgentSentinels.java) | Added `SYSTEM_PROMPT_ECHO_PATTERN` — detects persona names, environment headers, and internal metadata markers |
+| [AgentStateMachineRunner.java](file:///Users/srini/Ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/AgentStateMachineRunner.java) | Added system prompt echo guard in `guardFinalAnswer()` — strips leaked content or returns safe fallback (Telegram channel) |
+| [AgentResponseMapper.java](file:///Users/srini/Ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResponseMapper.java) | Same guard added to `sanitizeAnswer()` (Web/REST channel) |
+
+**Behavior**: If the LLM echoes system prompt content, the guard will try to salvage any real user-facing text that appears *before* the echo. If nothing useful is found, it returns a clean "please try again" message instead of leaking internals.

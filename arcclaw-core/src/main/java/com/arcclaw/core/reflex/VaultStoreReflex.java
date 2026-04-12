@@ -16,6 +16,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
+import com.arcclaw.core.security.VaultKey;
 import org.jboss.logging.Logger;
 
 /**
@@ -78,7 +79,7 @@ public class VaultStoreReflex implements AgentReflex {
         log.infof("VaultStoreReflex: intercepting secret store for '%s' (session=%s, force=%s)", keyName, sessionId, force);
 
         // Overwrite protection
-        Optional<com.arcclaw.core.security.VaultKey> existing = secretVault.retrieveSystemKey(keyName);
+        Optional<VaultKey> existing = secretVault.retrieveSystemKey(keyName);
         if (existing.isPresent()) {
             try (var _ = existing.get()) {
                 if (!force) {

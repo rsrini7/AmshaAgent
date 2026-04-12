@@ -1,5 +1,6 @@
 package com.arcclaw.core.api;
 
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -83,6 +84,22 @@ public class AgentResponseMapper {
         if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
                 // Strip leaked RAG/compaction context blocks
                 answer = AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).replaceFirst("").strip();
+        }
+
+        // Strip system prompt echoes (host env, persona names, etc.)
+        if (AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(answer).find()) {
+            log.warnf("AgentResponseMapper: stripping system prompt echo from answer");
+            Matcher m = AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(answer);
+            if (m.find() && m.start() > 0) {
+                String salvaged = answer.substring(0, m.start()).strip();
+                if (!salvaged.isBlank()) {
+                    answer = salvaged;
+                } else {
+                    answer = "⚠️ I wasn't able to generate a clean response. Please try again.";
+                }
+            } else {
+                answer = "⚠️ I wasn't able to generate a clean response. Please try again.";
+            }
         }
 
         boolean looksLikeCronConfirmation = FAKE_CRON_PATTERN.matcher(answer).find();

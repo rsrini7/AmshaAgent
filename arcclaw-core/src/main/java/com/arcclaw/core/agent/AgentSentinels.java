@@ -50,6 +50,20 @@ public final class AgentSentinels {
         Pattern.CASE_INSENSITIVE
     );
 
+    // System prompt echo guard
+    // The LLM occasionally echoes back its own system prompt (persona, environment
+    // metadata, tool list) as part of the FINISH answer. This leaks internal host
+    // details (working directory, Java version, Git status) to the end user.
+    public static final Pattern SYSTEM_PROMPT_ECHO_PATTERN = Pattern.compile(
+        "##\\s*(?:Host Environment Context|Current Context|System Status|Time Status)" +
+        "|\\*\\*Working Directory\\*\\*" +
+        "|\\*\\*ArcClaw Version\\*\\*" +
+        "|\\*\\*Git Repository Detected\\*\\*" +
+        "|\\*\\*Registered Agent Tools\\*\\*" +
+        "|You are (?:Vishnu|Brahma|Shiva|Saraswati|Ganesha|Shakti|Kartikeya),",
+        Pattern.CASE_INSENSITIVE
+    );
+
     public static final String SYSTEM_ROLE = "system";
     public static final String SYSTEM_USER = "system";
     public static final String SYSTEM_SESSION = "system";
