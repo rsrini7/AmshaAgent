@@ -406,7 +406,7 @@ public class PlaywrightBrowserInstaller {
 
         try {
             log.infof("Extracting Playwright CLI driver (v%s, %s) to %s", currentVersion, platform, driverDir);
-            extractFromJar(bundleJar, "driver/" + platform, binaryDir);
+            extractFromJar(bundleJar, "driver/" + platform, driverDir);
 
             // Make executables on Unix
             if (!isWindows()) {
