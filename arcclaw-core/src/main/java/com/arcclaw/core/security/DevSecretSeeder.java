@@ -189,8 +189,8 @@ public class DevSecretSeeder {
                 .getOptionalValue(vaultKeyName, String.class)
                 .orElse(null);
 
-        if (hostValue == null || hostValue.isBlank()) {
-            log.warnf("Secret seeder: %s not found in config or .env. " +
+        if (hostValue == null || hostValue.isBlank() || "none".equalsIgnoreCase(hostValue.trim())) {
+            log.warnf("Secret seeder: %s not found or set to 'none' in config. " +
                       "Provide it manually: send 'store %s=<value>' via chat, " +
                       "or set it in .env and restart with ARCCLAW_AUTO_SEED_SECRETS=true.", 
                       vaultKeyName, vaultKeyName);
