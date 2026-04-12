@@ -39,7 +39,7 @@ public class ResetReflex implements AgentReflex {
     StatefulAgentStore statefulAgentStore;
 
     private static final Pattern MATCHES_PATTERN = 
-    Pattern.compile("(?i)^(/reset|clear\\s+(my\\s+)?history|reset\\s+(my\\s+)?history)$");
+    Pattern.compile("(?i)^(/reset|/resethard|clear\\s+all|clear\\s+(my\\s+)?history|reset\\s+(my\\s+)?history)$");
 
     @Override
     public boolean matches(String input) {
@@ -49,6 +49,9 @@ public class ResetReflex implements AgentReflex {
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.infof("[ResetReflex] User requested session reset for %s", sessionId);
+
+        String trimmed = input.trim().toLowerCase();
+        boolean isHardReset = trimmed.contains("hard") || trimmed.contains("clear all");
 
         // 1. Soft workspace reset — clears memory, workspace dir, CDI scope
         //    Does NOT remove heartbeat. Does NOT clear governance budget.
@@ -66,18 +69,28 @@ public class ResetReflex implements AgentReflex {
             });
         }
 
-        // deletes checkpoint (StatusReflex shows NOT_STARTED = NO_ACTIVE_STATE)
+        // 4. Wipe chat history ONLY if hard reset was requested
+        if (isHardReset) {
+            chatMemoryStore.deleteMessages(sessionId);
+        }
+
+        // 5. deletes checkpoint (StatusReflex shows NOT_STARTED = NO_ACTIVE_STATE)
         for (AgentRoleEnum role : AgentRoleEnum.values()) {
             statefulAgentStore.deleteCheckpoint(sessionId, role.toScopedName());
         }
 
-        // 4. Clear stale cron jobs — session-scoped only, NOT user-scoped
+        // 6. Clear stale cron jobs — session-scoped only, NOT user-scoped
         long deletedCrons = cronRepository.deleteAllBySessionId(sessionId);
 
-        log.infof("[ResetReflex] Session %s soft-reset — workspace, checkpoints, " +
-        "compaction, %d cron job(s) cleared. Chat memory, heartbeat, and budget retained.",
-        sessionId, deletedCrons);
+        String logStatus = isHardReset ? "chat history cleared" : "Chat memory retained";
+        log.infof("[ResetReflex] Session %s reset — workspace, checkpoints, " +
+        "compaction, %d cron job(s) cleared. %s. Heartbeat and budget retained.",
+        sessionId, deletedCrons, logStatus);
 
-        return ReflexResult.respond(UserMessages.sessionReset(deletedCrons), context);
+        String replyMessage = isHardReset 
+            ? "💥 *Hard Reset Complete.* Agent state, checkpoints, and chat history have been wiped. You are starting with a clean slate."
+            : UserMessages.sessionReset(deletedCrons);
+
+        return ReflexResult.respond(replyMessage, context);
     }
 }
