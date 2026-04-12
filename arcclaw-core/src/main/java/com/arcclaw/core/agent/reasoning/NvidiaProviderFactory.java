@@ -8,6 +8,8 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import com.arcclaw.core.routing.NvidiaMessageSanitizer;
+
 @ApplicationScoped
 public class NvidiaProviderFactory implements AgentChatModelProvider {
 
@@ -42,7 +44,7 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
-        return OpenAiChatModel.builder()
+        ChatModel base = OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(modelName)
@@ -53,5 +55,7 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
                 .logRequests(logHttp)
                 .logResponses(logHttp)
                 .build();
+
+        return new NvidiaMessageSanitizer(base);
     }
 }

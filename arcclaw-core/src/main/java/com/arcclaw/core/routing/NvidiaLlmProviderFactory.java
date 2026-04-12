@@ -17,7 +17,7 @@ public class NvidiaLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
-        return OpenAiChatModel.builder()
+        ChatModel base = OpenAiChatModel.builder()
             .baseUrl(config.baseUrl())
             .apiKey(config.apiKey().orElseThrow(() -> new IllegalStateException("NVIDIA requires apiKey")))
             .modelName(config.modelName())
@@ -28,5 +28,7 @@ public class NvidiaLlmProviderFactory implements RoutingChatModelProvider {
             .logRequests(false)
             .logResponses(false)
             .build();
+
+        return new NvidiaMessageSanitizer(base);
     }
 }
