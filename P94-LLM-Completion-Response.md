@@ -1161,3 +1161,42 @@ Done. Here's what I've implemented:
 | [AgentResponseMapper.java](file:///Users/srini/Ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/api/AgentResponseMapper.java) | Same guard added to `sanitizeAnswer()` (Web/REST channel) |
 
 **Behavior**: If the LLM echoes system prompt content, the guard will try to salvage any real user-facing text that appears *before* the echo. If nothing useful is found, it returns a clean "please try again" message instead of leaking internals.
+
+---
+
+Viewed .env.example:1-286
+Edited .env.example
+Viewed env-example:1-286
+Edited env-example
+
+I've completed the end-to-end integration for NVIDIA as a primary and fallback LLM provider. Here's a summary of the changes:
+
+### 1. Backend Integration (Core & Onboarding)
+- **`NvidiaProviderFactory`**: Created a new `AgentChatModelProvider` that handles NVIDIA's NIM endpoints for the main reasoning engine.
+- **`NvidiaLlmProviderFactory`**: Implemented a `RoutingChatModelProvider` to support NVIDIA for internal utility tasks like intent classification and memory compaction.
+- **`LlmModelFactory`**: Updated the provider inference logic to automatically recognize `nvidia.com` URLs.
+- **`LlmValidationService`**: Added the default NVIDIA base URL (`https://integrate.api.nvidia.com/v1`) to the validation gateway.
+- **`OnboardingResource`**: Defined `mistralai/devstral-2-123b-instruct-2512` as the default model when selecting NVIDIA during onboarding.
+
+### 2. Application Bootstrap & CLI
+- **`AppBootstrap`**:
+    - Added **NVIDIA** as the 5th provider choice in the first-run interactive setup.
+    - Configured automatic base-URL patching and validation for the `nvidia` provider.
+    - Added comprehensive fallback support for NVIDIA, including the specific `deepseek-ai/deepseek-v3.2` model you requested.
+- **`LlmProviderFactoryTest`**: Added unit tests to verify that the NVIDIA provider is correctly discovered via SPI and validates API keys as expected.
+
+### 3. Frontend & Documentation
+- **UI Components**: Updated both `arc-onboarding.ts` and `arc-settings.ts` to include NVIDIA in the provider selection grids with its branded green icon and description.
+- **`.env.example`**: Updated both the root and `arcclaw-app` environment templates with documented examples for NVIDIA configuration.
+
+### Updated `.env.example` snippet:
+```bash
+# ARCCLAW_LLM_PROVIDER=nvidia #→ routes to NVIDIA NIMs
+
+# --- NVIDIA (NIMs) ---
+# ARCCLAW_LLM_MODEL_NAME=mistralai/devstral-2-123b-instruct-2512
+# ARCCLAW_LLM_BASE_URL=https://integrate.api.nvidia.com/v1
+# ARCCLAW_LLM_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+You can now use NVIDIA by setting `ARCCLAW_LLM_PROVIDER=nvidia` in your `.env` file or by running the interactive setup again.

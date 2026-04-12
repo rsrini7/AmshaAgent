@@ -39,6 +39,7 @@ public class LlmValidationService implements LlmValidationGateway {
                 case "anthropic" -> "https://api.anthropic.com";
                 case "openrouter"-> "https://openrouter.ai/api/v1";
                 case "ollama"    -> "http://localhost:11434";
+                case "nvidia"    -> "https://integrate.api.nvidia.com/v1";
                 default          -> "";
             };
 

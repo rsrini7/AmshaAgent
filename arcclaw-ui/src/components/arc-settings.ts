@@ -9,6 +9,7 @@ const PROVIDERS = [
   { id:'anthropic',   name:'Anthropic',    tag:'Claude series',   icon:'A',  color:'#cc785c' },
   { id:'claude-code', name:'Claude Code',  tag:'CLI tool',        icon:'C',  color:'#8b5cf6' },
   { id:'openrouter',  name:'OpenRouter',   tag:'Unified API',     icon:'R',  color:'#6561f5' },
+  { id:'nvidia',      name:'NVIDIA',       tag:'NIM models',      icon:'N',  color:'#76b900' },
 ];
 
 @customElement('arc-settings')

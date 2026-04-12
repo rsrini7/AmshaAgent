@@ -30,6 +30,14 @@ class LlmProviderFactoryTest {
     }
 
     @Test
+    void nvidiaProviderIsDiscoveredViaSpi() {
+        Exception e = assertThrows(IllegalStateException.class, () -> {
+            factory.createModel("nvidia", "https://integrate.api.nvidia.com/v1", "", "model", 100, null, 1, null, null);
+        });
+        assertTrue(e.getMessage().contains("NVIDIA requires apiKey"));
+    }
+
+    @Test
     void unknownProviderThrowsIllegalStateWithHelpfulMessage() {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> {
             factory.createModel("anthropic", "https://api.anthropic.com", "key", "claude-3", 100, null, 1, null, null);
@@ -46,5 +54,6 @@ class LlmProviderFactoryTest {
         assertTrue(ids.contains("groq"));
         assertTrue(ids.contains("openai"));
         assertTrue(ids.contains("ollama"));
+        assertTrue(ids.contains("nvidia"));
     }
 }

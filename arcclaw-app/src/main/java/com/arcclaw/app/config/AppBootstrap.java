@@ -209,12 +209,14 @@ public class AppBootstrap {
             System.err.println("  │  2. OpenRouter - access any model (Llama 3, Claude, etc.)");
             System.err.println("  │  3. OpenAI - direct connection");
             System.err.println("  │  4. Ollama - local only (no API key required)");
+            System.err.println("  │  5. NVIDIA - high performance NIMs");
             System.err.println("  │");
-            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-4, Default: 1]: ");
+            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-5, Default: 1]: ");
             String provider = switch (choice != null ? choice.trim() : "") {
                 case "2" -> "openrouter";
                 case "3" -> "openai";
                 case "4" -> "ollama";
+                case "5" -> "nvidia";
                 default  -> "groq";
             };
             System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
@@ -223,24 +225,28 @@ public class AppBootstrap {
                 case "openrouter" -> "https://openrouter.ai/api/v1";
                 case "openai"     -> "https://api.openai.com/v1";
                 case "ollama"     -> "http://localhost:11434";
+                case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
                 default           -> "https://api.groq.com/openai/v1";
             };
             System.setProperty("ARCCLAW_LLM_BASE_URL", baseUrl);
 
             String modelName = switch (provider) {
                 case "openrouter" -> "openai/gpt-oss-20b:free";
+                case "nvidia"     -> "mistralai/devstral-2-123b-instruct-2512";
                 default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
             };
             System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
 
             String compactionModel = switch (provider) {
                 case "openrouter" -> "google/gemma-3-27b-it:free";
+                case "nvidia"     -> "mistralai/mistral-7b-instruct-v0.3";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_COMPACTION_MODEL", compactionModel);
 
             String intentModel = switch (provider) {
                 case "openrouter" -> "openai/gpt-oss-20b:free";
+                case "nvidia"     -> "mistralai/mistral-7b-instruct-v0.3";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", intentModel);
@@ -453,12 +459,14 @@ public class AppBootstrap {
                     System.err.println("  │  2. OpenRouter - best for free tier fallbacks");
                     System.err.println("  │  3. OpenAI - reliable fallback");
                     System.err.println("  │  4. Ollama - local only (no key)");
+                    System.err.println("  │  5. NVIDIA - NIM fallback");
                     System.err.println("  │");
-                    String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-4, Default: 2]: ");
+                    String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-5, Default: 2]: ");
                     String fProvider = switch (choice != null ? choice.trim() : "") {
                         case "1" -> "groq";
                         case "3" -> "openai";
                         case "4" -> "ollama";
+                        case "5" -> "nvidia";
                         default  -> "openrouter";
                     };
                     patchEnvFile(envFile, "ARCCLAW_LLM_FALLBACK_PROVIDER", fProvider);
@@ -468,6 +476,7 @@ public class AppBootstrap {
                         case "openrouter" -> "https://openrouter.ai/api/v1";
                         case "openai"     -> "https://api.openai.com/v1";
                         case "ollama"     -> "http://localhost:11434";
+                        case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
                         default           -> "https://api.groq.com/openai/v1";
                     };
                     patchEnvFile(envFile, "ARCCLAW_LLM_FALLBACK_BASE_URL", fBaseUrl);
@@ -476,6 +485,7 @@ public class AppBootstrap {
                     String fModel = switch (fProvider) {
                         case "openrouter" -> "openai/gpt-oss-20b:free";
                         case "ollama"     -> "llama3.2";
+                        case "nvidia"     -> "deepseek-ai/deepseek-v3.2";
                         default           -> "meta-llama/llama-3.3-70b-instruct";
                     };
                     patchEnvFile(envFile, "ARCCLAW_LLM_FALLBACK_MODEL", fModel);
@@ -522,11 +532,13 @@ public class AppBootstrap {
                             System.err.println("  │  2. OpenRouter");
                             System.err.println("  │  3. OpenAI");
                             System.err.println("  │  4. Ollama");
-                            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-4, Default: 1]: ");
+                            System.err.println("  │  5. NVIDIA");
+                            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-5, Default: 1]: ");
                             String uProvider = switch (choice != null ? choice.trim() : "") {
                                 case "2" -> "openrouter";
                                 case "3" -> "openai";
                                 case "4" -> "ollama";
+                                case "5" -> "nvidia";
                                 default  -> "groq";
                             };
                             String providerKey = spec.key.equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") ? "ARCCLAW_INTENT_CLASSIFIER_PROVIDER" : "ARCCLAW_COMPACTION_PROVIDER";
@@ -537,6 +549,7 @@ public class AppBootstrap {
                                 case "openrouter" -> "https://openrouter.ai/api/v1";
                                 case "openai"     -> "https://api.openai.com/v1";
                                 case "ollama"     -> "http://localhost:11434";
+                                case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
                                 default           -> "https://api.groq.com/openai/v1";
                             };
                             String baseUrlKey = spec.key.equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") ? "ARCCLAW_INTENT_CLASSIFIER_BASE_URL" : "ARCCLAW_COMPACTION_BASE_URL";
@@ -546,6 +559,7 @@ public class AppBootstrap {
                             String uModel = switch (uProvider) {
                                 case "openrouter" -> spec.key.contains("INTENT") ? "openai/gpt-oss-20b:free" : "google/gemma-3-27b-it:free";
                                 case "ollama"     -> "llama3.2";
+                                case "nvidia"     -> "mistralai/mistral-7b-instruct-v0.3";
                                 default           -> "llama-3.1-8b-instant";
                             };
                             String modelKey = spec.key.equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") ? "ARCCLAW_INTENT_CLASSIFIER_MODEL" : "ARCCLAW_COMPACTION_MODEL";
@@ -725,6 +739,7 @@ public class AppBootstrap {
                 case "openrouter" -> "https://openrouter.ai/api/v1";
                 case "openai"     -> "https://api.openai.com/v1";
                 case "ollama"     -> "http://localhost:11434";
+                case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
                 default           -> null;
             };
 
@@ -773,6 +788,12 @@ public class AppBootstrap {
             
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
+        } else if ("nvidia".equalsIgnoreCase(provider)) {
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "mistralai/devstral-2-123b-instruct-2512");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct-v0.3");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct-v0.3");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
         }
     }
 
