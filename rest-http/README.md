@@ -185,7 +185,7 @@ X-ArcClaw-API-Key: {{validKey}}
 | `PROMPT_INJECTION_BLOCKED` | Yes | critical | Injection detected |
 | `PII_SCAN_REDACTED` | No | telemetry | PII found and redacted |
 | `REFLEX_COMMAND` | No | telemetry | /status, /reset, etc. |
-| `VAULT_STORE` | No | telemetry | store KEY=VALUE |
+| `VAULT_STORE` | No | telemetry | vault KEY=VALUE |
 | `VAULT_RETRIEVE` | Yes | critical | Tool fetched secret |
 | `VAULT_RETRIEVE_MISS` | No | telemetry | Secret not found |
 | `CONTEXT_COMPACTED` | No | telemetry | Chat window compacted |

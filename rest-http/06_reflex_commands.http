@@ -279,12 +279,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# STORE KEY=VALUE — vault store (NOT a reflex, but handled before LLM)
+# VAULT KEY=VALUE — vault store
 # ReflexRegistry bypasses ALL sanitization for "store" prefix messages.
 # PII scan does NOT run on store commands (prevents false JWT redaction).
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-12] store KEY=VALUE — vault secret storage
+### [REFLEX-12] vault KEY=VALUE — vault secret storage
 # Expect 200: "✅ Secret 'TEST_KEY' stored securely."
 # Audit event: VAULT_STORE
 # Confirm in logs: NO [PII-REDACTED] line for this message.

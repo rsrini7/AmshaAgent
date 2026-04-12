@@ -973,7 +973,7 @@ I have implemented the chosen approach to handle vault secrets via chat. This re
     *   The tools now look for the vault key (`ARCCLAW_TOOLS_BRAVE_API_KEY`, etc.) first and fall back to the config/`.env` property if not found.
 
 4.  **User Guidance**:
-    *   Updated the `DevSecretSeeder` warning message to explicitly tell users they can send `store KEY=VALUE` via chat to provision missing keys.
+    *   Updated the `DevSecretSeeder` warning message to explicitly tell users they can send `vault KEY=VALUE` via chat to provision missing keys.
 
 5.  **Testing**:
     *   Added `VaultStoreReflexTest.java` to verify the interception and vault storage logic (and fixed a `MessageContext` constructor error identified during development).
@@ -1064,10 +1064,10 @@ I have fixed the lint warning by using the Java 25 unnamed variable (`_`) for th
 
 ### Final Implementation Summary:
 
-*   **Secured `store` keyword**: System-level keys are intercepted and moved directly to the encrypted vault.
+*   **Secured `vault` keyword**: System-level keys are intercepted and moved directly to the encrypted vault.
 *   **Overwrite Protection**:
-    *   `store KEY=VALUE`: Checks if `KEY` exists. If so, prevents overwrite and suggests using `--force`.
-    *   `store KEY=VALUE --force`: Permits overwriting the existing vault key.
+    *   `vault KEY=VALUE`: Checks if `KEY` exists. If so, prevents overwrite and suggests using `--force`.
+    *   `vault KEY=VALUE --force`: Permits overwriting the existing vault key.
 *   **Agnostic Search Tools**: `BraveWebSearchTool` and `SerperWebSearchTool` are now fully "vault-aware". They automatically check for these secrets in the encrypted store before falling back to their default configurations.
 *   **Verified Tests**: Updated the test suite to cover multiple scenarios (first store, protected overwrite, and forced overwrite) and resolved all compilation issues.
 

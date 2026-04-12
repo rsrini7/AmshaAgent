@@ -455,9 +455,9 @@ a helpful hint rather than silently failing.
 
 ## 7. Vault — Storing Secrets via Chat
 
-The `store KEY=VALUE` command persists a secret encrypted via `AES-256-GCM-SIV + Argon2id`.
+The `vault KEY=VALUE` command persists a secret encrypted via `AES-256-GCM-SIV + Argon2id`.
 It is handled **separately from the reflex system** — `ReflexRegistry` explicitly skips all
-sanitization passes for `store` messages (PII reflex does not run, preventing false redaction
+sanitization passes for `vault` messages (PII reflex does not run, preventing false redaction
 of tokens that match PII patterns like JWTs).
 
 Stored secrets are retrieved by sandboxed tools (`GithubTool` reads `GITHUB_TOKEN`) via

@@ -19,7 +19,7 @@ import com.arcclaw.core.security.VaultConstants;
 import org.jboss.logging.Logger;
 
 /**
- * High-priority reflex that intercepts "store KEY=VALUE" commands for known vault keys.
+ * High-priority reflex that intercepts "vault KEY=VALUE" commands for known vault keys.
  * This prevents secrets from being sent to the LLM and stored in the RAG knowledge base.
  */
 @ApplicationScoped
@@ -28,10 +28,10 @@ public class VaultStoreReflex implements AgentReflex {
 
     private static final Logger log = Logger.getLogger(VaultStoreReflex.class);
 
-    // Matches commands like "store ARCCLAW_TOOLS_BRAVE_API_KEY=sk-xxxx" or "store ... --force"
+    // Matches commands like "vault ARCCLAW_BRAVE_API_KEY=sk-xxxx" or "vault ... --force"
     // Supports various dash types (-, --, —) to handle platform auto-formatting.
     private static final Pattern VAULT_STORE_PATTERN =
-            Pattern.compile("^store\\s+(\\w+)\\s*=\\s*(.+?)(?:\\s+([-—]{1,2}force))?$", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("^vault\\s+(\\w+)\\s*=\\s*(.+?)(?:\\s+([-—]{1,2}force))?$", Pattern.CASE_INSENSITIVE);
 
     @Inject
     SecretVault secretVault;
@@ -43,7 +43,7 @@ public class VaultStoreReflex implements AgentReflex {
     public boolean matches(String input) {
         if (input == null) return false;
         String trimmed = input.trim();
-        if (trimmed.equalsIgnoreCase("store") || trimmed.equalsIgnoreCase("/store")) {
+        if (trimmed.equalsIgnoreCase("vault") || trimmed.equalsIgnoreCase("/vault")) {
             return true;
         }
         Matcher m = VAULT_STORE_PATTERN.matcher(trimmed);
@@ -59,14 +59,11 @@ public class VaultStoreReflex implements AgentReflex {
     @ActivateRequestContext
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         String trimmed = input.trim();
-        if (trimmed.equalsIgnoreCase("store") || trimmed.equalsIgnoreCase("/store")) {
-            return ReflexResult.respond("📝 *Usage Guide: store*\n\n" +
-                    "**1. Secure Secrets (Vault)**\n" +
-                    "Use this for API keys and sensitive tokens. They will be encrypted and never shown to the AI.\n" +
-                    "`store KEY=VALUE` (e.g., `store GITHUB_TOKEN=...`)\n\n" +
-                    "**2. General Knowledge (RAG)**\n" +
-                    "Use this to save facts or documents for later research.\n" +
-                    "`store my favorite color is blue`", context);
+        if (trimmed.equalsIgnoreCase("vault") || trimmed.equalsIgnoreCase("/vault")) {
+            return ReflexResult.respond("🔐 *Usage Guide: vault*\n\n" +
+                    "Use this to securely store API keys and sensitive tokens. They will be encrypted and never shown to the AI.\n" +
+                    "`vault KEY=VALUE` (e.g., `vault GITHUB_TOKEN=...`)\n\n" +
+                    "To save general notes or documents for the AI, use `store` instead.", context);
         }
 
         Matcher m = VAULT_STORE_PATTERN.matcher(trimmed);
@@ -87,7 +84,7 @@ public class VaultStoreReflex implements AgentReflex {
                 if (!force) {
                     return ReflexResult.respond("⚠️ Secret `" + keyName + "` already exists in vault.\n" +
                             "To overwrite it, append `--force` to your command:\n" +
-                            "`store " + keyName + "=" + value + " --force`", context);
+                            "`vault " + keyName + "=" + value + " --force`", context);
                 }
             }
         }

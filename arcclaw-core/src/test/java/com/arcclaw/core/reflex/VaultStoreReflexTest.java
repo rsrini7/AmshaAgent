@@ -45,7 +45,7 @@ public class VaultStoreReflexTest {
 
     @Test
     void testExecuteStoresInVault() {
-        String input = "store GITHUB_TOKEN=secret-123";
+        String input = "vault GITHUB_TOKEN=secret-123";
         com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("user-1", "chat-123", "User 1", com.arcclaw.channel.api.ChannelType.CLI);
         com.arcclaw.channel.api.ChannelMessage message = new com.arcclaw.channel.api.ChannelMessage.CliMessage(user, input, "sess-1", java.time.Instant.now());
         MessageContext context = new MessageContext("chat-123", user, message);
@@ -64,7 +64,7 @@ public class VaultStoreReflexTest {
 
     @Test
     void testOverwriteProtection() {
-        String input = "store GITHUB_TOKEN=new-secret";
+        String input = "vault GITHUB_TOKEN=new-secret";
         com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("user-1", "chat-123", "User 1", com.arcclaw.channel.api.ChannelType.CLI);
         com.arcclaw.channel.api.ChannelMessage message = new com.arcclaw.channel.api.ChannelMessage.CliMessage(user, input, "sess-1", java.time.Instant.now());
         MessageContext context = new MessageContext("chat-123", user, message);
@@ -80,7 +80,7 @@ public class VaultStoreReflexTest {
 
     @Test
     void testOverwriteWithForce() {
-        String input = "store GITHUB_TOKEN=new-secret --force";
+        String input = "vault GITHUB_TOKEN=new-secret --force";
         com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("user-1", "chat-123", "User 1", com.arcclaw.channel.api.ChannelType.CLI);
         com.arcclaw.channel.api.ChannelMessage message = new com.arcclaw.channel.api.ChannelMessage.CliMessage(user, input, "sess-1", java.time.Instant.now());
         MessageContext context = new MessageContext("chat-123", user, message);
