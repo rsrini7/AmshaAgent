@@ -41,19 +41,22 @@ public class PlaywrightBrowserInstaller {
      */
     public static boolean isChromiumInstalled(Path browsersPath) {
         if (!Files.exists(browsersPath)) return false;
-        // Get expected revision from driver if available
         String expectedRevision = readExpectedRevision(browsersPath.getParent());
         try (Stream<Path> files = Files.list(browsersPath)) {
             return files.anyMatch(p -> {
                 String name = p.getFileName().toString();
                 if (!Files.isDirectory(p)) return false;
-                if (expectedRevision != null) {
-                    // Strict match — prevents npx-installed wrong version from passing
-                    return name.equals("chromium-" + expectedRevision) ||
-                        name.equals("chromium_headless_shell-" + expectedRevision);
-                }
-                // Fallback: any chromium directory
-                return name.startsWith("chromium-") || name.startsWith("chromium_headless_shell-");
+                boolean nameMatch = expectedRevision != null
+                    ? name.equals("chromium-" + expectedRevision) ||
+                    name.equals("chromium_headless_shell-" + expectedRevision)
+                    : name.startsWith("chromium-") ||
+                    name.startsWith("chromium_headless_shell-");
+                if (!nameMatch) return false;
+                // ← ADD THIS: verify the actual executable exists, not just the folder
+                Path exe = isWindows()
+                    ? p.resolve("chrome-headless-shell-win64").resolve("chrome-headless-shell.exe")
+                    : p.resolve("chrome-headless-shell").resolve("chrome-headless-shell");
+                return Files.exists(exe);
             });
         } catch (IOException e) { return false; }
     }
