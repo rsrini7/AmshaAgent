@@ -91,8 +91,11 @@ public class SerperWebSearchTool implements AgentTool {
 
     @Override
     public boolean isEnabled() {
-        String key = getApiKey();
-        return key != null && !key.isBlank() && !"none".equalsIgnoreCase(key);
+        // Invariant: Use existence check instead of decryption during startup/init.
+        if (vault.systemKeyExists("ARCCLAW_TOOLS_SERPER_API_KEY")) {
+            return true;
+        }
+        return configApiKey != null && !configApiKey.isBlank() && !"none".equalsIgnoreCase(configApiKey);
     }
 
     @Override

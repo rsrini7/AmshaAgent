@@ -92,8 +92,12 @@ public class BraveWebSearchTool implements AgentTool {
 
     @Override
     public boolean isEnabled() {
-        String key = getApiKey();
-        return key != null && !key.isBlank() && !"none".equalsIgnoreCase(key);
+        // Invariant: Use existence check instead of decryption during startup/init.
+        // This prevents boot-time crashes in security tests where master keys mismatch.
+        if (vault.systemKeyExists("ARCCLAW_TOOLS_BRAVE_API_KEY")) {
+            return true;
+        }
+        return configApiKey != null && !configApiKey.isBlank() && !"none".equalsIgnoreCase(configApiKey);
     }
 
     @Override
