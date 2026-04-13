@@ -9,12 +9,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.CompactionSummaryDto;
-
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class SqliteCompactionStoreAdapterTest {

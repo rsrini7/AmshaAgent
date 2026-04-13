@@ -1,15 +1,16 @@
 package com.arcclaw.persistence.sqlite;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
-import io.micrometer.core.instrument.MeterRegistry;
-import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.jboss.logging.Logger;
-
 import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 
 /**
  * Retry template for SQLite BUSY handling.

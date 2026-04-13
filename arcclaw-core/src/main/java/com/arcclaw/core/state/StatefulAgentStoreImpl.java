@@ -4,11 +4,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -21,9 +24,7 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Implementation of {@link StatefulAgentStore} that delegates to a {@link CheckpointStorePort}.
@@ -220,7 +221,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = com.arcclaw.core.agent.AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
+        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
         return storeAdapter.findLatestAwaitingApprovalWithPrefix(sessionPrefix)
                 .map(this::dtoToEntity);
     }
@@ -333,7 +334,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public Optional<String> findLatestRole(String sessionId) {
-        java.util.Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
         return storeAdapter.findLatestBySessionAndStatus(sessionId, CheckpointStatus.ARCHIVED.name())
                 .map(CheckpointDto::agentRole);
     }

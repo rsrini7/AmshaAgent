@@ -6,8 +6,8 @@ import java.lang.reflect.Method;
 
 import jakarta.annotation.Priority;
 
-import com.arcclaw.persistence.sqlite.SqliteWalConfigurer;
 import com.arcclaw.persistence.sqlite.RagSchemaInitializer;
+import com.arcclaw.persistence.sqlite.SqliteWalConfigurer;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;

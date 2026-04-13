@@ -10,8 +10,8 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.core.state.RagChunkEntity;
+import com.arcclaw.persistence.api.MemoryChunkDto;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

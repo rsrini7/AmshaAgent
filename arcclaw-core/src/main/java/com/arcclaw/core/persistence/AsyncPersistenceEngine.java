@@ -11,13 +11,13 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import com.arcclaw.persistence.api.PersistenceAdapterPort;
-import com.arcclaw.persistence.api.CheckpointStorePort;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.persistence.api.CheckpointStorePort;
+import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.ShutdownEvent;

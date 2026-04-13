@@ -1,12 +1,5 @@
 package com.arcclaw.persistence.sqlite;
 
-import io.agroal.api.AgroalPoolInterceptor;
-import io.quarkus.arc.Arc;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-import org.sqlite.SQLiteConnection;
-
-import jakarta.inject.Singleton;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +7,14 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import jakarta.inject.Singleton;
+
+import io.agroal.api.AgroalPoolInterceptor;
+import io.quarkus.arc.Arc;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+import org.sqlite.SQLiteConnection;
 
 /**
  * Hardens SQLite FTS5 connection pooling by verifying/attaching the fts schema

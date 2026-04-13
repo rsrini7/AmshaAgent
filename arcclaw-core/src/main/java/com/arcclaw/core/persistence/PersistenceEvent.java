@@ -1,6 +1,7 @@
 package com.arcclaw.core.persistence;
 
 import java.util.concurrent.CompletableFuture;
+
 import com.arcclaw.core.audit.SecurityEventType;
 
 /**

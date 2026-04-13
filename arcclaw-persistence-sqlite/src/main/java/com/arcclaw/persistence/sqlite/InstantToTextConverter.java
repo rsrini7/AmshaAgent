@@ -1,8 +1,10 @@
 package com.arcclaw.persistence.sqlite;
 
 import java.time.Instant;
+
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+
 import com.arcclaw.core.util.TemporalUtils;
 
 /**

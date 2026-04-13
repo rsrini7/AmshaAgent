@@ -11,8 +11,8 @@ import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CompactionStorePort;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
 

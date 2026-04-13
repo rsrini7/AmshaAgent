@@ -1,8 +1,6 @@
 package com.arcclaw.rag;
 
 import java.util.Map;
-import com.arcclaw.persistence.api.MemoryRetrievalPort;
-import com.arcclaw.persistence.api.MemoryEntryDto;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -15,6 +13,8 @@ import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.persistence.api.MemoryEntryDto;
+import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 @ApplicationScoped

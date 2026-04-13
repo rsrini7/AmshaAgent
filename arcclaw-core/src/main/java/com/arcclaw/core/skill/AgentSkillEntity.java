@@ -7,7 +7,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-
 /**
  * Persistent script entity backed by the {@code agent_skill} SQLite table.
  * <p>

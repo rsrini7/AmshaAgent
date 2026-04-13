@@ -1,10 +1,13 @@
 package com.arcclaw.rag;
 
 import java.util.List;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import com.arcclaw.persistence.api.MemoryRetrievalPort;
+
 import com.arcclaw.persistence.api.MemoryChunkDto;
+import com.arcclaw.persistence.api.MemoryRetrievalPort;
+
 // import org.jboss.logging.Logger;
 
 /**

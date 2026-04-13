@@ -1,7 +1,5 @@
 package com.arcclaw.persistence.sqlite;
 
-import com.arcclaw.persistence.api.MemoryChunkDto;
-
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -9,6 +7,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.persistence.api.MemoryChunkDto;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;

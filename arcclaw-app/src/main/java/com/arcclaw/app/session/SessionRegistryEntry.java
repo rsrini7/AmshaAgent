@@ -10,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
-
 /**
  * JPA entity mapping the (channelType, channelId, userId) triplet to a stable,
  * random session ID.

@@ -12,8 +12,8 @@ import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CompactionStorePort;
 
 @ApplicationScoped
 @ReflexPriority(500)

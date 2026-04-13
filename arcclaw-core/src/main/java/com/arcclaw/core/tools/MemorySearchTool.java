@@ -10,9 +10,9 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.util.Fts5QueryUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
-import com.arcclaw.core.util.Fts5QueryUtil;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.jboss.logging.Logger;
 
