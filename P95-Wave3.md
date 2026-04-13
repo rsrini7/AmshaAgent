@@ -7,7 +7,7 @@
 3. **Implement SqliteCheckpointStoreAdapter (C1 Phase 2)** — extract queries from StatefulAgentStoreImpl
 4. **Implement SqliteMemoryRetrievalAdapter (C1 Phase 2)** — extract from TwoTierMemoryService
 5. **Rewire StatefulAgentStoreImpl -> ports (C1 Phase 3)** — biggest single change
-6. **Rewire WorkspaceManager + SessionReaper (C1 Phase 3)** — inject PersistenceRetryPort
+6. **Rewire WorkspaceManager + SessionReaper (C1 Phase 3)** — delegate to CheckpointStorePort (retry is adapter-internal)
 7. **Rewire RAG module -> MemoryRetrievalPort (C1 Phase 3)** — arcclaw-rag depends on persistence-api
 8. **Delete core.persistence package (C1 Phase 3)** — verify empty
 9. **Add contract tests (C1 Phase 4)** — InMemoryCheckpointStoreAdapter
@@ -22,9 +22,9 @@
 #### Where the SQLite coupling actually lives today
 | Layer | Module | Files | What leaks |
 | :--- | :--- | :--- | :--- |
-| **Persistence infra** | `arcclaw-core` $\rightarrow$ `core.persistence` | `SqliteRetryTemplate`, `ArcClawSQLiteDialect`, `FtsConnectionInterceptor`, `SqliteErrorStrings`, `PersistenceRetryEngine` | SQLite retry semantics, dialect hacks, FTS5 connection bootstrap |
-| **State / checkpoint** | `arcclaw-core` $\rightarrow$ `core.state` | `StatefulAgentStoreImpl` (injects `SqliteRetryTemplate`), `WorkspaceManager` (injects `SqliteRetryTemplate`), `SessionReaper` (injects `SqliteRetryTemplate`) | `REQUIRES_NEW` patterns, `BUSY` retry wrapping, SQLite timestamp formatting |
-| **Approval / HITL** | `arcclaw-core` $\rightarrow$ `core.approval` | `CheckpointApprovalService` (comments reference "SQLite write lock", "XA BEGIN IMMEDIATE") | SQLite-specific transaction ordering knowledge baked into comments and control flow |
+| **Persistence infra** | `arcclaw-core` -> `core.persistence` | `SqliteRetryTemplate`, `ArcClawSQLiteDialect`, `FtsConnectionInterceptor`, `SqliteErrorStrings`, `PersistenceRetryEngine` | SQLite retry semantics, dialect hacks, FTS5 connection bootstrap |
+| **State / checkpoint** | `arcclaw-core` -> `core.state` | `StatefulAgentStoreImpl` (injects `SqliteRetryTemplate`), `WorkspaceManager` (injects `SqliteRetryTemplate`), `SessionReaper` (injects `SqliteRetryTemplate`) | `REQUIRES_NEW` patterns, `BUSY` retry wrapping, SQLite timestamp formatting |
+| **Approval / HITL** | `arcclaw-core` -> `core.approval` | `CheckpointApprovalService` (comments reference "SQLite write lock", "XA BEGIN IMMEDIATE") | SQLite-specific transaction ordering knowledge baked into comments and control flow |
 | **RAG / memory** | `arcclaw-rag` | `TwoTierMemoryService`, `GlobalKnowledgeBase`, `RagSchemaInitializer` (all inject `FtsConnectionInterceptor` from `core.persistence`) | FTS5 + `sqlite-vec` assumptions, raw SQL for FTS5 MATCH |
 | **App bootstrap** | `arcclaw-app` | `SqliteWalConfigurer`, `ChatStreamResource` | WAL mode enforcement, startup schema setup |
 
@@ -37,8 +37,8 @@
 arcclaw-persistence-api/          <- NEW module (tiny: interfaces only)
     CheckpointStorePort.java
     MemoryRetrievalPort.java
-    PersistenceRetryPort.java     (abstracts retry strategy)
     BackendCapabilities.java      (FTS? vector? advisory locks?)
+    NOTE: PersistenceRetryPort removed - retry is adapter-internal (5.14.1)
 
 arcclaw-core/                     <- EXISTING (domain + orchestration)
     core.state/
@@ -62,7 +62,8 @@ arcclaw-persistence-sqlite/       <- NEW module (current SQLite infra moves here
 arcclaw-persistence-postgres/     <- FUTURE module (sibling, NOT inside core)
     PostgresCheckpointStoreAdapter.java (implements CheckpointStorePort)
     PostgresMemoryRetrievalAdapter.java (implements MemoryRetrievalPort, uses pgvector+tsvector)
-    PostgresRetryAdapter.java           (implements PersistenceRetryPort - advisory locks, not BUSY)
+    Note: No retry adapter needed - Postgres uses MVCC, retry is adapter-internal if needed at all
+    
 ```
 
 **Answer to your question**: No — Postgres code should **never** go inside `arcclaw-core`. The port interfaces live in a thin `arcclaw-persistence-api` module. Each backend gets its own module (`arcclaw-persistence-sqlite`, `arcclaw-persistence-postgres`). Core depends only on the API module. At runtime, CDI picks the active adapter based on which module is on the classpath / active Quarkus profile.
@@ -89,9 +90,9 @@ public interface MemoryRetrievalPort {
     BackendCapabilities capabilities();
 }
 
-public interface PersistenceRetryPort {
-    <T> T executeWithRetry(Supplier<T> operation, String operationName);
-}
+// NOTE: PersistenceRetryPort intentionally ommitted.
+// Retry-on-BUSY is a SQLite-specific concern encapsulated inside
+// SqliteCheckpointStoreAdapter. See Architecture_Invariants (5.14.1)
 
 public record BackendCapabilities(
     boolean supportsFullTextSearch,
@@ -104,14 +105,15 @@ public record BackendCapabilities(
 
 **Phase 2: Create `arcclaw-persistence-sqlite` module**
 1. Move these files from `arcclaw-core/core.persistence/`:
-    * `SqliteRetryTemplate.java` $\rightarrow$ adapts to `PersistenceRetryPort`
-    * `ArcClawSQLiteDialect.java` $\rightarrow$ stays SQLite-specific
-    * `FtsConnectionInterceptor.java` $\rightarrow$ stays SQLite-specific
-    * `SqliteErrorStrings.java` $\rightarrow$ stays SQLite-specific
-    * `PersistenceRetryEngine.java` $\rightarrow$ merges into SQLite adapter
+    * `SqliteRetryTemplate.java` -> stays SQLite-internal (adapter uses it directly, NOT exposed as port)
+    * `ArcClawSQLiteDialect.java` -> stays SQLite-specific
+    * `FtsConnectionInterceptor.java` -> stays SQLite-specific
+    * `SqliteErrorStrings.java` -> stays SQLite-specific
+    * `PersistenceRetryEngine.java` -> merges into SQLite adapter
 2. Create `SqliteCheckpointStoreAdapter` implements `CheckpointStorePort`:
     * Wraps `EntityManager` + `SqliteRetryTemplate` + `REQUIRES_NEW` boundaries
     * Contains all JPQL queries currently in `StatefulAgentStoreImpl`
+    - **Encapsulates retry loops internally** - callers see only `CheckpointStorePort` methods
 3. Create `SqliteMemoryRetrievalAdapter` implements `MemoryRetrievalPort`:
     * Wraps `FtsConnectionInterceptor` + FTS5 MATCH queries + sqlite-vec
     * Contains logic currently in `TwoTierMemoryService`
@@ -122,15 +124,18 @@ public record BackendCapabilities(
 
 **Phase 3: Rewire core to use ports**
 1. `StatefulAgentStoreImpl`:
-    * Remove `@Inject SqliteRetryTemplate` $\rightarrow$ `@Inject PersistenceRetryPort`
-    * Remove direct JPQL queries $\rightarrow$ delegate to `@Inject CheckpointStorePort`
+    * Remove `@Inject SqliteRetryTemplate` -> `@Inject PersistenceRetryPort`
+    * Remove `withRetry()` wrapper method - no longer needed
+    * Remove direct JPQL queries -> retry is now inside `SQliteCheckpointStoreAdapter`
     * Keep status transition logic, audit emission, resume lock (these are domain, not storage)
 2. `WorkspaceManager`:
-    * Remove `@Inject SqliteRetryTemplate` $\rightarrow$ `@Inject PersistenceRetryPort`
+    * Remove `@Inject SqliteRetryTemplate` -> delegate to `CheckpointStorePort.markFailed(sessionId)`
+    * The adapter handles retry internally
 3. `SessionReaper`:
-    * Remove `@Inject SqliteRetryTemplate` $\rightarrow$ `@Inject PersistenceRetryPort`
+    * Remove `@Inject SqliteRetryTemplate` -> delegate to `CheckpointStorePort` methods
+    * The adapter handles retry internally
 4. `TwoTierMemoryService`:
-    * Remove `@Inject FtsConnectionInterceptor` $\rightarrow$ `@Inject MemoryRetrievalPort`
+    * Remove `@Inject FtsConnectionInterceptor` -> `@Inject MemoryRetrievalPort`
 5. `arcclaw-core` `pom.xml`: remove SQLite driver dependency, keep only `arcclaw-persistence-api`.
 
 **Phase 4: Profile-based activation**
@@ -138,14 +143,24 @@ public record BackendCapabilities(
 # application.yaml
 arcclaw:
   persistence:
-    backend: sqlite # or "postgres"
+    backend: ${ARCCLAW_PERSISTENCE_BACKEND:sqlite} # default = sqlite
 
-# application-postgres.yaml (Quarkus profile)
+# Create application-postgres.yaml (Quarkus profile) under arcclaw-app
+# Activated via: -Dquarkus.profile=postgres (composable: -Dquarkus.profile=prod,postgres)
 quarkus:
   datasource:
     db-kind: postgresql
     jdbc:
-      url: jdbc:postgresql://localhost:5432/arcclaw
+      url: "{ARCCLAW_PG_URL:jdbc:postgresql://localhost:5432/arcclaw}"
+      username: "${ARCCLAW_PG_USER:arcclaw}"
+      password: "${ARCCLAW_PG_PASSWORD:}"
+      min-size: 2
+      max-size: 10
+  hibernate-orm:
+    dialect:
+    schema-management:
+      strategy: update
+    
 ```
 CDI selects the active adapter via `@IfBuildProfile("sqlite")` / `@IfBuildProfile("postgres")` or `@LookupIfProperty`.
 
@@ -153,13 +168,13 @@ CDI selects the active adapter via `@IfBuildProfile("sqlite")` / `@IfBuildProfil
 1. `PostgresCheckpointStoreAdapter` implements `CheckpointStorePort`:
     * Standard JPA/JPQL (no BUSY retry needed)
     * `@Transactional` boundaries without SQLite-specific `REQUIRES_NEW` workarounds
+    * May use advisory locks internally for distributed coordination if needed
 2. `PostgresMemoryRetrievalAdapter` implements `MemoryRetrievalPort`:
     * `tsvector` for full-text search (replaces FTS5)
     * `pgvector` for vector search (replaces sqlite-vec)
     * No `FtsConnectionInterceptor` needed
-3. `PostgresRetryAdapter` implements `PersistenceRetryPort`:
-    * Uses advisory locks for distributed coordination
-    * Standard connection pool retry (no `SQLITE_BUSY`)
+    Note: No PersistenceRetryPort needed - Postgres uses MVCC. Any retry logic
+    (e.g., optimistic lock retries) is adapter-internal, not exposed to core.
 
 ---
 
@@ -266,7 +281,7 @@ This method excludes only 4 terminal statuses (FAILED, COMPLETED, ARCHIVED, COMP
 // "Without this, SQLite compares TEXT representations of Instant vs LocalDateTime incorrectly" // line 101
 ```
 
-**The `Instant` $\rightarrow$ `LocalDateTime` formatting is a hidden portability bomb**:
+**The `Instant` -> `LocalDateTime` formatting is a hidden portability bomb**:
 ```java
 // SessionReaper.java line 101 (implied)
 // SQLite stores Instant as TEXT; queries must use LocalDateTime for comparison
@@ -287,7 +302,7 @@ This method excludes only 4 terminal statuses (FAILED, COMPLETED, ARCHIVED, COMP
 // line 118: "ensures the SQLite write lock is fully released"
 ```
 
-**Side-effect**: The entire transaction choreography in this class is designed around SQLite's single-writer constraint. On Postgres, this elaborate dance of `NOT_SUPPORTED` $\rightarrow$ `REQUIRES_NEW` $\rightarrow$ `SUPPORTS` is unnecessary. The Postgres adapter can use a simple `@Transactional` with row-level locks. But the core orchestration class will still have these annotations – they become dead weight on Postgres.
+**Side-effect**: The entire transaction choreography in this class is designed around SQLite's single-writer constraint. On Postgres, this elaborate dance of `NOT_SUPPORTED` -> `REQUIRES_NEW` -> `SUPPORTS` is unnecessary. The Postgres adapter can use a simple `@Transactional` with row-level locks. But the core orchestration class will still have these annotations – they become dead weight on Postgres.
 
 **Fix**: The approval transaction choreography should be backend-aware. Either:
 * Move the transaction boundary decisions into the adapter layer.
