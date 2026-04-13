@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.AgentReflex;
+import com.arcclaw.core.reflex.ReflexPriority;
 import com.arcclaw.core.reflex.ReflexResult;
 
 /**
@@ -17,6 +18,7 @@ import com.arcclaw.core.reflex.ReflexResult;
  * Lists all currently loaded skills mapped into the {@link SkillRegistry}.
  */
 @ApplicationScoped
+@ReflexPriority(500)
 public class SkillReflex implements AgentReflex {
 
     private static final Pattern SKILLS_CMD = Pattern.compile("^\\s*/skills\\s*$", Pattern.CASE_INSENSITIVE);

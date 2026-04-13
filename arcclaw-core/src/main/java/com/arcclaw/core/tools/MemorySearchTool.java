@@ -54,6 +54,11 @@ public class MemorySearchTool implements AgentTool {
     }
 
     @Override
+    public IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.IDEMPOTENT;
+    }
+
+    @Override
     public boolean requiresSandbox() {
         return false;
     }

@@ -60,6 +60,7 @@ public class LlmModelFactory {
         if (baseUrl == null || baseUrl.isBlank()) return "openrouter";
         if (baseUrl.contains("openai.com"))   return "openai";
         if (baseUrl.contains("groq.com"))     return "groq";
+        if (baseUrl.contains("nvidia.com"))   return "nvidia";
         if (baseUrl.contains("localhost:11434")) return "ollama";
         return "openrouter"; // default: OpenAI-compatible
     }

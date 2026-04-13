@@ -207,23 +207,23 @@ public class CliUtils {
             ));
         }
 
-        if (!isSet("ARCCLAW_SERPER_API_KEY") && !isExplicitOptOut("ARCCLAW_SERPER_API_KEY")) {
+        if (!isSet("ARCCLAW_TOOLS_SERPER_API_KEY") && !isExplicitOptOut("ARCCLAW_TOOLS_SERPER_API_KEY")) {
             missing.add(new VarSpec(
-                "ARCCLAW_SERPER_API_KEY",
+                "ARCCLAW_TOOLS_SERPER_API_KEY",
                 "Optional Serper.dev API key for Google Search integration.",
                 "1. Sign up at https://serper.dev — 2,500 free searches",
                 "2. Copy your API key",
-                "3. Add:  ARCCLAW_SERPER_API_KEY=your_key_here"
+                "3. Add:  ARCCLAW_TOOLS_SERPER_API_KEY=your_key_here"
             ));
         }
 
-        if (!isSet("ARCCLAW_BRAVE_API_KEY") && !isExplicitOptOut("ARCCLAW_BRAVE_API_KEY")) {
+        if (!isSet("ARCCLAW_TOOLS_BRAVE_API_KEY") && !isExplicitOptOut("ARCCLAW_TOOLS_BRAVE_API_KEY")) {
             missing.add(new VarSpec(
-                "ARCCLAW_BRAVE_API_KEY",
+                "ARCCLAW_TOOLS_BRAVE_API_KEY",
                 "Optional Brave Search API key.",
                 "1. Sign up at https://api.search.brave.com",
                 "2. Create an API key",
-                "3. Add:  ARCCLAW_BRAVE_API_KEY=your_key_here"
+                "3. Add:  ARCCLAW_TOOLS_BRAVE_API_KEY=your_key_here"
             ));
         }
 

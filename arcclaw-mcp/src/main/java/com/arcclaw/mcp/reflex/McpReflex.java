@@ -5,11 +5,13 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.reflex.AgentReflex;
+import com.arcclaw.core.reflex.ReflexPriority;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.mcp.bridge.McpToolBridge;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 
 @ApplicationScoped
+@ReflexPriority(500)
 public class McpReflex implements AgentReflex {
 
     @Inject DynamicToolCapabilityRegistry registry;

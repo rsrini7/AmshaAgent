@@ -1,7 +1,9 @@
 package com.arcclaw.tool.playwright;
 
+import java.nio.file.Path;
 import java.util.Base64;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -44,6 +46,17 @@ public class PlaywrightPageRunner {
     private Playwright playwright;
     private Browser browser;
 
+    /**
+     * Guards @Scheduled refreshBrowser against the scheduler-vs-startup race in native mode.
+     * The scheduler can fire before @PostConstruct completes — this flag plus delayed="PT5M"
+     * together prevent refreshBrowser from acting before init() has finished.
+     */
+    private volatile boolean startupComplete = false;
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     public boolean isInitialized() {
         return browser != null;
     }
@@ -52,38 +65,89 @@ public class PlaywrightPageRunner {
     void init() {
         if (!enabled) {
             log.info("Playwright is disabled — skipping browser warmup.");
+            startupComplete = true;
             return;
         }
 
         try {
             long t0 = System.currentTimeMillis();
-            // Since this runs during Quarkus startup, it warms up the browser instantly.
-            playwright = Playwright.create();
+
+            // Resolve BROWSERS_PATH and SKIP_BROWSER_DOWNLOAD from SysProp or Env
+            Map<String, String> env = new HashMap<>(System.getenv());
+            
+            String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", 
+                    System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
+            
+            if (browsersPath != null && !browsersPath.isBlank()) {
+                // Ensure the path is absolute for consistency across launch environments (Fix for Windows Binary)
+                Path p = Path.of(browsersPath).toAbsolutePath().normalize();
+                String resolvedPath = p.toString();
+                env.put("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
+                // Sync back to system property for visibility in logs/other components
+                System.setProperty("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
+                log.infof("Initializing Playwright with BROWSERS_PATH=%s", resolvedPath);
+            } else {
+                log.info("Initializing Playwright with default browser path");
+            }
+
+            String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
+                    System.getenv("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"));
+            if (skipDownload != null && !skipDownload.isBlank()) {
+                env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", skipDownload);
+            }
+
+            playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
             browser = playwright.chromium().launch(
                 new BrowserType.LaunchOptions().setHeadless(headless)
             );
-            log.infof("Playwright Chromium cached in %dms (headless=%s)", 
+            log.infof("Playwright Chromium cached in %dms (headless=%s)",
                     System.currentTimeMillis() - t0, headless);
+
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                if (playwright != null) {
+                    try { playwright.close(); } catch (Exception ignored) {}
+                }
+            }, "playwright-shutdown"));
+
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : "";
+            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             if (msg.contains("Executable doesn't exist")) {
-                log.warn("Playwright Chromium binary not found. Run 'mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args=\"install\"' to fix.");
+                // Concise warning: take only the first line to avoid giant Node/driver stack traces
+                String summary = msg.split("\n")[0].trim();
+                log.warnf("Playwright Chromium binary not found. Initialization skipped. " +
+                         "(Run 'npx playwright install chromium' or check path). Details: %s", summary);
             } else {
-                log.warnf("Playwright failed to initialize: %s. Tool will be unavailable.", msg);
+                log.errorf(e, "Playwright initialization failed: %s", msg);
             }
-            destroy(); // Clean up if playwright was created but launch failed
+            destroy();
+        } finally {
+            startupComplete = true;
         }
     }
 
     @PreDestroy
     void destroy() {
+        // Close browser before playwright to avoid orphaned subprocesses
+        closeBrowserQuietly(browser, "destroy");
         browser = null;
-        playwright = null;
+        if (playwright != null) {
+            try {
+                playwright.close();
+            } catch (Exception e) {
+                log.debugf("Playwright close during destroy: %s", safeMessage(e));
+            }
+            playwright = null;
+        }
     }
 
-    @Scheduled(every = "6h")
+    /**
+     * Periodic browser refresh to avoid stale state accumulating over long uptimes.
+     * delayed="PT5M" provides the primary guard against the scheduler-vs-startup race
+     * in native mode. startupComplete is the secondary guard.
+     */
+    @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
-        if (!enabled || playwright == null) return;
+        if (!startupComplete || !enabled || playwright == null) return;
         log.info("Playwright browser refresh");
         closeBrowserQuietly(browser, "refresh");
         browser = playwright.chromium().launch(
@@ -117,8 +181,7 @@ public class PlaywrightPageRunner {
     }
 
     /**
-     * Launches a fresh Chromium browser context, navigates to url, returns result.
-     * Each call creates and destroys its own Playwright + Browser instance — no shared state.
+     * Reuses the cached Chromium browser context, navigates to url, returns result.
      *
      * @param url       target URL (must match SAFE_URL_PATTERN — caller pre-validates)
      * @param action    "navigate" | "extract_text" | "screenshot"
@@ -181,7 +244,7 @@ public class PlaywrightPageRunner {
             String result = switch (action) {
                 case "screenshot" -> captureScreenshot(page);
                 case "navigate"   -> normalizeWhitespace(page.content());
-                default           -> extractText(page, selector); // extract_text + fallback
+                default           -> extractText(page, selector);
             };
 
             log.infof("Playwright completed action=%s for %s in %dms (result=%d chars)",
@@ -190,51 +253,55 @@ public class PlaywrightPageRunner {
         }
     }
 
-    private String extractText(Page page, String selector) {
-        if (selector != null && !selector.isBlank() && !"body".equalsIgnoreCase(selector)) {
+    private String extractText(Page page, String llmSelector) {
+        // 1. Try LLM-provided selector — wait for visibility on SPAs
+        if (llmSelector != null && !llmSelector.isBlank()) {
             try {
-                // Ensure visibility before extraction to avoid immediate empty returns on SPA/Lazy sites.
-                Locator loc = page.locator(selector);
+                Locator loc = page.locator(llmSelector);
                 loc.first().waitFor(new Locator.WaitForOptions()
                     .setState(WaitForSelectorState.VISIBLE)
-                    .setTimeout(3000));
-
-                List<String> texts = loc.allInnerTexts();
-                String joined = texts.stream()
-                    .map(t -> normalizeWhitespace(t.strip()))
-                    .filter(t -> t.length() > 5)
+                    .setTimeout(3000));                    // ← RESTORE waitFor
+                String result = loc.allInnerTexts().stream()
+                    .map(t -> normalizeWhitespace(t.trim())) // ← RESTORE normalizeWhitespace
+                    .filter(s -> s.length() > 10)
                     .collect(Collectors.joining("\n"));
-
-                if (joined.length() > 20) return joined;
-                log.warnf("LLM selector '%s' returned only %d chars — engaging fallback chain", 
-                        selector, joined.length());
+                if (result.length() > 50) return result;
+                log.warnf("LLM selector '%s' returned only %d chars — engaging fallback chain",
+                        llmSelector, result.length());
             } catch (Exception e) {
-                log.warnf("LLM selector '%s' failed or timed out — engaging fallback chain", selector);
+                log.warnf("LLM selector '%s' failed or timed out — engaging fallback chain", llmSelector);
             }
         }
 
-        // Expanded fallback chain for better discovery on modern blogs/SPAs
-        String[] fallbacks = {"h1", "h2", "h3", "article h2", "article h3", ".post-title", ".entry-title"};
-        for (String f : fallbacks) {
+        // 2. Semantic fallback chain
+        String[] fallbackSelectors = {
+            "article h1, article h2, article h3",
+            "main h1, main h2, main h3",
+            "[class*='title'], [class*='heading'], [class*='post-title']",
+            "h1, h2, h3",
+            "main p",
+            "body"
+        };
+        for (String sel : fallbackSelectors) {
             try {
-                // No waitFor on fallbacks — instant empty list if selector is absent.
-                // We only block on the primary LLM-provided selector (already protected above).
-                List<String> texts = page.locator(f).allInnerTexts();
-                String joined = texts.stream()
-                    .map(t -> normalizeWhitespace(t.strip()))
-                    .filter(t -> t.length() > 5)
+                String result = page.locator(sel).allInnerTexts().stream()
+                    .map(t -> normalizeWhitespace(t.trim()))  // ← normalizeWhitespace here too
+                    .filter(s -> s.length() > 15)
+                    .distinct()
                     .collect(Collectors.joining("\n"));
-
-                if (joined.length() > 20) return joined;
+                if (result.length() > 50) {
+                    log.infof("Fallback selector '%s' yielded %d chars", sel, result.length());
+                    return result;
+                }
             } catch (Exception ignored) {}
         }
 
-        // Final fallback: Guaranteed full body (10s cap to prevent edge-case hangs)
+        // 3. Nuclear fallback — 10s timeout cap to prevent hangs  ← RESTORE timeout
         try {
             return normalizeWhitespace(page.locator("body").innerText(
                 new Locator.InnerTextOptions().setTimeout(10000)));
         } catch (Exception e) {
-            return "Error: Could not extract text from body.";
+            return "Error: Could not extract text from page body.";
         }
     }
 

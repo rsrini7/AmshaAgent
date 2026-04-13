@@ -349,6 +349,38 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public void markOrphaned(Long checkpointId, String reason) {
+        withRetry(() -> {
+            self.doMarkOrphanedId(checkpointId, reason);
+            return null;
+        }, "markOrphaned-id");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkOrphanedId(Long checkpointId, String reason) {
+        em.clear();
+        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
+        if (checkpoint != null) {
+            doMarkOrphaned(checkpoint, reason);
+        }
+    }
+
+    private void doMarkOrphaned(AgentCheckpoint checkpoint, String reason) {
+        checkpoint.setStatus(CheckpointStatus.ORPHANED);
+        checkpoint.setFailedAt(Instant.now());
+        checkpoint.setFailReason(reason);
+
+        String userId = WorkspaceContext.resolveUserId();
+        String idempotencyKey = "CP_ORPHANED:" + checkpoint.getId();
+        auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+            SecurityEventType.CHECKPOINT_ORPHANED, reason, idempotencyKey);
+
+        log.warnf("Checkpoint session=%s role=%s marked ORPHANED: %s",
+                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
+    }
+
+
+    @Override
     @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
         String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";

@@ -93,7 +93,7 @@ public enum ToolCapability {
      */
     WEB_SEARCH_SERPER("serper_web_search",
         "Search the web for real-time Google results using the Serper API. " +
-        "Prefer this when ARCCLAW_SERPER_API_KEY is set (2500 free calls).");
+        "Prefer this when ARCCLAW_TOOLS_SERPER_API_KEY is set (2500 free calls).");
 
     private final String toolName;
     private final String description;

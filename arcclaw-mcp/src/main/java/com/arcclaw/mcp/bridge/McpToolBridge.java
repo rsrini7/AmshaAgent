@@ -9,6 +9,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -41,18 +43,38 @@ public class McpToolBridge {
             .toList();
     }
 
-    public String invoke(String toolName, String paramsJson) {
+    @Inject AuditService auditService;
+
+    public String executeTool(McpToolRequest request) {
+        String toolName = request.toolName();
+        String paramsJson = request.paramsJson();
         if (!allowlist.exposedTools().contains(toolName)) {
             throw new McpToolNotAllowedException("Tool '" + toolName + "' not in allowlist");
         }
 
+        String mcpClientId = request.getHeader("X-MCP-Client-ID");
+        String mcpSessionId = request.getHeader("X-MCP-Session-ID");
+        String mcpCapabilities = request.getHeader("X-MCP-Capabilities");
+
+        String sessionId = "mcp-" + mcpClientId + "-" + mcpSessionId;
+        String userId = "mcp:" + mcpClientId;
+        String role = mapCapabilitiesToRole(mcpCapabilities);
+
+        auditService.record(
+            sessionId,
+            userId,
+            role,
+            SecurityEventType.TOOL_INVOKED,
+            "Invoked " + toolName + " by " + mcpClientId + " [session=" + mcpSessionId + "]"
+        );
+
         try {
             return WorkspaceContext.run(
-                "mcp-external",
-                "mcp-client",
-                "mcp-channel",
+                sessionId,
+                userId,
+                "mcp",
                 AutonomyLevel.SUPERVISED,
-                AgentRoleEnum.COORDINATOR.toScopedName(),
+                role,
                 () -> {
                     ToolResponse response = toolRegistry.invokeTool(toolName, paramsJson, "mcp-server");
                     return response.success() ? response.output() : "Error: " + response.output();
@@ -62,6 +84,16 @@ public class McpToolBridge {
             log.errorf("Error invoking tool '%s': %s", toolName, e.getMessage());
             return "Error: " + e.getMessage();
         }
+    }
+
+    private String mapCapabilitiesToRole(String capabilities) {
+        if (capabilities != null && capabilities.contains("code_generation")) {
+            return AgentRoleEnum.CODER.id();
+        }
+        if (capabilities != null && capabilities.contains("web_navigation")) {
+            return AgentRoleEnum.RESEARCHER.id();
+        }
+        return AgentRoleEnum.COORDINATOR.id();
     }
 
     private String buildInputSchema(ToolCapability cap) {

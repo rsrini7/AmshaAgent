@@ -1,4 +1,7 @@
 arcclaw:
+  tools:
+    playwright:
+      enabled: false
   vault:
     pepper: "mock-pepper"
   data-dir: "./target"
@@ -8,21 +11,38 @@ arcclaw:
     hot-reload: false
 
 quarkus:
+  arc:
+    # Exclude core beans from CDI during module-level tool tests to avoid 
+    # unsatisfied dependency errors for heavy core components (persistence, audit, etc.)
+    exclude-types:
+      - "com.arcclaw.core.**"
+      - "com.arcclaw.tool.playwright.PlaywrightBrowserTool"
+  otel:
+    sdk:
+      disabled: true
+  log:
+    level: INFO
+    category:
+      "com.arcclaw.tool.playwright":
+        level: WARN
+      "com.microsoft.playwright":
+        level: "OFF"
   langchain4j:
     openai:
       timeout: "30s"
   transaction-manager:
     enable-recovery: false
-  shutdown:
-    timeout: 5S
-
-quarkiverse:
-  mcp:
-    server:
-      http:
-        enabled: false
-      stdio:
-        enabled: false
-
-hibernate-orm:
-  packages: "com.arcclaw.core.*"
+  scheduler:
+    enabled: false
+  hibernate-orm:
+    enabled: false
+  datasource:
+    enabled: false
+  # Required by Quarkus REST / Management extensions when present on classpath
+  http:
+    host: "localhost"
+    port: 8081
+  management:
+    host: "localhost"
+    port: 9001
+    enabled: true

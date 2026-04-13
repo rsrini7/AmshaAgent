@@ -1007,7 +1007,7 @@ Secrets are encrypted with AES-256-GCM-SIV (Argon2id-derived key). Never returne
 
 ### 10.1 Store a secret via goal string
 
-There is no direct "store secret" REST endpoint — secrets are stored via the `store KEY=VALUE` pattern:
+There is no direct "store secret" REST endpoint — secrets are stored via the `vault KEY=VALUE` pattern:
 
 ```bash
 curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \

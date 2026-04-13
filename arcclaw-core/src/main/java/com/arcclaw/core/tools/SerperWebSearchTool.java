@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,7 +35,20 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class SerperWebSearchTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.tools.serper.api-key", defaultValue = "none")
-    String apiKey;
+    String configApiKey;
+
+    @Inject
+    SecretVault vault;
+
+    private String getApiKey() {
+        return vault.retrieveSystemKey("ARCCLAW_TOOLS_SERPER_API_KEY")
+            .map(vk -> {
+                try (vk) {
+                    return new String(vk.get(), StandardCharsets.UTF_8);
+                }
+            })
+            .orElse(configApiKey);
+    }
 
     @Inject
     ObjectMapper objectMapper;
@@ -71,8 +86,17 @@ public class SerperWebSearchTool implements AgentTool {
     }
 
     @Override
+    public IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.IDEMPOTENT;
+    }
+
+    @Override
     public boolean isEnabled() {
-        return apiKey != null && !apiKey.isBlank() && !"none".equalsIgnoreCase(apiKey);
+        // Invariant: Use existence check instead of decryption during startup/init.
+        if (vault.systemKeyExists("ARCCLAW_TOOLS_SERPER_API_KEY")) {
+            return true;
+        }
+        return configApiKey != null && !configApiKey.isBlank() && !"none".equalsIgnoreCase(configApiKey);
     }
 
     @Override
@@ -125,7 +149,7 @@ public class SerperWebSearchTool implements AgentTool {
         }
 
         if (!isEnabled()) {
-            return ToolResponse.failure(503, "Serper Search is not configured. Set ARCCLAW_SERPER_API_KEY.");
+            return ToolResponse.failure(503, "Serper Search is not configured. Set ARCCLAW_TOOLS_SERPER_API_KEY.");
         }
 
         int count = 5;
@@ -156,7 +180,7 @@ public class SerperWebSearchTool implements AgentTool {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(endpoint)
                 .header("Content-Type", "application/json")
-                .header("X-API-KEY", apiKey)
+                .header("X-API-KEY", getApiKey())
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .timeout(Duration.ofSeconds(15))
                 .build();

@@ -181,13 +181,20 @@ public class AgentStateMachineRunner {
                                   "tool call JSON — retrying with correction (schema attempt %d)",
                                   context.sessionId(), llmSchemaErrorCount + 1);
                         history.add(step);
+                        String leakedTool = "the intended tool";
+                        Matcher nameMatcher = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"").matcher(candidateAnswer);
+                        if (nameMatcher.find()) {
+                            leakedTool = nameMatcher.group(1);
+                        } else if (candidateAnswer.contains("delegate_to_agent")) {
+                            leakedTool = "delegate_to_agent";
+                        }
+
                         transientError =
                                 "System: Your last response was a raw JSON tool call object " +
                                 "written as plain text, not a valid FINISH answer. " +
                                 "You MUST invoke tools through the tool mechanism — " +
-                                "NEVER write {\"type\": \"function\", ...} as your answer text. " +
-                                "If you need to search memory, call memory_search properly as a tool. " +
-                                "Retry now: call the tool correctly, or FINISH with a plain text answer.";
+                                "NEVER write {\"type\": \"function\", ...} or raw JSON as your answer text. " +
+                                "Retry now: call " + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
                         llmSchemaErrorCount++;
                         if (llmSchemaErrorCount >= 2) {
                             log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
@@ -429,10 +436,34 @@ public class AgentStateMachineRunner {
             if (withoutHeader.isBlank()) {
                 return "⚠️ I wasn't able to generate a new response. Please try again.";
             }
-            return withoutHeader;
+            stripped = withoutHeader;
+        }
+
+        // System prompt echo guard — the LLM occasionally echoes back its own
+        // system prompt (persona, host environment, tool list) as the FINISH answer.
+        // This leaks working directory, Java version, Git status etc. to the user.
+        if (AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(stripped).find()) {
+            log.warnf("ANSWER-GUARD: detected system prompt echo in answer for session %s — stripping internal context", sessionId);
+            // Try to salvage any user-facing content before the system prompt block
+            int echoStart = findSystemPromptEchoStart(stripped);
+            if (echoStart > 0) {
+                String salvaged = stripped.substring(0, echoStart).strip();
+                if (!salvaged.isBlank() && salvaged.length() >= MIN_ANSWER_ALPHA_LENGTH) {
+                    return salvaged;
+                }
+            }
+            return "⚠️ I wasn't able to generate a clean response. Please try again.";
         }
 
         return answer;
+    }
+
+    /**
+     * Finds the start index of a system prompt echo block in the answer text.
+     */
+    private int findSystemPromptEchoStart(String text) {
+        Matcher m = AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(text);
+        return m.find() ? m.start() : -1;
     }
 
     private static final Pattern INTERNAL_JVM_ERROR_PATTERN = Pattern.compile(

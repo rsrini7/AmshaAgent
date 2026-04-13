@@ -3,7 +3,6 @@ package com.arcclaw.core.state;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -14,10 +13,13 @@ import org.junit.jupiter.api.Test;
  * <p>
  * This test ensures that when new statuses are added to the enum, the developer
  * is forced to explicitly decide if they are terminal or not by updating
- * this snapshot and the corresponding methods in CheckpointStatus.
+ * this snapshot. This prevents accidental changes to the agent lifecycle policy.
  */
 public class CheckpointStatusTest {
 
+    /**
+     * Verifies that the internal logic of the enum is consistent.
+     */
     @Test
     public void testTerminalStatusesConsistency() {
         Set<CheckpointStatus> terminalSet = CheckpointStatus.terminalStatuses();
@@ -28,8 +30,14 @@ public class CheckpointStatusTest {
         }
     }
 
+    /**
+     * SNAPSHOT TEST: terminalStatuses()
+     * <p>
+     * If this set changes, you MUST explicitly update this test. This serves
+     * as a governance check for lifecycle changes.
+     */
     @Test
-    public void testTerminalStatusesSnapshot() {
+    public void testTerminalLifecycleSnapshot() {
         Set<CheckpointStatus> terminalStatuses = CheckpointStatus.terminalStatuses();
         
         Set<CheckpointStatus> expectedTerminal = Set.of(
@@ -38,14 +46,18 @@ public class CheckpointStatusTest {
             CheckpointStatus.LOOP_EXCEEDED,
             CheckpointStatus.DENIED,
             CheckpointStatus.COMPROMISED,
-            CheckpointStatus.ARCHIVED
+            CheckpointStatus.ARCHIVED,
+            CheckpointStatus.ORPHANED
         );
 
         assertEquals(expectedTerminal, terminalStatuses,
             "Terminal status set has changed. This snapshot test must be explicitly updated " +
-            "to acknowledge the change in terminal lifecycle states.");
+            "to acknowledge the change in terminal lifecycle states. §7.36");
     }
 
+    /**
+     * SNAPSHOT TEST: Non-terminal statuses
+     */
     @Test
     public void testNonTerminalStatusesSnapshot() {
         Set<CheckpointStatus> nonTerminal = Arrays.stream(CheckpointStatus.values())
@@ -61,26 +73,6 @@ public class CheckpointStatusTest {
 
         assertEquals(expectedNonTerminal, nonTerminal,
             "Non-terminal status set has changed. New statuses must be explicitly " +
-            "classified as terminal or non-terminal in this snapshot test.");
-    }
-
-    @Test
-    void testIsTerminalExactSet(){
-        Set<CheckpointStatus> terminalStatuses = EnumSet.allOf(CheckpointStatus.class).stream()
-            .filter(s -> s.isTerminal())
-            .collect(Collectors.toSet());
-        
-        Set<CheckpointStatus> expectedTerminal = Set.of(
-            CheckpointStatus.COMPLETED,
-            CheckpointStatus.FAILED,
-            CheckpointStatus.LOOP_EXCEEDED,
-            CheckpointStatus.DENIED,
-            CheckpointStatus.COMPROMISED,
-            CheckpointStatus.ARCHIVED
-        );
-
-        assertEquals(expectedTerminal, terminalStatuses,
-            "Terminal status set has changed. This snapshot test must be explicitly updated " +
-            "to acknowledge the change in terminal lifecycle states.");
+            "classified as terminal or non-terminal in this snapshot test. §7.36");
     }
 }

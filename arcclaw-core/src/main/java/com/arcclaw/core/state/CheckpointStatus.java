@@ -1,5 +1,7 @@
 package com.arcclaw.core.state;
 
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Set;
 
 /**
@@ -12,6 +14,9 @@ import java.util.Set;
  * <p>Active states:
  * {@link #NOT_STARTED}, {@link #IN_PROGRESS}, {@link #AWAITING_APPROVAL},
  * {@link #AWAITING_RETRY}.
+ *
+ * <p>Orphaned states:
+ * {@link #ORPHANED}.
  */
 public enum CheckpointStatus {
 
@@ -82,28 +87,40 @@ public enum CheckpointStatus {
      */
     AWAITING_RETRY,
 
+     /**
+      * Terminal status set by AgentLoop when a fresh turn starts over an existing
+      * COMPLETED/FAILED/COMPROMISED checkpoint. Archived rows are excluded from
+      * all load() and findLatestAwaitingApproval() queries so they never shadow
+      * a newer AWAITING_APPROVAL row for the same (sessionId, agentRole) pair.
+      */
+     ARCHIVED,
+
+     /**
+      * Terminal status for checkpoints that were abandoned in an active state (like AWAITING_RETRY)
+      * for an extended period (e.g., 30+ minutes) due to scheduler outages or process crashes.
+      * Flagged for manual intervention or cleanup.
+      */
+     ORPHANED;
+
     /**
-     * Terminal status set by AgentLoop when a fresh turn starts over an existing
-     * COMPLETED/FAILED/COMPROMISED checkpoint. Archived rows are excluded from
-     * all load() and findLatestAwaitingApproval() queries so they never shadow
-     * a newer AWAITING_APPROVAL row for the same (sessionId, agentRole) pair.
+     * Set of statuses that represent an end-of-life state for a checkpoint.
+     * No further transitions are permitted once these are reached.
      */
-    ARCHIVED;
+    private static final Set<CheckpointStatus> TERMINAL_STATES = EnumSet.of(
+        COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED
+    );
 
     /**
      * @return true if this status represents an end-of-life state for a checkpoint.
      */
     public boolean isTerminal() {
-        return switch (this) {
-            case COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED -> true;
-            case NOT_STARTED, IN_PROGRESS, AWAITING_APPROVAL, AWAITING_RETRY -> false;
-        };
+        return TERMINAL_STATES.contains(this);
     }
 
     /**
      * @return The immutable set of all terminal statuses.
      */
     public static Set<CheckpointStatus> terminalStatuses() {
-        return Set.of(COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED);
+        return Collections.unmodifiableSet(TERMINAL_STATES);
     }
 }

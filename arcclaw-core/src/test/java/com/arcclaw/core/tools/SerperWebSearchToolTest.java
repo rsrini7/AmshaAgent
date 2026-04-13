@@ -3,16 +3,19 @@ package com.arcclaw.core.tools;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.SecretVault;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,12 +37,16 @@ class SerperWebSearchToolTest {
     @Mock
     AuditService auditService;
 
+    @Mock
+    SecretVault vault;
+
     @InjectMocks
     SerperWebSearchTool tool;
 
     @BeforeEach
     void setup() {
-        tool.apiKey = "fake-serper-key";
+        tool.configApiKey = "fake-serper-key";
+        lenient().when(vault.retrieveSystemKey("ARCCLAW_TOOLS_SERPER_API_KEY")).thenReturn(Optional.empty());
         try {
             var field = SerperWebSearchTool.class.getDeclaredField("httpClient");
             field.setAccessible(true);
@@ -61,7 +68,7 @@ class SerperWebSearchToolTest {
 
     @Test
     void testBlankApiKeyFails() throws Exception {
-        tool.apiKey = "none";
+        tool.configApiKey = "none";
         Map<String, Object> params = Map.of("query", "test");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 

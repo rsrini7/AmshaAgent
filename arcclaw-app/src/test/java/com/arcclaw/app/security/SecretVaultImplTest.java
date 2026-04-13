@@ -9,8 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import jakarta.inject.Inject;
@@ -18,9 +22,12 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AesGcmSivCipher;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.EncryptedSecret;
 import com.arcclaw.core.security.EncryptedSecretRepository;
 import com.arcclaw.core.security.SecretVaultImpl;
@@ -60,7 +67,7 @@ public class SecretVaultImplTest {
 
     @Test
     void testEncryptDecryptCycle() {
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             cleanDb();
             // 1. Store
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
@@ -80,7 +87,7 @@ public class SecretVaultImplTest {
 
     @Test
     void testTamperDetection_BitFlip() {
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             cleanDb();
             // 1. Store
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
@@ -103,7 +110,7 @@ public class SecretVaultImplTest {
 
     @Test
     void testKeySwappingProtection_AADMismatch() {
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             cleanDb();
             // Scenario: Attacker tries to move the ciphertext from "OPENAI_API_KEY" to
             // "GITHUB_TOKEN"
@@ -149,7 +156,7 @@ public class SecretVaultImplTest {
 
     @Test
     void testStore_VersionAssertions() {
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             cleanDb();
             // 1. Store
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
@@ -173,14 +180,14 @@ public class SecretVaultImplTest {
         CountDownLatch doneLatch = new CountDownLatch(2);
         
         // Ensure entity is clean
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             cleanDb();
         });
 
         Thread.ofVirtual().start(() -> {
             try {
                 startLatch.await();
-                WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+                WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
                     vault.store(key, SECRET_PAYLOAD);
                 });
             } catch (Exception e) {
@@ -197,7 +204,7 @@ public class SecretVaultImplTest {
         Thread.ofVirtual().start(() -> {
             try {
                 startLatch.await();
-                WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+                WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
                     vault.store(key, SECRET_PAYLOAD);
                 });
             } catch (Exception e) {
@@ -214,7 +221,7 @@ public class SecretVaultImplTest {
         startLatch.countDown();
         assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should finish");
         
-        WorkspaceScopeHolder.run(TEST_SESSION_ID, () -> {
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             assertNotNull(repository.findByKey(TEST_SESSION_ID, key));
         });
     }
@@ -241,5 +248,97 @@ public class SecretVaultImplTest {
         try (VaultKey key = retrieved.get()) {
             assertArrayEquals(payload, key.get(), "System key payload must match");
         }
+    }
+    @Test
+    void testVaultWriteDuringToolExecution() {
+        // Enclosing transaction simulates tool execution
+        // We Use manual transaction to avoid REQUIRED -> REQUIRES_NEW deadlock on SQLite
+        deleteSession(TEST_SESSION_ID);
+        
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
+            vault.store(API_KEY_NAME, SECRET_PAYLOAD);
+        });
+        
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, API_KEY_NAME));
+        });
+    }
+
+    @Test
+    void testConcurrentVaultWrites() throws InterruptedException {
+        String key = "CONCURRENT_BENCHMARK";
+        int threadCount = 10;
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
+            cleanDb();
+        });
+
+        for (int i = 0; i < threadCount; i++) {
+            Thread.ofVirtual().start(() -> {
+                try {
+                    WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
+                        vault.store(key, SECRET_PAYLOAD);
+                    });
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "All threads should finish without deadlock");
+        
+        WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, key));
+        });
+    }
+    @Test
+    void testVaultAuditOnVirtualThread() throws Exception {
+        String testUserId = "test-user-123";
+        String testSessionId = "test-session-456";
+
+        cleanDb();
+        
+        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+            try {
+                WorkspaceContext.run(
+                    testSessionId,
+                    testUserId,
+                    "test-chat",
+                    AutonomyLevel.FULL,
+                    "test-role",
+                    () -> {
+                        vault.store("test-key", SECRET_PAYLOAD);
+                        return null;
+                    }
+                );
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        }, Executors.newVirtualThreadPerTaskExecutor());
+
+        future.get();
+        auditService.waitForIdle();
+
+        // Verify audit record has correct user ID
+        WorkspaceContext.runWithFullAutonomy(testSessionId, testUserId, "test-chat", "test-role", () -> {
+            List<AuditEvent> events = entityManager.createQuery("SELECT a FROM AuditEvent a WHERE a.sessionId = :sid AND a.eventType = :type", AuditEvent.class)
+                    .setParameter("sid", testSessionId)
+                    .setParameter("type", SecurityEventType.VAULT_STORE)
+                    .getResultList();
+            
+            assertFalse(events.isEmpty(), "Audit event should be recorded");
+            assertEquals(testUserId, events.get(0).userId);
+        });
+
+        // Cleanup on test thread with transaction
+        deleteSession(testSessionId);
+    }
+
+    @Transactional
+    void deleteSession(String sid) {
+        repository.deleteBySessionId(sid);
+        entityManager.flush();
+        entityManager.clear();
     }
 }

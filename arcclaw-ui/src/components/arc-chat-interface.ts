@@ -240,10 +240,26 @@ export class ArcChatInterface extends LitElement {
     this._ws?.disconnect();
   }
 
-  private _connect() {
+  private async _connect() {
+    let token = '';
+    if (this.apiKey) {
+      try {
+        const res = await fetch('/api/v1/chat/ws-token', {
+          method: 'POST',
+          headers: { 'X-ArcClaw-API-Key': this.apiKey, 'Content-Type': 'application/json' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          token = data.token;
+        }
+      } catch (e) {
+        console.warn('Failed to obtain WS token', e);
+      }
+    }
+
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host;
-    const wsUrl = `${proto}://${host}/ws/chat?apiKey=${encodeURIComponent(this.apiKey)}&sessionId=${encodeURIComponent(this.platformId)}`;
+    const wsUrl = `${proto}://${host}/ws/chat?sessionId=${encodeURIComponent(this.platformId)}`;
     this._ws = new WsManager(
       wsUrl,
       (frame) => this._handleFrame(frame),
@@ -254,6 +270,9 @@ export class ArcChatInterface extends LitElement {
           bubbles: true,
           composed: true
         }));
+        if (status === 'open' && token) {
+          this._ws?.send({ type: 'AUTH', token });
+        }
         if (status === 'closed' || status === 'error') {
           this._ws = null;
         }

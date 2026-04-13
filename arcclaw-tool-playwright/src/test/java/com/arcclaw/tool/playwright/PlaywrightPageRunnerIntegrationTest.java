@@ -3,29 +3,27 @@ package com.arcclaw.tool.playwright;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.microsoft.playwright.PlaywrightException;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@QuarkusTest
 @Tag("integration")
 class PlaywrightPageRunnerIntegrationTest {
 
-    static PlaywrightPageRunner runner;
+    @Inject
+    PlaywrightPageRunner runner;
 
-    @BeforeAll
-    static void checkEnvAndInit() {
-        String enabledEnv = System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED");
+    @BeforeEach
+    void checkEnabled() {
         Assumptions.assumeTrue(
-            "true".equalsIgnoreCase(enabledEnv),
-            "Skipping: ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED is not set to true"
+            runner.isEnabled(),
+            "Skipping: Playwright tool is disabled in configuration"
         );
-        
-        runner = new PlaywrightPageRunner();
-        runner.enabled = true; // Manually enable since we're bypassing CDI
-        runner.init();
-        
         Assumptions.assumeTrue(
             runner.isInitialized(),
             "Skipping: Playwright runner failed to initialize (check Chromium binaries)"

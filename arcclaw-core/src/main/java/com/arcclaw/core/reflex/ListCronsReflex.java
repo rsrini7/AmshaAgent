@@ -18,6 +18,7 @@ import com.arcclaw.core.state.AgentCronRepository;
  * Bypasses the LLM entirely for common "list my crons" queries.
  */
 @ApplicationScoped
+@ReflexPriority(500)
 public class ListCronsReflex implements AgentReflex {
 
     @Inject

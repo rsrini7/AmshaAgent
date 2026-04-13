@@ -1,10 +1,14 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -17,9 +21,13 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
+import com.arcclaw.core.tool.InterceptorPriority;
 import com.arcclaw.core.tool.ToolGuardInterceptor;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.Subclass;
 import org.jboss.logging.Logger;
 
 /**
@@ -36,6 +44,34 @@ public class ToolInvocationGuard {
     @Inject public ToolRegistry toolRegistry;
     @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
     @Inject public Instance<ToolGuardInterceptor> interceptors;
+    
+    // Session-scoped deduplication cache: SessionId -> (DedupeKey -> Observation)
+    private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
+
+    private List<ToolGuardInterceptor> sortedInterceptors;
+
+    @PostConstruct
+    public void init() {
+        if (interceptors == null) {
+            this.sortedInterceptors = List.of();
+            return;
+        }
+        this.sortedInterceptors = interceptors.stream()
+            .sorted(Comparator.comparingInt(this::getPriority))
+            .toList();
+        log.infof("ToolInvocationGuard initialized with %d sorted interceptors.", sortedInterceptors.size());
+    }
+
+
+    private int getPriority(ToolGuardInterceptor interceptor) {
+        Class<?> clazz = interceptor.getClass();
+        // Handle CDI proxies
+        if (interceptor instanceof Subclass) {
+            clazz = clazz.getSuperclass();
+        }
+        InterceptorPriority priority = clazz.getAnnotation(InterceptorPriority.class);
+        return priority != null ? priority.value() : 1000;
+    }
 
     public sealed interface GuardDecision
             permits GuardDecision.Allow, GuardDecision.Deduplicate,
@@ -54,8 +90,8 @@ public class ToolInvocationGuard {
             String toolName, Map<String, Object> params,
             List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
-        // 0. RUN REGISTERED INTERCEPTORS (SPI)
-        for (ToolGuardInterceptor interceptor : interceptors) {
+        // 0. RUN REGISTERED INTERCEPTORS (SPI) - now sorted by priority
+        for (ToolGuardInterceptor interceptor : sortedInterceptors) {
             if (interceptor.handledToolNames().isEmpty()
                     || interceptor.handledToolNames().contains(toolName)) {
                 Optional<GuardDecision> decision = interceptor.evaluate(
@@ -66,35 +102,34 @@ public class ToolInvocationGuard {
             }
         }
 
-        // 1. DEDUPLICATION CHECK
-        for (ReasoningStep past : history) {
-            if (toolName.equals(past.action())
-                    && past.observation() != null
-                    && !past.observation().isBlank()) {
+        // 0.5 RESOLVE IDEMPOTENCY MODE
+        IdempotencyMode mode = toolRegistry.findTool(toolName)
+                .map(AgentTool::idempotencyMode)
+                .orElse(IdempotencyMode.NON_IDEMPOTENT);
 
-                // Primary check: Map equality (fast)
-                boolean argsMatch = Objects.equals(params, past.actionInput());
-
-                // Fallback check: JSON string equality (handles LinkedHashMap ordering
-                // differences)
-                if (!argsMatch) {
-                    try {
-                        String currentArgs = objectMapper.writeValueAsString(params);
-                        String pastArgs    = objectMapper.writeValueAsString(past.actionInput());
-                        argsMatch = currentArgs.equals(pastArgs);
-                    } catch (Exception e) {
-                        log.debugf("DEDUP-GUARD: JSON comparison failed for tool '%s' in session %s: %s",
-                                toolName, sessionId, e.getMessage());
+        // 1. DEDUPLICATION CHECK (O(1) with stable hash/JSON key)
+        // Skip for NON_IDEMPOTENT tools as they should run every time if requested.
+        if (mode != IdempotencyMode.NON_IDEMPOTENT) {
+            Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
+                Map<String, String> index = new ConcurrentHashMap<>();
+                // Build index from history on first access in this turn
+                for (ReasoningStep past : history) {
+                    if (past.observation() != null && !past.observation().isBlank()) {
+                        index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
                     }
                 }
+                return index;
+            });
 
-                if (argsMatch) {
-                    log.warnf("[DEDUP-GUARD] Duplicate tool call '%s' detected for session=%s — returning cached observation.",
-                            toolName, sessionId);
-                    String cachedObs = past.observation() + "\n\n[NOTE: This result was retrieved from " +
-                            "the current session cache. The tool was not re-executed.]";
-                    return new GuardDecision.Deduplicate(cachedObs);
-                }
+            String currentKey = buildDedupeKey(toolName, params);
+            if (dedupeIndex.containsKey(currentKey)) {
+                String pastObservation = dedupeIndex.get(currentKey);
+                log.warnf("[DEDUP-GUARD] Duplicate call '%s' (mode=%s) detected for session=%s — bypassing re-execution.",
+                        toolName, mode, sessionId);
+                String cachedObs = pastObservation + "\n\n[NOTE: This result was retrieved from " +
+                        "the session cache. The " + (mode == IdempotencyMode.AT_MOST_ONCE ? "AT_MOST_ONCE " : "") +
+                        "tool was not re-executed.]";
+                return new GuardDecision.Deduplicate(cachedObs);
             }
         }
 
@@ -134,6 +169,39 @@ public class ToolInvocationGuard {
         }
 
         return new GuardDecision.Allow();
+    }
+    /**
+     * Clears cached deduplication data for a terminated session.
+     */
+    public void clearSession(String sessionId) {
+        sessionDedupeCache.remove(sessionId);
+    }
+
+    /**
+     * Records a new tool call in the deduplication cache so subsequent or parallel calls
+     * with identical parameters can be skipped.
+     */
+    public void recordToolCall(String sessionId, String toolName, Map<String, Object> params, String observation) {
+        Map<String, String> index = sessionDedupeCache.computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
+        if (observation != null) {
+            index.put(buildDedupeKey(toolName, params), observation);
+        }
+    }
+
+    private String buildDedupeKey(String toolName, Map<String, Object> params) {
+        if (params == null || params.isEmpty()) {
+            return toolName + ":empty";
+        }
+        try {
+            // Normalize params: sort keys for consistent JSON representation
+            TreeMap<String, Object> sorted = new TreeMap<>(params);
+            String normalizedJson = objectMapper.writeValueAsString(sorted);
+            // Use stable hash suffix to keep keys manageable but deterministic
+            return toolName + ":" + normalizedJson.hashCode();
+        } catch (Exception e) {
+            // Fallback for non-serializable content (unlikely in ToolInvocationGuard)
+            return toolName + ":err:" + Objects.hash(params);
+        }
     }
 }
 

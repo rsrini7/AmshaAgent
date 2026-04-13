@@ -222,6 +222,12 @@ public class ToolStepHandler {
         String observation = buildObservation(response);
         final ReasoningStep completedStep = step.withObservation(observation, response.success());
         history.add(completedStep);
+        
+        // Record for future O(1) deduplication in this turn
+        if (response.success()) {
+            guard.recordToolCall(context.sessionId(), toolName, params, observation);
+        }
+
         observers.forEach(o -> o.onStepComplete(
             context.sessionId(), context.agentRole(), completedStep));
         log.debugf("Observation for '%s': %s", toolName,

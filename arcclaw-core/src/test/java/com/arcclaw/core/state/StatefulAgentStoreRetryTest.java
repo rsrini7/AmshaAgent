@@ -50,8 +50,8 @@ class StatefulAgentStoreRetryTest {
         // With BACKOFF_BASE_MS = 50 in StatefulAgentStoreImpl:
         // Attempt 1: fail -> sleep 50 * 2^1 = 100ms
         // Attempt 2: fail -> sleep 50 * 2^2 = 200ms
-        // Total expected >= 300ms
-        assertTrue(elapsed >= 300, "Total elapsed time should be at least 300ms (100+200), but was " + elapsed);
+        // Total expected 300ms, but Jitter (-25%) can reduce it to 225ms.
+        assertTrue(elapsed >= 225, "Total elapsed time should be at least 225ms (jittered), but was " + elapsed);
     }
 
     @Test

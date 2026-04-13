@@ -17,6 +17,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 @ApplicationScoped
+@ReflexPriority(500)
 public class HistoryReflex implements AgentReflex {
 
      private static final Pattern MATCHES_PATTERN = Pattern.compile(

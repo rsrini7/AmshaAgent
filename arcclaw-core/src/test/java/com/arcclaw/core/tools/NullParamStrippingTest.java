@@ -18,9 +18,11 @@ import jakarta.enterprise.inject.Instance;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,10 @@ class NullParamStrippingTest {
         when(instance.iterator()).thenReturn(List.of(mockTool).iterator());
         when(instance.spliterator()).thenReturn(List.of(mockTool).spliterator());
         registry.discoveredTools = instance;
+        registry.objectMapper = new ObjectMapper();
+        registry.isolationExecutor = mock(ProcessIsolationExecutor.class);
+        
+        registry.initialize();
     }
 
     @Test

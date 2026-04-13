@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -86,7 +85,9 @@ public class ToolRegistry {
     // Stateless — no CDI needed. Can be swapped to @Inject if custom policies are
     // required later.
     private final AutonomyPolicy autonomyPolicy = new AutonomyPolicy.Default();
-
+    
+    private Map<String, AgentTool> toolIndex;
+    private Map<String, ToolDescriptor> descriptorCache;
     private Map<String, Map<String, String>> secretsCache;
 
     @PostConstruct
@@ -101,16 +102,23 @@ public class ToolRegistry {
     }
 
     private void doInitialize() {
-        Map<String, Map<String, String>> cache = new HashMap<>();
+        Map<String, AgentTool> mutableToolIndex = new HashMap<>();
+        Map<String, ToolDescriptor> mutableDescriptorCache = new LinkedHashMap<>();
+        Map<String, Map<String, String>> mutableSecretsCache = new HashMap<>();
+
         for (AgentTool tool : discoveredTools) {
+            if (!tool.isEnabled()) continue;
+            
             String name = tool.name();
+            mutableToolIndex.put(name, tool);
             
             // 1. Build secrets cache
-            if (tool.isEnabled()) {
-                cache.put(name, extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
-            }
+            mutableSecretsCache.put(name, extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
 
-            // 2. Discover metadata-driven capabilities
+            // 2. Build descriptor cache (pre-serialized JSON)
+            mutableDescriptorCache.put(name, buildDescriptor(tool));
+
+            // 3. Discover metadata-driven capabilities
             var meta = tool.getClass().getAnnotation(ToolMetadata.class);
             if (meta == null) {
                 Class<?> current = tool.getClass();
@@ -129,7 +137,25 @@ public class ToolRegistry {
                 }
             }
         }
-        this.secretsCache = Collections.unmodifiableMap(cache);
+        
+        this.toolIndex = Map.copyOf(mutableToolIndex);
+        this.descriptorCache = Collections.unmodifiableMap(mutableDescriptorCache);
+        this.secretsCache = Map.copyOf(mutableSecretsCache);
+    }
+
+    private ToolDescriptor buildDescriptor(AgentTool tool) {
+        String schema = null;
+        try {
+            var ps = tool.parametersSchema();
+            var schemaMap = schemaToMap(ps);
+            schema = schemaMap != null
+                ? objectMapper.writeValueAsString(schemaMap)
+                : null;
+        } catch (Exception e) {
+            log.warnf("Could not serialize schema for tool %s: %s",
+                tool.name(), e.getMessage());
+        }
+        return new ToolDescriptor(tool.name(), tool.description(), schema);
     }
 
     // Path safety 
@@ -157,10 +183,7 @@ public class ToolRegistry {
 
     // Tool listing / lookup 
     public List<String> listTools() {
-        return StreamSupport.stream(discoveredTools.spliterator(), false)
-                .filter(AgentTool::isEnabled)
-                .map(AgentTool::name)
-                .toList();
+        return List.copyOf(toolIndex.keySet());
     }
 
     /**
@@ -177,10 +200,7 @@ public class ToolRegistry {
      * @return Optional containing the tool if found.
      */
     public Optional<AgentTool> findTool(String toolName) {
-        return StreamSupport.stream(discoveredTools.spliterator(), false)
-                .filter(AgentTool::isEnabled)
-                .filter(tool -> tool.name().equals(toolName))
-                .findFirst();
+        return Optional.ofNullable(toolIndex.get(toolName));
     }
 
     // ── Invocation 
@@ -477,23 +497,7 @@ public class ToolRegistry {
     public record ToolDescriptor(String name, String description, String inputSchema) {}
 
     public List<ToolDescriptor> listToolDescriptors() {
-        return StreamSupport.stream(discoveredTools.spliterator(), false)
-                .filter(AgentTool::isEnabled)
-                .map(tool -> {
-                    String schema = null;
-                    try {
-                        var ps = tool.parametersSchema();
-                        var schemaMap = schemaToMap(ps);   // ← convert first
-                        schema = schemaMap != null
-                            ? objectMapper.writeValueAsString(schemaMap)
-                            : null;
-                    } catch (Exception e) {
-                        log.warnf("Could not serialize schema for tool %s: %s",
-                            tool.name(), e.getMessage());  // ← now visible
-                    }
-                    return new ToolDescriptor(tool.name(), tool.description(), schema);
-                })
-                .toList();
+        return List.copyOf(descriptorCache.values());
     }
 
     private Map<String, Object> schemaToMap(JsonObjectSchema schema) {

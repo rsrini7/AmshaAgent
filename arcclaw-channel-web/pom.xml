@@ -35,6 +35,11 @@
             <artifactId>quarkus-websockets-next</artifactId>
         </dependency>
 
+        <dependency>
+          <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-caffeine</artifactId>
+        </dependency>
+
         <!-- Standard Quarkus CDI -->
         <dependency>
             <groupId>io.quarkus</groupId>

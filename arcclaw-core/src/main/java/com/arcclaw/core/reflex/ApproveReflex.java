@@ -50,6 +50,7 @@ import org.jboss.logging.Logger;
 // "/approve → No pending tool executions require approval" silently.
 
 @ApplicationScoped
+@ReflexPriority(100)
 public class ApproveReflex implements AgentReflex {
 
     @Inject

@@ -36,6 +36,7 @@ public enum SecurityEventType {
     CHECKPOINT_CREATED,    // new entity persisted
     CHECKPOINT_COMPLETED,  // stateful store markCompleted()
     CHECKPOINT_FAILED,     // stateful store markFailed()
+    CHECKPOINT_ORPHANED,   // RateLimitRetryScheduler abandoned stale retry
 
     // Misc Security
     SECURITY,

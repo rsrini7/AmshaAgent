@@ -24,7 +24,7 @@
 ###   REDACT_AND_FORWARD (default) — redact + pass sanitized goal to LLM
 ###   BLOCK_AND_NOTIFY             — reject message, return error to caller
 ###
-### Exception: "store KEY=VALUE" messages BYPASS PII scan entirely.
+### Exception: "vault KEY=VALUE" messages BYPASS PII scan entirely.
 ### (Prevents false redaction of GITHUB_TOKEN=ghp_... which matches JWT pattern.)
 ###
 ### ── PromptInjectionReflex ──────────────────────────────────────

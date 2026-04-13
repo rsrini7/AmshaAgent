@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +32,20 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class BraveWebSearchTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.tools.brave.api-key", defaultValue = "none")
-    String apiKey;
+    String configApiKey;
+
+    @Inject
+    SecretVault vault;
+
+    private String getApiKey() {
+        return vault.retrieveSystemKey("ARCCLAW_TOOLS_BRAVE_API_KEY")
+            .map(vk -> {
+                try (vk) {
+                    return new String(vk.get(), StandardCharsets.UTF_8);
+                }
+            })
+            .orElse(configApiKey);
+    }
 
     @Inject
     ObjectMapper objectMapper;
@@ -71,8 +85,19 @@ public class BraveWebSearchTool implements AgentTool {
     }
 
     @Override
+    public IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.IDEMPOTENT;
+    }
+
+
+    @Override
     public boolean isEnabled() {
-        return apiKey != null && !apiKey.isBlank() && !"none".equalsIgnoreCase(apiKey);
+        // Invariant: Use existence check instead of decryption during startup/init.
+        // This prevents boot-time crashes in security tests where master keys mismatch.
+        if (vault.systemKeyExists("ARCCLAW_TOOLS_BRAVE_API_KEY")) {
+            return true;
+        }
+        return configApiKey != null && !configApiKey.isBlank() && !"none".equalsIgnoreCase(configApiKey);
     }
 
     @Override
@@ -129,7 +154,7 @@ public class BraveWebSearchTool implements AgentTool {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(uri)
                 .header("Accept", "application/json")
-                .header("X-Subscription-Token", apiKey)
+                .header("X-Subscription-Token", getApiKey())
                 .GET()
                 .build();
 

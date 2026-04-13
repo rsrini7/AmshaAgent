@@ -142,4 +142,12 @@ public interface AgentTool {
     default boolean shouldStripNullParams() {
         return true;
     }
+
+    /**
+     * Returns the idempotency mode for this tool. §7.38
+     * Defaults to NON_IDEMPOTENT for a "fail-closed" posture.
+     */
+    default IdempotencyMode idempotencyMode() {
+        return IdempotencyMode.NON_IDEMPOTENT;
+    }
 }

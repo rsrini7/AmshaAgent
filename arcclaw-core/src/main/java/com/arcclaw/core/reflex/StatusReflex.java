@@ -16,6 +16,7 @@ import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 
 @ApplicationScoped
+@ReflexPriority(500)
 public class StatusReflex implements AgentReflex {
 
     @Inject StatefulAgentStore statefulAgentStore;

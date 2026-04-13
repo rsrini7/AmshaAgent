@@ -17,6 +17,7 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 @Default
 @InputSanitizer.Injection
+@ReflexPriority(10)
 public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
     @ConfigProperty(name = "arcclaw.security.prompt-injection.enabled", defaultValue = "true")

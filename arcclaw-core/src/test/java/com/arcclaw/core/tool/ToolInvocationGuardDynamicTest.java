@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -35,6 +36,7 @@ class ToolInvocationGuardDynamicTest {
         this.mockInstance = mock(Instance.class);
         this.mockInterceptors = mock(Instance.class);
         when(mockInterceptors.iterator()).thenReturn(Collections.emptyIterator());
+        when(mockInterceptors.stream()).thenReturn(Stream.empty());
 
         mockToolRegistry = mock(ToolRegistry.class);
 
@@ -44,6 +46,8 @@ class ToolInvocationGuardDynamicTest {
         guard.objectMapper = new ObjectMapper();
         guard.toolRegistry = mockToolRegistry;
         guard.interceptors = mockInterceptors;
+        
+        guard.init(); // Initialize sortedInterceptors
     }
 
     @Test
