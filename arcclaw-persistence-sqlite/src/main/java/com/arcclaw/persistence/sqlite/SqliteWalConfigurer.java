@@ -1,0 +1,66 @@
+package com.arcclaw.persistence.sqlite;
+
+import java.io.File;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+import javax.sql.DataSource;
+
+import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+/**
+ * Ensures SQLite WAL mode is enabled for concurrent read/write and
+ * re-attaches the FTS database on every fresh connection if needed.
+ * <p>
+ * Logic moved to the persistence-sqlite module to isolate SQLite-specific
+ * boot configuration from the core domain.
+ */
+@ApplicationScoped
+public class SqliteWalConfigurer {
+
+    private static final Logger log = Logger.getLogger(SqliteWalConfigurer.class);
+
+    @Inject DataSource dataSource;
+
+    @ConfigProperty(name = "ARCCLAW_DATA_DIR", defaultValue = ".")
+    String dataDir;
+
+    /**
+     * Boot-time configuration — fires BEFORE RagSchemaInitializer.
+     */
+    void onStartup(@Observes @Priority(10) StartupEvent event) {
+        log.info("SQLite: Configuring WAL mode and FTS cross-database ATTACH...");
+        
+        File ftsDb = new File(dataDir, "arcclaw_fts.db");
+
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+
+            // 1. Enable WAL mode
+            stmt.execute("PRAGMA journal_mode=WAL;");
+            stmt.execute("PRAGMA synchronous=NORMAL;");
+            log.info("SQLite: WAL mode enabled.");
+
+            // 2. Attach FTS database for sub-queries
+            if (ftsDb.exists()) {
+                String attachSql = String.format("ATTACH DATABASE '%s' AS fts;", 
+                        ftsDb.getAbsolutePath().replace("\\", "/"));
+                stmt.execute(attachSql);
+                log.info("SQLite: Attached fts database.");
+            } else {
+                log.warnf("SQLite: FTS database not found at %s. Skipping ATTACH.", 
+                        ftsDb.getAbsolutePath());
+            }
+
+        } catch (SQLException e) {
+            log.error("SQLite: Failed to configure WAL/ATTACH on startup", e);
+        }
+    }
+}

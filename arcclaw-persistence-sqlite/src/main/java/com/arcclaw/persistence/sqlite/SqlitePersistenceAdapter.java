@@ -23,7 +23,7 @@ public class SqlitePersistenceAdapter implements PersistenceAdapterPort {
     SqlitePersistenceAdapter self;
 
     @Override
-    public void executeWithRetry(String sessionId, String operationName, Runnable action) {
+    public void execute(String sessionId, String operationName, Runnable action) {
         try {
             retryTemplate.execute(operationName, 5, 50, () -> {
                 self.persistSynchronously(action);

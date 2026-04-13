@@ -365,7 +365,7 @@ public class AsyncPersistenceEngine {
      *       {@code @WorkspaceScoped} beans resolve correctly inside the JPA write.
      *       <strong>NEVER</strong> wrap the whole consumer thread — it processes
      *       events from many different sessions.</li>
-     *   <li>Delegates the retry loop to {@link PersistenceRetryEngine#executeWithRetry}.</li>
+     *   <li>Delegates the retry loop to {@link PersistenceAdapterPort#execute}.</li>
      *   <li>Wraps any non-CVE exception in a {@link ComplianceViolationException} so
      *       the drain loop has a single exception type to handle.</li>
      * </ol>
@@ -396,7 +396,7 @@ public class AsyncPersistenceEngine {
         // Bind workspace scope per-event, then delegate all retry logic to retryEngine.
         try {
             WorkspaceScopeHolder.run(event.getSessionId(),
-                    () -> persistenceAdapter.executeWithRetry(
+                    () -> persistenceAdapter.execute(
                             event.getSessionId(),
                             event.getEventType().toString(),
                             event.getDbAction()));

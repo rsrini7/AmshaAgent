@@ -1,6 +1,7 @@
 package com.arcclaw.core.state;
 
 import java.time.Instant;
+import com.arcclaw.core.util.TemporalUtils;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -50,10 +51,8 @@ public class AgentCronEntity {
 
     public String goal;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant nextFireTime;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant lastFireTime;
 
     @Convert(converter = CronStatusConverter.class)
@@ -71,10 +70,8 @@ public class AgentCronEntity {
      */
     public String lastDeliveryId;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant createdAt;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant updatedAt;
 
     /**
@@ -86,7 +83,7 @@ public class AgentCronEntity {
                 || status == CronStatus.SKIPPED
                 || nextFireTime == null)
                 ? "N/A"
-                : InstantToTextConverter.format(nextFireTime);
+                : TemporalUtils.formatIsoLex(nextFireTime);
 
         String displayGoal = "N/A";
         if (goal != null) {

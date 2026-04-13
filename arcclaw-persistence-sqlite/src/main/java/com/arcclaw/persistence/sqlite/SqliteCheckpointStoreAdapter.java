@@ -78,6 +78,18 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public com.arcclaw.persistence.api.CheckpointDto saveCheckpointWithSteps(com.arcclaw.persistence.api.CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
+        return withRetry(() -> self.doSaveCheckpointWithSteps(checkpointDto, steps), "save-checkpoint-steps");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public com.arcclaw.persistence.api.CheckpointDto doSaveCheckpointWithSteps(com.arcclaw.persistence.api.CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
+        com.arcclaw.persistence.api.CheckpointDto saved = doSaveEntity(checkpointDto);
+        doSaveSteps(saved.id(), steps);
+        return saved;
+    }
+
+    @Override
     public Optional<com.arcclaw.persistence.api.CheckpointDto> findById(Long id) {
         return withRetry(() -> self.doFindById(id), "find-by-id");
     }
@@ -132,6 +144,29 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public Optional<com.arcclaw.persistence.api.CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+        return withRetry(() -> self.doFindLatestAwaitingApprovalWithPrefix(sessionPrefix), "find-awaiting-prefix");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<com.arcclaw.persistence.api.CheckpointDto> doFindLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+        em.clear();
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId LIKE :prefix " +
+                "  AND c.status = :status " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("prefix", sessionPrefix + "%")
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .map(this::entityToDto)
+                .findFirst();
+    }
+
+    @Override
     public void transitionStatus(Long id, String newStatus) {
         withRetry(() -> {
             self.doTransitionStatus(id, newStatus);
@@ -176,6 +211,28 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .map(this::entityToDto)
+                .findFirst();
+    }
+
+    @Override
+    public Optional<com.arcclaw.persistence.api.CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status) {
+        return withRetry(() -> self.doFindLatestBySessionAndStatus(sessionId, status), "find-latest-status");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<com.arcclaw.persistence.api.CheckpointDto> doFindLatestBySessionAndStatus(String sessionId, String status) {
+        em.clear();
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid AND c.status = :status " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("status", CheckpointStatus.valueOf(status))
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
@@ -493,6 +550,8 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     private void updateEntityFromDto(AgentCheckpoint entity, com.arcclaw.persistence.api.CheckpointDto dto) {
         entity.setSessionId(dto.sessionId());
         entity.setAgentRole(dto.agentRole());
+        
+        CheckpointStatus oldStatus = entity.getStatus();
         if (dto.status() != null) {
             entity.setStatus(CheckpointStatus.valueOf(dto.status()));
         }
@@ -510,7 +569,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         
         // A16 — Stale Join Guard: merge batch decisions to prevent overwriting active decisions
         if (CheckpointStatus.AWAITING_APPROVAL.toString().equals(dto.status()) 
-                && entity.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                && oldStatus == CheckpointStatus.AWAITING_APPROVAL) {
             mergeBatchDecisions(entity, dto);
         } else {
             entity.setBatchToolDecisions(dto.batchToolDecisions());

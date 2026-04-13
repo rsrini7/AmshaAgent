@@ -8,7 +8,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SessionKnowledgeBase.class,
         RagSchemaInitializer.class,
         SqliteMemoryRetrievalAdapter.class,
-        SqliteCheckpointStoreAdapter.class
+        SqliteCheckpointStoreAdapter.class,
+        InstantToTextConverter.class,
+        SqliteWalConfigurer.class
     }
 )
 public class SqlitePersistenceReflectionConfig {

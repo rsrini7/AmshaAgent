@@ -24,7 +24,6 @@ import com.arcclaw.core.skill.SkillFrontmatter;
 import com.arcclaw.core.skill.SkillPromptParams;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.InstantToTextConverter;
 import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ManageScheduleTool;
 import com.arcclaw.core.tools.MemorySearchTool;
@@ -65,7 +64,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         GithubTool.class,
         MemorySearchTool.class,
         AgentCronEntity.class,
-        InstantToTextConverter.class,
         SandboxExecTool.class,
         ScheduleTaskTool.class,
         ManageScheduleTool.class,

@@ -18,5 +18,5 @@ public interface PersistenceAdapterPort {
      * @param operationName descriptive name for logging/metrics
      * @param action the action to execute
      */
-    void executeWithRetry(String sessionId, String operationName, Runnable action);
+    void execute(String sessionId, String operationName, Runnable action);
 }

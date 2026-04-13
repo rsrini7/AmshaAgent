@@ -83,11 +83,20 @@ public class SessionReaper {
      * checkpoints from a previous JVM crash and mark them as FAILED.
      */
     public void onStartup(@Observes StartupEvent event) {
-        try {
-            QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
-        } catch (Exception e) {
-            log.errorf("Failed onStartup zombie recovery: %s", e.getMessage());
-            log.debugf(e, "Full stacktrace for onStartup zombie recovery failure");
+        int maxAttempts = 5;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
+                return;
+            } catch (Exception e) {
+                if (attempt == maxAttempts) {
+                    log.errorf("Failed onStartup zombie recovery after %d attempts: %s", maxAttempts, e.getMessage());
+                    log.debugf(e, "Full stacktrace for onStartup zombie recovery failure");
+                } else {
+                    log.warnf("Attempt %d: Failed onStartup zombie recovery (%s), retrying...", attempt, e.getMessage());
+                    try { Thread.sleep(100 * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                }
+            }
         }
     }
 

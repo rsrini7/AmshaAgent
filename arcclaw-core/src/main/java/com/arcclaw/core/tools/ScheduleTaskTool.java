@@ -24,7 +24,7 @@ import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
-import com.arcclaw.core.state.InstantToTextConverter;
+import com.arcclaw.core.util.TemporalUtils;
 import com.cronutils.model.Cron;
 import com.cronutils.model.CronType;
 import com.cronutils.model.definition.CronDefinitionBuilder;
@@ -265,7 +265,7 @@ public class ScheduleTaskTool implements AgentTool {
 
         return ToolResponse.success("Task scheduled successfully. " +
                 "ID: " + entity.id + " | Next fire: " +
-                InstantToTextConverter.format(nextFireTime) +
+                TemporalUtils.formatIsoLex(nextFireTime) +
                 "\n\nCRITICAL DIRECTIVE: The task is now safely handed off to the background cron system. " +
                 "You MUST NOT execute the goal yourself right now. " +
                 "Reply to the user with a plain text confirmation of the schedule and FINISH immediately.");

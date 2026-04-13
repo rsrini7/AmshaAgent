@@ -3,7 +3,6 @@ package com.arcclaw.core.state;
 import java.time.Instant;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -25,7 +24,6 @@ public class RagChunkEntity {
     @Column
     public String source;
 
-    @Convert(converter = InstantToTextConverter.class)
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 }

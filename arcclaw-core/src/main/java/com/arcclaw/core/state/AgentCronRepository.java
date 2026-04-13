@@ -39,13 +39,11 @@ public class AgentCronRepository {
      * fresh EntityManager scope with no prior state.
      */
     @Transactional(TxType.NOT_SUPPORTED)
-    @SuppressWarnings("unchecked")
     public List<AgentCronEntity> findDueCrons() {
-        String now = InstantToTextConverter.format(Instant.now());
-        return em.createNativeQuery(
-                "SELECT * FROM agentcron WHERE status='ACTIVE' AND nextFireTime <= :now",
+        return em.createQuery(
+                "SELECT c FROM AgentCronEntity c WHERE c.status = 'ACTIVE' AND c.nextFireTime <= :now",
                 AgentCronEntity.class
-        ).setParameter("now", now).getResultList();
+        ).setParameter("now", Instant.now()).getResultList();
     }
 
     /**
@@ -125,11 +123,11 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='ACTIVE', lastFireTime=:last, nextFireTime=:next, updatedAt=:now WHERE id=:id"
-        ).setParameter("last", InstantToTextConverter.format(lastFireTime))
-         .setParameter("next", InstantToTextConverter.format(nextFireTime))
-         .setParameter("now", InstantToTextConverter.format(Instant.now()))
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = 'ACTIVE', c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("last", lastFireTime)
+         .setParameter("next", nextFireTime)
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -139,10 +137,10 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markCompleted(String id, Instant lastFireTime) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='COMPLETED', lastFireTime=:last, updatedAt=:now WHERE id=:id"
-        ).setParameter("last", InstantToTextConverter.format(lastFireTime))
-         .setParameter("now", InstantToTextConverter.format(Instant.now()))
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = 'COMPLETED', c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("last", lastFireTime)
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -152,9 +150,9 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markAwaitingApproval(String id) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='AWAITING_APPROVAL', updatedAt=:now WHERE id=:id"
-        ).setParameter("now", InstantToTextConverter.format(Instant.now()))
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = 'AWAITING_APPROVAL', c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -177,10 +175,10 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markFailed(String id, String errorReason) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='FAILED', errorReason=:err, updatedAt=:now WHERE id=:id"
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = 'FAILED', c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("err", errorReason)
-         .setParameter("now", InstantToTextConverter.format(Instant.now()))
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -192,11 +190,11 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markSkipped(List<AgentCronEntity> skippedJobs) {
         if (skippedJobs.isEmpty()) return; // avoid acquiring write lock for nothing
-        String now = InstantToTextConverter.format(Instant.now());
+        Instant now = Instant.now();
         for (AgentCronEntity job : skippedJobs) {
-            em.createNativeQuery(
-                "UPDATE agentcron SET status='SKIPPED', nextFireTime=:next, updatedAt=:now WHERE id=:id"
-            ).setParameter("next", InstantToTextConverter.format(job.nextFireTime))
+            em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = 'SKIPPED', c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
+            ).setParameter("next", job.nextFireTime)
              .setParameter("now", now)
              .setParameter("id", job.id)
              .executeUpdate();
@@ -210,12 +208,11 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void reclaimStaleCrons(Instant threshold) {
-        String thresholdStr = InstantToTextConverter.format(threshold);
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='ACTIVE' " +
-                "WHERE status='RUNNING' AND " +
-                "(lastFireTime < :threshold OR (lastFireTime IS NULL AND createdAt < :threshold))"
-        ).setParameter("threshold", thresholdStr).executeUpdate();
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = 'ACTIVE' " +
+                "WHERE c.status = 'RUNNING' AND " +
+                "(c.lastFireTime < :threshold OR (c.lastFireTime IS NULL AND c.createdAt < :threshold))"
+        ).setParameter("threshold", threshold).executeUpdate();
     }
 
     /**

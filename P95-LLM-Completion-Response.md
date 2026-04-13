@@ -281,3 +281,129 @@ The unit tests for `CompactionService` should now compile and run successfully.
 > `CompactionService` uses `summaryRepository` as the field name for the `CompactionStorePort` injection.
 
 Please run `mvn test -pl arcclaw-core -Dtest=CompactionServiceTest` to verify.
+
+---
+
+Edited AsyncPersistenceEngine.java
+Searched for "findLatestRole"
+Searched for "findLatestRole"
+Viewed StatefulAgentStoreImpl.java:330-340
+Viewed AsyncPersistenceEngine.java:220-250
+Searched for "checkpointStore.save"
+Searched for "save("
+Viewed AsyncPersistenceEngine.java:1-100
+Viewed AsyncPersistenceEngine.java:200-230
+Searched for "submitCritical(event)"
+Searched for "submitCritical("
+Searched for "submitCritical"
+Searched for "criticalQueue.offer"
+Viewed AsyncPersistenceEngine.java:150-250
+Searched for "persistenceEngine"
+Searched for "AsyncPersistenceEngine"
+Searched for "InstantToTextConverter"
+Searched for "InstantToTextConverter"
+Viewed InstantToTextConverter.java:1-48
+Searched for "SqliteRetryTemplate"
+Listed directory sqlite
+Searched for "SqliteWalConfigurer"
+Viewed AgentCronRepository.java:1-281
+Ran command: `mkdir -p arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/`
+Ran command: `mv arcclaw-core/src/main/java/com/arcclaw/core/state/InstantToTextConverter.java arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/
+mv arcclaw-core/src/main/java/com/arcclaw/core/state/SqliteWalConfigurer.java arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/`
+Viewed ScheduleTaskTool.java:1-323
+Created TemporalUtils.java
+Edited InstantToTextConverter.java
+Edited SqliteWalConfigurer.java
+Edited AgentCronRepository.java
+Edited ScheduleTaskTool.java
+Viewed AgentSkillEntity.java:1-77
+Edited AgentSkillEntity.java
+Edited AgentSkillEntity.java
+Viewed AgentCronEntity.java:1-119
+Edited AgentCronEntity.java
+Viewed RagChunkEntity.java:1-32
+Edited RagChunkEntity.java
+Edited RagChunkEntity.java
+Viewed SessionRegistryEntry.java:1-50
+Edited SessionRegistryEntry.java
+Viewed StartupOrderTest.java:1-30
+Edited StartupOrderTest.java
+Viewed CoreReflectionConfig.java:1-75
+Viewed SqlitePersistenceReflectionConfig.java:1-16
+Edited SqlitePersistenceReflectionConfig.java
+Edited CoreReflectionConfig.java
+Viewed StatefulAgentStoreImpl.java:30-80
+Viewed StatefulAgentStore.java:1-60
+Searched for "store.save("
+Searched for "StatefulAgentStore"
+Searched for "StatefulAgentStore"
+Searched for "agentStore.save"
+Searched for "agentStore.save"
+Searched for "\.save\("
+Viewed SqlitePersistenceAdapter.java:1-69
+Viewed CheckpointStatus.java:1-127
+Ran command: `grep -r "com.arcclaw.persistence.sqlite" arcclaw-core/src/main/java/com/arcclaw/core/ | grep -v "test"`
+Searched for "com\.arcclaw\.persistence\.sqlite"
+Searched for "InstantToTextConverter"
+Viewed application.yaml:1-764
+Viewed ArcClawSQLiteDialect.java:1-38
+Ran command: `ls arcclaw-core/src/main/java/com/arcclaw/core/persistence/ArcClawSQLiteDialect.java`
+Viewed pom.xml:1-174
+Edited application.yaml
+Edited application.yaml
+Edited CheckpointStorePort.java
+Viewed SqliteCheckpointStoreAdapter.java:200-250
+Edited SqliteCheckpointStoreAdapter.java
+Edited SqliteCheckpointStoreAdapter.java
+Viewed SqliteCheckpointStoreAdapter.java:215-225
+Edited SqliteCheckpointStoreAdapter.java
+Edited SqliteCheckpointStoreAdapter.java
+Searched for "findFirst();"
+Searched for "findFirst"
+Viewed SqliteCheckpointStoreAdapter.java:1-400
+Edited SqliteCheckpointStoreAdapter.java
+Viewed SqliteCheckpointStoreAdapter.java:401-608
+Edited SqliteCheckpointStoreAdapter.java
+Edited StatefulAgentStoreImpl.java
+Viewed StatefulAgentStoreImpl.java:325-345
+Searched for "InstantToTextConverter"
+
+I have completed the migration and hardening of the ArcClaw persistence layer. This effort focused on strictly separating the core domain from adapter-specific concerns, ensuring atomic state transitions, and preparing the framework for a future PostgreSQL migration.
+
+### Key Achievements
+
+#### 1. Architectural Decoupling & Isolation
+*   **Module Relocation**: Moved `InstantToTextConverter` and `SqliteWalConfigurer` from `arcclaw-core` to `arcclaw-persistence-sqlite`. SQLite-specific boot configuration (WAL mode, FTS database attachment) is now isolated in the adapter layer.
+*   **Backend Agnosticism**: Created `TemporalUtils` in core to provide ISO-8601 formatting for logs and tools. Refactored `AgentCronRepository` to use **JPQL** instead of native queries, allowing Hibernate to handle temporal mapping via the adapter's `autoApply` converter.
+*   **Invariant Enforcement**: Adjusted `PersistenceAdapterPort` to rename `executeWithRetry` to `execute`, complying with **Invariant 5.14.1** (retry logic must be internal to the adapter).
+*   **Dialect Alignment**: Updated `application.yaml` to point to the new package for `ArcClawSQLiteDialect`, fixing a Hibernate DDL regression.
+
+#### 2. Reliability & Atomicity
+*   **Atomic Persist**: Implemented `saveCheckpointWithSteps` in `CheckpointStorePort` and its SQLite implementation. This ensures that reasoning steps and their parent checkpoint are saved in a single transaction, preventing "orphaned steps" on failure.
+*   **Stale Join Guard (C3)**: Fixed a race condition in `SqliteCheckpointStoreAdapter` where the stale status check was performed against already-updated state.
+*   **Zombi Recovery (C5)**: Added a bounded retry loop to `SessionReaper.onStartup` to handle `SQLITE_BUSY` locks during JVM boot contention.
+
+#### 3. State Integrity & Audit Compliance
+*   **Audit Fixes (C2)**: Updated `markFailed` and `markOrphaned` in `StatefulAgentStoreImpl` to ensure the `CHECKPOINT_ORPHANED` audit event is emitted and timestamps are correctly recorded.
+*   **Turn Resolution (H1)**: Refactored `findLatestRole` to filter for `ARCHIVED` checkpoints, ensuring it correctly identifies the most recently completed agent turn across multiple turns in a single session.
+*   **Cron Prefix Matching (C6)**: Implemented `findLatestAwaitingApprovalWithPrefix` to support the structural separation of cron-triggered agent turns.
+
+### Verification Performed
+*   Scanned `arcclaw-core` for leaked `com.arcclaw.persistence.sqlite` imports (None found).
+*   Verified that all `@Convert` annotations were removed from core entities in favor of global `autoApply` handling.
+*   Updated `StartupOrderTest` to reflect the package movements.
+
+The persistence layer is now significantly more robust and adheres to the project's strict architectural boundaries.
+
+> [!NOTE]
+> All core entities are now backend-agnostic. The SQLite specific `TEXT` mapping is handled entirely by the `arcclaw-persistence-sqlite` module through the `ArcClawSQLiteDialect` and the auto-applied `InstantToTextConverter`.
+
+Viewed SqliteWalConfigurer.java:1-68
+Edited SqliteWalConfigurer.java
+
+I've removed the unused `mainDb` variable from `SqliteWalConfigurer.java` to resolve the lint error.
+
+### Summary of Changes
+*   **SqliteWalConfigurer.java**: Removed the `mainDb` local variable in `onStartup()` as it was not being utilized in the WAL configuration or FTS attachment logic.
+
+The persistence layer migration and hardening are complete.

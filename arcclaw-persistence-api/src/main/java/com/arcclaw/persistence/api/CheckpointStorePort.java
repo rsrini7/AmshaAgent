@@ -27,6 +27,15 @@ public interface CheckpointStorePort {
     CheckpointDto save(CheckpointDto checkpoint);
 
     /**
+     * Saves or updates a checkpoint and its granular reasoning steps atomically.
+     * 
+     * @param checkpoint the checkpoint DTO to save
+     * @param steps the list of reasoning steps associated with the checkpoint
+     * @return the saved checkpoint DTO with ID populated
+     */
+    CheckpointDto saveCheckpointWithSteps(CheckpointDto checkpoint, List<ReasoningStepDto> steps);
+
+    /**
      * Finds a checkpoint by its ID.
      * 
      * @param id the checkpoint ID
@@ -61,11 +70,18 @@ public interface CheckpointStorePort {
      * @param cutoff the cutoff time - checkpoints updated before this time are considered stale
      * @return list of stale approval checkpoint DTOs
      */
+    List<CheckpointDto> findStaleApprovals(Instant cutoff);
+
+    /**
+     * Finds the latest checkpoint awaiting approval for a given session prefix (e.g. cron).
+     */
+    Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix);
     /**
      * Returns the absolute latest checkpoint for this session, regardless of status.
      * Used for continuity and continuity phrases (§7.29).
      */
     Optional<CheckpointDto> findLatestBySession(String sessionId);
+    Optional<CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status);
 
     /**
      * Replaces all granular steps for a checkpoint with the new list.
@@ -80,7 +96,6 @@ public interface CheckpointStorePort {
 
     void deleteSteps(Long checkpointId);
 
-    List<CheckpointDto> findStaleApprovals(Instant cutoff);
     List<CheckpointDto> findByStatus(String status);
     boolean isCheckpointExpired(String sessionId, long timeoutHours);
     boolean isSessionActive(String sessionId);
