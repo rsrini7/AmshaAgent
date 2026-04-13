@@ -21,7 +21,7 @@ class PlaywrightPageRunnerIntegrationTest {
     @BeforeEach
     void checkEnabled() {
         Assumptions.assumeTrue(
-            runner.enabled,
+            runner.isEnabled(),
             "Skipping: Playwright tool is disabled in configuration"
         );
         Assumptions.assumeTrue(

@@ -53,6 +53,10 @@ public class PlaywrightPageRunner {
      */
     private volatile boolean startupComplete = false;
 
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     public boolean isInitialized() {
         return browser != null;
     }
