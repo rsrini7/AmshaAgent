@@ -64,14 +64,18 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
             checkpoint.setAutonomyLevel(autonomy);
             checkpoint.setIterationsUsed(steps.size());
+        }
 
+        CheckpointDto savedDto = storeAdapter.save(entityToDto(checkpoint));
+        
+        if (!existing.isPresent()) {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
             auditService.recordWithIdempotency(sessionId, userId, agentRole,
                 SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy, idempotencyKey);
+            log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         }
 
-        CheckpointDto savedDto = storeAdapter.save(entityToDto(checkpoint));
         return dtoToEntity(savedDto);
     }
 
@@ -102,19 +106,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void markFailed(Long checkpointId, String reason) {
-        storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            CheckpointDto updated = new CheckpointDto(
-                dto.id(), dto.sessionId(), dto.agentRole(), 
-                CheckpointStatus.FAILED.toString(),
-                dto.autonomyLevel(), dto.stateJson(), dto.channelPlatformId(), dto.channelType(), 
-                dto.originalGoal(), Instant.now(), dto.completedAt(), reason,
-                dto.pendingToolName(), dto.batchToolDecisions(), dto.pendingToolParametersJson(), 
-                dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(), 
-                dto.retryAfterMs(), dto.systemNote(), dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
-                dto.createdAt(), dto.updatedAt()
-            );
-            storeAdapter.save(updated);
-        });
+        markFailed(checkpointId, reason, null, null, null);
     }
 
     @Override
@@ -136,6 +128,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 dto.createdAt(), dto.updatedAt()
             );
             storeAdapter.save(updated);
+
+            String userId = WorkspaceContext.resolveUserId();
+            String idempotencyKey = "CP_FAILED:" + checkpointId;
+            String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
+            auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
+                SecurityEventType.CHECKPOINT_FAILED, details, idempotencyKey);
+            log.warnf("Checkpoint %s/%s marked FAILED: %s", dto.sessionId(), dto.agentRole(), reason);
         });
     }
 
