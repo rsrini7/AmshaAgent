@@ -33,6 +33,11 @@ allowing agents to read JavaScript-rendered pages that are inaccessible to plain
       <artifactId>playwright</artifactId>
       <version>1.58.0</version>
     </dependency>
+
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-opentelemetry</artifactId>
+    </dependency>
     <!-- Test -->
     <dependency>
         <groupId>io.quarkus</groupId>

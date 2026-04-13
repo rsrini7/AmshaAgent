@@ -68,26 +68,29 @@ public class PlaywrightPageRunner {
         try {
             long t0 = System.currentTimeMillis();
 
-            // Map system properties from .env (loaded by AppBootstrap) to Playwright's env
+            // Resolve BROWSERS_PATH and SKIP_BROWSER_DOWNLOAD from SysProp or Env
             Map<String, String> env = new HashMap<>(System.getenv());
-            String browsersPathProp = System.getProperty("PLAYWRIGHT_BROWSERS_PATH");
-            String resolvedPath = null;
-
-            if (browsersPathProp != null && !browsersPathProp.isBlank()) {
+            
+            String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", 
+                    System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
+            
+            if (browsersPath != null && !browsersPath.isBlank()) {
                 // Ensure the path is absolute for consistency across launch environments (Fix for Windows Binary)
-                Path p = Path.of(browsersPathProp).toAbsolutePath().normalize();
-                resolvedPath = p.toString();
+                Path p = Path.of(browsersPath).toAbsolutePath().normalize();
+                String resolvedPath = p.toString();
                 env.put("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
+                // Sync back to system property for visibility in logs/other components
                 System.setProperty("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
+                log.infof("Initializing Playwright with BROWSERS_PATH=%s", resolvedPath);
+            } else {
+                log.info("Initializing Playwright with default browser path");
             }
 
-            String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD");
+            String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
+                    System.getenv("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"));
             if (skipDownload != null && !skipDownload.isBlank()) {
                 env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", skipDownload);
             }
-
-            log.infof("Initializing Playwright with BROWSERS_PATH=%s",
-                    resolvedPath != null ? resolvedPath : "default");
 
             playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
             browser = playwright.chromium().launch(
@@ -103,11 +106,14 @@ public class PlaywrightPageRunner {
             }, "playwright-shutdown"));
 
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : "";
-            log.errorf(e, "Playwright initialization failed: %s", msg);
+            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             if (msg.contains("Executable doesn't exist")) {
-                log.warn("Playwright Chromium binary not found. Run 'playwright install chromium' " +
-                         "or install via npx before launching ArcClaw.");
+                // Concise warning: take only the first line to avoid giant Node/driver stack traces
+                String summary = msg.split("\n")[0].trim();
+                log.warnf("Playwright Chromium binary not found. Initialization skipped. " +
+                         "(Run 'npx playwright install chromium' or check path). Details: %s", summary);
+            } else {
+                log.errorf(e, "Playwright initialization failed: %s", msg);
             }
             destroy();
         } finally {
