@@ -1,6 +1,8 @@
 package com.arcclaw.rag;
 
 import java.util.Map;
+import com.arcclaw.persistence.api.MemoryRetrievalPort;
+import com.arcclaw.persistence.api.MemoryEntryDto;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -18,8 +20,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 @ApplicationScoped
 public class IngestDocumentTool implements AgentTool {
 
-    @Inject GlobalKnowledgeBase globalKb;
-    @Inject SessionKnowledgeBase sessionKb;
+    @Inject MemoryRetrievalPort memoryPort;
     @Inject AuditService auditService;
 
     @Override
@@ -87,13 +88,10 @@ public class IngestDocumentTool implements AgentTool {
         String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) sessionId = "no-session";
 
-        String chunkId = globalKb.ingest(text);
-        sessionKb.ingest(chunkId != null ? chunkId : "session-" + label, text);
+        memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
 
         return ToolResponse.success(
-            chunkId != null
-                ? "Document ingested successfully. chunkId: " + chunkId
-                : "Document stored in session memory (persistent vector store unavailable).");
+            "Document ingested successfully into knowledge base.");
     }
 
     @Override

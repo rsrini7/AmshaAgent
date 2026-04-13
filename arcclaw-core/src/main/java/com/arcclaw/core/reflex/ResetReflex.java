@@ -11,7 +11,7 @@ import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.core.state.StatefulAgentStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
@@ -30,7 +30,7 @@ public class ResetReflex implements AgentReflex {
     ChatMemoryStore chatMemoryStore;
 
     @Inject
-    CompactionSummaryRepository compactionSummaryRepository;
+    CompactionStorePort compactionSummaryRepository;
 
     @Inject
     AgentCronRepository cronRepository;

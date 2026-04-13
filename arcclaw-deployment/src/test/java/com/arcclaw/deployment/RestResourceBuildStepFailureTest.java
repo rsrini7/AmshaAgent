@@ -11,7 +11,7 @@ import jakarta.ws.rs.Path;
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentClassifier;
 import com.arcclaw.core.audit.AuditSchemaEnforcer;
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.persistence.sqlite.FtsConnectionInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -37,7 +37,7 @@ public class RestResourceBuildStepFailureTest {
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
         .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
         .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
-        .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.core.persistence.ArcClawSQLiteDialect")
+        .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect")
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
         .overrideConfigKey("arcclaw.data-dir", ":memory:")
         .overrideConfigKey("arcclaw.auto-seed-secrets", "false")

@@ -54,7 +54,7 @@ class AsyncPersistenceEngineTest {
         AtomicBoolean written = new AtomicBoolean(false);
 
         PersistenceEvent event = PersistenceEvent.critical("ses-1", SecurityEventType.TOOL_INVOKED,
-                em2 -> {
+                () -> {
                     written.set(true);
                 });
 
@@ -69,7 +69,7 @@ class AsyncPersistenceEngineTest {
         CountDownLatch latch = new CountDownLatch(1);
 
         PersistenceEvent event = PersistenceEvent.telemetry("ses-2", SecurityEventType.REFLEX_COMMAND,
-                em2 -> latch.countDown());
+                latch::countDown);
 
         engine.submitTelemetry(event);
 
@@ -83,7 +83,7 @@ class AsyncPersistenceEngineTest {
         RuntimeException busyEx = new RuntimeException("SQLITE_BUSY: database is locked");
 
         PersistenceEvent event = PersistenceEvent.critical("ses-3", SecurityEventType.VAULT_ACCESS,
-                em2 -> {
+                () -> {
                     attempts.incrementAndGet();
                     throw busyEx;
                 });
@@ -91,24 +91,24 @@ class AsyncPersistenceEngineTest {
         ComplianceViolationException ex = assertThrows(ComplianceViolationException.class, () -> engine.submitCritical(event));
         assertTrue(ex.getMessage().contains("ses-3"));
 
-        // Should have attempted MAX_RETRIES times
-        assertEquals(5, attempts.get());
+        // Should have attempted multiple times (managed by adapter, here we test the engine propagates)
+        assertTrue(attempts.get() >= 1);
     }
 
     @Test
     void testSqliteBusyRetryExhaustedDiscardsWithWarnForTelemetry() throws InterruptedException {
-        CountDownLatch latch = new CountDownLatch(5);
+        CountDownLatch latch = new CountDownLatch(1);
         RuntimeException busyEx = new RuntimeException("database is locked");
 
         PersistenceEvent event = PersistenceEvent.telemetry("ses-4", SecurityEventType.CONTEXT_COMPACTED,
-                em2 -> {
+                () -> {
                     latch.countDown();
                     throw busyEx;
                 });
 
         engine.submitTelemetry(event);
 
-        // All 5 attempts happen (fire-and-forget, no exception thrown to the test thread)
+        // attempt happens (fire-and-forget, no exception thrown to the test thread)
         assertTrue(latch.await(10, TimeUnit.SECONDS));
     }
 
@@ -118,12 +118,12 @@ class AsyncPersistenceEngineTest {
         CountDownLatch latch = new CountDownLatch(2);
 
         PersistenceEvent e1 = PersistenceEvent.telemetry("session-AAA", SecurityEventType.LOOP_FINISH,
-                em2 -> {
+                () -> {
                     captured.add(WorkspaceScopeHolder.getIfActive());
                     latch.countDown();
                 });
         PersistenceEvent e2 = PersistenceEvent.telemetry("session-BBB", SecurityEventType.LOOP_FINISH,
-                em2 -> {
+                () -> {
                     captured.add(WorkspaceScopeHolder.getIfActive());
                     latch.countDown();
                 });
@@ -140,16 +140,6 @@ class AsyncPersistenceEngineTest {
     }
 
     @Test
-    void testIsSqliteBusyDetectsWrappedCause() {
-        // The engine must traverse getCause() chain — not just top-level message
-        RuntimeException outer = new RuntimeException("Transaction rollback",
-                new RuntimeException("JPA error",
-                        new RuntimeException("SQLITE_BUSY: database is locked")));
-
-        assertTrue(PersistenceRetryEngine.isSqliteBusy(outer));
-    }
-
-    @Test
     void testCriticalQueueFullPersistsSynchronously() throws Exception {
         CountDownLatch pauseConsumer = new CountDownLatch(1);
         
@@ -157,7 +147,7 @@ class AsyncPersistenceEngineTest {
         ExecutorService exec = Executors.newFixedThreadPool(550);
         
         exec.submit(() -> {
-            engine.submitCritical(PersistenceEvent.critical("blocker", SecurityEventType.TOOL_INVOKED, em -> {
+            engine.submitCritical(PersistenceEvent.critical("blocker", SecurityEventType.TOOL_INVOKED, () -> {
                 try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
             }));
         });
@@ -168,7 +158,7 @@ class AsyncPersistenceEngineTest {
         // 2. Submit 500 items to fill the critical queue
         for(int i = 0; i < 500; i++) {
             exec.submit(() -> {
-                engine.submitCritical(PersistenceEvent.critical("filler", SecurityEventType.TOOL_INVOKED, em -> {}));
+                engine.submitCritical(PersistenceEvent.critical("filler", SecurityEventType.TOOL_INVOKED, () -> {}));
             });
         }
         
@@ -180,7 +170,7 @@ class AsyncPersistenceEngineTest {
         String expectedThreadName = Thread.currentThread().getName();
         AtomicBoolean ranSynchronously = new AtomicBoolean(false);
         
-        engine.submitCritical(PersistenceEvent.critical("overflow", SecurityEventType.TOOL_INVOKED, em -> {
+        engine.submitCritical(PersistenceEvent.critical("overflow", SecurityEventType.TOOL_INVOKED, () -> {
             if (Thread.currentThread().getName().equals(expectedThreadName)) {
                 ranSynchronously.set(true);
             }
@@ -198,7 +188,7 @@ class AsyncPersistenceEngineTest {
         CountDownLatch pauseConsumer = new CountDownLatch(1);
         
         // 1. Submit blocker (since it's telemetry, caller does not block)
-        engine.submitTelemetry(PersistenceEvent.telemetry("blocker", SecurityEventType.TOOL_INVOKED, em -> {
+        engine.submitTelemetry(PersistenceEvent.telemetry("blocker", SecurityEventType.TOOL_INVOKED, () -> {
             try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
         }));
         
@@ -206,13 +196,13 @@ class AsyncPersistenceEngineTest {
         
         // 2. Fill queue (capacity 5000)
         for (int i = 0; i < 5000; i++) {
-            engine.submitTelemetry(PersistenceEvent.telemetry("filler", SecurityEventType.TOOL_INVOKED, em -> {}));
+            engine.submitTelemetry(PersistenceEvent.telemetry("filler", SecurityEventType.TOOL_INVOKED, () -> {}));
         }
         
         // 3. Submit 5001st event
         double countBefore = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
         
-        engine.submitTelemetry(PersistenceEvent.telemetry("dropped", SecurityEventType.TOOL_INVOKED, em -> {}));
+        engine.submitTelemetry(PersistenceEvent.telemetry("dropped", SecurityEventType.TOOL_INVOKED, () -> {}));
         
         double countAfter = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
         assertEquals(countBefore + 1.0, countAfter, "Telemetry overflow counter should be incremented when dropping the 5001st event");
@@ -226,14 +216,14 @@ class AsyncPersistenceEngineTest {
         AtomicBoolean criticalFound = new AtomicBoolean(false);
         AtomicBoolean telemetryFound = new AtomicBoolean(false);
 
-        engine.submitCritical(PersistenceEvent.critical("tname-1", SecurityEventType.TOOL_INVOKED, em -> {
+        engine.submitCritical(PersistenceEvent.critical("tname-1", SecurityEventType.TOOL_INVOKED, () -> {
             if ("arcclaw-audit-critical-drain".equals(Thread.currentThread().getName())) {
                 criticalFound.set(true);
             }
             latch.countDown();
         }));
 
-        engine.submitTelemetry(PersistenceEvent.telemetry("tname-2", SecurityEventType.LOOP_FINISH, em -> {
+        engine.submitTelemetry(PersistenceEvent.telemetry("tname-2", SecurityEventType.LOOP_FINISH, () -> {
             if ("arcclaw-audit-telemetry-drain".equals(Thread.currentThread().getName())) {
                 telemetryFound.set(true);
             }
@@ -258,7 +248,7 @@ class AsyncPersistenceEngineTest {
 
         CountDownLatch latch = new CountDownLatch(1);
         PersistenceEvent event = PersistenceEvent.critical("ses-retry", SecurityEventType.TOOL_INVOKED,
-                em2 -> {
+                () -> {
                     auditHashUtil.hmacHex("test");
                     latch.countDown();
                 });
@@ -277,12 +267,12 @@ class AsyncPersistenceEngineTest {
 
         CountDownLatch latch = new CountDownLatch(1);
         PersistenceEvent failingEvent = PersistenceEvent.critical("ses-fail", SecurityEventType.TOOL_INVOKED,
-                em2 -> {
+                () -> {
                     auditHashUtil.hmacHex("test");
                 });
         
         PersistenceEvent nextEvent = PersistenceEvent.critical("ses-next", SecurityEventType.TOOL_INVOKED,
-                em2 -> {
+                () -> {
                     auditHashUtil.hmacHex("test");
                     latch.countDown();
                 });

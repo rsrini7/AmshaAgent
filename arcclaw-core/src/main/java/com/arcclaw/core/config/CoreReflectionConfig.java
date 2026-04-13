@@ -15,7 +15,6 @@ import com.arcclaw.core.audit.AuditVerifier;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.cron.CronTaskScheduled;
-import com.arcclaw.core.persistence.ArcClawSQLiteDialect;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
@@ -77,7 +76,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SkillFrontmatter.class,
         CompiledSkillEntry.class,
         SkillPromptParams.class,
-        ArcClawSQLiteDialect.class,
         SandboxResult.class,
         AgentJobCompleted.class,
         CronTaskScheduled.class

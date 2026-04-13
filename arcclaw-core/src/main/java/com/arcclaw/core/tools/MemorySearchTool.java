@@ -10,8 +10,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.persistence.api.CompactionStorePort;
+import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.arcclaw.core.util.Fts5QueryUtil;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.jboss.logging.Logger;
@@ -29,7 +29,7 @@ public class MemorySearchTool implements AgentTool {
     private static final Logger log = Logger.getLogger(MemorySearchTool.class);
 
     @Inject
-    CompactionSummaryRepository repository;
+    CompactionStorePort repository;
 
     @Override
     public String name() {
@@ -101,9 +101,9 @@ public class MemorySearchTool implements AgentTool {
         String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
 
         // 4. Search
-        List<CompactionSummaryEntity> results;
+        List<CompactionSummaryDto> results;
         try {
-            results = repository.searchMemory(userId, safeQuery, 5);
+            results = repository.search(userId, safeQuery, 5);
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             if (msg.contains("no such table") || msg.contains("fts")) {
@@ -123,8 +123,8 @@ public class MemorySearchTool implements AgentTool {
         }
 
         String formatted = results.stream()
-                .map((CompactionSummaryEntity r) -> String.format("Session %s (%s): %s",
-                        r.getSessionId(), r.getCreatedAt(), r.getSummary()))
+                .map((CompactionSummaryDto r) -> String.format("Session %s (%s): %s",
+                        r.sessionId(), r.compactedAt(), r.summary()))
                 .collect(Collectors.joining("\n---\n"));
 
         if (formatted.isBlank()) {

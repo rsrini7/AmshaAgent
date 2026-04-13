@@ -11,6 +11,8 @@
   <packaging>pom</packaging>
 
   <modules>
+    <module>arcclaw-persistence-api</module>
+    <module>arcclaw-persistence-sqlite</module>
     <module>arcclaw-channel-api</module>
     <module>arcclaw-core</module>
     <module>arcclaw-mcp</module>

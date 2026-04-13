@@ -10,7 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.persistence.api.CompactionStorePort;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -33,7 +33,7 @@ public class HistoryReflex implements AgentReflex {
     ChatMemoryStore chatMemoryStore;
 
     @Inject
-    CompactionSummaryRepository compactionSummaryRepository;
+    CompactionStorePort compactionSummaryRepository;
 
     @Override
     public boolean matches(String input) {
@@ -47,7 +47,7 @@ public class HistoryReflex implements AgentReflex {
         // Use findLatestBySessionId for consistency
         compactionSummaryRepository.findLatestBySessionId(sessionId).ifPresent(s -> {
             sb.append(String.format(COMPACTED_SUMMARY_FORMAT, 
-                      s.getMessagesCompacted(), s.getSummary()))
+                      s.messagesCompacted(), s.summary()))
               .append("\n\n");
         });
 

@@ -11,6 +11,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import com.arcclaw.persistence.api.PersistenceAdapterPort;
+import com.arcclaw.persistence.api.CheckpointStorePort;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -74,9 +76,12 @@ public class AsyncPersistenceEngine {
     @Inject
     MeterRegistry registry;
 
-    /** Handles retry loop, @Transactional boundary, exhaustion, and BUSY detection. */
+    /** Handles backend-specific retry-loop and @Transactional boundary. */
     @Inject
-    PersistenceRetryEngine retryEngine;
+    PersistenceAdapterPort persistenceAdapter;
+
+    @Inject
+    CheckpointStorePort checkpointStore;
 
     // -------------------------------------------------------------------------
     // Lifecycle state
@@ -218,7 +223,7 @@ public class AsyncPersistenceEngine {
         PersistenceEvent event = PersistenceEvent.critical(
                 checkpoint.getSessionId(),
                 SecurityEventType.CHECKPOINT_CREATED,
-                em -> em.merge(checkpoint));
+                () -> checkpointStore.save(CheckpointMapper.toDto(checkpoint)));
         submitCritical(event);
         return event.getFuture();
     }
@@ -232,12 +237,20 @@ public class AsyncPersistenceEngine {
      * <strong>For use in tests only.</strong>
      */
     public void waitForIdle() {
-        PersistenceRetryEngine.sleepQuietly(10); // give any in-flight enqueue time to land
+        sleepQuietly(10); // give any in-flight enqueue time to land
         while (!criticalQueue.isEmpty()
                 || !telemetryQueue.isEmpty()
                 || processingCritical.get()
                 || processingTelemetry.get()) {
-            PersistenceRetryEngine.sleepQuietly(10);
+            sleepQuietly(10);
+        }
+    }
+
+    private void sleepQuietly(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -383,7 +396,10 @@ public class AsyncPersistenceEngine {
         // Bind workspace scope per-event, then delegate all retry logic to retryEngine.
         try {
             WorkspaceScopeHolder.run(event.getSessionId(),
-                    () -> retryEngine.executeWithRetry(event));
+                    () -> persistenceAdapter.executeWithRetry(
+                            event.getSessionId(),
+                            event.getEventType().toString(),
+                            event.getDbAction()));
 
         } catch (ComplianceViolationException cve) {
             if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);

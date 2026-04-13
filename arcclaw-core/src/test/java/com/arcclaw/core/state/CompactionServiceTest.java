@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.persistence.api.CompactionStorePort;
+import com.arcclaw.persistence.api.CompactionSummaryDto;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -24,7 +26,7 @@ class CompactionServiceTest {
 
     CompactionService service;
     PersistentChatMemoryStore mockChatStore;
-    CompactionSummaryRepository mockRepo;
+    CompactionStorePort mockPort;
     AuditService mockAudit;
     ChatModel mockModel;
 
@@ -32,12 +34,12 @@ class CompactionServiceTest {
     void setup() {
         service = new CompactionService();
         mockChatStore = mock(PersistentChatMemoryStore.class);
-        mockRepo = mock(CompactionSummaryRepository.class);
+        mockPort = mock(CompactionStorePort.class);
         mockAudit = mock(AuditService.class);
         mockModel = mock(ChatModel.class);
 
         service.chatMemoryStore = mockChatStore;
-        service.summaryRepository = mockRepo;
+        service.summaryRepository = mockPort;
         service.auditService = mockAudit;
         service.compactionModel = mockModel;
         
@@ -70,7 +72,7 @@ class CompactionServiceTest {
         }
         
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
-        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
                 .aiMessage(AiMessage.aiMessage("New Summary Text"))
                 .build());
@@ -78,7 +80,7 @@ class CompactionServiceTest {
         assertTrue(service.compact("session1", "test-user"));
 
         verify(mockModel, times(1)).chat(any(UserMessage.class));
-        verify(mockRepo, times(1)).upsertSummary("session1", "test-user", "New Summary Text", 5);
+        verify(mockPort, times(1)).upsert(any(CompactionSummaryDto.class));
         verify(mockChatStore, times(1)).updateMessages(eq("session1"), anyList());
         verify(mockAudit, times(1)).record(eq("session1"), eq("system"), eq("system"), any(), anyString());
     }
@@ -95,7 +97,7 @@ class CompactionServiceTest {
                 .build());
 
         assertFalse(service.compact("session1", "test-user"));
-        verify(mockRepo, never()).upsertSummary(any(), any(), any(), anyInt());
+        verify(mockPort, never()).upsert(any());
     }
 
     @Test
@@ -106,17 +108,17 @@ class CompactionServiceTest {
         String longText = sb.toString();
         
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
-        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
                 .aiMessage(AiMessage.aiMessage(longText))
                 .build());
 
         assertTrue(service.compact("session1", "test-user"));
 
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), captor.capture(), anyInt());
+        ArgumentCaptor<CompactionSummaryDto> captor = ArgumentCaptor.forClass(CompactionSummaryDto.class);
+        verify(mockPort).upsert(captor.capture());
         
-        String truncated = captor.getValue();
+        String truncated = captor.getValue().summary();
         assertTrue(truncated.endsWith("...[truncated]"));
         char lastChar = truncated.charAt(1984);
         assertEquals('A', lastChar);
@@ -128,14 +130,14 @@ class CompactionServiceTest {
         sb.append("extra");
         longText = sb.toString();
         
-        reset(mockRepo);
+        reset(mockPort);
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
                 .aiMessage(AiMessage.aiMessage(longText))
                 .build());
         
         assertTrue(service.compact("session1", "test-user"));
-        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), captor.capture(), anyInt());
-        truncated = captor.getValue();
+        verify(mockPort).upsert(captor.capture());
+        truncated = captor.getValue().summary();
         
         assertTrue(truncated.contains("\uD83D\uDE00...[truncated]"));
         int emojiStart = truncated.indexOf("\uD83D\uDE00");
@@ -156,26 +158,30 @@ class CompactionServiceTest {
     void testShortTextIsNotTruncated() {
         String shortText = "A".repeat(1985);
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
-        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
                 .aiMessage(AiMessage.aiMessage(shortText))
                 .build());
 
         assertTrue(service.compact("session1", "test-user"));
-        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), eq(shortText), anyInt());
+        ArgumentCaptor<CompactionSummaryDto> captor = ArgumentCaptor.forClass(CompactionSummaryDto.class);
+        verify(mockPort).upsert(captor.capture());
+        assertEquals(shortText, captor.getValue().summary());
     }
 
     @Test
     void testTruncationSuffixPresent() {
         String longText = "A".repeat(1986);
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
-        when(mockRepo.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
                 .aiMessage(AiMessage.aiMessage(longText))
                 .build());
 
         assertTrue(service.compact("session1", "test-user"));
-        verify(mockRepo).upsertSummary(eq("session1"), eq("test-user"), contains("...[truncated]"), anyInt());
+        ArgumentCaptor<CompactionSummaryDto> captor = ArgumentCaptor.forClass(CompactionSummaryDto.class);
+        verify(mockPort).upsert(captor.capture());
+        assertTrue(captor.getValue().summary().contains("...[truncated]"));
     }
 
     @Test

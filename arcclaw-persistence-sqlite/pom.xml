@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.arcclaw</groupId>
+        <artifactId>arcclaw-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>arcclaw-persistence-sqlite</artifactId>
+    <name>ArcClaw Persistence - SQLite</name>
+    <description>SQLite-specific persistence adapter implementation</description>
+
+    <dependencies>
+        <!-- Persistence API (port interfaces) -->
+        <dependency>
+            <groupId>com.arcclaw</groupId>
+            <artifactId>arcclaw-persistence-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- ArcClaw core domain -->
+        <dependency>
+            <groupId>com.arcclaw</groupId>
+            <artifactId>arcclaw-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Quarkus CDI -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
+        </dependency>
+
+        <!-- Hibernate ORM -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-hibernate-orm</artifactId>
+        </dependency>
+
+        <!-- SQLite driver -->
+        <dependency>
+            <groupId>io.quarkiverse.jdbc</groupId>
+            <artifactId>quarkus-jdbc-sqlite</artifactId>
+            <version>3.0.11</version>
+        </dependency>
+
+        <!-- Jakarta Enterprise APIs -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.jboss.logging</groupId>
+            <artifactId>jboss-logging</artifactId>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5-mockito</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

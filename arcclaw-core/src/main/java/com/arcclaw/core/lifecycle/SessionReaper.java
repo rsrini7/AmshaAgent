@@ -22,12 +22,12 @@ import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
-import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.ShutdownEvent;
@@ -60,7 +60,7 @@ public class SessionReaper {
     @Inject StatefulAgentStore agentStore;
     @Inject ObjectMapper objectMapper;
     @Inject SessionAuditSequencer auditSequencer;
-    @Inject SqliteRetryTemplate retryTemplate;
+    @Inject CheckpointStorePort checkpointStore;
     @Inject CompactionInFlightFlag compactionInFlight;
     @Inject AgentSseService agentSseService;
     @Inject CliResultBridge cliResultBridge;
@@ -84,11 +84,9 @@ public class SessionReaper {
      */
     public void onStartup(@Observes StartupEvent event) {
         try {
-            retryTemplate.executeVoid("onStartup-zombies", 5, 50, () -> {
-                QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
-            });
+            QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
         } catch (Exception e) {
-            log.errorf("Failed onStartup zombie recovery after retries: %s", e.getMessage());
+            log.errorf("Failed onStartup zombie recovery: %s", e.getMessage());
             log.debugf(e, "Full stacktrace for onStartup zombie recovery failure");
         }
     }

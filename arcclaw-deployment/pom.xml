@@ -21,6 +21,13 @@
 
     <dependency>
       <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-persistence-sqlite</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-channel-api</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>

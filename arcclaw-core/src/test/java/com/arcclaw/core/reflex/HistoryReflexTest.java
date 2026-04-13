@@ -13,8 +13,8 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.persistence.api.CompactionStorePort;
+import com.arcclaw.persistence.api.CompactionSummaryDto;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -34,7 +34,7 @@ public class HistoryReflexTest {
     ChatMemoryStore chatMemoryStore;
 
     @InjectMock
-    CompactionSummaryRepository compactionSummaryRepository;
+    CompactionStorePort compactionStorePort;
 
     private MessageContext createContext(String input) {
         ChannelUser user = new ChannelUser("user1", "user1", "user1", ChannelType.TELEGRAM);
@@ -53,14 +53,11 @@ public class HistoryReflexTest {
     void testExecute_WithSummaryAndMessages() {
         String sessionId = "test-session";
         
-        CompactionSummaryEntity summary = new CompactionSummaryEntity();
-        summary.setSummary("Prior history summarized.");
-        summary.setMessagesCompacted(10);
+        CompactionSummaryDto summary = new CompactionSummaryDto(sessionId, "Prior history summarized.", Instant.now(), 10, "user1");
         
-        when(compactionSummaryRepository.findLatestBySessionId(sessionId))
+        when(compactionStorePort.findLatestBySessionId(sessionId))
             .thenReturn(Optional.of(summary));
             
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         List<ChatMessage> messages = List.of(
             UserMessage.userMessage("User prompt"),
             AiMessage.aiMessage("AI response")
@@ -78,7 +75,7 @@ public class HistoryReflexTest {
 
     @Test
     void testExecute_NoHistory() {
-        when(compactionSummaryRepository.findLatestBySessionId(anyString()))
+        when(compactionStorePort.findLatestBySessionId(anyString()))
             .thenReturn(Optional.empty());
         when(chatMemoryStore.getMessages(anyString())).thenReturn(List.of());
         

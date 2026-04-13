@@ -6,8 +6,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.CompactionEventBridge;
-import com.arcclaw.core.state.CompactionSummaryEntity;
-import com.arcclaw.core.state.CompactionSummaryRepository;
+import com.arcclaw.persistence.api.CompactionStorePort;
+import com.arcclaw.persistence.api.CompactionSummaryDto;
 import org.jboss.logging.Logger;
 
 /**
@@ -38,7 +38,7 @@ public class CompactionSummaryCache {
     private boolean loaded = false;
 
     @Inject
-    CompactionSummaryRepository summaryRepository;
+    CompactionStorePort summaryRepository;
 
     @Inject
     CompactionEventBridge compactionEventBridge;
@@ -61,7 +61,7 @@ public class CompactionSummaryCache {
 
             log.tracef("CompactionSummaryCache: cache miss for session %s, fetching from DB", sessionId);
             cachedSummary = summaryRepository.findLatestBySessionId(sessionId)
-                    .map(CompactionSummaryEntity::getSummary)
+                    .map(CompactionSummaryDto::summary)
                     .orElse(null);
             loaded = true;
         } else {

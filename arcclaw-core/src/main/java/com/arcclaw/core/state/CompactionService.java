@@ -1,5 +1,6 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -12,6 +13,8 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.persistence.api.CompactionStorePort;
+import com.arcclaw.persistence.api.CompactionSummaryDto;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -40,7 +43,7 @@ public class CompactionService {
     PersistentChatMemoryStore chatMemoryStore;
 
     @Inject
-    CompactionSummaryRepository summaryRepository;
+    CompactionStorePort summaryRepository;
 
     @Inject
     AuditService auditService;
@@ -142,10 +145,10 @@ public class CompactionService {
         List<ChatMessage> toCompact = nonSystemMessages.subList(0, size - keepRecent);
         List<ChatMessage> toKeep   = nonSystemMessages.subList(size - keepRecent, size);
 
-        Optional<CompactionSummaryEntity> existingSummaryOpt =
+        Optional<CompactionSummaryDto> existingSummaryOpt =
                 summaryRepository.findLatestBySessionId(sessionId);
         String existingSummaryText =
-                existingSummaryOpt.map(CompactionSummaryEntity::getSummary).orElse("");
+                existingSummaryOpt.map(CompactionSummaryDto::summary).orElse("");
 
         String messagesToCompactStr = toCompact.stream()
                 .map(ChatMessage::toString)
@@ -181,7 +184,8 @@ public class CompactionService {
 
         newSummary = truncateSafely(newSummary);
 
-        summaryRepository.upsertSummary(sessionId, userId, newSummary, toCompact.size());
+        summaryRepository.upsert(new CompactionSummaryDto(
+            sessionId, newSummary, Instant.now(), toCompact.size(), userId));
 
         List<ChatMessage> filteredKeep = toKeep.stream()
                 .filter(m -> !(m instanceof SystemMessage))
