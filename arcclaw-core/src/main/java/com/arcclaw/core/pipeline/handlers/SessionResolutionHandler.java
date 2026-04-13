@@ -75,7 +75,7 @@ public class SessionResolutionHandler implements MessageHandler {
             // or after a server restart before any checkpoint has been written.
             // The level is written back to heartbeat below, so this fires at most
             // once per session per JVM lifetime.
-            log.warnf("No stored autonomy found for session %s (first message or post-restart), defaulting to SUPERVISED", sessionId);
+            log.debugf("No stored autonomy found for session %s (first message or post-restart), defaulting to SUPERVISED", sessionId);
             level = AutonomyLevel.SUPERVISED;
         }
 

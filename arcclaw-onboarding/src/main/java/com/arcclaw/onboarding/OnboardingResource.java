@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
-import org.apache.commons.lang3.exception.ExceptionUtils;
-
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -48,6 +46,7 @@ import com.arcclaw.onboarding.dto.Step5Response;
 import com.arcclaw.onboarding.dto.StepResponse;
 import com.arcclaw.onboarding.spi.OnboardingStepProvider;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 

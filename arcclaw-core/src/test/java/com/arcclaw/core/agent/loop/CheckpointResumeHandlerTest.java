@@ -29,7 +29,7 @@ import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -110,7 +110,7 @@ class CheckpointResumeHandlerTest {
 
     @Test
     void testApprovalPath() throws Exception {
-        WorkspaceScopeHolder.run("session", () -> {
+        WorkspaceContext.runWithFullAutonomy("session", "user", "chat", "coordinator", () -> {
             AgentCheckpoint checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId("session");
             checkpoint.setAgentRole("coordinator");
@@ -139,7 +139,7 @@ class CheckpointResumeHandlerTest {
 
     @Test
     void testToolExecutionFailurePath() throws Exception {
-        WorkspaceScopeHolder.run("session", () -> {
+        WorkspaceContext.runWithFullAutonomy("session", "user", "chat", "coordinator", () -> {
             AgentCheckpoint checkpoint = new AgentCheckpoint();
             checkpoint.setSessionId("session");
             checkpoint.setAgentRole("coordinator");
@@ -203,7 +203,7 @@ class CheckpointResumeHandlerTest {
         field.setAccessible(true);
         field.set(engine, stepParser);
 
-        WorkspaceScopeHolder.run("test-session", () -> {
+        WorkspaceContext.runWithFullAutonomy("test-session", "user", "chat", "coordinator", () -> {
             // Act
             Map<String, Object> params = Map.of("parameters", "{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}");
             ReasoningStep step = ReasoningStep.of("thought", "github", params, "obs", 0, 0);

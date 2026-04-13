@@ -8,6 +8,7 @@ import jakarta.enterprise.inject.Default;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.InputSanitizer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -117,6 +118,11 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
     }
 
     @Override
+    public int priority() {
+        return 10;
+    }
+
+    @Override
     public SecurityEventType auditEventType() {
         return SecurityEventType.PROMPT_INJECTION_BLOCKED;
     }
@@ -143,8 +149,7 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
         log.warnf("[INJECTION-BLOCKED] session=%s user=%s category=%s input_length=%d",
                 sessionId, userId, matchedCategory, inputLength);
 
-        String output = "⛔ Message blocked: adversarial instruction pattern detected. " +
-                "If you believe this is a false positive, rephrase your request.";
+        String output = UserMessages.PROMPT_INJECTION_DETECTED;
         return ReflexResult.respond(output, context);
     }
 

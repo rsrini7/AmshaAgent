@@ -1,10 +1,12 @@
 package com.arcclaw.core.config;
 
-import io.quarkus.runtime.Startup;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.annotation.PostConstruct;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+
+import io.quarkus.runtime.Startup;
 
 @ApplicationScoped
 @Startup

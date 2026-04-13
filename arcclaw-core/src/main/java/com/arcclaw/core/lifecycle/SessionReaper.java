@@ -18,7 +18,6 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.SessionAuditSequencer;
@@ -27,6 +26,7 @@ import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -97,7 +97,7 @@ public class SessionReaper {
         // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
         // D1.2: Added 15-minute grace period based on updatedAt to protect
         // active checkpoints running on other nodes during rolling/canary deployments.
-        // FIX: Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
+        // Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
         // Without this, SQLite compares TEXT representations of Instant vs LocalDateTime incorrectly.
         LocalDateTime cutoff = LocalDateTime.ofInstant(
                 Instant.now().minus(Duration.ofMinutes(15)),
@@ -222,21 +222,15 @@ public class SessionReaper {
         }
     }
 
-    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
         if (cp.hasBatchToolDecisions()) {
             BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
                 agentStore.updateBatchToolDecision(
                     cp.getSessionId(), cp.getAgentRole(), toolName,
-                    AgentSentinels.TOOL_DECISION_DENIED));
+                    ToolDecision.DENIED.name()));
         }
 
-        AgentCheckpoint fresh = agentStore.load(cp.getSessionId(), cp.getAgentRole())
-            .orElse(cp);
-        fresh.setStatus(CheckpointStatus.FAILED);
-        fresh.setFailedAt(Instant.now());
-        fresh.setFailReason("Approval timed out after " + hitlTimeoutHours + " hours.");
-        em.merge(fresh);
+        agentStore.markFailed(cp.getId(), "Approval timed out after " + hitlTimeoutHours + " hours.");
 
         // Notify channel
         decisionEvents.fireAsync(new ApprovalDecisionEvent(
@@ -279,17 +273,10 @@ public class SessionReaper {
                     "DELETE FROM ChatMemoryEntity m WHERE m.memoryId NOT IN (" +
                     "  SELECT c.sessionId FROM AgentCheckpoint c " +
                     "  WHERE c.updatedAt > :cutoff " +
-                    "     OR c.status NOT IN (:completed, :archived, :failed, :denied, :loop_exceeded, :compromised)" +
+                    "     OR c.status NOT IN (:terminalStatuses)" +
                     ")")
                     .setParameter("cutoff", cutoff)
-                    .setParameter("completed",     CheckpointStatus.COMPLETED)
-                    .setParameter("archived",      CheckpointStatus.ARCHIVED)
-                    .setParameter("failed",        CheckpointStatus.FAILED)
-                    .setParameter("denied",        CheckpointStatus.DENIED)
-                    .setParameter("loop_exceeded", CheckpointStatus.LOOP_EXCEEDED)
-                    // NOTE: If new terminal CheckpointStatus values are added to the enum,
-                    // update this list to include them or active sessions may be incorrectly purged.
-                    .setParameter("compromised",   CheckpointStatus.COMPROMISED)
+                    .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                     .executeUpdate();
                 
                 if (deleted > 0) {

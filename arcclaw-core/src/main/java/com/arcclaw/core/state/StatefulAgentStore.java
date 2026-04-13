@@ -4,9 +4,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 
 /**
  * Contract for persisting and retrieving agent reasoning checkpoints.
@@ -66,6 +66,16 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param reason     Human-readable failure reason.
      */
     void markFailed(AgentCheckpoint checkpoint, String reason);
+
+    /**
+     * Mark a checkpoint as failed with full diagnostic context.
+     */
+    void markFailed(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass);
+
+    /**
+     * Mark a checkpoint as failed with full diagnostic context.
+     */
+    void markFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass);
 
     /**
      * Mark a checkpoint as completed.
@@ -171,6 +181,11 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * exist for the same (sessionId, agentRole) pair.
      */
     Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId);
+
+    /**
+     * Retrieves the absolute latest checkpoint for this session, regardless of status or role.
+     */
+    Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId);
 
     /**
      * Returns the agentRole of the most recent non-archived checkpoint for this session.

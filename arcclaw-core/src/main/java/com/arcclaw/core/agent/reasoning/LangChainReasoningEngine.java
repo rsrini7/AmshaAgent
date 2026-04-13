@@ -4,12 +4,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -32,7 +33,6 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
 import io.opentelemetry.api.trace.Span;
-
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
@@ -43,10 +43,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
 
 
-    private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
-            "\\b(save|store|ingest|remember|add to memory|note that|call me)\\b",
-            Pattern.CASE_INSENSITIVE
-    );
 
     private boolean isSchemaValidationError(String message) {
         if (message == null) return false;
@@ -90,7 +86,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private String findRateLimitMessage(Throwable e) {
         Throwable t = e;
         while (t != null) {
-            if (isRateLimitError(t.getMessage())) return t.getMessage();
+            String msg = AgentErrorMessageUtil.safeMessage(t);
+            if (isRateLimitError(msg)) return msg;
             t = t.getCause();
         }
         return null;
@@ -105,6 +102,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
     @Inject AgentOtelContext otelContext;
+    @Inject IntentClassificationService intentClassifier;
 
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
@@ -134,7 +132,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // from the tool list so the LLM cannot see or call them in its schema.
         boolean isBackgroundSession = 
             context.autonomyLevel() == AutonomyLevel.BACKGROUND
-            || (context.sessionId() != null && context.sessionId().startsWith("cron-"));
+            || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
  
         List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
                 .filter(allowedTools::contains)
@@ -156,7 +154,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         try {
             response = chatModel.chat(request);
         } catch (InvalidRequestException e) {
-            String msg = e.getMessage() != null ? e.getMessage() : "";
+            String msg = AgentErrorMessageUtil.safeMessage(e);
 
             if (isSchemaValidationError(msg)) {
                 log.warnf("[LangChainReasoningEngine] Schema validation error — " +
@@ -219,7 +217,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
-                        // Fix: intercept write intents before FINISH
+                        // intercept write intents before FINISH
                         if (goalIsWriteIntent(goal)) {
                             log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced prose " +
                                             "instead of tool call for session %s — injecting correction",
@@ -275,7 +273,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             String rateLimitMsg = findRateLimitMessage(e);
             if (rateLimitMsg != null) {
                 Throwable rootCause = ExceptionUtils.getRootCause(e);
-                String rootMsg = rootCause != null ? rootCause.getMessage() : e.getMessage();
+                String rootMsg = rootCause != null ? AgentErrorMessageUtil.safeMessage(rootCause) : AgentErrorMessageUtil.safeMessage(e);
                 log.warnf("[LangChainReasoningEngine] Rate limit — root cause: %s", 
                     AgentErrorMessageUtil.sanitizeErrorMessage(rootMsg));
                 rateLimitTracker.recordHit("primary");
@@ -283,7 +281,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 throw new RuntimeException(clean, e);
             }
 
-            String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+            String clean = AgentErrorMessageUtil.sanitizeErrorMessage(AgentErrorMessageUtil.safeMessage(e));
             throw new RuntimeException(clean, e);
         }
 
@@ -345,7 +343,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     private boolean goalIsWriteIntent(String goal) {
-        return goal != null && WRITE_INTENT_PATTERN.matcher(goal).find();
+        return intentClassifier.isWriteIntent(goal);
     }
 
     /**
@@ -431,10 +429,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     governanceLayer.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                     otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                 } catch (BudgetWarningException w) {
-                    log.warnf("Budget warning for session %s structured call: %s", sessionId, w.getMessage());
+                    log.warnf("Budget warning for session %s structured call: %s", sessionId, AgentErrorMessageUtil.safeMessage(w));
                     throw w;
                 } catch (BudgetExceededException be) {
-                    log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, be.getMessage());
+                    log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, AgentErrorMessageUtil.safeMessage(be));
                     throw be;
                 }
             }
@@ -449,7 +447,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
                 throw new RuntimeException("Structured output LLM call failed: " + clean, e);
             }
-            String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
+            String clean = AgentErrorMessageUtil.sanitizeErrorMessage(AgentErrorMessageUtil.safeMessage(e));
             throw new RuntimeException("Structured output LLM call failed: " + clean, e);
         } finally {
             if (span != null) {

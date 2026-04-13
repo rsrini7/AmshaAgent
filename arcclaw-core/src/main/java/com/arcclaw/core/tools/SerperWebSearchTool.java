@@ -101,11 +101,24 @@ public class SerperWebSearchTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        String userId = WorkspaceContext.userId();
-        if (userId == null || userId.isBlank()) {
-            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-        }
+        String userId;
+        String sessionId;
+        String agentRole;
 
+        try {
+            // Step 1 — Extract and validate tenant context
+            // NS2: Fail fast on missing context
+            userId    = WorkspaceContext.requireUserId();
+            sessionId = WorkspaceContext.requireSessionId();
+            agentRole = WorkspaceContext.requireAgentRole();
+        } catch (IllegalStateException e) {
+            // NS2 backward compatibility: convert missing context into 403 ToolResponse
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
+        }
+ 
         String query = (String) params.get("query");
         if (query == null || query.isBlank()) {
             return ToolResponse.failure(400, "query parameter is required.");
@@ -154,9 +167,8 @@ public class SerperWebSearchTool implements AgentTool {
                  return ToolResponse.failure(response.statusCode(), "Serper Search API failed: " + response.body());
             }
 
-            // Audit successful search
-            String sessionId = WorkspaceContext.requireSessionId();
-            auditService.record(sessionId, userId, WorkspaceContext.agentRole(), 
+            // Audit successful search — NS2: Fail fast on missing role
+            auditService.record(sessionId, userId, agentRole, 
                 SecurityEventType.TOOL_EXECUTED, "Serper search: " + query);
 
             JsonNode root = objectMapper.readTree(response.body());

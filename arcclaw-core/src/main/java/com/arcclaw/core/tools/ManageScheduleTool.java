@@ -1,5 +1,7 @@
 package com.arcclaw.core.tools;
 
+import static com.arcclaw.core.message.UserMessages.NO_SCHEDULE_FOUND;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -11,8 +13,8 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -75,51 +77,58 @@ public class ManageScheduleTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        // Tenant context validation — fail-closed
-        String userId =  WorkspaceContext.userId();
-        if (userId == null || userId.isBlank()) {
-            return ToolResponse.failure(403,
-                    "Security violation: tenant context not bound. Operation rejected.");
-        }
+        String userId;
+        String sessionId;
 
+        try {
+            // Step 1 — Extract and validate tenant context — NS2: Fail fast
+            userId    = WorkspaceContext.requireUserId();
+            sessionId = WorkspaceContext.requireSessionId();
+        } catch (IllegalStateException e) {
+            // NS2 backward compatibility: convert missing context into 403 ToolResponse
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
+        }
+ 
         String action = (String) params.get("action");
         if (action == null || action.isBlank()) {
             return ToolResponse.failure(400, "action is required (list or delete).");
         }
-
-        return switch (action.trim().toLowerCase()) {
-            case "list" -> {
-                List<AgentCronEntity> jobs = cronRepository.findByUserId(userId);
-                if (jobs.isEmpty()) {
-                    yield ToolResponse.success("No scheduled tasks found.");
+ 
+            return switch (action.trim().toLowerCase()) {
+                case "list" -> {
+                    List<AgentCronEntity> jobs = cronRepository.findByUserId(userId);
+                    if (jobs.isEmpty()) {
+                        yield ToolResponse.success(NO_SCHEDULE_FOUND);
+                    }
+                    String listing = jobs.stream()
+                            .map(AgentCronEntity::toDisplayString)
+                            .collect(Collectors.joining("\n---\n"));
+                    yield ToolResponse.success(listing);
                 }
-                String listing = jobs.stream()
-                        .map(AgentCronEntity::toDisplayString)
-                        .collect(Collectors.joining("\n---\n"));
-                yield ToolResponse.success(listing);
-            }
-            case "delete" -> {
-                String cronId = (String) params.get("cronId");
-                if (cronId == null || cronId.isBlank()) {
-                    yield ToolResponse.failure(400, "cronId is required for delete action.");
+                case "delete" -> {
+                    String cronId = (String) params.get("cronId");
+                    if (cronId == null || cronId.isBlank()) {
+                        yield ToolResponse.failure(400, "cronId is required for delete action.");
+                    }
+ 
+                    int deleted = cronRepository.deleteByIdAndUserId(cronId, userId); // ← capture result
+ 
+                    if (deleted == 0) {
+                        yield ToolResponse.failure(404,
+                            UserMessages.cronNotFound(cronId));
+                    }
+ 
+                    auditService.record(sessionId, userId,           // ← only audit on actual deletion
+                            AgentRoleEnum.COORDINATOR.toScopedName(),
+                            SecurityEventType.CRONDELETED,
+                            "cronId=" + cronId);
+ 
+                    yield ToolResponse.success(UserMessages.cronDeleted(cronId));
                 }
-
-                int deleted = cronRepository.deleteByIdAndUserId(cronId, userId); // ← capture result
-
-                if (deleted == 0) {
-                    yield ToolResponse.failure(404,
-                        "Cron job not found: " + cronId + ". Use action='list' to see valid IDs.");
-                }
-
-                String sessionId = WorkspaceScopeHolder.getIfActive();
-                auditService.record(sessionId, userId,           // ← only audit on actual deletion
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
-                        SecurityEventType.CRONDELETED,
-                        "cronId=" + cronId);
-
-                yield ToolResponse.success("✅ Cron job " + cronId + " deleted.");
-            }
-
+ 
             default -> ToolResponse.failure(400,
                     "Unknown action: " + action + ". Use 'list' or 'delete'.");
         };

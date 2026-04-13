@@ -165,7 +165,7 @@ public class PodmanContainerExecutor {
 
                 var pb = new ProcessBuilder(podmanCmd);
 
-                // FIX: check mkdirs() return value — silent failure leaves ProcessBuilder
+                // check mkdirs() return value — silent failure leaves ProcessBuilder
                 // pointing at a non-existent directory, producing a confusing OS error.
                 File workspaceDir = Path.of(workspaceRootDir, sessionId).toFile();
                 if (!workspaceDir.exists()) {
@@ -229,7 +229,7 @@ public class PodmanContainerExecutor {
                     String raw = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
 
                     // Intercept the "Image Not Found" case.
-                    // FIX: use sandboxImage field instead of hardcoded literal
+                    // use sandboxImage field instead of hardcoded literal
                     // so the warning stays accurate if the image name is overridden in config.
                     if (raw != null && (raw.contains("not known") || raw.contains("not found"))) {
                         log.warnf("**====================================================================**");
@@ -258,7 +258,7 @@ public class PodmanContainerExecutor {
 
             } catch (Exception e) {
                 span.recordException(e);
-                // FIX: null-guard e.getMessage() — some exception types (e.g. NullPointerException)
+                // null-guard e.getMessage() — some exception types (e.g. NullPointerException)
                 // return null from getMessage(), which causes OpenTelemetry to throw internally.
                 span.setStatus(StatusCode.ERROR,
                     e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());

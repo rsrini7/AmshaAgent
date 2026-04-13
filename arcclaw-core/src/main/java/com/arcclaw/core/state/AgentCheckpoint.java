@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import jakarta.annotation.Nullable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,8 +24,8 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-/**
- * JPA entity for persisting agent reasoning loop state.
+ /**
+  * JPA entity for persisting agent reasoning loop state.
  * <p>
  * Each checkpoint captures the full serialized reasoning history
  * ({@code stateJson}) for a given session and agent role, enabling
@@ -69,6 +70,7 @@ public class AgentCheckpoint {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "autonomy_level", length = 20)
+    @Nullable
     private AutonomyLevel autonomyLevel;
 
     /**
@@ -79,14 +81,17 @@ public class AgentCheckpoint {
      */
     @Deprecated
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String stateJson;
 
     /** Channel platform ID (e.g. Telegram chat ID) — used for timeout notifications. */
     @Column(name = "channel_platform_id", length = 128)
+    @Nullable
     private String channelPlatformId;
 
     /** Channel type (e.g. TELEGRAM, REST_API) — used for timeout notifications. */
     @Column(name = "channel_type", length = 32)
+    @Nullable
     private String channelType;
 
     /**
@@ -101,26 +106,33 @@ public class AgentCheckpoint {
      * has no hard limit, but the column bound prevents runaway input.
      */
     @Column(name = "original_goal", length = 2048)
+    @Nullable
     private String originalGoal;
 
     /** Timestamp when a failure occurred (null if not failed). */
+    @Nullable
     private Instant failedAt;
 
     /** Timestamp when the checkpoint completed successfully (null if not completed). */
+    @Nullable
     private Instant completedAt;
 
     /** Human-readable failure reason (null if not failed). */
     @Column(length = 1024)
+    @Nullable
     private String failReason;
 
     @Column(name = "pending_tool_name")
+    @Nullable
     private String pendingToolName;
 
     @Column(name = "batch_tool_decisions", columnDefinition = "TEXT")
+    @Nullable
     private String batchToolDecisions; // JSON: {"github":"PENDING","manage_schedule":"PENDING"}
 
     @Column(name = "pending_tool_parameters", columnDefinition = "TEXT")
     @JsonIgnore // Privacy Fix Phase 41: ensure sensitive tool parameters never leak to telemetry/JSON APIs
+    @Nullable
     private String pendingToolParametersJson;
 
     /**
@@ -128,9 +140,11 @@ public class AgentCheckpoint {
      * were pre-executed before the HITL pause. §7.30
      */
     @Column(name = "pre_executed_results", columnDefinition = "TEXT")
+    @Nullable
     private String preExecutedResults;
 
     @Column(name = "max_iterations")
+    @Nullable
     private Integer maxIterations;
 
     @Column(name = "iterations_used")
@@ -138,11 +152,28 @@ public class AgentCheckpoint {
 
     /** Estimated duration (ms) to wait before retrying a rate-limited call. */
     @Column(name = "retry_after_ms")
+    @Nullable
     private Integer retryAfterMs;
 
     /** System constraints to be injected into the prompt (separate from original_goal). */
     @Column(name = "system_note", columnDefinition = "TEXT")
+    @Nullable
     private String systemNote;
+
+    /** Categorized error code for diagnostics (e.g. AUTH_FAILED, TOOL_TIMEOUT). */
+    @Column(name = "error_code", length = 64)
+    @Nullable
+    private String errorCode;
+
+    /** Correlation ID for tracking failures across logs (OTel traceId). */
+    @Column(name = "trace_id", length = 128)
+    @Nullable
+    private String traceId;
+
+    /** Simple name of the Java exception causing the failure. */
+    @Column(name = "root_cause_class", length = 128)
+    @Nullable
+    private String rootCauseClass;
 
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
@@ -318,6 +349,15 @@ public class AgentCheckpoint {
 
     public String getPreExecutedResults() { return preExecutedResults; }
     public void setPreExecutedResults(String v) { this.preExecutedResults = v; }
+
+    public String getErrorCode() { return errorCode; }
+    public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
+
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
+
+    public String getRootCauseClass() { return rootCauseClass; }
+    public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
 
     public boolean hasPreExecutedResults() {
         return preExecutedResults != null && !preExecutedResults.isBlank();

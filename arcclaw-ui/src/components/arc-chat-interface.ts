@@ -210,7 +210,11 @@ export class ArcChatInterface extends LitElement {
   private async _loadHistory() {
     if (!this.sessionId) return;
     try {
-      const res = await fetch(`/api/v1/chat/stream/history/${this.sessionId}`);
+      const res = await fetch(`/api/v1/chat/stream/history/${this.sessionId}`, {
+        headers: {
+          'X-ArcClaw-API-Key': this.apiKey
+        }
+      });
       if (!res.ok) return;
       const msgs = await res.json();
       this._messages = msgs
@@ -219,7 +223,7 @@ export class ArcChatInterface extends LitElement {
           id: crypto.randomUUID(),
           role: m.role,
           text: m.text,
-          timestamp: Date.now(),
+          timestamp: m.timestamp || Date.now(),
           historic: true,
           isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸ Approval needed'),
           actionId: m.actionId || null
@@ -283,7 +287,7 @@ export class ArcChatInterface extends LitElement {
       this._showDenyReason = false;
       const isApproval = frame.text.includes('⏸ Approval needed');
       this._messages = [...this._messages, {
-        id: crypto.randomUUID(), role: 'assistant', text: frame.text, timestamp: Date.now(), isApprovalPrompt: isApproval
+        id: crypto.randomUUID(), role: 'assistant', text: frame.text, timestamp: frame.timestamp || Date.now(), isApprovalPrompt: isApproval
       }];
       if (isApproval) this._awaitingApproval = true;
       this._scrollToBottom();

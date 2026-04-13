@@ -25,12 +25,10 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.util.MdcKeys;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
 
 /**
  * JPA EntityManager-based implementation of {@link StatefulAgentStore}.
@@ -78,7 +76,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpoint checkpoint;
-        AutonomyLevel autonomy = WorkspaceContext.autonomy();
+        AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
 
         if (existing.isPresent()) {
             checkpoint = existing.get();
@@ -98,9 +96,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setIterationsUsed(steps.size());
             em.persist(checkpoint);
 
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole,
-                SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy);
+            String userId = WorkspaceContext.resolveUserId();
+            String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
+            auditService.recordWithIdempotency(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy, idempotencyKey);
 
             log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s",
                       sessionId, agentRole, autonomy);
@@ -148,7 +147,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
             managed.setIterationsUsed(checkpoint.getIterationsUsed());
             managed.setRetryAfterMs(checkpoint.getRetryAfterMs());
-            // Fix 2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
+            //  2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
             managed.setUpdatedAt(checkpoint.getUpdatedAt());
             return managed;
         }
@@ -161,22 +160,22 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             return;
         }
         try {
-            Map<String, String> managedMap = objectMapper.readValue(
+            Map<String, ToolDecision> managedMap = objectMapper.readValue(
                 managed.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
-            Map<String, String> incomingMap = objectMapper.readValue(
+                new TypeReference<Map<String, ToolDecision>>() {});
+            Map<String, ToolDecision> incomingMap = objectMapper.readValue(
                 incoming.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
+                new TypeReference<Map<String, ToolDecision>>() {});
 
             boolean changed = false;
-            for (Map.Entry<String, String> entry : managedMap.entrySet()) {
+            for (Map.Entry<String, ToolDecision> entry : managedMap.entrySet()) {
                 String tool = entry.getKey();
-                String managedDecision = entry.getValue();
-                String incomingDecision = incomingMap.get(tool);
+                ToolDecision managedDecision = entry.getValue();
+                ToolDecision incomingDecision = incomingMap.get(tool);
 
                 // If managed has a real decision, and incoming is still pending, keep the decision
-                if (!AgentSentinels.TOOL_DECISION_PENDING.equals(managedDecision)
-                        && AgentSentinels.TOOL_DECISION_PENDING.equals(incomingDecision)) {
+                if (ToolDecision.PENDING != managedDecision
+                        && ToolDecision.PENDING == incomingDecision) {
                     incomingMap.put(tool, managedDecision);
                     changed = true;
                 }
@@ -224,6 +223,22 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
@@ -300,9 +315,43 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public void markFailed(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
+        withRetry(() -> {
+            self.doMarkFailedIdDiagnostics(checkpointId, reason, errorCode, traceId, rootCauseClass);
+            return null;
+        }, "markFailed-diagnostics-id");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkFailedIdDiagnostics(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
+        em.clear();
+        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
+        if (checkpoint != null) {
+            doMarkFailed(checkpoint, reason, errorCode, traceId, rootCauseClass);
+        }
+    }
+
+    @Override
+    public void markFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
+        withRetry(() -> {
+            self.doMarkFailedEntityDiagnostics(checkpoint, reason, errorCode, traceId, rootCauseClass);
+            return null;
+        }, "markFailed-diagnostics-entity");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkFailedEntityDiagnostics(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
+        em.clear();
+        AgentCheckpoint managed = em.find(AgentCheckpoint.class, checkpoint.getId());
+        if (managed != null) {
+            doMarkFailed(managed, reason, errorCode, traceId, rootCauseClass);
+        }
+    }
+
+    @Override
     @Transactional
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = "cron-" + cronId + "-";
+        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
 
         TypedQuery<AgentCheckpoint> q = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
@@ -317,16 +366,25 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     private void doMarkFailed(AgentCheckpoint checkpoint, String reason) {
+        doMarkFailed(checkpoint, reason, null, null, null);
+    }
+
+    private void doMarkFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
         checkpoint.setStatus(CheckpointStatus.FAILED);
         checkpoint.setFailedAt(Instant.now());
         checkpoint.setFailReason(reason);
+        checkpoint.setErrorCode(errorCode);
+        checkpoint.setTraceId(traceId);
+        checkpoint.setRootCauseClass(rootCauseClass);
 
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
-        auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
-            SecurityEventType.CHECKPOINT_FAILED, "reason=" + reason);
+        String userId = WorkspaceContext.resolveUserId();
+        String idempotencyKey = "CP_FAILED:" + (checkpoint.getId() != null ? checkpoint.getId() : "null");
+        String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
+        auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+            SecurityEventType.CHECKPOINT_FAILED, details, idempotencyKey);
 
-        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s",
-                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
+        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s (errorCode=%s, traceId=%s)",
+                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason, errorCode, traceId);
     }
 
     @Override
@@ -345,9 +403,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             checkpoint.setStatus(CheckpointStatus.COMPLETED);
             checkpoint.setCompletedAt(Instant.now());
 
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
-                SecurityEventType.CHECKPOINT_COMPLETED, null);
+            String userId = WorkspaceContext.resolveUserId();
+            String idempotencyKey = "CP_COMPLETED:" + checkpointId;
+            auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+                SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
 
             log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
         }
@@ -393,9 +452,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             }
             em.persist(checkpoint);
 
-            String userId = (String) MDC.get(MdcKeys.USER_ID);
-            auditService.record(sessionId, userId, agentRole,
-                SecurityEventType.CHECKPOINT_CREATED, null);
+            String userId = WorkspaceContext.resolveUserId();
+            String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
+            auditService.recordWithIdempotency(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, null, idempotencyKey);
             log.infof("Created new checkpoint for finalization: session=%s, role=%s",
                       sessionId, agentRole);
         }
@@ -416,14 +476,19 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             entity.setObservation(step.observation());
             entity.setInputTokens(step.inputTokens());
             entity.setOutputTokens(step.outputTokens());
+            entity.setSuccess(step.success());
+            entity.setErrorCode(step.errorCode());
+            entity.setTraceId(step.traceId());
+            entity.setRootCauseClass(step.rootCauseClass());
             em.persist(entity);
         }
 
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String userId = WorkspaceContext.resolveUserId();
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
                 ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;
-        auditService.record(sessionId, userId, agentRole, eventType, null);
+        String idempotencyKey = (finalStatus == CheckpointStatus.COMPLETED ? "CP_COMPLETED:" : "CP_FAILED:") + cpId;
+        auditService.recordWithIdempotency(sessionId, userId, agentRole, eventType, null, idempotencyKey);
 
         log.infof("Checkpoint session=%s role=%s finalized with status=%s",
                   sessionId, agentRole, finalStatus);
@@ -451,7 +516,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     new TypeReference<Map<String, Object>>() {}),
                 entity.getObservation(),
                 entity.getInputTokens(),
-                entity.getOutputTokens()
+                entity.getOutputTokens(),
+                entity.getSuccess(),
+                entity.getErrorCode(),
+                entity.getTraceId(),
+                entity.getRootCauseClass()
         );
     }
 
@@ -501,7 +570,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     /**
      * Finds the most-recent non-ARCHIVED checkpoint for a (sessionId, agentRole) pair.
      * <p>
-     * FIX: Added {@code ORDER BY c.id DESC} so the newest row is always returned.
+     * Added {@code ORDER BY c.id DESC} so the newest row is always returned.
      * Previously, LIMIT 1 with no ordering caused SQLite to return the oldest row
      * (lowest checkpoint_id = first inserted = often COMPLETED), which shadowed
      * any newer AWAITING_APPROVAL row and broke the "/approve" flow.
@@ -583,11 +652,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         }
 
         try {
-            Map<String, String> map = objectMapper.readValue(
+            Map<String, ToolDecision> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
+                new TypeReference<Map<String, ToolDecision>>() {});
             if (!map.containsKey(toolName)) return false;
-            map.put(toolName, decision);
+            map.put(toolName, ToolDecision.valueOf(decision));
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
             em.merge(cp);
             return true;
@@ -613,11 +682,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         if (!cp.hasBatchToolDecisions()) return false;
 
         try {
-            Map<String, String> map = objectMapper.readValue(
+            Map<String, ToolDecision> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, String>>() {});
+                new TypeReference<Map<String, ToolDecision>>() {});
             return map.values().stream()
-                .noneMatch(val -> AgentSentinels.TOOL_DECISION_PENDING.equals(val));
+                .noneMatch(val -> ToolDecision.PENDING == val);
         } catch (Exception e) {
             log.errorf("Failed to check if batch decided: %s",
                e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
@@ -713,15 +782,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         return !em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
-                "  AND c.status NOT IN (:failed, :completed, :archived, :compromised, :denied, :loop_exceeded)",
+                "  AND c.status NOT IN (:terminalStatuses)",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
-                .setParameter("failed",      CheckpointStatus.FAILED)
-                .setParameter("completed",   CheckpointStatus.COMPLETED)
-                .setParameter("archived",    CheckpointStatus.ARCHIVED)
-                .setParameter("compromised", CheckpointStatus.COMPROMISED)
-                .setParameter("denied",      CheckpointStatus.DENIED)
-                .setParameter("loop_exceeded", CheckpointStatus.LOOP_EXCEEDED)
+                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .setMaxResults(1)
                 .getResultList()
                 .isEmpty();

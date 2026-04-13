@@ -2,7 +2,9 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -13,6 +15,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.persona.Agent;
 import com.arcclaw.core.agent.persona.AgentRole;
@@ -20,6 +23,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.InputSanitizer;
@@ -51,6 +55,9 @@ public class AgentStateMachineRunner {
     private static final Pattern RAW_DELEGATE_CALL_PATTERN =
         Pattern.compile( "(?m)^\\s*delegate_to_agent\\s*\\(\\s*agent\\s*=", Pattern.CASE_INSENSITIVE);
 
+    private static final Pattern RAW_TOOL_JSON_PATTERN = 
+        Pattern.compile("^\\s*\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"\\s*:", Pattern.DOTALL);
+
     // ── Suspiciously short non-answers: "Done.", "OK.", "ok" etc.
     private static final Pattern SUSPICIOUSLY_SHORT =
             Pattern.compile(
@@ -58,10 +65,6 @@ public class AgentStateMachineRunner {
                 Pattern.CASE_INSENSITIVE
             );
 
-    private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
-            "\\b(save|store|ingest|remember|add to memory|note that|call me)\\b",
-            Pattern.CASE_INSENSITIVE
-    );
 
     // ── FIX Bug 1: Minimum meaningful answer length ───────────────────────────
     // Garbage 2-token responses like "'." or "." contain no alphabetic characters.
@@ -84,6 +87,8 @@ public class AgentStateMachineRunner {
     @Inject Event<AgentStateChangedEvent> stateChangedEvent;
     @Inject StatefulAgentStore agentStore;
     @Inject CliResultBridge cliResultBridge;
+    @Inject IntentClassificationService intentClassifier;
+    @Inject RateLimitTracker rateLimitTracker;
 
     public AgentResult run(AgentExecutionContext context, ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
@@ -116,8 +121,8 @@ public class AgentStateMachineRunner {
             try (Scope scope = iterSpan.makeCurrent()) {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
-                // Fix 3: Inject write-intent hint as transientError on iteration 1
-                if (iteration == 1 && context.goal() != null && WRITE_INTENT_PATTERN.matcher(context.goal()).find()) {
+                // Inject write-intent hint as transientError on iteration 1
+                if (iteration == 1 && intentClassifier.isWriteIntent(context.goal())) {
                     transientError = "The user wants to store data. Call ingest_document immediately. " +
                                      "Pass [REDACTED-*] placeholders as-is. No explanation needed.";
                 }
@@ -164,6 +169,14 @@ public class AgentStateMachineRunner {
                     }
 
                     if (isRawToolCallLeak(candidateAnswer)) {
+                        if (RAW_TOOL_JSON_PATTERN.matcher(candidateAnswer).find() && rateLimitTracker.isBackingOff("primary")) {
+                            log.warnf("FINISH answer has raw tool JSON but rate-limited — stripping instead of retrying for session %s", context.sessionId());
+                            candidateAnswer = stripRawToolJson(candidateAnswer);
+                            AgentResult result = AgentResult.finished(candidateAnswer, List.copyOf(history));
+                            maybeSignalBridge(context, result);
+                            return result;
+                        }
+
                         log.warnf("[STATE-MACHINE] session %s: FINISH answer contains raw " +
                                   "tool call JSON — retrying with correction (schema attempt %d)",
                                   context.sessionId(), llmSchemaErrorCount + 1);
@@ -245,8 +258,7 @@ public class AgentStateMachineRunner {
 
             } catch (Exception e) {
                 iterSpan.recordException(e);
-                iterSpan.setStatus(StatusCode.ERROR,
-                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                iterSpan.setStatus(StatusCode.ERROR, AgentErrorMessageUtil.safeMessage(e));
                 throw e;
             } finally {
                 iterSpan.end();
@@ -285,15 +297,38 @@ public class AgentStateMachineRunner {
     private boolean isRawToolCallLeak(String answer) {
         if (answer == null || answer.isBlank()) return false;
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
-            || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find();
+            || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
+            || RAW_TOOL_JSON_PATTERN.matcher(answer).find();
+    }
+
+    private String stripRawToolJson(String answer) {
+        if (answer == null) return "";
+        Matcher m = RAW_TOOL_JSON_PATTERN.matcher(answer);
+        if (m.find()) {
+            String stripped = answer.substring(m.end())
+                .replaceFirst("^[^}]*\\}", "")
+                .replaceAll("^[}\\s]+", "")
+                .strip();
+            return stripped.isBlank() ? "I have completed the task." : stripped;
+        }
+        return answer;
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole,
             List<ReasoningStep> history, ReasoningStep step, int iteration) {
         log.infof("Agent reached FINISH at iteration %d", iteration);
+ 
+        // NS3: Null-safe actionInput map dereference
+        Optional<Map<String, Object>> inputOpt = Optional.ofNullable(step.actionInput());
+        if (inputOpt.isEmpty()) {
+            log.errorf("LLM sent FINISH without actionInput map for session %s", sessionId);
+            return AgentResult.failed("Malformed LLM response: FINISH action missing input payload.",
+                    AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history));
+        }
+
         String answer = step.thought();
-        if (step.actionInput() != null && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
-            answer = String.valueOf(step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
+        if (inputOpt.get().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+            answer = String.valueOf(inputOpt.get().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
         }
 
         if (answer != null) {
@@ -310,7 +345,7 @@ public class AgentStateMachineRunner {
         if (answer != null && isGeneratedCodeBlock(answer, agentRole)) {
             if (!AgentRoleEnum.fromString(agentRole).definition().canGenerateCode()) {
                 String refusal = "I'm " + agentRole + " — I don't generate code. " +
-                        "Please ask Brahma (coder) for code generation tasks.";
+                        "Please ask " + AgentRoleEnum.CODER.definition().displayName() + " ("+AgentRoleEnum.CODER.id()+") for code generation tasks.";
                 writer.saveAnswer(sessionId, refusal);
                 history.add(step.withObservation("Blocked: code generation by non-coder role"));
                 return AgentResult.finished(refusal, List.copyOf(history));
@@ -368,7 +403,7 @@ public class AgentStateMachineRunner {
 
         String stripped = answer.strip();
 
-        // FIX Bug 1: garbage punctuation-only response from thin-context LLM output
+        // garbage punctuation-only response from thin-context LLM output
         // e.g. "'." (2 tokens) produced when compaction race starves the LLM of context.
         if (stripped.length() < MIN_ANSWER_ALPHA_LENGTH
                 && !stripped.chars().anyMatch(Character::isLetterOrDigit)) {

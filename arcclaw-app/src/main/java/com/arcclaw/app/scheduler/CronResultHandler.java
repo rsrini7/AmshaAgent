@@ -8,6 +8,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
@@ -153,7 +154,7 @@ public class CronResultHandler {
                        "WHERE channel_type IS NULL;",
                        job.id, job.channelType);
             // Use a deterministic sessionId for audit — cronId is always available
-            String cronSessionId = "cron-" + job.id;
+            String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.id;
             auditService.record(cronSessionId, job.userId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.LEGACY_CHANNEL_FALLBACK,

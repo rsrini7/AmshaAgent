@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.Optional;
@@ -9,6 +11,7 @@ import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +45,7 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", ToolDecision.APPROVED.name());
         // resumeHandler verification removed: approveTool now returns CP, triggerResume handles activation.
     }
 
@@ -57,7 +60,7 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", ToolDecision.APPROVED.name());
         verify(resumeHandler, never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
     }
 
@@ -88,8 +91,8 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveAll("s1", "bulk approve");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", "APPROVED");
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "sandboxexec", "APPROVED");
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", ToolDecision.APPROVED.name());
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "sandboxexec", ToolDecision.APPROVED.name());
     }
 
     @Test

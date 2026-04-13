@@ -12,6 +12,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.reasoning.MessageTag;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageDeserializer;
@@ -37,6 +39,9 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     @Inject
     CompactionEventBridge compactionEventBridge;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @ConfigProperty(name = "quarkus.langchain4j.chat-memory.max-messages", defaultValue = "20")
     int rollingWindowSize;
@@ -100,6 +105,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     @Transactional
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String sessionId = String.valueOf(memoryId);
+        
         List<ChatMessage> sanitized = messages.stream()
             .filter(msg -> {
                 if (!(msg instanceof AiMessage ai)) return true;
@@ -114,8 +120,43 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
         String json = ChatMessageSerializer.messagesToJson(sanitized);
 
-        // Use merge to either insert or update the record
-        em.merge(new ChatMemoryEntity(sessionId, json));
+        // Manage timestamps in parallel logic since ChatMessage meta is unsupported in this version
+        ChatMemoryEntity entity = em.find(ChatMemoryEntity.class, sessionId);
+        List<Long> timestamps = new ArrayList<>();
+        if (entity != null && entity.getMetadataJson() != null) {
+            try {
+                timestamps = objectMapper.readValue(entity.getMetadataJson(), new TypeReference<List<Long>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse chat metadata, resetting timestamps", e);
+            }
+        }
+
+        // Align timestamps with sanitized messages list
+        if (sanitized.size() > timestamps.size()) {
+            // New messages added — pad with current time
+            long now = System.currentTimeMillis();
+            while (timestamps.size() < sanitized.size()) {
+                timestamps.add(now);
+            }
+        } else if (sanitized.size() < timestamps.size()) {
+            // Pruned (rolling window) — keep trailing timestamps
+            timestamps = timestamps.subList(timestamps.size() - sanitized.size(), timestamps.size());
+        }
+
+        String metaJson = "[]";
+        try {
+            metaJson = objectMapper.writeValueAsString(timestamps);
+        } catch (Exception e) {
+            log.error("Failed to serialize chat metadata", e);
+        }
+
+        if (entity == null) {
+            em.persist(new ChatMemoryEntity(sessionId, json, metaJson));
+        } else {
+            entity.setMessagesJson(json);
+            entity.setMetadataJson(metaJson);
+            em.merge(entity);
+        }
     }
 
     @Override
@@ -124,6 +165,19 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         ChatMemoryEntity entity = em.find(ChatMemoryEntity.class, memoryId.toString());
         if (entity != null) {
             em.remove(entity);
+        }
+    }
+
+    public List<Long> getTimestamps(String sessionId) {
+        ChatMemoryEntity entity = em.find(ChatMemoryEntity.class, sessionId);
+        if (entity == null || entity.getMetadataJson() == null) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(entity.getMetadataJson(), new TypeReference<List<Long>>() {});
+        } catch (Exception e) {
+            log.warnf("Failed to parse chat metadata for session %s", sessionId);
+            return new ArrayList<>();
         }
     }
 }

@@ -15,6 +15,7 @@ import jakarta.ws.rs.core.Response;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResolutionException;
@@ -40,13 +41,16 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.MdcKeys;
+import com.arcclaw.core.util.MdcManaged;
 import io.quarkus.virtual.threads.VirtualThreads;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 @ApplicationScoped
+@MdcManaged
 public class AgentSessionService {
 
     private final Logger log;
@@ -72,6 +76,11 @@ public class AgentSessionService {
             "deletecron"
     );
 
+    private static final String REST_USER_ID = "rest:api";
+    private static final String REST_USER_NAME = "REST API User";
+    private static final String REST_API_SESSION_PREFIX = "rest-api-";
+    private static final String REST_CHAT_SESSION_PREFIX = "rest-chat-";
+    
     protected AgentSessionService() {
         this.log = null;
         this.agentLoop = null;
@@ -124,8 +133,7 @@ public class AgentSessionService {
         heartbeatTracker.recordHeartbeat(sessionId, level);
 
         // Bind the requesting API key identity as owner — used for per-key isolation
-        Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
-        String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+        String requestingKey = WorkspaceContext.resolveUserId();
         if (requestingKey != null && !requestingKey.isBlank()) {
             heartbeatTracker.tryBindOwner(sessionId, requestingKey);
         }
@@ -133,8 +141,7 @@ public class AgentSessionService {
     }
 
     public Map<String, Instant> listSessions() {
-        Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
-        String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+        String requestingKey = WorkspaceContext.resolveUserId();
 
         if (requestingKey == null || requestingKey.isBlank()) {
             return Map.of(); // Anonymous/System can't list active sessions via REST
@@ -192,7 +199,7 @@ public class AgentSessionService {
                 AutonomyLevel level = getOrDefaultAutonomy(sessionId);
 
                 return WorkspaceContext.run(
-                        sessionId, "rest:api", sessionId, level, canonicalRole, ChannelType.REST_API, () -> {
+                        sessionId, REST_USER_ID, sessionId, level, canonicalRole, ChannelType.REST_API, () -> {
                             MessageContext context = createRestContext(sessionId, request.goal());
                             context.setAutonomyLevel(level);
                             AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
@@ -257,7 +264,7 @@ public class AgentSessionService {
                         // via SSE/channel. HTTP caller gets an acknowledgement only.
                         checkpointApprovalService.triggerResume(cp);
                         response.resume(Response.ok(
-                            Map.of("status", "DENIED",
+                            Map.of("status", ToolDecision.DENIED.name(),
                                 "message", "Tool execution denied. Result will be delivered via session channel."))
                             .build());
                     } catch (CheckpointResolutionException e) {
@@ -284,7 +291,7 @@ public class AgentSessionService {
                         // APPROVED/DENIED decisions map from batchToolDecisions.
                         checkpointApprovalService.triggerResume(cp);
                         response.resume(Response.accepted(
-                            Map.of("status", "APPROVED",
+                            Map.of("status", ToolDecision.APPROVED.name(),
                                 "message", "Tool execution approved. Results will be delivered via session channel."))
                             .build());
                     } catch (CheckpointResolutionException e) {
@@ -300,7 +307,7 @@ public class AgentSessionService {
                 AutonomyLevel sessionLevel = getOrDefaultAutonomy(sessionId);
                 String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
 
-                WorkspaceContext.run(sessionId, "restapi", sessionId, sessionLevel,
+                WorkspaceContext.run(sessionId, REST_USER_ID, sessionId, sessionLevel,
                                     canonicalRole, ChannelType.REST_API, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
                     context.setAutonomyLevel(sessionLevel);
@@ -347,7 +354,7 @@ public class AgentSessionService {
                             .build();
                 }
 
-                MDC.put(MdcKeys.USER_ID, "rest:api");
+                MDC.put(MdcKeys.USER_ID, REST_USER_ID);
 
                 // ✅ FIX F17: write all batch decisions BEFORE agentLoop reads them
                 // Without this, resumeParallelBatch finds all tools still PENDING
@@ -355,7 +362,7 @@ public class AgentSessionService {
                 checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
 
                 return WorkspaceContext.run(
-                    sessionId, "rest:api", sessionId, AutonomyLevel.FULL,
+                    sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL,
                     canonicalRole, ChannelType.REST_API, () -> {
                         String resumeGoal = checkpointResumeHandler
                             .resolveResumeGoal(sessionId, canonicalRole);
@@ -381,8 +388,6 @@ public class AgentSessionService {
             log.errorf("Failed to approve session %s: %s", sessionId, e.getMessage());
             log.debug("Full approval failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
-        } finally {
-            MDC.remove(MdcKeys.USER_ID);
         }
     }
 
@@ -403,17 +408,15 @@ public class AgentSessionService {
                             .build();
                 }
 
-                MDC.put(MdcKeys.USER_ID, "rest:api");
+                MDC.put(MdcKeys.USER_ID, REST_USER_ID);
                 AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                 checkpointApprovalService.triggerResume(cp);
-                return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
+                return Response.ok(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId)).build();
             });
         } catch (Exception e) {
             log.errorf("Failed to deny session %s: %s", sessionId, e.getMessage());
             log.debug("Full denial failure stack trace:", e);
             return Response.serverError().entity(e.getMessage()).build();
-        } finally {
-            MDC.remove(MdcKeys.USER_ID);
         }
     }
 
@@ -459,9 +462,9 @@ public class AgentSessionService {
     }
 
     private MessageContext createRestContext(String sessionId, String goal) {
-        ChannelUser user = new ChannelUser("rest:api", "rest:api", "REST API User", ChannelType.REST_API);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, "rest-api-" + sessionId, Instant.now());
-        return new MessageContext("rest-chat-" + sessionId, user, msg);
+        ChannelUser user = new ChannelUser(REST_USER_ID, REST_USER_ID, REST_USER_NAME, ChannelType.REST_API);
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, REST_API_SESSION_PREFIX + sessionId, Instant.now());
+        return new MessageContext(REST_CHAT_SESSION_PREFIX + sessionId, user, msg);
     }
 
     private Optional<Response> validateRole(String role) {
@@ -489,8 +492,7 @@ public class AgentSessionService {
         // CLI and Telegram sessions have null owner → open access (correct).
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
-            Object requestingKeyObj = MDC.get(MdcKeys.USER_ID);
-            String requestingKey = (requestingKeyObj != null) ? requestingKeyObj.toString() : null;
+            String requestingKey = WorkspaceContext.resolveUserId();
             if (requestingKey != null && !owner.get().equals(requestingKey)) {
                 log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
                           requestingKey, sessionId, owner.get());
@@ -498,7 +500,7 @@ public class AgentSessionService {
                 auditService.recordMandatory(
                     sessionId,
                     requestingKey,
-                    "system",
+                    AgentSentinels.SYSTEM_ROLE,
                     SecurityEventType.UNAUTHORIZED_ACCESS,
                     "Key " + requestingKey + " attempted cross-key session access"
                 );
@@ -539,10 +541,10 @@ public class AgentSessionService {
             String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
 
             ReflexResult result = WorkspaceContext.run(
-                sessionId, "rest:api", sessionId, AutonomyLevel.FULL,
+                sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL,
                 canonicalRole, ChannelType.REST_API,
                 () -> reflexRegistry.processIfReflex(
-                    sessionId, "rest:api", sessionId, goal, context)
+                    sessionId, REST_USER_ID, sessionId, goal, context)
             );
 
             return result.commandResponse()

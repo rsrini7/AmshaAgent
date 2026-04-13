@@ -6,6 +6,8 @@ import java.util.UUID;
 
 import jakarta.persistence.*;
 
+import com.arcclaw.core.agent.AgentSentinels;
+
 /**
  * Immutable WORM audit record. Insert-only — no update or delete operations permitted.
  * Includes an HMAC chain for tamper detection.
@@ -62,6 +64,9 @@ public class AuditEvent {
 
     @Column(name = "app_version", length = 32)
     public String appVersion;
+    
+    @Column(name = "idempotency_key", updatable = false, length = 128)
+    public String idempotencyKey;
 
     // Monotonic per-session insert order — set exclusively by AuditEventRepository.record()
     @Column(nullable = false, updatable = false)
@@ -105,7 +110,7 @@ public class AuditEvent {
         e.id             = UUID.randomUUID();
         e.sessionId      = sessionId != null ? sessionId : "unknown";
         e.userId         = userId;
-        e.agentRole      = agentRole != null ? agentRole : "system";
+        e.agentRole      = agentRole != null ? agentRole : AgentSentinels.SYSTEM_ROLE;
         e.goalHash       = "n/a";
         e.outcome        = AuditOutcome.SECURITY_EVENT;
         e.eventType      = type;

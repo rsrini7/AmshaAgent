@@ -100,7 +100,16 @@ public class PlaywrightBrowserTool implements AgentTool {
         }
 
         // Guard 2: userId from WorkspaceContext (static, never from params — see BraveWebSearchTool)
-        String userId = WorkspaceContext.userId();
+        String userId;
+        try {
+            userId = WorkspaceContext.requireUserId();
+        } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "No active user session.");
+            }
+            throw e;
+        }
+
         if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403, "No active user session.");
         }
@@ -131,7 +140,7 @@ public class PlaywrightBrowserTool implements AgentTool {
             // Audit with URL only — NEVER log page content.
             // AuditService.record() 5-arg signature: (sessionId, userId, agentRole, type, detail)
             String sessionId = WorkspaceContext.requireSessionId();
-            auditService.record(sessionId, userId, WorkspaceContext.agentRole(),
+            auditService.record(sessionId, userId, WorkspaceContext.requireAgentRole(),
                 SecurityEventType.TOOL_EXECUTED, "Browser navigate: " + url);
 
             return ToolResponse.success(result);

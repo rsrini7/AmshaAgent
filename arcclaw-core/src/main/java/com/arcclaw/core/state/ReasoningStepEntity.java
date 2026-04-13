@@ -45,6 +45,18 @@ public class ReasoningStepEntity {
     @Column(name = "output_tokens")
     private int outputTokens;
 
+    @Column(name = "success")
+    private Boolean success;
+
+    @Column(name = "error_code", length = 64)
+    private String errorCode;
+
+    @Column(name = "trace_id", length = 128)
+    private String traceId;
+
+    @Column(name = "root_cause_class", length = 128)
+    private String rootCauseClass;
+
     public Long getId() {
         return id;
     }
@@ -116,4 +128,16 @@ public class ReasoningStepEntity {
     public void setOutputTokens(int outputTokens) {
         this.outputTokens = outputTokens;
     }
+
+    public Boolean getSuccess() { return success; }
+    public void setSuccess(Boolean success) { this.success = success; }
+
+    public String getErrorCode() { return errorCode; }
+    public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
+
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
+
+    public String getRootCauseClass() { return rootCauseClass; }
+    public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
 }

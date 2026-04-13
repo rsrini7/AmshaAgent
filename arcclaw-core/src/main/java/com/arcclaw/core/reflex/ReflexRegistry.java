@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -26,8 +28,14 @@ public class ReflexRegistry {
     public ReflexResult processIfReflex(String sessionId, String userId, String chatId,
                                         String input, MessageContext context) {
 
+        // Snapshot and sort reflex instances once per request (H5 priority ordering)
+        // Eliminates hot-reload race conditions between Match and Sanitize passes.
+        List<AgentReflex> snapshot = reflexes.stream()
+            .sorted(Comparator.comparingInt(AgentReflex::priority))
+            .toList();
+
         // PASS 1 — find first matching reflex and dispatch
-        for (AgentReflex reflex : reflexes) {
+        for (AgentReflex reflex : snapshot) {
             if (!reflex.matches(input)) continue;
             try {
                 auditService.record(
@@ -49,7 +57,7 @@ public class ReflexRegistry {
 
         // PASS 2 — no reflex matched; run sanitization chain
         String sanitized = input;
-        for (AgentReflex reflex : reflexes) {
+        for (AgentReflex reflex : snapshot) {
             try {
                 String before = sanitized;
                 sanitized = reflex.sanitize(sessionId, userId, sanitized);

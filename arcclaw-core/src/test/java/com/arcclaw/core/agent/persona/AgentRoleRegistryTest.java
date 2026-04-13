@@ -1,7 +1,7 @@
 package com.arcclaw.core.agent.persona;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -39,15 +39,12 @@ class AgentRoleRegistryTest {
     }
 
     @Test
-    void unknownRoleNameDoesNotThrow() {
-        AgentRoleEnum dynamic = AgentRoleEnum.fromString("security-auditor");
-        assertEquals("security-auditor", dynamic.toScopedName());
+    void unknownRoleNameThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> AgentRoleEnum.fromString("security-auditor"));
     }
 
     @Test
-    void thirdPartyRoleCanBeResolvedWithoutCoreChange() {
-        AgentRoleEnum pluginRole = AgentRoleEnum.fromString("customer-support-agent");
-        assertNotNull(pluginRole);
-        assertEquals("customer-support-agent", pluginRole.toScopedName());
+    void thirdPartyRoleThrowsUnlessRegistered() {
+        assertThrows(IllegalArgumentException.class, () -> AgentRoleEnum.fromString("customer-support-agent"));
     }
 }

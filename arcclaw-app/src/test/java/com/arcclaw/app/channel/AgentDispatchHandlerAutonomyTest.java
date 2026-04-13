@@ -1,6 +1,10 @@
 package com.arcclaw.app.channel;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
@@ -56,7 +60,7 @@ class AgentDispatchHandlerAutonomyTest {
         AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-full"), anyString(), anyString(), any(), anyInt(), eq(ctx)))
                 .thenAnswer(inv -> {
-                    captured.set(WorkspaceContext.autonomy());
+                    captured.set(WorkspaceContext.requireAutonomyOrSupervised());
                     return AgentResult.finished("done", Collections.emptyList());
                 });
 
@@ -81,7 +85,7 @@ class AgentDispatchHandlerAutonomyTest {
         AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-supervised"), anyString(), anyString(), any(), anyInt(), eq(ctx)))
                 .thenAnswer(inv -> {
-                    captured.set(WorkspaceContext.autonomy());
+                    captured.set(WorkspaceContext.requireAutonomyOrSupervised());
                     return AgentResult.finished("done", Collections.emptyList());
                 });
 

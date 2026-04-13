@@ -1,7 +1,11 @@
 package com.arcclaw.core.util;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.arcclaw.core.message.UserMessages;
 
 public final class AgentErrorMessageUtil {
 
@@ -18,14 +22,24 @@ public final class AgentErrorMessageUtil {
             "^(For input string:|null|Cannot invoke|NullPointerException|NumberFormatException)");
 
     private AgentErrorMessageUtil() {}
-
+ 
+    /**
+     * Returns a safe message from a Throwable.
+     * Returns e.getMessage() if present, otherwise returns the class simple name.
+     * If the throwable is null, returns "Unknown Error".
+     */
+    public static String safeMessage(Throwable t) {
+        if (t == null) return "Unknown Error";
+        return t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
+    }
+ 
     public static String sanitizeErrorMessage(String raw) {
-        if (raw == null) return "❌ Task failed. Please try again.";
+        if (raw == null) return TASK_FAILED;
 
         // Guard: if the raw message looks like a JVM internal crash message,
         // return a safe fallback immediately — never show stack-trace internals to users.
         if (JVM_INTERNALS_PATTERN.matcher(raw.trim()).find()) {
-            return "⚠️ The AI service returned an unexpected response. Please try again.";
+            return AI_UNEXPECTED_RESPONSE;
         }
 
         String stripped = raw.replace("ReasoningEngine error: ", "")
@@ -46,35 +60,35 @@ public final class AgentErrorMessageUtil {
         }
 
         if (apiMessage.contains("model_not_found") || apiMessage.contains("does not exist")) {
-            return "⚠️ **Model Not Found**: The AI model `" + extractModelName(apiMessage) + "` is either not available or you don't have access to it. Please check your configuration.";
+            return UserMessages.modelNotFound(extractModelName(apiMessage));
         }
 
         if (apiMessage.contains("tokens per day") || apiMessage.contains("TPD")) {
             return formatTpdMessage(apiMessage);
         }
 
-        if (apiMessage.contains("rate limit") || apiMessage.contains("Rate limit") || apiMessage.contains("throttled")) {
-            return "⏳ I'm a little busy right now - please give me a moment and try again in " + extractWaitTime(apiMessage) + ".";
+        if (isRateLimitError(apiMessage)) {
+            return UserMessages.rateLimited(extractWaitTime(apiMessage));
         }
 
         if (apiMessage.contains("over capacity")) {
-            return "⚠️ The AI service is currently over capacity and cannot process requests. Please try again in a few minutes.";
+            return OVER_CAPACITY;
         }
 
         if (apiMessage.contains("tool call validation failed") || apiMessage.contains("SCHEMA_ERROR")) {
-            return "❌ Tool execution error: The agent generated an invalid request.";
+            return TOOL_VALIDATION_ERROR;
         }
 
         if (apiMessage.contains("Budget Exceeded")) {
-            return "❌ Your session budget limit has been reached.";
+            return BUDGET_EXCEEDED;
         }
 
         if (isJson) {
-            return "⚠️ API Error: " + apiMessage;
+            return UserMessages.apiError(apiMessage);
         }
 
         if (stripped.contains("{") && stripped.contains("\"error\"")) {
-            return "⚠️ The AI service returned an error. Please try again shortly.";
+            return AI_SERVICE_ERROR;
         }
 
         return stripped;
@@ -101,7 +115,7 @@ public final class AgentErrorMessageUtil {
     public static String sanitizeLlmErrorPhrases(String answer) {
         if (answer == null || answer.isBlank()) return answer;
         if (answer.length() < 500 && LLM_ERROR_NARRATION_PATTERN.matcher(answer).find()) {
-            return "⚠️ I encountered an internal error and could not complete your request. Please try again.";
+            return INTERNAL_LLM_ERROR;
         }
         return answer;
     }
@@ -114,15 +128,10 @@ public final class AgentErrorMessageUtil {
             String limit = tokenMatcher.group(1);
             String used  = tokenMatcher.group(2);
             String req   = tokenMatcher.group(3);
-            return String.format("⚠️ **Daily Token Limit Reached**\n" +
-                                 "• Limit: %s\n" +
-                                 "• Used: %s\n" +
-                                 "• Requested: %s\n\n" +
-                                 "⏳ Please try again in %s.",
-                                 limit, used, req, waitTime);
+            return UserMessages.tokenLimitDetailed(limit, used, req, waitTime);
         }
 
-        return "⚠️ Daily token limit reached. Please try again in " + waitTime + ".";
+        return UserMessages.tokenLimitSimple(waitTime);
     }
 
     private static String extractWaitTime(String text) {
@@ -135,6 +144,11 @@ public final class AgentErrorMessageUtil {
             return humanReadableWait(timeStr);
         }
         return "a few moments";
+    }
+
+    public static boolean isRateLimitError(String msg) {
+        if (msg == null) return false;
+        return msg.contains("rate limit") || msg.contains("Rate limit") || msg.contains("throttled");
     }
 
     private static String humanReadableWait(String rawInterval) {

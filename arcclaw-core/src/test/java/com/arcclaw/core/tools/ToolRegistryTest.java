@@ -104,7 +104,7 @@ class ToolRegistryTest {
      */
     @Test
     void testGovernanceAllowsFullAutonomy() {
-        WorkspaceContext.run(TEST_SESSION, "", "", AutonomyLevel.FULL, "", () -> {
+        WorkspaceContext.run(TEST_SESSION, "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             // This will *not* throw SecurityException (governance passes).
             // The tool itself may fail (no 'gh' binary) — that's fine; we're
             // testing governance, not the gh CLI.
@@ -129,7 +129,7 @@ class ToolRegistryTest {
      */
     @Test
     void testInvokeUnknownToolThrows() {
-        WorkspaceContext.run(TEST_SESSION, "", "", AutonomyLevel.FULL, "", () -> {
+        WorkspaceContext.run(TEST_SESSION, "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             assertThrows(IllegalArgumentException.class,
                     () -> registry.invokeTool("nonexistent-tool", Collections.emptyMap()));
         });

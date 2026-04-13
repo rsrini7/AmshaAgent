@@ -25,8 +25,10 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -140,7 +142,7 @@ public class CheckpointResumeHandler {
                 channelPluginRegistry.find(cType.id())
                     .map(ChannelPlugin::sender)
                     .ifPresentOrElse(
-                        s -> s.sendRaw(user, "❌ Resume failed: " + e.getMessage()),
+                        s -> s.sendRaw(user, "❌ Resume failed: " + AgentErrorMessageUtil.safeMessage(e)),
                         () -> log.debugf("CheckpointResumeHandler: no sender for type %s — error reply dropped (async flow)", cType.id())
                     );
                 throw new RuntimeException("Failed to resume session", e);
@@ -256,13 +258,13 @@ public class CheckpointResumeHandler {
         // If all decisions in the batch are DENIED, route to the denial handler
         if (cp.hasBatchToolDecisions()) {
             try {
-                Map<String, String> decisions = objectMapper.readValue(
+                Map<String, ToolDecision> decisions = objectMapper.readValue(
                     cp.getBatchToolDecisions(),
-                    new TypeReference<Map<String, String>>() {}
+                    new TypeReference<Map<String, ToolDecision>>() {}
                 );
                 boolean allDenied = !decisions.isEmpty() &&
                     decisions.values().stream()
-                        .allMatch(AgentSentinels.TOOL_DECISION_DENIED::equals);
+                        .allMatch(ToolDecision.DENIED::equals);
                 if (allDenied) return AgentSentinels.GOAL_DENY_APPROVED;
             } catch (Exception e) {
                 log.warnf("resolveResumeGoal: failed to parse batch decisions for session %s", cp.getSessionId());
@@ -326,8 +328,8 @@ public class CheckpointResumeHandler {
         try {
             ToolResponse resumeResponse = WorkspaceContext.runWithFullAutonomy(
                     sessionId,
-                    WorkspaceContext.userId(),
-                    WorkspaceContext.chatId(),
+                    WorkspaceContext.requireUserId(),
+                    WorkspaceContext.requireChatId(),
                     agentRole,
                     () -> toolRegistry.invokeTool(pendingTool, pendingParams, sessionId));
 
@@ -361,7 +363,7 @@ public class CheckpointResumeHandler {
             checkpoint.setPendingToolParametersJson(null);
             agentStore.save(checkpoint);
 
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String errMsg = AgentErrorMessageUtil.safeMessage(e);
 
             log.errorf("Resume tool execution failed for session=%s tool=%s: %s",
                     sessionId, pendingTool, errMsg);
@@ -391,9 +393,9 @@ public class CheckpointResumeHandler {
                 new TypeReference<List<ParallelToolCall>>() {});
         } catch (Exception e) {
             log.errorf("[PARALLEL-HITL-RESUME] session=%s: failed to parse batch: %s",
-                       sessionId, e.getMessage());
+                       sessionId, AgentErrorMessageUtil.safeMessage(e));
             checkpoint.setStatus(CheckpointStatus.FAILED);
-            checkpoint.setFailReason("Failed to parse parallel tool batch: " + e.getMessage());
+            checkpoint.setFailReason("Failed to parse parallel tool batch: " + AgentErrorMessageUtil.safeMessage(e));
             agentStore.save(checkpoint);
             return AgentResult.failed(
                 "Failed to resume parallel tool batch — corrupt checkpoint.",
@@ -401,18 +403,18 @@ public class CheckpointResumeHandler {
                 List.copyOf(history));
         }
 
-        Map<String, String> decisions = Map.of();
+        Map<String, ToolDecision> decisions = Map.of();
         if (checkpoint.hasBatchToolDecisions()) {
             try {
                 decisions = objectMapper.readValue(
                     checkpoint.getBatchToolDecisions(),
-                    new TypeReference<Map<String, String>>() {}
+                    new TypeReference<Map<String, ToolDecision>>() {}
                 );
             } catch (Exception e) {
                 log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions — " +
                           "defaulting to PENDING for all tools: %s",
                           sessionId,
-                          e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                          AgentErrorMessageUtil.safeMessage(e));
             }
         }
 
@@ -426,7 +428,7 @@ public class CheckpointResumeHandler {
                 log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load pre-executed results — " +
                           "will re-invoke affected tools: %s",
                           sessionId,
-                          e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                          AgentErrorMessageUtil.safeMessage(e));
             }
         }
 
@@ -442,15 +444,15 @@ public class CheckpointResumeHandler {
                                         log.warnf("[PRE-EXEC-RESTORE] session=%s could not restore result for %s" +
                               ", re-invoking: %s",
                               sessionId, call.toolName(),
-                              e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                              AgentErrorMessageUtil.safeMessage(e));
                     // fall through to normal execution if restore failed
                 }
             }
 
-            String decision = decisions.getOrDefault(
-                call.toolName(), AgentSentinels.TOOL_DECISION_PENDING);
+            ToolDecision decision = decisions.getOrDefault(
+                call.toolName(), ToolDecision.PENDING);
 
-            if (AgentSentinels.TOOL_DECISION_DENIED.equals(decision)) {
+            if (ToolDecision.DENIED == decision) {
                 completed.add(call.withResult("User denied this tool execution.", false));
                 continue;
             }
@@ -458,14 +460,14 @@ public class CheckpointResumeHandler {
             try {
                 ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                     sessionId,
-                    WorkspaceContext.userId(),
-                    WorkspaceContext.chatId(),
+                    WorkspaceContext.requireUserId(),
+                    WorkspaceContext.requireChatId(),
                     agentRole,
                     () -> toolRegistry.invokeTool(
                         call.toolName(), call.paramsJson(), sessionId));
                 completed.add(call.withResult(response.output(), response.success()));
             } catch (Exception e) {
-                String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                String errMsg = AgentErrorMessageUtil.safeMessage(e);
                 log.warnf("[PARALLEL-HITL-RESUME] session=%s tool=%s failed: %s",
                           sessionId, call.toolName(), errMsg);
                 completed.add(call.withResult(

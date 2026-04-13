@@ -20,6 +20,9 @@ public class ChatMemoryEntity {
     @Column(name = "messages_json", columnDefinition = "TEXT", nullable = false)
     private String messagesJson;
 
+    @Column(name = "metadata_json", columnDefinition = "TEXT")
+    private String metadataJson;
+
     /**
      * Default constructor required by JPA.
      */
@@ -31,10 +34,12 @@ public class ChatMemoryEntity {
      * 
      * @param memoryId     Unique ID for the chat memory (usually sessionId)
      * @param messagesJson Serialized List of ChatMessage
+     * @param metadataJson Serialized message metadata (e.g. timestamps)
      */
-    public ChatMemoryEntity(String memoryId, String messagesJson) {
+    public ChatMemoryEntity(String memoryId, String messagesJson, String metadataJson) {
         this.memoryId = memoryId;
         this.messagesJson = messagesJson;
+        this.metadataJson = metadataJson;
     }
 
     // Getters and Setters
@@ -53,5 +58,13 @@ public class ChatMemoryEntity {
 
     public void setMessagesJson(String messagesJson) {
         this.messagesJson = messagesJson;
+    }
+
+    public String getMetadataJson() {
+        return metadataJson;
+    }
+
+    public void setMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
     }
 }

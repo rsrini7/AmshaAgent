@@ -1,11 +1,13 @@
 package com.arcclaw.core.state;
 
+import java.util.Set;
+
 /**
  * Lifecycle status of an agent checkpoint.
  *
  * <p>Terminal states (no further transitions possible):
  * {@link #COMPLETED}, {@link #FAILED}, {@link #LOOP_EXCEEDED},
- * {@link #DENIED}, {@link #COMPROMISED}.
+ * {@link #DENIED}, {@link #COMPROMISED}, {@link #ARCHIVED}.
  *
  * <p>Active states:
  * {@link #NOT_STARTED}, {@link #IN_PROGRESS}, {@link #AWAITING_APPROVAL},
@@ -86,5 +88,22 @@ public enum CheckpointStatus {
      * all load() and findLatestAwaitingApproval() queries so they never shadow
      * a newer AWAITING_APPROVAL row for the same (sessionId, agentRole) pair.
      */
-    ARCHIVED
+    ARCHIVED;
+
+    /**
+     * @return true if this status represents an end-of-life state for a checkpoint.
+     */
+    public boolean isTerminal() {
+        return switch (this) {
+            case COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED -> true;
+            case NOT_STARTED, IN_PROGRESS, AWAITING_APPROVAL, AWAITING_RETRY -> false;
+        };
+    }
+
+    /**
+     * @return The immutable set of all terminal statuses.
+     */
+    public static Set<CheckpointStatus> terminalStatuses() {
+        return Set.of(COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED);
+    }
 }

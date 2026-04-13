@@ -68,7 +68,7 @@ public class AgentDispatchHandler implements MessageHandler {
         String role = context.getAgentRole()
                 .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
 
-        // Fix 3 — Prioritize the sanitized goal from reflexes (StoreReflex, PII redact) 
+        // Prioritize the sanitized goal from reflexes (StoreReflex, PII redact) 
         // over the raw message text.
         String goal = (context.getGoal() != null && !context.getGoal().isBlank())
                 ? context.getGoal()

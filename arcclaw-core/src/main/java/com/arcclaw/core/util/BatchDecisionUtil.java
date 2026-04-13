@@ -3,8 +3,8 @@ package com.arcclaw.core.util;
 import java.util.List;
 import java.util.Map;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -22,11 +22,11 @@ public final class BatchDecisionUtil {
     public static List<String> pendingToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {
         if (!cp.hasBatchToolDecisions()) return List.of();
         try {
-            Map<String, String> map = objectMapper.readValue(
+            Map<String, ToolDecision> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
                 new TypeReference<>() {});
             return map.entrySet().stream()
-                .filter(e -> AgentSentinels.TOOL_DECISION_PENDING.equals(e.getValue()))
+                .filter(e -> ToolDecision.PENDING == e.getValue())
                 .map(Map.Entry::getKey)
                 .toList();
         } catch (Exception e) {
@@ -40,7 +40,7 @@ public final class BatchDecisionUtil {
     public static List<String> allToolNames(AgentCheckpoint cp, ObjectMapper objectMapper) {
         if (!cp.hasBatchToolDecisions()) return List.of();
         try {
-            Map<String, String> map = objectMapper.readValue(
+            Map<String, ToolDecision> map = objectMapper.readValue(
                 cp.getBatchToolDecisions(),
                 new TypeReference<>() {});
             return map.keySet().stream().toList();

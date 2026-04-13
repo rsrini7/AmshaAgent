@@ -1,11 +1,15 @@
 package com.arcclaw.core.tools;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
@@ -18,10 +22,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Allows the coordinator to delegate specialized tasks (like coding or debugging)
@@ -59,14 +60,35 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
+        String currentRoleName;
+        String outerSessionId;
+        String userId;
+        String chatId;
+
+        try {
+            // NS2: Fail fast on missing context
+            currentRoleName = WorkspaceContext.requireAgentRole();
+            outerSessionId  = WorkspaceContext.requireSessionId();
+            userId          = WorkspaceContext.requireUserId();
+            chatId          = WorkspaceContext.requireChatId();
+        } catch (IllegalStateException e) {
+            // NS2 backward compatibility: convert missing context into 403 ToolResponse
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
+        }
+
         Object agentObj = params.get("agent");
         Object goalObj = params.get("goal");
 
+        String delegatableList = getDelegatableAgentList();
+
         if (agentObj == null || String.valueOf(agentObj).isBlank()) {
-            return ToolResponse.failure(400, "Parameter 'agent' is required. Valid agents: brahma, shiva, saraswati, brihaspati, dattatreya.");
+            return ToolResponse.failure(400, delegationAgentRequired(delegatableList));
         }
         if (goalObj == null || String.valueOf(goalObj).isBlank()) {
-            return ToolResponse.failure(400, "Parameter 'goal' is required. Please provide a clear, specific goal for the sub-agent.");
+            return ToolResponse.failure(400, DELEGATION_GOAL_REQUIRED);
         }
 
         String agentName = String.valueOf(agentObj);
@@ -74,28 +96,21 @@ public class DelegateToAgentTool implements AgentTool {
 
         String normalized = agentName.trim().toLowerCase();
 
-        // 1. Self-delegation guard
-        if ("coordinator".equals(normalized) || "vishnu".equals(normalized)) {
+        // 1. Self-delegation guard using registry metadata
+        if (isSelfDelegation(normalized)) {
             return ToolResponse.failure(400,
-                "Cannot delegate to yourself (coordinator/vishnu). " +
-                "Route to a specialist: brahma, shiva, saraswati, brihaspati, dattatreya.");
+                delegationSelfGuard(normalized, delegatableList));
         }
 
         // 2. Role validation
         if (!AgentRoleEnum.isKnownRole(agentName)) {
             return ToolResponse.failure(400,
-                "Unknown agent '" + agentName + "'. Valid agents: " +
-                "brahma, shiva, saraswati, brihaspati, dattatreya.");
+                delegationUnknownAgent(agentName, delegatableList));
         }
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
 
         // 2a. Governance Guard: Capability Escalation Check (§4.10)
-        // Coordinator is the root orchestrator — it can delegate to ANY
-        // registered role. Capability escalation guard only applies when
-        // non-coordinator roles attempt delegation (prevents lateral
-        // privilege escalation between specialists).
-        String currentRoleName = WorkspaceContext.agentRole();
         AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
 
         if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
@@ -112,17 +127,13 @@ public class DelegateToAgentTool implements AgentTool {
                     .collect(Collectors.joining(", "));
                 
                 return ToolResponse.failure(403,
-                    String.format("Delegation to %s rejected: target role has capabilities [%s] " +
-                                  "not permitted for delegating role [%s]. " +
-                                  "Use a role with sufficient capabilities or request coordinator to delegate.",
-                                  targetRole.toScopedName(), unauthorizedList, currentRoleName)
+                    delegationRejectedCaps(targetRole.toScopedName(), unauthorizedList, currentRoleName)
                 );
             }
         }
         
         // AgentExecutionContext constructor throws on maxIterations <= 0
         int maxIterations = Math.max(1, targetRole.definition().maxIterations());
-        String outerSessionId = WorkspaceContext.requireSessionId();
 
         // NOTE: Inner sessions bypass SessionRegistry intentionally.
         // StatefulAgentStore.save() must not require a session_registry entry.
@@ -148,8 +159,8 @@ public class DelegateToAgentTool implements AgentTool {
         try {
             result = WorkspaceContext.run(
                 innerSessionId,
-                WorkspaceContext.userId(),
-                WorkspaceContext.chatId(),
+                userId,
+                chatId,
                 AutonomyLevel.FULL,
                 targetRole.toScopedName(),
                 () -> agentLoop.get().run(
@@ -160,25 +171,26 @@ public class DelegateToAgentTool implements AgentTool {
                     maxIterations
                 )
             );
+        } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
         } catch (BudgetExceededException e) {
             throw e; // MUST propagate to top level
         } catch (Exception e) {
             return ToolResponse.failure(500,
-                "Delegation to '" + targetRole.toScopedName() + "' failed: " + e.getMessage());
+                delegationFailed(targetRole.toScopedName(), e.getMessage()));
         }
 
         // 3. Handle specific terminal subtypes BEFORE formatting
         if (result instanceof AgentResult.AwaitingApproval aa) {
             return ToolResponse.failure(409,
-                "Agent '" + targetRole.toScopedName() + "' paused for human approval " +
-                "of tool '" + aa.toolName() + "'. " +
-                "Delegation cannot complete until the inner session is approved. " +
-                "Session: " + aa.sessionId());
+                delegationPaused(targetRole.toScopedName(), aa.toolName(), aa.sessionId()));
         }
         if (result instanceof AgentResult.LoopExceeded) {
             return ToolResponse.failure(500,
-                "Agent '" + targetRole.toScopedName() + "' exceeded its iteration budget (" +
-                maxIterations + " iterations). Try simplifying the goal.");
+                delegationExceeded(targetRole.toScopedName(), maxIterations));
         }
 
         // 4. Success path uses standard formatter
@@ -186,5 +198,19 @@ public class DelegateToAgentTool implements AgentTool {
         log.infof("[DELEGATE] agent=%s completed for session=%s",
                   targetRole.toScopedName(), outerSessionId);
         return ToolResponse.success(formatted);
+    }
+
+    private String getDelegatableAgentList() {
+        return AgentRoleEnum.values().stream()
+                .filter(role -> !role.equals(AgentRoleEnum.COORDINATOR))
+                .flatMap(role -> role.definition().aliases().stream())
+                .sorted()
+                .collect(Collectors.joining(", "));
+    }
+
+    private boolean isSelfDelegation(String normalized) {
+        AgentRoleEnum current = AgentRoleEnum.COORDINATOR;
+        return current.id().equals(normalized) ||
+               current.definition().aliases().contains(normalized);
     }
 }

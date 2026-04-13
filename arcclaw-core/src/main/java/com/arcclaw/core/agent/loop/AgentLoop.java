@@ -35,10 +35,13 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcKeys;
+import com.arcclaw.core.util.MdcManaged;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -55,6 +58,7 @@ import org.jboss.logging.MDC;
  * {@link #run(String, String, String, ReasoningEngine, int)} unchanged.
  */
 @ApplicationScoped
+@MdcManaged
 public class AgentLoop {
 
     private static final Logger log = Logger.getLogger(AgentLoop.class);
@@ -144,7 +148,7 @@ public class AgentLoop {
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
-        // Fix 2 — Ensure storage goals have enough budget (min 3 steps)
+        // Ensure storage goals have enough budget (min 3 steps)
         int budget = maxIterations;
         if (goal != null && (goal.toLowerCase().contains("store") || goal.toLowerCase().contains("remember"))) {
             budget = Math.max(budget, 3);
@@ -164,25 +168,24 @@ public class AgentLoop {
 
         // --- Resolve agentRole at the API boundary ---
         final String canonicalRole;
-        try {
-            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
-            canonicalRole = AgentRoleEnum.isSkillRole(agentRole)
-                    ? agentRole
-                    : resolvedRole.toScopedName();
-        } catch (IllegalArgumentException e) {
+        if (!AgentRoleEnum.isKnownRole(agentRole)) {
             log.warnf("[AgentLoop] Unknown agentRole '%s' — defaulting to COORDINATOR", agentRole);
 
-            auditService.record(sessionId, WorkspaceContext.userId(), agentRole,
+            auditService.record(sessionId, WorkspaceContext.requireUserId(), agentRole,
                 SecurityEventType.INVALID_ROLE_FALLBACK,
                 "Unknown agentRole '" + agentRole + "' — defaulted to COORDINATOR");
 
             Counter.builder("arcclaw.agent.role.unknown")
-                .tag("role", agentRole)
+                .tag("role", agentRole != null ? agentRole : "null")
                 .register(meterRegistry)
                 .increment();
 
-            return runWithRole(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(),
-                               goal, systemNote, engine, maxIterations, context);
+            canonicalRole = AgentRoleEnum.COORDINATOR.toScopedName();
+        } else {
+            AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
+            canonicalRole = AgentRoleEnum.isSkillRole(agentRole)
+                    ? agentRole
+                    : resolvedRole.toScopedName();
         }
 
         return runWithRole(sessionId, canonicalRole, goal, systemNote, engine, maxIterations, context);
@@ -204,7 +207,7 @@ public class AgentLoop {
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
 
-        // FIX: Capture userId early into a local variable so the finally block can
+        // Capture userId early into a local variable so the finally block can
         // pass it to observers without re-reading MDC (which may be unreliable in finally).
         // Initialized to "unknown" in case WorkspaceContext.userId() throws before assignment.
         // WorkspaceContext.userId() is already called unconditionally later in this method
@@ -212,9 +215,9 @@ public class AgentLoop {
         final String capturedUserId = WorkspaceContext.resolveUserId();
 
         try {
-            // FIX: Store userId in MDC so it appears in structured log output alongside
+            // Store userId in MDC so it appears in structured log output alongside
             // SESSION_ID and AGENT_ROLE. Previously USER_ID was never set here,
-            // meaning MDC.get(MdcKeys.USER_ID) in the finally block always returned null
+            // meaning WorkspaceContext.resolveUserId() in the finally block always returned null
             // and observers always received "unknown".
             MDC.put(MdcKeys.USER_ID, capturedUserId);
 
@@ -245,7 +248,7 @@ public class AgentLoop {
                                 resumedHistory.size(), sessionId);
 
                     } else {
-                        // ── FIX: new message arrived while a stale approval is pending.
+                        // ── new message arrived while a stale approval is pending.
                         //    This happens after a JVM restart (SessionReaper leaves the
                         //    checkpoint alive for SSE replay) or when the user simply
                         //    sends a new goal without approving the previous tool.
@@ -300,10 +303,10 @@ public class AgentLoop {
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
                     capturedUserId,  // reuse already-captured value
-                    WorkspaceContext.chatId(),
+                    WorkspaceContext.requireChatId(),
                     canonicalRole,
                     goal,
-                    WorkspaceContext.autonomy(),
+                    WorkspaceContext.requireAutonomyOrSupervised(),
                     maxIterations,
                     channelType,
                     channelPlatformId,
@@ -373,8 +376,9 @@ public class AgentLoop {
             return result;
 
         } catch (StructuredOutputException e) {
-            log.errorf("Structured output failure for session %s: %s", sessionId, e.getMessage());
-            result = AgentResult.failed(e.getMessage(),
+            String msg = AgentErrorMessageUtil.safeMessage(e);
+            log.errorf("Structured output failure for session %s: %s", sessionId, msg);
+            result = AgentResult.failed(msg,
                     AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
             return result;
 
@@ -386,27 +390,31 @@ public class AgentLoop {
         } catch (ComplianceViolationException cve) {
             log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s " +
                        "— halting agent.", sessionId, cve.getEventType());
-            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + cve.getMessage(),
+            String msg = AgentErrorMessageUtil.safeMessage(cve);
+            result = AgentResult.failed("COMPLIANCE_VIOLATION: " + msg,
                     AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
+            String traceId = Span.current().getSpanContext().getTraceId();
             try {
-                agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
-                    cp.setStatus(CheckpointStatus.COMPROMISED);
-                    agentStore.save(cp);
-                });
+                agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
+                    agentStore.markFailed(cp.getId(), "COMPLIANCE_VIOLATION: " + msg, 
+                        "COMPLIANCE_VIOLATION", traceId, cve.getClass().getSimpleName())
+                );
             } catch (Exception ignored) {}
             return result;
 
         } catch (Exception e) {
-            // FIX: null-guard e.getMessage() — NullPointerException and several other JVM
+            // null-guard e.getMessage() — NullPointerException and several other JVM
             // exception types return null from getMessage(), which would produce
             // "SYSTEM_ERROR: null" in both the AgentResult and the checkpoint failure record.
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String errMsg = AgentErrorMessageUtil.safeMessage(e);
             log.errorf("Agent execution failed for session %s: %s", sessionId, errMsg, e);
             result = AgentResult.failed("SYSTEM_ERROR: " + errMsg,
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+            String traceId = Span.current().getSpanContext().getTraceId();
             try {
                 agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
-                    agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg)
+                    agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg,
+                        "SYSTEM_ERROR", traceId, e.getClass().getSimpleName())
                 );
             } catch (Exception ignored) {}
             return result;
@@ -415,15 +423,11 @@ public class AgentLoop {
             if (result != null) {
                 String goalHash = hashUtil.sha256hex(goal);
                 final AgentResult finalResult = result;
-                // FIX: use capturedUserId (set early in try block) instead of
-                // MDC.get(MdcKeys.USER_ID) — cleaner and not subject to MDC lifecycle.
+                // use capturedUserId (set early in try block) instead of
+                // WorkspaceContext.resolveUserId() — cleaner and not subject to MDC lifecycle.
                 observers.forEach(o -> o.onLoopComplete(
                     sessionId, capturedUserId, canonicalRole, goalHash, finalResult));
             }
-            // --- CONTEXT TEARDOWN ---
-            MDC.remove(MdcKeys.SESSION_ID);
-            MDC.remove(MdcKeys.AGENT_ROLE);
-            MDC.remove(MdcKeys.USER_ID); // FIX: was missing — leaked into next request on same thread
             otelContext.endSessionSpan(sessionId);
         }
     }
@@ -453,7 +457,7 @@ public class AgentLoop {
                     .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
         } catch (Exception e) {
             log.warnf("notifyStaleApprovalDiscarded: could not notify user for session=%s — %s",
-                    sessionId, e.getMessage());
+                    sessionId, AgentErrorMessageUtil.safeMessage(e));
         }
     }
 
@@ -533,7 +537,7 @@ public class AgentLoop {
         } catch (Exception e) {
             log.warnf("Failed to stamp channel info for session %s — " +
                       "timeout notification may be skipped. Cause: %s",
-                      sessionId, e.getMessage());
+                      sessionId, AgentErrorMessageUtil.safeMessage(e));
             // Never re-throw — channel stamping must not corrupt the AwaitingApproval result.
         }
     }

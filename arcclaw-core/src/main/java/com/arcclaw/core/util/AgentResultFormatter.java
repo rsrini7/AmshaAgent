@@ -9,7 +9,7 @@ import com.arcclaw.core.agent.result.AgentResult;
  * Shared logic for rendering {@link AgentResult} to user-friendly text.
  * Unified across interactive sessions and background cron tasks.
  *
- * FIX: Added sanitize() to strip raw TOOLCALL markup that OpenRouter free-tier
+ * Added sanitize() to strip raw TOOLCALL markup that OpenRouter free-tier
  * models occasionally embed inside FINISH answer text. Groq never did this because
  * it followed the format schema strictly; OpenRouter free models do not.
  */

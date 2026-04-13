@@ -15,6 +15,7 @@ public enum SecurityEventType {
     TOOL_INVOKED,          // every ToolRegistry.invokeTool() call
     TOOL_EXECUTED,         // recorded at the end of tool execution
     TOOL_BLOCKED,          // SecurityException from autonomy check
+    TOOL_FAILED,           // Audit
 
     // Approval flow
     APPROVAL_GRANTED,      // user replied /approve

@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -315,7 +316,7 @@ public class SystemPromptBuilder {
                 + "list above is a critical failure and will break the orchestration pipeline.\n"
                 + "When in doubt, output text only.\n\n"
 
-                // FIX: Cross-turn tool contamination guard.
+                // Cross-turn tool contamination guard.
                 // Groq error "attempted to call tool X which was not in request.tools" is caused
                 // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
                 // a prior coordinator turn and trying to call it in a role that does not have it.
@@ -422,7 +423,7 @@ public class SystemPromptBuilder {
      * on global prompt context.
      */
     private String buildBrowserRetryRule(AgentRoleEnum roleEnum) {
-        boolean hasBrowser = roleEnum.definition().toolNames().contains("browser_navigate");
+        boolean hasBrowser = roleEnum.definition().toolNames().contains(ToolCapability.BROWSER_NAVIGATE.toolName());
 
         if (!hasBrowser) return "";
 

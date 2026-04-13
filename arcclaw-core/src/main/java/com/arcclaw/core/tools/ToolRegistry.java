@@ -9,16 +9,21 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.RequiresApprovalException;
@@ -31,6 +36,7 @@ import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.RequiresSecrets;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonArraySchema;
@@ -40,6 +46,8 @@ import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonSchemaElement;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import io.opentelemetry.api.trace.Span;
+import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -69,6 +77,8 @@ public class ToolRegistry {
     @Inject ObjectMapper objectMapper;
     @Inject ProcessIsolationExecutor isolationExecutor;
     @Inject AuditService auditService;
+    @Inject CapabilityRegistry capabilityRegistry;
+    @Inject RoleRegistry roleRegistry;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -80,11 +90,43 @@ public class ToolRegistry {
     private Map<String, Map<String, String>> secretsCache;
 
     @PostConstruct
-    void buildSecretsCache() {
+    void initialize() {
+        log.info("ToolRegistry: Initializing and discovering tool capabilities...");
+        doInitialize();
+    }
+
+    void onStart(@Observes StartupEvent ev) {
+        // Accessing the bean triggers @PostConstruct if it hasn't run yet
+        log.info("ToolRegistry: Eager startup verification complete.");
+    }
+
+    private void doInitialize() {
         Map<String, Map<String, String>> cache = new HashMap<>();
         for (AgentTool tool : discoveredTools) {
+            String name = tool.name();
+            
+            // 1. Build secrets cache
             if (tool.isEnabled()) {
-                cache.put(tool.name(), extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+                cache.put(name, extractRequiredSecrets(tool.getClass(), "sandboxCommand"));
+            }
+
+            // 2. Discover metadata-driven capabilities
+            var meta = tool.getClass().getAnnotation(ToolMetadata.class);
+            if (meta == null) {
+                Class<?> current = tool.getClass();
+                while (current != null && current != Object.class) {
+                    meta = current.getAnnotation(ToolMetadata.class);
+                    if (meta != null) break;
+                    current = current.getSuperclass();
+                }
+            }
+
+            if (meta != null) {
+                log.infof("Discovered dynamic tool capability: %s (granting to: %s)",
+                          meta.capabilityId(), String.join(", ", meta.defaultRoles()));
+                for (String roleId : meta.defaultRoles()) {
+                    capabilityRegistry.grant(roleId, name);
+                }
             }
         }
         this.secretsCache = Collections.unmodifiableMap(cache);
@@ -95,7 +137,7 @@ public class ToolRegistry {
     /**
      * Converts a session ID to a safe directory name for all OS platforms.
      *
-     * Windows BUG FIX: Colons (':') are illegal in Windows path components —
+     * Windows BUG Colons (':') are illegal in Windows path components —
      * they are reserved as drive letter separators (e.g. C:\).
      * Delegate session IDs use the format "parentId:delegate:agentname:timestamp", which
      * causes InvalidPathException on every sandbox tool call inside a sub-agent
@@ -110,8 +152,7 @@ public class ToolRegistry {
      * makes workspace dirs portable across platforms.
      */
     static String toSafeDirName(String sessionId) {
-        if (sessionId == null) return sessionId;
-        return sessionId.replace(':', '_');
+        return PathSanitizer.sanitizeForFilesystem(sessionId);
     }
 
     // Tool listing / lookup 
@@ -169,15 +210,15 @@ public class ToolRegistry {
         // Role-capability hard block 
         // Schema filter is soft (LLM can hallucinate past it).
         // This is the hard enforcement layer — role must explicitly own the capability.
-        String agentRole = WorkspaceContext.agentRole();
+        String agentRole = WorkspaceContext.requireAgentRole();
         if (agentRole != null) {
             if (!AgentRoleEnum.isKnownRole(agentRole)) {
                 log.warnf("SECURITY: Unknown agentRole=%s — blocking tool=%s", agentRole, toolName);
                 return ToolResponse.failure(403, "Unknown agent role: " + agentRole);
             }
             AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
-            boolean roleAllowed = role.definition().capabilities().stream()
-                    .anyMatch(cap -> cap.toolName().equals(toolName));
+            Set<String> allowedTools = roleRegistry.permittedTools(role);
+            boolean roleAllowed = allowedTools.contains(toolName);
             if (!roleAllowed) {
                 log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
                         agentRole, toolName);
@@ -192,7 +233,7 @@ public class ToolRegistry {
         }
 
         // Autonomy governance check
-        var level      = WorkspaceContext.autonomy();
+        var level      = WorkspaceContext.requireAutonomyOrSupervised();
         var requiredOp = tool.requiredOperation();
 
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
@@ -215,7 +256,7 @@ public class ToolRegistry {
                     toolName, requiredOp, level);
             auditService.record(
                     WorkspaceContext.requireSessionId(), resolveUserId(),
-                    WorkspaceContext.agentRole(),
+                    WorkspaceContext.requireAgentRole(),
                     SecurityEventType.TOOL_BLOCKED,
                     "tool=" + toolName + " op=" + requiredOp);
             throw new SecurityException(
@@ -226,18 +267,24 @@ public class ToolRegistry {
 
         // NULL PARAM STRIP
         // Some LLMs send optional fields as explicit null (e.g. "ref": null)
-        // instead of omitting them. This can break downstream validators or 
-        // cause 400 errors from strict APIs. Strip them here for all tools.
-        Map<String, Object> sanitizedParams = params.entrySet().stream()
-                .filter(e -> e.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        // instead of omitting them. This can break downstream validators or
+        // cause 400 errors from strict APIs. Strip them here for all tools by default,
+        // but allow tools to opt-out if they differentiate null vs omitted.
+        Map<String, Object> sanitizedParams;
+        if (tool.shouldStripNullParams()) {
+            sanitizedParams = params.entrySet().stream()
+                    .filter(e -> e.getValue() != null)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        } else {
+            sanitizedParams = new HashMap<>(params);
+        }
 
         // Sandbox path 
         if (tool.requiresSandbox()) {
             recordToolAudit(toolName);
             var requiredSecrets = extractRequiredSecrets(tool);
 
-            // FIX: Use toSafeDirName() to strip colons from the session ID.
+            // Use toSafeDirName() to strip colons from the session ID.
             // Windows treats ':' as a drive separator — delegate sub-agent session IDs
             // like "parentId:d:researcher:cf747207" crash Path.of() on Windows with
             // InvalidPathException. The safe dir name is only used for the filesystem
@@ -291,15 +338,32 @@ public class ToolRegistry {
                 log.errorf("Tool '%s' execution failed: %s", toolName, raw);
                 log.debugf(e, "Full stacktrace for tool '%s' failure in session %s",
                            toolName, WorkspaceContext.requireSessionId());
-                return ToolResponse.failure(1, friendly);
+                
+                String traceId = Span.current().getSpanContext().getTraceId();
+                ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, e.getClass().getSimpleName());
+                recordToolFailureAudit(toolName, response);
+                return response;
             }
         }
 
         // Direct (non-sandbox) path
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         recordToolAudit(toolName);
-        ToolResponse response = tool.execute(sanitizedParams);
-        return response;
+        try {
+            ToolResponse response = tool.execute(sanitizedParams);
+            if (!response.success()) {
+                 recordToolFailureAudit(toolName, response);
+            }
+            return response;
+        } catch (Exception e) {
+            String raw = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String friendly = "EXECUTION_FAILED: " + raw;
+            log.errorf("Tool '%s' (direct) execution failed: %s", toolName, raw, e);
+            String traceId = Span.current().getSpanContext().getTraceId();
+            ToolResponse response = ToolResponse.failure(1, friendly, "DIRECT_TOOL_FAILED", traceId, e.getClass().getSimpleName());
+            recordToolFailureAudit(toolName, response);
+            return response;
+        }
     }
 
     /**
@@ -343,9 +407,19 @@ public class ToolRegistry {
     private void recordToolAudit(String toolName) {
         auditService.record(
                 WorkspaceContext.requireSessionId(), resolveUserId(),
-                WorkspaceContext.agentRole(),
+                WorkspaceContext.requireAgentRole(),
                 SecurityEventType.TOOL_INVOKED,
                 "tool=" + toolName);
+    }
+
+    private void recordToolFailureAudit(String toolName, ToolResponse response) {
+        String details = String.format("tool=%s errorCode=%s traceId=%s rootCause=%s",
+                toolName, response.errorCode(), response.traceId(), response.rootCauseClass());
+        auditService.record(
+                WorkspaceContext.requireSessionId(), resolveUserId(),
+                WorkspaceContext.requireAgentRole(),
+                SecurityEventType.TOOL_FAILED,
+                details);
     }
 
     /**

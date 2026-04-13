@@ -86,6 +86,7 @@ public class WebChannelSender implements ChannelSender {
             .add("type", "message")
             .add("role", "assistant")
             .add("text", text)
+            .add("timestamp", System.currentTimeMillis())
             .build().toString();
     }
 }

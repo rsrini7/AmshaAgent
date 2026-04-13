@@ -37,7 +37,7 @@ public class StoreReflex implements AgentReflex {
 
         String content = matcher.group(2).trim();
         
-        // Fix 1 — Pre-parse KEY=VALUE pairs to ensure accurate label extraction
+        // Pre-parse KEY=VALUE pairs to ensure accurate label extraction
         int idx = content.indexOf('=');
         if (idx > 0) {
             String label = content.substring(0, idx).trim();
@@ -53,7 +53,7 @@ public class StoreReflex implements AgentReflex {
             return new ReflexResult(Optional.empty(), structuredGoal);
         }
 
-        // Fix 2 — Alias "remember X" to a structured storage goal
+        //  2 — Alias "remember X" to a structured storage goal
         return new ReflexResult(Optional.empty(), "Remember this information: " + content);
     }
 }

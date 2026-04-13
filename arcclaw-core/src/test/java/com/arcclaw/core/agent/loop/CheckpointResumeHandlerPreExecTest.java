@@ -18,10 +18,12 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -72,7 +74,7 @@ class CheckpointResumeHandlerPreExecTest {
         cp.setPreExecutedResults(objectMapper.writeValueAsString(preResults));
         
         // Mock 'unsafe' decision as APPROVED
-        Map<String, String> decisions = Map.of("unsafe", "APPROVED");
+        Map<String, String> decisions = Map.of("unsafe", ToolDecision.APPROVED.name());
         cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
 
         when(agentStore.load(sessionId, agentRole)).thenReturn(Optional.of(cp));
@@ -87,7 +89,10 @@ class CheckpointResumeHandlerPreExecTest {
         msgContext.setSessionId(sessionId);
         msgContext.setResumeSignal(true);
 
-        handler.handle(context, new ArrayList<>(), msgContext);
+        WorkspaceContext.runWithFullAutonomy(sessionId, "user1", "chat1", agentRole, () -> {
+            handler.handle(context, new ArrayList<>(), msgContext);
+            return null;
+        });
 
         // Verify toolRegistry.invokeTool was ONLY called for 'unsafe', NOT for 'safe'
         verify(toolRegistry, never()).invokeTool(eq("safe"), any(), any());

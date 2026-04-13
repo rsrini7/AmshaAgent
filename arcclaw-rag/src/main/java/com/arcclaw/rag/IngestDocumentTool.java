@@ -56,7 +56,7 @@ public class IngestDocumentTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
-        String userId = WorkspaceContext.userId();
+        String userId = WorkspaceContext.requireUserId();
         if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403,
                 "Security violation: tenant context not bound.");

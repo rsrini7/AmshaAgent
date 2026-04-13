@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
+import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -68,7 +70,7 @@ public class ApproveReflexDelegationTest {
         when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
         MessageContext context = mock(MessageContext.class);
-        com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("u1", "u1", "u1", com.arcclaw.channel.api.ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.TELEGRAM);
         when(context.getUser()).thenReturn(user);
 
         ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve", context);
@@ -88,7 +90,7 @@ public class ApproveReflexDelegationTest {
         when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
         MessageContext context = mock(MessageContext.class);
-        com.arcclaw.channel.api.ChannelUser user = new com.arcclaw.channel.api.ChannelUser("u1", "u1", "u1", com.arcclaw.channel.api.ChannelType.TELEGRAM);
+        ChannelUser user = new ChannelUser("u1", "u1", "u1", ChannelType.TELEGRAM);
         when(context.getUser()).thenReturn(user);
 
         ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve github", context);

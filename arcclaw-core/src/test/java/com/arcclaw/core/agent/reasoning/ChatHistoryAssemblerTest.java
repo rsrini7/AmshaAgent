@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,6 +22,7 @@ import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
@@ -36,13 +38,15 @@ class ChatHistoryAssemblerTest {
     @Mock
     Logger log;
 
+    @InjectMocks
     ChatHistoryAssembler assembler;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        assembler = new ChatHistoryAssembler(chatMemoryStore, objectMapper);
         assembler.log = log;
+        assembler.defaultObservationMaxLength = 4000;
+        assembler.toolSpecificLimits = Optional.empty();
     }
 
     @Test
@@ -121,11 +125,29 @@ class ChatHistoryAssemblerTest {
         List<ChatMessage> result = assembler.assemble(null, null, List.of(step));
 
         // Assert
-        // Expecting AiMessage and ToolExecutionResultMessage
         assertEquals(2, result.size());
         ToolExecutionResultMessage obsMsg = (ToolExecutionResultMessage) result.get(1);
-        assertEquals(4000 + "... [TRUNCATED FOR LENGTH]".length(), obsMsg.text().length());
-        assertTrue(obsMsg.text().endsWith("[TRUNCATED FOR LENGTH]"));
+        String expectedIndicator = "\n[... truncated 1000 chars]";
+        assertEquals(4000 + expectedIndicator.length(), obsMsg.text().length());
+        assertTrue(obsMsg.text().endsWith("1000 chars]"));
+    }
+
+    @Test
+    void testAssemble_reactStepObservationTruncated_WithToolSpecificLimit() {
+        // Arrange
+        assembler.toolSpecificLimits = Optional.of(Map.of("special_tool", 1000));
+        String longObs = "A".repeat(1500);
+        ReasoningStep step = ReasoningStep.pending("thought", "special_tool", Map.of(), 0, 0)
+                .withObservation(longObs);
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(null, null, List.of(step));
+
+        // Assert
+        ToolExecutionResultMessage obsMsg = (ToolExecutionResultMessage) result.get(1);
+        String expectedIndicator = "\n[... truncated 500 chars]";
+        assertEquals(1000 + expectedIndicator.length(), obsMsg.text().length());
+        assertTrue(obsMsg.text().endsWith("500 chars]"));
     }
 
     @Test

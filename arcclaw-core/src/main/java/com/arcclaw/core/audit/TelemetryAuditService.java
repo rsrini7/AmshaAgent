@@ -9,6 +9,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.config.SystemMetadataRegistry;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
+import com.arcclaw.core.util.AgentErrorMessageUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -41,17 +42,27 @@ public class TelemetryAuditService {
      * Swallows all exceptions to prevent crashing the caller.
      */
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
-        log.infof("[AUDIT-PROBE] type=%s session=%s", type, sessionId);
+        recordWithIdempotency(sessionId, userId, agentRole, type, detail, null);
+    }
+
+    /**
+     * Records a point-in-time security event with an optional idempotency key.
+     */
+    public void recordWithIdempotency(String sessionId, String userId, String agentRole,
+                                      SecurityEventType type, String detail, String idempotencyKey) {
+        log.infof("[AUDIT-PROBE] type=%s session=%s idempotency=%s", type, sessionId, idempotencyKey);
         try {
             AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
             event.appVersion = registry.getAppVersion();
+            event.idempotencyKey = idempotencyKey;
             PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, type, em -> {
                 auditEventRepository.record(event);
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("[TEST-EXPECTED]")) {
-                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)", type, sessionId, e.getMessage());
+            String msg = AgentErrorMessageUtil.safeMessage(e);
+            if (msg.contains("[TEST-EXPECTED]")) {
+                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)", type, sessionId, msg);
             } else {
                 log.warnf(e, "[AUDIT] Failed to submit TELEMETRY event %s for session %s", type, sessionId);
             }
@@ -82,8 +93,9 @@ public class TelemetryAuditService {
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("[TEST-EXPECTED]")) {
-                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)", sessionId, e.getMessage());
+            String msg = AgentErrorMessageUtil.safeMessage(e);
+            if (msg.contains("[TEST-EXPECTED]")) {
+                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)", sessionId, msg);
             } else {
                 log.warnf(e, "[AUDIT] Failed to submit loop completion TELEMETRY for session %s", sessionId);
             }

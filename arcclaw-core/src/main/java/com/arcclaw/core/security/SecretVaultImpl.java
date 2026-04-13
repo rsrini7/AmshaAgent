@@ -8,11 +8,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.util.MdcKeys;
-import org.jboss.logging.MDC;
 
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
@@ -101,8 +101,8 @@ public class SecretVaultImpl implements SecretVault {
             // Only record audit for non-system sessions to avoid infinite recursion or
             // missing context
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
-                String userId = (String) MDC.get(MdcKeys.USER_ID);
-                auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_STORE, "keyName=" + keyName);
+                String userId = WorkspaceContext.resolveUserId();
+                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_STORE, "keyName=" + keyName);
             }
 
         } catch (Exception e) {
@@ -117,10 +117,10 @@ public class SecretVaultImpl implements SecretVault {
 
         // 1. Fetch
         EncryptedSecret entity = repository.findByKey(sessionId, keyName);
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String userId = WorkspaceContext.resolveUserId();
 
         if (entity == null) {
-            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE_MISS,
+            auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
                     "keyName=" + keyName);
             return Optional.empty();
         }
@@ -130,7 +130,7 @@ public class SecretVaultImpl implements SecretVault {
         try {
             // 3. Decrypt
             byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, sessionKey, keyName);
-            auditService.record(sessionId, userId, "system", SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
+            auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
             // Log security event?
@@ -139,17 +139,6 @@ public class SecretVaultImpl implements SecretVault {
         // sessionKey NOT auto-closed here
     }
 
-    @Override
-    public void rotateSecrets(String sessionId) {
-        // Key rotation is tracked for Phase 64.
-        // All documentation references to "24-hour automatic rotation" are incorrect
-        // and have been removed in Phase 63.
-        // Do not call this method — it will always throw until Phase 64 ships.
-        throw new UnsupportedOperationException(
-                "Vault key rotation is not yet implemented. " +
-                        "Tracked in Phase 64 backlog. " +
-                        "Remove all callers until Phase 64 is complete.");
-    }
 
     @Override
     public Optional<VaultKey> retrieveSystemKey(String keyName) {

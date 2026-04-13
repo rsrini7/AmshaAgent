@@ -42,6 +42,18 @@ public class AuditEventRepository {
      */
     @Transactional
     public void record(AuditEvent event) {
+        if (event.idempotencyKey != null) {
+            Long count = em.createQuery(
+                    "SELECT COUNT(a) FROM AuditEvent a WHERE a.idempotencyKey = :key",
+                    Long.class)
+                .setParameter("key", event.idempotencyKey)
+                .getSingleResult();
+            if (count > 0) {
+                // Already recorded in a previous (retried) attempt. Skip to ensure logical idempotency.
+                return;
+            }
+        }
+
         ReentrantLock lock = sequencer.lockFor(event.sessionId);
         lock.lock();
         try {

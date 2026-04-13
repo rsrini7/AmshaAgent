@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.role;
 
+import java.util.stream.Collectors;
+
 import io.quarkus.qute.TemplateData;
 
 /**
@@ -117,6 +119,17 @@ public enum ToolCapability {
      * @return the description.
      */
     public String description() {
+        if (this == DELEGATE_TO_AGENT) {
+            String delegatableRoles = AgentRoleEnum.values().stream()
+                .filter(r -> !r.equals(AgentRoleEnum.COORDINATOR))
+                .flatMap(r -> r.definition().aliases().stream())
+                .sorted()
+                .collect(Collectors.joining(", "));
+            
+            return "Delegate a task to a domain expert sub-agent. " +
+                   "REQUIRED: 'agent' (string name: " + delegatableRoles + "), 'goal' (string self-contained task description). " +
+                   "Example: {\"agent\":\"shiva\",\"goal\":\"Analyze the stack trace in app.log and fix the NPE\"}";
+        }
         return description;
     }
 }

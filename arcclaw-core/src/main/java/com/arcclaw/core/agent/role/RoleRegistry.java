@@ -2,14 +2,19 @@ package com.arcclaw.core.agent.role;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class RoleRegistry {
+
+    @Inject
+    CapabilityRegistry capabilityRegistry;
 
     private final ConcurrentHashMap<String, RoleDefinition> dynamicRoles = new ConcurrentHashMap<>();
 
@@ -30,7 +35,22 @@ public class RoleRegistry {
      */
     public Set<String> permittedTools(AgentRoleEnum role) {
         if (role == null) return Set.of();
-        return role.definition().toolNames();
+        Set<String> coreTools = role.definition().toolNames();
+        
+        // Null-safe for unit testing
+        if (capabilityRegistry == null) {
+            return coreTools;
+        }
+
+        Set<String> supplemental = capabilityRegistry.getSupplementalTools(role.id());
+
+        if (supplemental == null || supplemental.isEmpty()) {
+            return coreTools;
+        }
+
+        Set<String> all = new HashSet<>(coreTools);
+        all.addAll(supplemental);
+        return Collections.unmodifiableSet(all);
     }
 
     /**

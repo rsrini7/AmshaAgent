@@ -58,7 +58,7 @@ class TelegramCallbackHandlerHttpClientTest {
         Field field = TelegramCallbackHandler.class.getDeclaredField("httpClient");
         field.setAccessible(true);
         
-        // Fix NPE: mock the method to return a valid CompletableFuture instead of null
+        // mock the method to return a valid CompletableFuture instead of null
         Mockito.when(mockClient.sendAsync(any(), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
         

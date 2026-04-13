@@ -12,7 +12,10 @@ class ToolCapabilityTest {
     void testDelegateToAgentExistsAndCoordinatorOwnsIt() {
         // 1. Verify capability exists
         assertEquals("delegate_to_agent", ToolCapability.DELEGATE_TO_AGENT.toolName());
-        assertTrue(ToolCapability.DELEGATE_TO_AGENT.description().contains("Delegate a task"));
+        String desc = ToolCapability.DELEGATE_TO_AGENT.description();
+        assertTrue(desc.contains("Delegate a task"));
+        assertTrue(desc.contains("shiva"), "Dynamic description should contain delegatable role aliases");
+        assertTrue(desc.contains("brahma"));
 
         // 2. Verify Coordinator has it
         RoleDefinition coordinatorDef = AgentRoleEnum.COORDINATOR.definition();

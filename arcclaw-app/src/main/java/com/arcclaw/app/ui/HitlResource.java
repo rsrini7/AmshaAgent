@@ -17,13 +17,12 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import com.arcclaw.core.util.MdcKeys;
-import org.jboss.logging.MDC;
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.scope.WorkspaceContext;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import org.jboss.resteasy.reactive.RestStreamElementType;
@@ -50,7 +49,7 @@ public class HitlResource {
 
         // §85-B: Lazy ownership binding for SSE subscription.
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String userId = WorkspaceContext.resolveUserId();
         if (userId == null) {
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
@@ -66,7 +65,7 @@ public class HitlResource {
     @GET
     public Response listPending() {
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
-        String userId = (String) MDC.get(MdcKeys.USER_ID);
+        String userId = WorkspaceContext.resolveUserId();
         if (userId == null) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", "Cannot resolve user identity"))

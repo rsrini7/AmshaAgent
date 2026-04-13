@@ -9,7 +9,6 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.core.state.CompactionSummaryRepository;
@@ -39,9 +38,14 @@ public class MemorySearchTool implements AgentTool {
 
     @Override
     public String description() {
-        return "Search the user's long-term memory (past session summaries) for specific keywords, " +
-               "topics, or historical context. Use this when the user asks about past decisions, " +
-               "previous sessions, or historical context.";
+        return """
+            Search the user's long-term memory (past session summaries) for specific keywords,
+            topics, or historical context.
+            IMPORTANT: Use concrete factual keywords that would appear in stored data —
+            e.g. for 'who am I' use query='user name identity', NOT 'your name' or 'my name'.
+            For 'what did I work on' use query='project task work'.
+            Use noun phrases and keywords, never pronouns or self-referential phrases.
+            """;
     }
 
     @Override
@@ -64,62 +68,79 @@ public class MemorySearchTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
+        String userId;
+        String sessionId;
+
         try {
-            // 1. Extract userId from ScopedValue — hard tenant boundary
-            String userId = WorkspaceContext.userId();
-
-            if (userId == null || userId.isBlank()) {
-                return ToolResponse.failure(403,
-            "Security violation: memory_search: USER_ID not bound in current scope");
+            // Step 1 — Extract and validate tenant context
+            // NS2: Fail fast on missing context
+            userId    = WorkspaceContext.requireUserId();
+            sessionId = WorkspaceContext.requireSessionId();
+        } catch (IllegalStateException e) {
+            // NS2 backward compatibility: convert missing context into 403 ToolResponse
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
             }
-
-            // 2. Extract sessionId for audit
-            String sessionId = WorkspaceScopeHolder.getIfActive();
-
-            // 3. Validate query
-            String query = params != null ? (String) params.get("query") : null;
-            if (query == null || query.isBlank()) {
-                return ToolResponse.failure(400, "query parameter is required for memory_search");
-            }
-
-            String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
-
-            // 4. Search
-            List<CompactionSummaryEntity> results;
-            try {
-                results = repository.searchMemory(userId, safeQuery, 5);
-            } catch (Exception e) {
-                String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                if (msg.contains("no such table") || msg.contains("fts")) {
-                    log.warnf("FTS index unavailable for session %s: %s", sessionId, msg);
-                    return ToolResponse.success(
-                        "Memory index temporarily unavailable. Proceed with current context.");
-                }
-                log.errorf("MemorySearchTool failed for session %s: %s", sessionId, msg);
-                log.debugf(e, "Full stacktrace for MemorySearchTool failure in session %s", sessionId);
-                return ToolResponse.failure(500, "Memory search failed: " + msg);
-            }
-
-            // 5. Format results
-            if (results == null || results.isEmpty()) {
-                return ToolResponse.success("No relevant memory found for query: " + query + 
-                                            ". Proceed with current context only.");
-            }
-
-            String formatted = results.stream()
-                    .map((CompactionSummaryEntity r) -> String.format("Session %s (%s): %s",
-                            r.getSessionId(), r.getCreatedAt(), r.getSummary()))
-                    .collect(Collectors.joining("\n---\n"));
-
-            if (formatted.isBlank()) {
-                return ToolResponse.success("No relevant memory found for query: " + query + 
-                                            ". Proceed with current context only.");
-            }
-
-            return ToolResponse.success(formatted);
-
-        } catch (SecurityException e) {
-            throw e; // re-throw security exceptions — must not be swallowed
+            throw e;
         }
+
+        // 2. Validate query
+        String query = params != null ? (String) params.get("query") : null;
+        if (query == null || query.isBlank()) {
+            return ToolResponse.failure(400, "query parameter is required for memory_search");
+        }
+
+        // Normalise self-referential queries to factual equivalents
+        query = normaliseMemoryQuery(query);
+
+        String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
+
+        // 4. Search
+        List<CompactionSummaryEntity> results;
+        try {
+            results = repository.searchMemory(userId, safeQuery, 5);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            if (msg.contains("no such table") || msg.contains("fts")) {
+                log.warnf("FTS index unavailable for session %s: %s", sessionId, msg);
+                return ToolResponse.success(
+                    "Memory index temporarily unavailable. Proceed with current context.");
+            }
+            log.errorf("MemorySearchTool failed for session %s: %s", sessionId, msg);
+            log.debugf(e, "Full stacktrace for MemorySearchTool failure in session %s", sessionId);
+            return ToolResponse.failure(500, "Memory search failed: " + msg);
+        }
+
+        // 5. Format results
+        if (results == null || results.isEmpty()) {
+            return ToolResponse.success("No relevant memory found for query: " + query + 
+                                        ". Proceed with current context only.");
+        }
+
+        String formatted = results.stream()
+                .map((CompactionSummaryEntity r) -> String.format("Session %s (%s): %s",
+                        r.getSessionId(), r.getCreatedAt(), r.getSummary()))
+                .collect(Collectors.joining("\n---\n"));
+
+        if (formatted.isBlank()) {
+            return ToolResponse.success("No relevant memory found for query: " + query + 
+                                        ". Proceed with current context only.");
+        }
+
+        return ToolResponse.success(formatted);
+    }
+
+    private String normaliseMemoryQuery(String query) {
+        if (query == null) return query;
+        String lower = query.toLowerCase().strip();
+        // Self-referential identity queries
+        if (lower.matches(".*(my name|who am i|user name|user identity).*")) {
+            return "user name identity";
+        }
+        // Self-referential work queries
+        if (lower.matches(".*(what did i|what have i|my work|my project|my task).*")) {
+            return "project task work history";
+        }
+        return query;
     }
 }

@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -22,6 +24,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -31,6 +34,7 @@ import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -83,7 +87,7 @@ public class DenyReflex implements AgentReflex {
                     if (!delegateGuard.isDelegate(userId)) {
                         log.warnf("[DELEGATE-DENIED] admin=%s attempted to deny session=%s",
                                   userId, targetSid);
-                        return "❌ You are not authorized to use approval delegation.";
+                        return NOT_AUTHORIZED_DELEGATION;
                     }
                     return handleDelegateDenial(targetSid, userId, chatId, context);
                 }
@@ -129,7 +133,7 @@ public class DenyReflex implements AgentReflex {
                                     // Wait for it to finish and signal us through the bridge.
                                     result = cliResultBridge.waitForResult(sessionId, 10000);
                                 }
-                                return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not deny — session may already be processing.";
+                                return result != null ? AgentResultFormatter.format(result) : COULD_NOT_RESUME;
                             } finally {
                                 cliResultBridge.cancel(sessionId);
                             }
@@ -138,7 +142,7 @@ public class DenyReflex implements AgentReflex {
                             return "";
                         }
                     } catch (CheckpointResolutionException e) {
-                        return "No pending denial found for this session.";
+                        return NO_PENDING_DENIAL;
                     }
                 }
 
@@ -156,13 +160,13 @@ public class DenyReflex implements AgentReflex {
                     String list = pending.stream()
                             .map(c -> "• `/deny " + c.id + "` — " + c.goal)
                             .collect(Collectors.joining("\n"));
-                    return "⚠️ Multiple background tasks awaiting approval:\n\n" + list;
+                    return String.format(CRON_MULTIPLE_AWAITING, list);
                 }
 
                 // 2026-04-07: Bridge check for late-arriving results from other channels
                 if (!statefulAgentStore.isSessionActive(sessionId)) {
                     log.debugf("DenyReflex: ignoring denial for already-completed session %s", sessionId);
-                    return "No pending tool executions require approval for this session.";
+                    return NO_PENDING_ANYWHERE_SESSION;
                 }
 
                 AgentResult bridgeResult = null;
@@ -178,16 +182,16 @@ public class DenyReflex implements AgentReflex {
                 }
 
                 // 6. Nothing pending anywhere
-                return "No pending tool executions require approval for this session.";
+                return NO_PENDING_ANYWHERE_SESSION;
             });
             return ReflexResult.respond(response, context);
         } catch (Exception e) {
-            // Fix 1: e.getMessage() can be null for bare exception construction
+            //  1: e.getMessage() can be null for bare exception construction
             String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             log.errorf("Failed to process denial for session %s: %s", sessionId, errMsg);
             log.debug("Full denial processing failure stack trace:", e);
             return ReflexResult.respond(
-                "❌ **Denial Error**: An internal fault occurred while terminating the task.",
+                DENIAL_ERROR,
                 context);
         }
     }
@@ -204,15 +208,15 @@ public class DenyReflex implements AgentReflex {
             .orElse(null);
 
         if (activeRole == null) {
-            return "No parallel batch awaiting per-tool approval for this session.";
+            return NO_BATCH_AWAITING;
         }
 
         try {
             AgentCheckpoint cp = checkpointApprovalService.denyTool(sessionId, toolName, "CLI deny");
             checkpointApprovalService.triggerResume(cp);
-            return "🚫 Tool '" + toolName + "' denied.";
+            return UserMessages.toolDenied(toolName);
         } catch (CheckpointResolutionException e) {
-            return "No pending denial found for this session.";
+            return NO_PENDING_DENIAL;
         }
     }
 
@@ -226,7 +230,7 @@ public class DenyReflex implements AgentReflex {
         BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
             statefulAgentStore.updateBatchToolDecision(
                 sessionId, agentRole, toolName,
-                AgentSentinels.TOOL_DECISION_DENIED));
+                ToolDecision.DENIED.name()));
     }
 
     private String triggerBatchResume(
@@ -240,7 +244,7 @@ public class DenyReflex implements AgentReflex {
             sessionId, agentRole, context.getUser().platformId(), context.getChatId(),
             context.getUser().channel().name()
         );
-        return "✅ Resuming task...";
+        return RESUMING_TASK;
     }
 
     private String handleCronDenial(
@@ -253,11 +257,11 @@ public class DenyReflex implements AgentReflex {
                 .orElse(null);
 
         if (cron == null) {
-            return "❌ Cron task not found or not yours.";
+            return CRON_NOT_FOUND;
         }
 
         if (cron.status != CronStatus.AWAITING_APPROVAL) {
-            return "❌ This task is not awaiting approval (status=" + cron.status.name() + ").";
+            return String.format(CRON_NOT_AWAITING, cron.status.name());
         }
 
         var pendingCheckpoint = statefulAgentStore
@@ -265,12 +269,11 @@ public class DenyReflex implements AgentReflex {
                 .orElse(null);
 
         if (pendingCheckpoint == null) {
-            return "❌ No pending checkpoint found for this task. " +
-                   "It may have already been processed.";
+            return CRON_NO_CHECKPOINT;
         }
 
         String cronSessionId = pendingCheckpoint.getSessionId();
-        // Fix 2: use the actual agent role stored in the checkpoint.
+        //  2: use the actual agent role stored in the checkpoint.
         // Hardcoding COORDINATOR caused resolveResumeGoal() to look up the wrong
         // checkpoint row. Consistent with the same fix applied to ApproveReflex.
         String cronRole = pendingCheckpoint.getAgentRole();
@@ -278,7 +281,7 @@ public class DenyReflex implements AgentReflex {
         if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
             log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
                       "ignoring duplicate trigger.", cronSessionId);
-            return "⏳ Already processing your denial. Please wait.";
+            return ALREADY_PROCESSING_DENIAL;
         }
 
         try {
@@ -324,7 +327,7 @@ public class DenyReflex implements AgentReflex {
             .orElse(null);
 
         if (activeRole == null) {
-            return "❌ Target session not found or not awaiting approval.";
+            return TARGET_SESSION_NOT_AWAITING;
         }
 
         AgentCheckpoint cp = statefulAgentStore.load(targetSid, activeRole)

@@ -24,6 +24,7 @@ class RoleRegistryTest {
                 "Reviews code",
                 5,
                 false,
+                false,
                 Set.of(ToolCapability.GITHUB),
                 Set.of()
         );
@@ -41,6 +42,7 @@ class RoleRegistryTest {
                 "Reviewer",
                 "Reviews code",
                 5,
+                false,
                 false,
                 Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH),
                 Set.of()
@@ -62,7 +64,7 @@ class RoleRegistryTest {
 
     @Test
     void testDynamicRolesCollectionIsUnmodifiable() {
-        RoleDefinition def = new RoleDefinition("skill:foo", "Foo", "", 5, false, Set.of(), Set.of());
+        RoleDefinition def = new RoleDefinition("skill:foo", "Foo", "", 5, false, false, Set.of(), Set.of());
         registry.registerDynamic("foo", def);
 
         var roles = registry.getDynamicRoles();

@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import static com.arcclaw.core.message.UserMessages.*;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -31,8 +33,10 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.core.util.CronScheduleUtil;
@@ -124,7 +128,7 @@ public class ApproveReflex implements AgentReflex {
                     if (!delegateGuard.isDelegate(userId)) {
                         log.warnf("[DELEGATE-DENIED] admin=%s attempted to approve session=%s",
                                   userId, targetSid);
-                        return "❌ You are not authorized to use approval delegation.";
+                        return NOT_AUTHORIZED_DELEGATION;
                     }
                     return handleDelegateApproval(targetSid, userId, chatId, context);
                 }
@@ -141,7 +145,7 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 // 3. Session checkpoint — interactive approval.
-                // FIX: replaced enum loop with findLatestAwaitingApproval() to avoid
+                // replaced enum loop with findLatestAwaitingApproval() to avoid
                 // stale-row ambiguity. When multiple rows exist for the same
                 // (sessionId, agentRole), the old loop called load() which returned
                 // the first (oldest = COMPLETED) row, never finding the newer
@@ -173,7 +177,7 @@ public class ApproveReflex implements AgentReflex {
                                     // Wait for it to finish and signal us through the bridge.
                                     result = cliResultBridge.waitForResult(sessionId, 10000);
                                 }
-                                return result != null ? AgentResultFormatter.format(result) : "⚠️ Could not resume — session may already be processing.";
+                                return result != null ? AgentResultFormatter.format(result) : COULD_NOT_RESUME;
                             } finally {
                                 cliResultBridge.cancel(sessionId);
                             }
@@ -182,7 +186,7 @@ public class ApproveReflex implements AgentReflex {
                             return "";
                         }
                     } catch (CheckpointResolutionException e) {
-                        return "No pending approval found for this session.";
+                        return NO_PENDING_APPROVAL;
                     }
                 }
 
@@ -191,22 +195,26 @@ public class ApproveReflex implements AgentReflex {
                     cronRepository.findAwaitingApprovalByUserId(userId);
                 if (pending.size() == 1) {
                     AgentCronEntity cron = pending.getFirst();
-                    return "⚠️ No active approval in this chat session.\n\n" +
-                           "A background task is waiting for your approval:\n" +
-                           "• " + cron.goal + "\n\n" +
-                           "Use: `/approve " + cron.id + "` to approve, " +
-                           "or `/deny " + cron.id + "` to cancel.";
+                    return String.format(CRON_SINGLE_AWAITING_GUIDE, cron.goal, cron.id, cron.id);
                 } else if (pending.size() > 1) {
                     String list = pending.stream()
                             .map(c -> "• `/approve " + c.id + "` — " + c.goal)
                             .collect(Collectors.joining("\n"));
-                    return "⚠️ Multiple background tasks awaiting approval:\n\n" + list;
+                    return String.format(CRON_MULTIPLE_AWAITING, list);
+                }
+
+                // Check if last checkpoint is FAILED — guide user to retry
+                Optional<AgentCheckpoint> lastCheckpoint = statefulAgentStore.findLatestCheckpoint(sessionId);
+                if (lastCheckpoint.isPresent() && lastCheckpoint.get().getStatus() == CheckpointStatus.FAILED) {
+                    log.debugf("ApproveReflex: last checkpoint is FAILED for session %s — guiding user to retry", sessionId);
+                    return "⚠️ My last attempt failed before it could be approved (likely due to a rate limit). " +
+                           "Please **resend your original message** to retry — I'll ask for approval again.";
                 }
 
                 // 5. Check if it was JUST completed via another channel (signal bridge)
                 if (!statefulAgentStore.isSessionActive(sessionId)) {
                     log.debugf("ApproveReflex: ignoring approval for already-completed session %s", sessionId);
-                    return "No pending tool executions require approval.";
+                    return NO_PENDING_ANYWHERE;
                 }
 
                 AgentResult bridgeResult = null;
@@ -222,7 +230,7 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 // 6. Nothing pending anywhere
-                return "No pending tool executions require approval.";
+                return NO_PENDING_ANYWHERE;
             });
             return ReflexResult.respond(response, context);
         } catch (Exception e) {
@@ -230,7 +238,7 @@ public class ApproveReflex implements AgentReflex {
             log.errorf("Failed to process approval for session %s: %s", sessionId, errMsg);
             log.debug("Full approval processing failure stack trace:", e);
             return ReflexResult.respond(
-                "❌ **Approval Error**: An internal fault occurred while resuming the task.",
+                APPROVAL_ERROR,
                 context);
         }
     }
@@ -239,7 +247,7 @@ public class ApproveReflex implements AgentReflex {
             String toolName, String sessionId, String userId,
             String chatId, MessageContext context) throws Exception {
 
-        // FIX: replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
+        // replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
         // Additionally filter for hasBatchToolDecisions() since per-tool approval
         // only applies to parallel batch checkpoints.
         Optional<AgentCheckpoint> latestPending =
@@ -250,7 +258,7 @@ public class ApproveReflex implements AgentReflex {
             .orElse(null);
 
         if (activeRole == null) {
-            return "No parallel batch awaiting per-tool approval for this session.";
+            return NO_BATCH_AWAITING;
         }
 
         try {
@@ -258,7 +266,7 @@ public class ApproveReflex implements AgentReflex {
             checkpointApprovalService.triggerResume(cp);
             return "";
         } catch (CheckpointResolutionException e) {
-            return "No pending approval found for this session.";
+            return NO_PENDING_APPROVAL;
         }
     }
 
@@ -272,7 +280,7 @@ public class ApproveReflex implements AgentReflex {
         BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
             statefulAgentStore.updateBatchToolDecision(
                 sessionId, agentRole, toolName,
-                AgentSentinels.TOOL_DECISION_APPROVED));
+                ToolDecision.APPROVED.name()));
     }
 
     private String triggerBatchResume(
@@ -286,7 +294,7 @@ public class ApproveReflex implements AgentReflex {
             sessionId, agentRole, context.getUser().platformId(), context.getChatId(),
             context.getUser().channel().name()
         );
-        return "✅ Resuming task...";
+        return RESUMING_TASK;
     }
 
     private String handleCronApproval(
@@ -299,11 +307,11 @@ public class ApproveReflex implements AgentReflex {
                 .orElse(null);
 
         if (cron == null) {
-            return "❌ Cron task not found or not yours.";
+            return CRON_NOT_FOUND;
         }
 
         if (!CronStatus.AWAITING_APPROVAL.equals(cron.status)) {
-            return "❌ This task is not awaiting approval (status=" + cron.status + ").";
+            return String.format(CRON_NOT_AWAITING, cron.status);
         }
 
         var pendingCheckpoint = statefulAgentStore
@@ -311,8 +319,7 @@ public class ApproveReflex implements AgentReflex {
                 .orElse(null);
 
         if (pendingCheckpoint == null) {
-            return "❌ No pending checkpoint found for this task. " +
-                "It may have already been processed.";
+            return CRON_NO_CHECKPOINT;
         }
 
         String cronSessionId = pendingCheckpoint.getSessionId();
@@ -321,7 +328,7 @@ public class ApproveReflex implements AgentReflex {
         if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
             log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
                     "ignoring duplicate trigger.", cronSessionId);
-            return "⏳ Already processing your approval. Please wait.";
+            return ALREADY_PROCESSING_APPROVAL;
         }
 
         try {
@@ -401,7 +408,7 @@ public class ApproveReflex implements AgentReflex {
 
         log.infof("[DELEGATE-APPROVE] admin=%s approving session=%s", adminId, targetSid);
 
-        // FIX: replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
+        // replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
         Optional<AgentCheckpoint> latestPending =
             statefulAgentStore.findLatestAwaitingApproval(targetSid);
         String activeRole = latestPending
@@ -409,7 +416,7 @@ public class ApproveReflex implements AgentReflex {
             .orElse(null);
 
         if (activeRole == null) {
-            return "❌ Target session not found or not awaiting approval.";
+            return TARGET_SESSION_NOT_AWAITING;
         }
 
         AgentCheckpoint cp = latestPending.orElseThrow(() ->

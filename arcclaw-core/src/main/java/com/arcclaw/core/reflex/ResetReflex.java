@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -76,9 +77,6 @@ public class ResetReflex implements AgentReflex {
         "compaction, %d cron job(s) cleared. Chat memory, heartbeat, and budget retained.",
         sessionId, deletedCrons);
 
-        String output = "🧹 Agent state, checkpoints, and " + deletedCrons
-                + " scheduled task(s) have been cleared. " +
-                "Your conversation history has been preserved — we can pick up where we left off.";
-        return ReflexResult.respond(output, context);
+        return ReflexResult.respond(UserMessages.sessionReset(deletedCrons), context);
     }
 }

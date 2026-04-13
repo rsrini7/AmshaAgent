@@ -19,6 +19,7 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ class ApprovalStateMachineTest {
         StringBuilder sb = new StringBuilder("{");
         for (int i = 0; i < all.size(); i++) {
             String tool = all.get(i);
-            String dec = pending.contains(tool) ? "PENDING" : "APPROVED";
+            String dec = pending.contains(tool) ? ToolDecision.PENDING.name() : ToolDecision.APPROVED.name();
             sb.append("\"").append(tool).append("\":\"").append(dec).append("\"");
             if (i < all.size() - 1) sb.append(",");
         }
@@ -82,7 +83,7 @@ class ApprovalStateMachineTest {
         assertEquals("github:read", result.toolName());
         assertEquals(0, result.remainingPendingTools());
 
-        verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", "APPROVED");
+        verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", ToolDecision.APPROVED.name());
         verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
         verify(decisionEvents).fire(any(ApprovalDecisionEvent.class));
     }
@@ -95,7 +96,7 @@ class ApprovalStateMachineTest {
         ApprovalResult result = stateMachine.decide("session-123", "github:read", ApprovalDecision.REJECT, "test");
         
         assertEquals(ApprovalOutcome.REJECTED, result.outcome());
-        verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", "DENIED");
+        verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", ToolDecision.DENIED.name());
     }
 
     @Test

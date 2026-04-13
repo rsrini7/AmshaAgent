@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -57,12 +58,7 @@ public class StatusReflex implements AgentReflex {
         String shortId = sessionId.length() > 8
             ? sessionId.substring(sessionId.length() - 8) : sessionId;
 
-        String output = String.format(
-            "📊 *Status:* %s\n" +
-            "💰 *Cost:* $%.4f / $%.2f (%.1f%%)\n" +
-            "🔢 *Tokens:* %d prompt + %d completion = %d total\n" +
-            "🧠 *Memory:* %s\n" +
-            "⏱️ *Session:* %s",
+        String output = UserMessages.statusMessage(
             status, cost, budgetUsd, pct,
             inputTokens, outputTokens, totalTokens,
             memoryLine, shortId);

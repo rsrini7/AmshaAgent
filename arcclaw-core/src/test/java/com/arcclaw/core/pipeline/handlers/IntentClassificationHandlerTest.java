@@ -1,5 +1,6 @@
 package com.arcclaw.core.pipeline.handlers;
 
+import static com.arcclaw.core.message.UserMessages.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -17,6 +18,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
@@ -34,6 +36,7 @@ class IntentClassificationHandlerTest {
     private ChannelSender sender;
     private ChannelPluginRegistry registry;
     private AgentRoleCache roleCache;
+    private IntentClassificationService intentClassifier;
 
     @BeforeEach
     void setUp() {
@@ -42,6 +45,7 @@ class IntentClassificationHandlerTest {
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
         roleCache = mock(AgentRoleCache.class);
+        intentClassifier = mock(IntentClassificationService.class);
 
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
@@ -50,6 +54,7 @@ class IntentClassificationHandlerTest {
         handler.classifier = classifier;
         handler.channelPluginRegistry = registry;
         handler.roleCache = roleCache;
+        handler.intentClassifier = intentClassifier;
 
         var destructiveFilter = mock(DestructiveVocabularyFilter.class);
         when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
@@ -72,7 +77,7 @@ class IntentClassificationHandlerTest {
 
         assertEquals(HandleResult.CONTINUE, result);
         assertEquals(AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
-        verify(sender).sendRaw(eq(user), eq("⏳ Rate limited on classification — defaulting to coordinator."));
+        verify(sender).sendRaw(eq(user), eq(CLASSIFICATION_RATE_LIMITED));
     }
 
     @Test

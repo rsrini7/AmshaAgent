@@ -265,6 +265,16 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public ToolResponse execute(Map<String, Object> params) {
+        String sessionId;
+        try {
+            sessionId = WorkspaceContext.requireSessionId();
+        } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
+                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
+            throw e;
+        }
+
         try {
             String code = (String) params.get("code");
             String lang = (String) params.get("language");
@@ -281,11 +291,10 @@ public class SandboxExecTool implements AgentTool {
             // DirectExecutor has no secure secret injection mechanism.
             if (params.containsKey("secrets")) {
                 log.warnf("[SandboxExecTool] 'secrets' parameter ignored on direct host fallback — " +
-                          "Podman unavailable. session=%s", WorkspaceContext.requireSessionId());
+                          "Podman unavailable. session=%s", sessionId);
             }
             Map<String, String> requiredSecrets = Map.of();
 
-            String sessionId = WorkspaceContext.requireSessionId();
             Path workspaceRoot = Path.of(workspaceRootDir, toFsName(sessionId));
 
             return switch (lang) {

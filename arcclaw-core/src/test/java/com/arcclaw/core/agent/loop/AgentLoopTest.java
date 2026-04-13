@@ -26,6 +26,8 @@ import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -127,9 +129,12 @@ class AgentLoopTest {
                                 .awaitingApproval("mytool", "{}", "s1", Collections.emptyList());
                 when(stateMachineRunner.run(any(), any(), any())).thenReturn(approval);
 
-                AgentResult result = loop.runWithRole("s1", "coord", "goal", null, engine, 5,
-                                ctx);
+                WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
+                        AgentResult result = loop.runWithRole("s1", "coord", "goal", null, engine, 5,
+                                        ctx);
 
-                assertTrue(result instanceof AgentResult.AwaitingApproval);
+                        assertTrue(result instanceof AgentResult.AwaitingApproval);
+                        return null;
+                });
         }
 }
