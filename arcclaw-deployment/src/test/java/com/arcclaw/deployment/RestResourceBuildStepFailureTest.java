@@ -14,6 +14,7 @@ import com.arcclaw.persistence.sqlite.AuditSchemaEnforcer;
 import com.arcclaw.persistence.sqlite.FtsConnectionInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.qute.Template;
@@ -93,6 +94,12 @@ public class RestResourceBuildStepFailureTest {
         @ApplicationScoped
         public IntentClassifier classifier() {
             return Mockito.mock(IntentClassifier.class);
+        }
+
+        @Produces
+        @ApplicationScoped
+        public EmbeddingModel embeddingModel() {
+            return Mockito.mock(EmbeddingModel.class);
         }
     }
 }
