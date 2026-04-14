@@ -1,4 +1,4 @@
-package com.arcclaw.core.state;
+package com.arcclaw.persistence.sqlite;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -7,6 +7,7 @@ import java.util.UUID;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
+import com.arcclaw.core.state.ChatMemoryEntity;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;

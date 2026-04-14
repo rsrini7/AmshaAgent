@@ -1,4 +1,4 @@
-package com.arcclaw.core.audit;
+package com.arcclaw.persistence.sqlite;
 
 import java.nio.file.Path;
 

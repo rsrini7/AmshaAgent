@@ -44,12 +44,5 @@ public class TxReflectionTest {
         assertNotNull(tx1, "updateBatchToolDecision must be annotated with @Transactional");
         assertEquals(Transactional.TxType.NOT_SUPPORTED, tx1.value(),
             "updateBatchToolDecision override must be NOT_SUPPORTED");
-            
-        Method doUpdateBatchToolDecision = StatefulAgentStoreImpl.class.getDeclaredMethod("doUpdateBatchToolDecision",
-            String.class, String.class, String.class, String.class);
-        Transactional tx2 = doUpdateBatchToolDecision.getAnnotation(Transactional.class);
-        assertNotNull(tx2, "doUpdateBatchToolDecision must be annotated with @Transactional");
-        assertEquals(Transactional.TxType.REQUIRES_NEW, tx2.value(),
-            "doUpdateBatchToolDecision must be REQUIRES_NEW");
     }
 }

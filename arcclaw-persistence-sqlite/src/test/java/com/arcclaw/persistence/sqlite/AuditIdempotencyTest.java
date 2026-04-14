@@ -1,4 +1,4 @@
-package com.arcclaw.core.audit;
+package com.arcclaw.persistence.sqlite;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -7,6 +7,11 @@ import java.util.UUID;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
+import com.arcclaw.core.audit.AuditEvent;
+import com.arcclaw.core.audit.AuditEventRepository;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.audit.TelemetryAuditService;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 

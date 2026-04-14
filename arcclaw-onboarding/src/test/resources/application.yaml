@@ -56,7 +56,7 @@ quarkus:
       initial-size: 1
       acquisition-timeout: 10s
   hibernate-orm:
-    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     schema-management:
       strategy: drop-and-create
     log:

@@ -176,11 +176,13 @@ class AsyncPersistenceEngineTest {
             }
         }));
         
-        assertTrue(ranSynchronously.get(), "501st event (mandatory) should never be dropped and must run synchronously on the test thread under pressure");
-        
-        // Cleanup
-        pauseConsumer.countDown();
-        exec.shutdownNow();
+        try {
+            assertTrue(ranSynchronously.get(), "501st event (mandatory) should never be dropped and must run synchronously on the test thread under pressure");
+        } finally {
+            // Cleanup
+            pauseConsumer.countDown();
+            exec.shutdownNow();
+        }
     }
 
     @Test
@@ -204,10 +206,12 @@ class AsyncPersistenceEngineTest {
         
         engine.submitTelemetry(PersistenceEvent.telemetry("dropped", SecurityEventType.TOOL_INVOKED, em -> {}));
         
-        double countAfter = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
-        assertEquals(countBefore + 1.0, countAfter, "Telemetry overflow counter should be incremented when dropping the 5001st event");
-        
-        pauseConsumer.countDown();
+        try {
+            double countAfter = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
+            assertEquals(countBefore + 1.0, countAfter, "Telemetry overflow counter should be incremented when dropping the 5001st event");
+        } finally {
+            pauseConsumer.countDown();
+        }
     }
 
     @Test

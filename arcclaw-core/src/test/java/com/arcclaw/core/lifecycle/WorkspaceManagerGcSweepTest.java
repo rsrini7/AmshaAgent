@@ -4,24 +4,23 @@ import static java.time.temporal.ChronoUnit.MINUTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.stream.Stream;
 
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
 
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.api.CheckpointStorePort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.hibernate.query.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +37,7 @@ class WorkspaceManagerGcSweepTest {
     SessionHeartbeatTracker heartbeatTracker;
 
     @InjectMock
-    EntityManager emMock;
+    CheckpointStorePort checkpointStorePortMock; // Mock new port instead of EM
 
     @InjectMock
     StatefulAgentStore agentStoreMock; // Mock to avoid DB hits during irrelevant side effects
@@ -54,8 +53,8 @@ class WorkspaceManagerGcSweepTest {
         
         heartbeatTracker.injectHeartbeat(sessionId, Instant.now().minus(60, MINUTES));
 
-        // Stub EntityManager
-        stubEntityManager(sessionId, true, List.of());
+        // Stub CheckpointStorePort
+        stubCheckpointStorePort(sessionId, true);
 
         // Act
         sessionReaper.gcSweep();
@@ -71,8 +70,8 @@ class WorkspaceManagerGcSweepTest {
         
         heartbeatTracker.injectHeartbeat(sessionId, Instant.now().minus(60, MINUTES));
  
-        // Stub EntityManager
-        stubEntityManager(sessionId, false, List.of());
+        // Stub CheckpointStorePort
+        stubCheckpointStorePort(sessionId, false);
         
         // Mock session as resuming
         when(agentStoreMock.isBatchResuming(sessionId)).thenReturn(true);
@@ -91,8 +90,8 @@ class WorkspaceManagerGcSweepTest {
         
         heartbeatTracker.injectHeartbeat(sessionId, Instant.now().minus(60, MINUTES));
 
-        // Stub EntityManager
-        stubEntityManager(sessionId, false, List.of());
+        // Stub CheckpointStorePort
+        stubCheckpointStorePort(sessionId, false);
 
         // Act
         sessionReaper.gcSweep();
@@ -110,14 +109,14 @@ class WorkspaceManagerGcSweepTest {
         heartbeatTracker.injectHeartbeat(s2, Instant.now().minus(60, MINUTES));
         heartbeatTracker.injectHeartbeat(s3, Instant.now().minus(60, MINUTES));
 
-        // Stub EntityManager for s1 awaiting approval
-        stubEntityManager(s1, true, List.of());
+        // Stub CheckpointStorePort for s1 awaiting approval
+        stubCheckpointStorePort(s1, true);
 
         // Act
         sessionReaper.gcSweep();
 
         // Assert: Bulk query executed exactly ONCE
-        verify(emMock, times(1)).createQuery(contains("SELECT c.sessionId FROM AgentCheckpoint"), eq(String.class));
+        verify(checkpointStorePortMock, times(1)).findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
 
         // Assert: s1 survives, s2 and s3 are terminated
         assertEquals(1, heartbeatTracker.activeSessionCount());
@@ -147,39 +146,16 @@ class WorkspaceManagerGcSweepTest {
     }
 
     /**
-     * Unified helper to stub EntityManager.
+     * Unified helper to stub CheckpointStorePort.
      */
-    @SuppressWarnings("unchecked")
-    private void stubEntityManager(String awaitingSessionId, boolean isAwaitingInBulk, List<AgentCheckpoint> timedOutList) {
-        // 1. Bulk Query Mock
-        TypedQuery<String> bulkQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(Query.class));
-        when(bulkQueryMock.setParameter(anyString(), any())).thenReturn(bulkQueryMock);
+    private void stubCheckpointStorePort(String awaitingSessionId, boolean isAwaitingInBulk) {
         if (isAwaitingInBulk) {
-            when(bulkQueryMock.getResultStream()).thenReturn(Stream.of(awaitingSessionId));
+            CheckpointDto dto = new CheckpointDto(1L, awaitingSessionId, "agent", null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0, null, null, null, null, null, null, null);
+            when(checkpointStorePortMock.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name()))
+                .thenReturn(List.of(dto));
         } else {
-            when(bulkQueryMock.getResultStream()).thenReturn(Stream.empty());
+            when(checkpointStorePortMock.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name()))
+                .thenReturn(List.of());
         }
-
-        // 2. Timed Out Approvals Mock
-        TypedQuery<AgentCheckpoint> timedOutQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(Query.class));
-        when(timedOutQueryMock.setParameter(anyString(), any())).thenReturn(timedOutQueryMock);
-        when(timedOutQueryMock.getResultList()).thenReturn(timedOutList);
-
-        // 3. Fallback Mock
-        TypedQuery<Object> fallbackQueryMock = mock(TypedQuery.class, withSettings().extraInterfaces(Query.class));
-        when(fallbackQueryMock.setParameter(anyString(), any())).thenReturn(fallbackQueryMock);
-        when(fallbackQueryMock.getResultList()).thenReturn(List.of());
-
-        // Router
-        doAnswer(invocation -> {
-            String ql = invocation.getArgument(0);
-            Class<?> clazz = invocation.getArgument(1);
-            if (clazz == String.class && ql.contains("sessionId")) {
-                return bulkQueryMock;
-            } else if (clazz == AgentCheckpoint.class) {
-                return timedOutQueryMock;
-            }
-            return fallbackQueryMock;
-        }).when(emMock).createQuery(anyString(), any(Class.class));
     }
 }

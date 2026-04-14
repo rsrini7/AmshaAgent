@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.sqlite;
+package com.arcclaw.core.state;
 
 import java.time.Instant;
 
@@ -13,9 +13,8 @@ import com.arcclaw.core.util.TemporalUtils;
  * Uses fixed-width ISO 8601 format provided by {@link TemporalUtils}.
  * This guarantees lexicographic sort safety in SQLite.
  * <p>
- * Architecture rule (§5.10.1): autoApply is ENABLED in the SQLite adapter
- * module, ensuring all Instant fields in core entities are automatically
- * converted when this module is present.
+ * Architecture rule (§5.10.1): autoApply is ENABLED, ensuring all Instant 
+ * fields in core entities are automatically converted.
  */
 @Converter(autoApply = true)
 public class InstantToTextConverter implements AttributeConverter<Instant, String> {

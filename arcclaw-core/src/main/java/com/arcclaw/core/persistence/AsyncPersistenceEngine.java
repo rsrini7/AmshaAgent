@@ -406,6 +406,7 @@ public class AsyncPersistenceEngine {
                                 event.getSessionId(),
                                 event.getEventType().toString(),
                                 event.getDbAction()));
+                if (event.getFuture() != null) event.getFuture().complete(null);
                 break;
             } catch (IllegalStateException e) {
                 if (e.getMessage() != null
@@ -415,8 +416,9 @@ public class AsyncPersistenceEngine {
                     sleepQuietly(100);
                     continue;
                 }
-                if (event.getFuture() != null) event.getFuture().completeExceptionally(e);
-                throw e; // re-throw so drainCritical can log the failure
+                ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
+                throw cve; // re-throw so drainCritical can log the failure
             } catch (ComplianceViolationException cve) {
                 if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
                 throw cve;

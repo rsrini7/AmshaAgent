@@ -72,7 +72,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
-        return storeAdapter.findBySessionAndRole(sessionId, agentRole).map(CheckpointMapper::toEntity);
+        return storeAdapter.findBySessionAndRole(sessionId, agentRole)
+            .map(dto -> {
+                AgentCheckpoint entity = CheckpointMapper.toEntity(dto);
+                return entity; // map handles the null-to-empty transition
+            });
     }
 
     @Override

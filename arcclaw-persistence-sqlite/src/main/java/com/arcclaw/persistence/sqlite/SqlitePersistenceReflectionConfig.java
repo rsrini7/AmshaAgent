@@ -1,5 +1,6 @@
 package com.arcclaw.persistence.sqlite;
 
+import com.arcclaw.core.state.InstantToTextConverter;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(

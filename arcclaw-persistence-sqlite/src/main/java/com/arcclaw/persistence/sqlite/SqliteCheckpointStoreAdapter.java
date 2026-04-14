@@ -173,7 +173,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public Optional<CheckpointDto> doFindBySessionAndRole(String sessionId, String agentRole) {
-        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -198,7 +197,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<CheckpointDto> doFindActiveBySession(String sessionId) {
-        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -468,7 +466,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             .setMaxResults(1)
             .getResultList();
             
-        if (rows.isEmpty()) return true;   // no AWAITING_APPROVAL → treat as expired
+        if (rows.isEmpty() || rows.get(0) == null) return true;   // no AWAITING_APPROVAL → treat as expired
         AgentCheckpoint cp = rows.get(0);
         if (cp.getUpdatedAt() == null) return true;
         return cp.getUpdatedAt().isBefore(cutoff);
@@ -579,7 +577,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkCheckpointsFailed(String sessionId) {
-        em.clear();
         List<AgentCheckpoint> checkpoints = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -591,6 +588,10 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
         Instant now = Instant.now();
         for (var checkpoint : checkpoints) {
+            if (checkpoint == null) {
+                log.warnf("Found null checkpoint in list for session=%s", sessionId);
+                continue;
+            }
             checkpoint.setStatus(CheckpointStatus.FAILED);
             checkpoint.setFailedAt(now);
             checkpoint.setFailReason("Session terminated by WorkspaceManager");

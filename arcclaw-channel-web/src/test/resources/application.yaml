@@ -15,7 +15,7 @@ quarkus:
       url: "jdbc:sqlite:./target/web-test.db"
 
   hibernate-orm:
-    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     schema-management:
       strategy: drop-and-create
     packages:
