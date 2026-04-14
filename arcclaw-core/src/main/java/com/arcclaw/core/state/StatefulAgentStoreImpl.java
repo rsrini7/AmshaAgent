@@ -118,7 +118,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void markFailed(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
-        storeAdapter.markFailed(checkpointId, reason);
+        storeAdapter.markFailed(checkpointId, reason, errorCode, traceId, rootCauseClass);
 
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
             String userId = WorkspaceContext.resolveUserId();
@@ -137,7 +137,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void markOrphaned(Long checkpointId, String reason) {
-        storeAdapter.markOrphaned(checkpointId);
+        storeAdapter.markOrphaned(checkpointId, reason);
 
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
             String userId = WorkspaceContext.resolveUserId();

@@ -427,7 +427,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .stream().map(this::entityToDto).toList();
     }
 
-    @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<CheckpointDto> doFindStaleAwaitingApproval(Instant cutoff) {
         em.clear();
@@ -570,21 +569,24 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     // ── FIX 9: Atomic status transition methods ─────────────────────────
 
     @Override
-    public void markFailed(Long checkpointId, String failReason) {
+    public void markFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
         withRetry(() -> {
-            self.doMarkFailed(checkpointId, failReason);
+            self.doMarkFailed(checkpointId, failReason, errorCode, traceId, rootCauseClass);
             return null;
         }, "mark-failed");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkFailed(Long checkpointId, String failReason) {
+    public void doMarkFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
         em.clear();
         AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
         if (cp == null) return;
         cp.setStatus(CheckpointStatus.FAILED);
         cp.setFailedAt(Instant.now());
         cp.setFailReason(failReason);
+        cp.setErrorCode(errorCode);
+        cp.setTraceId(traceId);
+        cp.setRootCauseClass(rootCauseClass);
     }
 
     @Override
@@ -602,23 +604,25 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         if (cp == null) return;
         cp.setStatus(CheckpointStatus.COMPLETED);
         cp.setCompletedAt(Instant.now());
+        cp.setFailReason(null);
     }
 
     @Override
-    public void markOrphaned(Long checkpointId) {
+    public void markOrphaned(Long checkpointId, String reason) {
         withRetry(() -> {
-            self.doMarkOrphaned(checkpointId);
+            self.doMarkOrphaned(checkpointId, reason);
             return null;
         }, "mark-orphaned");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkOrphaned(Long checkpointId) {
+    public void doMarkOrphaned(Long checkpointId, String reason) {
         em.clear();
         AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
         if (cp == null) return;
         cp.setStatus(CheckpointStatus.ORPHANED);
         cp.setFailedAt(Instant.now());
+        cp.setFailReason(reason);
     }
 
     // ── FIX 10: Atomic batch tool decision update ───────────────────────

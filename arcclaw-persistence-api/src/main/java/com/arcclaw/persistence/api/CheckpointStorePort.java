@@ -99,7 +99,6 @@ public interface CheckpointStorePort {
 
     List<CheckpointDto> findByStatus(String status);
     boolean isCheckpointExpired(String sessionId, long timeoutHours);
-    List<CheckpointDto> doFindStaleAwaitingApproval(Instant cutoff);
     boolean isSessionActive(String sessionId);
 
     /**
@@ -111,8 +110,6 @@ public interface CheckpointStorePort {
      * Finds IN_PROGRESS checkpoints that haven't been updated since cutoff (JVM crashes).
      */
     List<CheckpointDto> findInProgressZombies(Instant cutoff);
-
-
 
     /**
      * Checks if there are any pending tool approvals for a session.
@@ -142,9 +139,9 @@ public interface CheckpointStorePort {
     /** Deletes chat history for terminal sessions older than the cutoff. Backend handles temporal binding. */
     void purgeOldChatHistory(Instant cutoff);
 
-    void markFailed(Long checkpointId, String failReason);
+    void markFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass);
     void markCompleted(Long checkpointId);
-    void markOrphaned(Long checkpointId);
+    void markOrphaned(Long checkpointId, String reason);
 
     boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision);
 }

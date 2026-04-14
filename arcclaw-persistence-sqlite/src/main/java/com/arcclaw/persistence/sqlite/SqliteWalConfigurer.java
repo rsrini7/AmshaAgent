@@ -51,21 +51,19 @@ public class SqliteWalConfigurer {
             log.info("SQLite: WAL mode and 10s busyTimeout enabled.");
 
             // 2. Attach FTS database for sub-queries
-            if (ftsDb.exists()) {
-                String attachSql = String.format("ATTACH DATABASE '%s' AS fts;", 
-                        ftsDb.getAbsolutePath().replace("\\", "/"));
-                stmt.execute(attachSql);
-                log.infof("SQLite: FTS database attached from %s", ftsDb.getAbsolutePath());
-                
-                try {
-                    stmt.execute("CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts USING fts5(sessionId, summary)");
-                } catch (Exception e) {
-                    log.warn("SQLite: Failed to create compaction_summary_fts table", e);
-                }
-            } else {
-                log.debugf("SQLite: FTS database not yet present at %s — " +
-                           "will be created by AuditSchemaEnforcer on first write.",
-                           ftsDb.getAbsolutePath());
+            if (!ftsDb.getParentFile().exists()) {
+                ftsDb.getParentFile().mkdirs();
+            }
+
+            String attachSql = String.format("ATTACH DATABASE '%s' AS fts;", 
+                    ftsDb.getAbsolutePath().replace("\\", "/"));
+            stmt.execute(attachSql);
+            log.infof("SQLite: FTS database attached from %s", ftsDb.getAbsolutePath());
+            
+            try {
+                stmt.execute("CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts USING fts5(sessionId, summary)");
+            } catch (Exception e) {
+                log.warn("SQLite: Failed to create compaction_summary_fts table", e);
             }
 
         } catch (SQLException e) {
