@@ -1044,3 +1044,27 @@ I have updated `SessionReaper.java` to use the `CheckpointStatus` enum for statu
 This completes the hardening and precision audit of the ArcClaw persistence layer. 
 
 render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)
+
+Edited TwoTierMemoryServiceTest.java
+Edited SqlitePersistenceAdapter.java
+Edited SqlitePersistenceAdapter.java
+Edited SqlitePersistenceAdapter.java
+
+I have finalized the hardening of the ArcClaw persistence layer. All architectural invariants—including the critical **capture-before-mutate** pattern for zombie recovery and **CDI proxy bypass** for atomic checkpointing—are now correctly implemented and documented.
+
+### Final Verification Result
+
+| Fix | Status | Key Invariant Enforced |
+|---|---|---|
+| **FIX 1 — TOCTOU Upsert** | ✅ Resolved | Checkpoint status is now consistently reset to `IN_PROGRESS` even in the "existing entity" path of `doUpsertWithSteps`. |
+| **FIX 3 — Zombie Recovery** | ✅ Resolved | **Capture-before-mutate**: `recoverZombiesAndMarkFailed` snaps the DTO *before* updating the database, allowing `SessionReaper` to correctly identify and republish pending approvals. |
+| **FIX 6 — Capabilities** | ✅ Resolved | Record field names restored to `supportsFullTextSearch` and `supportsVectorSearch` for backward compatibility. |
+| **FIX 8 — SPI Cleanup** | ✅ Resolved | Removed scope-creep `ftsSearch` parameter from `MemoryRetrievalPort` and updated all callers. |
+| **Style/Maintenance** | ✅ Resolved | Replaced hardcoded status strings with Enum constant names in `SessionReaper` and cleaned up imports in `SqlitePersistenceAdapter`. |
+
+The persistence layer is now transactionally atomic, protected against race conditions, and maintains full visibility for the Human-In-The-Loop (HITL) republication subsystem during crash recovery.
+
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/SqliteCheckpointStoreAdapter.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-api/src/main/java/com/arcclaw/persistence/api/BackendCapabilities.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/SqlitePersistenceAdapter.java)
