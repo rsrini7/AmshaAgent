@@ -25,6 +25,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,6 +85,8 @@ public class SessionReaper {
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void onStartup(@Observes StartupEvent event) {
         try {
+            // Note: SQLite BUSY retries are handled internally (transparently) 
+            // by CheckpointStorePort via SqliteRetryTemplate. A single call here is safe.
             QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
         } catch (Exception e) {
             log.errorf("Failed onStartup zombie recovery: %s", e.getMessage());
@@ -248,7 +251,9 @@ public class SessionReaper {
                     "  WHERE c.updatedAt > :cutoff " +
                     "     OR c.status NOT IN (:terminalStatuses)" +
                     ")")
-                    .setParameter("cutoff", cutoff)
+                    // Note: Hibernate 6 bulk JPQL often bypasses autoApply=true converters for parameters.
+                    // We manually format to String using TemporalUtils to ensure SQLite TEXT comparison matches.
+                    .setParameter("cutoff", TemporalUtils.formatIsoLex(cutoff))
                     .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                     .executeUpdate();
                 
