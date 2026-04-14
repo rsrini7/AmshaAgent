@@ -149,10 +149,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                                            List<ReasoningStep> steps,
                                            CheckpointStatus finalStatus) {
         String json = serializeSteps(steps);
-        boolean isNew = load(sessionId, agentRole).isEmpty();  // check BEFORE save
+        Optional<AgentCheckpoint> existingOpt = load(sessionId, agentRole);
+        boolean isNew = existingOpt.isEmpty();
 
-        AgentCheckpoint checkpoint = load(sessionId, agentRole)
-                .orElseGet(AgentCheckpoint::new);
+        AgentCheckpoint checkpoint = existingOpt.orElseGet(AgentCheckpoint::new);
         
         checkpoint.setSessionId(sessionId);
         checkpoint.setAgentRole(agentRole);
