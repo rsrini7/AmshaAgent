@@ -19,7 +19,6 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 // NvidiaMessageSanitizer.java
 public class NvidiaMessageSanitizer implements ChatModel {
 
-    private static final Pattern SHORT_CALL_ID = Pattern.compile("^call_\\d+$");
     private final ChatModel delegate;
 
     public NvidiaMessageSanitizer(ChatModel delegate) {
@@ -90,9 +89,12 @@ public class NvidiaMessageSanitizer implements ChatModel {
         return result;
     }
 
+    private static final Pattern NVIDIA_ID_FORMAT = Pattern.compile("^[a-zA-Z0-9]{9}$");
+
     private boolean needsIdFix(String id) {
-        // NVIDIA rejects: call_0, call_1 etc. (too short or wrong format)
-        return id == null || SHORT_CALL_ID.matcher(id).matches();
+        // NVIDIA requires exactly 9 alphanumeric chars. 
+        // UUIDs, 'call_X' or other formats trigger 'DEGRADED function' 400 errors.
+        return id == null || !NVIDIA_ID_FORMAT.matcher(id).matches();
     }
 
     private ChatMessage rewriteWithMapping(ChatMessage msg, Map<String, String> idMapping) {
@@ -105,7 +107,8 @@ public class NvidiaMessageSanitizer implements ChatModel {
                                     .id(newId).name(req.name()).arguments(req.arguments())
                                     .build();
                     }).toList();
-            return AiMessage.from(fixed);
+            // NVIDIA NIMs prefer explicit empty text over null when tool calls are present
+            return AiMessage.aiMessage(ai.text() != null ? ai.text() : "", fixed);
         }
         if (msg instanceof ToolExecutionResultMessage tool) {
             String newId = idMapping.getOrDefault(tool.id(), tool.id());
@@ -137,7 +140,9 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 }).toList();
 
         return ChatResponse.builder()
-                .aiMessage(AiMessage.from(fixed))
+                .aiMessage(AiMessage.aiMessage(
+                    response.aiMessage().text() != null ? response.aiMessage().text() : "", 
+                    fixed))
                 .finishReason(response.finishReason())
                 .tokenUsage(response.tokenUsage())
                 .build();
