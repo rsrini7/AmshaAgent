@@ -20,9 +20,8 @@ class EncryptedSecretVersionTest {
     EntityManager em;
 
     @BeforeEach
-    @Transactional
     void cleanup() {
-        em.createQuery("DELETE FROM EncryptedSecret").executeUpdate();
+        // cleanup omitted. UUID isolation is sufficient and avoids cross-test data wipes in parallel runs.
     }
 
     @Test

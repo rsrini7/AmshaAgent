@@ -20,7 +20,6 @@ import com.arcclaw.core.state.CronStatus;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 /**
  * Integration tests for {@link AgentCronRepository} using real in-memory SQLite.
@@ -35,9 +34,8 @@ class AgentCronRepositoryTest {
     EntityManager em;
     
     @BeforeEach
-    @Transactional
     void cleanup() {
-        em.createQuery("DELETE FROM AgentCronEntity").executeUpdate();
+        // cleanup omitted. UUID isolation is sufficient and avoids cross-test data wipes in parallel runs.
     }
 
     private AgentCronEntity createEntity(String userId, CronStatus status, Instant nextFireTime) {

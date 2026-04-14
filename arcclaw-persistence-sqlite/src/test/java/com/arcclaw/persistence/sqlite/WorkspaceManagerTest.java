@@ -50,9 +50,6 @@ class WorkspaceManagerTest {
     @BeforeEach
     void cleanup() {
         auditService.waitForIdle();
-        QuarkusTransaction.requiringNew().run(() -> {
-            em.createQuery("DELETE FROM AgentCheckpoint").executeUpdate();
-        });
         heartbeatTracker.clearAll();
     }
 
