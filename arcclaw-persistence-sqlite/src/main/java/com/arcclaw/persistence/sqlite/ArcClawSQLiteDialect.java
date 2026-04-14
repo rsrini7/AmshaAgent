@@ -21,12 +21,12 @@ public class ArcClawSQLiteDialect extends SQLiteDialect {
             new SQLiteIdentityColumnSupport() {
                 @Override
                 public boolean hasDataTypeInIdentityColumn() {
-                    return true;  // ORM 7 fix: must be true to emit type in DDL
+                    return false; // Force 'integer' as the base for the rowid alias
                 }
 
                 @Override
                 public String getIdentityColumnString(int type) {
-                    return "integer";  // SQLite rowid alias requires exactly this
+                    return "integer"; // Hibernate will add the primary key constraint at table level
                 }
             };
 

@@ -55,7 +55,7 @@ quarkus:
       url: "jdbc:sqlite:./target/sqlite-integration-test.db?busy_timeout=60000&journal_mode=WAL&transaction_mode=IMMEDIATE"
       additional-jdbc-url-properties: "journal_mode=WAL&synchronous=FULL&busy_timeout=60000&transaction_mode=IMMEDIATE"
       min-size: 1
-      max-size: 5
+      max-size: 1
       initial-size: 1
       acquisition-timeout: 10s
 

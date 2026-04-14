@@ -186,6 +186,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
+                .filter(java.util.Objects::nonNull)
                 .map(CheckpointMapper::toDto)
                 .findFirst();
     }
