@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -75,8 +76,9 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     @Override
     public void index(MemoryEntryDto entry) {
         String chunkId = globalKb.ingest(entry.text());
+        String fallbackId = entry.id() != null ? "session-" + entry.id() : UUID.randomUUID().toString();
         sessionKb.ingest(
-            chunkId != null ? chunkId : "session-" + entry.id(),
+            chunkId != null ? chunkId : fallbackId,
             entry.text());
     }
 

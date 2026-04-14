@@ -118,19 +118,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void markFailed(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
-        storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            CheckpointDto updated = new CheckpointDto(
-                dto.id(), dto.sessionId(), dto.agentRole(), 
-                CheckpointStatus.FAILED.toString(),
-                dto.autonomyLevel(), dto.stateJson(), dto.channelPlatformId(), dto.channelType(), 
-                dto.originalGoal(), Instant.now(), dto.completedAt(), reason,
-                dto.pendingToolName(), dto.batchToolDecisions(), dto.pendingToolParametersJson(), 
-                dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(), 
-                dto.retryAfterMs(), dto.systemNote(), errorCode, traceId, rootCauseClass,
-                dto.createdAt(), dto.updatedAt()
-            );
-            storeAdapter.save(updated);
+        storeAdapter.markFailed(checkpointId, reason);
 
+        storeAdapter.findById(checkpointId).ifPresent(dto -> {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_FAILED:" + checkpointId;
             String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
@@ -147,19 +137,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void markOrphaned(Long checkpointId, String reason) {
-        storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            CheckpointDto updated = new CheckpointDto(
-                dto.id(), dto.sessionId(), dto.agentRole(), 
-                "ORPHANED",
-                dto.autonomyLevel(), dto.stateJson(), dto.channelPlatformId(), dto.channelType(), 
-                dto.originalGoal(), Instant.now(), dto.completedAt(), reason,
-                dto.pendingToolName(), dto.batchToolDecisions(), dto.pendingToolParametersJson(), 
-                dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(), 
-                dto.retryAfterMs(), dto.systemNote(), dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
-                dto.createdAt(), dto.updatedAt()
-            );
-            storeAdapter.save(updated);
+        storeAdapter.markOrphaned(checkpointId);
 
+        storeAdapter.findById(checkpointId).ifPresent(dto -> {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_ORPHANED:" + checkpointId;
             auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
@@ -170,19 +150,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void markCompleted(Long checkpointId) {
-        storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            CheckpointDto updated = new CheckpointDto(
-                dto.id(), dto.sessionId(), dto.agentRole(), 
-                CheckpointStatus.COMPLETED.toString(),
-                dto.autonomyLevel(), dto.stateJson(), dto.channelPlatformId(), dto.channelType(), 
-                dto.originalGoal(), dto.failedAt(), Instant.now(), null,
-                dto.pendingToolName(), dto.batchToolDecisions(), dto.pendingToolParametersJson(), 
-                dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(), 
-                dto.retryAfterMs(), dto.systemNote(), dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
-                dto.createdAt(), dto.updatedAt()
-            );
-            storeAdapter.save(updated);
+        storeAdapter.markCompleted(checkpointId);
 
+        storeAdapter.findById(checkpointId).ifPresent(dto -> {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_COMPLETED:" + checkpointId;
             auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
@@ -240,42 +210,16 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
-        return storeAdapter.findLatestBySession(sessionId).map(d -> AutonomyLevel.valueOf(d.autonomyLevel()));
+        return storeAdapter.findLatestBySession(sessionId)
+            .flatMap(d -> Optional.ofNullable(d.autonomyLevel())
+                .map(AutonomyLevel::valueOf));
     }
 
     @Override
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public boolean updateBatchToolDecision(String sessionId, String agentRole,
                                            String toolName, String decision) {
-        Optional<CheckpointDto> dtoOpt = storeAdapter.findBySessionAndRole(sessionId, agentRole);
-        if (dtoOpt.isEmpty()) return false;
-
-        CheckpointDto dto = dtoOpt.get();
-        if (!CheckpointStatus.AWAITING_APPROVAL.toString().equals(dto.status()) || dto.batchToolDecisions() == null) {
-            return false;
-        }
-
-        try {
-            Map<String, ToolDecision> map = objectMapper.readValue(
-                dto.batchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
-            if (!map.containsKey(toolName)) return false;
-            map.put(toolName, ToolDecision.valueOf(decision));
-            
-            CheckpointDto updated = new CheckpointDto(
-                dto.id(), dto.sessionId(), dto.agentRole(), dto.status(),
-                dto.autonomyLevel(), dto.stateJson(), dto.channelPlatformId(), dto.channelType(),
-                dto.originalGoal(), dto.failedAt(), dto.completedAt(), dto.failReason(),
-                dto.pendingToolName(), objectMapper.writeValueAsString(map),
-                dto.pendingToolParametersJson(), dto.preExecutedResults(), dto.maxIterations(),
-                dto.iterationsUsed(), dto.retryAfterMs(), dto.systemNote(), dto.errorCode(),
-                dto.traceId(), dto.rootCauseClass(), dto.createdAt(), dto.updatedAt()
-            );
-            storeAdapter.save(updated);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        return storeAdapter.atomicUpdateBatchToolDecision(sessionId, agentRole, toolName, decision);
     }
 
     @Override

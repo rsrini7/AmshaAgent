@@ -9,6 +9,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import com.arcclaw.core.util.TemporalUtils;
+
 /**
  * Repository for {@link AgentCronEntity} with SQLite WAL-friendly
  * transaction patterns.
@@ -136,9 +138,9 @@ public class AgentCronRepository {
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :active, c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("active", CronStatus.ACTIVE)
-         .setParameter("last", lastFireTime)
-         .setParameter("next", nextFireTime)
-         .setParameter("now", Instant.now())
+         .setParameter("last", TemporalUtils.formatIsoLex(lastFireTime))
+         .setParameter("next", TemporalUtils.formatIsoLex(nextFireTime))
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -151,8 +153,8 @@ public class AgentCronRepository {
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :completed, c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("completed", CronStatus.COMPLETED)
-         .setParameter("last", lastFireTime)
-         .setParameter("now", Instant.now())
+         .setParameter("last", TemporalUtils.formatIsoLex(lastFireTime))
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -165,7 +167,7 @@ public class AgentCronRepository {
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :awaiting, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL)
-         .setParameter("now", Instant.now())
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -192,7 +194,7 @@ public class AgentCronRepository {
                 "UPDATE AgentCronEntity c SET c.status = :failed, c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("failed", CronStatus.FAILED)
          .setParameter("err", errorReason)
-         .setParameter("now", Instant.now())
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -209,8 +211,8 @@ public class AgentCronRepository {
             em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :skipped, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
             ).setParameter("skipped", CronStatus.SKIPPED)
-             .setParameter("next", job.nextFireTime)
-             .setParameter("now", now)
+             .setParameter("next", TemporalUtils.formatIsoLex(job.nextFireTime))
+             .setParameter("now", TemporalUtils.formatIsoLex(now))
              .setParameter("id", job.id)
              .executeUpdate();
         }
@@ -229,7 +231,7 @@ public class AgentCronRepository {
                 "(c.lastFireTime <= :threshold OR (c.lastFireTime IS NULL AND c.createdAt <= :threshold))"
         ).setParameter("active", CronStatus.ACTIVE)
          .setParameter("running", CronStatus.RUNNING)
-         .setParameter("threshold", threshold)
+         .setParameter("threshold", TemporalUtils.formatIsoLex(threshold))
          .executeUpdate();
     }
 

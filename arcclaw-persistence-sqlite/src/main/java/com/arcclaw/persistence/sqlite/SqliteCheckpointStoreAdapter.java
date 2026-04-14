@@ -17,6 +17,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ReasoningStepEntity;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.ReasoningStepDto;
@@ -427,10 +428,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    public List<CheckpointDto> findStaleAwaitingApproval(Instant cutoff) {
-        return withRetry(() -> self.doFindStaleAwaitingApproval(cutoff), "find-stale-awaiting");
-    }
-
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<CheckpointDto> doFindStaleAwaitingApproval(Instant cutoff) {
         em.clear();
@@ -453,9 +450,9 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doIsSessionActive(String sessionId) {
         em.clear();
-        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status IN (:statuses)", Long.class)
+        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status NOT IN :terminalStatuses", Long.class)
                 .setParameter("sid", sessionId)
-                .setParameter("statuses", List.of(CheckpointStatus.IN_PROGRESS, CheckpointStatus.AWAITING_APPROVAL))
+                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .getSingleResult();
         return count > 0;
     }
@@ -537,6 +534,133 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         if (!checkpoints.isEmpty()) {
             log.infof("Marked %d checkpoint(s) FAILED for session=%s",
                       checkpoints.size(), sessionId);
+        }
+    }
+
+    // ── FIX 8B: purgeOldChatHistory — moved from SessionReaper ──────────
+
+    @Override
+    public void purgeOldChatHistory(Instant cutoff) {
+        withRetry(() -> {
+            self.doPurgeOldChatHistory(cutoff);
+            return null;
+        }, "purge-old-chat-history");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doPurgeOldChatHistory(Instant cutoff) {
+        em.clear();
+        int deleted = em.createQuery(
+            "DELETE FROM ChatMemoryEntity m WHERE m.memoryId NOT IN (" +
+            "  SELECT c.sessionId FROM AgentCheckpoint c " +
+            "  WHERE c.updatedAt > :cutoff " +
+            "     OR c.status NOT IN (:terminalStatuses)" +
+            ")")
+            // Hibernate 6 bulk JPQL bypasses autoApply converters for parameters.
+            // Manually format to String using TemporalUtils for SQLite TEXT comparison.
+            .setParameter("cutoff", TemporalUtils.formatIsoLex(cutoff))
+            .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
+            .executeUpdate();
+
+        if (deleted > 0) {
+            log.infof("Purge complete: removed %d stale chat memory row(s).", deleted);
+        }
+    }
+
+    // ── FIX 9: Atomic status transition methods ─────────────────────────
+
+    @Override
+    public void markFailed(Long checkpointId, String failReason) {
+        withRetry(() -> {
+            self.doMarkFailed(checkpointId, failReason);
+            return null;
+        }, "mark-failed");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkFailed(Long checkpointId, String failReason) {
+        em.clear();
+        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
+        if (cp == null) return;
+        cp.setStatus(CheckpointStatus.FAILED);
+        cp.setFailedAt(Instant.now());
+        cp.setFailReason(failReason);
+    }
+
+    @Override
+    public void markCompleted(Long checkpointId) {
+        withRetry(() -> {
+            self.doMarkCompleted(checkpointId);
+            return null;
+        }, "mark-completed");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkCompleted(Long checkpointId) {
+        em.clear();
+        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
+        if (cp == null) return;
+        cp.setStatus(CheckpointStatus.COMPLETED);
+        cp.setCompletedAt(Instant.now());
+    }
+
+    @Override
+    public void markOrphaned(Long checkpointId) {
+        withRetry(() -> {
+            self.doMarkOrphaned(checkpointId);
+            return null;
+        }, "mark-orphaned");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkOrphaned(Long checkpointId) {
+        em.clear();
+        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
+        if (cp == null) return;
+        cp.setStatus(CheckpointStatus.ORPHANED);
+        cp.setFailedAt(Instant.now());
+    }
+
+    // ── FIX 10: Atomic batch tool decision update ───────────────────────
+
+    @Override
+    public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole,
+                                                  String toolName, String decision) {
+        return withRetry(() -> self.doAtomicUpdateBatchToolDecision(sessionId, agentRole, toolName, decision),
+                "atomic-update-batch-decision");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doAtomicUpdateBatchToolDecision(String sessionId, String agentRole,
+                                                    String toolName, String decision) {
+        em.clear();
+        List<AgentCheckpoint> results = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("role", agentRole)
+                .setMaxResults(1)
+                .getResultList();
+        if (results.isEmpty()) return false;
+
+        AgentCheckpoint cp = results.get(0);
+        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL || cp.getBatchToolDecisions() == null) {
+            return false;
+        }
+
+        try {
+            Map<String, ToolDecision> map = objectMapper.readValue(
+                cp.getBatchToolDecisions(),
+                new TypeReference<Map<String, ToolDecision>>() {});
+            if (!map.containsKey(toolName)) return false;
+            map.put(toolName, ToolDecision.valueOf(decision));
+            cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
+            return true;
+        } catch (Exception e) {
+            log.errorf("Failed to update batch tool decision for session=%s tool=%s: %s",
+                       sessionId, toolName, e.getMessage());
+            return false;
         }
     }
 

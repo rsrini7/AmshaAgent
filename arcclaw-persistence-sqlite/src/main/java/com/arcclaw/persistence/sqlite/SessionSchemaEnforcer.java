@@ -22,17 +22,17 @@ public class SessionSchemaEnforcer {
     @Transactional
     void onStart(@Observes @Priority(Interceptor.Priority.APPLICATION + 90) StartupEvent ev) {
         em.createNativeQuery("""
-            CREATE TABLE IF NOT EXISTS sessionregistry (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                channeltype TEXT NOT NULL,
-                channelid   TEXT NOT NULL,
-                userid      TEXT NOT NULL,
-                sessionid   TEXT NOT NULL UNIQUE,
-                createdat   TEXT NOT NULL,
-                UNIQUE(channeltype, channelid, userid)
+            CREATE TABLE IF NOT EXISTS session_registry (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_type TEXT NOT NULL,
+                channel_id   TEXT NOT NULL,
+                user_id      TEXT NOT NULL,
+                session_id   TEXT NOT NULL UNIQUE,
+                created_at   TEXT NOT NULL,
+                UNIQUE(channel_type, channel_id, user_id)
             )
         """).executeUpdate();
-        log.info("SessionSchemaEnforcer: sessionregistry table verified.");
+        log.info("SessionSchemaEnforcer: session_registry table verified.");
     }
 }
 

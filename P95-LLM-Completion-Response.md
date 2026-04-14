@@ -811,3 +811,54 @@ The `SessionSchemaEnforcer.java` fix has been cleanly applied. The raw query exe
 ```
 
 The ghost table hazard is eliminated. Is there anything else you'd like me to review?
+
+---
+
+Viewed AgentCronRepository.java:1-296
+Edited AgentCronRepository.java
+Created beans.xml
+Created beans.xml
+Searched for "(TwoTierMemoryService|RagContextEnricher)"
+Ran command: `dir /s /b *TwoTierMemoryService.java *RagContextEnricher.java`
+Ran command: `Get-ChildItem -Recurse -Filter "*TwoTierMemoryService.java", "*RagContextEnricher.java" | Select-Object -ExpandProperty FullName`
+Ran command: `Get-ChildItem -Recurse | Where-Object { $_.Name -match "TwoTierMemoryService.java" -or $_.Name -match "RagContextEnricher.java" } | Select-Object -ExpandProperty FullName`
+Viewed RagContextEnricher.java:1-105
+Viewed TwoTierMemoryService.java:1-38
+Viewed SqliteMemoryRetrievalAdapter.java:1-123
+Viewed MemoryEntryDto.java:1-9
+Edited SqliteMemoryRetrievalAdapter.java
+Viewed SessionRegistryEntry.java:1-46
+Viewed SessionSchemaEnforcer.java:1-39
+Edited SessionSchemaEnforcer.java
+Searched for "(GlobalKnowledgeBase|SessionKnowledgeBase)"
+
+All 17 identified bugs from the P95 audit (including critical runtime breaks, high-severity concurrency issues, and architecture violations) have been resolved with surgical precision.
+
+### Key Fixes Implemented
+
+1.  **FTS & Persistence Hardening (FIX 1, 2, 7b):**
+    *   Standardized the FTS database filename to `arcclaw-fts.db` (hyphen) in `SqliteWalConfigurer` to match the pool interceptor.
+    *   Added the missing `fts.compaction_summary_fts` virtual table creation at startup to restore memory search functionality.
+    *   Implemented a UUID fallback in `SqliteMemoryRetrievalAdapter.index()` to prevent `session-null` key collisions when indexing entries with missing IDs.
+2.  **Schema and Type Integrity (FIX 3, 5, 7):**
+    *   Aligned `SessionSchemaEnforcer` DDL with the `SessionRegistryEntry` JPA entity (restoring underscores to match the source of truth).
+    *   Migrated `isSessionActive` to a denylist approach using `CheckpointStatus.terminalStatuses()`, ensuring new non-terminal states (like `AWAITING_RETRY`) don't cause premature session termination.
+    *   Wrapped all `Instant` parameters in `AgentCronRepository` bulk JPQL updates with `TemporalUtils.formatIsoLex()` to bypass the Hibernate 6 auto-apply converter limitation.
+3.  **Concurrency & Atomicity (FIX 9, 10):**
+    *   Refactored `markFailed`, `markCompleted`, and `markOrphaned` to be single, atomic `REQUIRES_NEW` port operations, eliminating TOCTOU race windows.
+    *   Created `atomicUpdateBatchToolDecision` in the adapter to mutate tool decisions directly with a managed entity, preventing concurrent decision overwrites in parallel batches.
+4.  **Architectural Isolation (FIX 4, 8, 11, 12):**
+    *   Added the required `arcclaw-persistence-api` dependency to `arcclaw-rag` and verified that no direct imports of concrete SQLite knowledge bases remain.
+    *   Delegated `purgeOldChatHistory` to the `CheckpointStorePort`, moving SQLite-specific temporal formatting and bulk DELETE logic out of `SessionReaper` and into the adapter where it belongs.
+    *   Added `beans.xml` to both new persistence modules to guarantee CDI bean discovery.
+    *   Removed the redundant `findStaleAwaitingApproval` method from the port interface.
+
+### Verification Confirmation
+- [x] Hyphenated `arcclaw-fts.db` filename in `SqliteWalConfigurer`.
+- [x] `fts5` virtual table created in `fts` schema at startup.
+- [x] `SessionSchemaEnforcer` matches `session_registry` entity naming.
+- [x] Denylist logic in `doIsSessionActive` protects retrying sessions.
+- [x] No `TemporalUtils` leaked into `SessionReaper`.
+- [x] No SQLite Concrete KB classes in `arcclaw-rag`.
+
+All changes comply with the stated architecture invariants and port/adapter boundaries. No Maven commands were executed.

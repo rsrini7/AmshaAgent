@@ -39,7 +39,7 @@ public class SqliteWalConfigurer {
     void onStartup(@Observes @Priority(10) StartupEvent event) {
         log.info("SQLite: Configuring WAL mode and FTS cross-database ATTACH...");
         
-        File ftsDb = new File(dataDir, "arcclaw_fts.db");
+        File ftsDb = new File(dataDir, "arcclaw-fts.db");
 
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
@@ -56,6 +56,12 @@ public class SqliteWalConfigurer {
                         ftsDb.getAbsolutePath().replace("\\", "/"));
                 stmt.execute(attachSql);
                 log.infof("SQLite: FTS database attached from %s", ftsDb.getAbsolutePath());
+                
+                try {
+                    stmt.execute("CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts USING fts5(sessionId, summary)");
+                } catch (Exception e) {
+                    log.warn("SQLite: Failed to create compaction_summary_fts table", e);
+                }
             } else {
                 log.debugf("SQLite: FTS database not yet present at %s — " +
                            "will be created by AuditSchemaEnforcer on first write.",

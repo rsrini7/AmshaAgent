@@ -7,9 +7,9 @@ import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.ColumnDefault;
 
 import com.arcclaw.core.util.TemporalUtils;
+import org.hibernate.annotations.ColumnDefault;
 
 /**
  * Persistent cron job entity backed by the {@code agentcron} SQLite table.

@@ -25,7 +25,6 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
-import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -240,27 +239,10 @@ public class SessionReaper {
         if (shuttingDown) return;
 
         Instant cutoff = Instant.now().minus(Duration.ofDays(retentionDays));
-
         log.infof("Purging chat history older than %d days (cutoff=%s)", retentionDays, cutoff);
-
+        
         try {
-            QuarkusTransaction.requiringNew().run(() -> {
-                int deleted = em.createQuery(
-                    "DELETE FROM ChatMemoryEntity m WHERE m.memoryId NOT IN (" +
-                    "  SELECT c.sessionId FROM AgentCheckpoint c " +
-                    "  WHERE c.updatedAt > :cutoff " +
-                    "     OR c.status NOT IN (:terminalStatuses)" +
-                    ")")
-                    // Note: Hibernate 6 bulk JPQL often bypasses autoApply=true converters for parameters.
-                    // We manually format to String using TemporalUtils to ensure SQLite TEXT comparison matches.
-                    .setParameter("cutoff", TemporalUtils.formatIsoLex(cutoff))
-                    .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
-                    .executeUpdate();
-                
-                if (deleted > 0) {
-                    log.infof("Purge complete: removed %d stale chat memory row(s).", deleted);
-                }
-            });
+            checkpointStore.purgeOldChatHistory(cutoff);
         } catch (Exception e) {
             log.warnf("Failed to purge old chat history: %s", e.getMessage());
         }
