@@ -56,14 +56,33 @@ public class NvidiaMessageSanitizer implements ChatModel {
             }
         }
 
-        List<ChatMessage> system = messages.stream()
+        List<SystemMessage> system = messages.stream()
                 .filter(m -> m instanceof SystemMessage)
+                .map(m -> (SystemMessage) m)
                 .limit(1).toList();
 
-        List<ChatMessage> rest = messages.stream()
+        List<ChatMessage> nonSystem = messages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
-                .map(msg -> rewriteWithMapping(msg, idMapping))
                 .toList();
+
+        List<ChatMessage> rest = new ArrayList<>();
+        for (int i = 0; i < nonSystem.size(); i++) {
+            ChatMessage current = nonSystem.get(i);
+            
+            // §7.32: NVIDIA 'DEGRADED function' protection.
+            // If an Assistant message has tool calls, it MUST be followed by ToolExecutionResultMessage(s).
+            // If the very next message is NOT a tool result, this is an abandoned/leaked call
+            // that will cause a 400 error. We drop it.
+            if (current instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
+                boolean hasFollowingResult = (i + 1 < nonSystem.size()) 
+                        && (nonSystem.get(i + 1) instanceof ToolExecutionResultMessage);
+                if (!hasFollowingResult) {
+                    continue; // Skip abandoned tool call
+                }
+            }
+            
+            rest.add(rewriteWithMapping(current, idMapping));
+        }
 
         List<ChatMessage> result = new ArrayList<>(system);
         result.addAll(rest);

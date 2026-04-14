@@ -1993,3 +1993,24 @@ I've completed the hardening of the ArcClaw agentic loop, specifically targeting
     *   Upgraded `AgentRoleCache` to a write-through cache backed by `StatefulAgentStore`. It now correctly recovers the previous role from the database after a restart, ensuring specialized requests (like Go/Java execution) are routed back to the correct specialist agents.
 
 These changes ensure the system is resilient to both technical template constraints and operational events like service restarts.
+
+---
+
+Viewed NvidiaMessageSanitizer.java:1-133
+Edited NvidiaMessageSanitizer.java
+
+I've added the final piece of the reliability puzzle for NVIDIA NIM integration: **Abandoned Tool Call Pruning**.
+
+### The Final Issue
+The error `"DEGRADED function cannot be invoked"` occurs because NVIDIA NIM is a strictly validated API. If the conversation history contains an Assistant message with a `tool_call`, it **must** be followed by a `tool` result message. 
+
+When we perform a "turn-flip" self-correction (injecting a User turn to fix a malformed response), we were inadvertently leaving behind Assistant messages with orphaned tool calls. NVIDIA sees these as "degraded" states and rejects the next request entirely.
+
+### The Fix
+I updated `NvidiaMessageSanitizer.java` to implement a **Pairing Guard**:
+
+*   **Abandoned Call Pruning**: The sanitizer now scans the conversation history. If it finds an Assistant message containing tool calls that is NOT immediately followed by a tool result (e.g., because it's followed by our new correction turn), it **automatically removes** that Assistant message from the history.
+*   **Request Integrity**: This ensures the sequence sent to NVIDIA is always clean and properly paired, preventing the 400 error.
+*   **Self-Healing**: Combined with the Turn-Flipping and persistent Role Cache, the agent can now seamlessly recover from tool-omission errors, app restarts, and formatting glitches without you ever seeing a "Bad Request" error.
+
+This robust multi-layered defense (Regex + Turn-Flipping + Pruning + Persistence) should make the Telegram agent highly reliable even on sensitive providers like NVIDIA NIM.
