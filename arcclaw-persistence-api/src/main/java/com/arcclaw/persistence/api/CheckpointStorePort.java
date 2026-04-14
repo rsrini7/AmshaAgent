@@ -143,7 +143,7 @@ public interface CheckpointStorePort {
     CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
         String stateJson, String autonomy, int iterationsUsed);
 
-    List<CheckpointDto> recoverZombiesAndMarkFailed(Instant inProgressCutoff, Instant approvalCutoff, String failReason);
+    List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason);
 
     void purgeOldChatHistory(Instant cutoff);
 

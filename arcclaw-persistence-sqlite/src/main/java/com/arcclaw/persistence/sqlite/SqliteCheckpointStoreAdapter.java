@@ -642,12 +642,12 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    public List<CheckpointDto> recoverZombiesAndMarkFailed(Instant inProgressCutoff, Instant approvalCutoff, String failReason) {
-        return withRetry(() -> self.doRecoverZombiesAndMarkFailed(inProgressCutoff, approvalCutoff, failReason), "recover-zombies");
+    public List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason) {
+        return withRetry(() -> self.doRecoverInProgressZombies(inProgressCutoff, failReason), "recover-zombies");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public List<CheckpointDto> doRecoverZombiesAndMarkFailed(Instant inProgressCutoff, Instant approvalCutoff, String failReason) {
+    public List<CheckpointDto> doRecoverInProgressZombies(Instant inProgressCutoff, String failReason) {
         em.clear();
         
         // 1. In-progress zombies
@@ -658,26 +658,12 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setParameter("cutoff", inProgressCutoff)
                 .getResultList();
         
-        // 2. Awaiting-approval zombies
-        List<AgentCheckpoint> awaiting = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("cutoff", approvalCutoff)
-                .getResultList();
-
         Instant now = Instant.now();
         List<CheckpointDto> results = new ArrayList<>();
         
         for (AgentCheckpoint cp : inProgress) {
             results.add(CheckpointMapper.toDto(cp));
             cp.setStatus(CheckpointStatus.FAILED);
-            cp.setFailedAt(now);
-            cp.setFailReason(failReason);
-        }
-        for (AgentCheckpoint cp : awaiting) {
-            results.add(CheckpointMapper.toDto(cp));
-            cp.setStatus(CheckpointStatus.ORPHANED);
             cp.setFailedAt(now);
             cp.setFailReason(failReason);
         }

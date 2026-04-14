@@ -17,6 +17,7 @@ import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * SQLite implementation of {@link MemoryRetrievalPort}.
@@ -38,6 +39,9 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
     @Inject
     FtsConnectionInterceptor ftsInterceptor;
+
+    @ConfigProperty(name = "arcclaw.rag.max-source-chars", defaultValue = "400")
+    int maxSourceChars;
 
     @Override
     public List<MemoryChunkDto> search(String query, int topK, String userId) {
@@ -68,7 +72,18 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
         vectorResults.sort(Comparator.comparingDouble(MemoryChunkDto::score).reversed());
 
         // 4. Merge via RRF
-        return reciprocalRankFusion(topK, ftsResults, vectorResults);
+        List<MemoryChunkDto> mergedResults = reciprocalRankFusion(topK, ftsResults, vectorResults);
+
+        // 5. Truncate Pass
+        return mergedResults.stream()
+            .map(chunk -> {
+                String text = chunk.text();
+                if (text != null && text.length() > maxSourceChars) {
+                    text = text.substring(0, maxSourceChars) + "…";
+                }
+                return new MemoryChunkDto(chunk.chunkId(), text, chunk.score());
+            })
+            .toList();
     }
 
     @Override

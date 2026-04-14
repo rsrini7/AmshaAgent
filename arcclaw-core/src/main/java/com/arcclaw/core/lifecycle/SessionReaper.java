@@ -95,22 +95,33 @@ public class SessionReaper {
 
     private void doRecoverZombies() {
         Instant inProgressCutoff = Instant.now().minus(Duration.ofMinutes(15));
-        Instant approvalCutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours)); // leave alive if younger than this
         
-        List<CheckpointDto> recovered = checkpointStore.recoverZombiesAndMarkFailed(
-            inProgressCutoff, approvalCutoff, "JVM crash recovery — orphaned at startup");
+        // Step 1: Mark IN_PROGRESS zombies FAILED
+        List<CheckpointDto> failed = checkpointStore.recoverInProgressZombies(
+            inProgressCutoff, "JVM crash recovery — orphaned at startup");
+        if (!failed.isEmpty()) {
+            log.warnf("Zombie recovery: found and failed %d orphaned IN_PROGRESS checkpoint(s).",
+                failed.size());
+            failed.forEach(dto -> log.infof("  Marked FAILED: id=%d session=%s role=%s",
+                dto.id(), dto.sessionId(), dto.agentRole()));
+        } else {
+            log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
+        }
 
-        if (!recovered.isEmpty()) {
-            log.warnf("Zombie recovery: found and failed %d orphaned/stale checkpoint(s).", recovered.size());
-            for (var dto : recovered) {
-                if (CheckpointStatus.AWAITING_APPROVAL.name().equals(dto.status())) {
-                     log.infof("  Republishing orphaned approval: id=%d session=%s role=%s",
-                        dto.id(), dto.sessionId(), dto.agentRole());
-                     agentSseService.republishOnSubscribe(dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
-                }
+        // Step 2: Replay ALL surviving AWAITING_APPROVAL — never orphan at startup
+        List<CheckpointDto> pendingApprovals =
+            checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
+        if (!pendingApprovals.isEmpty()) {
+            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — "
+                + "leaving alive, queuing SSE replay.", pendingApprovals.size());
+            for (var dto : pendingApprovals) {
+                log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
+                    dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
+                agentSseService.republishOnSubscribe(
+                    dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
             }
         } else {
-            log.info("Zombie recovery: no orphaned checkpoints found.");
+            log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints found.");
         }
     }
 

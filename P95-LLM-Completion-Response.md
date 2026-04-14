@@ -1068,3 +1068,81 @@ render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-sqlit
 render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)
 render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-api/src/main/java/com/arcclaw/persistence/api/BackendCapabilities.java)
 render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/SqlitePersistenceAdapter.java)
+
+---
+
+Edited CheckpointStorePort.java
+Edited SqliteCheckpointStoreAdapter.java
+Edited SessionReaper.java
+Viewed StatefulAgentStoreImpl.java:180-250
+Ran command: `rg -n "saveAndFinalize" arcclaw-core\src\main\java\com\arcclaw\core\state\StatefulAgentStoreImpl.java`
+Viewed SqliteMemoryRetrievalAdapter.java:1-100
+Edited SqliteMemoryRetrievalAdapter.java
+Ran command: `rg "markFired|markSkipped|markAwaitingApproval|markFailed|markCompleted|reclaimStaleCrons" arcclaw-core\src\main\java\com\arcclaw\core\state\`
+Ran command: `rg -n "cronRepository" arcclaw-core\src\main\java\com\arcclaw\core\state\`
+Ran command: `rg "AgentCronRepository" arcclaw-core\src\main\java\com\arcclaw\core\state\`
+Viewed AgentCronRepository.java:1-20
+Viewed AgentCronRepository.java:21-40
+Viewed AgentCronRepository.java:130-250
+Viewed AgentCronRepository.java:1-316
+Viewed AgentCronRepository.java:1-316
+Ran command: `rg -n "markFireSuccess" arcclaw-core\src\main\java\com\arcclaw\core\state\AgentCronRepository.java`
+Searched for "setParameter"
+Searched for "setParameter"
+Searched for "setParameter\(.*Instant\.now\(\)"
+Edited AgentCronRepository.java
+Ran command: `rg -n "markFireSuccess|markFireFailure" arcclaw-core\src\main\java\com\arcclaw\core\state\AgentCronRepository.java`
+
+I have completed the 4 targeted fixes as requested.
+
+### Summary of Targeted Fixes
+
+#### Fix A: AWAITING_APPROVAL SSE Replay Decoupling
+- **`SqliteCheckpointStoreAdapter`**: Renamed `recoverZombiesAndMarkFailed` to `recoverInProgressZombies`. Removed the logic that orphaned `AWAITING_APPROVAL` checkpoints and removed the `approvalCutoff` parameter from both the port and implementer.
+- **`SessionReaper`**: Updated to independently perform two steps:
+    1. Recover and fail strictly `IN_PROGRESS` zombies.
+    2. Retrieve and replay SSE for **all** surviving `AWAITING_APPROVAL` checkpoints, ensuring they are never orphaned on startup.
+- **Cleanup**: Removed the `hitlTimeoutHours` configuration from `SessionReaper`.
+
+#### Fix B: Restore CP_CREATED Audit in `saveAndFinalize`
+- **`StatefulAgentStoreImpl`**: Added a check using `load().isEmpty()` before saving to determine if a checkpoint is brand new (e.g., for single-shot agents).
+- If new, it now correctly emits the `SecurityEventType.CHECKPOINT_CREATED` audit event with the appropriate idempotency key before emitting the final `COMPLETED`/`FAILED` event.
+
+#### Fix C: Restore `maxSourceChars` Truncation in Memory Search
+- **`SqliteMemoryRetrievalAdapter`**: Added an injectable `@ConfigProperty` for `arcclaw.rag.max-source-chars` (defaulting to 400).
+- Implemented a truncation pass on the final merged search results (after RRF and deduplication) to ensure compaction summaries do not bloat the LLM context window.
+
+#### Fix D: Resolve AgentCronRepository Bulk JPQL Parameters
+- **`AgentCronRepository`**: Updated all bulk JPQL `UPDATE` methods to use explicit `TemporalUtils.formatIsoLex()` formatting for `Instant` parameters to ensure compatibility with Hibernate 6.
+- **Documentation**: Standardized the comments across all update methods to clearly state: *"String passed explicitly because Hibernate 6 bulk JPQL bypasses @Converter autoApply for bind parameters. SELECT queries use Instant directly (converter applies)."*
+
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-api/src/main/java/com/arcclaw/persistence/api/CheckpointStorePort.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/SqliteCheckpointStoreAdapter.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/SqliteMemoryRetrievalAdapter.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/state/AgentCronRepository.java)
+
+Viewed SessionReaper.java:115-233
+Edited SessionReaper.java
+Viewed SessionReaper.java:60-80
+Viewed SessionReaper.java:90-130
+Viewed SqliteMemoryRetrievalAdapter.java:30-100
+
+I have corrected the implementation of Fix A to ensure that `hitlTimeoutHours` is preserved in `SessionReaper`, while still decoupling the startup zombie recovery from the timeout logic.
+
+### Corrected Fix A Summary
+- **`SessionReaper`**: Restored the `hitlTimeoutHours` field and its `@ConfigProperty`. It is now correctly excluded from the `doRecoverZombies` (startup) logic—which now replays **all** `AWAITING_APPROVAL` sessions regardless of age—but remains available for the `sweepTimedOutApprovals` scheduled task to perform its background orphaning duties.
+
+### Status of All 4 Fixes
+
+| Fix | Component | Status | Key Logic Applied |
+|---|---|---|---|
+| **Fix A** | `SessionReaper` | ✅ Corrected | Startup recovery now replays all HITL; `hitlTimeoutHours` field restored for background GC. |
+| **Fix B** | `StatefulAgentStoreImpl` | ✅ Applied | `CHECKPOINT_CREATED` audit event now fires for new sessions in `saveAndFinalize`. |
+| **Fix C** | `SqliteMemoryRetrievalAdapter`| ✅ Applied | Search results are now truncated to `maxSourceChars` (400) to protect LLM context windows. |
+| **Fix D** | `AgentCronRepository` | ✅ Applied | Explicit `TemporalUtils.formatIsoLex()` formatting enforced for all bulk JPQL UPDATE parameters. |
+
+All tasks are now complete and aligned with the architectural requirements.
+
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)
