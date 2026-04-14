@@ -261,7 +261,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
-                .setParameter("archived", CheckpointStatus.ARCHIVED.name())
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
@@ -444,11 +444,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .stream().map(this::entityToDto).toList();
     }
 
-
-    @Override
-    public boolean isBusy(Throwable e) {
-        return SqliteErrorStrings.isBusy(e);
-    }
 
     @Override
     public boolean isSessionActive(String sessionId) {

@@ -81,29 +81,13 @@ public class SessionReaper {
      * On application startup, find any IN_PROGRESS or AWAITING_APPROVAL
      * checkpoints from a previous JVM crash and mark them as FAILED.
      */
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void onStartup(@Observes StartupEvent event) {
-        int maxAttempts = 5;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
-                return;
-            } catch (Exception e) {
-                boolean isBusy = checkpointStore.isBusy(e);
-                if (attempt >= maxAttempts || !isBusy) {
-                    log.errorf("Failed onStartup zombie recovery after %d attempts: %s",
-                        maxAttempts, e.getMessage());
-                    log.debug("Full stacktrace for onStartup zombie recovery failure", e);
-                    return;
-                }
-                log.warnf("Attempt %d: BUSY on zombie recovery, retrying...", attempt);
-                try {
-                    long jitter = (long) (Math.random() * 50);
-                    Thread.sleep(100L * attempt + jitter);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
+        try {
+            QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
+        } catch (Exception e) {
+            log.errorf("Failed onStartup zombie recovery: %s", e.getMessage());
+            log.debug("Full stacktrace for onStartup zombie recovery failure", e);
         }
     }
 

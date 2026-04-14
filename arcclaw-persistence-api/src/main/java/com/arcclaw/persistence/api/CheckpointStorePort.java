@@ -116,8 +116,6 @@ public interface CheckpointStorePort {
      */
     List<CheckpointDto> findStaleAwaitingApproval(Instant cutoff);
 
-    boolean isBusy(Throwable e);
-
     /**
      * Checks if there are any pending tool approvals for a session.
      * 

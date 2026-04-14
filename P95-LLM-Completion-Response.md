@@ -659,3 +659,20 @@ I have resolved all 33 structural and compiler errors reported across 10 files. 
 *   **Log Integrity**: Telemetry and crash recovery logs now correctly capture session identifiers even during failure conditions.
 
 All reported lints have been addressed and the codebase is now structurally sound for the next phase of integration.
+
+---
+
+Viewed SqliteCheckpointStoreAdapter.java:110-280
+Searched for "ARCHIVED"
+
+Both of these final corrections have been implemented. 
+
+### 1. Architectural Integrity Restored (`isBusy` removal)
+- **`CheckpointStorePort.java`**: Completely removed the `isBusy(Throwable e)` method to restore purity to the domain interface. It now has exactly 0 leakage of SQLite concepts.
+- **`SqliteCheckpointStoreAdapter.java`**: Removed the `@Override isBusy(Throwable e)` implementation.
+- **`SessionReaper.java`**: Removed the redundant manual retry loop and `Thread.sleep` from `onStartup()`. Since `SqliteCheckpointStoreAdapter` wraps its internal JPQL/EntityManager calls with the SQLite-specific `withRetry` template, `doRecoverZombies` will correctly receive transparent retry handling for `SQLITE_BUSY` contention without the orchestration layer ever knowing about it.
+
+### 2. JPQL Parameter Standardization
+- **`SqliteCheckpointStoreAdapter.java`**: Updated `doFindLatestNonArchivedBySession` to pass the enum value directly (`.setParameter("archived", CheckpointStatus.ARCHIVED)`) instead of invoking `.name()`. This perfectly aligns with `doFindBySessionAndRole` and prevents any mixed-resolution string bugs from creeping in if the `@Enumerated` strategy were to ever change.
+
+The persistence layer is now cleanly decoupled, bulletproofed against SQLite locks, and fully compliant with the architecture invariants.
