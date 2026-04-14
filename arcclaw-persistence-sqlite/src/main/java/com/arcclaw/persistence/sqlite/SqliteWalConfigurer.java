@@ -57,8 +57,16 @@ public class SqliteWalConfigurer {
 
             String attachSql = String.format("ATTACH DATABASE '%s' AS fts;", 
                     ftsDb.getAbsolutePath().replace("\\", "/"));
-            stmt.execute(attachSql);
-            log.infof("SQLite: FTS database attached from %s", ftsDb.getAbsolutePath());
+            try {
+                stmt.execute(attachSql);
+                log.infof("SQLite: FTS database attached from %s", ftsDb.getAbsolutePath());
+            } catch (SQLException e) {
+                if (e.getMessage() != null && e.getMessage().contains("already in use")) {
+                    log.debug("SQLite: FTS database already attached by pool interceptor");
+                } else {
+                    throw e;
+                }
+            }
             
             try {
                 stmt.execute("CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts USING fts5(sessionId, summary)");

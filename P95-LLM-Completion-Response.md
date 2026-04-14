@@ -903,3 +903,13 @@ I have addressed the 3 critical bugs and 2 minor gaps identified in the post-fix
     *   Updated `doMarkCompleted` in the adapter to explicitly clear the `failReason` field, ensuring protocol fidelity when a checkpoint transitions to a successful terminal state.
 
 All fixes have been verified against the persistence layer decoupling rules and architecture invariants. The `CheckpointStorePort` is now clean, backend-agnostic, and operationally transparent.
+
+---
+
+Edited SqliteWalConfigurer.java
+
+I have applied the defensive hardening to `SqliteWalConfigurer.java`. 
+
+The `ATTACH DATABASE` statement is now wrapped in a specific `try-catch` block that ignores "already in use" errors. This ensures that even if the `FtsConnectionInterceptor` acquires and attaches the FTS database before the configurer runs (due to potential future changes in Quarkus startup ordering), the application will still boot successfully without throwing a fatal exception.
+
+The persistence layer hardening is now complete and operationally robust.
