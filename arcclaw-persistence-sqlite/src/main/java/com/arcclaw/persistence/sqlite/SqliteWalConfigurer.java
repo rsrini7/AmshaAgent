@@ -36,6 +36,7 @@ public class SqliteWalConfigurer {
     /**
      * Boot-time configuration — fires BEFORE RagSchemaInitializer.
      */
+    @Priority(10)
     void onStartup(@Observes @Priority(10) StartupEvent event) {
         log.info("SQLite: Configuring WAL mode and FTS cross-database ATTACH...");
         
