@@ -88,10 +88,10 @@ public class IngestDocumentTool implements AgentTool {
         String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) sessionId = "no-session";
 
-        memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
+        String chunkId = memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
 
         return ToolResponse.success(
-            "Document ingested successfully into knowledge base.");
+            "Document ingested successfully. chunkId: " + chunkId);
     }
 
     @Override

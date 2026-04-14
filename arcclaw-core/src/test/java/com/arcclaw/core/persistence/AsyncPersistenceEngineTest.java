@@ -54,7 +54,7 @@ class AsyncPersistenceEngineTest {
         AtomicBoolean written = new AtomicBoolean(false);
 
         PersistenceEvent event = PersistenceEvent.critical("ses-1", SecurityEventType.TOOL_INVOKED,
-                () -> {
+                em -> {
                     written.set(true);
                 });
 
@@ -69,7 +69,7 @@ class AsyncPersistenceEngineTest {
         CountDownLatch latch = new CountDownLatch(1);
 
         PersistenceEvent event = PersistenceEvent.telemetry("ses-2", SecurityEventType.REFLEX_COMMAND,
-                latch::countDown);
+                em -> latch.countDown());
 
         engine.submitTelemetry(event);
 
@@ -83,7 +83,7 @@ class AsyncPersistenceEngineTest {
         RuntimeException busyEx = new RuntimeException("SQLITE_BUSY: database is locked");
 
         PersistenceEvent event = PersistenceEvent.critical("ses-3", SecurityEventType.VAULT_ACCESS,
-                () -> {
+                em -> {
                     attempts.incrementAndGet();
                     throw busyEx;
                 });
@@ -101,7 +101,7 @@ class AsyncPersistenceEngineTest {
         RuntimeException busyEx = new RuntimeException("database is locked");
 
         PersistenceEvent event = PersistenceEvent.telemetry("ses-4", SecurityEventType.CONTEXT_COMPACTED,
-                () -> {
+                em -> {
                     latch.countDown();
                     throw busyEx;
                 });
@@ -118,12 +118,12 @@ class AsyncPersistenceEngineTest {
         CountDownLatch latch = new CountDownLatch(2);
 
         PersistenceEvent e1 = PersistenceEvent.telemetry("session-AAA", SecurityEventType.LOOP_FINISH,
-                () -> {
+                em -> {
                     captured.add(WorkspaceScopeHolder.getIfActive());
                     latch.countDown();
                 });
         PersistenceEvent e2 = PersistenceEvent.telemetry("session-BBB", SecurityEventType.LOOP_FINISH,
-                () -> {
+                em -> {
                     captured.add(WorkspaceScopeHolder.getIfActive());
                     latch.countDown();
                 });
@@ -147,7 +147,7 @@ class AsyncPersistenceEngineTest {
         ExecutorService exec = Executors.newFixedThreadPool(550);
         
         exec.submit(() -> {
-            engine.submitCritical(PersistenceEvent.critical("blocker", SecurityEventType.TOOL_INVOKED, () -> {
+            engine.submitCritical(PersistenceEvent.critical("blocker", SecurityEventType.TOOL_INVOKED, em -> {
                 try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
             }));
         });
@@ -158,7 +158,7 @@ class AsyncPersistenceEngineTest {
         // 2. Submit 500 items to fill the critical queue
         for(int i = 0; i < 500; i++) {
             exec.submit(() -> {
-                engine.submitCritical(PersistenceEvent.critical("filler", SecurityEventType.TOOL_INVOKED, () -> {}));
+                engine.submitCritical(PersistenceEvent.critical("filler", SecurityEventType.TOOL_INVOKED, em -> {}));
             });
         }
         
@@ -170,7 +170,7 @@ class AsyncPersistenceEngineTest {
         String expectedThreadName = Thread.currentThread().getName();
         AtomicBoolean ranSynchronously = new AtomicBoolean(false);
         
-        engine.submitCritical(PersistenceEvent.critical("overflow", SecurityEventType.TOOL_INVOKED, () -> {
+        engine.submitCritical(PersistenceEvent.critical("overflow", SecurityEventType.TOOL_INVOKED, em -> {
             if (Thread.currentThread().getName().equals(expectedThreadName)) {
                 ranSynchronously.set(true);
             }
@@ -188,7 +188,7 @@ class AsyncPersistenceEngineTest {
         CountDownLatch pauseConsumer = new CountDownLatch(1);
         
         // 1. Submit blocker (since it's telemetry, caller does not block)
-        engine.submitTelemetry(PersistenceEvent.telemetry("blocker", SecurityEventType.TOOL_INVOKED, () -> {
+        engine.submitTelemetry(PersistenceEvent.telemetry("blocker", SecurityEventType.TOOL_INVOKED, em -> {
             try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
         }));
         
@@ -196,13 +196,13 @@ class AsyncPersistenceEngineTest {
         
         // 2. Fill queue (capacity 5000)
         for (int i = 0; i < 5000; i++) {
-            engine.submitTelemetry(PersistenceEvent.telemetry("filler", SecurityEventType.TOOL_INVOKED, () -> {}));
+            engine.submitTelemetry(PersistenceEvent.telemetry("filler", SecurityEventType.TOOL_INVOKED, em -> {}));
         }
         
         // 3. Submit 5001st event
         double countBefore = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
         
-        engine.submitTelemetry(PersistenceEvent.telemetry("dropped", SecurityEventType.TOOL_INVOKED, () -> {}));
+        engine.submitTelemetry(PersistenceEvent.telemetry("dropped", SecurityEventType.TOOL_INVOKED, em -> {}));
         
         double countAfter = registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").count();
         assertEquals(countBefore + 1.0, countAfter, "Telemetry overflow counter should be incremented when dropping the 5001st event");
@@ -216,14 +216,14 @@ class AsyncPersistenceEngineTest {
         AtomicBoolean criticalFound = new AtomicBoolean(false);
         AtomicBoolean telemetryFound = new AtomicBoolean(false);
 
-        engine.submitCritical(PersistenceEvent.critical("tname-1", SecurityEventType.TOOL_INVOKED, () -> {
+        engine.submitCritical(PersistenceEvent.critical("tname-1", SecurityEventType.TOOL_INVOKED, em -> {
             if ("arcclaw-audit-critical-drain".equals(Thread.currentThread().getName())) {
                 criticalFound.set(true);
             }
             latch.countDown();
         }));
 
-        engine.submitTelemetry(PersistenceEvent.telemetry("tname-2", SecurityEventType.LOOP_FINISH, () -> {
+        engine.submitTelemetry(PersistenceEvent.telemetry("tname-2", SecurityEventType.LOOP_FINISH, em -> {
             if ("arcclaw-audit-telemetry-drain".equals(Thread.currentThread().getName())) {
                 telemetryFound.set(true);
             }
@@ -248,7 +248,7 @@ class AsyncPersistenceEngineTest {
 
         CountDownLatch latch = new CountDownLatch(1);
         PersistenceEvent event = PersistenceEvent.critical("ses-retry", SecurityEventType.TOOL_INVOKED,
-                () -> {
+                em -> {
                     auditHashUtil.hmacHex("test");
                     latch.countDown();
                 });
@@ -267,12 +267,12 @@ class AsyncPersistenceEngineTest {
 
         CountDownLatch latch = new CountDownLatch(1);
         PersistenceEvent failingEvent = PersistenceEvent.critical("ses-fail", SecurityEventType.TOOL_INVOKED,
-                () -> {
+                em -> {
                     auditHashUtil.hmacHex("test");
                 });
         
         PersistenceEvent nextEvent = PersistenceEvent.critical("ses-next", SecurityEventType.TOOL_INVOKED,
-                () -> {
+                em -> {
                     auditHashUtil.hmacHex("test");
                     latch.countDown();
                 });

@@ -223,7 +223,7 @@ public class AsyncPersistenceEngine {
         PersistenceEvent event = PersistenceEvent.critical(
                 checkpoint.getSessionId(),
                 SecurityEventType.CHECKPOINT_CREATED,
-                () -> checkpointStore.save(CheckpointMapper.toDto(checkpoint)));
+                em -> em.merge(checkpoint));
         submitCritical(event);
         return event.getFuture();
     }

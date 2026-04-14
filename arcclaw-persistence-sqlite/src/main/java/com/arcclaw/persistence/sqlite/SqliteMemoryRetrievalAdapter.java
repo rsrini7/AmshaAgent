@@ -40,9 +40,9 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     FtsConnectionInterceptor ftsInterceptor;
 
     @Override
-    public List<MemoryChunkDto> search(String query, int topK, String sessionId) {
+    public List<MemoryChunkDto> search(String query, int topK, String userId, boolean ftsSearch) {
         // 1. Perform FTS Search
-        List<CompactionSummaryDto> ftsEntities = compactionRepo.search(sessionId, query, topK * 2);
+        List<CompactionSummaryDto> ftsEntities = compactionRepo.search(userId, query, topK * 2);
         List<MemoryChunkDto> ftsResults = new ArrayList<>();
         for (int i = 0; i < ftsEntities.size(); i++) {
             var e = ftsEntities.get(i);
@@ -56,9 +56,7 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
         // 3. Perform Vector Search
         List<MemoryChunkDto> vectorResults = new ArrayList<>();
-        // Note: GlobalKnowledgeBase currently returns ScoredChunk, which we convert
-        globalKb.search(query, topK * 2).forEach(c -> 
-            vectorResults.add(new MemoryChunkDto(c.chunkId(), c.text(), c.score())));
+        vectorResults.addAll(globalKb.search(query, topK * 2));
         
         // Session-scoped vector search (if applicable)
         if (WorkspaceScopeHolder.isActive()) {
@@ -74,12 +72,13 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     }
 
     @Override
-    public void index(MemoryEntryDto entry) {
+    public String index(MemoryEntryDto entry) {
         String chunkId = globalKb.ingest(entry.text());
         String fallbackId = entry.id() != null ? "session-" + entry.id() : UUID.randomUUID().toString();
         sessionKb.ingest(
             chunkId != null ? chunkId : fallbackId,
             entry.text());
+        return chunkId != null ? chunkId : fallbackId;
     }
 
     @Override
@@ -87,8 +86,8 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
         return new BackendCapabilities(
             true, // supportsFullTextSearch
             ftsInterceptor.isVectorSearchEnabled(),
-            true, // supportsAdvisoryLocks
-            true  // supportsNestedTransactions
+            false, // supportsAdvisoryLocks
+            false  // supportsNestedTransactions
         );
     }
 

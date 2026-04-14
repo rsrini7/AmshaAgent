@@ -21,6 +21,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
+import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -46,30 +47,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
         String json = serializeSteps(steps);
-        Optional<AgentCheckpoint> existing = load(sessionId, agentRole);
-
-        AgentCheckpoint checkpoint;
         AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
 
-        if (existing.isPresent()) {
-            checkpoint = existing.get();
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            checkpoint.setAutonomyLevel(autonomy);
-            checkpoint.setIterationsUsed(steps.size());
-        } else {
-            checkpoint = new AgentCheckpoint();
-            checkpoint.setSessionId(sessionId);
-            checkpoint.setAgentRole(agentRole);
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            checkpoint.setAutonomyLevel(autonomy);
-            checkpoint.setIterationsUsed(steps.size());
-        }
-
-        CheckpointDto savedDto = storeAdapter.save(entityToDto(checkpoint));
+        CheckpointUpsertResult result = storeAdapter.upsertWithSteps(
+            sessionId, agentRole, json, autonomy.toString(), steps.size());
         
-        if (!existing.isPresent()) {
+        if (result.created()) {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
             auditService.recordWithIdempotency(sessionId, userId, agentRole,
@@ -77,19 +60,19 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         }
 
-        return dtoToEntity(savedDto);
+        return CheckpointMapper.toEntity(result.checkpoint());
     }
 
     @Override
     public AgentCheckpoint save(AgentCheckpoint checkpoint) {
-        CheckpointDto savedDto = storeAdapter.save(entityToDto(checkpoint));
-        return dtoToEntity(savedDto);
+        CheckpointDto savedDto = storeAdapter.save(CheckpointMapper.toDto(checkpoint));
+        return CheckpointMapper.toEntity(savedDto);
     }
 
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
-        return storeAdapter.findBySessionAndRole(sessionId, agentRole).map(this::dtoToEntity);
+        return storeAdapter.findBySessionAndRole(sessionId, agentRole).map(CheckpointMapper::toEntity);
     }
 
     @Override
@@ -181,7 +164,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         }
 
         CheckpointDto saved = storeAdapter.saveCheckpointWithSteps(
-                entityToDto(checkpoint), 
+                CheckpointMapper.toDto(checkpoint), 
                 steps.stream().map(this::mapToReasoningStepDto).toList());
 
         String userId = WorkspaceContext.resolveUserId();
@@ -191,7 +174,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         String idempotencyKey = (finalStatus == CheckpointStatus.COMPLETED ? "CP_COMPLETED:" : "CP_FAILED:") + saved.id();
         auditService.recordWithIdempotency(sessionId, userId, agentRole, eventType, null, idempotencyKey);
 
-        return dtoToEntity(saved);
+        return CheckpointMapper.toEntity(saved);
     }
 
     @Override
@@ -205,7 +188,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
         String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
         return storeAdapter.findLatestAwaitingApprovalWithPrefix(sessionPrefix)
-                .map(this::dtoToEntity);
+                .map(CheckpointMapper::toEntity);
     }
 
     @Override
@@ -247,12 +230,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff) {
-        return storeAdapter.findStaleApprovals(cutoff).stream().map(this::dtoToEntity).toList();
+        return storeAdapter.findStaleApprovals(cutoff).stream().map(CheckpointMapper::toEntity).toList();
     }
 
     @Override
     public List<AgentCheckpoint> findByStatus(CheckpointStatus status) {
-        return storeAdapter.findByStatus(status.toString()).stream().map(this::dtoToEntity).toList();
+        return storeAdapter.findByStatus(status.toString()).stream().map(CheckpointMapper::toEntity).toList();
     }
 
     @Override
@@ -279,12 +262,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
         return storeAdapter.findLatestAwaitingApproval(sessionId)
-                .map(this::dtoToEntity);
+                .map(CheckpointMapper::toEntity);
     }
 
     @Override
     public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId) {
-        return storeAdapter.findLatestBySession(sessionId).map(this::dtoToEntity);
+        return storeAdapter.findLatestBySession(sessionId).map(CheckpointMapper::toEntity);
     }
 
     @Override
@@ -311,39 +294,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     // ── Mapping ──────────────────────────────────────────────────────────────
 
-    private CheckpointDto entityToDto(AgentCheckpoint entity) {
-        return CheckpointMapper.toDto(entity);
-    }
-
-    private AgentCheckpoint dtoToEntity(CheckpointDto dto) {
-        AgentCheckpoint entity = new AgentCheckpoint();
-        entity.setId(dto.id());
-        entity.setSessionId(dto.sessionId());
-        entity.setAgentRole(dto.agentRole());
-        if (dto.status() != null) entity.setStatus(CheckpointStatus.valueOf(dto.status()));
-        if (dto.autonomyLevel() != null) entity.setAutonomyLevel(AutonomyLevel.valueOf(dto.autonomyLevel()));
-        entity.setStateJson(dto.stateJson());
-        entity.setChannelPlatformId(dto.channelPlatformId());
-        entity.setChannelType(dto.channelType());
-        entity.setOriginalGoal(dto.originalGoal());
-        entity.setFailedAt(dto.failedAt());
-        entity.setCompletedAt(dto.completedAt());
-        entity.setFailReason(dto.failReason());
-        entity.setPendingToolName(dto.pendingToolName());
-        entity.setBatchToolDecisions(dto.batchToolDecisions());
-        entity.setPendingToolParametersJson(dto.pendingToolParametersJson());
-        entity.setPreExecutedResults(dto.preExecutedResults());
-        entity.setMaxIterations(dto.maxIterations());
-        entity.setIterationsUsed(dto.iterationsUsed());
-        entity.setRetryAfterMs(dto.retryAfterMs());
-        entity.setSystemNote(dto.systemNote());
-        entity.setErrorCode(dto.errorCode());
-        entity.setTraceId(dto.traceId());
-        entity.setRootCauseClass(dto.rootCauseClass());
-        entity.setCreatedAt(dto.createdAt());
-        entity.setUpdatedAt(dto.updatedAt());
-        return entity;
-    }
 
     private ReasoningStepDto mapToReasoningStepDto(ReasoningStep step) {
         return new ReasoningStepDto(

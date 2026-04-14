@@ -28,7 +28,6 @@ import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
@@ -85,8 +84,9 @@ public class SessionReaper {
     public void onStartup(@Observes StartupEvent event) {
         try {
             // Note: SQLite BUSY retries are handled internally (transparently) 
-            // by CheckpointStorePort via SqliteRetryTemplate. A single call here is safe.
-            QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
+            // by CheckpointStorePort via SqliteRetryTemplate. 
+            // FIXED (§FIX 3): No nested REQUIRES_NEW. recoverZombiesAndMarkFailed handles full tx.
+            doRecoverZombies();
         } catch (Exception e) {
             log.errorf("Failed onStartup zombie recovery: %s", e.getMessage());
             log.debug("Full stacktrace for onStartup zombie recovery failure", e);
@@ -94,41 +94,22 @@ public class SessionReaper {
     }
 
     private void doRecoverZombies() {
-        // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
-        Instant cutoff = Instant.now().minus(Duration.ofMinutes(15));
+        Instant inProgressCutoff = Instant.now().minus(Duration.ofMinutes(15));
+        Instant approvalCutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours)); // leave alive if younger than this
         
-        List<CheckpointDto> inProgressZombies = checkpointStore.findInProgressZombies(cutoff);
+        List<CheckpointDto> recovered = checkpointStore.recoverZombiesAndMarkFailed(
+            inProgressCutoff, approvalCutoff, "JVM crash recovery — orphaned at startup");
 
-        if (!inProgressZombies.isEmpty()) {
-            log.warnf("Zombie recovery: found %d orphaned IN_PROGRESS checkpoint(s) — marking FAILED",
-                    inProgressZombies.size());
-            for (var dto : inProgressZombies) {
-                agentStore.markFailed(dto.id(), "JVM crash recovery — session was IN_PROGRESS at startup");
-                log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
+        if (!recovered.isEmpty()) {
+            log.warnf("Zombie recovery: found and failed %d orphaned/stale checkpoint(s).", recovered.size());
+            for (var dto : recovered) {
+                if ("AWAITING_APPROVAL".equals(dto.status())) { // Repurpose: republication logic moved to SSE replay on UI connect
+                     log.infof("  Processed orphaned approval: id=%d session=%s role=%s",
                         dto.id(), dto.sessionId(), dto.agentRole());
+                }
             }
         } else {
-            log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
-        }
-
-        // 2. AWAITING_APPROVAL — leave alive, queue SSE replay for when UI connects
-        List<CheckpointDto> approvalZombies = checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
-
-        if (!approvalZombies.isEmpty()) {
-            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — leaving as-is, queuing SSE replay",
-                    approvalZombies.size());
-            for (var dto : approvalZombies) {
-                log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
-                        dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
-                // Queue the event so UI gets it when it subscribes after restart
-                agentSseService.republishOnSubscribe(
-                    dto.sessionId(),
-                    dto.pendingToolName(),
-                    dto.pendingToolParametersJson()
-                );
-            }
-        } else {
-            log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints.");
+            log.info("Zombie recovery: no orphaned checkpoints found.");
         }
     }
 

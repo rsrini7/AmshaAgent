@@ -6,12 +6,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.stream.Stream;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -20,6 +22,7 @@ import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
+import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,30 +56,84 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return withRetry(() -> self.doSaveEntity(checkpointDto), "save-entity");
     }
 
+    @Override
+    public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
+        String stateJson, String autonomy, int iterationsUsed) {
+        return withRetry(() -> self.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed), "upsert-with-steps");
+    }
+
+    /**
+     * Atomically finds or creates a checkpoint and updates its metadata.
+     * Restores TOCTOU safety (§FIX 1).
+     */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
+        String stateJson, String autonomy, int iterationsUsed) {
+        em.clear();
+        List<AgentCheckpoint> results = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid AND c.agentRole = :role AND c.status <> :archived " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("role", agentRole)
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
+                .setMaxResults(1)
+                .getResultList();
+        
+        AgentCheckpoint entity;
+        boolean created = false;
+        if (results.isEmpty()) {
+            entity = new AgentCheckpoint();
+            entity.setSessionId(sessionId);
+            entity.setAgentRole(agentRole);
+            entity.setStatus(CheckpointStatus.IN_PROGRESS);
+            created = true;
+        } else {
+            entity = results.get(0);
+        }
+        
+        entity.setStateJson(stateJson);
+        if (autonomy != null) {
+            entity.setAutonomyLevel(AutonomyLevel.valueOf(autonomy));
+        }
+        entity.setIterationsUsed(iterationsUsed);
+        
+        if (created) {
+            em.persist(entity);
+        } else {
+            entity = em.merge(entity);
+        }
+        
+        return new CheckpointUpsertResult(CheckpointMapper.toDto(entity), created);
+    }
+
     /**
      * Saves or updates a checkpoint in a fresh, isolated transaction.
      * Handles both inserts and updates; clears L1 cache before querying existing.
      * 
-     * Architecture rule (§5.8): REQUIRES_NEW transaction runs in isolation.
      * Caller must NOT be inside a REQUIRED transaction.
+     * 
+     * NOTE: When called from doSaveCheckpointWithSteps(), the @Transactional annotation
+     * on this method is bypassed (direct call, not CDI proxy). This is intentional.
      */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
         em.clear();
         
         if (checkpointDto.id() == null) {
-            AgentCheckpoint entity = dtoToEntity(checkpointDto);
+            AgentCheckpoint entity = CheckpointMapper.toEntity(checkpointDto);
             em.persist(entity);
-            return entityToDto(entity);
+            return CheckpointMapper.toDto(entity);
         } else {
             AgentCheckpoint managed = em.find(AgentCheckpoint.class, checkpointDto.id());
             if (managed == null) {
-                AgentCheckpoint newEntity = dtoToEntity(checkpointDto);
+                AgentCheckpoint newEntity = CheckpointMapper.toEntity(checkpointDto);
                 em.persist(newEntity);
-                return entityToDto(newEntity);
+                return CheckpointMapper.toDto(newEntity);
             }
             updateEntityFromDto(managed, checkpointDto);
-            return entityToDto(managed);
+            return CheckpointMapper.toDto(managed);
         }
     }
 
@@ -87,6 +144,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointDto doSaveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
+        // INTENTIONAL: doSaveEntity and doSaveSteps are called directly (not via self) so
+        // their @Transactional(REQUIRES_NEW) is NOT intercepted. They participate in THIS
+        // method's REQUIRES_NEW transaction, ensuring checkpoint + steps commit atomically.
+        // Do NOT change to self.doSaveEntity() — that would start a nested REQUIRES_NEW,
+        // split the commit, and break atomicity.
         CheckpointDto saved = doSaveEntity(checkpointDto);
         doSaveSteps(saved.id(), steps);
         return saved;
@@ -101,7 +163,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     public Optional<CheckpointDto> doFindById(Long id) {
         em.clear();
         AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, id);
-        return Optional.ofNullable(checkpoint).map(this::entityToDto);
+        return Optional.ofNullable(checkpoint).map(CheckpointMapper::toDto);
     }
 
     @Override
@@ -125,7 +187,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .map(this::entityToDto)
+                .map(CheckpointMapper::toDto)
                 .findFirst();
     }
 
@@ -147,7 +209,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .getResultList()
                 .stream()
-                .map(this::entityToDto)
+                .map(CheckpointMapper::toDto)
                 .toList();
     }
 
@@ -169,7 +231,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .map(this::entityToDto)
+                .map(CheckpointMapper::toDto)
                 .findFirst();
     }
 
@@ -192,7 +254,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .map(this::entityToDto)
+                .map(CheckpointMapper::toDto)
                 .findFirst();
     }
 
@@ -215,6 +277,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             switch (status) {
                 case COMPLETED:
                     checkpoint.setCompletedAt(now);
+                    checkpoint.setFailReason(null);
                     break;
                 case FAILED:
                     checkpoint.setFailedAt(now);
@@ -244,7 +307,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .map(this::entityToDto)
+                .map(CheckpointMapper::toDto)
                 .findFirst();
     }
 
@@ -266,7 +329,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .map(this::entityToDto)
+                .map(CheckpointMapper::toDto)
                 .findFirst();
     }
 
@@ -288,7 +351,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .map(this::entityToDto)
+                .map(CheckpointMapper::toDto)
                 .findFirst();
     }
 
@@ -302,6 +365,8 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doSaveSteps(Long checkpointId, List<ReasoningStepDto> steps) {
+        // NOTE: When called from doSaveCheckpointWithSteps(), the @Transactional annotation
+        // on this method is bypassed (direct call, not CDI proxy). This is intentional.
         em.clear();
         em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
                 .setParameter("id", checkpointId)
@@ -381,7 +446,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status", AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.valueOf(status))
                 .getResultList()
-                .stream().map(this::entityToDto).toList();
+                .stream().map(CheckpointMapper::toDto).toList();
     }
 
     @Override
@@ -424,7 +489,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setParameter("status", CheckpointStatus.IN_PROGRESS)
                 .setParameter("cutoff", cutoff)
                 .getResultList()
-                .stream().map(this::entityToDto).toList();
+                .stream().map(CheckpointMapper::toDto).toList();
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
@@ -437,7 +502,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", cutoff)
                 .getResultList()
-                .stream().map(this::entityToDto).toList();
+                .stream().map(CheckpointMapper::toDto).toList();
     }
 
 
@@ -576,6 +641,48 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         }, "mark-failed");
     }
 
+    @Override
+    public List<CheckpointDto> recoverZombiesAndMarkFailed(Instant inProgressCutoff, Instant approvalCutoff, String failReason) {
+        return withRetry(() -> self.doRecoverZombiesAndMarkFailed(inProgressCutoff, approvalCutoff, failReason), "recover-zombies");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public List<CheckpointDto> doRecoverZombiesAndMarkFailed(Instant inProgressCutoff, Instant approvalCutoff, String failReason) {
+        em.clear();
+        
+        // 1. In-progress zombies
+        List<AgentCheckpoint> inProgress = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.IN_PROGRESS)
+                .setParameter("cutoff", inProgressCutoff)
+                .getResultList();
+        
+        // 2. Awaiting-approval zombies
+        List<AgentCheckpoint> awaiting = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("cutoff", approvalCutoff)
+                .getResultList();
+
+        Instant now = Instant.now();
+        for (AgentCheckpoint cp : inProgress) {
+            cp.setStatus(CheckpointStatus.FAILED);
+            cp.setFailedAt(now);
+            cp.setFailReason(failReason);
+        }
+        for (AgentCheckpoint cp : awaiting) {
+            cp.setStatus(CheckpointStatus.ORPHANED);
+            cp.setFailedAt(now);
+            cp.setFailReason(failReason);
+        }
+
+        return Stream.concat(inProgress.stream(), awaiting.stream())
+                .map(CheckpointMapper::toDto)
+                .toList();
+    }
+
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
         em.clear();
@@ -687,71 +794,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         }
     }
 
-    // ── Conversion helpers between DTO and JPA Entity ──────────────────────
-
-    private CheckpointDto entityToDto(AgentCheckpoint entity) {
-        return new CheckpointDto(
-            entity.getId(),
-            entity.getSessionId(),
-            entity.getAgentRole(),
-            entity.getStatus() != null ? entity.getStatus().toString() : null,
-            entity.getAutonomyLevel() != null ? entity.getAutonomyLevel().toString() : null,
-            entity.getStateJson(),
-            entity.getChannelPlatformId(),
-            entity.getChannelType(),
-            entity.getOriginalGoal(),
-            entity.getFailedAt(),
-            entity.getCompletedAt(),
-            entity.getFailReason(),
-            entity.getPendingToolName(),
-            entity.getBatchToolDecisions(),
-            entity.getPendingToolParametersJson(),
-            entity.getPreExecutedResults(),
-            entity.getMaxIterations(),
-            entity.getIterationsUsed(),
-            entity.getRetryAfterMs(),
-            entity.getSystemNote(),
-            entity.getErrorCode(),
-            entity.getTraceId(),
-            entity.getRootCauseClass(),
-            entity.getCreatedAt(),
-            entity.getUpdatedAt()
-        );
-    }
-
-    private AgentCheckpoint dtoToEntity(CheckpointDto dto) {
-        AgentCheckpoint entity = new AgentCheckpoint();
-        entity.setId(dto.id());
-        entity.setSessionId(dto.sessionId());
-        entity.setAgentRole(dto.agentRole());
-        if (dto.status() != null) {
-            entity.setStatus(CheckpointStatus.valueOf(dto.status()));
-        }
-        if (dto.autonomyLevel() != null) {
-            entity.setAutonomyLevel(AutonomyLevel.valueOf(dto.autonomyLevel()));
-        }
-        entity.setStateJson(dto.stateJson());
-        entity.setChannelPlatformId(dto.channelPlatformId());
-        entity.setChannelType(dto.channelType());
-        entity.setOriginalGoal(dto.originalGoal());
-        entity.setFailedAt(dto.failedAt());
-        entity.setCompletedAt(dto.completedAt());
-        entity.setFailReason(dto.failReason());
-        entity.setPendingToolName(dto.pendingToolName());
-        entity.setBatchToolDecisions(dto.batchToolDecisions());
-        entity.setPendingToolParametersJson(dto.pendingToolParametersJson());
-        entity.setPreExecutedResults(dto.preExecutedResults());
-        entity.setMaxIterations(dto.maxIterations());
-        entity.setIterationsUsed(dto.iterationsUsed());
-        entity.setRetryAfterMs(dto.retryAfterMs());
-        entity.setSystemNote(dto.systemNote());
-        entity.setErrorCode(dto.errorCode());
-        entity.setTraceId(dto.traceId());
-        entity.setRootCauseClass(dto.rootCauseClass());
-        entity.setCreatedAt(dto.createdAt());
-        entity.setUpdatedAt(dto.updatedAt());
-        return entity;
-    }
+    // ── Conversion helpers ───────────────
 
     private void updateEntityFromDto(AgentCheckpoint entity, CheckpointDto dto) {
         entity.setSessionId(dto.sessionId());

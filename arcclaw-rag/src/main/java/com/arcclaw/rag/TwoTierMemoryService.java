@@ -29,7 +29,7 @@ public class TwoTierMemoryService {
      * @param topK    max results to return
      */
     public List<ScoredChunk> search(String query, String userId, int topK) {
-        List<MemoryChunkDto> results = memoryPort.search(query, topK, userId);
+        List<MemoryChunkDto> results = memoryPort.search(query, topK, userId, false);
         return results.stream()
                 .map(dto -> new ScoredChunk(dto.chunkId(), dto.text(), dto.score()))
                 .toList();

@@ -135,6 +135,9 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
+        // IMPORTANT: Hibernate 6 bulk JPQL (UPDATE/DELETE) bypasses @Converter autoApply for
+        // bind parameters. TemporalUtils.formatIsoLex() must be used here to manually apply the
+        // InstantToTextConverter format. Do NOT change to Instant — it will break the comparison.
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :active, c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("active", CronStatus.ACTIVE)
@@ -150,6 +153,9 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markCompleted(String id, Instant lastFireTime) {
+        // IMPORTANT: Hibernate 6 bulk JPQL (UPDATE/DELETE) bypasses @Converter autoApply for
+        // bind parameters. TemporalUtils.formatIsoLex() must be used here to manually apply the
+        // InstantToTextConverter format. Do NOT change to Instant — it will break the comparison.
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :completed, c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("completed", CronStatus.COMPLETED)
@@ -164,6 +170,9 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markAwaitingApproval(String id) {
+        // IMPORTANT: Hibernate 6 bulk JPQL (UPDATE/DELETE) bypasses @Converter autoApply for
+        // bind parameters. TemporalUtils.formatIsoLex() must be used here to manually apply the
+        // InstantToTextConverter format. Do NOT change to Instant — it will break the comparison.
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :awaiting, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL)
@@ -190,6 +199,9 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markFailed(String id, String errorReason) {
+        // IMPORTANT: Hibernate 6 bulk JPQL (UPDATE/DELETE) bypasses @Converter autoApply for
+        // bind parameters. TemporalUtils.formatIsoLex() must be used here to manually apply the
+        // InstantToTextConverter format. Do NOT change to Instant — it will break the comparison.
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :failed, c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("failed", CronStatus.FAILED)
@@ -208,6 +220,9 @@ public class AgentCronRepository {
         if (skippedJobs.isEmpty()) return; // avoid acquiring write lock for nothing
         Instant now = Instant.now();
         for (AgentCronEntity job : skippedJobs) {
+            // IMPORTANT: Hibernate 6 bulk JPQL (UPDATE/DELETE) bypasses @Converter autoApply for
+            // bind parameters. TemporalUtils.formatIsoLex() must be used here to manually apply the
+            // InstantToTextConverter format. Do NOT change to Instant — it will break the comparison.
             em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :skipped, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
             ).setParameter("skipped", CronStatus.SKIPPED)
@@ -225,6 +240,9 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void reclaimStaleCrons(Instant threshold) {
+        // IMPORTANT: Hibernate 6 bulk JPQL (UPDATE/DELETE) bypasses @Converter autoApply for
+        // bind parameters. TemporalUtils.formatIsoLex() must be used here to manually apply the
+        // InstantToTextConverter format. Do NOT change to Instant — it will break the comparison.
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :active " +
                 "WHERE c.status = :running AND " +

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,7 +30,7 @@ class TwoTierMemoryServiceTest {
     void testDelegationToPort() {
         // Arrange
         MemoryChunkDto dto = new MemoryChunkDto("id-1", "text-1", 0.95);
-        when(memoryPort.search(anyString(), anyInt(), anyString()))
+        when(memoryPort.search(anyString(), anyInt(), anyString(), Mockito.anyBoolean()))
                 .thenReturn(List.of(dto));
 
         // Act
@@ -41,6 +42,6 @@ class TwoTierMemoryServiceTest {
         assertEquals("text-1", results.get(0).text());
         assertEquals(0.95, results.get(0).score());
         
-        verify(memoryPort).search("query-1", 1, "user-1");
+        verify(memoryPort).search("query-1", 1, "user-1", false);
     }
 }

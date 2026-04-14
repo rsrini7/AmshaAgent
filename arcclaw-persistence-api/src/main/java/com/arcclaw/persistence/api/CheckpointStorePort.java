@@ -136,7 +136,15 @@ public interface CheckpointStorePort {
      */
     void deleteCheckpoint(String sessionId, String role);
 
-    /** Deletes chat history for terminal sessions older than the cutoff. Backend handles temporal binding. */
+    /**
+     * Atomically finds or creates a checkpoint and updates its metadata and reasoning steps.
+     * Restores TOCTOU safety (§FIX 1).
+     */
+    CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
+        String stateJson, String autonomy, int iterationsUsed);
+
+    List<CheckpointDto> recoverZombiesAndMarkFailed(Instant inProgressCutoff, Instant approvalCutoff, String failReason);
+
     void purgeOldChatHistory(Instant cutoff);
 
     void markFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass);

@@ -1,5 +1,9 @@
 package com.arcclaw.persistence.api;
 
+import java.util.function.Consumer;
+
+import jakarta.persistence.EntityManager;
+
 /**
  * Port for executing database actions with backend-specific retry logic.
  * 
@@ -16,7 +20,7 @@ public interface PersistenceAdapterPort {
      * 
      * @param sessionId the context session ID
      * @param operationName descriptive name for logging/metrics
-     * @param action the action to execute
+     * @param action the action to execute, providing direct access to the EntityManager
      */
-    void execute(String sessionId, String operationName, Runnable action);
+    void execute(String sessionId, String operationName, Consumer<EntityManager> action);
 }

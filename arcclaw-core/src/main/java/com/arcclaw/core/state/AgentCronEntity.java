@@ -47,7 +47,7 @@ public class AgentCronEntity {
      * Explicit default value for GraalVM native safety.
      */
     @Column(name = "runonce", nullable = false)
-    @ColumnDefault("false")
+    @ColumnDefault("0")   // SQLite stores boolean as INTEGER; 'false' (string) would be wrong
     public boolean runOnce = false;
 
     public String goal;

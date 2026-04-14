@@ -1,7 +1,10 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.util.function.Consumer;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
@@ -15,13 +18,16 @@ public class SqlitePersistenceAdapter implements PersistenceAdapterPort {
 
 
     @Inject
+    EntityManager em;
+
+    @Inject
     SqliteRetryTemplate retryTemplate;
 
     @Inject
     SqlitePersistenceAdapter self;
 
     @Override
-    public void execute(String sessionId, String operationName, Runnable action) {
+    public void execute(String sessionId, String operationName, Consumer<EntityManager> action) {
         try {
             retryTemplate.execute(operationName, 5, 50, () -> {
                 self.persistSynchronously(action);
@@ -36,7 +42,8 @@ public class SqlitePersistenceAdapter implements PersistenceAdapterPort {
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void persistSynchronously(Runnable action) {
-        action.run();
+    public void persistSynchronously(Consumer<EntityManager> action) {
+        em.clear();
+        action.accept(em);
     }
 }
