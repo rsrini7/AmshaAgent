@@ -32,6 +32,15 @@ quarkus:
     arcclaw-channel-api:
       group-id: com.arcclaw
       artifact-id: arcclaw-channel-api
+    arcclaw-persistence-sqlite:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-persistence-sqlite
+  langchain4j:
+    openai:
+      api-key: "disabled"
+      embedding-model:
+        enabled: true
+        model-name: "text-embedding-3-small"
   arc:
     remove-unused-beans: all
   datasource:

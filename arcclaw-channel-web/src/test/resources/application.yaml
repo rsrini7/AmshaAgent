@@ -32,9 +32,22 @@ quarkus:
     timeout: 30s
     chat-model:
       provider: openai
+    embedding-model:
+      provider: openai
     openai:
       api-key: "dummy"
       timeout: 30s
+      embedding-model:
+        enabled: true
+        model-name: "text-embedding-3-small"
+  
+  index-dependency:
+    arcclaw-core:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-core
+    arcclaw-persistence-sqlite:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-persistence-sqlite
 
 # Mock/Dummy config for core handlers that are bean-scanned
 arcclaw:

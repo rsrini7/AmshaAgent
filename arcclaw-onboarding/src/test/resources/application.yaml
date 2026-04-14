@@ -30,8 +30,18 @@ quarkus:
   langchain4j:
     openai:
       timeout: 30s
+      embedding-model:
+        enabled: false
+        model-name: "text-embedding-3-small"
   application:
     name: arcclaw-onboarding-test
+  index-dependency:
+    arcclaw-core:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-core
+    arcclaw-persistence-sqlite:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-persistence-sqlite
   otel:
     sdk:
       disabled: true

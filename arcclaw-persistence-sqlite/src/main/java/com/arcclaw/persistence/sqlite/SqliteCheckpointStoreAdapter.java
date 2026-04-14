@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
@@ -186,7 +187,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(CheckpointMapper::toDto)
                 .findFirst();
     }
