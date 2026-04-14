@@ -149,6 +149,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                                            List<ReasoningStep> steps,
                                            CheckpointStatus finalStatus) {
         String json = serializeSteps(steps);
+        boolean isNew = load(sessionId, agentRole).isEmpty();  // check BEFORE save
+
         AgentCheckpoint checkpoint = load(sessionId, agentRole)
                 .orElseGet(AgentCheckpoint::new);
         
@@ -168,6 +170,16 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 steps.stream().map(this::mapToReasoningStepDto).toList());
 
         String userId = WorkspaceContext.resolveUserId();
+
+        // Emit CP_CREATED for brand-new checkpoints (single-shot agents)
+        if (isNew) {
+            String createdKey = "CP_CREATED:" + sessionId + ":" + agentRole;
+            auditService.recordWithIdempotency(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, null, createdKey);
+            log.infof("Created new checkpoint during finalization session=%s role=%s",
+                sessionId, agentRole);
+        }
+
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
                 ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;
