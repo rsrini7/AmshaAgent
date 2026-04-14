@@ -27,9 +27,7 @@ public class InstantToTextConverter implements AttributeConverter<Instant, Strin
 
     @Override
     public Instant convertToEntityAttribute(String dbData) {
-        // We still need to parse. TemporalUtils doesn't have parse yet.
-        // Let's keep the formatter local for parsing if needed, or update TemporalUtils.
-        return dbData == null ? null : Instant.parse(dbData);
+        return TemporalUtils.parseIsoLex(dbData);
     }
 
     /**

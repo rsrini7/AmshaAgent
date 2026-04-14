@@ -1,7 +1,6 @@
 package com.arcclaw.core.state;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -177,22 +176,22 @@ public class AgentCheckpoint {
 
     /** When this checkpoint was first created. */
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     /** When this checkpoint was last updated. */
     @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @PrePersist
     void onPersist() {
-        var now = LocalDateTime.now();
+        var now = Instant.now();
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = Instant.now();
     }
 
     public Long getId() {
@@ -287,11 +286,11 @@ public class AgentCheckpoint {
         this.failReason = failReason;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
 
@@ -339,11 +338,11 @@ public class AgentCheckpoint {
     public String getSystemNote() { return systemNote; }
     public void setSystemNote(String systemNote) { this.systemNote = systemNote; }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
 
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 

@@ -26,4 +26,14 @@ public class TemporalUtils {
     public static String formatIsoLex(Instant instant) {
         return instant == null ? null : ISO_LEX_FORMATTER.format(instant);
     }
+
+    /**
+     * Parses an ISO 8601 lexicographical string back into an {@link Instant}.
+     *
+     * @param text the text to parse
+     * @return the parsed Instant, or null if input is null
+     */
+    public static Instant parseIsoLex(String text) {
+        return text == null ? null : Instant.from(ISO_LEX_FORMATTER.parse(text));
+    }
 }

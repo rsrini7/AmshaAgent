@@ -1,7 +1,6 @@
 package com.arcclaw.persistence.api;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 
 /**
  * Transfer object for checkpoint data.
@@ -31,6 +30,6 @@ public record CheckpointDto(
     String errorCode,
     String traceId,
     String rootCauseClass,
-    LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    Instant createdAt,
+    Instant updatedAt
 ) {}

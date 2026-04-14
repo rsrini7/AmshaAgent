@@ -41,9 +41,11 @@ public class AgentCronRepository {
     @Transactional(TxType.NOT_SUPPORTED)
     public List<AgentCronEntity> findDueCrons() {
         return em.createQuery(
-                "SELECT c FROM AgentCronEntity c WHERE c.status = 'ACTIVE' AND c.nextFireTime <= :now",
+                "SELECT c FROM AgentCronEntity c WHERE c.status = :status AND c.nextFireTime <= :now",
                 AgentCronEntity.class
-        ).setParameter("now", Instant.now()).getResultList();
+        ).setParameter("status", CronStatus.ACTIVE)
+         .setParameter("now", Instant.now())
+         .getResultList();
     }
 
     /**
@@ -79,9 +81,11 @@ public class AgentCronRepository {
     public List<AgentCronEntity> findAwaitingApprovalByUserId(String userId) {
         em.clear();
         return em.createQuery(
-                "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = 'AWAITING_APPROVAL'",
+                "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = :status",
                 AgentCronEntity.class
-        ).setParameter("userId", userId).getResultList();
+        ).setParameter("userId", userId)
+         .setParameter("status", CronStatus.AWAITING_APPROVAL)
+         .getResultList();
     }
 
     @Transactional(TxType.NOT_SUPPORTED)
@@ -102,8 +106,11 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public boolean claimForFire(String id) {
         int updated = em.createNativeQuery(
-                "UPDATE agentcron SET status='RUNNING' WHERE id=:id AND status='ACTIVE'"
-        ).setParameter("id", id).executeUpdate();
+                "UPDATE agentcron SET status=:running WHERE id=:id AND status=:active"
+        ).setParameter("id", id)
+         .setParameter("running", CronStatus.RUNNING.name())
+         .setParameter("active", CronStatus.ACTIVE.name())
+         .executeUpdate();
         return updated == 1;
     }
 
@@ -114,8 +121,11 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void releaseClaimToActive(String id) {
         em.createNativeQuery(
-                "UPDATE agentcron SET status='ACTIVE' WHERE id=:id AND status='RUNNING'"
-        ).setParameter("id", id).executeUpdate();
+                "UPDATE agentcron SET status=:active WHERE id=:id AND status=:running"
+        ).setParameter("id", id)
+         .setParameter("active", CronStatus.ACTIVE.name())
+         .setParameter("running", CronStatus.RUNNING.name())
+         .executeUpdate();
     }
 
     /**
@@ -124,8 +134,9 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
         em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = 'ACTIVE', c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("last", lastFireTime)
+                "UPDATE AgentCronEntity c SET c.status = :active, c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("active", CronStatus.ACTIVE)
+         .setParameter("last", lastFireTime)
          .setParameter("next", nextFireTime)
          .setParameter("now", Instant.now())
          .setParameter("id", id)
@@ -138,8 +149,9 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markCompleted(String id, Instant lastFireTime) {
         em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = 'COMPLETED', c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("last", lastFireTime)
+                "UPDATE AgentCronEntity c SET c.status = :completed, c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("completed", CronStatus.COMPLETED)
+         .setParameter("last", lastFireTime)
          .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
@@ -151,8 +163,9 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markAwaitingApproval(String id) {
         em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = 'AWAITING_APPROVAL', c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("now", Instant.now())
+                "UPDATE AgentCronEntity c SET c.status = :awaiting, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL)
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -176,8 +189,9 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markFailed(String id, String errorReason) {
         em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = 'FAILED', c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("err", errorReason)
+                "UPDATE AgentCronEntity c SET c.status = :failed, c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("failed", CronStatus.FAILED)
+         .setParameter("err", errorReason)
          .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
@@ -193,8 +207,9 @@ public class AgentCronRepository {
         Instant now = Instant.now();
         for (AgentCronEntity job : skippedJobs) {
             em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = 'SKIPPED', c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
-            ).setParameter("next", job.nextFireTime)
+                "UPDATE AgentCronEntity c SET c.status = :skipped, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
+            ).setParameter("skipped", CronStatus.SKIPPED)
+             .setParameter("next", job.nextFireTime)
              .setParameter("now", now)
              .setParameter("id", job.id)
              .executeUpdate();
@@ -209,10 +224,13 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void reclaimStaleCrons(Instant threshold) {
         em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = 'ACTIVE' " +
-                "WHERE c.status = 'RUNNING' AND " +
+                "UPDATE AgentCronEntity c SET c.status = :active " +
+                "WHERE c.status = :running AND " +
                 "(c.lastFireTime < :threshold OR (c.lastFireTime IS NULL AND c.createdAt < :threshold))"
-        ).setParameter("threshold", threshold).executeUpdate();
+        ).setParameter("active", CronStatus.ACTIVE)
+         .setParameter("running", CronStatus.RUNNING)
+         .setParameter("threshold", threshold)
+         .executeUpdate();
     }
 
     /**

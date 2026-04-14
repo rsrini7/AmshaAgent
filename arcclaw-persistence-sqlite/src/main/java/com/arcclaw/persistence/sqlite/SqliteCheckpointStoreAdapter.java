@@ -1,8 +1,6 @@
 package com.arcclaw.persistence.sqlite;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +31,7 @@ import org.jboss.logging.Logger;
  * - REQUIRES_NEW transaction boundaries for write operations
  * - Retry logic wrapping via {@link SqliteRetryTemplate}
  * - em.clear() patterns for fresh DB reads after BUSY retries
- * - LocalDateTime formatting for SQLite TEXT timestamp comparisons
+ * - Instant formatting for SQLite TEXT timestamp comparisons
  * 
  * Architecture note (§5.14.1): Retry-on-BUSY logic is intentionally encapsulated
  * inside this adapter. It does NOT leak via a PersistenceRetryPort interface.
@@ -324,17 +322,15 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     /**
      * Finds checkpoints that are stale and awaiting approval.
      * 
-     * SQLite stores Instant as TEXT; queries must convert cutoff to LocalDateTime
-     * for correct comparison. Postgres queries don't need this conversion.
+     * Architecture rule (§5.10.1): Instant parameters are bound directly to JPQL. 
+     * Hibernate's auto-applied InstantToTextConverter handles the conversion 
+     * to SQLite-compatible TEXT using TemporalUtils.formatIsoLex().
      */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<CheckpointDto> doFindStaleApprovals(Instant cutoff) {
         em.clear();
-        // Convert Instant to LocalDateTime for SQLite TEXT comparison
-        LocalDateTime cutoffDt = LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC);
-        
         return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = 'AWAITING_APPROVAL' AND c.updatedAt < :cutoff", AgentCheckpoint.class)
-                .setParameter("cutoff", cutoffDt)
+                .setParameter("cutoff", cutoff)
                 .getResultList()
                 .stream().map(this::entityToDto).toList();
     }
@@ -362,11 +358,10 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     public boolean doIsCheckpointExpired(String sessionId, long timeoutHours) {
         em.clear();
         Instant cutoff = Instant.now().minus(timeoutHours, ChronoUnit.HOURS);
-        LocalDateTime cutoffDt = LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC);
 
         Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.updatedAt < :cutoff", Long.class)
                 .setParameter("sid", sessionId)
-                .setParameter("cutoff", cutoffDt)
+                .setParameter("cutoff", cutoff)
                 .getSingleResult();
         return count > 0;
     }

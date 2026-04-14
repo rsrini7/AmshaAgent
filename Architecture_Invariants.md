@@ -602,6 +602,15 @@ SecretVault operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST
 
 ---
 
+## 5.21 `InstantToTextConverter` Multi-Backend Safety (§5.21 INVARIANT)
+
+- `@Converter(autoApply = true)` on `InstantToTextConverter` in `arcclaw-persistence-sqlite` MUST remain SQLite-only.
+- The `arcclaw-persistence-postgres` module MUST NOT add a competing `@Converter(autoApply = true)` for `Instant`.
+- PostgreSQL handles `timestamptz` natively; any PostgreSQL-specific conversion must be explicit or handled by the dialect.
+- Having two auto-apply converters for the same type on the same classpath causes a Hibernate boot failure.
+
+---
+
 ## 6. Native image and reflection rules
 
 ### 6.1 Reflection safety

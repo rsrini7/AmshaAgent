@@ -2,8 +2,6 @@ package com.arcclaw.core.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -94,7 +92,13 @@ public class SessionReaper {
                     log.debugf(e, "Full stacktrace for onStartup zombie recovery failure");
                 } else {
                     log.warnf("Attempt %d: Failed onStartup zombie recovery (%s), retrying...", attempt, e.getMessage());
-                    try { Thread.sleep(100 * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                    try {
+                        long jitter = (long) (Math.random() * 50);
+                        Thread.sleep(100L * attempt + jitter);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
         }
@@ -104,11 +108,9 @@ public class SessionReaper {
         // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
         // D1.2: Added 15-minute grace period based on updatedAt to protect
         // active checkpoints running on other nodes during rolling/canary deployments.
-        // Convert Instant → LocalDateTime to match the column type (updatedAt is LocalDateTime).
-        // Without this, SQLite compares TEXT representations of Instant vs LocalDateTime incorrectly.
-        LocalDateTime cutoff = LocalDateTime.ofInstant(
-                Instant.now().minus(Duration.ofMinutes(15)),
-                ZoneOffset.UTC);
+        // Direct Instant comparison — Hibernate's InstantToTextConverter handles conversion.
+        Instant cutoff = Instant.now().minus(Duration.ofMinutes(15));
+        
         List<AgentCheckpoint> inProgressZombies = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
@@ -269,9 +271,7 @@ public class SessionReaper {
     public void purgeOldChatHistory() {
         if (shuttingDown) return;
 
-        LocalDateTime cutoff = LocalDateTime.ofInstant(
-                Instant.now().minus(Duration.ofDays(retentionDays)),
-                ZoneOffset.UTC);
+        Instant cutoff = Instant.now().minus(Duration.ofDays(retentionDays));
 
         log.infof("Purging chat history older than %d days (cutoff=%s)", retentionDays, cutoff);
 
