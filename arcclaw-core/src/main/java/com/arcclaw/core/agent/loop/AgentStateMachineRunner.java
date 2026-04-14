@@ -187,7 +187,23 @@ public class AgentStateMachineRunner {
                         log.warnf("[STATE-MACHINE] session %s: FINISH answer contains raw " +
                                   "tool call JSON — retrying with correction (schema attempt %d)",
                                   context.sessionId(), llmSchemaErrorCount + 1);
-                        history.add(step);
+                        
+                        // §7.36: Strip the leak BEFORE adding to history to avoid confusing LLM/provider
+                        String cleanThought = stripRawToolJson(candidateAnswer);
+                        ReasoningStep cleanStep = new ReasoningStep(
+                                cleanThought,
+                                step.action(),
+                                step.actionInput(),
+                                step.observation(),
+                                step.inputTokens(),
+                                step.outputTokens(),
+                                step.success(),
+                                step.errorCode(),
+                                step.traceId(),
+                                step.rootCauseClass()
+                        );
+                        history.add(cleanStep);
+
                         String leakedTool = "the intended tool";
                         Matcher nameMatcher = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"").matcher(candidateAnswer);
                         Matcher nvidiaMatcher = Pattern.compile("\\[+TOOL_CALLS\\]+\\s*(\\w+)").matcher(candidateAnswer);
@@ -204,17 +220,27 @@ public class AgentStateMachineRunner {
                                 "System: Your last response was a raw tool call (JSON or [[TOOL_CALLS]] format) " +
                                 "written as plain text, not a valid FINISH answer. " +
                                 "You MUST invoke tools through the tool mechanism — " +
-                                "NEVER write [[TOOL_CALLS]], {\"type\": \"function\", ...} or raw JSON as your answer text. " +
+                                "NEVER write [[TOOL_CALLS]] or raw JSON in your answer text. " +
                                 "Retry now: call " + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
                         llmSchemaErrorCount++;
                         if (llmSchemaErrorCount >= 2) {
-                            log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
-                                       "limit after raw tool call leak", context.sessionId());
-                            return AgentResult.failed(
-                                    "I encountered a formatting error and could not complete your request. " +
-                                    "Please try again.",
-                                    AgentResult.FailureCategory.SCHEMA_ERROR,
-                                    List.copyOf(history));
+                            String salvaged = stripRawToolJson(candidateAnswer);
+                            // Only salvage if we have a meaningful answer. 
+                            // If it's blank or just the generic fallback, it's a real failure.
+                            if (!salvaged.isBlank() && salvaged.length() > 5 && !salvaged.contains("completed the task")) {
+                                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
+                                       "limit after raw tool call leak. Salvaging partially clean answer.", context.sessionId());
+                                AgentResult result = AgentResult.finished(salvaged, List.copyOf(history));
+                                maybeSignalBridge(context, result);
+                                return result;
+                            } else {
+                                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
+                                       "limit. No salvageable answer found.", context.sessionId());
+                                return AgentResult.failed(
+                                        "I encountered a formatting error and could not complete your request. Please try again.",
+                                        AgentResult.FailureCategory.SCHEMA_ERROR,
+                                        List.copyOf(history));
+                            }
                         }
                         continue;
                     }
