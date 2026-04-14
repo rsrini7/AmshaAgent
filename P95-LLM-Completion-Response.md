@@ -1959,3 +1959,37 @@ I updated `ChatHistoryAssembler.java` to implement **Turn Flipping**:
 *   **Prompt Compliance**: By ensuring the last message in the request is from the **User**, we satisfy the model's protocol requirements, allowing it to correctly append its internal `<|assistant|>` tokens and proceed with the generation.
 
 This change not only fixes the 400 error but also makes the correction hint more "vocal" to the LLM, as it now appears as the most recent turn in the dialogue.
+
+---
+
+Viewed AgentRoleEnum.java:1-141
+Listed directory handler
+Searched for "IntentClassificationHandler"
+Viewed IntentClassificationHandler.java:1-138
+Viewed AgentRoleCache.java:1-31
+Viewed IntentClassificationService.java:1-59
+Viewed StatefulAgentStore.java:1-231
+Viewed StatefulAgentStoreImpl.java:280-320
+Searched for "AgentRoleCache"
+Edited AgentRoleCache.java
+Searched for "continuity phrase matched"
+Viewed IntentClassifierService.java:1-187
+Viewed PersistentChatMemoryStore.java:1-184
+
+I've completed the hardening of the ArcClaw agentic loop, specifically targeting the failures observed when the application restarts or when strict LLM providers like NVIDIA NIM are used.
+
+### Summary of Fixes
+
+1.  **NVIDIA NIM Bracket Leak Fixed**:
+    *   Previously, the leak guard at line 62 of `AgentStateMachineRunner.java` only caught `[[TOOL_CALLS]]` (double brackets). Latest logs showed models leaking the single-bracket variation `[TOOL_CALLS]`.
+    *   I updated the detection and extraction logic to use a flexible regex (`\[+TOOL_CALLS\]+`), ensuring any bracketed internal syntax is caught and triggers a self-correction retry.
+
+2.  **Resolved 400 BadRequest (Template Error)**:
+    *   NVIDIA and Mistral models fail when the last message in a request is from the assistant (due to the `add_generation_prompt: true` flag in their internal prompt templates).
+    *   I updated `ChatHistoryAssembler.java` to perform **Turn Flipping**. Any system correction hints (e.g., retries after a tool leak) are now injected as a `UserMessage` instead of being appended to the `SystemMessage` or head prompt. This ensures the model always receives a User turn before it is expected to respond.
+
+3.  **Persistent Role Identity (App Restart Fix)**:
+    *   Identified that `AgentRoleCache` was in-memory only, causing "continuity" phrases like "try again" to default to the `coordinator` role following an application restart. Since the coordinator role lacks code-execution tools, the LLM was forced to "leak" raw tool calls it couldn't properly execute.
+    *   Upgraded `AgentRoleCache` to a write-through cache backed by `StatefulAgentStore`. It now correctly recovers the previous role from the database after a restart, ensuring specialized requests (like Go/Java execution) are routed back to the correct specialist agents.
+
+These changes ensure the system is resilient to both technical template constraints and operational events like service restarts.
