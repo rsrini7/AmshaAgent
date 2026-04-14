@@ -9,6 +9,7 @@ import java.util.Map;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.persistence.api.BackendCapabilities;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
@@ -59,11 +60,9 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
             vectorResults.add(new MemoryChunkDto(c.chunkId(), c.text(), c.score())));
         
         // Session-scoped vector search (if applicable)
-        try {
+        if (WorkspaceScopeHolder.isActive()) {
             sessionKb.search(query, topK * 2).forEach(c -> 
                 vectorResults.add(new MemoryChunkDto(c.chunkId(), c.text(), c.score())));
-        } catch (Exception e) {
-            // Session scope might not be active in some contexts
         }
 
         // Sort combined vector results to create a ranked list for RRF
@@ -75,7 +74,10 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
     @Override
     public void index(MemoryEntryDto entry) {
-        globalKb.ingest(entry.text());
+        String chunkId = globalKb.ingest(entry.text());
+        sessionKb.ingest(
+            chunkId != null ? chunkId : "session-" + entry.id(),
+            entry.text());
     }
 
     @Override

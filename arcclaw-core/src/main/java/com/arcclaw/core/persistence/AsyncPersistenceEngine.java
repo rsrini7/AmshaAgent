@@ -327,9 +327,10 @@ public class AsyncPersistenceEngine {
      * is best-effort and must never crash the drain thread.
      */
     private void drainTelemetry() {
+        PersistenceEvent event = null;
         while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
-                PersistenceEvent event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
+                event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (event == null) continue;
 
                 processingTelemetry.set(true);
@@ -345,7 +346,10 @@ public class AsyncPersistenceEngine {
 
             } catch (Exception e) {
                 if (running.get() && Arc.container() != null) {
-                    log.errorf("AsyncPersistenceEngine Unexpected error in telemetry drain: %s",
+                    final PersistenceEvent fe = event;
+                    log.warnf("TELEMETRY event dropped after retry exhaustion for session %s type %s: %s",
+                            fe != null ? fe.getSessionId() : "unknown",
+                            fe != null ? fe.getEventType() : "unknown",
                             e.getMessage());
                     log.debugf(e, "AsyncPersistenceEngine Full stacktrace for telemetry drain error");
                 }
@@ -394,22 +398,34 @@ public class AsyncPersistenceEngine {
         }
 
         // Bind workspace scope per-event, then delegate all retry logic to retryEngine.
-        try {
-            WorkspaceScopeHolder.run(event.getSessionId(),
-                    () -> persistenceAdapter.execute(
-                            event.getSessionId(),
-                            event.getEventType().toString(),
-                            event.getDbAction()));
-
-        } catch (ComplianceViolationException cve) {
-            if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
-            throw cve; // re-throw so drainCritical can log the HMAC-unavailable case
-
-        } catch (Exception e) {
-            ComplianceViolationException cve = new ComplianceViolationException(
-                    event.getSessionId(), event.getEventType(), e);
-            if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
-            throw cve;
+        int hmacRetry = 0;
+        while (true) {
+            try {
+                WorkspaceScopeHolder.run(event.getSessionId(),
+                        () -> persistenceAdapter.execute(
+                                event.getSessionId(),
+                                event.getEventType().toString(),
+                                event.getDbAction()));
+                break;
+            } catch (IllegalStateException e) {
+                if (e.getMessage() != null
+                        && e.getMessage().contains("HMAC key unavailable")
+                        && hmacRetry++ < 3) {
+                    log.warnf("Audit HMAC key not yet available, retry %d/3 in 100ms", hmacRetry);
+                    sleepQuietly(100);
+                    continue;
+                }
+                if (event.getFuture() != null) event.getFuture().completeExceptionally(e);
+                throw e; // re-throw so drainCritical can log the failure
+            } catch (ComplianceViolationException cve) {
+                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
+                throw cve;
+            } catch (Exception e) {
+                ComplianceViolationException cve = new ComplianceViolationException(
+                        event.getSessionId(), event.getEventType(), e);
+                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
+                throw cve;
+            }
         }
     }
 }

@@ -3,7 +3,7 @@ package com.arcclaw.app.ui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 import jakarta.inject.Inject;
@@ -49,7 +49,7 @@ public class HitlServiceTest {
         cpA.setAgentRole("default");
         cpA.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cpA.setPendingToolName("toolA");
-        cpA.setUpdatedAt(LocalDateTime.now());
+        cpA.setUpdatedAt(Instant.now());
         em.persist(cpA);
         cpUserA_Id = cpA.getId();
 
@@ -59,7 +59,7 @@ public class HitlServiceTest {
         cpB.setAgentRole("default");
         cpB.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cpB.setPendingToolName("toolB");
-        cpB.setUpdatedAt(LocalDateTime.now());
+        cpB.setUpdatedAt(Instant.now());
         em.persist(cpB);
         cpUserB_Id = cpB.getId();
         

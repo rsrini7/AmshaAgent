@@ -113,10 +113,15 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.agentRole = :role",
+                "WHERE c.sessionId = :sid " +
+                "  AND c.agentRole = :role " +
+                "  AND c.status <> :archived " +
+                "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
                 .setParameter("role", agentRole)
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
+                .setMaxResults(1)
                 .getResultList()
                 .stream()
                 .map(this::entityToDto)
@@ -143,6 +148,28 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .stream()
                 .map(this::entityToDto)
                 .toList();
+    }
+
+    @Override
+    public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) {
+        return withRetry(() -> self.doFindLatestAwaitingApproval(sessionId), "find-latest-awaiting");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<CheckpointDto> doFindLatestAwaitingApproval(String sessionId) {
+        em.clear();
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid AND c.status = :status " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .map(this::entityToDto)
+                .findFirst();
     }
 
     @Override
@@ -213,6 +240,28 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .map(this::entityToDto)
+                .findFirst();
+    }
+
+    @Override
+    public Optional<CheckpointDto> findLatestNonArchivedBySession(String sessionId) {
+        return withRetry(() -> self.doFindLatestNonArchivedBySession(sessionId), "find-latest-non-archived");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<CheckpointDto> doFindLatestNonArchivedBySession(String sessionId) {
+        em.clear();
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid AND c.status <> :archived " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("archived", CheckpointStatus.ARCHIVED.name())
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
@@ -316,24 +365,9 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
-        return withRetry(() -> self.doFindStaleApprovals(cutoff), "find-stale-approvals");
+        return withRetry(() -> self.doFindStaleAwaitingApproval(cutoff), "find-stale-approvals");
     }
 
-    /**
-     * Finds checkpoints that are stale and awaiting approval.
-     * 
-     * Architecture rule (§5.10.1): Instant parameters are bound directly to JPQL. 
-     * Hibernate's auto-applied InstantToTextConverter handles the conversion 
-     * to SQLite-compatible TEXT using TemporalUtils.formatIsoLex().
-     */
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public List<CheckpointDto> doFindStaleApprovals(Instant cutoff) {
-        em.clear();
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = 'AWAITING_APPROVAL' AND c.updatedAt < :cutoff", AgentCheckpoint.class)
-                .setParameter("cutoff", cutoff)
-                .getResultList()
-                .stream().map(this::entityToDto).toList();
-    }
 
     @Override
     public List<CheckpointDto> findByStatus(String status) {
@@ -356,14 +390,64 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doIsCheckpointExpired(String sessionId, long timeoutHours) {
-        em.clear();
         Instant cutoff = Instant.now().minus(timeoutHours, ChronoUnit.HOURS);
+        em.clear();
+        List<AgentCheckpoint> rows = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid AND c.status = :status " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+            .setParameter("sid", sessionId)
+            .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+            .setMaxResults(1)
+            .getResultList();
+            
+        if (rows.isEmpty()) return true;   // no AWAITING_APPROVAL → treat as expired
+        AgentCheckpoint cp = rows.get(0);
+        if (cp.getUpdatedAt() == null) return true;
+        return cp.getUpdatedAt().isBefore(cutoff);
+    }
 
-        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.updatedAt < :cutoff", Long.class)
-                .setParameter("sid", sessionId)
+    @Override
+    public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
+        return withRetry(() -> self.doFindInProgressZombies(cutoff), "find-in-progress-zombies");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public List<CheckpointDto> doFindInProgressZombies(Instant cutoff) {
+        em.clear();
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.status = :status AND c.updatedAt < :cutoff",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.IN_PROGRESS)
                 .setParameter("cutoff", cutoff)
-                .getSingleResult();
-        return count > 0;
+                .getResultList()
+                .stream().map(this::entityToDto).toList();
+    }
+
+    @Override
+    public List<CheckpointDto> findStaleAwaitingApproval(Instant cutoff) {
+        return withRetry(() -> self.doFindStaleAwaitingApproval(cutoff), "find-stale-awaiting");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public List<CheckpointDto> doFindStaleAwaitingApproval(Instant cutoff) {
+        em.clear();
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.status = :status AND c.updatedAt < :cutoff",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("cutoff", cutoff)
+                .getResultList()
+                .stream().map(this::entityToDto).toList();
+    }
+
+
+    @Override
+    public boolean isBusy(Throwable e) {
+        return SqliteErrorStrings.isBusy(e);
     }
 
     @Override

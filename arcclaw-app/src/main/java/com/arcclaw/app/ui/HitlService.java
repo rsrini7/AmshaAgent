@@ -1,7 +1,6 @@
 package com.arcclaw.app.ui;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -95,7 +94,7 @@ public class HitlService {
             cp.getSessionId(),
             cp.getPendingToolName(),
             params,
-            cp.getUpdatedAt().toInstant(ZoneOffset.UTC),
+            cp.getUpdatedAt(),
             cp.getAgentRole()
         );
     }

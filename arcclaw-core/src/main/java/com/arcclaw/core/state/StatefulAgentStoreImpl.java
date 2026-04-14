@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -86,6 +87,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
         return storeAdapter.findBySessionAndRole(sessionId, agentRole).map(this::dtoToEntity);
     }
@@ -161,7 +163,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_ORPHANED:" + checkpointId;
             auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
-                SecurityEventType.CHECKPOINT_ORPHANED, null, idempotencyKey);
+                SecurityEventType.CHECKPOINT_ORPHANED, reason, idempotencyKey);
+            log.warnf("Checkpoint %s/%s marked ORPHANED: %s", dto.sessionId(), dto.agentRole(), reason);
         });
     }
 
@@ -184,6 +187,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             String idempotencyKey = "CP_COMPLETED:" + checkpointId;
             auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
                 SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
+            log.infof("Checkpoint %d marked COMPLETED for session %s", checkpointId, dto.sessionId());
         });
     }
 
@@ -191,15 +195,24 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
                                            List<ReasoningStep> steps,
                                            CheckpointStatus finalStatus) {
-        AgentCheckpoint checkpoint = save(sessionId, agentRole, steps);
+        String json = serializeSteps(steps);
+        AgentCheckpoint checkpoint = load(sessionId, agentRole)
+                .orElseGet(AgentCheckpoint::new);
+        
+        checkpoint.setSessionId(sessionId);
+        checkpoint.setAgentRole(agentRole);
+        checkpoint.setStateJson(json);
         checkpoint.setStatus(finalStatus);
+        
         if (finalStatus == CheckpointStatus.COMPLETED) {
             checkpoint.setCompletedAt(Instant.now());
         } else if (finalStatus == CheckpointStatus.FAILED) {
             checkpoint.setFailedAt(Instant.now());
         }
 
-        CheckpointDto saved = storeAdapter.saveCheckpointWithSteps(entityToDto(checkpoint), steps.stream().map(this::mapToReasoningStepDto).toList());
+        CheckpointDto saved = storeAdapter.saveCheckpointWithSteps(
+                entityToDto(checkpoint), 
+                steps.stream().map(this::mapToReasoningStepDto).toList());
 
         String userId = WorkspaceContext.resolveUserId();
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
@@ -231,6 +244,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public boolean updateBatchToolDecision(String sessionId, String agentRole,
                                            String toolName, String decision) {
         Optional<CheckpointDto> dtoOpt = storeAdapter.findBySessionAndRole(sessionId, agentRole);
@@ -320,10 +334,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
-        return storeAdapter.findActiveBySession(sessionId).stream()
-                .filter(d -> CheckpointStatus.AWAITING_APPROVAL.toString().equals(d.status()))
-                .map(this::dtoToEntity)
-                .findFirst();
+        return storeAdapter.findLatestAwaitingApproval(sessionId)
+                .map(this::dtoToEntity);
     }
 
     @Override
@@ -334,7 +346,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public Optional<String> findLatestRole(String sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
-        return storeAdapter.findLatestBySessionAndStatus(sessionId, CheckpointStatus.ARCHIVED.name())
+        return storeAdapter.findLatestNonArchivedBySession(sessionId)
                 .map(CheckpointDto::agentRole);
     }
 

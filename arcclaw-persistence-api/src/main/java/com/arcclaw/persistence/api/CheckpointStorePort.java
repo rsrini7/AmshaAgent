@@ -81,6 +81,7 @@ public interface CheckpointStorePort {
      * Used for continuity and continuity phrases (§7.29).
      */
     Optional<CheckpointDto> findLatestBySession(String sessionId);
+    Optional<CheckpointDto> findLatestNonArchivedBySession(String sessionId);
     Optional<CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status);
 
     /**
@@ -99,6 +100,23 @@ public interface CheckpointStorePort {
     List<CheckpointDto> findByStatus(String status);
     boolean isCheckpointExpired(String sessionId, long timeoutHours);
     boolean isSessionActive(String sessionId);
+
+    /**
+     * Finds the absolute latest checkpoint awaiting approval for the session.
+     */
+    Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId);
+
+    /**
+     * Finds IN_PROGRESS checkpoints that haven't been updated since cutoff (JVM crashes).
+     */
+    List<CheckpointDto> findInProgressZombies(Instant cutoff);
+
+    /**
+     * Finds AWAITING_APPROVAL checkpoints that haven't been updated since cutoff.
+     */
+    List<CheckpointDto> findStaleAwaitingApproval(Instant cutoff);
+
+    boolean isBusy(Throwable e);
 
     /**
      * Checks if there are any pending tool approvals for a session.

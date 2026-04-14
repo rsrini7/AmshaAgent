@@ -25,6 +25,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -87,18 +88,20 @@ public class SessionReaper {
                 QuarkusTransaction.requiringNew().run(this::doRecoverZombies);
                 return;
             } catch (Exception e) {
-                if (attempt == maxAttempts) {
-                    log.errorf("Failed onStartup zombie recovery after %d attempts: %s", maxAttempts, e.getMessage());
-                    log.debugf(e, "Full stacktrace for onStartup zombie recovery failure");
-                } else {
-                    log.warnf("Attempt %d: Failed onStartup zombie recovery (%s), retrying...", attempt, e.getMessage());
-                    try {
-                        long jitter = (long) (Math.random() * 50);
-                        Thread.sleep(100L * attempt + jitter);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
+                boolean isBusy = checkpointStore.isBusy(e);
+                if (attempt >= maxAttempts || !isBusy) {
+                    log.errorf("Failed onStartup zombie recovery after %d attempts: %s",
+                        maxAttempts, e.getMessage());
+                    log.debug("Full stacktrace for onStartup zombie recovery failure", e);
+                    return;
+                }
+                log.warnf("Attempt %d: BUSY on zombie recovery, retrying...", attempt);
+                try {
+                    long jitter = (long) (Math.random() * 50);
+                    Thread.sleep(100L * attempt + jitter);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
         }
@@ -106,55 +109,36 @@ public class SessionReaper {
 
     private void doRecoverZombies() {
         // 1. Recover IN_PROGRESS zombies — mark FAILED (true crash orphans)
-        // D1.2: Added 15-minute grace period based on updatedAt to protect
-        // active checkpoints running on other nodes during rolling/canary deployments.
-        // Direct Instant comparison — Hibernate's InstantToTextConverter handles conversion.
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(15));
         
-        List<AgentCheckpoint> inProgressZombies = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.IN_PROGRESS)
-                .setParameter("cutoff", cutoff)
-                .getResultList();
+        List<CheckpointDto> inProgressZombies = checkpointStore.findInProgressZombies(cutoff);
 
         if (!inProgressZombies.isEmpty()) {
             log.warnf("Zombie recovery: found %d orphaned IN_PROGRESS checkpoint(s) — marking FAILED",
                     inProgressZombies.size());
-            Instant now = Instant.now();
-            for (var checkpoint : inProgressZombies) {
-                checkpoint.setStatus(CheckpointStatus.FAILED);
-                checkpoint.setFailedAt(now);
-                checkpoint.setFailReason("JVM crash recovery — session was IN_PROGRESS at startup");
-                em.merge(checkpoint);
+            for (var dto : inProgressZombies) {
+                agentStore.markFailed(dto.id(), "JVM crash recovery — session was IN_PROGRESS at startup");
                 log.infof("  Marked checkpoint id=%d (session=%s, role=%s) as FAILED",
-                        checkpoint.getId(), checkpoint.getSessionId(), checkpoint.getAgentRole());
+                        dto.id(), dto.sessionId(), dto.agentRole());
             }
         } else {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
 
         // 2. AWAITING_APPROVAL — leave alive, queue SSE replay for when UI connects
-        List<AgentCheckpoint> approvalZombies = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .getResultList();
+        List<CheckpointDto> approvalZombies = checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
 
         if (!approvalZombies.isEmpty()) {
             log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — leaving as-is, queuing SSE replay",
                     approvalZombies.size());
-            for (var checkpoint : approvalZombies) {
+            for (var dto : approvalZombies) {
                 log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
-                        checkpoint.getId(),
-                        checkpoint.getSessionId(),
-                        checkpoint.getAgentRole(),
-                        checkpoint.getPendingToolName());
+                        dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
                 // Queue the event so UI gets it when it subscribes after restart
                 agentSseService.republishOnSubscribe(
-                    checkpoint.getSessionId(),
-                    checkpoint.getPendingToolName(),
-                    checkpoint.getPendingToolParametersJson()
+                    dto.sessionId(),
+                    dto.pendingToolName(),
+                    dto.pendingToolParametersJson()
                 );
             }
         } else {
@@ -200,12 +184,9 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     Set<String> findAwaitingApprovalIds() {
-        em.clear();
-        return em.createQuery(
-                "SELECT c.sessionId FROM AgentCheckpoint c WHERE c.status = :status",
-                String.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .getResultStream()
+        return checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name())
+                .stream()
+                .map(CheckpointDto::sessionId)
                 .collect(Collectors.toSet());
     }
 

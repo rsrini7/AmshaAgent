@@ -2,7 +2,7 @@ package com.arcclaw.core.state;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -24,8 +24,8 @@ class AgentCheckpointVersionTest {
         checkpoint.setSessionId("test-session-v0");
         checkpoint.setAgentRole("coordinator");
         checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-        checkpoint.setCreatedAt(LocalDateTime.now());
-        checkpoint.setUpdatedAt(LocalDateTime.now());
+        checkpoint.setCreatedAt(Instant.now());
+        checkpoint.setUpdatedAt(Instant.now());
 
         em.persist(checkpoint);
         em.flush();

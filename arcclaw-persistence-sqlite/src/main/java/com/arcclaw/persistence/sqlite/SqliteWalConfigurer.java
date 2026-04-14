@@ -30,7 +30,7 @@ public class SqliteWalConfigurer {
 
     @Inject DataSource dataSource;
 
-    @ConfigProperty(name = "ARCCLAW_DATA_DIR", defaultValue = ".")
+    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = ".")
     String dataDir;
 
     /**
@@ -47,17 +47,19 @@ public class SqliteWalConfigurer {
             // 1. Enable WAL mode
             stmt.execute("PRAGMA journal_mode=WAL;");
             stmt.execute("PRAGMA synchronous=NORMAL;");
-            log.info("SQLite: WAL mode enabled.");
+            stmt.execute("PRAGMA busy_timeout=10000;");
+            log.info("SQLite: WAL mode and 10s busyTimeout enabled.");
 
             // 2. Attach FTS database for sub-queries
             if (ftsDb.exists()) {
                 String attachSql = String.format("ATTACH DATABASE '%s' AS fts;", 
                         ftsDb.getAbsolutePath().replace("\\", "/"));
                 stmt.execute(attachSql);
-                log.info("SQLite: Attached fts database.");
+                log.infof("SQLite: FTS database attached from %s", ftsDb.getAbsolutePath());
             } else {
-                log.warnf("SQLite: FTS database not found at %s. Skipping ATTACH.", 
-                        ftsDb.getAbsolutePath());
+                log.debugf("SQLite: FTS database not yet present at %s — " +
+                           "will be created by AuditSchemaEnforcer on first write.",
+                           ftsDb.getAbsolutePath());
             }
 
         } catch (SQLException e) {

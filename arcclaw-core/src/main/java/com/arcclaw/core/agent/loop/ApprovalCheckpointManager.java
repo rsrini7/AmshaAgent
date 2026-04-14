@@ -1,7 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +70,7 @@ public class ApprovalCheckpointManager {
         cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());
         cp.setSystemNote(context.systemNote());
-        cp.setUpdatedAt(LocalDateTime.now());
+        cp.setUpdatedAt(Instant.now());
 
         if (context.hasChannelInfo()) {
             cp.setChannelType(context.channelType());
@@ -126,7 +125,7 @@ public class ApprovalCheckpointManager {
         cp.setBatchToolDecisions(decisionsJson);
         cp.setOriginalGoal(context.goal());
         cp.setSystemNote(context.systemNote());
-        cp.setUpdatedAt(LocalDateTime.now());
+        cp.setUpdatedAt(Instant.now());
 
         if (context.hasChannelInfo()) {
             cp.setChannelType(context.channelType());
@@ -185,7 +184,7 @@ public class ApprovalCheckpointManager {
         cp.setPreExecutedResults(preExecutedResultsJson);
         cp.setOriginalGoal(context.goal());
         cp.setSystemNote(context.systemNote());
-        cp.setUpdatedAt(LocalDateTime.now());
+        cp.setUpdatedAt(Instant.now());
 
         if (context.hasChannelInfo()) {
             cp.setChannelType(context.channelType());
