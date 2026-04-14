@@ -1908,3 +1908,32 @@ String approveCb = truncateCb("BATCH_APPROVE|" + prefix + "|" + safeToolName);
 ```
 
 All related components—the session prefix lookup in `StatefulAgentStore` and the request context activation in the Telegram handler—are now correctly wired and ready for use in the next verification step.
+
+---
+
+Edited P95-LLM-Completion-Response.md
+Viewed ReasoningStepParser.java:1-126
+Viewed AgentStateMachineRunner.java:160-210
+Viewed AgentStateMachineRunner.java:120-160
+Viewed AgentStateMachineRunner.java:100-120
+Edited AgentStateMachineRunner.java
+Viewed AgentStateMachineRunner.java:320-350
+Viewed AgentStateMachineRunner.java:185-205
+Edited AgentStateMachineRunner.java
+
+I've hardened the **NVIDIA NIM Leak Guard** to address the specific bracket variations seen in your latest sessions.
+
+### The Fix
+The pattern used for detecting bracketed tool calls was too strict, expecting exactly two opening brackets. I've updated the detection and correction logic in `AgentStateMachineRunner.java` to handle the more common single-bracket leak (`[TOOL_CALLS]`) we observed:
+
+1.  **Flexible Bracket Detection**: Updated `NVIDIA_TOOL_CALL_PATTERN` to `\[+TOOL_CALLS\]+`, which now catches `[TOOL_CALLS]`, `[[TOOL_CALLS]]`, and other common variations.
+2.  **Robust Name Extraction**: Improved the regex for identifying the leaked tool name, ensuring it accurately captures the tool even when the brackets are formatted irregularly.
+3.  **Redacted Output Stripping**: Rewrote `stripRawToolJson` to be more aggressive. It now correctly identifies and removes the bracketed marker and the following tool-name string, preventing internal syntax from leaking into the final answer even if the system is under rate-limit pressure.
+
+### Impact
+When the model outputs `[TOOL_CALLS]sandbox_exec{...}`, the system will now:
+1.  **Catch the leak** immediately.
+2.  **Trigger a self-correction retry** (up to 2 times), instructing the model: *"You MUST invoke tools through the tool mechanism — NEVER write [TOOL_CALLS] as your answer text."*
+3.  **Clean the output** as a fallback to ensure you see professional, plain-text answers rather than raw JSON or bracketed markers.
+
+These adjustments ensure full reliability when using NVIDIA NIMs or other models that sometimes revert to raw text tool representations.

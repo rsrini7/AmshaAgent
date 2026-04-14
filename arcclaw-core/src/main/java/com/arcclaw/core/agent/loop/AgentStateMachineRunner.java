@@ -60,7 +60,7 @@ public class AgentStateMachineRunner {
 
     // NVIDIA-specific tool call leak pattern: [[TOOL_CALLS]sandbox_exec{...}]
     private static final Pattern NVIDIA_TOOL_CALL_PATTERN =
-        Pattern.compile("\\[\\[TOOL_CALLS\\]", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("\\[+TOOL_CALLS\\]+", Pattern.CASE_INSENSITIVE);
 
     // ── Suspiciously short non-answers: "Done.", "OK.", "ok" etc.
     private static final Pattern SUSPICIOUSLY_SHORT =
@@ -190,7 +190,7 @@ public class AgentStateMachineRunner {
                         history.add(step);
                         String leakedTool = "the intended tool";
                         Matcher nameMatcher = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"").matcher(candidateAnswer);
-                        Matcher nvidiaMatcher = Pattern.compile("\\[\\[TOOL_CALLS\\](\\w+)").matcher(candidateAnswer);
+                        Matcher nvidiaMatcher = Pattern.compile("\\[+TOOL_CALLS\\]+\\s*(\\w+)").matcher(candidateAnswer);
 
                         if (nameMatcher.find()) {
                             leakedTool = nameMatcher.group(1);
@@ -324,21 +324,19 @@ public class AgentStateMachineRunner {
         if (answer == null) return "";
         
         String stripped = answer;
+        
+        // 1. Remove standard raw JSON leaks ({"type": "function", ...})
         Matcher jsonMatcher = RAW_TOOL_JSON_PATTERN.matcher(stripped);
         if (jsonMatcher.find()) {
-            stripped = stripped.substring(jsonMatcher.end())
-                .replaceFirst("^[^}]*\\}", "")
-                .replaceAll("^[}\\s]+", "")
-                .strip();
+            stripped = stripped.substring(0, jsonMatcher.start()) + stripped.substring(jsonMatcher.end());
+            stripped = stripped.replaceFirst("^[^}]*\\}", "").replaceAll("^[}\\s]+", "");
         }
 
-        Matcher nvidiaMatcher = NVIDIA_TOOL_CALL_PATTERN.matcher(stripped);
-        if (nvidiaMatcher.find()) {
-            // Strip the [[TOOL_CALLS]... ] block
-            stripped = stripped.replaceAll("(?i)\\[\\[TOOL_CALLS\\].*?\\]", "").strip();
-        }
+        // 2. Remove NVIDIA-style bracketed leaks ([TOOL_CALLS]name{...})
+        // We use a pattern that catches the marker and subsequent non-whitespace text (name + JSON)
+        stripped = Pattern.compile("(?i)\\[+TOOL_CALLS\\]+[^\\s]*").matcher(stripped).replaceAll("");
 
-        return stripped.isBlank() ? "I have completed the task." : stripped;
+        return stripped.isBlank() ? "I have completed the task." : stripped.trim();
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole,
