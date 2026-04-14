@@ -5,8 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditEventRepository;
@@ -14,9 +13,10 @@ import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class AuditEventRepositoryTest {
@@ -63,7 +63,7 @@ class AuditEventRepositoryTest {
     @Test
     void testValidation_rejectsNullSessionId() {
         AuditEvent event = new AuditEvent();
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+        Assertions.assertThrows(IllegalStateException.class,
             () -> repository.validateBeforePersist(event));
     }
 }
