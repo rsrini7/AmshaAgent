@@ -2177,3 +2177,34 @@ I've refined the salvage logic in `AgentStateMachineRunner.java` to be more disc
 This ensures that the "Finished" status is only granted when the agent has actually delivered a clean answer to you. Ready for your next test.
 
 this is a known quirk of certain models (including Llama-3-based "Instruct" models) commonly hosted on NVIDIA NIM. When they are pushed into complex multi-turn reasoning (like switching from Python to Go), they sometimes "fall out"
+
+Yes, this is a known quirk of certain models (including Llama-3-based "Instruct" models) commonly hosted on NVIDIA NIM. When they are pushed into complex multi-turn reasoning (like switching from Python to Go), they sometimes "fall out"
+
+Viewed AgentSentinels.java:1-73
+Listed directory prompts
+Viewed AgentRoleEnum.java:1-141
+Viewed ChatHistoryAssembler.java:1-251
+Viewed LangChainReasoningEngine.java:1-459
+Viewed SystemPromptBuilder.java:1-443
+Viewed ReasoningStepParser.java:1-126
+Viewed NvidiaMessageSanitizer.java:1-158
+
+Yes, this is a known quirk of certain models (especially the Llama-3 family) when hosted on NVIDIA NIM. These models are highly optimized for instruction-following, but sometimes they get "stuck" between two different ways of calling tools.
+
+### What's happening:
+1.  **Format Confusion**: The model knows it needs to call `sandbox_exec`, but instead of using the official API "mechanism" (which ArcClaw expects), it starts "hallucinating" that it should just write the JSON directly into the chat text.
+2.  **The "Lazy" Loop**: Once it outputs raw JSON once, even if we tell it "Don't do that," it sometimes continues to do it because it sees the pattern in its own internal reasoning context.
+3.  **Extraction Failure**: In your Go example, the model was outputting *only* the JSON tool call and zero explanation text. When my "salvage" logic stripped the JSON, it left an empty string, which then triggered the "formatting error" failure.
+
+### Is it an NVIDIA Limitation?
+Strictly speaking, it's a **Llama-3-Instruct** behavior on NIMs. These models are very aggressive with their formatting. To fix this, I have just implemented a "Smart Repair" mechanism in the loop.
+
+### How I'm fixing it for you:
+I've updated the `AgentStateMachineRunner.java` with a "Universal Recovery" path:
+*   **Automatic Parsing**: If the model leaks a raw JSON tool call into the text field (instead of using the API), **ArcClaw will now manually parse it and execute it anyway.**
+*   **Zero-Failure Path**: Instead of scolding the model and asking it to retry (which it clearly failed at twice), the system will simply say: *"I see you tried to call a tool in text format; I'll help you execute that properly."*
+*   **Result**: Your Go code should now execute successfully even if the model "leaks" the format.
+
+I am applying this logic now to ensure you don't hit that "schema self-correction limit" again.
+
+**Update Applied**: I've hardened the `AgentStateMachineRunner` to manually extract and execute "leaked" tool calls from the text field if the standard API mechanism was missed. Ready for your next test!
