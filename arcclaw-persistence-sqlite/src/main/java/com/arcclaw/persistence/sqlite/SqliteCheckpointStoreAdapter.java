@@ -662,10 +662,10 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         List<CheckpointDto> results = new ArrayList<>();
         
         for (AgentCheckpoint cp : inProgress) {
-            results.add(CheckpointMapper.toDto(cp));
             cp.setStatus(CheckpointStatus.FAILED);
             cp.setFailedAt(now);
             cp.setFailReason(failReason);
+            results.add(CheckpointMapper.toDto(cp));
         }
 
         return results;

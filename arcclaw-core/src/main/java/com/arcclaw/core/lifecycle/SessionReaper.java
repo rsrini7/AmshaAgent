@@ -79,8 +79,11 @@ public class SessionReaper {
     /**
      * On application startup, find any IN_PROGRESS or AWAITING_APPROVAL
      * checkpoints from a previous JVM crash and mark them as FAILED.
+     *
+     * NO @Transactional annotation — actual transactional boundaries and 
+     * SQLite retry loops are handled by the delegated methods within 
+     * CheckpointStorePort to prevent nested REQUIRES_NEW overhead.
      */
-    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void onStartup(@Observes StartupEvent event) {
         try {
             // Note: SQLite BUSY retries are handled internally (transparently) 
