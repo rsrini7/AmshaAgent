@@ -3,6 +3,7 @@ package com.arcclaw.core.sandbox;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -57,7 +58,7 @@ public class DirectExecutor {
         if ("python3".equals(exe)) {
             // Check if python3 is actually callable. If not, swap to python.
             if (!canRun(exe)) {
-                var fixed = new java.util.ArrayList<>(command);
+                var fixed = new ArrayList<>(command);
                 fixed.set(0, "python");
                 return fixed;
             }

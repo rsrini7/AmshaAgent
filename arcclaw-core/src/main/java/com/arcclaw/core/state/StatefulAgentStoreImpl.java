@@ -284,6 +284,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public Optional<AgentCheckpoint> findLatestAwaitingApprovalByPrefix(String prefix) {
+        return storeAdapter.findLatestAwaitingApprovalWithPrefix(prefix)
+                .map(CheckpointMapper::toEntity);
+    }
+
+    @Override
     public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId) {
         return storeAdapter.findLatestBySession(sessionId).map(CheckpointMapper::toEntity);
     }
