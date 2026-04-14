@@ -1937,3 +1937,25 @@ When the model outputs `[TOOL_CALLS]sandbox_exec{...}`, the system will now:
 3.  **Clean the output** as a fallback to ensure you see professional, plain-text answers rather than raw JSON or bracketed markers.
 
 These adjustments ensure full reliability when using NVIDIA NIMs or other models that sometimes revert to raw text tool representations.
+
+---
+
+Edited P95-LLM-Completion-Response.md
+Viewed EngineStepHandler.java:1-371
+Listed directory reasoning
+Viewed LangChainReasoningEngine.java:1-459
+Viewed ChatHistoryAssembler.java:1-241
+Edited ChatHistoryAssembler.java
+
+I've resolved the **400 BadRequestError** that was occurring during self-correction retries.
+
+### The Issue
+The error `"Cannot set add_generation_prompt to True when the last message is from the assistant"` was triggered because the system was injecting correction hints as `SystemMessages` or appending them to the head prompt. This left the conversation history ending with the leaked `AssistantMessage` (the raw tool call). Strict model templates (like those used by NVIDIA NIM and Mistral) forbid generating an assistant response if the assistant was the last one to speak.
+
+### The Fix
+I updated `ChatHistoryAssembler.java` to implement **Turn Flipping**:
+*   **Generic Hint Detection**: The assembler now detects any goal-context containing `"System: "` hints.
+*   **Turn Transition**: Instead of a "passive" system message, these hints are now injected as a **UserMessage** at the very end of the message list.
+*   **Prompt Compliance**: By ensuring the last message in the request is from the **User**, we satisfy the model's protocol requirements, allowing it to correctly append its internal `<|assistant|>` tokens and proceed with the generation.
+
+This change not only fixes the 400 error but also makes the correction hint more "vocal" to the LLM, as it now appears as the most recent turn in the dialogue.
