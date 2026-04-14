@@ -195,10 +195,19 @@ public class ChatHistoryAssembler {
             int start = goal.indexOf("System: ");
             String correctionHint = goal.substring(start);
             
+            ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
+
             // We use UserMessage instead of SystemMessage to "flip" the turn 
-            // if the last message was from the Assistant (AiMessage).
-            // This prevents "add_generation_prompt" failures on NVIDIA/Azure/Mistral.
-            messages.add(UserMessage.userMessage(correctionHint));
+            // ONLY if the last message was from the Assistant (AiMessage).
+            // This prevents "add_generation_prompt" failures while maintaining 
+            // valid turn-order (no User turns immediately after ToolResults).
+            // §7.31/7.35
+            if (last instanceof AiMessage) {
+                messages.add(UserMessage.userMessage(correctionHint));
+            } else {
+                // Otherwise keep it as a SystemMessage (will be moved to head prompt)
+                messages.add(SystemMessage.from(correctionHint));
+            }
         }
 
         return messages;

@@ -333,8 +333,8 @@ public class AgentStateMachineRunner {
         }
 
         // 2. Remove NVIDIA-style bracketed leaks ([TOOL_CALLS]name{...})
-        // We use a pattern that catches the marker and subsequent non-whitespace text (name + JSON)
-        stripped = Pattern.compile("(?i)\\[+TOOL_CALLS\\]+[^\\s]*").matcher(stripped).replaceAll("");
+        // We match marker + name + potential JSON body to end of string/line (§7.25 hardened)
+        stripped = Pattern.compile("(?i)\\[+TOOL_CALLS\\]+.*", Pattern.DOTALL).matcher(stripped).replaceAll("");
 
         return stripped.isBlank() ? "I have completed the task." : stripped.trim();
     }

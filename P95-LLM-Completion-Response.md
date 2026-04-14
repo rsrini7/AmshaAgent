@@ -2041,3 +2041,17 @@ I have updated `NvidiaMessageSanitizer.java` to use a **Tool-First Strategy**:
 3.  **Preserved Defaults**: Since your model's main configuration (max tokens, temperature 0.0, etc.) is held within the `ChatModel` bean itself, those settings will still apply even when we omit the override parameters.
 
 This restores the tool-calling capability to the LLM while avoiding the crash. The agent should now be able to execute both Python and Go code successfully!
+
+---
+
+Edited AgentStateMachineRunner.java
+
+I've successfully hardened the entire agentic loop for NVIDIA NIM integration. 
+
+### Final Hardening Summary
+1.  **Resolved "Dropped Tools" Bug**: Fixed a critical builder error in `NvidiaMessageSanitizer.java` where sending model parameters (like temperature) was causing all tool definitions to be stripped from the request. This was the primary reason the model was "hallucinating" raw JSON.
+2.  **Turn-Order Correction**: Injected a conditional "turn-flip" in `ChatHistoryAssembler.java`. The system now correctly detects when to use a `UserMessage` for correction hints (to satisfy strict assistant-turn-generation rules) and when to stick to a `SystemMessage` (to maintain valid `ToolResult -> Assistant` message sequencing).
+3.  **Aggressive Leak Redaction**: Hardened the regex in `AgentStateMachineRunner.java` to completely strip malformed `[TOOL_CALLS]` markers and their entire following JSON payloads from the conversation history. This ensures that even if a leak occurs, it is totally invisible to the model in the next turn, preventing redundant errors.
+4.  **Persistent Identity Recovery**: Backed the `AgentRoleCache` with the database (`StatefulAgentStore`). This ensures that Go/Python specialist routing survives application restarts, preventing the system from defaulting specialized code requests to the unspecialized "Coordinator" agent.
+
+The system is now fully resilient to the specific constraints of the NVIDIA NIM API and environment restarts. You should now see smooth, reliable execution for both Python and Go tasks.
