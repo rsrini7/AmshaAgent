@@ -455,7 +455,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doIsCheckpointExpired(String sessionId, long timeoutHours) {
         Instant cutoff = Instant.now().minus(timeoutHours, ChronoUnit.HOURS);
-        em.clear();
+        
         List<AgentCheckpoint> rows = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid AND c.status = :status " +
@@ -466,7 +466,16 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             .setMaxResults(1)
             .getResultList();
             
-        if (rows.isEmpty() || rows.get(0) == null) return true;   // no AWAITING_APPROVAL → treat as expired
+        if (rows.isEmpty()) {
+            // Diagnostic: check if the session exists at all with ANY status
+            Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid", Long.class)
+                    .setParameter("sid", sessionId)
+                    .getSingleResult();
+            log.warnf("isCheckpointExpired found 0 records with AWAITING_APPROVAL for session %s (Total records for session: %d)", 
+                      sessionId, count);
+            return true;   // no AWAITING_APPROVAL → treat as expired
+        }
+        
         AgentCheckpoint cp = rows.get(0);
         if (cp.getUpdatedAt() == null) return true;
         return cp.getUpdatedAt().isBefore(cutoff);

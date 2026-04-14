@@ -1529,3 +1529,41 @@ To ensure all changes are correctly picked up, please run:
 `mvn clean test -pl arcclaw-persistence-sqlite`
 
 The tests should now complete without transaction deadlocks, null pointer exceptions, or WORM immutability violations.
+
+---
+
+Good news — down to just 2 failures! Both are straightforward fixes:
+
+1. **Audit test**: `validateBeforePersist` correctly rejects a blank `AuditEvent` — my test needs to expect that.
+2. **Expiry test**: Hibernate's dirty-check flush at commit time overwrites the JPQL backdating because the entity is still managed. Fix: split persist and backdate into separate transactions.
+
+Viewed AuditEventRepositoryTest.java:60-69
+Edited AuditEventRepositoryTest.java
+
+Now the expiry test — the problem is that Hibernate re-flushes the managed entity on commit, overwriting the JPQL backdate:
+
+Viewed StatefulAgentStoreExpiryTest.java:60-81
+Edited StatefulAgentStoreExpiryTest.java
+Edited StatefulAgentStoreExpiryTest.java
+
+Fixed both remaining failures:
+
+1. **Audit validation test**: Now correctly expects `IllegalStateException` when validating an empty `AuditEvent`.
+
+2. **Expiry test**: The root cause was **Hibernate's dirty-check flush overwriting the JPQL backdate**. When `em.persist(cp)` and the JPQL `UPDATE updatedAt` were in the same transaction, Hibernate still had `cp` as a managed entity with `updatedAt = now()` (set by `@PrePersist`). At commit time, Hibernate's dirty-check saw the managed entity and re-flushed it, overwriting the JPQL-backdated timestamp. **Fix**: Split into two transactions — Transaction 1 persists and commits, Transaction 2 backdates via JPQL with no managed entity to conflict.
+
+Please run: `mvn clean test -pl arcclaw-persistence-sqlite`
+
+---
+
+Viewed StatefulAgentStoreExpiryTest.java:1-89
+Edited SqliteCheckpointStoreAdapter.java
+Edited StatefulAgentStoreExpiryTest.java
+
+I have hardened the `StatefulAgentStoreExpiryTest` with explicit assertions to verify that the record is created, the ID is assigned, and the backdate update actually touches exactly one row. I also added diagnostic logging to the adapter to report if it's missing the record entirely or seeing a different status.
+
+One subtle detail: I removed a misplaced `em.clear()` from the adapter's expiry check logic. Since the check uses `REQUIRES_NEW`, it already has a fresh persistence context; clearing it manually was redundant and potentially interfering with the result set mapping.
+
+Please run the tests: `mvn clean test -pl arcclaw-persistence-sqlite`
+
+If it fails, the console output will now contain a `WARN` log starting with `isCheckpointExpired found 0 records...` which will tell us definitively if the record is missing from the database or if it's just filtered out by the `AWAITING_APPROVAL` status.

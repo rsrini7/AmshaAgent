@@ -61,8 +61,9 @@ class AuditEventRepositoryTest {
     }
 
     @Test
-    void testValidation() {
+    void testValidation_rejectsNullSessionId() {
         AuditEvent event = new AuditEvent();
-        repository.validateBeforePersist(event);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+            () -> repository.validateBeforePersist(event));
     }
 }
