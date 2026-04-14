@@ -108,8 +108,8 @@ public class AgentCronRepository {
         int updated = em.createNativeQuery(
                 "UPDATE agentcron SET status=:running WHERE id=:id AND status=:active"
         ).setParameter("id", id)
-         .setParameter("running", CronStatus.RUNNING)
-         .setParameter("active", CronStatus.ACTIVE)
+         .setParameter("running", CronStatus.RUNNING.name())
+         .setParameter("active", CronStatus.ACTIVE.name())
          .executeUpdate();
         return updated == 1;
     }
@@ -123,8 +123,8 @@ public class AgentCronRepository {
         em.createNativeQuery(
                 "UPDATE agentcron SET status=:active WHERE id=:id AND status=:running"
         ).setParameter("id", id)
-         .setParameter("active", CronStatus.ACTIVE)
-         .setParameter("running", CronStatus.RUNNING)
+         .setParameter("active", CronStatus.ACTIVE.name())
+         .setParameter("running", CronStatus.RUNNING.name())
          .executeUpdate();
     }
 

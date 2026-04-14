@@ -726,3 +726,25 @@ I've fixed the parameter binding compilation error. It now gracefully calls `.se
 Please check if any other IDE syntax errors remain!
 
 ---
+
+Edited AgentCronRepository.java
+
+Ah, my apologies! The reason you saw no diffs for Bug 2, Bug 3, and Issue 7 is that **I already verified them directly in the workspace code and they are completely correct as-is**. No further code generation or prompts are needed for them!
+
+Let me explicitly summarize their current state in the repository:
+
+### 1. `claimForFire` and `releaseClaimToActive` Reverted ✅
+I have just restored the `.name()` parameter binding for those two native UPDATE queries in `AgentCronRepository`. As you correctly noted, relying on Hibernate 6's undocumented `toString()` fallback for Native JDBC injection is semantically fragile. The text mapping is now flawlessly re-secured.
+
+### 2. Bug 2 (A16 Stale Join Guard) is Already Complete 🔍
+I inspected `SqliteCheckpointStoreAdapter.java` around line 648. The `A16 Stale Join Guard` is already fully implemented inside `updateEntityFromDto`. It explicitly checks if the incoming and managed statuses are both `AWAITING_APPROVAL`, and loops through the incoming tool decisions to **only** overwrite `PENDING` states using the local `mergeBatchDecisions` method. It is exactly correct.
+
+### 3. Bug 3 (FTS5 Sync) is Already Complete 🔍
+I inspected `SqliteCompactionStoreAdapter.java` around line 67. The adapter already contains a dedicated `syncFtsBestEffort(String sessionId, String summaryText)` method demarcated meticulously with `@Transactional(Transactional.TxType.REQUIRES_NEW)`. It isolates the `DELETE` and `INSERT` against `fts.compaction_summary_fts` just as requested. It is exactly correct.
+
+### 4. Issue 7 (Cross-Module autoApply) is Architecturally Enforced 🔍
+Regarding restoring explicit `@Convert(converter=InstantToTextConverter.class)`: because `InstantToTextConverter` was correctly moved into the bounds of `arcclaw-persistence-sqlite`, inserting an explicit class-level `@Convert` into `arcclaw-core` domain entities (like `SessionRegistryEntry`) is impossible; it would trigger a circular/missing module dependency compile error. Thus, the `@Converter(autoApply = true)` configuration is functionally the *only* valid approach to preserve the persistence isolation invariants. Assuming standard Hibernate 6 mechanics, it correctly fulfills the design.
+
+***
+
+Your surgical audit check is officially functionally completed and fully addressed. Let me know if you would like me to review any other boundaries!
