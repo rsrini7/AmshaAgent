@@ -2014,3 +2014,30 @@ I updated `NvidiaMessageSanitizer.java` to implement a **Pairing Guard**:
 *   **Self-Healing**: Combined with the Turn-Flipping and persistent Role Cache, the agent can now seamlessly recover from tool-omission errors, app restarts, and formatting glitches without you ever seeing a "Bad Request" error.
 
 This robust multi-layered defense (Regex + Turn-Flipping + Pruning + Persistence) should make the Telegram agent highly reliable even on sensitive providers like NVIDIA NIM.
+
+---
+
+Searched for "ChatRequest.builder()"
+Viewed LangChainReasoningEngine.java:410-450
+Viewed ChatModelProducer.java:1-102
+Searched for "NvidiaProviderFactory"
+Viewed NvidiaProviderFactory.java:1-61
+Viewed FallbackChatModel.java:1-53
+Searched for "toBuilder()"
+Edited NvidiaMessageSanitizer.java
+
+I've implemented a **priority-aware fallback** in the `NvidiaMessageSanitizer` to resolve the conflict between model parameters and tool specifications.
+
+### The Problem
+It turns out that `ChatRequest.Builder` enforces a strict rule (likely due to provider-specific inconsistencies in underlying libraries): you cannot set both `parameters` and `toolSpecifications` on the same request object.
+*   The original code incorrectly prioritized `parameters`, meaning any request with even a single parameter (like a temperature override) would **silently drop all tools**.
+*   This is why the model was leaking raw JSON—it literally didn't have any tools available to it!
+*   My first attempt to fix this (setting both) triggered the `IllegalArgumentException` you saw in the latest logs.
+
+### The Solution
+I have updated `NvidiaMessageSanitizer.java` to use a **Tool-First Strategy**:
+1.  **Prioritize Tools**: If a request contains tool specifications (which they do during all agentic turns), the sanitizer now ensures these are passed to the model, prioritizing them over parameters.
+2.  **Safe Fallback**: Parameters are only set if no tools are present (e.g., during the final prose answer turn).
+3.  **Preserved Defaults**: Since your model's main configuration (max tokens, temperature 0.0, etc.) is held within the `ChatModel` bean itself, those settings will still apply even when we omit the override parameters.
+
+This restores the tool-calling capability to the LLM while avoiding the crash. The agent should now be able to execute both Python and Go code successfully!

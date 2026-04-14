@@ -32,11 +32,12 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         ChatRequest.Builder builder = ChatRequest.builder().messages(sanitized);
 
-        // Mutually exclusive — set only whichever is present
-        if (request.parameters() != null) {
-            builder.parameters(request.parameters());
-        } else if (request.toolSpecifications() != null) {
+        // §7.33: ChatRequest.Builder forbids setting both parameters and toolSpecifications.
+        // We prioritize toolSpecifications to ensure the agent doesn't lose its core functionality.
+        if (request.toolSpecifications() != null && !request.toolSpecifications().isEmpty()) {
             builder.toolSpecifications(request.toolSpecifications());
+        } else if (request.parameters() != null) {
+            builder.parameters(request.parameters());
         }
 
         ChatResponse response = delegate.chat(builder.build());
