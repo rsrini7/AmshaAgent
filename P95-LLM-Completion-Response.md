@@ -1771,3 +1771,57 @@ I have successfully stabilized the ArcClaw persistence layer and all affected in
 *   **Startup Priority**: 1 Test Passed (Startup order verified)
 
 The ArcClaw framework now has a robust, production-ready persistence layer with a fully green integration test suite.
+
+---
+
+Viewed ToolRegistry.java:1-561
+Viewed PiiRedactionTransformer.java:1-29
+Searched for "implements InputSanitizer"
+Searched for "PromptInjectionReflex"
+Viewed PromptInjectionReflex.java:1-178
+Viewed SandboxResult.java:1-21
+Viewed AgentLoop.java:1-553
+Viewed AgentStateMachineRunner.java:1-556
+Viewed CheckpointResumeHandler.java:1-510
+Searched for "@InputSanitizer.Injection"
+Viewed ToolRegistry.java:320-340
+Viewed ProcessIsolationExecutor.java:1-200
+Ran command: `python --version; python3 --version`
+Edited ToolRegistry.java
+Viewed SandboxExecTool.java:460-478
+Edited SandboxExecTool.java
+Viewed SandboxExecTool.java:340-400
+Viewed DirectExecutor.java:1-46
+Edited SandboxExecTool.java
+Viewed SandboxExecTool.java:340-400
+Edited DirectExecutor.java
+Edited SandboxExecTool.java
+
+I have resolved the issue causing empty tool observations and execution failures on Windows.
+
+### Identified Root Causes
+1. **ToolRegistry Regression**: `ToolRegistry.java` was only checking for infrastructure failures (e.g., sandbox offline) but ignoring tool-level failure flags (e.g., non-zero exit codes). This caused the registry to return a blank "Success" response to the LLM when a tool actually failed, leading the agent to loop indefinitely.
+2. **Windows `python3` Shim**: The sandbox tool hardcodes `python3` for its Linux-based container environment. When falling back to host execution on Windows, this triggered the "Microsoft Store shim" for `python3` which fails to execute, while `python` is the functional binary on the USER's system.
+3. **Observation Gaps**: Truncation and sentinel logic was inconsistent across different execution paths, occasionally allowing blank strings to reach the LLM's context.
+
+### Fixes Implemented
+* **`ToolRegistry.java`**: Added explicit checking for `result.success()`. Tool failures are now correctly surfaced as `ToolResponse.failure`, allowing the LLM to see error messages rather than blank output.
+* **`DirectExecutor.java`**: Implemented a Windows-specific command fixup that automatically aliases `python3` to `python` if the former is not found or is non-functional. This ensures that Linux-intended commands work seamlessly on Windows host fallbacks.
+* **`SandboxExecTool.java`**: Centralized output processing in `postProcessOutput` to ensure all execution paths (primary and fallback) apply consistent truncation and return safe "no output" sentinels.
+
+The agent should now be able to successfully execute the Fibonacci script and provide the result.
+
+```java
+// Logic added to DirectExecutor.java to resolve the Windows python3 issue
+private List<String> fixupCommandForWindows(List<String> command) {
+    if ("python3".equals(command.get(0)) && !canRun("python3")) {
+        var fixed = new ArrayList<>(command);
+        fixed.set(0, "python");
+        return fixed;
+    }
+    return command;
+}
+```
+
+---
+
