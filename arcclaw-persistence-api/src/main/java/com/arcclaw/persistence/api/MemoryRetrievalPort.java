@@ -20,10 +20,9 @@ public interface MemoryRetrievalPort {
      * @param query the search query
      * @param topK the maximum number of results to return
      * @param userId The user whose memory to search (NOT the session ID).
-     * @param ftsSearch whether to use Full Text Search (keyword) instead of vector search
      * @return list of scored memory chunks matching the query
      */
-    List<MemoryChunkDto> search(String query, int topK, String userId, boolean ftsSearch);
+    List<MemoryChunkDto> search(String query, int topK, String userId);
 
     /**
      * Indexes a memory entry for future retrieval.

@@ -2,11 +2,11 @@ package com.arcclaw.persistence.sqlite;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
-import java.util.stream.Stream;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -87,12 +87,12 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity = new AgentCheckpoint();
             entity.setSessionId(sessionId);
             entity.setAgentRole(agentRole);
-            entity.setStatus(CheckpointStatus.IN_PROGRESS);
             created = true;
         } else {
             entity = results.get(0);
         }
         
+        entity.setStatus(CheckpointStatus.IN_PROGRESS);
         entity.setStateJson(stateJson);
         if (autonomy != null) {
             entity.setAutonomyLevel(AutonomyLevel.valueOf(autonomy));
@@ -667,20 +667,22 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .getResultList();
 
         Instant now = Instant.now();
+        List<CheckpointDto> results = new ArrayList<>();
+        
         for (AgentCheckpoint cp : inProgress) {
+            results.add(CheckpointMapper.toDto(cp));
             cp.setStatus(CheckpointStatus.FAILED);
             cp.setFailedAt(now);
             cp.setFailReason(failReason);
         }
         for (AgentCheckpoint cp : awaiting) {
+            results.add(CheckpointMapper.toDto(cp));
             cp.setStatus(CheckpointStatus.ORPHANED);
             cp.setFailedAt(now);
             cp.setFailReason(failReason);
         }
 
-        return Stream.concat(inProgress.stream(), awaiting.stream())
-                .map(CheckpointMapper::toDto)
-                .toList();
+        return results;
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)

@@ -1001,3 +1001,46 @@ render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/jav
 render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/test/java/com/arcclaw/core/persistence/AsyncPersistenceEngineTest.java)
 render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/test/java/com/arcclaw/core/audit/TelemetryAuditServiceTest.java)
 render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-rag/src/test/java/com/arcclaw/rag/TwoTierMemoryServiceTest.java)
+
+---
+
+Viewed TwoTierMemoryServiceTest.java:1-48
+Edited TwoTierMemoryServiceTest.java
+
+I have performed a thorough follow-up on the persistence layer hardening, addressing every gap identified in the audit.
+
+### Resolved Critical Gaps
+
+#### 1. TOCTOU: Consistent Status Reset (Fix 1)
+- **`SqliteCheckpointStoreAdapter`**: Corrected `doUpsertWithSteps` to ensure `entity.setStatus(CheckpointStatus.IN_PROGRESS)` is called universally. Previously, the status was only set for new checkpoints, which would have broken the state machine when resuming from `AWAITING_APPROVAL` or `FAILED` states.
+
+#### 2. Reversion of Breaking Changes (Fix 6)
+- **`BackendCapabilities`**: Reverted the field renames (`isFtsSupported` $\rightarrow$ `supportsFullTextSearch`, `isVectorSearchSupported` $\rightarrow$ `supportsVectorSearch`) to maintain backward compatibility with `arcclaw-core` and other dependent modules.
+
+#### 3. Removal of Scope Creep (Fix 8)
+- **`MemoryRetrievalPort` & Implementations**: Removed the unrequested `boolean ftsSearch` parameter from the `search` method. The SPI and all its callers (`TwoTierMemoryService`, `TwoTierMemoryServiceTest`) have been updated to use the clean 3-argument signature.
+
+#### 4. Restoration of SSE Republication (Fix 3 Behavior)
+- **`SqliteCheckpointStoreAdapter`**: Updated `doRecoverZombiesAndMarkFailed` to capture the original status and metadata of checkpoints *before* marking them as `ORPHANED`.
+- **`SessionReaper`**: Restored the logic to trigger `agentSseService.republishOnSubscribe(...)` for any recovered checkpoints that were in the `AWAITING_APPROVAL` state. This ensures that pending human-in-the-loop approvals are correctly replayed to the UI upon server restart.
+
+These targeted adjustments ensure that the refactor is functionally complete, behaviorally consistent with the original logic, and free of unintentional breaking changes.
+
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/SqliteCheckpointStoreAdapter.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-api/src/main/java/com/arcclaw/persistence/api/BackendCapabilities.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-persistence-api/src/main/java/com/arcclaw/persistence/api/MemoryRetrievalPort.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-rag/src/main/java/com/arcclaw/rag/TwoTierMemoryService.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-rag/src/test/java/com/arcclaw/rag/TwoTierMemoryServiceTest.java)
+
+Viewed SessionReaper.java:100-115
+Edited SessionReaper.java
+
+I have updated `SessionReaper.java` to use the `CheckpointStatus` enum for status comparisons, eliminating the remaining hardcoded string. 
+
+### Final Refinement
+- **`SessionReaper`**: Replaced the hardcoded `"AWAITING_APPROVAL"` check in `doRecoverZombies()` with `CheckpointStatus.AWAITING_APPROVAL.name()`, ensuring type safety and consistency with the rest of the domain model.
+
+This completes the hardening and precision audit of the ArcClaw persistence layer. 
+
+render_diffs(file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/lifecycle/SessionReaper.java)

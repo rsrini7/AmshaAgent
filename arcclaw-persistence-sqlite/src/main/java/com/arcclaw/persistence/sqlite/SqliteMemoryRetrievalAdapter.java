@@ -40,7 +40,7 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     FtsConnectionInterceptor ftsInterceptor;
 
     @Override
-    public List<MemoryChunkDto> search(String query, int topK, String userId, boolean ftsSearch) {
+    public List<MemoryChunkDto> search(String query, int topK, String userId) {
         // 1. Perform FTS Search
         List<CompactionSummaryDto> ftsEntities = compactionRepo.search(userId, query, topK * 2);
         List<MemoryChunkDto> ftsResults = new ArrayList<>();

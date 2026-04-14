@@ -103,9 +103,10 @@ public class SessionReaper {
         if (!recovered.isEmpty()) {
             log.warnf("Zombie recovery: found and failed %d orphaned/stale checkpoint(s).", recovered.size());
             for (var dto : recovered) {
-                if ("AWAITING_APPROVAL".equals(dto.status())) { // Repurpose: republication logic moved to SSE replay on UI connect
-                     log.infof("  Processed orphaned approval: id=%d session=%s role=%s",
+                if (CheckpointStatus.AWAITING_APPROVAL.name().equals(dto.status())) {
+                     log.infof("  Republishing orphaned approval: id=%d session=%s role=%s",
                         dto.id(), dto.sessionId(), dto.agentRole());
+                     agentSseService.republishOnSubscribe(dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
                 }
             }
         } else {
