@@ -1825,3 +1825,24 @@ private List<String> fixupCommandForWindows(List<String> command) {
 
 ---
 
+Viewed AgentSentinels.java:1-73
+Viewed EngineStepHandler.java:1-371
+Edited AgentStateMachineRunner.java
+Edited AgentStateMachineRunner.java
+Edited AgentStateMachineRunner.java
+Edited AgentStateMachineRunner.java
+Edited AgentStateMachineRunner.java
+
+I have addressed the issue where NVIDIA NIM models were leaking raw tool call strings (e.g., `[[TOOL_CALLS]sandbox_exec{...}]`) to the user instead of triggering the approval workflow.
+
+### Identified Root Cause
+Certain NVIDIA models occasionally produce "bracketed" tool calls instead of standard JSON or OpenAI-compatible structured tags. Because this specific format (`[[TOOL_CALLS]`) wasn't recognized by our state machine's "leak guard," it was being accepted as a legitimate plain-text answer (`FINISH`) and forwarded directly to Telegram.
+
+### Fixes Implemented
+1.  **NVIDIA Leak Guard**: Updated `AgentStateMachineRunner.java` with a new `NVIDIA_TOOL_CALL_PATTERN`. This ensures that any response containing `[[TOOL_CALLS]` is immediately flagged as a malformed response rather than a final answer.
+2.  **Self-Correction Loop**: When this leak is detected, the agent now automatically retries the LLM with a corrective prompt: 
+    *   *“System: Your last response was a raw tool call ([[TOOL_CALLS]] format) written as plain text... You MUST invoke tools through the tool mechanism — NEVER write [[TOOL_CALLS]] as your answer text.”*
+3.  **Enhanced Tool Identification**: Improved the regex logic to extract the intended tool name (e.g., `sandbox_exec`) directly from the malformed NVIDIA brackets. This allows the system to tell the model exactly which tool it attempted to call incorrectly, facilitating a successful retry.
+4.  **Sanitization Logic**: Updated the `stripRawToolJson` utility to remove these bracketed blocks if the system is under rate-limit pressure, preventing internal tool-calling syntax from ever reaching the end-user.
+
+With these changes, the system will detect the raw NVIDIA formatting, prompt the model to use the proper tool calling API, and correctly trigger the approval request as intended.

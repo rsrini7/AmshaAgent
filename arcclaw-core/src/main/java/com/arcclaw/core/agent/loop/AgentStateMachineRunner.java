@@ -58,6 +58,10 @@ public class AgentStateMachineRunner {
     private static final Pattern RAW_TOOL_JSON_PATTERN = 
         Pattern.compile("^\\s*\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"\\s*:", Pattern.DOTALL);
 
+    // NVIDIA-specific tool call leak pattern: [[TOOL_CALLS]sandbox_exec{...}]
+    private static final Pattern NVIDIA_TOOL_CALL_PATTERN =
+        Pattern.compile("\\[\\[TOOL_CALLS\\]", Pattern.CASE_INSENSITIVE);
+
     // ── Suspiciously short non-answers: "Done.", "OK.", "ok" etc.
     private static final Pattern SUSPICIOUSLY_SHORT =
             Pattern.compile(
@@ -169,8 +173,11 @@ public class AgentStateMachineRunner {
                     }
 
                     if (isRawToolCallLeak(candidateAnswer)) {
-                        if (RAW_TOOL_JSON_PATTERN.matcher(candidateAnswer).find() && rateLimitTracker.isBackingOff("primary")) {
-                            log.warnf("FINISH answer has raw tool JSON but rate-limited — stripping instead of retrying for session %s", context.sessionId());
+                        boolean isRawJson = RAW_TOOL_JSON_PATTERN.matcher(candidateAnswer).find();
+                        boolean isNvidiaLeak = NVIDIA_TOOL_CALL_PATTERN.matcher(candidateAnswer).find();
+
+                        if ((isRawJson || isNvidiaLeak) && rateLimitTracker.isBackingOff("primary")) {
+                            log.warnf("FINISH answer has raw tool leak but rate-limited — stripping instead of retrying for session %s", context.sessionId());
                             candidateAnswer = stripRawToolJson(candidateAnswer);
                             AgentResult result = AgentResult.finished(candidateAnswer, List.copyOf(history));
                             maybeSignalBridge(context, result);
@@ -183,17 +190,21 @@ public class AgentStateMachineRunner {
                         history.add(step);
                         String leakedTool = "the intended tool";
                         Matcher nameMatcher = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"").matcher(candidateAnswer);
+                        Matcher nvidiaMatcher = Pattern.compile("\\[\\[TOOL_CALLS\\](\\w+)").matcher(candidateAnswer);
+
                         if (nameMatcher.find()) {
                             leakedTool = nameMatcher.group(1);
+                        } else if (nvidiaMatcher.find()) {
+                            leakedTool = nvidiaMatcher.group(1);
                         } else if (candidateAnswer.contains("delegate_to_agent")) {
                             leakedTool = "delegate_to_agent";
                         }
 
                         transientError =
-                                "System: Your last response was a raw JSON tool call object " +
+                                "System: Your last response was a raw tool call (JSON or [[TOOL_CALLS]] format) " +
                                 "written as plain text, not a valid FINISH answer. " +
                                 "You MUST invoke tools through the tool mechanism — " +
-                                "NEVER write {\"type\": \"function\", ...} or raw JSON as your answer text. " +
+                                "NEVER write [[TOOL_CALLS]], {\"type\": \"function\", ...} or raw JSON as your answer text. " +
                                 "Retry now: call " + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
                         llmSchemaErrorCount++;
                         if (llmSchemaErrorCount >= 2) {
@@ -305,20 +316,29 @@ public class AgentStateMachineRunner {
         if (answer == null || answer.isBlank()) return false;
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
             || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
-            || RAW_TOOL_JSON_PATTERN.matcher(answer).find();
+            || RAW_TOOL_JSON_PATTERN.matcher(answer).find()
+            || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find();
     }
 
     private String stripRawToolJson(String answer) {
         if (answer == null) return "";
-        Matcher m = RAW_TOOL_JSON_PATTERN.matcher(answer);
-        if (m.find()) {
-            String stripped = answer.substring(m.end())
+        
+        String stripped = answer;
+        Matcher jsonMatcher = RAW_TOOL_JSON_PATTERN.matcher(stripped);
+        if (jsonMatcher.find()) {
+            stripped = stripped.substring(jsonMatcher.end())
                 .replaceFirst("^[^}]*\\}", "")
                 .replaceAll("^[}\\s]+", "")
                 .strip();
-            return stripped.isBlank() ? "I have completed the task." : stripped;
         }
-        return answer;
+
+        Matcher nvidiaMatcher = NVIDIA_TOOL_CALL_PATTERN.matcher(stripped);
+        if (nvidiaMatcher.find()) {
+            // Strip the [[TOOL_CALLS]... ] block
+            stripped = stripped.replaceAll("(?i)\\[\\[TOOL_CALLS\\].*?\\]", "").strip();
+        }
+
+        return stripped.isBlank() ? "I have completed the task." : stripped;
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole,
