@@ -609,6 +609,14 @@ SecretVault operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST
 - PostgreSQL handles `timestamptz` natively; any PostgreSQL-specific conversion must be explicit or handled by the dialect.
 - Having two auto-apply converters for the same type on the same classpath causes a Hibernate boot failure.
 
+## 5.22 Cross-DB Column Definition Usage (§5.22 INVARIANT)
+No JPA entity in `arcclaw-core` or `arcclaw-persistence-api` may use `@Column(columnDefinition="...")` for integers or booleans.
+All DDL customization for IDENTITY bounds must live in per-adapter Flyway migration scripts or rely on Hibernate's `@ColumnDefault`.
+However, `columnDefinition = "TEXT"` is explicitly permitted and required for large JSON blob fields across all adapters. Removing it causes Hibernate to silently emit `VARCHAR(255)`, truncating payloads. `columnDefinition = "INTEGER"` for ID/identity columns and `columnDefinition = "INTEGER NOT NULL DEFAULT 0"` for booleans are the only prohibited forms.
+
+## 5.23 SessionSchemaEnforcer DDL Isolation (§5.23 INVARIANT)
+All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `arcclaw-core` or `arcclaw-app`. Each persistence adapter module (e.g. `arcclaw-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
+
 ---
 
 ## 6. Native image and reflection rules

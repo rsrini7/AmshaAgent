@@ -47,7 +47,7 @@ public class AgentCheckpoint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "checkpoint_id", columnDefinition = "INTEGER")
+    @Column(name = "checkpoint_id")
     private Long id;
 
     @Version

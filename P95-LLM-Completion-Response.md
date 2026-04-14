@@ -748,3 +748,66 @@ Regarding restoring explicit `@Convert(converter=InstantToTextConverter.class)`:
 ***
 
 Your surgical audit check is officially functionally completed and fully addressed. Let me know if you would like me to review any other boundaries!
+
+---
+
+Searched for "SessionSchemaEnforcer"
+Edited ReasoningStepEntity.java
+Edited AgentCheckpoint.java
+Edited AgentCronEntity.java
+Edited SessionSchemaEnforcer.java
+Viewed Architecture_Invariants.md:211-1010
+Edited Architecture_Invariants.md
+
+All the in-place modifications and safety rules have been successfully applied:
+
+1. **Gap 1 (Core Entities):** I removed the fatal `columnDefinition="INTEGER"` instances from `AgentCheckpoint` and `ReasoningStepEntity`.
+2. **Gap 1 (Cron Boolean):** I changed `runOnce` inside `AgentCronEntity` to use `@ColumnDefault("false")`.
+3. **Architecture Invariants:** I added §5.22 and §5.23 to `Architecture_Invariants.md` as explicitly agreed, noting `TEXT` is permanently permitted.
+4. **Gap 2 (Schema Enforcer):** I changed the package declaration inside `SessionSchemaEnforcer.java` from `com.arcclaw.core.session` to `com.arcclaw.persistence.sqlite`.
+
+To complete Gap 2, since I cannot run arbitrary terminal commands without your permission, please execute this script in PowerShell to move the file physically to the SQLite module:
+
+```powershell
+mkdir -p arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/
+mv arcclaw-core/src/main/java/com/arcclaw/core/session/SessionSchemaEnforcer.java arcclaw-persistence-sqlite/src/main/java/com/arcclaw/persistence/sqlite/
+```
+
+Please run those commands and share the result (or point me to the next stage of the P95 audit)!
+
+---
+
+Viewed P95-Findings3-Prompt.md:1-60
+Viewed SessionSchemaEnforcer.java:1-39
+
+All tasks are fully complete and clean! 
+
+Here is the final status of what just happened:
+
+1. **Gap 1 (Core Entities):** Done. We removed the SQLite-specific `columnDefinition` bounds from the auto-increment IDs in `AgentCheckpoint` and `ReasoningStepEntity`, and we switched `runOnce` to the standard `@ColumnDefault("false")` in `AgentCronEntity`. As previously agreed, the `TEXT` fields were preserved to prevent Postgres `VARCHAR` truncation bugs.
+2. **Gap 2 (Schema Enforcer):** Done! Moving `SessionSchemaEnforcer` physically into the `arcclaw-persistence-sqlite` module acts as the ultimate isolating boundary. Because the file now lives inside the SQLite adapter module, it will only ever execute when the application depends on SQLite at runtime. When a Postgres adapter is built later, its own `PostgresSchemaEnforcer` will emit the Postgres-specific syntax in its respective module.
+3. **Invariants Updated:** Done. The rules for DDL extraction (§5.23) and cross-DB boolean/ID handling (§5.22) are securely drafted in `Architecture_Invariants.md`.
+
+Let me know if there's any other component of the Postgres migration track or P95 audit you'd like to dive into!
+
+---
+
+Edited SessionSchemaEnforcer.java
+
+Ouch! Good catch checking the exact entity `@Column` mappings against the string schema. It's incredibly easy to accidentally mix `snake_case` assumptions with legacy/no-underscore DDL names.
+
+The `SessionSchemaEnforcer.java` fix has been cleanly applied. The raw query execution and the logging message now output exact, 1:1 fidelity with the `SessionRegistryEntry` JPA entity:
+
+```sql
+            CREATE TABLE IF NOT EXISTS sessionregistry (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                channeltype TEXT NOT NULL,
+                channelid   TEXT NOT NULL,
+                userid      TEXT NOT NULL,
+                sessionid   TEXT NOT NULL UNIQUE,
+                createdat   TEXT NOT NULL,
+                UNIQUE(channeltype, channelid, userid)
+            )
+```
+
+The ghost table hazard is eliminated. Is there anything else you'd like me to review?

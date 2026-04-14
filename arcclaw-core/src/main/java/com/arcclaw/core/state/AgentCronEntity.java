@@ -7,6 +7,7 @@ import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.ColumnDefault;
 
 import com.arcclaw.core.util.TemporalUtils;
 
@@ -43,11 +44,10 @@ public class AgentCronEntity {
     public String timezone = "UTC";
 
     /**
-     * Explicit {@code INTEGER NOT NULL DEFAULT 0} for GraalVM native safety.
-     * Hibernate 6 community dialect boolean→INTEGER mapping can be stripped
-     * by AOT unless explicitly registered — this DDL guarantees all-mode safety.
+     * Explicit default value for GraalVM native safety.
      */
-    @Column(nullable = false, columnDefinition = "INTEGER NOT NULL DEFAULT 0")
+    @Column(name = "runonce", nullable = false)
+    @ColumnDefault("false")
     public boolean runOnce = false;
 
     public String goal;
