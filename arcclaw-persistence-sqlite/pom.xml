@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arcclaw-persistence-sqlite</artifactId>
-    <name>ArcClaw Persistence - SQLite</name>
+    <name>arcclaw-persistence-sqlite</name>
     <description>SQLite-specific persistence adapter implementation</description>
 
     <dependencies>

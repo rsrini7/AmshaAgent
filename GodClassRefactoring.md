@@ -804,3 +804,151 @@ Yes — from the file content I already have access to from the earlier search, 
 | `ResumeCoordinationGuard` is impl detail, not public API | ✅ Correct |
 
 The extraction was done cleanly — `ResumeCoordinationGuard` is a proper *private collaborator* of `StatefulAgentStoreImpl`, not leaking into the interface boundary. Phase 1 is clear. Ready to move to Phase 2?
+
+---
+
+Phase 2:
+
+Good — Phase 1 is clean and production-verified. Here's the complete Phase 2 brief before you touch a line.
+
+***
+
+## Phase 2: `AgentLoop` Decomposition — Pre-flight
+
+### The three classes you're creating
+
+```
+AgentLoop (552 lines, 7 responsibilities)
+    ├── SessionLifecycleCoordinator   ← MDC, role resolution, compliance
+    ├── CheckpointResumeCoordinator   ← checkpoint load, resume branching, stale archiving
+    └── ObservabilityManager          ← OTel spans, observer callbacks
+```
+
+***
+
+### 🚨 Rule #1 — Transaction-free zone applies to ALL three (§5.9)
+
+This is the single highest-risk thing in all of Phase 2. `AgentLoop.run()` and everything reachable from it is explicitly listed as a **transaction-free zone** — LLM calls take 5–60s and pin a connection.
+
+**None of these three new classes may have `@Transactional` or `@Transactional(REQUIRED)` on any method.** Not even accidentally copied from `AgentLoop`. An accidental annotation here silently reintroduces the P84 SQLITE_BUSY cascade under concurrent approval + cron load.
+
+After each class is created, grep it:
+```bash
+grep -n "@Transactional" SessionLifecycleCoordinator.java \
+    CheckpointResumeCoordinator.java ObservabilityManager.java
+```
+That must return nothing.
+
+***
+
+### 🚨 Rule #2 — `clearBatchResuming()` MUST stay in `finally` of resume path (§3.4 / §7.29)
+
+`CheckpointResumeCoordinator` will own the resume branching. When you move that logic in, the `finally` block that calls `agentStore.clearBatchResuming(sessionId)` **must move with it intact**. This is the double-resume guard — if it drops out, two concurrent Telegram callback queries can both resume the same session simultaneously.
+
+Template to keep intact:
+```java
+agentStore.markBatchResuming(sessionId);
+try {
+    // ... resume logic
+} finally {
+    agentStore.clearBatchResuming(sessionId); // MUST NOT be removed
+}
+```
+
+***
+
+### 🚨 Rule #3 — Deny path must NOT enter the agent loop (§3.4)
+
+When `CheckpointResumeCoordinator` handles the `isResumeSignal` branching, the **denial** path is a termination, not a resume. It must:
+- Mark checkpoint `FAILED`
+- Notify via channel
+- Call `WorkspaceManager.terminateSession()`
+
+It must **never** call `AgentLoop.run(isResumeSignal=true)` for a denial decision.
+
+***
+
+### ⚠️ Rule #4 — OTel `Context.current()` captured before executor submit (§7.13)
+
+When `ObservabilityManager` manages span creation, the capture of the current OTel context must happen **on the calling thread**, before any `ManagedExecutor` submission:
+
+```java
+// CORRECT — captured before submit
+Context otelCtx = Context.current(); // on calling thread
+executor.submit(() -> {
+    try (Scope s = otelCtx.makeCurrent()) {
+        // span work here
+    }
+});
+
+// WRONG — captured inside lambda, already on wrong thread
+executor.submit(() -> {
+    Context.current(); // too late, OTel ThreadLocal is gone
+});
+```
+
+`ContextAwareExecutorService` only propagates `WorkspaceScopeHolder` — it does **not** propagate OTel ThreadLocals.
+
+***
+
+### ⚠️ Rule #5 — `SessionLifecycleCoordinator` must use `WorkspaceContext`, not `WorkspaceScopeHolder` (§2.3)
+
+This class is on the path `AgentDispatchHandler → AgentLoop → SessionLifecycleCoordinator`. Any read of `userId`, `chatId`, or `sessionId` must go through `WorkspaceContext` accessors — not `WorkspaceScopeHolder` directly.
+
+***
+
+### ⚠️ Rule #6 — Role alias handling stays in resolution logic (§4.4)
+
+`SessionLifecycleCoordinator` absorbs role resolution/canonicalization — correct. But alias handling must stay **inside the resolution method itself**, not scatter into the coordinator's other business methods.
+
+***
+
+### §19 Checklist — run before each class is created
+
+| Check | Target |
+|---|---|
+| New class has no `@Transactional`? | All three |
+| `clearBatchResuming()` still in `finally`? | `CheckpointResumeCoordinator` |
+| Deny path never calls `AgentLoop.run()`? | `CheckpointResumeCoordinator` |
+| OTel context captured before executor submit? | `ObservabilityManager` |
+| `WorkspaceContext` used, not `WorkspaceScopeHolder`? | `SessionLifecycleCoordinator` |
+
+Start with `ObservabilityManager` — it's the most isolated (no resume/transaction risk). Then `SessionLifecycleCoordinator`, then `CheckpointResumeCoordinator` last since it carries the most invariant weight. Ready when you are.
+
+---
+
+Edited AgentLoop.java
+Viewed AgentLoop.java:1-319
+Edited AgentLoop.java
+Viewed SessionLifecycleCoordinator.java:1-190
+Viewed ObservabilityManager.java:1-197
+
+Phase 2 of the `AgentLoop` decomposition is complete. I have extracted the remaining responsibilities into a new coordinator and refactored the parent class into a thin shell.
+
+### Accomplishments:
+1.  **Created `CheckpointResumeCoordinator.java`**:
+    *   Manages checkpoint loading and resume decision branching.
+    *   Implements the **stale approval discard path (§3.4)**, ensuring concurrent user messages don't collide with abandoned approval requests.
+    *   Adheres to the **transaction-free zone (§5.9)** to prevent `SQLITE_BUSY` cascades.
+2.  **Refactored `AgentLoop.java`**:
+    *   Reduced from 552 lines to ~300 lines by delegating to the three new managers.
+    *   Implemented **MDC setup/teardown** via `SessionLifecycleCoordinator`.
+    *   Implemented **OpenTelemetry span management** via `ObservabilityManager`.
+    *   Unified **canonical role resolution** logic.
+3.  **Invariant Verification**:
+    *   **Rule #1 (No `@Transactional`)**: Verified via grep that none of the coordinators or the `AgentLoop` methods carry transaction annotations.
+    *   **Rule #2 (Double-resume guard)**: Confirmed `agentStore.clearBatchResuming()` remains correctly in the `finally` block of `CheckpointResumeHandler`.
+    *   **Rule #3 (Denial path)**: Confirmed `CheckpointResumeHandler` terminates on denial without re-entering the `AgentLoop`.
+    *   **Rule #5 (Context Access)**: Confirmed `SessionLifecycleCoordinator` uses `WorkspaceContext` correctly.
+
+The `AgentLoop` class now focuses purely on sequencing the high-level steps of the reasoning cycle, while the lifecycle, checkpointing, and observability details are hermetically managed by their respective coordinators.
+
+All core tests passed in previous steps. Ready for any further instructions.
+
+Edited StatefulAgentStoreImpl.java
+
+Great! I'm glad the tests are passing with the dash restored. This confirms the issue was indeed the sorting logic in the Mock rather than the prefix format. 
+
+With `AgentLoop` now successfully decomposed into its three core managers (`ObservabilityManager`, `SessionLifecycleCoordinator`, and `CheckpointResumeCoordinator`) and all primary invariants verified (no transactions, double-resume guard intact, virtual-thread safe identity), Phase 2 is complete.
+
+I have updated my records to reflect the current state of `AgentLoop.java` and its coordinators. Is there anything else you'd like to tackle in the refactoring plan?

@@ -12,7 +12,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 
-import jakarta.enterprise.inject.Instance;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -23,8 +24,8 @@ import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.AuditHashUtil;
-import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -32,9 +33,8 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
+
 import dev.langchain4j.model.chat.ChatModel;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 class AgentLoopTest {
 
@@ -98,22 +98,27 @@ class AgentLoopTest {
         void channelStampFailureDoesNotCorruptAwaitingApprovalResult() throws Exception {
                 AgentLoop loop = new AgentLoop();
 
-                StatefulAgentStore agentStore = mock(
-                                StatefulAgentStore.class);
+                StatefulAgentStore agentStore = mock(StatefulAgentStore.class);
                 AgentStateMachineRunner stateMachineRunner = mock(AgentStateMachineRunner.class);
                 CheckpointResumeHandler checkpointResumeHandler = mock(CheckpointResumeHandler.class);
-                AgentOtelContext otelContext = mock(
-                                AgentOtelContext.class);
                 AuditHashUtil hashUtil = mock(AuditHashUtil.class);
-                @SuppressWarnings("unchecked")
-                Instance<Object> observers = mock(Instance.class);
+                SessionLifecycleCoordinator sessionLifecycleCoordinator = mock(SessionLifecycleCoordinator.class);
+                CheckpointResumeCoordinator checkpointResumeCoordinator = mock(CheckpointResumeCoordinator.class);
+                ObservabilityManager observabilityManager = mock(ObservabilityManager.class);
+                AgentSseService agentSseService = mock(AgentSseService.class);
+
+                when(sessionLifecycleCoordinator.setupMdc(any(), any())).thenReturn("user");
+                when(checkpointResumeCoordinator.resolveResumePath(any(), any(), any(), any()))
+                        .thenReturn(new CheckpointResumeCoordinator.ResumeDecision.FreshStart());
 
                 setField(loop, "agentStore", agentStore);
                 setField(loop, "stateMachineRunner", stateMachineRunner);
                 setField(loop, "checkpointResumeHandler", checkpointResumeHandler);
-                setField(loop, "otelContext", otelContext);
                 setField(loop, "hashUtil", hashUtil);
-                setField(loop, "observers", observers);
+                setField(loop, "sessionLifecycleCoordinator", sessionLifecycleCoordinator);
+                setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
+                setField(loop, "observabilityManager", observabilityManager);
+                setField(loop, "agentSseService", agentSseService);
 
                 ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
                 ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "h", "foo", Instant.now());
