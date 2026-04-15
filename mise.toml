@@ -1370,14 +1370,32 @@ $script:excludeRelPaths = @(
     'arcclaw-app/src/main/resources/native'
 )
 
+# ── Include lists — these override exclusions above ──────────────────────────
+$script:includeFiles = @(
+    'Architecture_Invariants.md',
+    'P95-LLM-Completion-Response.md'
+)
+
+$script:includeRelPaths = @(
+    'docs-test/podman.md'
+)
+
 function ShouldExclude($item, $relPath) {
+    # ✅ Include list overrides everything — check FIRST
+    if (-not $item.PSIsContainer) {
+        if ($script:includeFiles -contains $item.Name) { return $false }
+    }
+    foreach ($rp in $script:includeRelPaths) {
+        if ($relPath -eq $rp) { return $false }
+    }
+
     # Specific relative path prefixes
     foreach ($rp in $script:excludeRelPaths) {
         if ($relPath -eq $rp -or $relPath.StartsWith("$rp/")) { return $true }
     }
     # Any segment of the path matches an excluded dir name
     foreach ($seg in $relPath.Split('/')) {
-        if ($script:excludeDirs -contains $seg) { return $true }   # -contains is case-insensitive
+        if ($script:excludeDirs -contains $seg) { return $true }
     }
     # File-level checks
     if (-not $item.PSIsContainer) {
