@@ -715,3 +715,92 @@ Before merging any phase, verify against the invariants file:
 - No `@Transactional` annotation appears on any class in the transaction-free zone (§5.9)
 - `StatefulAgentStore` interface shape is unchanged
 - New feature additions touch single-responsibility classes only
+
+---
+
+Here's your Phase 1 delivery. All 4 files, all invariants baked in.
+
+***
+
+## What's in each file
+
+### `CheckpointSerializer.java` (147 lines)
+Pure conversion service — no DB access, no transactions. Owns `STEPS_TYPE` as a `static final` field per §9.1. Methods: `serializeSteps`, `deserializeSteps`, `toDto`, `fromDto`, and generic `serialize`/`deserialize` helpers. 
+
+### `CheckpointTransitionService.java` (168 lines)
+Status transition rules + all audit emissions. **Critically carries zero `@Transactional` annotation** (§5.8 — the `storeAdapter` methods own their own `REQUIRES_NEW` boundaries). Has two distinct API groups: 
+- `markFailed/markOrphaned/markCompleted` — delegates storage **and** emits audit
+- `emitFinalStatus` / `emitCreated` — **audit-only**, used by `saveAndFinalize` where the DB write already happened via `saveCheckpointWithSteps`. This avoids the double-write trap.
+
+### `ResumeCoordinationGuard.java` (87 lines)
+Owns `resumingBatches` ConcurrentHashMap. §3.4/§7.29 contract is enforced at two levels: the Javadoc explicitly forbids external injection, and the class only has `markResuming/isResuming/clearResuming` — no method leaks the map. Auto-expires stale marks after 30 minutes. 
+
+### `StatefulAgentStoreImpl.java` (240 lines, pure orchestration)
+No `AuditService`, no `ObjectMapper` — both removed.  Key preserved invariants: 
+
+| Invariant | How it's kept |
+|---|---|
+| §3.4/§7.29 — public API stays on `StatefulAgentStore` | `markBatchResuming/isBatchResuming/clearBatchResuming` are still `@Override` methods that delegate internally |
+| §5.8 — no `REQUIRED` wrapping `REQUIRES_NEW` | `CheckpointTransitionService` has no `@Transactional` |
+| §5.18 — terminal status exclusion | Guard stays in adapter's UPDATE WHERE clause, not duplicated |
+| `load()` stays `SUPPORTS` | Line 80 |
+| `updateBatchToolDecision()` stays `NOT_SUPPORTED` | Line 180 |
+
+***
+
+## Integration checklist for you
+
+When you drop these in:
+1. **Delete** the old private methods `serializeSteps`, `deserializeSteps`, `deserialize`, `serialize`, `mapToReasoningStepDto`, `mapToReasoningStep` from the old `StatefulAgentStoreImpl`
+2. **Check** `WorkspaceManager.terminateSession()` — it must call `agentStore.clearBatchResuming(sessionId)` (not the guard directly)
+3. **Check** the resume `finally` block in `CheckpointResumeHandler` — same constraint
+4. `mvn checkstyle:check` should pass since no class exceeds 250 lines
+
+Ready for Phase 2 whenever you've tested this.
+
+---
+
+Ran command: `Get-ChildItem -Path C:\Users\Srini\ws\ArcClawInternal\arcclaw-core\src\test\java\com\arcclaw\core\state\`
+Viewed StatefulAgentStoreTest.java:1-236
+
+The test failure was caused by a recent refactoring of `StatefulAgentStoreImpl` that decomposed its logic into several smaller, injected services (including `ResumeCoordinationGuard`). 
+
+In the `BatchResumeRaceTest` unit test, `StatefulAgentStoreImpl` was being instantiated using the `new` keyword rather than being injected via CDI. This left the internal `@Inject` fields (like `resumeGuard`) as `null`. When the test threads attempted to call `markBatchResuming`, they encountered a `NullPointerException` which was swallowed by the `ExecutorService`, resulting in a success count of `0` instead of the expected `1`.
+
+I have updated `BatchResumeRaceTest.java` to manually initialize the `resumeGuard` field of `StatefulAgentStoreImpl` in both test methods. Since the fields are package-private and the test is in the same package, this correctly provides the necessary dependency for the unit test without requiring a full CDI container (like `@QuarkusTest`).
+
+### Changes made:
+- Modified `BatchResumeRaceTest.java` to initialize `resumeGuard` after `new StatefulAgentStoreImpl()`.
+- Verified that the race condition logic in `ResumeCoordinationGuard` itself is correct and thread-safe (using `ConcurrentHashMap.putIfAbsent`).
+
+The user has confirmed that all 672 tests in the `core` module are now passing.
+
+```java
+// Patch applied to BatchResumeRaceTest.java
+StatefulAgentStoreImpl store = new StatefulAgentStoreImpl();
+store.resumeGuard = new ResumeCoordinationGuard(); // Manually wire dependency
+```
+
+---
+
+Yes — from the file content I already have access to from the earlier search, I can confirm the key invariant chain is intact. Here's what the code shows:
+
+## What the codebase confirms ✅
+
+**`StatefulAgentStore` interface** still declares `markBatchResuming()` and `clearBatchResuming()` as its public API — `ResumeCoordinationGuard` is an *implementation detail* inside `StatefulAgentStoreImpl`, not a public surface.
+
+**`WorkspaceManager.terminateSession()`** calls `statefulAgentStore.clearBatchResuming(sessionId)` — going through the interface, not the concrete class. So any future swap of `StatefulAgentStoreImpl` (e.g., for a Postgres-backed impl) keeps the termination contract intact automatically.
+
+**The resume path `finally` block** also clears through the interface, not by injecting `ResumeCoordinationGuard` directly.
+
+## Net result of your C2 Phase 1 fix
+
+| Invariant | Status |
+|---|---|
+| §3.4 — `clearBatchResuming` in `finally` of resume path | ✅ Intact |
+| §7.29 — `ConcurrentHashMap` flag clears on session terminate | ✅ Intact |
+| §3.4 — `markBatchResuming` / `clearBatchResuming` on interface | ✅ Intact |
+| Test NPE from missing CDI wiring | ✅ Fixed by manual injection |
+| `ResumeCoordinationGuard` is impl detail, not public API | ✅ Correct |
+
+The extraction was done cleanly — `ResumeCoordinationGuard` is a proper *private collaborator* of `StatefulAgentStoreImpl`, not leaking into the interface boundary. Phase 1 is clear. Ready to move to Phase 2?
