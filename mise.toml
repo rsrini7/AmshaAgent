@@ -1387,6 +1387,8 @@ function ShouldExclude($item, $relPath) {
     }
     foreach ($rp in $script:includeRelPaths) {
         if ($relPath -eq $rp) { return $false }
+        # ✅ If this dir is a parent of an included path, allow recursion into it
+        if ($item.PSIsContainer -and $rp.StartsWith("$relPath/")) { return $false }
     }
 
     # Specific relative path prefixes
