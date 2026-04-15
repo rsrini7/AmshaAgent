@@ -1,0 +1,717 @@
+### C2) God-class concentration in orchestration and state
+
+**Goal:** Split oversized classes by responsibility.
+
+> **Post-C1 update:** `StatefulAgentStoreImpl` was reduced from 744 → 362 lines during Wave 3a (all JPQL, retry, transaction, and SQLite-specific code extracted to `SqliteCheckpointStoreAdapter`).
+> The remaining 362 lines are domain logic. Further decomposition is still beneficial but less urgent. `AgentStateMachineRunner` grew from 490 → 599 lines during P95 NVIDIA hardening — now the most over-packed class.
+
+**Impacted Files:**
+* `arcclaw-core/.../state/StatefulAgentStoreImpl.java` (362 lines post-C1, 5 remaining responsibilities)
+* `arcclaw-core/.../agent/loop/AgentLoop.java` (552 lines, 7 responsibilities)
+* `arcclaw-core/.../agent/loop/AgentStateMachineRunner.java` (599 lines post-P95, 8+ responsibilities — **largest god class**)
+* `arcclaw-core/.../tools/ToolRegistry.java` (566 lines, 7 responsibilities)
+
+**Violated Patterns:**
+* **SRP (Single Responsibility Principle):** Each class has 7-9 distinct responsibilities
+* **Fowler Code Smells:** Large Class, Long Method, Divergent Change
+* **Maintainability:** High change collision frequency; feature additions cause global regressions
+
+---
+
+### **Current Responsibilities per Class**
+
+**StatefulAgentStoreImpl** (5 post-C1):
+1. Checkpoint serialization/deserialization (via `CheckpointMapper` + Jackson)
+2. Status transition rules + audit event emission
+3. Batch decision merge conflict resolution
+4. Local resume lock management (`resumingBatches` ConcurrentHashMap)
+5. Domain-level save/load orchestration delegating to `CheckpointStorePort`
+
+**AgentLoop** (7):
+1. MDC lifecycle management
+2. OTel span management
+3. Checkpoint load/resume coordination
+4. Compliance violation handling
+5. Observer callback orchestration
+6. Stale approval archiving
+7. Role resolution + canonicalization
+
+**AgentStateMachineRunner** (8+ post-P95 — **LARGEST GOD CLASS**):
+1. Iteration loop control
+2. Answer guard/validation (including `SUSPICIOUSLY_SHORT` pattern)
+3. Raw tool call leak detection (4 patterns: standard JSON, delegate, tool-name-JSON, NVIDIA brackets)
+4. Finish action handling + salvage logic
+5. Code-block generation policy enforcement
+6. Compaction echo stripping
+7. Regex-based answer filtering + history sanitization
+8. Error message sanitization + self-correction retry hints
+
+**ToolRegistry** (7):
+1. CDI tool discovery
+2. Role-capability enforcement
+3. Autonomy policy checking
+4. Sandbox routing
+5. Secret extraction via reflection
+6. Schema generation + serialization
+7. Audit event emission
+
+---
+
+### **Steps**
+
+**Phase 1: Decompose `StatefulAgentStoreImpl` (362 lines → 3 focused classes)**
+> Post-C1, all JPQL/retry/transaction code is already extracted. Remaining decomposition targets serialization, audit, and resume lock.
+
+1.  **Create `CheckpointSerializer` service:**
+    * Move JSON serialization/deserialization (`serializeSteps`, `deserializeSteps`)
+    * Jackson `ObjectMapper` configuration
+2.  **Create `CheckpointTransitionService`:**
+    * Move status transition rules
+    * Move audit event emission for state changes
+3.  **Create `ResumeCoordinationGuard`:**
+    * Move `resumingBatches` ConcurrentHashMap
+    * Move `markBatchResuming()`, `clearResuming()` methods
+    * Document JVM-local limitation (see XB1 for distributed lock upgrade)
+4.  **Refactor `StatefulAgentStoreImpl`** to compose these components (~120 lines remaining)
+
+**Phase 2: Decompose `AgentLoop`**
+1.  **Create `SessionLifecycleCoordinator`:**
+    * Move MDC setup/teardown
+    * Move role resolution/canonicalization
+    * Move compliance violation detection
+2.  **Create `CheckpointResumeCoordinator`:**
+    * Move checkpoint load logic
+    * Move resume decision branching
+    * Move stale approval archiving
+3.  **Create `ObservabilityManager`:**
+    * Move OTel span creation/closing
+    * Move observer callback orchestration
+4.  **Refactor `AgentLoop.runWithRole()`** to delegate to these coordinators
+
+Here is the extracted content from the image, continuing the **ArcClaw** decomposition plan:
+
+---
+
+### **Phase 3: Decompose `AgentStateMachineRunner` (599 lines → 5 focused classes)**
+
+> P95 NVIDIA hardening added leak guard patterns, salvage logic, history sanitization, and self-correction retry. This class is now the **highest priority** for decomposition.
+
+1.  **Create `AnswerQualityGuard`:**
+    * Move answer validation (`guardFinalAnswer`)
+    * Move short-answer detection (`SUSPICIOUSLY_SHORT`, `MIN_ANSWER_ALPHA_LENGTH`)
+    * Move compaction echo stripping
+    * Move raw tool call leak detection (all 4 patterns: `RAW_TOOL_CALL_PATTERN`, `RAW_DELEGATE_CALL_PATTERN`, `RAW_TOOL_JSON_PATTERN`, `NVIDIA_TOOL_CALL_PATTERN`)
+    * Move history sanitization (`stripRawToolJson`)
+2.  **Create `FinishActionHandler`:**
+    * Move finish action processing
+    * Move salvage logic (non-blank text after stripping → Finished; blank → Failed)
+    * Move final answer construction
+    * Move post-completion checkpoint update
+3.  **Create `CodeGenerationPolicy`:**
+    * Move code-capability checks
+    * Move refusal message construction
+4.  **Create `SelfCorrectionRetryManager`:**
+    * Move correction hint construction
+    * Move turn-flip coordination with `ChatHistoryAssembler`
+    * Move retry budget tracking (`structuredSchemaCorrectionCount`)
+5.  **Extract regex patterns** to shared `IntentClassificationService` (see H2)
+6.  **Refactor `AgentStateMachineRunner.run()`** loop to use extracted components
+
+---
+
+### **Phase 4: Decompose `ToolRegistry`**
+
+1.  **Create `ToolDiscoveryService`:**
+    * Move CDI iteration and caching (see H1)
+    * Move tool descriptor building
+2.  **Create `ToolGovernanceGuard`:**
+    * Move role-capability enforcement
+    * Move autonomy policy checking
+    * Move governance layer delegation
+3.  **Create `ToolSchemaProvider`:**
+    * Move schema generation
+    * Move JSON serialization for schemas
+4.  **Keep `ToolRegistry`** as facade orchestrating these services
+
+---
+
+### **Complexity Targets**
+
+* **Max class size:** 250 lines
+* **Max method size:** 30 lines
+* **Max cyclomatic complexity:** 8 per method
+
+---
+
+### **Test Strategy**
+
+* Each extracted component gets dedicated unit tests
+* Integration tests preserve existing behavior
+* Add static analysis rules to fail CI if size/complexity thresholds exceeded
+
+---
+
+### **Done When**
+
+* Target classes are below agreed size/complexity thresholds.
+* Behavior remains stable via existing and added focused tests.
+* `mvn checkstyle:check` passes with new size/complexity rules.
+* New feature additions touch single-responsibility classes, not God classes.
+
+---
+
+Review:
+
+Now I have both the full refactoring plan and the complete invariants. Let me do a thorough cross-check of every phase against every relevant invariant.
+
+***
+
+## Invariant Cross-Check: C2 God-Class Refactoring
+
+Here's the full analysis phase by phase.
+
+***
+
+## Phase 1 — `StatefulAgentStoreImpl` Decomposition
+
+### ✅ `CheckpointSerializer` (clean)
+No invariant risks. Serialization is pure domain logic. §5.14.1 already handled by C1 — `SqliteRetryTemplate` is encapsulated in `arcclaw-persistence-sqlite` and the `withRetry` wrapper should already be gone.
+
+### ⚠️ `CheckpointTransitionService` — 3 risks
+
+**§5.18 (MUST):** `doMarkCheckpointsFailedRequiresNew` must exclude ALL terminal statuses (`FAILED`, `COMPLETED`, `ARCHIVED`, `COMPROMISED`) from the FAILED overwrite. If `CheckpointTransitionService` absorbs transition rules, this exclusion set must move with it intact. The plan doesn't call this out.
+
+**§5.19 (MUST):** Any query inside the transition service that retrieves "the most recent" checkpoint must keep `ORDER BY c.id DESC LIMIT 1`. Must not be silently dropped during extraction.
+
+**§5.8 (MUST NOT):** If `CheckpointTransitionService` is `@ApplicationScoped` and calls `agentStore.save()` (which is `REQUIRES_NEW`), it must NOT be wrapped in `@Transactional(REQUIRED)`. Must be un-annotated or `NOT_SUPPORTED`.
+
+### 🚨 `ResumeCoordinationGuard` — Direct Conflict with §3.4 and §7.29
+
+**§3.4 (MUST):**
+> The double-resume guard (`StatefulAgentStore.markBatchResuming()`) MUST remain in place. `clearBatchResuming()` MUST be called in the `finally` block of the resume path and by `WorkspaceManager.terminateSession()`.
+
+**§7.29 (INVARIANT):**
+> The flag lives in a ConcurrentHashMap in `StatefulAgentStore` and is cleared when the session terminates.
+
+The plan moves the `resumingBatches` ConcurrentHashMap out of `StatefulAgentStore` and into `ResumeCoordinationGuard`. The invariants name `StatefulAgentStore` explicitly as the home of `markBatchResuming()` and `clearBatchResuming()`. This is a **naming and contract conflict**.
+
+**Required resolution:** `StatefulAgentStore` interface MUST retain `markBatchResuming()` and `clearBatchResuming()` as its public API. `StatefulAgentStoreImpl` can internally delegate to `ResumeCoordinationGuard` — but `WorkspaceManager.terminateSession()` and the resume path `finally` block must keep calling through `StatefulAgentStore`, not inject `ResumeCoordinationGuard` directly. The invariant protects the public contract, not the implementation.
+
+***
+
+## Phase 2 — `AgentLoop` Decomposition
+
+### 🚨 ALL three new classes — §5.9 Transaction-Free Zone (MUST)
+
+§5.9 explicitly states:
+> `AgentLoop.run()` and all descendants — LLM call takes 5–60s; pins a connection.
+
+`SessionLifecycleCoordinator`, `CheckpointResumeCoordinator`, and `ObservabilityManager` are all reachable from `AgentLoop.run()`. **None of them may carry `@Transactional` or `@Transactional(REQUIRED)`**. The plan does not call this out for any of them. This is the single highest-risk invariant in the entire C2 refactoring — an accidental `@Transactional` on `CheckpointResumeCoordinator` would reintroduce the P84 SQLITE_BUSY cascade.
+
+### ⚠️ `CheckpointResumeCoordinator` — 4 specific risks
+
+**§3.4 (MUST):** Stale approval archiving calls `agentStore.save(checkpoint)`. Since `save()` is `REQUIRES_NEW` in the SQLite adapter, the coordinator must be `NOT_SUPPORTED` or un-annotated — never `REQUIRED`.
+
+**§3.4 (MUST NOT):** The coordinator handles the `isResumeSignal` branching. It must NEVER call `AgentLoop.run(isResumeSignal=true)` for denial decisions. Denial is a termination, not a resume. `rejectAndTerminate()` must mark checkpoint FAILED, notify via channel, call `WorkspaceManager.terminateSession()` — this is a distinct path and must stay that way.
+
+**§3.4 / §7.29 (MUST):** `clearBatchResuming()` MUST be called in the `finally` block of the resume path. If `CheckpointResumeCoordinator` owns the resume branching, it must own this `finally` call too. The plan does not mention this.
+
+**§5.9 validation checklist (§19):** The invariant file has an explicit pre-refactor validation checklist. Running it after every phase is mandatory. The plan's test strategy does not reference it.
+
+### ⚠️ `ObservabilityManager` — §7.13 OTel propagation risk
+
+**§7.13 (MUST):**
+> OpenTelemetry span context MUST be explicitly propagated to virtual threads. Capture `io.opentelemetry.context.Context.current()` on the calling thread BEFORE submitting to the executor. `ContextAwareExecutorService` propagates `WorkspaceScopeHolder` session context (ScopedValue) only — it does NOT propagate OTel ThreadLocal spans.
+
+When OTel span management is extracted to `ObservabilityManager`, the pre-executor capture of `Context.current()` must still happen on the calling thread before any `ManagedExecutor` submission. This is easy to accidentally break when moving the span setup into a service layer.
+
+### ⚠️ `SessionLifecycleCoordinator` — §2.3 and §4.4
+
+**§2.3 (MUST):** Any class reachable from `AgentDispatchHandler → AgentLoop → ToolRegistry → tool.execute()` must use `WorkspaceContext` accessors. `SessionLifecycleCoordinator` is on that path — it must NOT read userId/chatId/session from `WorkspaceScopeHolder`.
+
+**§4.4:** Role alias handling belongs in parsing/resolution code. The coordinator absorbs role resolution — that's correct — but alias handling must remain in the resolution logic, not scatter into the coordinator's business methods.
+
+***
+
+## Phase 3 — `AgentStateMachineRunner` Decomposition
+
+### 🚨 `AnswerQualityGuard` — §9.1 Static Final Patterns (MUST)
+
+**§9.1 (MUST):**
+> Reusable regex/pattern objects must be `static final`. Do not compile patterns per request, per message, or inside hot-path methods.
+
+**§4.11 (MUST NOT):**
+> Never compile patterns inline — use `static final Pattern` per §9.1.
+
+`AnswerQualityGuard` absorbs ALL 4 raw tool call leak patterns (`RAW_TOOL_CALL_PATTERN`, `RAW_DELEGATE_CALL_PATTERN`, `RAW_TOOL_JSON_PATTERN`, `NVIDIA_TOOL_CALL_PATTERN`), `SUSPICIOUSLY_SHORT`, `CONTEXT_RAG_ECHO_PATTERN`, `CONTEXT_RETRIEVED_ECHO_PATTERN`, `SYSTEM_PROMPT_ECHO_PATTERN`. Every single one must land as `static final Pattern` in the new class. This is the highest-frequency path in the whole system — a compilation-per-call regression here would be severe.
+
+### ⚠️ `FinishActionHandler` — §7.14 and §3.6
+
+**§7.14 (INVARIANT):**
+> ReasoningStep history is the in-memory source of truth during `AgentLoop.runWithRole()` execution. `AgentLoop` persists history to SQLite via `agentStore.save()` at session end or HITL pause only.
+
+`FinishActionHandler` owns "post-completion checkpoint update." It must NOT trigger a mid-run `agentStore.save()` of ReasoningSteps. The only legitimate writes mid-run are for HITL pause (`AWAITING_APPROVAL`). Session-end saves belong to `AgentLoop`'s finally/completion path.
+
+**§3.6 (MUST NOT):**
+> System-role messages MUST NOT be stored in `ChatMemoryStore`.
+
+If `FinishActionHandler` touches `ChatMemoryWriter` for the final answer, only the assistant turn goes to memory — not any system-injected prefix or sanitized header.
+
+**§5.9 (MUST):** Same as Phase 2 — transaction-free zone applies here too.
+
+### ⚠️ `SelfCorrectionRetryManager` — §3.5 and §8.6
+
+**§3.5 (MUST):** Hard budget exceedance must propagate upward. `SelfCorrectionRetryManager` manages the `structuredSchemaCorrectionCount` retry budget — it must NOT catch `BudgetExceededException`. The exception must propagate to `AgentStateMachineRunner` unchanged.
+
+**§8.6 (MUST):** Same rule from the sandbox tool contract angle — `BudgetExceededException` is explicitly listed as MUST propagate.
+
+**§3.7 (MUST):** In `StructuredRetryLoop`, the threshold check must precede `compareAndSet()`. If `SelfCorrectionRetryManager` wraps or calls `StructuredRetryLoop`, this ordering is non-negotiable.
+
+### ✅ `CodeGenerationPolicy` (mostly clean)
+No direct invariant conflicts. §4.10 (delegation capability guard) is separate from code-gen policy. Straightforward extraction.
+
+### ⚠️ Regex extraction to `IntentClassificationService` — §4.3 ordering
+
+**§4.3 (MUST):**
+> `SkillAwareIntentClassifier` MUST check `SkillRegistry` before LLM fallback. Do not invert that order.
+
+The extraction of patterns to `IntentClassificationService` must not alter the evaluation order. Skill-first routing precedes any LLM-based intent classification.
+
+***
+
+## Phase 4 — `ToolRegistry` Decomposition
+
+### 🚨 `ToolGovernanceGuard` — §3.2 mandatory path (MUST)
+
+**§3.2 (MUST):**
+> All tool execution MUST flow through `ToolRegistry` and `ToolInvoker`. Do not bypass guard, audit, sanitization, or approval logic by calling tool implementation classes directly.
+
+After decomposition, `ToolGovernanceGuard` must be invoked only through `ToolRegistry` (the facade). No external class — no agent loop component, no tool directly — should inject and call `ToolGovernanceGuard` directly, bypassing `ToolRegistry`.
+
+**§4.10 (MUST):** Delegation capability guard (transitive capability escalation is FORBIDDEN) lives currently in `DelegateToAgentTool`, but role-capability enforcement moves to `ToolGovernanceGuard`. The subset validation must stay intact.
+
+**§4.10 scheduling exemption (MUST NOT be removed):**
+> `schedule-cron`, `delete-cron`, `list-crons` are EXEMPT from HITL approval checks. This exemption is encoded in `ToolInvocationGuard` and MUST NOT be removed when adding new scheduling-adjacent tools.
+
+If `ToolGovernanceGuard` absorbs `ToolInvocationGuard` logic, this exemption list must survive verbatim.
+
+**§2.3 (MUST):** `ToolGovernanceGuard` is on the tool path. Must use `WorkspaceContext`, not `WorkspaceScopeHolder`.
+
+**§2.5:** The audit-drain fallback in tool-resolution path is the ONLY legitimate place for context fallback outside normal binding. Must remain in `ToolGovernanceGuard` (or its delegation chain), not disappear.
+
+### ⚠️ `ToolDiscoveryService` — §4.1 and §15
+
+**§4.1 (MUST):** Duplicate logical registrations must fail fast at startup. The CDI discovery caching must not silently allow two beans registering under the same tool name.
+
+**§15 (MUST):** If `ToolDiscoveryService` becomes a separate class in a new package, ensure the module still has `jandex-maven-plugin` and `beans.xml`. No new module creation here, but if it's ever split to a sub-package library, §15 and §16.3 apply.
+
+### ⚠️ `ToolSchemaProvider` — §4.9
+
+**§4.9 (MUST):**
+> `AgentFunctionProcessor` MUST generate JSON schema from the SAM **return type** using `SchemaFactoryWrapper.acceptJsonFormatVisitor(returnTypeClass, visitor)`. MUST NOT use `ToolSpecifications.toolSpecificationFrom()`.
+
+`ToolSchemaProvider` absorbs schema generation. If it touches `AgentFunctionProcessor`-style schema building, the return-type schema source must be maintained. Using `ToolSpecifications.toolSpecificationFrom()` generates the INPUT parameter schema and causes silent wrong behavior.
+
+***
+
+## Cross-Cutting Invariant — §19 Validation Checklist (all phases)
+
+The invariants file has an explicit pre-refactor checklist at §19. It must be run **mentally before every phase**, not just after the whole C2 is complete. The most critical checks for C2:
+
+| Check | Phase Risk |
+|---|---|
+| Does any new `@Transactional` call a `REQUIRES_NEW` method? (§5.8) | Phase 1, 2, 4 |
+| Does any new method run LLM/HTTP inside `@Transactional`? (§5.9) | Phase 2, 3 |
+| Is `CheckpointApprovalService` still `NOT_SUPPORTED` on all 4 methods? (§5.10) | Phase 1, 2 |
+| Is `ApprovalStateMachine.decide()` still `NOT_SUPPORTED`? (§5.11) | Phase 1 |
+| Is `clearBatchResuming()` still in `finally` of resume path? (§3.4) | Phase 2 |
+| Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19) | Phase 1 |
+| Is `SqliteRetryTemplate` still inside `arcclaw-persistence-sqlite` only? (§5.14.1) | Phase 1 |
+
+***
+
+## Summary of Flags
+
+| Phase | Item | Severity | Invariant |
+|---|---|---|---|
+| 1 | `ResumeCoordinationGuard` moves `ConcurrentHashMap` out of `StatefulAgentStore` | 🚨 Contract conflict | §3.4, §7.29 |
+| 1 | `CheckpointTransitionService` terminal status exclusion | ⚠️ Must carry over | §5.18 |
+| 1 | `CheckpointTransitionService` query ordering | ⚠️ Must carry over | §5.19 |
+| 2 | All 3 new classes may accidentally get `@Transactional` | 🚨 P84 regression risk | §5.9 |
+| 2 | `CheckpointResumeCoordinator` must keep `clearBatchResuming()` in `finally` | 🚨 Double-resume risk | §3.4 |
+| 2 | `CheckpointResumeCoordinator` deny path must NOT enter agent loop | ⚠️ Must preserve | §3.4 |
+| 2 | `ObservabilityManager` OTel capture before executor submit | ⚠️ Easy to break | §7.13 |
+| 3 | `AnswerQualityGuard` all patterns must be `static final` | 🚨 Hot-path perf | §9.1, §4.11 |
+| 3 | `FinishActionHandler` must not write ReasoningSteps mid-run | ⚠️ History correctness | §7.14 |
+| 3 | `SelfCorrectionRetryManager` must not swallow `BudgetExceededException` | ⚠️ Must propagate | §3.5, §8.6 |
+| 4 | `ToolGovernanceGuard` scheduling tool HITL exemption must survive | 🚨 Governance hole | §4.10 |
+| 4 | All tool execution must still flow through `ToolRegistry` facade | 🚨 Bypass risk | §3.2 |
+| 4 | `ToolSchemaProvider` must use return-type schema, not input schema | ⚠️ Silent wrong behavior | §4.9 |
+| All | §19 validation checklist must run before each phase | 🚨 Compound risk | §19 |
+
+The Claude Opus plan is structurally sound and the decomposition targets are correct — the above flags are the invariant gaps it doesn't address. The two most dangerous are: the **`ResumeCoordinationGuard` contract conflict** (Phase 1) and the **transaction-free zone for all Phase 2 extracted classes** (accidental `@Transactional` would silently reintroduce the P84 SQLITE_BUSY cascade under concurrent approval + cron load).
+
+---
+
+Now I have the full picture from both the codebase and the invariants. Here is your clean, invariant-aware refactoring plan.
+
+***
+
+# C2 Refactoring Plan: God-Class Decomposition
+
+## Guiding Constraints (Non-Negotiable)
+
+Before any phase begins, confirm these hold throughout:
+
+- No `@Transactional(REQUIRED)` or bare `@Transactional` on any class reachable from `AgentLoop.run()` downward — transaction-free zone (§5.9)
+- No `REQUIRED → REQUIRES_NEW` nesting anywhere in the call chain (§5.8)
+- `CheckpointApprovalService` stays `@Transactional(NOT_SUPPORTED)` on all 4 methods — non-negotiable (§5.10)
+- All regex patterns extracted to new classes must be `static final` — never compiled per-call (§9.1)
+- `StatefulAgentStore` interface public API (`markBatchResuming`, `isBatchResuming`, `clearBatchResuming`) must not change shape — `WorkspaceManager` and `CheckpointResumeHandler` call through the interface, not internals (§3.4, §7.29)
+
+***
+
+## Phase 1 — Decompose `StatefulAgentStoreImpl` (362 → ~120 lines)
+
+> All JPQL/retry/transaction code is already in `SqliteCheckpointStoreAdapter`. Remaining decomposition targets serialization, audit emission, and the resume lock.
+
+***
+
+### Step 1.1 — Create `CheckpointSerializer`
+
+**Package:** `com.arcclaw.core.state`
+
+**Move from `StatefulAgentStoreImpl`:**
+- `serializeSteps(List<ReasoningStep>)` → `String`
+- `deserializeSteps(AgentCheckpoint)` → `List<ReasoningStep>`
+- `STEPS_TYPE` TypeReference constant
+- Jackson `ObjectMapper` injection
+
+**Annotation:** `@ApplicationScoped` — no `@Transactional` of any kind.
+
+**Invariant note:** Pure serialization — no DB calls, no transaction boundary. Safe.
+
+***
+
+### Step 1.2 — Create `CheckpointTransitionService`
+
+**Package:** `com.arcclaw.core.state`
+
+**Move from `StatefulAgentStoreImpl`:**
+- `markFailed(Long, String, reason, errorCode, traceId, rootCauseClass)`
+- `markFailed(AgentCheckpoint, String)` convenience overload
+- `markCompleted(Long)`
+- `markOrphaned(Long, String)`
+- `saveAndFinalize(String, String, List<ReasoningStep>, CheckpointStatus)`
+- Audit event emission logic (all `auditService.recordWithIdempotency(...)` calls for `CHECKPOINT_CREATED`, `CHECKPOINT_COMPLETED`, `CHECKPOINT_FAILED`, `CHECKPOINT_ORPHANED`)
+
+**Annotation:** `@ApplicationScoped` — **no `@Transactional`**. Delegates writes to `storeAdapter` which internally uses `REQUIRES_NEW`. Any `@Transactional(REQUIRED)` here violates §5.8.
+
+**Critical carry-overs (§5.18, §5.19):**
+- `markCheckpointsFailedRequiresNew` must exclude ALL terminal statuses: `FAILED`, `COMPLETED`, `ARCHIVED`, `COMPROMISED` — do not reduce this set
+- Any query fetching "most recent" checkpoint must retain `ORDER BY c.id DESC LIMIT 1` — do not simplify to `getFirstResult()` or `stream().findFirst()`
+
+***
+
+### Step 1.3 — `ResumeCoordinationGuard` — Internal Delegation Only
+
+**Package:** `com.arcclaw.core.state`
+
+**Move the implementation from `StatefulAgentStoreImpl`:**
+- `ConcurrentHashMap<String, Instant> resumingBatches`
+- `markBatchResuming(String)` body
+- `isBatchResuming(String)` body (includes 30-minute stale-lock cleanup)
+- `clearBatchResuming(String)` body
+
+**CRITICAL RULE (§3.4, §7.29):**
+`ResumeCoordinationGuard` is an **internal implementation detail only**. It must NOT be injected anywhere outside `StatefulAgentStoreImpl`. The `StatefulAgentStore` interface retains `markBatchResuming`, `isBatchResuming`, `clearBatchResuming` as public API. `WorkspaceManager.terminateSession()` and `CheckpointResumeHandler.resumeAfterBatchDecision()` keep calling `statefulAgentStore.clearBatchResuming(sessionId)` — unchanged. The guard is invisible to callers.
+
+**Annotation:** `@ApplicationScoped` — no `@Transactional`.
+
+***
+
+### Step 1.4 — Refactor `StatefulAgentStoreImpl`
+
+Inject `CheckpointSerializer`, `CheckpointTransitionService`, and `ResumeCoordinationGuard`. Delegate all extracted logic. Remaining responsibilities: `save()`, `load()`, `saveAndFinalize()` orchestration, `updateBatchToolDecision()`, `isAllBatchToolsDecided()`, batch decision queries.
+
+**Target:** ~120 lines. `@ApplicationScoped` — keep existing `@Transactional(NOT_SUPPORTED)` on `updateBatchToolDecision` and `@Transactional(SUPPORTS)` on `load()`.
+
+***
+
+## Phase 2 — Decompose `AgentLoop` (552 → ~150 lines)
+
+> Three coordinators extracted. `AgentLoop.runWithRole()` becomes a sequencing shell only.
+
+***
+
+### Step 2.1 — Create `SessionLifecycleCoordinator`
+
+**Package:** `com.arcclaw.core.agent.loop`
+
+**Move from `AgentLoop`:**
+- MDC setup: `MDC.put(MdcKeys.SESSION_ID, ...)`, `MDC.put(MdcKeys.AGENT_ROLE, ...)`, `MDC.put(MdcKeys.USER_ID, ...)`
+- MDC teardown in `finally`
+- Role resolution and canonicalization (`AgentRoleEnum.fromString`, skill-role passthrough, unknown-role fallback with counter and audit event)
+- `capturedUserId` early capture via `WorkspaceContext.resolveUserId()`
+
+**Annotation:** `@ApplicationScoped` — **no `@Transactional`**. This class is in the transaction-free zone (§5.9).
+
+**Invariant note (§2.3):** Must use `WorkspaceContext` accessors for userId/chatId/session — never `WorkspaceScopeHolder`. It is on the `AgentDispatchHandler → AgentLoop` path.
+
+**Invariant note (§4.4):** Role alias resolution belongs here. Do not scatter alias logic into the loop body.
+
+***
+
+### Step 2.2 — Create `CheckpointResumeCoordinator`
+
+**Package:** `com.arcclaw.core.agent.loop`
+
+**Move from `AgentLoop`:**
+- `existingCheckpoint = agentStore.load(sessionId, canonicalRole)` block
+- `IN_PROGRESS` resume: load steps, build `resumedHistory`
+- `AWAITING_APPROVAL` with `isResumeSignal=true`: load steps, build `resumedHistory`
+- `AWAITING_APPROVAL` stale discard path: archive checkpoint, notify user via channel, audit event
+- Terminal status archive path: set `ARCHIVED`, save, log
+- Returns `List<ReasoningStep> resumedHistory` and a `ResumeDecision` record (new small sealed type: `FreshStart`, `ResumedHistory(steps)`, `AbortedStale`)
+
+**Annotation:** `@ApplicationScoped` — **no `@Transactional`** (§5.9). The stale discard path calls `agentStore.save(checkpoint)` which internally uses `REQUIRES_NEW` in the adapter — that is safe. An outer `@Transactional(REQUIRED)` here would be the §5.8 violation.
+
+**CRITICAL — double-resume guard (§3.4):**
+- The `finally` block that calls `agentStore.clearBatchResuming(sessionId)` stays in `CheckpointResumeHandler.resumeAfterBatchDecision()` — it is not moved here. `CheckpointResumeCoordinator` is only for the pre-loop checkpoint load/branch logic.
+
+**CRITICAL — denial path (§3.4):**
+- This coordinator must never route `GOAL_DENY_APPROVED` into `AgentLoop.run()`. Denial is a termination. `rejectAndTerminate()` must mark checkpoint `FAILED`, notify via channel, and call `WorkspaceManager.terminateSession()` without entering the agent loop.
+
+***
+
+### Step 2.3 — Create `ObservabilityManager`
+
+**Package:** `com.arcclaw.core.agent.loop`
+
+**Move from `AgentLoop`:**
+- `otelContext.childSpan(sessionId, ...)` — span creation and `span.end()` in `finally`
+- `observers.stream().forEach(o -> o.onLoopComplete(...))` observer callbacks
+- `meterRegistry` counter increments for role unknown etc.
+- `agentSseService` state-changed event firing
+
+**Annotation:** `@ApplicationScoped` — **no `@Transactional`** (§5.9).
+
+**CRITICAL — OTel propagation (§7.13):**
+When `ObservabilityManager` sets up spans and the execution subsequently fans out to `ManagedExecutor` virtual threads (parallel tool execution), `io.opentelemetry.context.Context.current()` must be captured **on the calling thread** before `executor.submit()`. `ContextAwareExecutorService` propagates `WorkspaceScopeHolder` ScopedValues only — it does NOT propagate OTel ThreadLocal spans. This capture must happen in the `AgentLoop`/`ToolStepHandler` fan-out site, not inside `ObservabilityManager`. Extracting the span setup must not accidentally delay the capture to after `submit()`.
+
+***
+
+### Step 2.4 — Refactor `AgentLoop.runWithRole()`
+
+Delegates to `SessionLifecycleCoordinator.setup()`, `CheckpointResumeCoordinator.load()`, `ObservabilityManager.beginSpan()`, then calls `stateMachineRunner.run()`. Post-result: `saveAndFinalize` / `markFailed`, `ObservabilityManager.finishSpan()`, observer callbacks in `finally`.
+
+**Target:** ~150 lines. `@ActivateRequestContext` only — no `@Transactional` annotation of any kind.
+
+***
+
+## Phase 3 — Decompose `AgentStateMachineRunner` (599 → ~150 lines)
+
+> Highest priority. 8+ responsibilities condensed during P95 NVIDIA hardening.
+
+***
+
+### Step 3.1 — Create `AnswerQualityGuard`
+
+**Package:** `com.arcclaw.core.agent.loop`
+
+**Move from `AgentStateMachineRunner`:**
+- `guardFinalAnswer(String, String, List<ReasoningStep>)` — full method
+- `SUSPICIOUSLY_SHORT` pattern
+- `MIN_ANSWER_ALPHA_LENGTH` constant
+- All 4 raw tool call leak patterns:
+  - `RAW_TOOL_CALL_PATTERN`
+  - `RAW_DELEGATE_CALL_PATTERN`
+  - `RAW_TOOL_JSON_PATTERN`
+  - `NVIDIA_TOOL_CALL_PATTERN`
+- `stripRawToolJson(List<ReasoningStep>)` — history sanitization
+- Compaction echo strip: `CONTEXT_RAG_ECHO_PATTERN`, `CONTEXT_RETRIEVED_ECHO_PATTERN` (move from `AgentSentinels` or inline here as `static final`)
+- System prompt echo strip: `SYSTEM_PROMPT_ECHO_PATTERN`
+
+**Annotation:** `@ApplicationScoped` — no `@Transactional`.
+
+**CRITICAL (§9.1, §4.11):** Every single one of the above patterns must land as `static final Pattern`. This is the hottest path in the system — `guardFinalAnswer` is called on every LLM turn. Compiling any of these per-call is a severe regression.
+
+***
+
+### Step 3.2 — Create `FinishActionHandler`
+
+**Package:** `com.arcclaw.core.agent.loop`
+
+**Move from `AgentStateMachineRunner`:**
+- `handleFinishAction(...)` — full method
+- Salvage logic: non-blank text after stripping → `Finished`; blank → `Failed`
+- Final answer construction
+- HTML unescape → error sanitize → code-gen role guard call → `guardFinalAnswer` call sequence
+- Post-completion checkpoint status update: `checkpoint.setStatus(COMPLETED)` call
+
+**Annotation:** `@ApplicationScoped` — **no `@Transactional`** (§5.9).
+
+**CRITICAL (§7.14):** `FinishActionHandler` must NOT persist `ReasoningSteps` to SQLite. The only legitimate write it may trigger is setting `checkpoint.status = COMPLETED` via `agentStore.save(checkpoint)` — a single checkpoint row update. Full `saveAndFinalize` with step history belongs to `AgentLoop`'s completion path, not here.
+
+**CRITICAL (§3.6):** If `FinishActionHandler` invokes `ChatMemoryWriter.saveAnswer()`, only the assistant turn goes to `ChatMemoryStore`. System-role messages (injected headers, sanitized tool output prefixes) must never be passed to it.
+
+***
+
+### Step 3.3 — Create `CodeGenerationPolicy`
+
+**Package:** `com.arcclaw.core.agent.loop`
+
+**Move from `AgentStateMachineRunner`:**
+- Code-capability check: `ToolCapability.CODE_EXECUTION` against current role
+- Refusal message construction
+- Code-block generation guard (the role check that blocks non-code-capable agents from returning code)
+
+**Annotation:** `@ApplicationScoped` — no `@Transactional`.
+
+***
+
+### Step 3.4 — Create `SelfCorrectionRetryManager`
+
+**Package:** `com.arcclaw.core.agent.loop`
+
+**Move from `AgentStateMachineRunner`:**
+- `structuredSchemaCorrectionCount` counter management
+- Correction hint construction and injection into `ChatHistoryAssembler`
+- Turn-flip coordination for schema self-healing
+- Retry budget ceiling check (max 4 schema correction attempts)
+
+**Annotation:** `@ApplicationScoped` — no `@Transactional`.
+
+**CRITICAL (§3.5, §8.6):** `SelfCorrectionRetryManager` must NOT catch or suppress `BudgetExceededException`. When budget is hard-exceeded, the exception propagates upward to `AgentStateMachineRunner` and then to `AgentLoop` unchanged. Swallowing it violates the hard-budget propagation rule.
+
+**CRITICAL (§3.7):** If `SelfCorrectionRetryManager` calls into `StructuredRetryLoop`, the ordering invariant `assertWithinBudget()` → log → `compareAndSet()` must not be reordered. Check precedes CAS — always.
+
+***
+
+### Step 3.5 — Extract Shared Regex to `IntentClassificationService`
+
+**Already exists.** Move only patterns that are truly intent-routing logic (continuity, follow-up heuristic, write-intent). Do NOT move answer-guard patterns (`RAW_TOOL_CALL_PATTERN`, `NVIDIA_TOOL_CALL_PATTERN`, echo patterns) here — those belong in `AnswerQualityGuard`.
+
+**CRITICAL (§4.3):** `SkillAwareIntentClassifier` must check `SkillRegistry` before `IntentClassificationService` LLM fallback. Do not invert this order when wiring up extracted intent logic.
+
+***
+
+### Step 3.6 — Refactor `AgentStateMachineRunner.run()`
+
+Injects `AnswerQualityGuard`, `FinishActionHandler`, `CodeGenerationPolicy`, `SelfCorrectionRetryManager`. Loop body delegates to each. Retains: iteration counter, `StepDecision` routing, `EngineStepHandler` delegation, `ToolStepHandler` delegation, `fireTerminalEvent`, `maybeSignalBridge`.
+
+**Target:** ~150 lines.
+
+***
+
+## Phase 4 — Decompose `ToolRegistry` (566 → ~150 lines)
+
+***
+
+### Step 4.1 — Create `ToolDiscoveryService`
+
+**Package:** `com.arcclaw.core.tools`
+
+**Move from `ToolRegistry`:**
+- CDI `Instance<AgentTool>` iteration and caching
+- Tool descriptor building per bean
+- Tool name → implementation map population
+
+**Annotation:** `@ApplicationScoped` — no `@Transactional`.
+
+**CRITICAL (§4.1):** Duplicate tool name registration must throw at startup, not silently last-write-wins. Keep the `fail-fast` guard.
+
+***
+
+### Step 4.2 — Create `ToolGovernanceGuard`
+
+**Package:** `com.arcclaw.core.tools`
+
+**Move from `ToolRegistry`:**
+- Role-capability enforcement (`ToolCapability` set check against `AgentRoleEnum`)
+- Autonomy policy checking (`AutonomyLevel` against tool's required autonomy)
+- `ToolInvocationGuard` evaluation sequence: READONLY block → deduplication → `PauseForApproval` → `Blocked`
+- Governance layer delegation to `GovernanceStrategy`
+- Audit event emission for governance violations
+
+**Annotation:** `@ApplicationScoped` — **no `@Transactional`** (§5.9, on the tool path).
+
+**CRITICAL (§3.2):** `ToolGovernanceGuard` must only be called through `ToolRegistry` facade. No external class — no agent loop component, no tool directly — may inject and bypass `ToolRegistry`.
+
+**CRITICAL (§4.10 — scheduling exemption):** `schedule-cron`, `delete-cron`, `list-crons` are exempt from HITL approval checks regardless of autonomy level. This exemption set must be copied verbatim from `ToolInvocationGuard` into `ToolGovernanceGuard`. Do not drop it.
+
+**CRITICAL (§4.10 — delegation cap guard):** Transitive capability escalation via delegation chains is forbidden. The subset validation (target role capabilities ⊆ delegating role capabilities) must remain in `ToolGovernanceGuard` after the `DelegateToAgentTool` logic moves.
+
+**CRITICAL (§2.3):** This class is on the `AgentDispatchHandler → AgentLoop → ToolRegistry → tool.execute()` path. Must use `WorkspaceContext` accessors — never `WorkspaceScopeHolder`.
+
+**CRITICAL (§2.5):** The audit-drain fallback in tool-resolution path is the only legitimate context fallback outside normal binding. Retain it here.
+
+***
+
+### Step 4.3 — Create `ToolSchemaProvider`
+
+**Package:** `com.arcclaw.core.tools`
+
+**Move from `ToolRegistry`:**
+- JSON schema generation per tool
+- Schema serialization to JSON string
+- Secret extraction via reflection (for schema field masking)
+
+**Annotation:** `@ApplicationScoped` — no `@Transactional`.
+
+**CRITICAL (§4.9):** Schema generation must use `SchemaFactoryWrapper.acceptJsonFormatVisitor(returnTypeClass, visitor)` on the **return type**. Must NOT use `ToolSpecifications.toolSpecificationFrom()` — that generates the INPUT parameter schema and produces silent wrong behavior for native tools.
+
+***
+
+### Step 4.4 — Refactor `ToolRegistry` as Facade
+
+Injects `ToolDiscoveryService`, `ToolGovernanceGuard`, `ToolSchemaProvider`, `ToolInvoker`. `invokeTool()` remains the single entry point — all external callers unchanged. `getToolSchemas(role, autonomy)` delegates to `ToolGovernanceGuard` filter + `ToolSchemaProvider`.
+
+**Target:** ~150 lines.
+
+***
+
+## Complexity Targets
+
+| Class | Max Lines | Max Method Lines | Max Cyclomatic |
+|---|---|---|---|
+| All extracted classes | 250 | 30 | 8 |
+| Refactored originals | 150 | 25 | 6 |
+
+***
+
+## Transaction Annotation Checklist (Run Before Each Phase)
+
+Before merging any phase, verify against the invariants file:
+
+| Method / Class | Required Annotation | Checked |
+|---|---|---|
+| `CheckpointApprovalService.approveTool/denyTool/approveAll/denyAll` | `NOT_SUPPORTED` | □ |
+| `ApprovalStateMachine.decide()` | `NOT_SUPPORTED` | □ |
+| `AgentLoop.run()` and all descendants | No `@Transactional` | □ |
+| `WorkspaceManager.gcSweep/findAwaitingApprovalIds/sweepTimedOutApprovals` | `NOT_SUPPORTED` | □ |
+| `AgentCronScheduler.pollAndDispatch()` | `NOT_SUPPORTED` | □ |
+| Any new class calling `REQUIRES_NEW` method | Must be `NOT_SUPPORTED` or none | □ |
+| `SqliteRetryTemplate` usage | Inside `arcclaw-persistence-sqlite` only | □ |
+
+***
+
+## Test Strategy
+
+- Each extracted class gets dedicated unit tests in isolation
+- `CheckpointResumeCoordinator`: test all 4 status branches (`IN_PROGRESS`, `AWAITING_APPROVAL + isResumeSignal`, `AWAITING_APPROVAL + stale`, `terminal`)
+- `AnswerQualityGuard`: test all 4 leak patterns, all 3 echo patterns, suspiciously-short, null/blank guards
+- `SelfCorrectionRetryManager`: test budget ceiling (max 4), `BudgetExceededException` propagation
+- `ToolGovernanceGuard`: test scheduling exemption, delegation cap guard, autonomy block
+- Integration tests on `AgentLoop` and `ToolRegistry` entry points preserve existing behavior unchanged
+- `StatefulAgentStore` interface tests: verify `markBatchResuming` / `clearBatchResuming` still callable through the interface after `ResumeCoordinationGuard` extraction
+
+***
+
+## Done When
+
+- All target classes are at or below agreed size/complexity thresholds
+- `mvn checkstyle:check` passes with new size/complexity rules
+- No `@Transactional` annotation appears on any class in the transaction-free zone (§5.9)
+- `StatefulAgentStore` interface shape is unchanged
+- New feature additions touch single-responsibility classes only
