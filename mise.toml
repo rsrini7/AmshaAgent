@@ -1312,110 +1312,119 @@ Write-Host '    Build the missing platform binary and re-run: mise run dist'
 """
 
 [tasks."7z:source"]
-description = "Generate source archive (7z) with standard exclusions"
+description = "Generate source archive (7z) from current folder with standard exclusions"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
-run = """
+run = '''
 $ErrorActionPreference = 'Stop'
-$out = 'arcclaw-source.7z'
 
+# ── Resolve 7z binary cross-platform ─────────────────────────────────────────
+$zipPath = if ($IsWindows) {
+    @("C:\Program Files\7-Zip\7z.exe","C:\Program Files (x86)\7-Zip\7z.exe") |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+} elseif ($IsMacOS) {
+    @('7zz','7z') | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue)?.Source } |
+        Where-Object { $_ } | Select-Object -First 1
+} else {
+    (Get-Command '7z' -ErrorAction SilentlyContinue)?.Source
+}
+if (-not $zipPath) {
+    Write-Host "❌ 7z not found. Install it:" -ForegroundColor Red
+    if ($IsWindows)      { Write-Host "   winget install 7zip.7zip" }
+    elseif ($IsMacOS)    { Write-Host "   brew install sevenzip" }
+    else                 { Write-Host "   sudo apt install p7zip-full" }
+    exit 1
+}
+
+$out     = 'arcclaw-source.7z'
 $argPass = '{{ arg(i=0, default="") }}'
-
 if ([string]::IsNullOrWhiteSpace($argPass)) {
     Write-Host "❌ ERROR: No password provided!" -ForegroundColor Red
     Write-Host "Usage: mise run 7z:source -- YOUR_PASSWORD"
     exit 1
 }
 
-# ── Combined Exclusions (Git + Manual) ───────────────────────────────────────
-$excludes = @(
-    '**/target',
-    'dist',
-    '.vscode',
-    '.idea',
-    'out',
-    '.quarkus',
-    'quarkus-app',
-    'workspaces',
-    'data',
-    'lib',
-    'node_modules',
-    'node',
-    'npm',
-    '.playwright-browsers',
-    '*.md',
-    '*.jar',
-    '*.exe',
-    '*.dll',
-    'Prompts',
-    'docs',
-    'docs-main',
-    'docs-test',
-    'Ideas-Pending',
-    'ProjectWorkflowDocs',
-    'bruno-collections',
-    'rest-http',
-    'backups',
-    '.gitignore',
-    '.gitattributes',
-    'build.env',
-    'arcclaw-app/src/main/resources/META-INF/resources',
-    'arcclaw-app/src/main/resources/native',
-    'arcclaw-source.zip',
-    'arcclaw-source.7z'
+# ── Exclusion lists (script-scoped so functions can see them) ─────────────────
+$script:root = (Get-Location).Path
+
+$script:excludeDirs = @(
+    'target', 'dist', '.vscode', '.idea', 'out', '.quarkus', 'quarkus-app',
+    'workspaces', 'data', 'lib', 'node_modules', 'node', 'npm',
+    '.playwright-browsers', 'MyPrompts', 'docs', 'docs-main', 'docs-test',
+    'Ideas-Pending', 'ProjectWorkflowDocs', 'bruno-collections',
+    'rest-http', 'backups', '.git'
 )
 
-Write-Host "📦  Generating $out with exclusions..."
-$root = Get-Location | Select-Object -ExpandProperty Path
-$stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid())
+$script:excludeExts = @(
+    '.md', '.jar', '.exe', '.dll', '.zip', '.7z', '.class', '.log'
+)
+
+$script:excludeFiles = @(
+    '.gitignore', '.gitattributes', 'build.env',
+    'arcclaw-source.zip', 'arcclaw-source.7z'
+)
+
+$script:excludeRelPaths = @(
+    'arcclaw-app/src/main/resources/META-INF/resources',
+    'arcclaw-app/src/main/resources/native'
+)
+
+function ShouldExclude($item, $relPath) {
+    # Specific relative path prefixes
+    foreach ($rp in $script:excludeRelPaths) {
+        if ($relPath -eq $rp -or $relPath.StartsWith("$rp/")) { return $true }
+    }
+    # Any segment of the path matches an excluded dir name
+    foreach ($seg in $relPath.Split('/')) {
+        if ($script:excludeDirs -contains $seg) { return $true }   # -contains is case-insensitive
+    }
+    # File-level checks
+    if (-not $item.PSIsContainer) {
+        if ($script:excludeFiles -contains $item.Name)      { return $true }
+        if ($script:excludeExts  -contains $item.Extension) { return $true }
+    }
+    return $false
+}
+
+function CopyFiltered($sourceDir, $destDir) {
+    Get-ChildItem -Path $sourceDir | ForEach-Object {
+        $relPath = $_.FullName.Substring($script:root.Length).TrimStart('\\/').Replace('\','/')
+        if (ShouldExclude $_ $relPath) {
+            Write-Verbose "  skip: $relPath"
+            return
+        }
+        if ($_.PSIsContainer) {
+            $dest = Join-Path $destDir $_.Name
+            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+            CopyFiltered $_.FullName $dest
+        } else {
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+            Copy-Item $_.FullName (Join-Path $destDir $_.Name) -Force
+        }
+    }
+}
+
+$stage = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
 New-Item -ItemType Directory $stage | Out-Null
 
-# ── Use PowerShell to filter and copy ─────────────────────────────────────────
-Write-Host "-- Filtering files (this may take a moment)..."
-Get-ChildItem -Path . -Recurse | ForEach-Object {
-    $relPath = $_.FullName.Replace($root, '').TrimStart('\\')
-    
-    if ($relPath -eq '' -or $relPath -eq '.git' -or $relPath.StartsWith('.git\\') -or $_.Name -eq $out) { return }
-    
-    # Normalize for comparison (forward slashes)
-    $normalizedRelPath = $relPath.Replace('\\', '/')
-    
-    $exclude = $false
-    foreach ($pattern in $excludes) {
-        # Normalize pattern for PowerShell -like (ensure forward slashes)
-        $pwshPattern = $pattern.Replace('**/', '*').Replace('/*', '*').Replace('\\', '/')
-        if ($normalizedRelPath -like "*$pwshPattern*" -or $_.Name -like "$pwshPattern") {
-            $exclude = $true; break
-        }
-    }
-    
-    if (-not $exclude) {
-        $dest = Join-Path $stage $relPath
-        if ($_.PSIsContainer) {
-            if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
-        } else {
-            $destDir = Split-Path $dest
-            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-            Copy-Item $_.FullName $dest -Force
-        }
-    }
+try {
+    Write-Host "📂  Staging files from: $($script:root)"
+    CopyFiltered $script:root $stage
+
+    if (Test-Path $out) { Remove-Item $out -Force }
+    Write-Host "📦  Creating encrypted archive: $out"
+    & $zipPath a "$out" "$stage\*" "-p$argPass" -mhe=on -mx=5 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "7z compression failed" }
+
+    if (Test-Path $out) {
+        Write-Host "✅  Archive created: $out" -ForegroundColor Green
+        Get-Item $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
+    } else { throw "Archive not found after compression" }
+} finally {
+    if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 }
-
-if (Test-Path $out) { Remove-Item $out -Force }
-$zipPath = "C:\\Program Files\\7-Zip\\7z.exe"
-
-& $zipPath a "$out" "$stage\\*" "-p$argPass" -mhe=on | Out-Null
-# Compress-Archive -Path "$stage/*" -DestinationPath $out -Force
-Remove-Item $stage -Recurse -Force
-
-if (Test-Path $out) {
-    Write-Host "✅ Archive created successfully: $out"
-    Get-Item $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
-} else {
-    Write-Host "❌ Failed to create archive." -ForegroundColor Red
-}
-"""
+'''
 
 [tasks."dist:pack"]
 description = "Create OS-specific release archives from dist/ for GitHub releases"
