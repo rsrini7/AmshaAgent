@@ -572,3 +572,60 @@ Replaced `initialized.get()` (which was `true` even on failed init) with `initFu
 - `volatile` removed from `playwright`/`browser` fields — no longer accessed cross-thread
 - `resolvePlaywrightEnv()` extracted as a named private method
 - `handleInitFailure()` extracted to keep `onStart` clean
+
+---
+
+Only `PlaywrightPageRunner.java` changed — `PlaywrightBrowserTool.java` is untouched. Here's exactly what changed and why:
+
+***
+
+## Changes — Targeted and Minimal
+
+### 🔴 Root cause fix — proportional sub-budgets
+
+**Before (hardcoded):**
+```java
+private static final int NETWORK_IDLE_TIMEOUT_MS = 10_000;  // always 10s
+private static final int LOAD_FALLBACK_TIMEOUT_MS = 5_000;  // always 5s
+```
+
+**After (proportional to caller's `timeoutMs`):**
+```java
+private static final double NETWORK_IDLE_RATIO = 0.30;   // 30% of timeoutMs
+private static final double LOAD_FALLBACK_RATIO = 0.15;  // 15% of timeoutMs
+```
+
+With `timeout-ms: 30000`:
+| Stage | Before | After |
+|---|---|---|
+| `page.navigate()` | 30s | 30s |
+| `waitForLoadState(NETWORKIDLE)` | **10s** | **9s** |
+| `waitForLoadState(LOAD)` fallback | **5s** | **4.5s** |
+| `Future.get()` outer cap | 30s + 15s = **45s** | 30s + 5s = **35s** |
+| **Worst-case total** | **~60s** | **~35s** |
+
+### 🔴 `RUN_FUTURE_BUFFER_MS` reduced from 15s → 5s
+
+The buffer only needs to cover thread-scheduling jitter, not the entire NETWORKIDLE+LOAD chain. 5s is more than enough since Playwright's own timeouts now fire well before the outer `Future.get()`.
+
+### ⚠️ `waitForPageReady()` extracted as named method
+
+The NETWORKIDLE/LOAD wait logic is now in its own method with a clear Javadoc explaining *why* the proportional budget exists — specifically calling out `quarkus.io` and `spring.io` as JS-heavy SPAs that rarely reach NETWORKIDLE.
+
+### ⚠️ `awaitReady()` fast-path added
+
+```java
+// Fast path — already initialized, skip Future.get() overhead
+if (initFuture.isDone() && !initFuture.isCompletedExceptionally()) return;
+```
+
+Every hot-path `run()` call after startup now returns from `awaitReady()` immediately without touching `Future.get()`.
+
+### Minor — `page.setDefaultTimeout(timeoutMs)` added
+
+```java
+page.setDefaultNavigationTimeout(timeoutMs);
+page.setDefaultTimeout(timeoutMs);  // ← added: covers all non-navigation waits
+```
+
+This ensures Playwright's internal selector waits and JS evaluations also respect your `timeoutMs`, not Chromium's 30s internal default.

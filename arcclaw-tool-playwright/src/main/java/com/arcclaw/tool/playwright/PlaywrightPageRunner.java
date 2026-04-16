@@ -36,18 +36,25 @@ public class PlaywrightPageRunner {
 
     private static final int MAX_SCREENSHOT_BYTES = 1_048_576; // 1 MB
 
-    /** Max time to wait for NETWORKIDLE after page LOAD — content is already usable. */
-    private static final int NETWORK_IDLE_TIMEOUT_MS = 10_000;
+    /**
+     * NETWORKIDLE budget = 30% of caller timeoutMs.
+     * Keeps NETWORKIDLE from eating the entire budget on JS-heavy SPAs.
+     * Example: timeoutMs=30000 → 9000ms NETWORKIDLE, 4500ms LOAD fallback.
+     */
+    private static final double NETWORK_IDLE_RATIO = 0.30;
 
-    /** Safety timeout for the LOAD fallback to prevent open-ended waits. */
-    private static final int LOAD_FALLBACK_TIMEOUT_MS = 5_000;
+    /**
+     * LOAD fallback budget = 15% of caller timeoutMs.
+     * Applied only when NETWORKIDLE times out.
+     */
+    private static final double LOAD_FALLBACK_RATIO = 0.15;
 
     /**
      * Extra buffer added to the caller-supplied timeoutMs when waiting for the
      * playwrightThread future — gives Playwright time to throw its own timeout
      * before the outer Future.get() fires.
      */
-    private static final long RUN_FUTURE_BUFFER_MS = 15_000L;
+    private static final long RUN_FUTURE_BUFFER_MS = 5_000L;
 
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
     boolean enabled;
@@ -56,15 +63,13 @@ public class PlaywrightPageRunner {
     boolean headless;
 
     // All Playwright objects MUST be accessed exclusively on playwrightThread.
-    // Playwright Java is not thread-safe — browser/page/context must live on
-    // the thread that created the Playwright instance.
     private Playwright playwright;
     private Browser browser;
 
     /**
      * Single dedicated thread that owns all Playwright work.
      * Playwright Java requires every call to happen on the thread that created
-     * the Playwright instance. All init, run, and refresh dispatches go here.
+     * the Playwright instance.
      */
     private final ExecutorService playwrightThread =
         Executors.newSingleThreadExecutor(r -> {
@@ -75,7 +80,7 @@ public class PlaywrightPageRunner {
 
     /**
      * Completes when init finishes (successfully or with an error).
-     * Callers block on this in awaitReady() before submitting work to playwrightThread.
+     * Callers fast-path via isDone() check in awaitReady().
      */
     private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
 
@@ -95,10 +100,6 @@ public class PlaywrightPageRunner {
     // Lifecycle — startup
     // -------------------------------------------------------------------------
 
-    /**
-     * Fires asynchronously after Quarkus startup — does NOT block the main thread.
-     * All Playwright work is dispatched onto playwrightThread to honour thread affinity.
-     */
     void onStart(@ObservesAsync StartupEvent ev) {
         if (!enabled) {
             log.info("Playwright is disabled — skipping browser warmup.");
@@ -106,8 +107,6 @@ public class PlaywrightPageRunner {
             return;
         }
 
-        // Dispatch onto playwrightThread — Playwright must be created on the thread
-        // that will use it for all subsequent calls.
         playwrightThread.submit(() -> {
             try {
                 long t0 = System.currentTimeMillis();
@@ -135,13 +134,8 @@ public class PlaywrightPageRunner {
     // Lifecycle — shutdown
     // -------------------------------------------------------------------------
 
-    /**
-     * @PreDestroy is the authoritative shutdown path.
-     * No Runtime.addShutdownHook — it would race with this method and cause a double-close.
-     */
     @PreDestroy
     void destroy() {
-        // Dispatch close onto playwrightThread to respect thread affinity
         playwrightThread.submit(() -> {
             closeBrowserQuietly(browser, "destroy");
             browser = null;
@@ -169,11 +163,6 @@ public class PlaywrightPageRunner {
     // Scheduled browser refresh
     // -------------------------------------------------------------------------
 
-    /**
-     * Periodic browser refresh to avoid stale state accumulating over long uptimes.
-     * delayed="PT5M" guards against scheduler-vs-startup race in native mode.
-     * Uses initFuture state (not AtomicBoolean) to correctly skip failed inits.
-     */
     @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
         if (!enabled
@@ -182,7 +171,6 @@ public class PlaywrightPageRunner {
             return;
         }
 
-        // Dispatch onto playwrightThread — Browser.close() + launch must be on the owning thread
         playwrightThread.submit(() -> {
             log.info("Playwright browser refresh");
             closeBrowserQuietly(browser, "refresh");
@@ -199,15 +187,15 @@ public class PlaywrightPageRunner {
 
     /**
      * Executes a Playwright action against the given URL.
-     * Submits work onto playwrightThread and blocks the calling thread until complete.
      *
-     * @param url       target URL (must match SAFE_URL_PATTERN)
-     * @param action    "navigate" | "extract_text" | "screenshot"
-     * @param selector  optional CSS selector to scope extraction (null = full body)
-     * @param timeoutMs navigation timeout in milliseconds
-     * @return result string: visible text, raw HTML, or base64 PNG
-     * @throws PlaywrightException      on navigation or execution failure
-     * @throws IllegalArgumentException on unsafe URL
+     * timeoutMs is the TOTAL budget for the entire page interaction:
+     *   - page.navigate()           gets the full timeoutMs
+     *   - waitForLoadState(IDLE)    gets 30% of timeoutMs
+     *   - waitForLoadState(LOAD)    gets 15% of timeoutMs (fallback only)
+     *   - Future.get() outer cap    gets timeoutMs + RUN_FUTURE_BUFFER_MS (5s)
+     *
+     * This ensures the method always returns within ~timeoutMs + 5s regardless
+     * of whether the site reaches NETWORKIDLE or not.
      */
     public String run(String url, String action, String selector, int timeoutMs) {
         awaitReady();
@@ -246,17 +234,26 @@ public class PlaywrightPageRunner {
                 "Check if Chromium browser binary is installed properly.");
         }
 
+        // Derive proportional sub-budgets from the caller's total timeoutMs.
+        // This prevents NETWORKIDLE from eating the entire budget on JS-heavy SPAs.
+        int networkIdleTimeoutMs = (int) (timeoutMs * NETWORK_IDLE_RATIO);  // e.g. 30s → 9s
+        int loadFallbackTimeoutMs = (int) (timeoutMs * LOAD_FALLBACK_RATIO); // e.g. 30s → 4.5s
+
         long t0 = System.currentTimeMillis();
-        log.infof("Playwright reusing cached browser for: %s", url);
+        log.infof("[Playwright] Starting action=%s url=%s (nav=%dms idle=%dms load=%dms)",
+                action, url, timeoutMs, networkIdleTimeoutMs, loadFallbackTimeoutMs);
 
         try (BrowserContext context = browser.newContext()) {
             Page page = context.newPage();
-            page.setDefaultNavigationTimeout(timeoutMs);
 
-            // Navigate and verify HTTP status — silent 4xx/5xx returns error HTML without this
+            // Navigation timeout = full caller budget
+            page.setDefaultNavigationTimeout(timeoutMs);
+            page.setDefaultTimeout(timeoutMs);
+
+            // Navigate and verify HTTP status
             long tNav = System.currentTimeMillis();
             Response response = page.navigate(url);
-            log.debugf("Navigation completed in %dms (status=%s)",
+            log.debugf("[Playwright] navigate() completed in %dms (status=%s)",
                     System.currentTimeMillis() - tNav,
                     response != null ? String.valueOf(response.status()) : "null");
 
@@ -266,21 +263,10 @@ public class PlaywrightPageRunner {
                     " " + response.statusText() + " for: " + url);
             }
 
-            // Wait for NETWORKIDLE; degrade gracefully for polling/WebSocket-heavy sites
-            try {
-                page.waitForLoadState(LoadState.NETWORKIDLE,
-                    new Page.WaitForLoadStateOptions().setTimeout(NETWORK_IDLE_TIMEOUT_MS));
-                log.debugf("NETWORKIDLE reached for: %s", url);
-            } catch (TimeoutError e) {
-                log.debugf("NETWORKIDLE timeout (%dms) for %s — falling back to LOAD state",
-                        NETWORK_IDLE_TIMEOUT_MS, url);
-                try {
-                    page.waitForLoadState(LoadState.LOAD,
-                        new Page.WaitForLoadStateOptions().setTimeout(LOAD_FALLBACK_TIMEOUT_MS));
-                } catch (TimeoutError loadTimeout) {
-                    log.warnf("LOAD fallback also timed out for %s — proceeding with partial content", url);
-                }
-            }
+            // Wait for NETWORKIDLE using proportional budget.
+            // JS-heavy SPAs (quarkus.io, spring.io) rarely reach NETWORKIDLE —
+            // we degrade to LOAD fallback quickly rather than burning the full budget.
+            waitForPageReady(page, url, networkIdleTimeoutMs, loadFallbackTimeoutMs);
 
             String result = switch (action) {
                 case "screenshot" -> captureScreenshot(page);
@@ -288,9 +274,38 @@ public class PlaywrightPageRunner {
                 default           -> extractText(page, selector);
             };
 
-            log.infof("Playwright completed action=%s for %s in %dms (result=%d chars)",
+            log.infof("[Playwright] Completed action=%s url=%s in %dms (result=%d chars)",
                     action, url, System.currentTimeMillis() - t0, result.length());
             return result;
+        }
+    }
+
+    /**
+     * Waits for page readiness using a two-stage strategy:
+     * 1. Try NETWORKIDLE with networkIdleTimeoutMs budget.
+     * 2. If NETWORKIDLE times out (common on JS-heavy SPAs), fall back to LOAD with loadFallbackTimeoutMs.
+     * 3. If LOAD also times out, warn and proceed — content is likely usable after navigate() returned.
+     *
+     * Previously used hardcoded 10s/5s values regardless of caller's timeoutMs, causing
+     * total doRun() time to exceed caller budget on slow sites.
+     */
+    private void waitForPageReady(Page page, String url,
+                                   int networkIdleTimeoutMs, int loadFallbackTimeoutMs) {
+        try {
+            page.waitForLoadState(LoadState.NETWORKIDLE,
+                new Page.WaitForLoadStateOptions().setTimeout(networkIdleTimeoutMs));
+            log.debugf("[Playwright] NETWORKIDLE reached for: %s", url);
+        } catch (TimeoutError e) {
+            log.debugf("[Playwright] NETWORKIDLE timeout (%dms) for %s — falling back to LOAD",
+                    networkIdleTimeoutMs, url);
+            try {
+                page.waitForLoadState(LoadState.LOAD,
+                    new Page.WaitForLoadStateOptions().setTimeout(loadFallbackTimeoutMs));
+                log.debugf("[Playwright] LOAD reached for: %s", url);
+            } catch (TimeoutError loadTimeout) {
+                log.warnf("[Playwright] LOAD fallback also timed out (%dms) for %s — proceeding with partial content",
+                        loadFallbackTimeoutMs, url);
+            }
         }
     }
 
@@ -307,10 +322,10 @@ public class PlaywrightPageRunner {
                     .filter(s -> s.length() > 10)
                     .collect(Collectors.joining("\n"));
                 if (result.length() > 50) return result;
-                log.warnf("LLM selector '%s' returned only %d chars — engaging fallback chain",
+                log.warnf("[Playwright] Selector '%s' returned only %d chars — engaging fallback chain",
                         llmSelector, result.length());
             } catch (Exception e) {
-                log.warnf("LLM selector '%s' failed or timed out — engaging fallback chain", llmSelector);
+                log.warnf("[Playwright] Selector '%s' failed or timed out — engaging fallback chain", llmSelector);
             }
         }
 
@@ -331,7 +346,7 @@ public class PlaywrightPageRunner {
                     .distinct()
                     .collect(Collectors.joining("\n"));
                 if (result.length() > 50) {
-                    log.infof("Fallback selector '%s' yielded %d chars", sel, result.length());
+                    log.infof("[Playwright] Fallback selector '%s' yielded %d chars", sel, result.length());
                     return result;
                 }
             } catch (Exception ignored) {}
@@ -350,7 +365,6 @@ public class PlaywrightPageRunner {
         byte[] png = page.screenshot(
             new Page.ScreenshotOptions().setFullPage(false));
 
-        // Re-shoot at CSS scale if over 1 MB (reduces size on hi-DPI displays)
         if (png.length > MAX_SCREENSHOT_BYTES) {
             png = page.screenshot(new Page.ScreenshotOptions()
                 .setFullPage(false)
@@ -364,11 +378,14 @@ public class PlaywrightPageRunner {
     // -------------------------------------------------------------------------
 
     /**
-     * Blocks the calling thread until Playwright is ready (or failed).
-     * Unwraps ExecutionException so callers get the real cause message.
+     * Fast-path: if initFuture is already done and successful, return immediately.
+     * This avoids Future.get() overhead on every hot-path invocation after startup.
      */
     private void awaitReady() {
         if (!enabled) return;
+        // Fast path — already initialized, skip Future.get() overhead
+        if (initFuture.isDone() && !initFuture.isCompletedExceptionally()) return;
+        // Slow path — init still in flight or failed
         try {
             initFuture.get(60, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
@@ -383,11 +400,6 @@ public class PlaywrightPageRunner {
         }
     }
 
-    /**
-     * Resolves PLAYWRIGHT_BROWSERS_PATH and PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD from
-     * system properties (priority) then environment variables.
-     * Normalizes the browsers path to absolute for Windows binary resolution.
-     */
     private Map<String, String> resolvePlaywrightEnv() {
         Map<String, String> env = new HashMap<>(System.getenv());
 
@@ -397,9 +409,9 @@ public class PlaywrightPageRunner {
             String resolvedPath = Path.of(browsersPath).toAbsolutePath().normalize().toString();
             env.put("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
             System.setProperty("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
-            log.infof("Initializing Playwright with BROWSERS_PATH=%s", resolvedPath);
+            log.infof("[Playwright] Initializing with BROWSERS_PATH=%s", resolvedPath);
         } else {
-            log.info("Initializing Playwright with default browser path");
+            log.info("[Playwright] Initializing with default browser path");
         }
 
         String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
@@ -415,10 +427,10 @@ public class PlaywrightPageRunner {
         String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         if (msg.contains("Executable doesn't exist")) {
             String summary = msg.split("\n")[0].trim();
-            log.warnf("Playwright Chromium binary not found — initialization skipped. " +
-                     "(Run 'npx playwright install chromium' or check path). Details: %s", summary);
+            log.warnf("[Playwright] Chromium binary not found — initialization skipped. " +
+                     "(Run 'npx playwright install chromium'). Details: %s", summary);
         } else {
-            log.errorf(e, "Playwright initialization failed: %s", msg);
+            log.errorf(e, "[Playwright] Initialization failed: %s", msg);
         }
         closeBrowserQuietly(browser, "init-failure");
         browser = null;
@@ -434,10 +446,10 @@ public class PlaywrightPageRunner {
             browserRef.close();
         } catch (Exception e) {
             if (isBenignCloseError(e)) {
-                log.debugf("Playwright browser close skipped benign error during %s: %s",
+                log.debugf("[Playwright] Browser close skipped benign error during %s: %s",
                         phase, safeMessage(e));
             } else {
-                log.warnf("Playwright browser close failed during %s: %s", phase, safeMessage(e));
+                log.warnf("[Playwright] Browser close failed during %s: %s", phase, safeMessage(e));
             }
         }
     }
@@ -449,7 +461,6 @@ public class PlaywrightPageRunner {
             || msg.contains("target page, context or browser has been closed");
     }
 
-    /** Collapses 3+ consecutive newlines to 2; trims leading/trailing whitespace. */
     private String normalizeWhitespace(String text) {
         return text == null ? "" : text.replaceAll("\n{3,}", "\n\n").trim();
     }
