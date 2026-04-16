@@ -5,17 +5,16 @@ import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 
-import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -25,13 +24,17 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
-import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 /**
  * Handles LLM engine invocation, budget events, and all exception classification
@@ -46,6 +49,7 @@ public class EngineStepHandler {
     @Inject Instance<AgentObserver> observers;
     @Inject ObjectMapper objectMapper;
     @Inject RateLimitTracker rateLimitTracker;
+    @Inject StatefulAgentStore agentStore;
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
         Pattern.compile("^([A-Za-z*#\\[]).*\\s.*[.!?]\\s*$", Pattern.DOTALL);
@@ -366,5 +370,20 @@ public class EngineStepHandler {
                 || msg.contains("connection timed out")
                 || msg.contains("Connection reset")
                 || msg.contains("Connection refused"));
+    }
+
+    /**
+     * Hot-path cache: returns cached status if clean, else reloads from store.
+     */
+    Optional<CheckpointStatus> loadCheckpointStatus(AgentExecutionContext ctx) {
+        if (!ctx.isStatusDirty() && ctx.lastCheckpointStatus() != null) {
+            return Optional.of(ctx.lastCheckpointStatus());
+        }
+        return agentStore.load(ctx.sessionId(), ctx.agentRole())
+                .map(cp -> {
+                    CheckpointStatus s = cp.getStatus();
+                    ctx.setLastCheckpointStatus(s);
+                    return s;
+                });
     }
 }
