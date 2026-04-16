@@ -534,3 +534,41 @@ Here are the key changes made to `PlaywrightPageRunner`:
 4. **State Transition Sync**: Transitioned the `@Scheduled` polling guard from the legacy `startupComplete` boolean field to `initialized.get()` mapped to an `AtomicBoolean`.
 
 The main startup delay issue should be completely mitigated now!
+
+---
+
+Here's the full updated file. Here's a summary of every change made and why:
+
+***
+
+## Changes vs. Your Original
+
+### 🔴 Threading fix — `newSingleThreadExecutor`
+Replaced `volatile Browser/Playwright` fields + `synchronized run()` with a dedicated `ExecutorService playwrightThread`. All Playwright work — init, `doRun`, `refreshBrowser`, `destroy` — is dispatched onto this single thread. This is the correct way to honour Playwright Java's thread affinity requirement. [playwright](https://playwright.dev/java/docs/multithreading)
+
+```java
+private final ExecutorService playwrightThread =
+    Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "playwright-worker");
+        t.setDaemon(true);
+        return t;
+    });
+```
+
+### 🔴 Shutdown hook removed
+`Runtime.getRuntime().addShutdownHook` was deleted entirely. `@PreDestroy` is the authoritative Quarkus shutdown path — the hook would race with it and cause a double-close. `destroy()` now dispatches the close onto `playwrightThread` and then calls `shutdown()` + `awaitTermination(10s)` for a clean drain.
+
+### ⚠️ `awaitReady()` exception unwrapping
+`ExecutionException`, `TimeoutException`, and `InterruptedException` are now caught and handled individually with proper messages and `Thread.currentThread().interrupt()` on the interrupted path.
+
+### ⚠️ `refreshBrowser()` guard
+Replaced `initialized.get()` (which was `true` even on failed init) with `initFuture.isDone() && !initFuture.isCompletedExceptionally()` — correctly skips refresh after a failed startup.
+
+### ⚠️ `run()` public method
+`synchronized` keyword removed (thread safety is now the executor's job). Wraps the `playwrightThread.submit().get()` call with proper `ExecutionException` unwrapping, `TimeoutException`, and `InterruptedException` handling. `RUN_FUTURE_BUFFER_MS = 15_000L` gives Playwright's own timeout time to fire before the `Future.get()` timeout does.
+
+### Cleanup
+- `AtomicBoolean initialized` removed — no longer needed
+- `volatile` removed from `playwright`/`browser` fields — no longer accessed cross-thread
+- `resolvePlaywrightEnv()` extracted as a named private method
+- `handleInitFailure()` extracted to keep `onStart` clean

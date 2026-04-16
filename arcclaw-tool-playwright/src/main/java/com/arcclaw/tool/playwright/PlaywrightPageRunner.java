@@ -4,12 +4,14 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -40,26 +42,63 @@ public class PlaywrightPageRunner {
     /** Safety timeout for the LOAD fallback to prevent open-ended waits. */
     private static final int LOAD_FALLBACK_TIMEOUT_MS = 5_000;
 
+    /**
+     * Extra buffer added to the caller-supplied timeoutMs when waiting for the
+     * playwrightThread future — gives Playwright time to throw its own timeout
+     * before the outer Future.get() fires.
+     */
+    private static final long RUN_FUTURE_BUFFER_MS = 15_000L;
+
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
     boolean enabled;
 
     @ConfigProperty(name = "arcclaw.tools.playwright.headless", defaultValue = "true")
     boolean headless;
 
-    private volatile Playwright playwright;
-    private volatile Browser browser;
+    // All Playwright objects MUST be accessed exclusively on playwrightThread.
+    // Playwright Java is not thread-safe — browser/page/context must live on
+    // the thread that created the Playwright instance.
+    private Playwright playwright;
+    private Browser browser;
 
-    private final AtomicBoolean initialized = new AtomicBoolean(false);
+    /**
+     * Single dedicated thread that owns all Playwright work.
+     * Playwright Java requires every call to happen on the thread that created
+     * the Playwright instance. All init, run, and refresh dispatches go here.
+     */
+    private final ExecutorService playwrightThread =
+        Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "playwright-worker");
+            t.setDaemon(true);
+            return t;
+        });
+
+    /**
+     * Completes when init finishes (successfully or with an error).
+     * Callers block on this in awaitReady() before submitting work to playwrightThread.
+     */
     private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
+
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
     public boolean isEnabled() {
         return enabled;
     }
 
     public boolean isInitialized() {
-        return browser != null;
+        return initFuture.isDone() && !initFuture.isCompletedExceptionally() && browser != null;
     }
 
+    // -------------------------------------------------------------------------
+    // Lifecycle — startup
+    // -------------------------------------------------------------------------
+
+    /**
+     * Fires asynchronously after Quarkus startup — does NOT block the main thread.
+     * All Playwright work is dispatched onto playwrightThread to honour thread affinity.
+     */
     void onStart(@ObservesAsync StartupEvent ev) {
         if (!enabled) {
             log.info("Playwright is disabled — skipping browser warmup.");
@@ -67,133 +106,102 @@ public class PlaywrightPageRunner {
             return;
         }
 
-        try {
-            long t0 = System.currentTimeMillis();
+        // Dispatch onto playwrightThread — Playwright must be created on the thread
+        // that will use it for all subsequent calls.
+        playwrightThread.submit(() -> {
+            try {
+                long t0 = System.currentTimeMillis();
 
-            // Resolve BROWSERS_PATH and SKIP_BROWSER_DOWNLOAD from SysProp or Env
-            Map<String, String> env = new HashMap<>(System.getenv());
-            
-            String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", 
-                    System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
-            
-            if (browsersPath != null && !browsersPath.isBlank()) {
-                // Ensure the path is absolute for consistency across launch environments (Fix for Windows Binary)
-                Path p = Path.of(browsersPath).toAbsolutePath().normalize();
-                String resolvedPath = p.toString();
-                env.put("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
-                // Sync back to system property for visibility in logs/other components
-                System.setProperty("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
-                log.infof("Initializing Playwright with BROWSERS_PATH=%s", resolvedPath);
-            } else {
-                log.info("Initializing Playwright with default browser path");
+                Map<String, String> env = resolvePlaywrightEnv();
+
+                playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
+                browser = playwright.chromium().launch(
+                    new BrowserType.LaunchOptions().setHeadless(headless)
+                );
+
+                log.infof("Playwright Chromium ready in %dms (headless=%s)",
+                        System.currentTimeMillis() - t0, headless);
+
+                initFuture.complete(null);
+
+            } catch (Exception e) {
+                handleInitFailure(e);
+                initFuture.completeExceptionally(e);
             }
-
-            String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
-                    System.getenv("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"));
-            if (skipDownload != null && !skipDownload.isBlank()) {
-                env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", skipDownload);
-            }
-
-            playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
-            browser = playwright.chromium().launch(
-                new BrowserType.LaunchOptions().setHeadless(headless)
-            );
-            log.infof("Playwright Chromium cached in %dms (headless=%s)",
-                    System.currentTimeMillis() - t0, headless);
-
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                if (playwright != null) {
-                    try { playwright.close(); } catch (Exception ignored) {}
-                }
-            }, "playwright-shutdown"));
-
-            initFuture.complete(null);
-
-        } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            if (msg.contains("Executable doesn't exist")) {
-                // Concise warning: take only the first line to avoid giant Node/driver stack traces
-                String summary = msg.split("\n")[0].trim();
-                log.warnf("Playwright Chromium binary not found. Initialization skipped. " +
-                         "(Run 'npx playwright install chromium' or check path). Details: %s", summary);
-            } else {
-                log.errorf(e, "Playwright initialization failed: %s", msg);
-            }
-            destroy();
-            initFuture.completeExceptionally(e);
-        } finally {
-            initialized.set(true);
-        }
+        });
     }
 
-    private void awaitReady() {
-        if (!enabled) return;
-        try {
-            initFuture.get(60, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new IllegalStateException("Playwright not ready", e);
-        }
-    }
+    // -------------------------------------------------------------------------
+    // Lifecycle — shutdown
+    // -------------------------------------------------------------------------
 
+    /**
+     * @PreDestroy is the authoritative shutdown path.
+     * No Runtime.addShutdownHook — it would race with this method and cause a double-close.
+     */
     @PreDestroy
     void destroy() {
-        // Close browser before playwright to avoid orphaned subprocesses
-        closeBrowserQuietly(browser, "destroy");
-        browser = null;
-        if (playwright != null) {
-            try {
-                playwright.close();
-            } catch (Exception e) {
-                log.debugf("Playwright close during destroy: %s", safeMessage(e));
+        // Dispatch close onto playwrightThread to respect thread affinity
+        playwrightThread.submit(() -> {
+            closeBrowserQuietly(browser, "destroy");
+            browser = null;
+            if (playwright != null) {
+                try {
+                    playwright.close();
+                } catch (Exception e) {
+                    log.debugf("Playwright close during destroy: %s", safeMessage(e));
+                }
+                playwright = null;
             }
-            playwright = null;
+        });
+
+        playwrightThread.shutdown();
+        try {
+            if (!playwrightThread.awaitTermination(10, TimeUnit.SECONDS)) {
+                log.warn("Playwright worker thread did not terminate cleanly within 10s");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Scheduled browser refresh
+    // -------------------------------------------------------------------------
 
     /**
      * Periodic browser refresh to avoid stale state accumulating over long uptimes.
-     * delayed="PT5M" provides the primary guard against the scheduler-vs-startup race
-     * in native mode. startupComplete is the secondary guard.
+     * delayed="PT5M" guards against scheduler-vs-startup race in native mode.
+     * Uses initFuture state (not AtomicBoolean) to correctly skip failed inits.
      */
     @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
-        if (!initialized.get() || !enabled || playwright == null) return;
-        log.info("Playwright browser refresh");
-        closeBrowserQuietly(browser, "refresh");
-        browser = playwright.chromium().launch(
-            new BrowserType.LaunchOptions().setHeadless(headless)
-        );
-    }
-
-    private void closeBrowserQuietly(Browser browserRef, String phase) {
-        if (browserRef == null) return;
-        try {
-            browserRef.close();
-        } catch (Exception e) {
-            if (isBenignCloseError(e)) {
-                log.debugf("Playwright browser close skipped benign error during %s: %s", phase, safeMessage(e));
-            } else {
-                log.warnf("Playwright browser close failed during %s: %s", phase, safeMessage(e));
-            }
+        if (!enabled
+                || !initFuture.isDone()
+                || initFuture.isCompletedExceptionally()) {
+            return;
         }
+
+        // Dispatch onto playwrightThread — Browser.close() + launch must be on the owning thread
+        playwrightThread.submit(() -> {
+            log.info("Playwright browser refresh");
+            closeBrowserQuietly(browser, "refresh");
+            browser = playwright.chromium().launch(
+                new BrowserType.LaunchOptions().setHeadless(headless)
+            );
+            log.info("Playwright browser refreshed successfully");
+        });
     }
 
-    private boolean isBenignCloseError(Throwable t) {
-        String msg = safeMessage(t).toLowerCase();
-        return msg.contains("stream closed")
-            || msg.contains("pipe closed")
-            || msg.contains("target page, context or browser has been closed");
-    }
-
-    private String safeMessage(Throwable t) {
-        String msg = t.getMessage();
-        return (msg == null || msg.isBlank()) ? t.getClass().getSimpleName() : msg;
-    }
+    // -------------------------------------------------------------------------
+    // Core run — public entry point
+    // -------------------------------------------------------------------------
 
     /**
-     * Reuses the cached Chromium browser context, navigates to url, returns result.
+     * Executes a Playwright action against the given URL.
+     * Submits work onto playwrightThread and blocks the calling thread until complete.
      *
-     * @param url       target URL (must match SAFE_URL_PATTERN — caller pre-validates)
+     * @param url       target URL (must match SAFE_URL_PATTERN)
      * @param action    "navigate" | "extract_text" | "screenshot"
      * @param selector  optional CSS selector to scope extraction (null = full body)
      * @param timeoutMs navigation timeout in milliseconds
@@ -201,15 +209,41 @@ public class PlaywrightPageRunner {
      * @throws PlaywrightException      on navigation or execution failure
      * @throws IllegalArgumentException on unsafe URL
      */
-    public synchronized String run(String url, String action, String selector, int timeoutMs) {
+    public String run(String url, String action, String selector, int timeoutMs) {
         awaitReady();
-        if (!enabled || browser == null) {
-            throw new PlaywrightException("Playwright is not correctly initialized. " +
-                "Check if Chromium browser binary is installed properly.");
-        }
 
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
             throw new IllegalArgumentException("Unsafe URL rejected: " + url);
+        }
+
+        try {
+            return playwrightThread
+                .submit(() -> doRun(url, action, selector, timeoutMs))
+                .get(timeoutMs + RUN_FUTURE_BUFFER_MS, TimeUnit.MILLISECONDS);
+
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof PlaywrightException pe) throw pe;
+            if (cause instanceof IllegalArgumentException ia) throw ia;
+            throw new PlaywrightException("Playwright execution failed: " +
+                (cause != null ? cause.getMessage() : e.getMessage()));
+        } catch (TimeoutException e) {
+            throw new PlaywrightException(
+                "Playwright run timed out after " + (timeoutMs + RUN_FUTURE_BUFFER_MS) + "ms for: " + url);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PlaywrightException("Playwright run interrupted for: " + url);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal — MUST only be called on playwrightThread
+    // -------------------------------------------------------------------------
+
+    private String doRun(String url, String action, String selector, int timeoutMs) {
+        if (browser == null) {
+            throw new PlaywrightException("Playwright is not correctly initialized. " +
+                "Check if Chromium browser binary is installed properly.");
         }
 
         long t0 = System.currentTimeMillis();
@@ -232,9 +266,7 @@ public class PlaywrightPageRunner {
                     " " + response.statusText() + " for: " + url);
             }
 
-            // Wait for network idle with SHORT timeout — content is already usable at LOAD.
-            // Sites with persistent polling (analytics, WebSockets) will always time out here;
-            // that's fine — we degrade gracefully.
+            // Wait for NETWORKIDLE; degrade gracefully for polling/WebSocket-heavy sites
             try {
                 page.waitForLoadState(LoadState.NETWORKIDLE,
                     new Page.WaitForLoadStateOptions().setTimeout(NETWORK_IDLE_TIMEOUT_MS));
@@ -242,8 +274,6 @@ public class PlaywrightPageRunner {
             } catch (TimeoutError e) {
                 log.debugf("NETWORKIDLE timeout (%dms) for %s — falling back to LOAD state",
                         NETWORK_IDLE_TIMEOUT_MS, url);
-                // Safety timeout on fallback — LOAD should already be achieved (navigate waits for it),
-                // but we add a bounded wait to prevent any open-ended blocking.
                 try {
                     page.waitForLoadState(LoadState.LOAD,
                         new Page.WaitForLoadStateOptions().setTimeout(LOAD_FALLBACK_TIMEOUT_MS));
@@ -271,9 +301,9 @@ public class PlaywrightPageRunner {
                 Locator loc = page.locator(llmSelector);
                 loc.first().waitFor(new Locator.WaitForOptions()
                     .setState(WaitForSelectorState.VISIBLE)
-                    .setTimeout(3000));                    // ← RESTORE waitFor
+                    .setTimeout(3000));
                 String result = loc.allInnerTexts().stream()
-                    .map(t -> normalizeWhitespace(t.trim())) // ← RESTORE normalizeWhitespace
+                    .map(t -> normalizeWhitespace(t.trim()))
                     .filter(s -> s.length() > 10)
                     .collect(Collectors.joining("\n"));
                 if (result.length() > 50) return result;
@@ -296,7 +326,7 @@ public class PlaywrightPageRunner {
         for (String sel : fallbackSelectors) {
             try {
                 String result = page.locator(sel).allInnerTexts().stream()
-                    .map(t -> normalizeWhitespace(t.trim()))  // ← normalizeWhitespace here too
+                    .map(t -> normalizeWhitespace(t.trim()))
                     .filter(s -> s.length() > 15)
                     .distinct()
                     .collect(Collectors.joining("\n"));
@@ -307,7 +337,7 @@ public class PlaywrightPageRunner {
             } catch (Exception ignored) {}
         }
 
-        // 3. Nuclear fallback — 10s timeout cap to prevent hangs  ← RESTORE timeout
+        // 3. Nuclear fallback — 10s timeout cap to prevent hangs
         try {
             return normalizeWhitespace(page.locator("body").innerText(
                 new Locator.InnerTextOptions().setTimeout(10000)));
@@ -329,8 +359,103 @@ public class PlaywrightPageRunner {
         return Base64.getEncoder().encodeToString(png);
     }
 
-    /** Collapses 3+ consecutive newlines to 2; trims whitespace. Never log result. */
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Blocks the calling thread until Playwright is ready (or failed).
+     * Unwraps ExecutionException so callers get the real cause message.
+     */
+    private void awaitReady() {
+        if (!enabled) return;
+        try {
+            initFuture.get(60, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            throw new IllegalStateException("Playwright init failed: " +
+                (cause != null ? cause.getMessage() : e.getMessage()), e);
+        } catch (TimeoutException e) {
+            throw new IllegalStateException("Playwright init timed out after 60s", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Playwright init interrupted", e);
+        }
+    }
+
+    /**
+     * Resolves PLAYWRIGHT_BROWSERS_PATH and PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD from
+     * system properties (priority) then environment variables.
+     * Normalizes the browsers path to absolute for Windows binary resolution.
+     */
+    private Map<String, String> resolvePlaywrightEnv() {
+        Map<String, String> env = new HashMap<>(System.getenv());
+
+        String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH",
+                System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
+        if (browsersPath != null && !browsersPath.isBlank()) {
+            String resolvedPath = Path.of(browsersPath).toAbsolutePath().normalize().toString();
+            env.put("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
+            System.setProperty("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
+            log.infof("Initializing Playwright with BROWSERS_PATH=%s", resolvedPath);
+        } else {
+            log.info("Initializing Playwright with default browser path");
+        }
+
+        String skipDownload = System.getProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
+                System.getenv("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"));
+        if (skipDownload != null && !skipDownload.isBlank()) {
+            env.put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", skipDownload);
+        }
+
+        return env;
+    }
+
+    private void handleInitFailure(Exception e) {
+        String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        if (msg.contains("Executable doesn't exist")) {
+            String summary = msg.split("\n")[0].trim();
+            log.warnf("Playwright Chromium binary not found — initialization skipped. " +
+                     "(Run 'npx playwright install chromium' or check path). Details: %s", summary);
+        } else {
+            log.errorf(e, "Playwright initialization failed: %s", msg);
+        }
+        closeBrowserQuietly(browser, "init-failure");
+        browser = null;
+        if (playwright != null) {
+            try { playwright.close(); } catch (Exception ignored) {}
+            playwright = null;
+        }
+    }
+
+    private void closeBrowserQuietly(Browser browserRef, String phase) {
+        if (browserRef == null) return;
+        try {
+            browserRef.close();
+        } catch (Exception e) {
+            if (isBenignCloseError(e)) {
+                log.debugf("Playwright browser close skipped benign error during %s: %s",
+                        phase, safeMessage(e));
+            } else {
+                log.warnf("Playwright browser close failed during %s: %s", phase, safeMessage(e));
+            }
+        }
+    }
+
+    private boolean isBenignCloseError(Throwable t) {
+        String msg = safeMessage(t).toLowerCase();
+        return msg.contains("stream closed")
+            || msg.contains("pipe closed")
+            || msg.contains("target page, context or browser has been closed");
+    }
+
+    /** Collapses 3+ consecutive newlines to 2; trims leading/trailing whitespace. */
     private String normalizeWhitespace(String text) {
-        return text == null ? "" : text.replaceAll("\\n{3,}", "\n\n").trim();
+        return text == null ? "" : text.replaceAll("\n{3,}", "\n\n").trim();
+    }
+
+    private String safeMessage(Throwable t) {
+        String msg = t.getMessage();
+        return (msg == null || msg.isBlank()) ? t.getClass().getSimpleName() : msg;
     }
 }
