@@ -455,3 +455,82 @@ Both call sites (`nextStep` for primary reasoning and for structured output) upd
 ## ✅ Verdict: Ready to Merge
 
 P97 T1-1 and T1-2 are complete and correct. The sealed hierarchy is properly structured, the classifier is the single source of truth for all provider error patterns, the adapter seam is correctly placed per §20.1/§20.2, and all invariants from §3.5, §5.9, §20.1, and §20.2 are preserved. 
+
+---
+
+Completely avoidable the 14-second cost is Playwright's driver extraction + Chromium process launch happening **eagerly** on the main thread during CDI startup.
+
+***
+
+## Background Thread Init (Quickest Fix, ~0 startup cost)
+
+Move the Playwright initialization off the main startup thread entirely using a Quarkus `StartupEvent` observer on a virtual/background thread:
+
+```java
+@ApplicationScoped
+public class PlaywrightPageRunner {
+
+    private volatile Playwright playwright;
+    private volatile Browser browser;
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
+    private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
+
+    // Fires after startup, on a background thread — doesn't block main
+    void onStart(@ObservesAsync StartupEvent ev) {
+        try {
+            log.info("Initializing Playwright in background...");
+            long t = System.currentTimeMillis();
+            playwright = Playwright.create();
+            browser = playwright.chromium().launch(
+                new BrowserType.LaunchOptions().setHeadless(true)
+            );
+            log.infof("Playwright Chromium ready in %dms", System.currentTimeMillis() - t);
+            initFuture.complete(null);
+        } catch (Exception e) {
+            initFuture.completeExceptionally(e);
+            log.errorf("Playwright init failed: %s", e.getMessage());
+        }
+    }
+
+    private void awaitReady() {
+        try {
+            initFuture.get(60, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException("Playwright not ready", e);
+        }
+    }
+
+    public String fetchPage(String url) {
+        awaitReady();   // first call blocks only if init still in flight
+        // ... rest of impl
+    }
+}
+```
+
+**Result:** Startup completes instantly. The 14 seconds runs in parallel. Any tool call that arrives before init finishes waits at `awaitReady()`, but in practice Playwright is ready well before any user triggers it. [dev](https://dev.to/niclassg/navigating-cdi-scope-in-quarkus-a-concurrency-perspective-3bgg)
+
+## Playwright Threading Note
+
+Playwright Java is **not thread-safe** — `Playwright`, `Browser`, `Page` instances must all be used on the thread that created them.  Whichever option you choose, make sure `fetchPage` calls run on the same thread that initialized the instance. Using a dedicated single-thread executor or virtual thread per invocation (creating a new `Playwright.create()` per call) are both valid patterns. If you're already pinning to one thread, you're fine. [playwright](https://playwright.dev/java/docs/multithreading)
+
+***
+
+## Recommendation
+
+**(`@ObservesAsync`)** is the best fit for ArcClaw — it keeps the browser warm without delaying startup, and the `CompletableFuture` gate ensures correctness if a tool call races with init.
+
+---
+
+Searched for "Playwright.create"
+Viewed PlaywrightPageRunner.java:1-326
+Edited PlaywrightPageRunner.java
+
+I've successfully moved the Playwright extraction and browser boot sequence completely off the main thread. 
+
+Here are the key changes made to `PlaywrightPageRunner`:
+1. **Async Observer Implementation**: Stripped out the blocking `@PostConstruct` initialization and replaced it with a dedicated `onStart(@ObservesAsync StartupEvent ev)` observer so that Quarkus runs it purely in the background without holding up the application's readiness probes.
+2. **Volatility & Concurrency Controls**: Handled multi-threading state boundaries by introducing `volatile` for the `playwright` and `browser` pointers.
+3. **Completion Gate (`awaitReady`)**: Implemented the robust `CompletableFuture` blocking latch you recommended. I invoked `awaitReady()` directly at the top of the `run()` tool execution path, meaning the runtime safely suspends any greedy first-tool-call attempt until the async warmup safely marks itself ready.
+4. **State Transition Sync**: Transitioned the `@Scheduled` polling guard from the legacy `startupComplete` boolean field to `initialized.get()` mapped to an `AtomicBoolean`.
+
+The main startup delay issue should be completely mitigated now!

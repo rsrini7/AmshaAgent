@@ -7,20 +7,23 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import jakarta.annotation.PostConstruct;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.ObservesAsync;
 
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.ScreenshotScale;
 import com.microsoft.playwright.options.WaitForSelectorState;
-import io.quarkus.runtime.Startup;
+import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-@Startup
 @ApplicationScoped
 public class PlaywrightPageRunner {
 
@@ -43,15 +46,11 @@ public class PlaywrightPageRunner {
     @ConfigProperty(name = "arcclaw.tools.playwright.headless", defaultValue = "true")
     boolean headless;
 
-    private Playwright playwright;
-    private Browser browser;
+    private volatile Playwright playwright;
+    private volatile Browser browser;
 
-    /**
-     * Guards @Scheduled refreshBrowser against the scheduler-vs-startup race in native mode.
-     * The scheduler can fire before @PostConstruct completes — this flag plus delayed="PT5M"
-     * together prevent refreshBrowser from acting before init() has finished.
-     */
-    private volatile boolean startupComplete = false;
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
+    private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
 
     public boolean isEnabled() {
         return enabled;
@@ -61,11 +60,10 @@ public class PlaywrightPageRunner {
         return browser != null;
     }
 
-    @PostConstruct
-    void init() {
+    void onStart(@ObservesAsync StartupEvent ev) {
         if (!enabled) {
             log.info("Playwright is disabled — skipping browser warmup.");
-            startupComplete = true;
+            initFuture.complete(null);
             return;
         }
 
@@ -109,6 +107,8 @@ public class PlaywrightPageRunner {
                 }
             }, "playwright-shutdown"));
 
+            initFuture.complete(null);
+
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             if (msg.contains("Executable doesn't exist")) {
@@ -120,8 +120,18 @@ public class PlaywrightPageRunner {
                 log.errorf(e, "Playwright initialization failed: %s", msg);
             }
             destroy();
+            initFuture.completeExceptionally(e);
         } finally {
-            startupComplete = true;
+            initialized.set(true);
+        }
+    }
+
+    private void awaitReady() {
+        if (!enabled) return;
+        try {
+            initFuture.get(60, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException("Playwright not ready", e);
         }
     }
 
@@ -147,7 +157,7 @@ public class PlaywrightPageRunner {
      */
     @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
-        if (!startupComplete || !enabled || playwright == null) return;
+        if (!initialized.get() || !enabled || playwright == null) return;
         log.info("Playwright browser refresh");
         closeBrowserQuietly(browser, "refresh");
         browser = playwright.chromium().launch(
@@ -192,6 +202,7 @@ public class PlaywrightPageRunner {
      * @throws IllegalArgumentException on unsafe URL
      */
     public synchronized String run(String url, String action, String selector, int timeoutMs) {
+        awaitReady();
         if (!enabled || browser == null) {
             throw new PlaywrightException("Playwright is not correctly initialized. " +
                 "Check if Chromium browser binary is installed properly.");
