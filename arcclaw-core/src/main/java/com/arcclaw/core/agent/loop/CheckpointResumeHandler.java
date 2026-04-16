@@ -343,10 +343,19 @@ public class CheckpointResumeHandler {
                         List.copyOf(history));
             }
 
+            Map<String, Object> parsedParams = Map.of();
+            try {
+                if (pendingParams != null && !pendingParams.isBlank()) {
+                    parsedParams = objectMapper.readValue(pendingParams, new TypeReference<Map<String, Object>>() {});
+                }
+            } catch (Exception e) {
+                log.warnf("Failed to parse pending parameters for session %s: %s", sessionId, pendingParams);
+            }
+
             history.add(ReasoningStep.pending(
-                    "Human Approved",
+                    "Executing " + pendingTool + " after human approval.",
                     pendingTool,
-                    Map.of("parameters", pendingParams != null ? pendingParams : "{}"),
+                    parsedParams,
                     0, 0)
                     .withObservation(resumeResponse.output()));
 

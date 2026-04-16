@@ -1409,3 +1409,20 @@ To fix this, I extended the `ApprovalGateway` SPI (which acts as the clean bound
 In `TelegramCallbackHandlerExpiryGuardTest`, the handler was crashing internally because `stateStore` was unmocked (`null`). Because I removed `stateStore` entirely, I mocked the new `resolveSessionIdPrefix()` method on the `approvalGateway` mock instead, ensuring the prefix passes safely through and triggers the expected outcomes (`"✅ Approved"` and `"⏱ Approval expired"`).
 
 The 63 tests in `arcclaw-channel-telegram` are now completely green. Let me know if there's anything else you'd like to check!
+
+---
+
+An incredible catch! I investigated the trace logs and diagnosed the root cause of the hallucinated tool calls after approval. 
+
+The issue was a textbook case of **negative in-context learning** caused by how we reconstructed history upon resuming a checkpoint:
+
+1. **The Bug in `CheckpointResumeHandler`**: When the session resumed post-approval, it appended the approved step back into the LLM's history. However, instead of parsing the parameters back into a proper map, it wrapped the raw JSON string in a map: `Map.of("parameters", "{...}")`. 
+2. **The Hallucination Cascade**: Because the LLM's system prompt strictly requires using its native function-calling API, seeing this fake, stringified `{"parameters": "..."}` block in its own history confused the model. It learned the "fake" schema and immediately responded by dumping a raw JSON block `{"name":"github", "parameters":{...}}` directly into the `FINISH` text on the next iteration.
+3. **The Loop Interference**: `FinishActionHandler` intercepted this raw text leak, warned you (`FINISH answer contains raw tool call JSON — retrying`), and forced the LLM to correct itself until hitting the schema error ceiling, eventually forcing out a plain "I was unable to fetch that repository" message.
+4. **Regex Precision Gap**: Additionally, the `RAW_TOOL_JSON_PATTERN` in `AnswerQualityGuard` couldn't accurately match certain valid payload shapes because it assumed `"name"` and `"parameters"` were exactly comma-separated, missing the inserted value between them (`"name": "...", "parameters": ...`).
+
+**What I Fixed:**
+1. **Deserialized Parameters**: I updated `CheckpointResumeHandler` to properly deserialize `pendingToolParametersJson` back into `Map<String, Object>` using `objectMapper.readValue()`. The mock thought inserted on resume was updated to `"Executing [tool] after human approval."`. Now the LLM sees the *correct native tool-call schema* inside its history.
+2. **Hardened JSON Detection**: Fixed the `RAW_TOOL_JSON_PATTERN` regex in `AnswerQualityGuard` to correctly account for the interspersed tool name (e.g., `"name"\s*:\s*"[^"]+"\s*,\s*"parameters"`).
+
+With these two fixes and all 672 core tests passing, the hitl-resume workflow should seamlessly proceed without triggering any self-correction loops! Let me know if everything is running smoothly now!

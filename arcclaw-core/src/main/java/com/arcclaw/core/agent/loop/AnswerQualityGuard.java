@@ -49,7 +49,7 @@ public class AnswerQualityGuard {
 
     /** Detects bare {"name":..., "parameters":...} JSON tool invocations. */
     static final Pattern RAW_TOOL_JSON_PATTERN =
-            Pattern.compile("\"name\"\\s*,\\s*\"parameters\"", Pattern.DOTALL);
+            Pattern.compile("\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"", Pattern.DOTALL);
 
     /** Detects NVIDIA-style TOOLCALLS prefix leaking into FINISH text. */
     static final Pattern NVIDIA_TOOL_CALL_PATTERN =
