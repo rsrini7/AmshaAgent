@@ -19,6 +19,7 @@ import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
+import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.sse.AgentSseService;
@@ -30,13 +31,12 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
-import dev.langchain4j.model.chat.ChatModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class AgentLoopTest {
 
-        private ChatModel model;
+        private LlmProviderPort model;
         private ToolRegistry toolRegistry;
         private RoleRegistry roleRegistry;
         private SystemPromptBuilder promptBuilder;
@@ -46,7 +46,7 @@ class AgentLoopTest {
 
         @BeforeEach
         void setUp() throws Exception {
-                model = mock(ChatModel.class);
+                model = mock(LlmProviderPort.class);
                 toolRegistry = mock(ToolRegistry.class);
                 roleRegistry = mock(RoleRegistry.class);
                 promptBuilder = mock(SystemPromptBuilder.class);
@@ -58,7 +58,7 @@ class AgentLoopTest {
                 engine = new LangChainReasoningEngine();
 
                 // Use reflection to set private fields
-                setField(engine, "chatModel", model);
+                setField(engine, "llmProviderPort", model);
                 setField(engine, "toolRegistry", toolRegistry);
                 setField(engine, "roleRegistry", roleRegistry);
                 setField(engine, "promptBuilder", promptBuilder);

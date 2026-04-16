@@ -1139,6 +1139,7 @@ Run this checklist mentally before every major refactor touching persistence, ap
 ### 20.2 LLM Provider Dependencies
 - When moving routing logic into arcclaw-core, all required LLM provider extensions (e.g. quarkus-langchain4j-anthropic) MUST also be added to arcclaw-core.
 - Failure to do so leads to ClassNotFoundException or unresolved imports in the routing factories (e.g. ClaudeCodeProviderFactory).
+- T1-2 boundary is an abstraction seam within `arcclaw-core`, not a Maven module split. `LangChain4jLlmAdapter` MUST remain in `arcclaw-core` per §20.1.
 
 ---
 

@@ -324,7 +324,7 @@ class AgentStateMachineRunnerTest {
 
     @Test
     void testSchemaErrorSelfHealsOnce() {
-        InvalidRequestException ex = new InvalidRequestException("bad schema");
+        InvalidRequestException ex = new InvalidRequestException("tool call validation failed");
         ReasoningStep finishStep = ReasoningStep.pending(
                 "done", ReasoningStep.FINISH, Map.of("answer", "healed"), 0, 0);
 

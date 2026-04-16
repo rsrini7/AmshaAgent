@@ -18,6 +18,12 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
+import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
+import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
+import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
+import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
+import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.governance.BudgetExceededException;
@@ -30,8 +36,6 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.exception.HttpException;
-import dev.langchain4j.exception.InvalidRequestException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
@@ -125,25 +129,37 @@ public class EngineStepHandler {
     private StepDecision handleEngineException(Exception e, String sessionId,
             int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
 
-        boolean isSchemaError = e instanceof InvalidRequestException
-                || (e instanceof HttpException && ((HttpException) e).statusCode() == 400);
+        LlmProviderException classified = 
+            LlmExceptionClassifier.classify(e);
 
-        if (isSchemaError) {
-            log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, e.getMessage());
+        if (classified instanceof LlmMalformedResponseException) {
+            log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, classified.getMessage());
 
-            String rawError = e.getMessage() != null ? e.getMessage() : "";
-
-            // 1. Terminal 400s: Model/Auth/Role configuration errors that retrying won't fix.
-            if (rawError.contains("model_not_found") || rawError.contains("does not exist") || rawError.contains("invalid_api_key")) {
-                String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(rawError);
-                log.warnf("[STATE-MACHINE] session %s: terminal configuration error (400): %s",
-                        sessionId, sanitizedMsg);
-                return StepDecision.terminal(AgentResult.failed(sanitizedMsg,
-                        AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+            llmSchemaErrorCount++;
+            if (llmSchemaErrorCount >= 4) {
+                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                return StepDecision.terminal(AgentResult.failed(
+                        "The agent encountered repeated tool schema errors and could not complete your request. Please try rephrasing your goal.",
+                        AgentResult.FailureCategory.SCHEMA_ERROR,
+                        List.copyOf(history)));
             }
+            return StepDecision.retryEngine(
+                    "System: Your previous tool call was rejected. Error: " + classified.getMessage() +
+                    ". Please review the tool schema and correct your arguments.",
+                    llmSchemaErrorCount);
+        }
 
-            // 2. Groq-specific: LLM tried a tool not registered in this role's schema.
-            // Retrying will never help — terminal immediately with a clear message.
+        if (classified instanceof LlmAuthenticationException) {
+            String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(classified.getMessage());
+            log.warnf("[STATE-MACHINE] session %s: terminal configuration error (400): %s",
+                    sessionId, sanitizedMsg);
+            return StepDecision.terminal(AgentResult.failed(sanitizedMsg,
+                    AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+        }
+
+        if (classified instanceof LlmToolCallException) {
+            String rawError = classified.getMessage() != null ? classified.getMessage() : "";
+            
             if (rawError.contains("not in request.tools")) {
                 String unavailableTool = extractUnavailableToolName(rawError);
                 
@@ -179,9 +195,8 @@ public class EngineStepHandler {
                 return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
             }
 
-            boolean isToolUseFailed = e.getMessage() != null
-                    && e.getMessage().contains("tool_use_failed");
-
+            boolean isToolUseFailed = rawError.contains("tool_use_failed");
+            
             if (isToolUseFailed) {
                 String failedGen = extractFailedGeneration(rawError);
                 if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
@@ -227,24 +242,12 @@ public class EngineStepHandler {
                 return StepDecision.retryEngine(correction, llmSchemaErrorCount);
             }
 
-            llmSchemaErrorCount++;
-            if (llmSchemaErrorCount >= 4) {
-                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
-                return StepDecision.terminal(AgentResult.failed(
-                        "The agent encountered repeated tool schema errors and could not complete your request. Please try rephrasing your goal.",
-                        AgentResult.FailureCategory.SCHEMA_ERROR,
-                        List.copyOf(history)));
-            }
-            return StepDecision.retryEngine(
-                    "System: Your previous tool call was rejected. Error: " + e.getMessage() +
-                    ". Please review the tool schema and correct your arguments.",
-                    llmSchemaErrorCount);
         }
 
-        if (e instanceof HttpException && ((HttpException) e).statusCode() == 429) {
+        if (classified instanceof LlmRateLimitException) {
             log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", sessionId, ExceptionUtils.getRootCauseMessage(e));
 
-            int retryAfterSeconds = extractRetryAfter(e.getMessage(), 10);
+            int retryAfterSeconds = extractRetryAfter(classified.getMessage(), 10);
             if (retryAfterSeconds <= 15) { // only auto-retry for short waits
                 log.warnf("[STATE-MACHINE] Rate limit session=%s — sleeping %ds then retrying",
                         sessionId, retryAfterSeconds);

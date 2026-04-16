@@ -19,13 +19,13 @@ import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
+import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +35,7 @@ import org.mockito.ArgumentCaptor;
 class LangChainReasoningEnginePersonaTest {
 
     private LangChainReasoningEngine engine;
-    private ChatModel mockChatLanguageModel;
+    private LlmProviderPort mockLlmProviderPort;
     private SystemPromptBuilder mockPromptBuilder;
     private ChatHistoryAssembler mockHistoryAssembler;
     private ReasoningStepParser mockStepParser;
@@ -45,7 +45,7 @@ class LangChainReasoningEnginePersonaTest {
         engine = new LangChainReasoningEngine();
 
         // 1. Create mocks
-        mockChatLanguageModel = mock(ChatModel.class);
+        mockLlmProviderPort = mock(LlmProviderPort.class);
         ToolRegistry mockToolRegistry = mock(ToolRegistry.class);
         RoleRegistry mockRoleRegistry = mock(RoleRegistry.class);
         mockPromptBuilder = mock(SystemPromptBuilder.class);
@@ -60,13 +60,13 @@ class LangChainReasoningEnginePersonaTest {
         ChatResponse mockResponse = mock(ChatResponse.class);
         // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         when(mockResponse.aiMessage()).thenReturn(AiMessage.aiMessage("mock response"));
-        when(mockChatLanguageModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(mockLlmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
 
         ReasoningStep expectedStep = ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);
         when(mockStepParser.parse(any(), any(), any())).thenReturn(expectedStep);
 
         // 3. Inject mocks via reflection
-        injectField(engine, "chatModel", mockChatLanguageModel);
+        injectField(engine, "llmProviderPort", mockLlmProviderPort);
         injectField(engine, "toolRegistry", mockToolRegistry);
         injectField(engine, "roleRegistry", mockRoleRegistry);
         injectField(engine, "promptBuilder", mockPromptBuilder);
@@ -95,7 +95,7 @@ class LangChainReasoningEnginePersonaTest {
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        verify(mockChatLanguageModel).chat(captor.capture());
+        verify(mockLlmProviderPort).nextStep(captor.capture());
 
         ChatRequest request = captor.getValue();
         List<ChatMessage> messages = request.messages();
@@ -118,7 +118,7 @@ class LangChainReasoningEnginePersonaTest {
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        verify(mockChatLanguageModel).chat(captor.capture());
+        verify(mockLlmProviderPort).nextStep(captor.capture());
 
         ChatRequest request = captor.getValue();
         List<ChatMessage> messages = request.messages();
