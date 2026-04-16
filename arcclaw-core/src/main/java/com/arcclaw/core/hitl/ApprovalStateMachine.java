@@ -112,4 +112,11 @@ public class ApprovalStateMachine implements ApprovalGateway {
         // 8. Return ApprovalResult with outcome + remainingPendingTools
         return new ApprovalResult(outcome, sessionId, toolName, remaining);
     }
+
+    @Override
+    public String resolveSessionIdPrefix(String prefix) {
+        return agentStore.findLatestAwaitingApprovalByPrefix(prefix)
+                .map(AgentCheckpoint::getSessionId)
+                .orElse(prefix);
+    }
 }

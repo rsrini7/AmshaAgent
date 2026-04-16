@@ -17,8 +17,6 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
@@ -39,9 +37,6 @@ public class TelegramCallbackHandler {
 
     @Inject
     ApprovalGateway approvalGateway;
-
-    @Inject
-    StatefulAgentStore stateStore;
 
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
@@ -89,9 +84,7 @@ public class TelegramCallbackHandler {
         try {
             // Resolve full sessionId from 8-char prefix to stay under 64-byte limit §7.25
             if (sessionId.length() < 36) {
-                sessionId = stateStore.findLatestAwaitingApprovalByPrefix(sessionId)
-                    .map(AgentCheckpoint::getSessionId)
-                    .orElse(sessionId);
+                sessionId = approvalGateway.resolveSessionIdPrefix(sessionId);
             }
 
             ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");

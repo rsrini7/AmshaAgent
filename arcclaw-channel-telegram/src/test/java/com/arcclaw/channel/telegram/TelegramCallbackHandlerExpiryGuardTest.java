@@ -44,6 +44,9 @@ class TelegramCallbackHandlerExpiryGuardTest {
         Message message = mock(Message.class);
         when(exchange.getIn()).thenReturn(message);
 
+        // Stub resolution
+        when(approvalGateway.resolveSessionIdPrefix(anyString())).thenAnswer(i -> i.getArgument(0));
+
         // Stub valid incoming callback for BATCH_APPROVE
         IncomingCallbackQuery query = new IncomingCallbackQuery();
         query.setId("cb-123");

@@ -1396,3 +1396,16 @@ I've completed the remaining verifications and safety hardening for Phase 4:
 All 672 core tests are confirmed passing. The `ToolRegistry` decomposition is complete, and the reasoning loop's governance and observability layers are fully stabilized.
 
 I will stop here as requested. Ready for your real-time tests!
+
+---
+
+I have successfully resolved the test failures and the architectural violation in the `arcclaw-channel-telegram` module:
+
+**1. Fixed the Architectural Violation**
+The `TelegramChannelArchitectureTest` explicitly prohibits `com.arcclaw.channel.telegram.*` from depending on `com.arcclaw.core.*` internals like `StatefulAgentStore`. 
+To fix this, I extended the `ApprovalGateway` SPI (which acts as the clean boundary) with a `resolveSessionIdPrefix(String prefix)` method. The core implementation (`ApprovalStateMachine`) now handles the `StatefulAgentStore` lookups, allowing the Telegram handler to stay completely ignorant of core state mechanics.
+
+**2. Resolved the NullPointerException in Tests**
+In `TelegramCallbackHandlerExpiryGuardTest`, the handler was crashing internally because `stateStore` was unmocked (`null`). Because I removed `stateStore` entirely, I mocked the new `resolveSessionIdPrefix()` method on the `approvalGateway` mock instead, ensuring the prefix passes safely through and triggers the expected outcomes (`"✅ Approved"` and `"⏱ Approval expired"`).
+
+The 63 tests in `arcclaw-channel-telegram` are now completely green. Let me know if there's anything else you'd like to check!
