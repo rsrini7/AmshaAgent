@@ -8,6 +8,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import jakarta.enterprise.inject.Instance;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,14 +22,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.observability.AgentObserver;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.tools.AgentTool;
-import com.arcclaw.core.tools.ToolRegistry;
-
-import jakarta.enterprise.inject.Instance;
 
 @ExtendWith(MockitoExtension.class)
 class ToolStepHandlerGuardTest {

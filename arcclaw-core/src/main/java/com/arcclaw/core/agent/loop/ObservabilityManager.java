@@ -9,10 +9,8 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
-
 import org.jboss.logging.Logger;
 
 /**

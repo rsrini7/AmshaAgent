@@ -6,7 +6,6 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.AgentSentinels;
-
 import org.jboss.logging.Logger;
 
 /**

@@ -1,4 +1,3 @@
-
 package com.arcclaw.core.agent.loop;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -10,10 +9,8 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcKeys;
-
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 

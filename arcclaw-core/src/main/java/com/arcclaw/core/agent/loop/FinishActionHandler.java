@@ -1,21 +1,20 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.List;
+import java.util.regex.Pattern;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
-import java.util.List;
-import java.util.regex.Pattern;
-
 import org.apache.commons.text.StringEscapeUtils;
 import org.jboss.logging.Logger;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 
 /**
  * Processes FINISH-action steps and produces a final {@link AgentResult}.

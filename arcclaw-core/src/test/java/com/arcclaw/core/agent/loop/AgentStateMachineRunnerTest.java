@@ -20,8 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
@@ -45,11 +44,11 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
 import io.opentelemetry.api.trace.Span;
-import jakarta.enterprise.inject.Instance;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class AgentStateMachineRunnerTest {
 

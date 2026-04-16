@@ -5,7 +5,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.structured.StructuredOutputException;
-
 import org.jboss.logging.Logger;
 
 /**

@@ -3,10 +3,12 @@ package com.arcclaw.core.tools;
 import java.util.Map;
 import java.util.Set;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.RequiresApprovalException;
@@ -16,9 +18,7 @@ import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Enforces role-capability, autonomy policy, and approval requirements for tool invocation.
@@ -68,8 +68,8 @@ public class ToolGovernanceGuard {
             // checks in SUPERVISED mode (they are allowed by policy anyway, but
             // we keep the check explicit to fulfill invariant §4.10).
             boolean isSchedulingTool = 
-                    com.arcclaw.core.agent.role.ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                    || com.arcclaw.core.agent.role.ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
+                    ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
+                    || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
             // 3. SUPERVISED SALVAGE: If it's blocked by policy but we are in SUPERVISED
             // mode, we might pivot to a PauseForApproval (409) instead of a hard 403.

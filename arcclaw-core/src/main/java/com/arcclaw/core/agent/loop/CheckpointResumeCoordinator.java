@@ -1,4 +1,3 @@
-
 package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
@@ -18,7 +17,6 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
 import org.jboss.logging.Logger;
 
 /**

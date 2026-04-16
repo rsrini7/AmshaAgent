@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
@@ -19,15 +21,13 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the Thought-Plan-Act-Observe loop.
@@ -245,7 +245,7 @@ public class AgentStateMachineRunner {
                 if (context.isStatusDirty()) {
                     var cpOpt = engineStepHandler.loadCheckpointStatus(context);
                     context.setLastCheckpointStatus(cpOpt.orElse(null));
-                    if (context.lastCheckpointStatus() == com.arcclaw.core.state.CheckpointStatus.AWAITING_APPROVAL) {
+                    if (context.lastCheckpointStatus() == CheckpointStatus.AWAITING_APPROVAL) {
                         log.warnf("Session %s is still AWAITING_APPROVAL. Refusing to invoke tool "
                                 + "until state is flushed as IN_PROGRESS.", context.sessionId());
                         return AgentResult.failed("State corrupted — tool execution attempted before "
