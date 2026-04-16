@@ -13,23 +13,41 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.ObservesAsync;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
-import com.microsoft.playwright.*;
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.Response;
+import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.ScreenshotScale;
 import com.microsoft.playwright.options.WaitForSelectorState;
+
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 
 @ApplicationScoped
 public class PlaywrightPageRunner {
 
     private static final Logger log = Logger.getLogger(PlaywrightPageRunner.class);
+
+    @ConfigProperty(name = "arcclaw.tools.playwright.min-content-chars", defaultValue = "200")
+    int minContentChars;
+
+    @ConfigProperty(name = "arcclaw.tools.playwright.min-filter-chars", defaultValue = "15")
+    int minFilterChars;
+
+    @ConfigProperty(name = "arcclaw.tools.playwright.selector-wait-ms", defaultValue = "2000")
+    int selectorWaitMs;
 
     private static final Pattern SAFE_URL_PATTERN =
         Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
@@ -100,7 +118,7 @@ public class PlaywrightPageRunner {
     // Lifecycle — startup
     // -------------------------------------------------------------------------
 
-    void onStart(@ObservesAsync StartupEvent ev) {
+    void onStart(@Observes StartupEvent ev) {
         if (!enabled) {
             log.info("Playwright is disabled — skipping browser warmup.");
             initFuture.complete(null);
@@ -198,6 +216,10 @@ public class PlaywrightPageRunner {
      * of whether the site reaches NETWORKIDLE or not.
      */
     public String run(String url, String action, String selector, int timeoutMs) {
+        log.infof("[PlaywrightPageRunner] run() ENTER enabled=%s initDone=%s initFailed=%s browser=%s",
+        enabled, initFuture.isDone(), initFuture.isCompletedExceptionally(),
+        browser != null ? "OK" : "NULL");
+
         awaitReady();
 
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
@@ -310,27 +332,38 @@ public class PlaywrightPageRunner {
     }
 
     private String extractText(Page page, String llmSelector) {
-        // 1. Try LLM-provided selector — wait for visibility on SPAs
+        // 1. Try LLM-provided selector — wait for visibility on SPAs.
+        // Threshold is minContentChars (default 200) to reject single-heading
+        // results like "Blog" (103 chars) that pass the old hardcoded 50-char floor.
         if (llmSelector != null && !llmSelector.isBlank()) {
             try {
                 Locator loc = page.locator(llmSelector);
                 loc.first().waitFor(new Locator.WaitForOptions()
                     .setState(WaitForSelectorState.VISIBLE)
-                    .setTimeout(3000));
+                    .setTimeout(selectorWaitMs));
                 String result = loc.allInnerTexts().stream()
                     .map(t -> normalizeWhitespace(t.trim()))
-                    .filter(s -> s.length() > 10)
+                    .filter(s -> s.length() > minFilterChars)
                     .collect(Collectors.joining("\n"));
-                if (result.length() > 50) return result;
-                log.warnf("[Playwright] Selector '%s' returned only %d chars — engaging fallback chain",
-                        llmSelector, result.length());
+                if (result.length() > minContentChars) return result;
+                log.warnf("[Playwright] Selector '%s' returned only %d chars (min=%d) — engaging fallback chain",
+                        llmSelector, result.length(), minContentChars);
             } catch (Exception e) {
                 log.warnf("[Playwright] Selector '%s' failed or timed out — engaging fallback chain", llmSelector);
             }
         }
 
-        // 2. Semantic fallback chain
+        // 2. Semantic fallback chain.
+        // Ordered from most specific (blog/post listing containers) to broadest (body).
+        // Each selector:
+        //   a) waits up to selectorWaitMs for at least one element to become visible —
+        //      this handles React/Vue lazy-render where elements mount after NETWORKIDLE
+        //   b) collects all inner texts, filters noise below minFilterChars
+        //   c) accepts the result only if total length exceeds minContentChars —
+        //      prevents a single short heading from short-circuiting the chain
         String[] fallbackSelectors = {
+            "[class*='blog'] h2, [class*='post'] h2, [class*='card'] h2",
+            "[class*='blog'] h3, [class*='post'] h3, [class*='card'] h3",
             "article h1, article h2, article h3",
             "main h1, main h2, main h3",
             "[class*='title'], [class*='heading'], [class*='post-title']",
@@ -340,19 +373,30 @@ public class PlaywrightPageRunner {
         };
         for (String sel : fallbackSelectors) {
             try {
+                // Wait for the selector to appear before collecting.
+                // Without this, allInnerTexts() returns empty on SPAs that mount
+                // elements asynchronously — even after NETWORKIDLE has fired.
+                // selectorWaitMs (default 2000ms) keeps this from burning too much
+                // of the caller budget; TimeoutError is caught and the chain continues.
+                page.waitForSelector(sel, new Page.WaitForSelectorOptions()
+                    .setState(WaitForSelectorState.VISIBLE)
+                    .setTimeout(selectorWaitMs));
+
                 String result = page.locator(sel).allInnerTexts().stream()
                     .map(t -> normalizeWhitespace(t.trim()))
-                    .filter(s -> s.length() > 15)
+                    .filter(s -> s.length() > minFilterChars)
                     .distinct()
                     .collect(Collectors.joining("\n"));
-                if (result.length() > 50) {
-                    log.infof("[Playwright] Fallback selector '%s' yielded %d chars", sel, result.length());
+                if (result.length() > minContentChars) {
+                    log.infof("[Playwright] Fallback selector '%s' yielded %d chars (min=%d)", sel, result.length(), minContentChars);
                     return result;
                 }
             } catch (Exception ignored) {}
         }
 
-        // 3. Nuclear fallback — 10s timeout cap to prevent hangs
+        // 3. Nuclear fallback — full body text, 10s hard cap.
+        // No minContentChars threshold here — if everything above failed,
+        // return whatever body has rather than giving up entirely.
         try {
             return normalizeWhitespace(page.locator("body").innerText(
                 new Locator.InnerTextOptions().setTimeout(10000)));

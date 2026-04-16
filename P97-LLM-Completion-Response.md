@@ -629,3 +629,69 @@ page.setDefaultTimeout(timeoutMs);  // ← added: covers all non-navigation wait
 ```
 
 This ensures Playwright's internal selector waits and JS evaluations also respect your `timeoutMs`, not Chromium's 30s internal default.
+
+---
+The log is definitive:
+
+```
+initDone=false initFailed=false browser=NULL
+```
+
+**Init has not completed yet when the tool fires.** `@ObservesAsync StartupEvent` is being dispatched, but the `playwright-worker` thread hasn't finished launching Chromium by the time the first user message arrives. The `awaitReady()` slow-path then blocks for 60 seconds waiting for an init that is either:
+
+1. **Still running** (Chromium launch is slow on this machine/environment), or
+2. **Stuck** — the `playwright-worker` thread is queued behind something else
+
+The smoking gun: `initDone=false` AND `initFailed=false` means init is **in-flight but not yet done**. This is a **startup race** — the tool fires before Chromium is ready.
+
+***
+
+## Root Cause — `@ObservesAsync StartupEvent` fires too late
+
+`@ObservesAsync` dispatches the event on a separate CDI thread from the startup sequence. In jar mode under load (Telegram polling starts immediately), the first user message can arrive and route to `browser_navigate` **before** the `playwright-worker` thread finishes `playwright.chromium().launch()`.
+
+The `awaitReady()` slow-path correctly blocks on `initFuture.get(60s)` — but Chromium launch itself is taking **more than 60 seconds** on first cold start in your environment. That's why `initDone` is still `false` after 60 seconds.
+
+***
+
+## The real fix — switch from `@ObservesAsync` to `@Observes` (synchronous)
+
+`@Observes StartupEvent` blocks Quarkus startup until init completes. The app won't accept traffic until Playwright is ready. This is the correct model for a required infrastructure component.
+
+The only change needed is in `PlaywrightPageRunner.java`:
+
+```java
+// BEFORE — async, races with first request
+void onStart(@ObservesAsync StartupEvent ev) {
+
+// AFTER — synchronous, startup blocks until Playwright is ready
+void onStart(@Observes StartupEvent ev) {
+```
+
+But with synchronous observation, you **cannot** dispatch to `playwrightThread` via `submit()` and return — that would deadlock (startup thread waits on Future, Quarkus holds startup lock). Instead, init must run directly on the startup thread, and then hand off ownership to `playwrightThread` for all subsequent calls.
+
+---
+
+### What changed vs your version
+
+**3 new `@ConfigProperty` fields** at the top of the class (add alongside the existing `enabled`/`headless` fields):
+
+```yaml
+# application.yaml — add under playwright:
+playwright:
+  min-content-chars: 200   # min chars for selector result to be accepted
+  min-filter-chars: 15     # min chars per individual text node
+  selector-wait-ms: 2000   # ms to wait for each selector to become visible
+```
+
+**`extractText()` changes:**
+
+| Was | Now | Why |
+|---|---|---|
+| `s.length() > 10` (LLM selector filter) | `s.length() > minFilterChars` | Configurable noise filter |
+| `result.length() > 50` (LLM selector accept) | `result.length() > minContentChars` | Rejects thin results like `"Blog"` |
+| No wait before `allInnerTexts()` | `page.waitForSelector(sel, ...selectorWaitMs)` | SPAs mount elements after NETWORKIDLE — without this, `allInnerTexts()` returns empty even when the element exists in the DOM but hasn't rendered yet |
+| `s.length() > 15` (fallback filter) | `s.length() > minFilterChars` | Configurable |
+| `result.length() > 200` (fallback accept) | `result.length() > minContentChars` | Configurable |
+
+The `waitForSelector` is placed **between** the selector string definition and the `allInnerTexts()` call — its `TimeoutError` is caught by the existing `catch (Exception ignored)` so a missing selector just moves to the next one in the chain without interrupting the loop.
