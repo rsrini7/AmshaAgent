@@ -10,7 +10,6 @@ import java.util.Optional;
 
 import jakarta.enterprise.inject.Instance;
 
-import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -49,7 +48,7 @@ class ToolStepHandlerGuardTest {
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
         // Silently rewrites to delegate_to_agent instead of blocking with hint
-        assertEquals(AgentStateMachineRunner.DecisionType.PROCEED, decision.type());
+        assertEquals(DecisionType.PROCEED, decision.type());
         assertEquals("delegate_to_agent", decision.step().action());
         // Thought is preserved from original step
         assertEquals("thought", decision.step().thought());
@@ -68,7 +67,7 @@ class ToolStepHandlerGuardTest {
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
-        assertEquals(AgentStateMachineRunner.DecisionType.PROCEED, decision.type());
+        assertEquals(DecisionType.PROCEED, decision.type());
     }
 
     @Test
@@ -80,7 +79,7 @@ class ToolStepHandlerGuardTest {
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
-        assertEquals(AgentStateMachineRunner.DecisionType.PROCEED, decision.type());
+        assertEquals(DecisionType.PROCEED, decision.type());
     }
 
     @Test
@@ -92,6 +91,6 @@ class ToolStepHandlerGuardTest {
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
-        assertEquals(AgentStateMachineRunner.DecisionType.PROCEED, decision.type());
+        assertEquals(DecisionType.PROCEED, decision.type());
     }
 }

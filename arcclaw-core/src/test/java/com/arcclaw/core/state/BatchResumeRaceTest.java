@@ -16,7 +16,8 @@ class BatchResumeRaceTest {
 
     @Test
     void markBatchResuming_isExclusiveAndClears() {
-        StatefulAgentStore store = new StatefulAgentStoreImpl();
+        StatefulAgentStoreImpl store = new StatefulAgentStoreImpl();
+        store.resumeGuard = new ResumeCoordinationGuard();
         String sessionId = "sess-123";
 
         // First call success
@@ -32,7 +33,8 @@ class BatchResumeRaceTest {
 
     @Test
     void markBatchResuming_isConcurrentThreadSafe() throws InterruptedException {
-        StatefulAgentStore store = new StatefulAgentStoreImpl();
+        StatefulAgentStoreImpl store = new StatefulAgentStoreImpl();
+        store.resumeGuard = new ResumeCoordinationGuard();
         String sessionId = "race-456";
         int threadCount = 20;
 

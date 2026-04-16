@@ -11,7 +11,6 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.agent.loop.AgentStateMachineRunner.StepDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;

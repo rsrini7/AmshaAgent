@@ -9,20 +9,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.role.CapabilityRegistry;
-import com.arcclaw.core.agent.role.RoleRegistry;
-import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,34 +24,27 @@ import org.junit.jupiter.api.Test;
 @QuarkusTest
 class NullParamStrippingTest {
 
-    private ToolRegistry registry;
+    @Inject
+    ToolRegistry registry;
+
+    @InjectMock
+    ToolDiscoveryService discoveryService;
+
+    @InjectMock
+    ToolGovernanceGuard governanceGuard;
+
     private AgentTool mockTool;
 
     @BeforeEach
     void setUp() {
-        registry = new ToolRegistry();
-        registry.auditService = mock(AuditService.class);
-        registry.capabilityRegistry = mock(CapabilityRegistry.class);
-        registry.roleRegistry = mock(RoleRegistry.class);
-        when(registry.roleRegistry.permittedTools(any())).thenReturn(Set.of("test-tool"));
-        
         mockTool = mock(AgentTool.class);
         when(mockTool.name()).thenReturn("test-tool");
         when(mockTool.isEnabled()).thenReturn(true);
         when(mockTool.requiredOperation()).thenReturn(ToolOperation.READ_FS);
         when(mockTool.requiresSandbox()).thenReturn(false);
         when(mockTool.execute(any())).thenReturn(ToolResponse.success("ok"));
-        
-        // Mock findTool by mocking discoveredTools Instance
-        @SuppressWarnings("unchecked")
-        Instance<AgentTool> instance = mock(Instance.class);
-        when(instance.iterator()).thenReturn(List.of(mockTool).iterator());
-        when(instance.spliterator()).thenReturn(List.of(mockTool).spliterator());
-        registry.discoveredTools = instance;
-        registry.objectMapper = new ObjectMapper();
-        registry.isolationExecutor = mock(ProcessIsolationExecutor.class);
-        
-        registry.initialize();
+
+        when(discoveryService.getToolIndex()).thenReturn(Map.of("test-tool", mockTool));
     }
 
     @Test

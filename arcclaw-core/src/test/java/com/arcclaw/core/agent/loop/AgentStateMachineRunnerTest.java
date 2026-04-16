@@ -1,25 +1,35 @@
 package com.arcclaw.core.agent.loop;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.IntentClassificationService;
-import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.reflex.PiiScanReflex;
@@ -60,9 +70,6 @@ class AgentStateMachineRunnerTest {
     @SuppressWarnings("unchecked")
     private Instance<DynamicToolLookup> dynamicToolLookup = mock(Instance.class);
  
-    @SuppressWarnings("unchecked")
-    private Event<AgentStateChangedEvent> stateChangedEvent = mock(Event.class);
-
     private AgentSseService agentSseService = mock(AgentSseService.class);
 
 
@@ -70,7 +77,16 @@ class AgentStateMachineRunnerTest {
     Instance<AgentObserver> observers = mock(Instance.class);
 
 
-    DestructiveVocabularyFilter destructiveFilter = mock(DestructiveVocabularyFilter.class);
+    private DestructiveVocabularyFilter destructiveFilter = mock(DestructiveVocabularyFilter.class);
+
+    // Phase 3 Collaborators
+    private FinishActionHandler finishActionHandler;
+    private AnswerQualityGuard qualityGuard;
+    private CodeGenerationPolicy codePolicy;
+    private SelfCorrectionRetryManager selfCorrectionRetryManager;
+    private LoopExitPublisher loopExitPublisher = mock(LoopExitPublisher.class);
+    private ParallelToolStepExecutor parallelExecutor = mock(ParallelToolStepExecutor.class);
+    private RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
 
 
     @BeforeEach
@@ -87,6 +103,16 @@ class AgentStateMachineRunnerTest {
         agentOtelContext = mock(AgentOtelContext.class);
         intentClassifier = mock(IntentClassificationService.class);
 
+        // Core extraction collaborators
+        qualityGuard = new AnswerQualityGuard();
+        codePolicy = new CodeGenerationPolicy();
+        selfCorrectionRetryManager = new SelfCorrectionRetryManager();
+
+        finishActionHandler = new FinishActionHandler();
+        finishActionHandler.qualityGuard = qualityGuard;
+        finishActionHandler.codePolicy = codePolicy;
+        finishActionHandler.rateLimitTracker = rateLimitTracker;
+        finishActionHandler.observers = observers;
 
         // Wire ApprovalCheckpointManager
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager();
@@ -99,6 +125,9 @@ class AgentStateMachineRunnerTest {
         EngineStepHandler engineStepHandler = new EngineStepHandler();
         engineStepHandler.governanceLayer = governanceLayer;
         engineStepHandler.observers       = observers;
+        engineStepHandler.objectMapper    = new ObjectMapper();
+        engineStepHandler.rateLimitTracker = rateLimitTracker;
+        engineStepHandler.agentStore      = agentStore;
 
 
         // Wire ToolStepHandler
@@ -110,6 +139,7 @@ class AgentStateMachineRunnerTest {
         toolStepHandler.writer            = writer;
         toolStepHandler.dynamicToolLookup = dynamicToolLookup;
         toolStepHandler.checkpointManager = checkpointManager;
+        toolStepHandler.parallelExecutor  = parallelExecutor;
 
 
         runner = new AgentStateMachineRunner();
@@ -120,9 +150,11 @@ class AgentStateMachineRunnerTest {
         runner.skillRegistry    = skillRegistry;
         runner.piiScanReflex    = piiScanReflex;
         runner.agentOtelContext = agentOtelContext;
-        runner.stateChangedEvent = stateChangedEvent;
-        runner.agentStore       = agentStore;
         runner.intentClassifier = intentClassifier;
+        runner.loopExitPublisher = loopExitPublisher;
+        runner.finishActionHandler = finishActionHandler;
+        runner.qualityGuard = qualityGuard;
+        runner.selfCorrectionRetryManager = selfCorrectionRetryManager;
 
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());

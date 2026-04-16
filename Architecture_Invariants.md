@@ -136,6 +136,10 @@ These are NOT interchangeable.
 - Soft budget warnings may be logged and tolerated for retry behavior.
 - Hard budget exceedance must propagate upward and stop execution.
 - Do not swallow hard budget failures.
+- SelfCorrectionRetryManager MUST NOT catch BudgetExceededException or BudgetWarningException.
+  These propagate unchanged to the AgentLoop catch block.
+  llmSchemaErrorCount MUST remain a plain int — never AtomicInteger — to prevent
+  the §3.7 CAS-before-check ordering violation from being introducible.
 
 ## 3.6 Chat memory storage boundary
 
@@ -742,6 +746,10 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
      HITL pause (AwaitingApproval checkpoint). ChatMemoryWriter manages
      user goal/AI answer messages in ChatMemoryStore only — it MUST NOT
      be used for ReasoningStep history persistence.
+     FinishActionHandler MUST NOT call agentStore.save() for ReasoningStep history.
+     It returns AgentResult only. AgentLoop owns all persistence triggered by that result.
+     FinishActionHandler MUST NOT own ChatMemoryWriter. The caller (AgentStateMachineRunner)
+     calls writer.saveAnswer() after receiving the result.
 
 7.15 MUST NOT: A deduplicated tool in a parallel batch MUST NOT cause
      its peers to be skipped. The dedup tool receives its cached
@@ -891,6 +899,9 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 ### 9.1 Regex/pattern compilation
 - Reusable regex/pattern objects must be `static final`.
 - Do not compile patterns per request, per message, or inside hot-path methods.
+- All Pattern objects in AnswerQualityGuard MUST be static final.
+- Per-call Pattern.compile() in any answer validation or stripping path is FORBIDDEN.
+  This includes stripRawToolJson() — NVIDIA_STRIP_PATTERN must be static final.
 
 ### 9.2 Time measurement
 - Use `System.nanoTime()` for elapsed durations.

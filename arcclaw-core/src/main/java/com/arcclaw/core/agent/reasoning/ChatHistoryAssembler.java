@@ -195,6 +195,8 @@ public class ChatHistoryAssembler {
             int start = goal.indexOf("System: ");
             String correctionHint = goal.substring(start);
             
+             // §4.11: Always prefix with the hard stop so LLM cannot retry a raw tool call.
+            String fullHint = "Do NOT attempt another tool call.\n\n" + correctionHint;
             ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
 
             // We use UserMessage instead of SystemMessage to "flip" the turn 
@@ -203,10 +205,10 @@ public class ChatHistoryAssembler {
             // valid turn-order (no User turns immediately after ToolResults).
             // §7.31/7.35
             if (last instanceof AiMessage) {
-                messages.add(UserMessage.userMessage(correctionHint));
+                messages.add(UserMessage.userMessage(fullHint));
             } else {
                 // Otherwise keep it as a SystemMessage (will be moved to head prompt)
-                messages.add(SystemMessage.from(correctionHint));
+                messages.add(SystemMessage.from(fullHint));
             }
         }
 

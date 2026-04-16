@@ -86,13 +86,13 @@ class ToolRegistryTest {
         // Use a role that has 'github' capability (e.g., COORDINATOR) 
         // to pass the role-capability check, but then hit the autonomy level block.
         WorkspaceContext.run(TEST_SESSION, "coordinator", "", AutonomyLevel.READONLY, "coordinator", () -> {
-            var ex = assertThrows(SecurityException.class,
-                    () -> registry.invokeTool("github", Map.<String, Object>of("target", "test/repo")));
+            ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("target", "test/repo"));
 
-            assertTrue(ex.getMessage().contains("NETWORK_OUTBOUND"),
-                    "SecurityException should mention the blocked operation");
-            assertTrue(ex.getMessage().contains("READONLY"),
-                    "SecurityException should mention the autonomy level");
+            assertEquals(403, response.exitCode(), "Should return 403 Forbidden");
+            assertTrue(response.output().contains("NETWORK_OUTBOUND"),
+                    "Response output should mention the blocked operation");
+            assertTrue(response.output().contains("READONLY"),
+                    "Response output should mention the autonomy level");
         });
     }
 
