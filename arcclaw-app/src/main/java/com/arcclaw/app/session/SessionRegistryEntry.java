@@ -3,15 +3,12 @@ package com.arcclaw.app.session;
 import java.time.Instant;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-
-import com.arcclaw.core.state.InstantToTextConverter;
 
 /**
  * JPA entity mapping the (channelType, channelId, userId) triplet to a stable,
@@ -43,7 +40,6 @@ public class SessionRegistryEntry {
     @Column(name = "session_id", nullable = false, unique = true)
     public String sessionId;
 
-    @Convert(converter = InstantToTextConverter.class)
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 }

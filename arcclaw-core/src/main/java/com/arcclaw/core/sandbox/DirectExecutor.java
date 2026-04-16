@@ -3,6 +3,7 @@ package com.arcclaw.core.sandbox;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -18,7 +19,8 @@ public class DirectExecutor {
 
     /** Dev mode: no isolation, direct execution. */
     public String executeDirectly(Path workspaceRoot, List<String> command) throws Exception {
-        var pb = new ProcessBuilder(command);
+        List<String> finalCommand = fixupCommandForWindows(command);
+        var pb = new ProcessBuilder(finalCommand);
         File workspaceDir = workspaceRoot.toFile();
         if (!workspaceDir.exists()) {
             workspaceDir.mkdirs();
@@ -41,5 +43,37 @@ public class DirectExecutor {
             throw new ToolExecutionException("Tool failed (exit " + process.exitValue() + "): " + result);
         }
         return result.isBlank() ? "(no execution output)" : result;
+    }
+
+    /**
+     * Common Windows FIX: 'python3' is often a broken Microsoft Store shim.
+     * Alias it to 'python' if 'python3 --version' fails but 'python' works.
+     */
+    private List<String> fixupCommandForWindows(List<String> command) {
+        if (command == null || command.isEmpty()) return command;
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (!os.contains("win")) return command;
+
+        String exe = command.get(0);
+        if ("python3".equals(exe)) {
+            // Check if python3 is actually callable. If not, swap to python.
+            if (!canRun(exe)) {
+                var fixed = new ArrayList<>(command);
+                fixed.set(0, "python");
+                return fixed;
+            }
+        }
+        return command;
+    }
+
+    private boolean canRun(String command) {
+        try {
+            var pb = new ProcessBuilder(command, "--version");
+            pb.redirectErrorStream(true);
+            var proc = pb.start();
+            return proc.waitFor(2, TimeUnit.SECONDS) && proc.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

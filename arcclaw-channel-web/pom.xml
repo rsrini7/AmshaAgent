@@ -87,6 +87,13 @@
             <artifactId>quarkus-qute</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Persistence Implementation (Test) -->
+        <dependency>
+            <groupId>com.arcclaw</groupId>
+            <artifactId>arcclaw-persistence-sqlite</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>

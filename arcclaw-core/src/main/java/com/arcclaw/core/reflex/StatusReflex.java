@@ -12,15 +12,15 @@ import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.CompactionSummaryRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CompactionStorePort;
 
 @ApplicationScoped
 @ReflexPriority(500)
 public class StatusReflex implements AgentReflex {
 
     @Inject StatefulAgentStore statefulAgentStore;
-    @Inject CompactionSummaryRepository compactionSummaryRepository;
+    @Inject CompactionStorePort compactionSummaryRepository;
     @Inject GovernanceStrategy governanceStrategy;
 
     @Override
@@ -53,7 +53,7 @@ public class StatusReflex implements AgentReflex {
         String memoryLine = compactionSummaryRepository
             .findLatestBySessionId(sessionId)
             .map(s -> String.format("Compacted (msgs summarized: %d) | Active window running",
-                s.getMessagesCompacted()))
+                s.messagesCompacted()))
             .orElse("Not compacted — session within active window");
 
         String shortId = sessionId.length() > 8

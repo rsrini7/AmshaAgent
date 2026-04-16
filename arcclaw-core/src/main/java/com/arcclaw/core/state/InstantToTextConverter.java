@@ -1,47 +1,39 @@
 package com.arcclaw.core.state;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
+import com.arcclaw.core.util.TemporalUtils;
+
 /**
  * JPA converter for {@link Instant} ↔ SQLite TEXT.
  * <p>
- * Uses fixed-width ISO 8601 format with exactly 3 millisecond digits:
- * {@code yyyy-MM-dd'T'HH:mm:ss.SSSX}. This guarantees lexicographic
- * sort safety in SQLite (all timestamps same width → string comparison
- * equals temporal comparison).
+ * Uses fixed-width ISO 8601 format provided by {@link TemporalUtils}.
+ * This guarantees lexicographic sort safety in SQLite.
  * <p>
- * Static helper {@link #format(Instant)} is available for native SQL
- * parameter binding in repositories.
+ * Architecture rule (§5.10.1): autoApply is ENABLED, ensuring all Instant 
+ * fields in core entities are automatically converted.
  */
-@Converter(autoApply = false)
+@Converter(autoApply = true)
 public class InstantToTextConverter implements AttributeConverter<Instant, String> {
-
-    private static final DateTimeFormatter FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX")
-                    .withZone(ZoneOffset.UTC);
 
     @Override
     public String convertToDatabaseColumn(Instant attribute) {
-        return attribute == null ? null : FORMATTER.format(attribute);
+        return TemporalUtils.formatIsoLex(attribute);
     }
 
     @Override
     public Instant convertToEntityAttribute(String dbData) {
-        return dbData == null ? null : Instant.from(FORMATTER.parse(dbData));
+        return TemporalUtils.parseIsoLex(dbData);
     }
 
     /**
      * Static helper for native SQL parameter binding.
-     *
-     * @param instant the instant to format
-     * @return fixed-width ISO 8601 text, or null if input is null
+     * Legacy support — prefer passing Instant to JPQL.
      */
     public static String format(Instant instant) {
-        return instant == null ? null : FORMATTER.format(instant);
+        return TemporalUtils.formatIsoLex(instant);
     }
 }

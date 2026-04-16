@@ -8,6 +8,7 @@ import jakarta.inject.Named;
 
 import com.arcclaw.channel.api.IntentClassifier;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.qute.Template;
@@ -108,5 +109,12 @@ public class TestCoreMocks {
     @Named("synthesizerTemplate")
     public Template synthesizerTemplate() {
         return Mockito.mock(Template.class);
+    }
+    @Produces
+    @Alternative
+    @Priority(1000)
+    @ApplicationScoped
+    public EmbeddingModel embeddingModel() {
+        return Mockito.mock(EmbeddingModel.class);
     }
 }

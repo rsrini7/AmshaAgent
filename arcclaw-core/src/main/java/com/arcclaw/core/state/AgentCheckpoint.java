@@ -1,7 +1,6 @@
 package com.arcclaw.core.state;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -42,25 +41,25 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
  */
 @Entity
 @Table(name = "agent_checkpoint", uniqueConstraints = @UniqueConstraint(name = "uq_checkpoint_session_role", columnNames = {
-        "sessionId",
-        "agentRole" }))
+        "session_id",
+        "agent_role" }))
 public class AgentCheckpoint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "checkpoint_id", columnDefinition = "INTEGER")
+    @Column(name = "checkpoint_id")
     private Long id;
 
     @Version
     @Column(nullable = false)
-    private Integer version = 0;
+    private Integer version;
 
     /** The workspace session ID this checkpoint belongs to. */
-    @Column(nullable = false, length = 128)
+    @Column(name = "session_id", nullable = false, length = 128)
     private String sessionId;
 
     /** The agent role (e.g., "coordinator", "debugger", "researcher", "coder"). */
-    @Column(nullable = false, length = 64)
+    @Column(name = "agent_role",nullable = false, length = 64)
     private String agentRole;
 
     /** Current lifecycle status of the checkpoint. */
@@ -80,7 +79,7 @@ public class AgentCheckpoint {
      * @deprecated Replaced by {@link ReasoningStepEntity} in Phase 55.3.
      */
     @Deprecated
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "state_json", columnDefinition = "TEXT")
     @Nullable
     private String stateJson;
 
@@ -110,15 +109,17 @@ public class AgentCheckpoint {
     private String originalGoal;
 
     /** Timestamp when a failure occurred (null if not failed). */
+    @Column(name = "failed_at")
     @Nullable
     private Instant failedAt;
 
     /** Timestamp when the checkpoint completed successfully (null if not completed). */
+    @Column(name = "completed_at")
     @Nullable
     private Instant completedAt;
 
     /** Human-readable failure reason (null if not failed). */
-    @Column(length = 1024)
+    @Column(name = "fail_reason", length = 1024)
     @Nullable
     private String failReason;
 
@@ -176,23 +177,23 @@ public class AgentCheckpoint {
     private String rootCauseClass;
 
     /** When this checkpoint was first created. */
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
     /** When this checkpoint was last updated. */
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     @PrePersist
     void onPersist() {
-        var now = LocalDateTime.now();
+        var now = Instant.now();
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = Instant.now();
     }
 
     public Long getId() {
@@ -287,11 +288,11 @@ public class AgentCheckpoint {
         this.failReason = failReason;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
 
@@ -339,11 +340,11 @@ public class AgentCheckpoint {
     public String getSystemNote() { return systemNote; }
     public void setSystemNote(String systemNote) { this.systemNote = systemNote; }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
 
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 

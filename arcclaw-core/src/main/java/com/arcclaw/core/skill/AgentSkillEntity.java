@@ -3,12 +3,9 @@ package com.arcclaw.core.skill;
 import java.time.Instant;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-
-import com.arcclaw.core.state.InstantToTextConverter;
 
 /**
  * Persistent script entity backed by the {@code agent_skill} SQLite table.
@@ -28,10 +25,8 @@ public class AgentSkillEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String definitionYaml;
 
-    @Convert(converter = InstantToTextConverter.class)
     private Instant createdAt;
 
-    @Convert(converter = InstantToTextConverter.class)
     private Instant updatedAt;
 
     protected AgentSkillEntity() {

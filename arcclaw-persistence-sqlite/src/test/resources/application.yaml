@@ -1,0 +1,94 @@
+ARCCLAW_LLM_API_KEY: "dummy-test-key"
+ARCCLAW_LLM_BASE_URL: "http://localhost:9999"
+
+arcclaw:
+  data-dir: "./target"
+  workspace:
+    root-dir: "./target/workspaces"
+  auto-seed-secrets: false
+  audit:
+    hmac-key: "dev-audit-hmac-key-min-32-bytes-00000"
+  vault:
+    pepper: "test-pepper"
+    master-key: "test-master-key-32-chars-padded!"
+
+quarkus:
+  application:
+    name: arcclaw-persistence-sqlite-test
+
+  arc:
+    exclude-types:
+      # Exclude channel impl beans — their test suites run separately
+      - com.arcclaw.channel.telegram.*
+      - com.arcclaw.channel.web.*
+      # Exclude the template-based producers that need Qute templates on classpath
+      - com.arcclaw.core.agent.reasoning.PromptTemplateEngine
+      - com.arcclaw.core.agent.persona.AgentProducer
+      # Exclude LLM model factories that need provider-specific config
+      - com.arcclaw.core.agent.reasoning.ChatModelProducer
+      - com.arcclaw.core.agent.reasoning.LangChainReasoningEngine
+      - com.arcclaw.core.routing.IntentClassifierModelProducer
+      - com.arcclaw.core.routing.LlmModelFactory
+
+  index-dependency:
+    arcclaw-core:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-core
+    arcclaw-channel-api:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-api
+
+  opentelemetry:
+    enabled: false
+  smallrye-fault-tolerance:
+    enabled: false
+  otel:
+    sdk:
+      disabled: true
+
+  scheduler:
+    enabled: false
+
+  datasource:
+    db-kind: sqlite
+    jdbc:
+      url: "jdbc:sqlite:./target/sqlite-integration-test.db?busy_timeout=60000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=FULL&busy_timeout=60000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 1
+      initial-size: 1
+      acquisition-timeout: 10s
+
+  hibernate-orm:
+    schema-management:
+      strategy: update
+    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
+    log:
+      sql: false
+    jdbc:
+      timezone: UTC
+    packages:
+      - com.arcclaw.core.state
+      - com.arcclaw.core.security
+      - com.arcclaw.core.audit
+      - com.arcclaw.core.skill
+
+  langchain4j:
+    openai:
+      api-key: "demo-key"
+      model-name: "gpt-4o"
+    ollama:
+      base-url: "http://localhost:11434"
+      model-name: "llama3.2:1b"
+
+  log:
+    level: INFO
+    category:
+      "org.hibernate.SQL":
+        level: WARN
+      "com.arcclaw.core.agent":
+        level: "OFF"
+      "com.arcclaw.core.tools":
+        level: "OFF"
+      "com.arcclaw.core.governance":
+        level: "OFF"

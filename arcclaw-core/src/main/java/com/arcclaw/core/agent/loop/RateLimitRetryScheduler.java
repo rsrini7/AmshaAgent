@@ -1,7 +1,8 @@
 package com.arcclaw.core.agent.loop;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -52,7 +53,7 @@ public class RateLimitRetryScheduler {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         long maxAgeSec = 0;
 
         for (AgentCheckpoint cp : awaiting) {
@@ -62,7 +63,7 @@ public class RateLimitRetryScheduler {
             maxAgeSec = Math.max(maxAgeSec, ageSec);
 
             long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : 30000;
-            LocalDateTime readyAt = cp.getUpdatedAt().plusNanos(retryAfterMs * 1_000_000L);
+            Instant readyAt = cp.getUpdatedAt().plusNanos(retryAfterMs * 1_000_000L);
 
             if (now.isAfter(readyAt)) {
                 log.infof("Resuming rate-limited session %s (retryAfterMs=%d)",
@@ -93,7 +94,7 @@ public class RateLimitRetryScheduler {
     @Scheduled(every = "5m", identity = "rate-limit-orphan-sweeper")
     public void sweepOrphanedRetries() {
         List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.MINUTES);
 
         for (AgentCheckpoint cp : awaiting) {
             if (cp.getUpdatedAt() != null && cp.getUpdatedAt().isBefore(cutoff)) {

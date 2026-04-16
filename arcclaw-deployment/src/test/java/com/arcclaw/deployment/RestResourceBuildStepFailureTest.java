@@ -10,10 +10,11 @@ import jakarta.ws.rs.Path;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentClassifier;
-import com.arcclaw.core.audit.AuditSchemaEnforcer;
-import com.arcclaw.core.persistence.FtsConnectionInterceptor;
+import com.arcclaw.persistence.sqlite.AuditSchemaEnforcer;
+import com.arcclaw.persistence.sqlite.FtsConnectionInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.qute.Template;
@@ -37,7 +38,7 @@ public class RestResourceBuildStepFailureTest {
         .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
         .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
         .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
-        .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.core.persistence.ArcClawSQLiteDialect")
+        .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect")
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
         .overrideConfigKey("arcclaw.data-dir", ":memory:")
         .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
@@ -93,6 +94,12 @@ public class RestResourceBuildStepFailureTest {
         @ApplicationScoped
         public IntentClassifier classifier() {
             return Mockito.mock(IntentClassifier.class);
+        }
+
+        @Produces
+        @ApplicationScoped
+        public EmbeddingModel embeddingModel() {
+            return Mockito.mock(EmbeddingModel.class);
         }
     }
 }

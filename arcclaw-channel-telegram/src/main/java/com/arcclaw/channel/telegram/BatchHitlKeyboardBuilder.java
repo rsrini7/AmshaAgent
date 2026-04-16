@@ -29,8 +29,9 @@ class BatchHitlKeyboardBuilder {
 
         for (String toolName : toolNames) {
             String safeToolName = toolName.replace("|", "_").replace(":", "_");
-            String approveCb = truncateCb("BATCH_APPROVE|" + safeSessionId + "|" + safeToolName);
-            String denyCb = truncateCb("BATCH_DENY|" + safeSessionId + "|" + safeToolName);
+            String prefix = safeSessionId.length() > 8 ? safeSessionId.substring(0, 8) : safeSessionId;
+            String approveCb = truncateCb("BATCH_APPROVE|" + prefix + "|" + safeToolName);
+            String denyCb = truncateCb("BATCH_DENY|" + prefix + "|" + safeToolName);
             
             List<InlineKeyboardButton> row = new ArrayList<>();
             

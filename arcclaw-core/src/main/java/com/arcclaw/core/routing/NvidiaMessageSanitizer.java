@@ -19,7 +19,6 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 // NvidiaMessageSanitizer.java
 public class NvidiaMessageSanitizer implements ChatModel {
 
-    private static final Pattern SHORT_CALL_ID = Pattern.compile("^call_\\d+$");
     private final ChatModel delegate;
 
     public NvidiaMessageSanitizer(ChatModel delegate) {
@@ -32,11 +31,12 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         ChatRequest.Builder builder = ChatRequest.builder().messages(sanitized);
 
-        // Mutually exclusive — set only whichever is present
-        if (request.parameters() != null) {
-            builder.parameters(request.parameters());
-        } else if (request.toolSpecifications() != null) {
+        // §7.33: ChatRequest.Builder forbids setting both parameters and toolSpecifications.
+        // We prioritize toolSpecifications to ensure the agent doesn't lose its core functionality.
+        if (request.toolSpecifications() != null && !request.toolSpecifications().isEmpty()) {
             builder.toolSpecifications(request.toolSpecifications());
+        } else if (request.parameters() != null) {
+            builder.parameters(request.parameters());
         }
 
         ChatResponse response = delegate.chat(builder.build());
@@ -56,23 +56,45 @@ public class NvidiaMessageSanitizer implements ChatModel {
             }
         }
 
-        List<ChatMessage> system = messages.stream()
+        List<SystemMessage> system = messages.stream()
                 .filter(m -> m instanceof SystemMessage)
+                .map(m -> (SystemMessage) m)
                 .limit(1).toList();
 
-        List<ChatMessage> rest = messages.stream()
+        List<ChatMessage> nonSystem = messages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
-                .map(msg -> rewriteWithMapping(msg, idMapping))
                 .toList();
+
+        List<ChatMessage> rest = new ArrayList<>();
+        for (int i = 0; i < nonSystem.size(); i++) {
+            ChatMessage current = nonSystem.get(i);
+            
+            // §7.32: NVIDIA 'DEGRADED function' protection.
+            // If an Assistant message has tool calls, it MUST be followed by ToolExecutionResultMessage(s).
+            // If the very next message is NOT a tool result, this is an abandoned/leaked call
+            // that will cause a 400 error. We drop it.
+            if (current instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
+                boolean hasFollowingResult = (i + 1 < nonSystem.size()) 
+                        && (nonSystem.get(i + 1) instanceof ToolExecutionResultMessage);
+                if (!hasFollowingResult) {
+                    continue; // Skip abandoned tool call
+                }
+            }
+            
+            rest.add(rewriteWithMapping(current, idMapping));
+        }
 
         List<ChatMessage> result = new ArrayList<>(system);
         result.addAll(rest);
         return result;
     }
 
+    private static final Pattern NVIDIA_ID_FORMAT = Pattern.compile("^[a-zA-Z0-9]{9}$");
+
     private boolean needsIdFix(String id) {
-        // NVIDIA rejects: call_0, call_1 etc. (too short or wrong format)
-        return id == null || SHORT_CALL_ID.matcher(id).matches();
+        // NVIDIA requires exactly 9 alphanumeric chars. 
+        // UUIDs, 'call_X' or other formats trigger 'DEGRADED function' 400 errors.
+        return id == null || !NVIDIA_ID_FORMAT.matcher(id).matches();
     }
 
     private ChatMessage rewriteWithMapping(ChatMessage msg, Map<String, String> idMapping) {
@@ -85,7 +107,8 @@ public class NvidiaMessageSanitizer implements ChatModel {
                                     .id(newId).name(req.name()).arguments(req.arguments())
                                     .build();
                     }).toList();
-            return AiMessage.from(fixed);
+            // NVIDIA NIMs prefer explicit empty text over null when tool calls are present
+            return AiMessage.aiMessage(ai.text() != null ? ai.text() : "", fixed);
         }
         if (msg instanceof ToolExecutionResultMessage tool) {
             String newId = idMapping.getOrDefault(tool.id(), tool.id());
@@ -117,7 +140,9 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 }).toList();
 
         return ChatResponse.builder()
-                .aiMessage(AiMessage.from(fixed))
+                .aiMessage(AiMessage.aiMessage(
+                    response.aiMessage().text() != null ? response.aiMessage().text() : "", 
+                    fixed))
                 .finishReason(response.finishReason())
                 .tokenUsage(response.tokenUsage())
                 .build();

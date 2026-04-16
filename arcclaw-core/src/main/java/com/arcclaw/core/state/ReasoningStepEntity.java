@@ -18,7 +18,6 @@ import jakarta.persistence.Table;
 public class ReasoningStepEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(columnDefinition = "INTEGER")
     private Long id;
 
     @Column(name = "checkpoint_id", nullable = false)

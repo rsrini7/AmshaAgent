@@ -39,13 +39,13 @@ public class AgentCronRepository {
      * fresh EntityManager scope with no prior state.
      */
     @Transactional(TxType.NOT_SUPPORTED)
-    @SuppressWarnings("unchecked")
     public List<AgentCronEntity> findDueCrons() {
-        String now = InstantToTextConverter.format(Instant.now());
-        return em.createNativeQuery(
-                "SELECT * FROM agentcron WHERE status='ACTIVE' AND nextFireTime <= :now",
+        return em.createQuery(
+                "SELECT c FROM AgentCronEntity c WHERE c.status = :status AND c.nextFireTime <= :now",
                 AgentCronEntity.class
-        ).setParameter("now", now).getResultList();
+        ).setParameter("status", CronStatus.ACTIVE)
+         .setParameter("now", Instant.now())
+         .getResultList();
     }
 
     /**
@@ -81,9 +81,11 @@ public class AgentCronRepository {
     public List<AgentCronEntity> findAwaitingApprovalByUserId(String userId) {
         em.clear();
         return em.createQuery(
-                "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = 'AWAITING_APPROVAL'",
+                "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = :status",
                 AgentCronEntity.class
-        ).setParameter("userId", userId).getResultList();
+        ).setParameter("userId", userId)
+         .setParameter("status", CronStatus.AWAITING_APPROVAL)
+         .getResultList();
     }
 
     @Transactional(TxType.NOT_SUPPORTED)
@@ -104,8 +106,11 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public boolean claimForFire(String id) {
         int updated = em.createNativeQuery(
-                "UPDATE agentcron SET status='RUNNING' WHERE id=:id AND status='ACTIVE'"
-        ).setParameter("id", id).executeUpdate();
+                "UPDATE agentcron SET status=:running WHERE id=:id AND status=:active"
+        ).setParameter("id", id)
+         .setParameter("running", CronStatus.RUNNING.name())
+         .setParameter("active", CronStatus.ACTIVE.name())
+         .executeUpdate();
         return updated == 1;
     }
 
@@ -116,8 +121,11 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void releaseClaimToActive(String id) {
         em.createNativeQuery(
-                "UPDATE agentcron SET status='ACTIVE' WHERE id=:id AND status='RUNNING'"
-        ).setParameter("id", id).executeUpdate();
+                "UPDATE agentcron SET status=:active WHERE id=:id AND status=:running"
+        ).setParameter("id", id)
+         .setParameter("active", CronStatus.ACTIVE.name())
+         .setParameter("running", CronStatus.RUNNING.name())
+         .executeUpdate();
     }
 
     /**
@@ -125,11 +133,14 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='ACTIVE', lastFireTime=:last, nextFireTime=:next, updatedAt=:now WHERE id=:id"
-        ).setParameter("last", InstantToTextConverter.format(lastFireTime))
-         .setParameter("next", InstantToTextConverter.format(nextFireTime))
-         .setParameter("now", InstantToTextConverter.format(Instant.now()))
+        // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses @Converter autoApply for
+        // bind parameters. SELECT queries use Instant directly (converter applies).
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = :active, c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("active", CronStatus.ACTIVE)
+         .setParameter("last", lastFireTime)
+         .setParameter("next", nextFireTime)
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -139,10 +150,13 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markCompleted(String id, Instant lastFireTime) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='COMPLETED', lastFireTime=:last, updatedAt=:now WHERE id=:id"
-        ).setParameter("last", InstantToTextConverter.format(lastFireTime))
-         .setParameter("now", InstantToTextConverter.format(Instant.now()))
+        // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses @Converter autoApply for
+        // bind parameters. SELECT queries use Instant directly (converter applies).
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = :completed, c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("completed", CronStatus.COMPLETED)
+         .setParameter("last", lastFireTime)
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -152,9 +166,12 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markAwaitingApproval(String id) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='AWAITING_APPROVAL', updatedAt=:now WHERE id=:id"
-        ).setParameter("now", InstantToTextConverter.format(Instant.now()))
+        // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses @Converter autoApply for
+        // bind parameters. SELECT queries use Instant directly (converter applies).
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = :awaiting, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL)
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -177,10 +194,13 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markFailed(String id, String errorReason) {
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='FAILED', errorReason=:err, updatedAt=:now WHERE id=:id"
-        ).setParameter("err", errorReason)
-         .setParameter("now", InstantToTextConverter.format(Instant.now()))
+        // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses @Converter autoApply for
+        // bind parameters. SELECT queries use Instant directly (converter applies).
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = :failed, c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
+        ).setParameter("failed", CronStatus.FAILED)
+         .setParameter("err", errorReason)
+         .setParameter("now", Instant.now())
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -192,12 +212,15 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRED)
     public void markSkipped(List<AgentCronEntity> skippedJobs) {
         if (skippedJobs.isEmpty()) return; // avoid acquiring write lock for nothing
-        String now = InstantToTextConverter.format(Instant.now());
+        Instant now = Instant.now();
         for (AgentCronEntity job : skippedJobs) {
-            em.createNativeQuery(
-                "UPDATE agentcron SET status='SKIPPED', nextFireTime=:next, updatedAt=:now WHERE id=:id"
-            ).setParameter("next", InstantToTextConverter.format(job.nextFireTime))
-             .setParameter("now", now)
+            // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses @Converter autoApply for
+            // bind parameters. SELECT queries use Instant directly (converter applies).
+            em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = :skipped, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
+             ).setParameter("skipped", CronStatus.SKIPPED)
+              .setParameter("next", job.nextFireTime)
+              .setParameter("now", now)
              .setParameter("id", job.id)
              .executeUpdate();
         }
@@ -210,12 +233,16 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void reclaimStaleCrons(Instant threshold) {
-        String thresholdStr = InstantToTextConverter.format(threshold);
-        em.createNativeQuery(
-                "UPDATE agentcron SET status='ACTIVE' " +
-                "WHERE status='RUNNING' AND " +
-                "(lastFireTime < :threshold OR (lastFireTime IS NULL AND createdAt < :threshold))"
-        ).setParameter("threshold", thresholdStr).executeUpdate();
+        // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses @Converter autoApply for
+        // bind parameters. SELECT queries use Instant directly (converter applies).
+        em.createQuery(
+                "UPDATE AgentCronEntity c SET c.status = :active " +
+                "WHERE c.status = :running AND " +
+                "(c.lastFireTime <= :threshold OR (c.lastFireTime IS NULL AND c.createdAt <= :threshold))"
+        ).setParameter("active", CronStatus.ACTIVE)
+         .setParameter("running", CronStatus.RUNNING)
+         .setParameter("threshold", threshold)
+         .executeUpdate();
     }
 
     /**

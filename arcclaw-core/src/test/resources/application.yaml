@@ -37,27 +37,14 @@ quarkus:
     sdk:
       disabled: true
   datasource:
+    db-kind: h2
     jdbc:
-      url: "jdbc:sqlite:./target/core-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
-      # pool-interceptor: com.arcclaw.core.persistence.FtsConnectionInterceptor
-      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
-      min-size: 1
-      max-size: 4
-      initial-size: 1
-      acquisition-timeout: 10s
+      url: "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1"
   scheduler:
     enabled: false
   hibernate-orm:
-    schema-management:
-      strategy: drop-and-create
-    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
-    log:
-      sql: false
-    packages:
-      - com.arcclaw.core.state
-      - com.arcclaw.core.security
-      - com.arcclaw.core.audit
-      - com.arcclaw.core.skill
+    database:
+      generation: drop-and-create
   log:
     level: INFO
     category:

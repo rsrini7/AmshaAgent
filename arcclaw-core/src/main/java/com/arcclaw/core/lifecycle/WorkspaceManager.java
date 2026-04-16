@@ -6,25 +6,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.time.Instant;
-import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.audit.AuditObserver;
 import com.arcclaw.core.governance.GovernanceStrategy;
-import com.arcclaw.core.persistence.SqliteRetryTemplate;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.PathSanitizer;
+import com.arcclaw.persistence.api.CheckpointStorePort;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -50,7 +45,7 @@ public class WorkspaceManager {
     @Inject ChatMemoryStore chatMemoryStore;
     @Inject SessionHeartbeatTracker heartbeatTracker;
     @Inject StatefulAgentStore statefulAgentStore;
-    @Inject SqliteRetryTemplate retryTemplate;
+    @Inject CheckpointStorePort checkpointStore;
     @Inject AuditObserver auditObserver;
     @Inject CliResultBridge cliResultBridge;
     @Inject ToolInvocationGuard toolInvocationGuard;
@@ -156,45 +151,21 @@ public class WorkspaceManager {
      *
      * By excluding all terminal statuses, we ensure only truly in-flight checkpoints
      * (IN_PROGRESS, AWAITING_APPROVAL, AWAITING_RETRY_APPROVAL) are clobbered.
+     * 
+     * Now delegates to CheckpointStorePort (arcclaw-persistence-sqlite via adapter).
+     * The retry logic and SQLite-specific transaction handling is encapsulated there.
      */
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkCheckpointsFailedRequiresNew(String sessionId) {
-        em.clear();
-        List<AgentCheckpoint> checkpoints = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "  AND c.status NOT IN (:terminalStatuses)",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
-                .getResultList();
-
-        Instant now = Instant.now();
-        for (var checkpoint : checkpoints) {
-            checkpoint.setStatus(CheckpointStatus.FAILED);
-            checkpoint.setFailedAt(now);
-            checkpoint.setFailReason("Session terminated by WorkspaceManager");
-        }
-        if (!checkpoints.isEmpty()) {
-            log.infof("Marked %d checkpoint(s) FAILED for session=%s",
-                      checkpoints.size(), sessionId);
-        }
-    }
-
     void markCheckpointsFailed(String sessionId) {
         try {
-            retryTemplate.executeVoid("markFailed-" + sessionId, 5, 50, () -> {
-                self.doMarkCheckpointsFailedRequiresNew(sessionId);
-            });
+            checkpointStore.markCheckpointsFailed(sessionId);
         } catch (IllegalStateException e) {
             // EntityManager already closed — JVM is shutting down, checkpoint
             // status update is best-effort only. Process is dying anyway.
             log.debugf("markCheckpointsFailed skipped for session=%s — EntityManager closed (shutdown in progress)", sessionId);
         } catch (Exception e) {
-            log.errorf("Failed to mark checkpoints FAILED after retries for session=%s: %s",
+            log.errorf("Failed to mark checkpoints FAILED for session=%s: %s",
                        sessionId, e.getMessage());
-            log.debugf(e, "Full stacktrace for retry exhaustion in markCheckpointsFailed " +
-                       "for session=%s", sessionId);
+            log.debugf(e, "Full stacktrace for checkpoint failure marking for session=%s", sessionId);
             throw (e instanceof RuntimeException re)
                 ? re
                 : new RuntimeException(

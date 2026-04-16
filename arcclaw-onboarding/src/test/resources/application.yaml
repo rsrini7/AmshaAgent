@@ -30,8 +30,18 @@ quarkus:
   langchain4j:
     openai:
       timeout: 30s
+      embedding-model:
+        enabled: false
+        model-name: "text-embedding-3-small"
   application:
     name: arcclaw-onboarding-test
+  index-dependency:
+    arcclaw-core:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-core
+    arcclaw-persistence-sqlite:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-persistence-sqlite
   otel:
     sdk:
       disabled: true
@@ -56,7 +66,7 @@ quarkus:
       initial-size: 1
       acquisition-timeout: 10s
   hibernate-orm:
-    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     schema-management:
       strategy: drop-and-create
     log:

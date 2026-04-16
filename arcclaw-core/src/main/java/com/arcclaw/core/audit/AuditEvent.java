@@ -79,7 +79,7 @@ public class AuditEvent {
     @Column(nullable = false, updatable = false, length = 64)
     public String prevHash;
 
-    protected AuditEvent() {} // JPA only
+    public AuditEvent() {} // JPA only
 
     public static AuditEvent of(String sessionId, String userId, String agentRole,
                                  String goalHash, AuditOutcome outcome, SecurityEventType eventType,

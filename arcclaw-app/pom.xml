@@ -30,6 +30,13 @@
       <artifactId>arcclaw-core</artifactId>
     </dependency>
 
+    <!-- SQLite adapter (persistence backend) -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-persistence-sqlite</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-rag</artifactId>

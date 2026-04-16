@@ -76,7 +76,7 @@ quarkus:
   hibernate-orm:
     schema-management:
       strategy: update
-    dialect: com.arcclaw.core.persistence.ArcClawSQLiteDialect
+    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     log:
       sql: false
     jdbc:

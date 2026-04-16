@@ -58,6 +58,10 @@ public class AgentStateMachineRunner {
     private static final Pattern RAW_TOOL_JSON_PATTERN = 
         Pattern.compile("^\\s*\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"\\s*:", Pattern.DOTALL);
 
+    // NVIDIA-specific tool call leak pattern: [[TOOL_CALLS]sandbox_exec{...}]
+    private static final Pattern NVIDIA_TOOL_CALL_PATTERN =
+        Pattern.compile("\\[+TOOL_CALLS\\]+", Pattern.CASE_INSENSITIVE);
+
     // ── Suspiciously short non-answers: "Done.", "OK.", "ok" etc.
     private static final Pattern SUSPICIOUSLY_SHORT =
             Pattern.compile(
@@ -169,8 +173,11 @@ public class AgentStateMachineRunner {
                     }
 
                     if (isRawToolCallLeak(candidateAnswer)) {
-                        if (RAW_TOOL_JSON_PATTERN.matcher(candidateAnswer).find() && rateLimitTracker.isBackingOff("primary")) {
-                            log.warnf("FINISH answer has raw tool JSON but rate-limited — stripping instead of retrying for session %s", context.sessionId());
+                        boolean isRawJson = RAW_TOOL_JSON_PATTERN.matcher(candidateAnswer).find();
+                        boolean isNvidiaLeak = NVIDIA_TOOL_CALL_PATTERN.matcher(candidateAnswer).find();
+
+                        if ((isRawJson || isNvidiaLeak) && rateLimitTracker.isBackingOff("primary")) {
+                            log.warnf("FINISH answer has raw tool leak but rate-limited — stripping instead of retrying for session %s", context.sessionId());
                             candidateAnswer = stripRawToolJson(candidateAnswer);
                             AgentResult result = AgentResult.finished(candidateAnswer, List.copyOf(history));
                             maybeSignalBridge(context, result);
@@ -180,30 +187,60 @@ public class AgentStateMachineRunner {
                         log.warnf("[STATE-MACHINE] session %s: FINISH answer contains raw " +
                                   "tool call JSON — retrying with correction (schema attempt %d)",
                                   context.sessionId(), llmSchemaErrorCount + 1);
-                        history.add(step);
+                        
+                        // §7.36: Strip the leak BEFORE adding to history to avoid confusing LLM/provider
+                        String cleanThought = stripRawToolJson(candidateAnswer);
+                        ReasoningStep cleanStep = new ReasoningStep(
+                                cleanThought,
+                                step.action(),
+                                step.actionInput(),
+                                step.observation(),
+                                step.inputTokens(),
+                                step.outputTokens(),
+                                step.success(),
+                                step.errorCode(),
+                                step.traceId(),
+                                step.rootCauseClass()
+                        );
+                        history.add(cleanStep);
+
                         String leakedTool = "the intended tool";
                         Matcher nameMatcher = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"").matcher(candidateAnswer);
+                        Matcher nvidiaMatcher = Pattern.compile("\\[+TOOL_CALLS\\]+\\s*(\\w+)").matcher(candidateAnswer);
+
                         if (nameMatcher.find()) {
                             leakedTool = nameMatcher.group(1);
+                        } else if (nvidiaMatcher.find()) {
+                            leakedTool = nvidiaMatcher.group(1);
                         } else if (candidateAnswer.contains("delegate_to_agent")) {
                             leakedTool = "delegate_to_agent";
                         }
 
                         transientError =
-                                "System: Your last response was a raw JSON tool call object " +
+                                "System: Your last response was a raw tool call (JSON or [[TOOL_CALLS]] format) " +
                                 "written as plain text, not a valid FINISH answer. " +
                                 "You MUST invoke tools through the tool mechanism — " +
-                                "NEVER write {\"type\": \"function\", ...} or raw JSON as your answer text. " +
+                                "NEVER write [[TOOL_CALLS]] or raw JSON in your answer text. " +
                                 "Retry now: call " + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
                         llmSchemaErrorCount++;
                         if (llmSchemaErrorCount >= 2) {
-                            log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
-                                       "limit after raw tool call leak", context.sessionId());
-                            return AgentResult.failed(
-                                    "I encountered a formatting error and could not complete your request. " +
-                                    "Please try again.",
-                                    AgentResult.FailureCategory.SCHEMA_ERROR,
-                                    List.copyOf(history));
+                            String salvaged = stripRawToolJson(candidateAnswer);
+                            // Only salvage if we have a meaningful answer. 
+                            // If it's blank or just the generic fallback, it's a real failure.
+                            if (!salvaged.isBlank() && salvaged.length() > 5 && !salvaged.contains("completed the task")) {
+                                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
+                                       "limit after raw tool call leak. Salvaging partially clean answer.", context.sessionId());
+                                AgentResult result = AgentResult.finished(salvaged, List.copyOf(history));
+                                maybeSignalBridge(context, result);
+                                return result;
+                            } else {
+                                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction " +
+                                       "limit. No salvageable answer found.", context.sessionId());
+                                return AgentResult.failed(
+                                        "I encountered a formatting error and could not complete your request. Please try again.",
+                                        AgentResult.FailureCategory.SCHEMA_ERROR,
+                                        List.copyOf(history));
+                            }
                         }
                         continue;
                     }
@@ -305,20 +342,27 @@ public class AgentStateMachineRunner {
         if (answer == null || answer.isBlank()) return false;
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
             || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
-            || RAW_TOOL_JSON_PATTERN.matcher(answer).find();
+            || RAW_TOOL_JSON_PATTERN.matcher(answer).find()
+            || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find();
     }
 
     private String stripRawToolJson(String answer) {
         if (answer == null) return "";
-        Matcher m = RAW_TOOL_JSON_PATTERN.matcher(answer);
-        if (m.find()) {
-            String stripped = answer.substring(m.end())
-                .replaceFirst("^[^}]*\\}", "")
-                .replaceAll("^[}\\s]+", "")
-                .strip();
-            return stripped.isBlank() ? "I have completed the task." : stripped;
+        
+        String stripped = answer;
+        
+        // 1. Remove standard raw JSON leaks ({"type": "function", ...})
+        Matcher jsonMatcher = RAW_TOOL_JSON_PATTERN.matcher(stripped);
+        if (jsonMatcher.find()) {
+            stripped = stripped.substring(0, jsonMatcher.start()) + stripped.substring(jsonMatcher.end());
+            stripped = stripped.replaceFirst("^[^}]*\\}", "").replaceAll("^[}\\s]+", "");
         }
-        return answer;
+
+        // 2. Remove NVIDIA-style bracketed leaks ([TOOL_CALLS]name{...})
+        // We match marker + name + potential JSON body to end of string/line (§7.25 hardened)
+        stripped = Pattern.compile("(?i)\\[+TOOL_CALLS\\]+.*", Pattern.DOTALL).matcher(stripped).replaceAll("");
+
+        return stripped.isBlank() ? "I have completed the task." : stripped.trim();
     }
 
     private AgentResult handleFinishAction(String sessionId, String agentRole,

@@ -8,6 +8,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import com.arcclaw.core.util.TemporalUtils;
+import org.hibernate.annotations.ColumnDefault;
+
 /**
  * Persistent cron job entity backed by the {@code agentcron} SQLite table.
  * <p>
@@ -41,19 +44,16 @@ public class AgentCronEntity {
     public String timezone = "UTC";
 
     /**
-     * Explicit {@code INTEGER NOT NULL DEFAULT 0} for GraalVM native safety.
-     * Hibernate 6 community dialect boolean→INTEGER mapping can be stripped
-     * by AOT unless explicitly registered — this DDL guarantees all-mode safety.
+     * Explicit default value for GraalVM native safety.
      */
-    @Column(nullable = false, columnDefinition = "INTEGER NOT NULL DEFAULT 0")
+    @Column(name = "runonce", nullable = false)
+    @ColumnDefault("0")   // SQLite stores boolean as INTEGER; 'false' (string) would be wrong
     public boolean runOnce = false;
 
     public String goal;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant nextFireTime;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant lastFireTime;
 
     @Convert(converter = CronStatusConverter.class)
@@ -71,10 +71,8 @@ public class AgentCronEntity {
      */
     public String lastDeliveryId;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant createdAt;
 
-    @Convert(converter = InstantToTextConverter.class)
     public Instant updatedAt;
 
     /**
@@ -86,7 +84,7 @@ public class AgentCronEntity {
                 || status == CronStatus.SKIPPED
                 || nextFireTime == null)
                 ? "N/A"
-                : InstantToTextConverter.format(nextFireTime);
+                : TemporalUtils.formatIsoLex(nextFireTime);
 
         String displayGoal = "N/A";
         if (goal != null) {

@@ -259,6 +259,11 @@ public class SandboxExecTool implements AgentTool {
         return Files.exists(javac) ? javac : null;
     }
 
+    @Override
+    public String postProcessOutput(String rawOutput, Map<String, Object> params) {
+        return truncate(rawOutput);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // execute() — host-side fallback when Podman is unavailable.
     // Only called when requiresSandbox() is false or via insecure-fallback.
@@ -346,7 +351,7 @@ public class SandboxExecTool implements AgentTool {
         if (!result.success()) {
             return ToolResponse.failure(1, result.reason());
         }
-        return ToolResponse.success(truncate(result.output()));
+        return ToolResponse.success(postProcessOutput(result.output(), Map.of()));
     }
 
     private ToolResponse executeInterpreted(String sessionId, Path workspaceRoot,
@@ -368,7 +373,7 @@ public class SandboxExecTool implements AgentTool {
         if (!result.success()) {
             return ToolResponse.failure(1, result.reason());
         }
-        return ToolResponse.success(truncate(result.output()));
+        return ToolResponse.success(postProcessOutput(result.output(), params));
     }
 
     private ToolResponse executeGo(String sessionId, Path workspaceRoot,
@@ -388,7 +393,7 @@ public class SandboxExecTool implements AgentTool {
             if (!result.success()) {
                 return ToolResponse.failure(1, result.reason());
             }
-            return ToolResponse.success(truncate(result.output()));
+            return ToolResponse.success(postProcessOutput(result.output(), Map.of()));
         } catch (IOException e) {
             if (e.getMessage().contains("No such file or directory")) {
                 return ToolResponse.failure(1,

@@ -2,44 +2,35 @@ package com.arcclaw.core.state;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.persistence.SqliteRetryTemplate;
+import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.api.CheckpointStorePort;
+import com.arcclaw.persistence.api.CheckpointUpsertResult;
+import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 /**
- * JPA EntityManager-based implementation of {@link StatefulAgentStore}.
- * <p>
- * Uses plain {@link EntityManager} instead of Panache because the entity
- * lives in {@code arcclaw-core} — Panache bytecode enhancement only runs
- * in the Quarkus application module ({@code arcclaw-app}).
- * <p>
- * Uses Jackson {@link ObjectMapper} (auto-configured by Quarkus) to
- * serialize/deserialize {@code List<ReasoningStep>} to/from the
- * {@link AgentCheckpoint#stateJson} TEXT field.
+ * Implementation of {@link StatefulAgentStore} that delegates to a {@link CheckpointStorePort}.
+ * This class is backend-agnostic and relies on the persistence adapter for database operations.
  */
 @ApplicationScoped
 public class StatefulAgentStoreImpl implements StatefulAgentStore {
@@ -47,224 +38,48 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     private static final Logger log = Logger.getLogger(StatefulAgentStoreImpl.class);
     private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {};
 
-    /**
-     * In-memory map of sessionIds to the start time of a resume operation.
-     * Prevents double-resume from concurrent callbacks.
-     * §7.29 — NOT persisted; cleared on session termination.
-     * F7: Stores Instant to allow TTL-based cleanup of orphaned markers.
-     */
-    private final ConcurrentHashMap<String, Instant>
-        resumingBatches = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Instant> resumingBatches = new ConcurrentHashMap<>();
 
     @Inject ObjectMapper objectMapper;
-    @Inject EntityManager em;
+    @Inject CheckpointStorePort storeAdapter;
     @Inject AuditService auditService;
-    @Inject SqliteRetryTemplate retryTemplate;
-    @Inject StatefulAgentStoreImpl self;
 
     @Override
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
-        return withRetry(() -> self.doSaveSteps(sessionId, agentRole, steps), "save-upsert");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public AgentCheckpoint doSaveSteps(String sessionId, String agentRole,
-                                       List<ReasoningStep> steps) {
-        em.clear();
         String json = serializeSteps(steps);
-
-        Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
-
-        AgentCheckpoint checkpoint;
         AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
 
-        if (existing.isPresent()) {
-            checkpoint = existing.get();
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            checkpoint.setAutonomyLevel(autonomy);
-            checkpoint.setIterationsUsed(steps.size());
-            log.debugf("Updated checkpoint for session=%s, role=%s, autonomy=%s, used=%d",
-                       sessionId, agentRole, autonomy, steps.size());
-        } else {
-            checkpoint = new AgentCheckpoint();
-            checkpoint.setSessionId(sessionId);
-            checkpoint.setAgentRole(agentRole);
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-            checkpoint.setAutonomyLevel(autonomy);
-            checkpoint.setIterationsUsed(steps.size());
-            em.persist(checkpoint);
-
+        CheckpointUpsertResult result = storeAdapter.upsertWithSteps(
+            sessionId, agentRole, json, autonomy.toString(), steps.size());
+        
+        if (result.created()) {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
             auditService.recordWithIdempotency(sessionId, userId, agentRole,
                 SecurityEventType.CHECKPOINT_CREATED, "autonomy=" + autonomy, idempotencyKey);
-
-            log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s",
-                      sessionId, agentRole, autonomy);
+            log.infof("Created checkpoint for session=%s, role=%s, autonomy=%s", sessionId, agentRole, autonomy);
         }
-        return checkpoint;
+
+        return CheckpointMapper.toEntity(result.checkpoint());
     }
 
     @Override
     public AgentCheckpoint save(AgentCheckpoint checkpoint) {
-        return withRetry(() -> self.doSaveEntity(checkpoint), "save-entity");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public AgentCheckpoint doSaveEntity(AgentCheckpoint checkpoint) {
-        em.clear();
-        if (checkpoint.getId() == null) {
-            em.persist(checkpoint);
-            return checkpoint;
-        } else {
-            AgentCheckpoint managed = em.find(AgentCheckpoint.class, checkpoint.getId());
-            if (managed == null) {
-                em.persist(checkpoint);
-                return checkpoint;
-            }
-            managed.setSessionId(checkpoint.getSessionId());
-            managed.setAgentRole(checkpoint.getAgentRole());
-            managed.setStatus(checkpoint.getStatus());
-            managed.setStateJson(checkpoint.getStateJson());
-            managed.setFailedAt(checkpoint.getFailedAt());
-            managed.setCompletedAt(checkpoint.getCompletedAt());
-            managed.setFailReason(checkpoint.getFailReason());
-            managed.setPendingToolName(checkpoint.getPendingToolName());
-            managed.setPendingToolParametersJson(checkpoint.getPendingToolParametersJson());
-            managed.setAutonomyLevel(checkpoint.getAutonomyLevel());
-            managed.setOriginalGoal(checkpoint.getOriginalGoal());
-
-            // A16 — Stale Join Guard: merge batch decisions to prevent overwriting active decisions
-            if (checkpoint.getStatus() == CheckpointStatus.AWAITING_APPROVAL 
-                    && managed.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                mergeBatchDecisions(managed, checkpoint);
-            } else {
-                managed.setBatchToolDecisions(checkpoint.getBatchToolDecisions());
-            }
-
-            managed.setPreExecutedResults(checkpoint.getPreExecutedResults());
-            managed.setIterationsUsed(checkpoint.getIterationsUsed());
-            managed.setRetryAfterMs(checkpoint.getRetryAfterMs());
-            //  2: updatedAt must propagate so findStaleAwaitingApproval cutoff works.
-            managed.setUpdatedAt(checkpoint.getUpdatedAt());
-            return managed;
-        }
-    }
-
-    private void mergeBatchDecisions(AgentCheckpoint managed, AgentCheckpoint incoming) {
-        if (incoming.getBatchToolDecisions() == null) return;
-        if (managed.getBatchToolDecisions() == null) {
-            managed.setBatchToolDecisions(incoming.getBatchToolDecisions());
-            return;
-        }
-        try {
-            Map<String, ToolDecision> managedMap = objectMapper.readValue(
-                managed.getBatchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
-            Map<String, ToolDecision> incomingMap = objectMapper.readValue(
-                incoming.getBatchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
-
-            boolean changed = false;
-            for (Map.Entry<String, ToolDecision> entry : managedMap.entrySet()) {
-                String tool = entry.getKey();
-                ToolDecision managedDecision = entry.getValue();
-                ToolDecision incomingDecision = incomingMap.get(tool);
-
-                // If managed has a real decision, and incoming is still pending, keep the decision
-                if (ToolDecision.PENDING != managedDecision
-                        && ToolDecision.PENDING == incomingDecision) {
-                    incomingMap.put(tool, managedDecision);
-                    changed = true;
-                }
-            }
-
-            if (changed) {
-                managed.setBatchToolDecisions(objectMapper.writeValueAsString(incomingMap));
-            } else {
-                managed.setBatchToolDecisions(incoming.getBatchToolDecisions());
-            }
-        } catch (Exception e) {
-            log.warnf("Failed to merge batch tool decisions for cp id=%d: %s",
-                managed.getId(), e.getMessage());
-            managed.setBatchToolDecisions(incoming.getBatchToolDecisions());
-        }
+        CheckpointDto savedDto = storeAdapter.save(CheckpointMapper.toDto(checkpoint));
+        return CheckpointMapper.toEntity(savedDto);
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
-        em.clear();
-        return findBySessionAndRole(sessionId, agentRole);
-    }
-
-    // ── NEW: findLatestAwaitingApproval ───────────────────────────────────────
-
-    /**
-     * Returns the most-recent checkpoint for this session that is in
-     * {@link CheckpointStatus#AWAITING_APPROVAL}, regardless of agentRole.
-     * <p>
-     * This replaces the AgentRoleEnum enum loop in {@code ApproveReflex} to fix
-     * stale-row ambiguity: when multiple rows exist for the same
-     * (sessionId, agentRole), the old loop called load() which could return the
-     * oldest (COMPLETED) row, shadowing a newer AWAITING_APPROVAL checkpoint and
-     * causing "/approve → No pending tool executions require approval" silently.
-     */
-    @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "  AND c.status = :status " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .filter(Objects::nonNull)
-                .findFirst();
+        return storeAdapter.findBySessionAndRole(sessionId, agentRole)
+            .map(dto -> {
+                AgentCheckpoint entity = CheckpointMapper.toEntity(dto);
+                return entity; // map handles the null-to-empty transition
+            });
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId) {
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .filter(Objects::nonNull)
-                .findFirst();
-    }
-
-    @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public Optional<String> findLatestRole(String sessionId) {
-        return em.createQuery(
-                "SELECT c.agentRole FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "  AND c.status <> :archived " +
-                "ORDER BY c.id DESC",
-                String.class)
-                .setParameter("sid", sessionId)
-                .setParameter("archived", CheckpointStatus.ARCHIVED)
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .findFirst();
-    }
-
-    @Override
-    @Deprecated
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
         if (checkpoint.getStateJson() == null || checkpoint.getStateJson().isBlank()) {
             return List.of();
@@ -273,496 +88,176 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             return objectMapper.readValue(checkpoint.getStateJson(), STEPS_TYPE);
         } catch (JsonProcessingException e) {
             log.errorf("Failed to deserialize stateJson for checkpoint id=%d: %s",
-                       checkpoint.getId(), e.getMessage());
+                checkpoint.getId(), e.getMessage());
             log.debugf(e, "Full stacktrace for deserialization failure of checkpoint id=%d",
-                       checkpoint.getId());
+                checkpoint.getId());
             return List.of();
         }
     }
 
     @Override
     public void markFailed(Long checkpointId, String reason) {
-        withRetry(() -> {
-            self.doMarkFailedId(checkpointId, reason);
-            return null;
-        }, "markFailed-id");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkFailedId(Long checkpointId, String reason) {
-        em.clear();
-        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
-        if (checkpoint != null) {
-            doMarkFailed(checkpoint, reason);
-        }
+        markFailed(checkpointId, reason, null, null, null);
     }
 
     @Override
     public void markFailed(AgentCheckpoint checkpoint, String reason) {
-        withRetry(() -> {
-            self.doMarkFailedEntity(checkpoint, reason);
-            return null;
-        }, "markFailed-entity");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkFailedEntity(AgentCheckpoint checkpoint, String reason) {
-        em.clear();
-        AgentCheckpoint managed = em.find(AgentCheckpoint.class, checkpoint.getId());
-        if (managed != null) {
-            doMarkFailed(managed, reason);
-        }
+        markFailed(checkpoint.getId(), reason);
     }
 
     @Override
     public void markFailed(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
-        withRetry(() -> {
-            self.doMarkFailedIdDiagnostics(checkpointId, reason, errorCode, traceId, rootCauseClass);
-            return null;
-        }, "markFailed-diagnostics-id");
-    }
+        storeAdapter.markFailed(checkpointId, reason, errorCode, traceId, rootCauseClass);
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkFailedIdDiagnostics(Long checkpointId, String reason, String errorCode, String traceId, String rootCauseClass) {
-        em.clear();
-        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
-        if (checkpoint != null) {
-            doMarkFailed(checkpoint, reason, errorCode, traceId, rootCauseClass);
-        }
+        storeAdapter.findById(checkpointId).ifPresent(dto -> {
+            String userId = WorkspaceContext.resolveUserId();
+            String idempotencyKey = "CP_FAILED:" + checkpointId;
+            String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
+            auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
+                SecurityEventType.CHECKPOINT_FAILED, details, idempotencyKey);
+            log.warnf("Checkpoint %s/%s marked FAILED: %s", dto.sessionId(), dto.agentRole(), reason);
+        });
     }
 
     @Override
     public void markFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
-        withRetry(() -> {
-            self.doMarkFailedEntityDiagnostics(checkpoint, reason, errorCode, traceId, rootCauseClass);
-            return null;
-        }, "markFailed-diagnostics-entity");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkFailedEntityDiagnostics(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
-        em.clear();
-        AgentCheckpoint managed = em.find(AgentCheckpoint.class, checkpoint.getId());
-        if (managed != null) {
-            doMarkFailed(managed, reason, errorCode, traceId, rootCauseClass);
-        }
+        markFailed(checkpoint.getId(), reason, errorCode, traceId, rootCauseClass);
     }
 
     @Override
     public void markOrphaned(Long checkpointId, String reason) {
-        withRetry(() -> {
-            self.doMarkOrphanedId(checkpointId, reason);
-            return null;
-        }, "markOrphaned-id");
-    }
+        storeAdapter.markOrphaned(checkpointId, reason);
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkOrphanedId(Long checkpointId, String reason) {
-        em.clear();
-        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
-        if (checkpoint != null) {
-            doMarkOrphaned(checkpoint, reason);
-        }
-    }
-
-    private void doMarkOrphaned(AgentCheckpoint checkpoint, String reason) {
-        checkpoint.setStatus(CheckpointStatus.ORPHANED);
-        checkpoint.setFailedAt(Instant.now());
-        checkpoint.setFailReason(reason);
-
-        String userId = WorkspaceContext.resolveUserId();
-        String idempotencyKey = "CP_ORPHANED:" + checkpoint.getId();
-        auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
-            SecurityEventType.CHECKPOINT_ORPHANED, reason, idempotencyKey);
-
-        log.warnf("Checkpoint session=%s role=%s marked ORPHANED: %s",
-                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason);
-    }
-
-
-    @Override
-    @Transactional
-    public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
-
-        TypedQuery<AgentCheckpoint> q = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId LIKE :sessionPrefix " +
-                "  AND c.status = :status " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class);
-        q.setParameter("sessionPrefix", sessionPrefix + "%");
-        q.setParameter("status", CheckpointStatus.AWAITING_APPROVAL);
-        q.setMaxResults(1);
-        return q.getResultList().stream().filter(Objects::nonNull).findFirst();
-    }
-
-    private void doMarkFailed(AgentCheckpoint checkpoint, String reason) {
-        doMarkFailed(checkpoint, reason, null, null, null);
-    }
-
-    private void doMarkFailed(AgentCheckpoint checkpoint, String reason, String errorCode, String traceId, String rootCauseClass) {
-        checkpoint.setStatus(CheckpointStatus.FAILED);
-        checkpoint.setFailedAt(Instant.now());
-        checkpoint.setFailReason(reason);
-        checkpoint.setErrorCode(errorCode);
-        checkpoint.setTraceId(traceId);
-        checkpoint.setRootCauseClass(rootCauseClass);
-
-        String userId = WorkspaceContext.resolveUserId();
-        String idempotencyKey = "CP_FAILED:" + (checkpoint.getId() != null ? checkpoint.getId() : "null");
-        String details = String.format("reason=%s errorCode=%s traceId=%s", reason, errorCode, traceId);
-        auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
-            SecurityEventType.CHECKPOINT_FAILED, details, idempotencyKey);
-
-        log.warnf("Checkpoint session=%s role=%s marked FAILED: %s (errorCode=%s, traceId=%s)",
-                  checkpoint.getSessionId(), checkpoint.getAgentRole(), reason, errorCode, traceId);
+        storeAdapter.findById(checkpointId).ifPresent(dto -> {
+            String userId = WorkspaceContext.resolveUserId();
+            String idempotencyKey = "CP_ORPHANED:" + checkpointId;
+            auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
+                SecurityEventType.CHECKPOINT_ORPHANED, reason, idempotencyKey);
+            log.warnf("Checkpoint %s/%s marked ORPHANED: %s", dto.sessionId(), dto.agentRole(), reason);
+        });
     }
 
     @Override
     public void markCompleted(Long checkpointId) {
-        withRetry(() -> {
-            self.doMarkCompletedId(checkpointId);
-            return null;
-        }, "markCompleted");
-    }
+        storeAdapter.markCompleted(checkpointId);
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkCompletedId(Long checkpointId) {
-        em.clear();
-        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, checkpointId);
-        if (checkpoint != null) {
-            checkpoint.setStatus(CheckpointStatus.COMPLETED);
-            checkpoint.setCompletedAt(Instant.now());
-
+        storeAdapter.findById(checkpointId).ifPresent(dto -> {
             String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_COMPLETED:" + checkpointId;
-            auditService.recordWithIdempotency(checkpoint.getSessionId(), userId, checkpoint.getAgentRole(),
+            auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
                 SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
-
-            log.infof("Checkpoint id=%d marked COMPLETED", checkpointId);
-        }
+            log.infof("Checkpoint %d marked COMPLETED for session %s", checkpointId, dto.sessionId());
+        });
     }
 
     @Override
     public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
-            List<ReasoningStep> steps, CheckpointStatus finalStatus) {
-        return withRetry(
-            () -> self.doSaveAndFinalize(sessionId, agentRole, steps, finalStatus),
-            "saveAndFinalize");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public AgentCheckpoint doSaveAndFinalize(String sessionId, String agentRole,
-            List<ReasoningStep> steps, CheckpointStatus finalStatus) {
-        em.clear();
+                                           List<ReasoningStep> steps,
+                                           CheckpointStatus finalStatus) {
         String json = serializeSteps(steps);
-        Optional<AgentCheckpoint> existing = findBySessionAndRole(sessionId, agentRole);
+        Optional<AgentCheckpoint> existingOpt = load(sessionId, agentRole);
+        boolean isNew = existingOpt.isEmpty();
 
-        AgentCheckpoint checkpoint;
-        if (existing.isPresent()) {
-            checkpoint = existing.get();
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(finalStatus);
-            if (finalStatus == CheckpointStatus.COMPLETED) {
-                checkpoint.setCompletedAt(Instant.now());
-            } else if (finalStatus == CheckpointStatus.FAILED) {
-                checkpoint.setFailedAt(Instant.now());
-            }
-            log.debugf("Updating checkpoint for finalization: session=%s, role=%s",
-                       sessionId, agentRole);
-        } else {
-            checkpoint = new AgentCheckpoint();
-            checkpoint.setSessionId(sessionId);
-            checkpoint.setAgentRole(agentRole);
-            checkpoint.setStateJson(json);
-            checkpoint.setStatus(finalStatus);
-            if (finalStatus == CheckpointStatus.COMPLETED) {
-                checkpoint.setCompletedAt(Instant.now());
-            } else if (finalStatus == CheckpointStatus.FAILED) {
-                checkpoint.setFailedAt(Instant.now());
-            }
-            em.persist(checkpoint);
-
-            String userId = WorkspaceContext.resolveUserId();
-            String idempotencyKey = "CP_CREATED:" + sessionId + ":" + agentRole;
-            auditService.recordWithIdempotency(sessionId, userId, agentRole,
-                SecurityEventType.CHECKPOINT_CREATED, null, idempotencyKey);
-            log.infof("Created new checkpoint for finalization: session=%s, role=%s",
-                      sessionId, agentRole);
+        AgentCheckpoint checkpoint = existingOpt.orElseGet(AgentCheckpoint::new);
+        
+        checkpoint.setSessionId(sessionId);
+        checkpoint.setAgentRole(agentRole);
+        checkpoint.setStateJson(json);
+        checkpoint.setStatus(finalStatus);
+        
+        if (finalStatus == CheckpointStatus.COMPLETED) {
+            checkpoint.setCompletedAt(Instant.now());
+        } else if (finalStatus == CheckpointStatus.FAILED) {
+            checkpoint.setFailedAt(Instant.now());
         }
 
-        final Long cpId = checkpoint.getId();
-        em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
-                .setParameter("id", cpId)
-                .executeUpdate();
-
-        for (int i = 0; i < steps.size(); i++) {
-            ReasoningStep step = steps.get(i);
-            ReasoningStepEntity entity = new ReasoningStepEntity();
-            entity.setCheckpointId(cpId);
-            entity.setSequenceNum(i);
-            entity.setThoughtJson(serialize(step.thought()));
-            entity.setAction(step.action());
-            entity.setActionInputJson(serialize(step.actionInput()));
-            entity.setObservation(step.observation());
-            entity.setInputTokens(step.inputTokens());
-            entity.setOutputTokens(step.outputTokens());
-            entity.setSuccess(step.success());
-            entity.setErrorCode(step.errorCode());
-            entity.setTraceId(step.traceId());
-            entity.setRootCauseClass(step.rootCauseClass());
-            em.persist(entity);
-        }
+        CheckpointDto saved = storeAdapter.saveCheckpointWithSteps(
+                CheckpointMapper.toDto(checkpoint), 
+                steps.stream().map(this::mapToReasoningStepDto).toList());
 
         String userId = WorkspaceContext.resolveUserId();
+
+        // Emit CP_CREATED for brand-new checkpoints (single-shot agents)
+        if (isNew) {
+            String createdKey = "CP_CREATED:" + sessionId + ":" + agentRole;
+            auditService.recordWithIdempotency(sessionId, userId, agentRole,
+                SecurityEventType.CHECKPOINT_CREATED, null, createdKey);
+            log.infof("Created new checkpoint during finalization session=%s role=%s",
+                sessionId, agentRole);
+        }
+
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
                 ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;
-        String idempotencyKey = (finalStatus == CheckpointStatus.COMPLETED ? "CP_COMPLETED:" : "CP_FAILED:") + cpId;
+        String idempotencyKey = (finalStatus == CheckpointStatus.COMPLETED ? "CP_COMPLETED:" : "CP_FAILED:") + saved.id();
         auditService.recordWithIdempotency(sessionId, userId, agentRole, eventType, null, idempotencyKey);
 
-        log.infof("Checkpoint session=%s role=%s finalized with status=%s",
-                  sessionId, agentRole, finalStatus);
-        return checkpoint;
+        return CheckpointMapper.toEntity(saved);
     }
 
     @Override
-    @Transactional
     public List<ReasoningStep> loadSteps(Long checkpointId) {
-        TypedQuery<ReasoningStepEntity> q = em.createQuery(
-                "SELECT r FROM ReasoningStepEntity r " +
-                "WHERE r.checkpointId = :id ORDER BY r.sequenceNum ASC",
-                ReasoningStepEntity.class);
-        q.setParameter("id", checkpointId);
-        return q.getResultList().stream()
+        return storeAdapter.loadSteps(checkpointId).stream()
                 .map(this::mapToReasoningStep)
                 .toList();
     }
 
-    private ReasoningStep mapToReasoningStep(ReasoningStepEntity entity) {
-        return ReasoningStep.of(
-                deserialize(entity.getThoughtJson(), String.class),
-                entity.getAction(),
-                deserialize(entity.getActionInputJson(),
-                    new TypeReference<Map<String, Object>>() {}),
-                entity.getObservation(),
-                entity.getInputTokens(),
-                entity.getOutputTokens(),
-                entity.getSuccess(),
-                entity.getErrorCode(),
-                entity.getTraceId(),
-                entity.getRootCauseClass()
-        );
-    }
-
-    private <T> T deserialize(String json, Class<T> clazz) {
-        if (json == null || json.isBlank()) return null;
-        try {
-            return objectMapper.readValue(json, clazz);
-        } catch (JsonProcessingException e) {
-            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s",
-                       e.getMessage(), json);
-            log.debug("Full deserialization failure stack trace:", e);
-            return null;
-        }
-    }
-
-    private <T> T deserialize(String json, TypeReference<T> typeRef) {
-        if (json == null || json.isBlank()) return null;
-        try {
-            return objectMapper.readValue(json, typeRef);
-        } catch (JsonProcessingException e) {
-            log.errorf("Failed to deserialize reasoning step component (Exception: %s): %s",
-                       e.getMessage(), json);
-            log.debug("Full deserialization failure stack trace:", e);
-            return null;
-        }
-    }
-
-    private String serialize(Object obj) {
-        if (obj == null) return null;
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize reasoning step component", e);
-        }
-    }
-
-    private <T> T withRetry(Callable<T> task, String operation) {
-        try {
-            return retryTemplate.execute(operation, 5, 50, task);
-        } catch (Exception e) {
-            throw (e instanceof RuntimeException re)
-                ? re
-                : new RuntimeException("Action failed after retries for " + operation, e);
-        }
-    }
-
-    /**
-     * Finds the most-recent non-ARCHIVED checkpoint for a (sessionId, agentRole) pair.
-     * <p>
-     * Added {@code ORDER BY c.id DESC} so the newest row is always returned.
-     * Previously, LIMIT 1 with no ordering caused SQLite to return the oldest row
-     * (lowest checkpoint_id = first inserted = often COMPLETED), which shadowed
-     * any newer AWAITING_APPROVAL row and broke the "/approve" flow.
-     * <p>
-     * Also excludes {@link CheckpointStatus#ARCHIVED} rows so that fresh turns
-     * archived by AgentLoop never interfere with the live checkpoint.
-     */
-    private Optional<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
-        em.clear();
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "  AND c.agentRole = :role " +
-                "  AND c.status <> :archived " +  // ← exclude archived rows
-                "ORDER BY c.id DESC",             // ← newest first — was missing
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("role", agentRole)
-                .setParameter("archived", CheckpointStatus.ARCHIVED)
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .filter(Objects::nonNull)
-                .findFirst();
-    }
-
-    private String serializeSteps(List<ReasoningStep> steps) {
-        try {
-            return (steps == null || steps.isEmpty())
-                ? "[]"
-                : objectMapper.writeValueAsString(steps);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize reasoning steps", e);
-        }
+    @Override
+    public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
+        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
+        return storeAdapter.findLatestAwaitingApprovalWithPrefix(sessionPrefix)
+                .map(CheckpointMapper::toEntity);
     }
 
     @Override
-    @Transactional
     public Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId) {
-        TypedQuery<AutonomyLevel> q = em.createQuery(
-                "SELECT c.autonomyLevel FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid ORDER BY c.id DESC",
-                AutonomyLevel.class);
-        q.setParameter("sid", sessionId);
-        q.setMaxResults(1);
-        return q.getResultList().stream().filter(Objects::nonNull).findFirst();
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void deleteCheckpoint(String sessionId, String role) {
-        em.createQuery(
-            "DELETE FROM AgentCheckpoint c " +
-            "WHERE c.sessionId = :sid AND c.agentRole = :role")
-        .setParameter("sid", sessionId)
-        .setParameter("role", role)
-        .executeUpdate();
+        return storeAdapter.findLatestBySession(sessionId)
+            .flatMap(d -> Optional.ofNullable(d.autonomyLevel())
+                .map(AutonomyLevel::valueOf));
     }
 
     @Override
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public boolean updateBatchToolDecision(String sessionId, String agentRole,
                                            String toolName, String decision) {
-        return withRetry(
-            () -> self.doUpdateBatchToolDecision(sessionId, agentRole, toolName, decision),
-            "updateBatchToolDecision");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public boolean doUpdateBatchToolDecision(String sessionId, String agentRole,
-                                             String toolName, String decision) {
-        em.clear();
-        Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
-        if (cpOpt.isEmpty()) return false;
-
-        AgentCheckpoint cp = cpOpt.get();
-        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL
-                || !cp.hasBatchToolDecisions()) {
-            return false;
-        }
-
-        try {
-            Map<String, ToolDecision> map = objectMapper.readValue(
-                cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
-            if (!map.containsKey(toolName)) return false;
-            map.put(toolName, ToolDecision.valueOf(decision));
-            cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
-            em.merge(cp);
-            return true;
-        } catch (Exception e) {
-            log.errorf("Failed to update batch tool decision: %s",
-               e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            return false;
-        }
+        return storeAdapter.atomicUpdateBatchToolDecision(sessionId, agentRole, toolName, decision);
     }
 
     @Override
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
-        return withRetry(() -> self.doIsAllBatchToolsDecided(sessionId, agentRole), "isAllBatchDecided");
-    }
+        Optional<CheckpointDto> dtoOpt = storeAdapter.findBySessionAndRole(sessionId, agentRole);
+        if (dtoOpt.isEmpty()) return false;
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public boolean doIsAllBatchToolsDecided(String sessionId, String agentRole) {
-        em.clear();
-        Optional<AgentCheckpoint> cpOpt = load(sessionId, agentRole);
-        if (cpOpt.isEmpty()) return false;
-
-        AgentCheckpoint cp = cpOpt.get();
-        if (!cp.hasBatchToolDecisions()) return false;
+        CheckpointDto dto = dtoOpt.get();
+        if (dto.batchToolDecisions() == null) return false;
 
         try {
             Map<String, ToolDecision> map = objectMapper.readValue(
-                cp.getBatchToolDecisions(),
+                dto.batchToolDecisions(),
                 new TypeReference<Map<String, ToolDecision>>() {});
-            return map.values().stream()
-                .noneMatch(val -> ToolDecision.PENDING == val);
+            return map.values().stream().noneMatch(val -> ToolDecision.PENDING == val);
         } catch (Exception e) {
-            log.errorf("Failed to check if batch decided: %s",
-               e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             return false;
         }
     }
 
     @Override
-    @Transactional
-    public List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff) {
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.status = :status " +
-                "  AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("cutoff", LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC))
-                .getResultList();
+    public void deleteCheckpoint(String sessionId, String role) {
+        storeAdapter.deleteCheckpoint(sessionId, role);
     }
 
     @Override
-    @Transactional
-    public List<AgentCheckpoint> findByStatus(CheckpointStatus status) {
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status",
-                AgentCheckpoint.class)
-                .setParameter("status", status)
-                .getResultList();
+    public List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff) {
+        return storeAdapter.findStaleApprovals(cutoff).stream().map(CheckpointMapper::toEntity).toList();
     }
 
-    /**
-     * Attempts to acquire the local JVM resume lock for a session.
-     * <p>
-     * <strong>D1.1/F7 Tradeoff Documented:</strong> This is a JVM-local
-     * ConcurrentHashMap. It protects against concurrent duplicate resumes hitting
-     * the SAME pod (e.g., impatient user clicking 'Approve' twice). It DOES NOT
-     * protect against cross-pod races during rolling restarts or if a load balancer
-     * sprays two approvals to different pods. Moving to a persistent lock (e.g. 
-     * Redis or row-level SQLite lock) is required for full distributed exactly-once
-     * resuming, if ever strictly required by an orchestrator setup.
-     */
+    @Override
+    public List<AgentCheckpoint> findByStatus(CheckpointStatus status) {
+        return storeAdapter.findByStatus(status.toString()).stream().map(CheckpointMapper::toEntity).toList();
+    }
+
     @Override
     public boolean markBatchResuming(String sessionId) {
-        // F7: Use Instant.now() instead of Boolean.TRUE for TTL tracking.
         return resumingBatches.putIfAbsent(sessionId, Instant.now()) == null;
     }
 
@@ -770,11 +265,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public boolean isBatchResuming(String sessionId) {
         Instant start = resumingBatches.get(sessionId);
         if (start == null) return false;
-
-        // F7: TTL Guard. If the entry is older than 30 minutes, assume the 
-        // thread died or finally block failed to run (e.g. OOM/SIGKILL previously).
         if (Duration.between(start, Instant.now()).toMinutes() > 30) {
-            log.warnf("Found orphaned resume marker for session %s (started %s) — ignoring.", sessionId, start);
             resumingBatches.remove(sessionId);
             return false;
         }
@@ -786,54 +277,86 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         resumingBatches.remove(sessionId);
     }
 
-    /**
-     * §7.35 — Returns true if the latest AWAITING_APPROVAL checkpoint for this
-     * session has been waiting longer than {@code timeoutHours}, or if no such
-     * checkpoint exists.
-     */
     @Override
-    @Transactional
-    public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
-        Optional<AgentCheckpoint> cpOpt = findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty()) {
-            return true; // no checkpoint = nothing to approve = treat as expired
-        }
-        AgentCheckpoint cp = cpOpt.get();
-        if (cp.getUpdatedAt() == null) {
-            return true; // no timestamp = cannot verify freshness = treat as expired
-        }
-        LocalDateTime cutoff = LocalDateTime.ofInstant(
-                Instant.now().minus(timeoutHours, ChronoUnit.HOURS),
-                ZoneOffset.UTC);
-        return cp.getUpdatedAt().isBefore(cutoff);
-    }
-    @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public boolean isSessionActive(String sessionId) {
-        em.clear();
-        return !em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "  AND c.status NOT IN (:terminalStatuses)",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
-                .setMaxResults(1)
-                .getResultList()
-                .isEmpty();
+    public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId) {
+        return storeAdapter.findLatestAwaitingApproval(sessionId)
+                .map(CheckpointMapper::toEntity);
     }
 
     @Override
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<AgentCheckpoint> findLatestAwaitingApprovalByPrefix(String prefix) {
+        return storeAdapter.findLatestAwaitingApprovalWithPrefix(prefix)
+                .map(CheckpointMapper::toEntity);
+    }
+
+    @Override
+    public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId) {
+        return storeAdapter.findLatestBySession(sessionId).map(CheckpointMapper::toEntity);
+    }
+
+    @Override
+    public Optional<String> findLatestRole(String sessionId) {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        return storeAdapter.findLatestNonArchivedBySession(sessionId)
+                .map(CheckpointDto::agentRole);
+    }
+
+    @Override
+    public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
+        return storeAdapter.isCheckpointExpired(sessionId, timeoutHours);
+    }
+
+    @Override
+    public boolean isSessionActive(String sessionId) {
+        return storeAdapter.isSessionActive(sessionId);
+    }
+
+    @Override
     public boolean hasPendingApproval(String sessionId) {
-        return !em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.status = :status",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setMaxResults(1)
-                .getResultList()
-                .isEmpty();
+        return storeAdapter.hasPendingApproval(sessionId);
+    }
+
+    // ── Mapping ──────────────────────────────────────────────────────────────
+
+
+    private ReasoningStepDto mapToReasoningStepDto(ReasoningStep step) {
+        return new ReasoningStepDto(
+            serialize(step.thought()), step.action(), serialize(step.actionInput()),
+            step.observation(), step.inputTokens(), step.outputTokens(),
+            step.success(), step.errorCode(), step.traceId(), step.rootCauseClass()
+        );
+    }
+
+    private ReasoningStep mapToReasoningStep(ReasoningStepDto dto) {
+        return ReasoningStep.of(
+            deserialize(dto.thoughtJson(), String.class),
+            dto.action(),
+            deserialize(dto.actionInputJson(), new TypeReference<Map<String, Object>>() {}),
+            dto.observation(), dto.inputTokens(), dto.outputTokens(), dto.success(),
+            dto.errorCode(), dto.traceId(), dto.rootCauseClass()
+        );
+    }
+
+    private <T> T deserialize(String json, Class<T> clazz) {
+        if (json == null || json.isBlank()) return null;
+        try { return objectMapper.readValue(json, clazz); }
+        catch (JsonProcessingException e) { return null; }
+    }
+
+    private <T> T deserialize(String json, TypeReference<T> typeRef) {
+        if (json == null || json.isBlank()) return null;
+        try { return objectMapper.readValue(json, typeRef); }
+        catch (JsonProcessingException e) { return null; }
+    }
+
+    private String serialize(Object obj) {
+        if (obj == null) return null;
+        try { return objectMapper.writeValueAsString(obj); }
+        catch (JsonProcessingException e) { throw new IllegalStateException(e); }
+    }
+
+    private String serializeSteps(List<ReasoningStep> steps) {
+        try { return (steps == null || steps.isEmpty()) ? "[]" : objectMapper.writeValueAsString(steps); }
+        catch (JsonProcessingException e) { throw new IllegalStateException(e); }
     }
 }

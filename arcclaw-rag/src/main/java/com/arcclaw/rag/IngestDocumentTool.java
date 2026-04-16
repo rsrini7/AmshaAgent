@@ -13,13 +13,14 @@ import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.persistence.api.MemoryEntryDto;
+import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 @ApplicationScoped
 public class IngestDocumentTool implements AgentTool {
 
-    @Inject GlobalKnowledgeBase globalKb;
-    @Inject SessionKnowledgeBase sessionKb;
+    @Inject MemoryRetrievalPort memoryPort;
     @Inject AuditService auditService;
 
     @Override
@@ -87,13 +88,10 @@ public class IngestDocumentTool implements AgentTool {
         String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) sessionId = "no-session";
 
-        String chunkId = globalKb.ingest(text);
-        sessionKb.ingest(chunkId != null ? chunkId : "session-" + label, text);
+        String chunkId = memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
 
         return ToolResponse.success(
-            chunkId != null
-                ? "Document ingested successfully. chunkId: " + chunkId
-                : "Document stored in session memory (persistent vector store unavailable).");
+            "Document ingested successfully. chunkId: " + chunkId);
     }
 
     @Override

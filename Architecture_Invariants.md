@@ -350,6 +350,25 @@ This contract is non-negotiable and must be re-verified after every major refact
 
 ---
 
+### 5.10.1 Multi-Backend Clarification (P95 Amendment – 2026-04-13)
+
+The `NOT_SUPPORTED` annotations on `CheckpointApprovalService` are **architecturally correct for all persistence backends**, not just an SQLite workaround.
+
+**Why `NOT_SUPPORTED` is semantically correct regardless of backend:**
+* The 4 mutating methods orchestrate child `REQUIRES_NEW` writes **and** a subsequent `triggerResume()` which enters the transaction-free zone (§5.9). An outer `REQUIRED` transaction would hold a connection open across the LLM call in the resume path – this is harmful for **any** connection pool, not just SQLite.
+* On Postgres, `NOT_SUPPORTED` is harmless dead weight: it suspends any ambient JTA context, which is fine since all children manage their own transactions.
+* On SQLite, `NOT_SUPPORTED` is **critical**: it prevents the BUSY cascade (§5.8).
+
+**What the storage extraction MUST NOT do:**
+* MUST NOT move `NOT_SUPPORTED` annotations from `CheckpointApprovalService` into the adapter layer. The transaction boundary protects the *orchestration sequence* (persistence + resume), not just the persistence call.
+* MUST NOT make `@Transactional` annotations "configurable per profile" on this class. The `NOT_SUPPORTED` contract applies universally.
+
+**What the storage extraction MAY do:**
+* The future `PostgresCheckpointStoreAdapter` MAY use `@Transactional(REQUIRED)` or plain `@Transactional` on its internal methods (no BUSY risk on Postgres).
+* The `SqliteCheckpointStoreAdapter` MUST retain `REQUIRES_NEW` on its write methods (same as current `StatefulAgentStoreImpl.doXxx()` methods).
+
+---
+
 ## 5.11 `ApprovalStateMachine.decide()` Transaction Contract
 
 `ApprovalStateMachine.decide()` (the `ApprovalGateway` SPI implementation) MUST be
@@ -442,6 +461,29 @@ MUST NOT use `SqliteRetryTemplate` for:
 The template inspects `SqliteErrorStrings.isBusy(e)` across the full `getCause()` chain
 because Hibernate wraps `SQLiteException` several layers deep. Do not simplify this check
 to a single `e.getMessage()` string comparison.
+
+---
+
+### 5.14.1 Retry Encapsulation After Storage Extraction (P95 Amendment – 2026-04-13)
+
+After the C1 storage port extraction (Wave 3), `SqliteRetryTemplate` MUST be encapsulated **inside** the `arcclaw-persistence-sqlite` adapter module.
+
+**MUST NOT expose a `PersistenceRetryPort` interface to `arcclaw-core`.**
+
+**Rationale:**
+* Retry-on-BUSY is a SQLite-specific infrastructure concern. Core should call `CheckpointStorePort.save()` and the adapter handles retries transparently.
+* Postgres does not need BUSY retries – it uses MVCC and standard connection-pool retry. Exposing a retry port to Core forces every core class to participate in an infrastructure concern it should not know about.
+* `StatefulAgentStoreImpl` currently wraps every `self.doXxx()` call with `withRetry(() -> self.doXxx(), ...)`. After extraction, the `SqliteCheckpointStoreAdapter` absorbs both the `REQUIRES_NEW` boundary and the retry loop – the `withRetry` wrapper in `StatefulAgentStoreImpl` is deleted.
+* `WorkspaceManager.markCheckpointsFailed()` should delegate to a `CheckpointStorePort.markFailed(sessionId)` method. The SQLite adapter wraps its own retry internally.
+
+**Port interface (`arcclaw-persistence-api`) MUST contain only:**
+* `CheckpointStorePort` – checkpoint CRUD + status transitions
+* `MemoryRetrievalPort` – search + index
+* `BackendCapabilities` – feature flags (FTS, vector, advisory locks)
+
+**Port interface MUST NOT contain:**
+* `PersistenceRetryPort` or any retry abstraction
+* `SqliteRetryTemplate` or any reference to SQLite error handling
 
 ---
 
@@ -557,6 +599,23 @@ SecretVault operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST
 - Caller transactions MUST NOT rely on vault writes rolling back with their transaction. Vault writes are committed immediately.
 - Calling `vault.store(...)` from within a `REQUIRED` transaction suspends the outer transaction and gets its own write lock, preventing `SQLITE_BUSY` errors during concurrent tool execution or onboarding initialization.
 - This explicit boundary satisfies the anti-nesting requirements described in §5.8.
+
+---
+
+## 5.21 `InstantToTextConverter` Multi-Backend Safety (§5.21 INVARIANT)
+
+- `@Converter(autoApply = true)` on `InstantToTextConverter` in `arcclaw-persistence-sqlite` MUST remain SQLite-only.
+- The `arcclaw-persistence-postgres` module MUST NOT add a competing `@Converter(autoApply = true)` for `Instant`.
+- PostgreSQL handles `timestamptz` natively; any PostgreSQL-specific conversion must be explicit or handled by the dialect.
+- Having two auto-apply converters for the same type on the same classpath causes a Hibernate boot failure.
+
+## 5.22 Cross-DB Column Definition Usage (§5.22 INVARIANT)
+No JPA entity in `arcclaw-core` or `arcclaw-persistence-api` may use `@Column(columnDefinition="...")` for integers or booleans.
+All DDL customization for IDENTITY bounds must live in per-adapter Flyway migration scripts or rely on Hibernate's `@ColumnDefault`.
+However, `columnDefinition = "TEXT"` is explicitly permitted and required for large JSON blob fields across all adapters. Removing it causes Hibernate to silently emit `VARCHAR(255)`, truncating payloads. `columnDefinition = "INTEGER"` for ID/identity columns and `columnDefinition = "INTEGER NOT NULL DEFAULT 0"` for booleans are the only prohibited forms.
+
+## 5.23 SessionSchemaEnforcer DDL Isolation (§5.23 INVARIANT)
+All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `arcclaw-core` or `arcclaw-app`. Each persistence adapter module (e.g. `arcclaw-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
 
 ---
 
@@ -1052,6 +1111,8 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Is `AgentCronScheduler.pollAndDispatch()` still NOT_SUPPORTED with `reclaimStaleCrons` isolated? (§5.12)
 - [ ] Does Agroal config still have `background-validation=true` and `max-size≥3`? (§5.13)
 - [ ] Is `SqliteRetryTemplate` only called from a NOT_SUPPORTED or un-annotated outer frame? (§5.14)
+- [ ] After storage extraction: is `SqliteRetryTemplate` encapsulated inside `arcclaw-persistence-sqlite`? No `PersistenceRetryPort` in core. (§5.14.1)
+- [ ] After storage extraction: are `NOT_SUPPORTED` annotations still on `CheckpointApprovalService`, NOT moved to adapters? (§5.10.1)
 - [ ] Does any new `CheckpointStatus` terminal value need to be added to `doMarkCheckpointsFailedRequiresNew`? (§5.18)
 - [ ] Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19)
 - [ ] Does `AsyncPersistenceEngine` still bind `WorkspaceScopeHolder` per event, not per thread? (§5.17)

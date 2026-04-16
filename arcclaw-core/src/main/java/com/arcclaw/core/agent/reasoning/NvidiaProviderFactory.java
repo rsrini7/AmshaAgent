@@ -4,11 +4,10 @@ import java.time.Duration;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.arcclaw.core.routing.NvidiaMessageSanitizer;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-
-import com.arcclaw.core.routing.NvidiaMessageSanitizer;
 
 @ApplicationScoped
 public class NvidiaProviderFactory implements AgentChatModelProvider {

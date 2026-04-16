@@ -329,6 +329,12 @@ public class ToolRegistry {
                     return ToolResponse.infraFailure(result.reason());
                 }
 
+                if (!result.success()) {
+                    // Tool failed (e.g. exit 1). Return a proper failure response
+                    // so the LLM can see the error rather than a blank Success.
+                    return ToolResponse.failure(1, result.reason());
+                }
+
                 String postProcessedOutput = tool.postProcessOutput(
                     result.output(), sanitizedParams);
 

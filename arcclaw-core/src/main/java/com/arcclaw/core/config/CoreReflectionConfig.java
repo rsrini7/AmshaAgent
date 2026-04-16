@@ -15,7 +15,6 @@ import com.arcclaw.core.audit.AuditVerifier;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.cron.CronTaskScheduled;
-import com.arcclaw.core.persistence.ArcClawSQLiteDialect;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
@@ -25,7 +24,6 @@ import com.arcclaw.core.skill.SkillFrontmatter;
 import com.arcclaw.core.skill.SkillPromptParams;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.InstantToTextConverter;
 import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ManageScheduleTool;
 import com.arcclaw.core.tools.MemorySearchTool;
@@ -66,7 +64,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         GithubTool.class,
         MemorySearchTool.class,
         AgentCronEntity.class,
-        InstantToTextConverter.class,
         SandboxExecTool.class,
         ScheduleTaskTool.class,
         ManageScheduleTool.class,
@@ -77,7 +74,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SkillFrontmatter.class,
         CompiledSkillEntry.class,
         SkillPromptParams.class,
-        ArcClawSQLiteDialect.class,
         SandboxResult.class,
         AgentJobCompleted.class,
         CronTaskScheduled.class

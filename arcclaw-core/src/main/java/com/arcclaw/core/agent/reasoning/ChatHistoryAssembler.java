@@ -188,16 +188,26 @@ public class ChatHistoryAssembler {
             }
         }
 
-        // STEP C — special goal injection
+        // STEP C — special goal injection or correction hints (§7.31 turn-flipping)
         if (goal != null && goal.equals(AgentSentinels.GOAL_TOOL_APPROVED)) {
-            // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
             messages.add(UserMessage.userMessage(goal));
-        } else if (goal != null && goal.contains("System: Your previous tool call")) {
-            String correctionHint = goal.substring(goal.indexOf("System: Your previous tool call"));
-            messages.add(SystemMessage.from(
-                correctionHint +
-                "\nIMPORTANT: Do NOT attempt another tool call. Output your final answer as plain text only."
-            ));
+        } else if (goal != null && goal.contains("System: ")) {
+            int start = goal.indexOf("System: ");
+            String correctionHint = goal.substring(start);
+            
+            ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
+
+            // We use UserMessage instead of SystemMessage to "flip" the turn 
+            // ONLY if the last message was from the Assistant (AiMessage).
+            // This prevents "add_generation_prompt" failures while maintaining 
+            // valid turn-order (no User turns immediately after ToolResults).
+            // §7.31/7.35
+            if (last instanceof AiMessage) {
+                messages.add(UserMessage.userMessage(correctionHint));
+            } else {
+                // Otherwise keep it as a SystemMessage (will be moved to head prompt)
+                messages.add(SystemMessage.from(correctionHint));
+            }
         }
 
         return messages;

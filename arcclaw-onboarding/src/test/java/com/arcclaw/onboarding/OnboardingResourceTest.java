@@ -12,6 +12,7 @@ import com.arcclaw.onboarding.dto.Step2Request;
 import com.arcclaw.onboarding.dto.Step3Request;
 import com.arcclaw.onboarding.dto.Step4Request;
 import com.arcclaw.onboarding.dto.Step5Request;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -24,6 +25,9 @@ class OnboardingResourceTest {
 
     @InjectMock
     LlmValidationGateway mockModelFactory;
+
+    @InjectMock
+    EmbeddingModel mockEmbeddingModel;
 
     @InjectMock
     SecretVault mockVault;

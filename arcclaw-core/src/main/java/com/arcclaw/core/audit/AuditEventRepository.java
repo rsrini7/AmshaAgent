@@ -82,7 +82,7 @@ public class AuditEventRepository {
      * Defensive pre-persist validation.
      * Catches any null-escape from hash utilities before hitting the DB NOT NULL constraint.
      */
-    void validateBeforePersist(AuditEvent event) {
+    public void validateBeforePersist(AuditEvent event) {
         if (event.sessionId == null || event.sessionId.isBlank())
             throw new IllegalStateException("AuditEvent.sessionId must not be null/blank");
         if (event.prevHash == null || event.prevHash.isBlank())

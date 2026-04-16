@@ -2,9 +2,10 @@ package com.arcclaw.tool.playwright;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import jakarta.inject.Inject;
+
 import com.microsoft.playwright.PlaywrightException;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;

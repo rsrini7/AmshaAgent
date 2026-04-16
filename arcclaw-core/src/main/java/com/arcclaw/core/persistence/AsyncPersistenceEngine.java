@@ -16,6 +16,8 @@ import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.persistence.api.CheckpointStorePort;
+import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.ShutdownEvent;
@@ -74,9 +76,12 @@ public class AsyncPersistenceEngine {
     @Inject
     MeterRegistry registry;
 
-    /** Handles retry loop, @Transactional boundary, exhaustion, and BUSY detection. */
+    /** Handles backend-specific retry-loop and @Transactional boundary. */
     @Inject
-    PersistenceRetryEngine retryEngine;
+    PersistenceAdapterPort persistenceAdapter;
+
+    @Inject
+    CheckpointStorePort checkpointStore;
 
     // -------------------------------------------------------------------------
     // Lifecycle state
@@ -232,12 +237,20 @@ public class AsyncPersistenceEngine {
      * <strong>For use in tests only.</strong>
      */
     public void waitForIdle() {
-        PersistenceRetryEngine.sleepQuietly(10); // give any in-flight enqueue time to land
+        sleepQuietly(10); // give any in-flight enqueue time to land
         while (!criticalQueue.isEmpty()
                 || !telemetryQueue.isEmpty()
                 || processingCritical.get()
                 || processingTelemetry.get()) {
-            PersistenceRetryEngine.sleepQuietly(10);
+            sleepQuietly(10);
+        }
+    }
+
+    private void sleepQuietly(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -314,9 +327,10 @@ public class AsyncPersistenceEngine {
      * is best-effort and must never crash the drain thread.
      */
     private void drainTelemetry() {
+        PersistenceEvent event = null;
         while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
-                PersistenceEvent event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
+                event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (event == null) continue;
 
                 processingTelemetry.set(true);
@@ -332,7 +346,10 @@ public class AsyncPersistenceEngine {
 
             } catch (Exception e) {
                 if (running.get() && Arc.container() != null) {
-                    log.errorf("AsyncPersistenceEngine Unexpected error in telemetry drain: %s",
+                    final PersistenceEvent fe = event;
+                    log.warnf("TELEMETRY event dropped after retry exhaustion for session %s type %s: %s",
+                            fe != null ? fe.getSessionId() : "unknown",
+                            fe != null ? fe.getEventType() : "unknown",
                             e.getMessage());
                     log.debugf(e, "AsyncPersistenceEngine Full stacktrace for telemetry drain error");
                 }
@@ -352,7 +369,7 @@ public class AsyncPersistenceEngine {
      *       {@code @WorkspaceScoped} beans resolve correctly inside the JPA write.
      *       <strong>NEVER</strong> wrap the whole consumer thread — it processes
      *       events from many different sessions.</li>
-     *   <li>Delegates the retry loop to {@link PersistenceRetryEngine#executeWithRetry}.</li>
+     *   <li>Delegates the retry loop to {@link PersistenceAdapterPort#execute}.</li>
      *   <li>Wraps any non-CVE exception in a {@link ComplianceViolationException} so
      *       the drain loop has a single exception type to handle.</li>
      * </ol>
@@ -381,19 +398,36 @@ public class AsyncPersistenceEngine {
         }
 
         // Bind workspace scope per-event, then delegate all retry logic to retryEngine.
-        try {
-            WorkspaceScopeHolder.run(event.getSessionId(),
-                    () -> retryEngine.executeWithRetry(event));
-
-        } catch (ComplianceViolationException cve) {
-            if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
-            throw cve; // re-throw so drainCritical can log the HMAC-unavailable case
-
-        } catch (Exception e) {
-            ComplianceViolationException cve = new ComplianceViolationException(
-                    event.getSessionId(), event.getEventType(), e);
-            if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
-            throw cve;
+        int hmacRetry = 0;
+        while (true) {
+            try {
+                WorkspaceScopeHolder.run(event.getSessionId(),
+                        () -> persistenceAdapter.execute(
+                                event.getSessionId(),
+                                event.getEventType().toString(),
+                                event.getDbAction()));
+                if (event.getFuture() != null) event.getFuture().complete(null);
+                break;
+            } catch (IllegalStateException e) {
+                if (e.getMessage() != null
+                        && e.getMessage().contains("HMAC key unavailable")
+                        && hmacRetry++ < 3) {
+                    log.warnf("Audit HMAC key not yet available, retry %d/3 in 100ms", hmacRetry);
+                    sleepQuietly(100);
+                    continue;
+                }
+                ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
+                throw cve; // re-throw so drainCritical can log the failure
+            } catch (ComplianceViolationException cve) {
+                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
+                throw cve;
+            } catch (Exception e) {
+                ComplianceViolationException cve = new ComplianceViolationException(
+                        event.getSessionId(), event.getEventType(), e);
+                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
+                throw cve;
+            }
         }
     }
 }

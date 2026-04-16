@@ -28,6 +28,14 @@ public class ReflexRegistry {
 
     private List<AgentReflex> sortedReflexes;
 
+    /**
+     * Startup-sorted immutable cache. O(N log N) sort happens once at boot.
+     * Hot-reload safety: Quarkus dev-mode restarts the CDI context on code
+     * changes, so @PostConstruct re-fires and the cache is rebuilt automatically.
+     * Per-request sorting was removed (RC4) because even though it guaranteed
+     * snapshot consistency, the startup cache is equivalent in Quarkus's
+     * restart-based hot-reload model.
+     */
     @PostConstruct
     void init() {
         this.sortedReflexes = reflexes.stream()
