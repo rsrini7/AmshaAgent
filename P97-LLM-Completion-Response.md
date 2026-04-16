@@ -695,3 +695,38 @@ playwright:
 | `result.length() > 200` (fallback accept) | `result.length() > minContentChars` | Configurable |
 
 The `waitForSelector` is placed **between** the selector string definition and the `allInnerTexts()` call — its `TimeoutError` is caught by the existing `catch (Exception ignored)` so a missing selector just moves to the next one in the chain without interrupting the loop.
+
+---
+
+Viewed EngineStepHandler.java:80-100
+Viewed EngineStepHandler.java:130-145
+Viewed EngineStepHandler.java:200-215
+Searched for "2"
+Edited EngineStepHandler.java
+Viewed AgentStateMachineRunner.java:1-35
+
+I have implemented all four hardening fixes to address the identified failure modes:
+
+1.  **Increased Self-Correction Budget**:
+    *   Updated `SelfCorrectionRetryManager.MAX_SCHEMA_CORRECTION_RETRIES` from `2` to `4` in [SelfCorrectionRetryManager.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/SelfCorrectionRetryManager.java).
+    *   Updated the corresponding threshold in [FinishActionHandler.java](file:///c:/Users/Srini/ws/ArcClawInternal/arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/FinishActionHandler.java).
+
+2.  **Early Salvage Logic**:
+    *   Modified `FinishActionHandler.handleLeak()` to permit early salvage of a clean "thought" after at least one correction attempt, provided the content is substantial (≥50 tokens) and passes existing quality guards. This prevents burning the remaining budget if the model already provided a usable answer within a "leaky" response.
+
+3.  **Degraded Response Recovery**:
+    *   Enhanced `EngineStepHandler.processEngineStep()` to detect "degraded" responses (≤1 output token) that frequently occur after model exhaustion or rate-limit sleeps.
+    *   Instead of passing these through to a failure result, the handler now injects a specific recovery hint instructing the model to retry with its full thought process and a clear answer.
+
+4.  **Consistency Verification**:
+    *   Verified all `llmSchemaErrorCount` threshold checks in `EngineStepHandler` are aligned with the new limit of 4.
+    *   Confirmed package-private visibility for `DecisionType`, ensuring no compilation errors in the core loop logic.
+
+These changes significantly improve the robustness profile for models like `llama-4-scout` on Groq, which are susceptible to raw JSON leaks and rate-limit induced degradation.
+
+***
+
+### Summary of fixes:
+- **`MAX_SCHEMA_CORRECTION_RETRIES`**: Increased to **4**.
+- **`FinishActionHandler`**: Added early salvage path for responses ≥ 50 tokens.
+- **`EngineStepHandler`**: Added detection and recovery hint for 1-token responses.

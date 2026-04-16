@@ -80,6 +80,19 @@ public class EngineStepHandler {
                     Collections.unmodifiableList(history));
 
             if (step != null) {
+                // If the model degraded (often after a rate-limit sleep) and returned
+                // 1 token or blank, inject a recovery hint rather than passing it through
+                // to the quality guard fallback.
+                if (step.outputTokens() <= 1 && !ReasoningStep.FINISH.equals(step.action())) {
+                    log.warnf("[STATE-MACHINE] session %s: detected degraded 1-token response — injecting recovery hint",
+                            context.sessionId());
+                    return StepDecision.retryEngine(
+                        "System: Your last response was empty or contained only one token. " +
+                        "This often happens due to infrastructure limits. " +
+                        "Please retry now with your full thought process and a clear FINISH answer.",
+                        llmSchemaErrorCount);
+                }
+
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
                     log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     llmSchemaErrorCount++;
