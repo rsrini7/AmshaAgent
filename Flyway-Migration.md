@@ -16,3 +16,5 @@ Replace with Flyway (recommended for long-term):
   5. Add Architecture Invariant 5.23:
      "Schema migrations are managed by Flyway, scoped per persistence adapter module.
       No class may issue CREATE TABLE via raw JDBC or EntityManager at runtime."
+
+this is just one sample.. need to check entire repo for this migration.
