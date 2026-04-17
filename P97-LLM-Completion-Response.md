@@ -1318,3 +1318,23 @@ I have synchronized the framework with all specified architectural invariants an
 *   **Checkstyle Baseline**: Configured `checkstyle-suppressions.xml` in `arcclaw-core/pom.xml` and created a baseline for pre-existing long-method violations in `SandboxExecTool` and `GithubTool`, allowing the complexity gate to pass for new code without blocking on legacy refactoring.
 
 All modules are compiling, and the Tier 2 hardening invariants are now strictly enforced across the reasoning loop.
+
+---
+
+Edited StrategyInjectionTest.java
+
+I have resolved the remaining hardening issues and fixed the compilation regressions in the test suite.
+
+### 🛡️ Final Hardening Fixes
+1.  **Checkpoint Resilience**: Added a null guard to `CheckpointResumeHandler.handleResumeFailure` to safely handle exceptions during `MessageContext` preparation, preventing an NPE that was swallowing original error details.
+2.  **McpToolBridge Fail-Fast (§4.1)**: Updated the `@PostConstruct` lifecycle to perform a proactive tool registry check. If a tool specified in the `McpToolAllowlist` is missing from the `ToolRegistry`, the server now throws an `IllegalStateException` at startup instead of failing silently at runtime.
+3.  **Dead Code Removal**: Pruned the unreferenced `onSchemaError`, `RetryDecision`, and `buildExhaustedHint` paths from `SelfCorrectionRetryManager`. Cleaned up the associated imports and documentation to reflect the new stateless orchestration model.
+4.  **Hot-Reload Safety (§4.2)**: Implemented `CapabilityRegistry.clear()` and ensured `ToolDiscoveryService` calls it at the start of its discovery cycle. This allows dev-mode hot-reloads to re-register capabilities without triggering "duplicate grant" exceptions.
+5.  **Contract Documentation**: Added Javadoc to `FinishActionHandler.handle()` clarifying that the `llmSchemaErrorCount` parameter must be the pre-incremented value for correct budget calculation in `CorrectionStrategy`.
+
+### 🧪 Test Suite Stability
+*   **McpToolBridgeTest**: Added `testWarmSchemaCacheThrowsOnMissingTool` to verify the new fail-fast startup semantics.
+*   **StrategyInjectionTest**: Updated the `AlternativeCorrectionStrategy` mock to implement the new stateless `withinBudget(int)` and `buildCorrectionHint(int, String)` signatures, resolving compilation errors.
+*   **DynamicToolDiscoveryTest**: Added `testDiscoveryIsIdempotentOnHotReload` to verify that repeated discovery calls (hot-reload simulation) pass without throwing duplicate-grant errors.
+
+The Tier 2 hardening phase is now complete, with all specified invariants for state management, fail-fast initialization, and architectural boundaries strictly enforced.

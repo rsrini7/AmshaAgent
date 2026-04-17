@@ -53,11 +53,11 @@ public class StrategyInjectionTest {
     @Priority(1)
     public static class AlternativeCorrectionStrategy implements CorrectionStrategy {
         @Override
-        public String buildCorrectionHint(String sessionId, String failureReason) {
+        public String buildCorrectionHint(int currentRetryCount, String failureReason) {
             return "alt hint";
         }
         @Override
-        public boolean withinBudget(String sessionId) {
+        public boolean withinBudget(int currentRetryCount) {
             return true;
         }
     }
