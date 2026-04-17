@@ -49,13 +49,13 @@ class AgentResilienceTest {
                         return ReasoningStep.pending(
                                 "I need to search the web for this.",
                                 "web_search", // <-- does NOT exist
-                                Map.of("query", "test query"), 0, 0);
+                                Map.of("query", "test query"), 100, 100);
                     }
                     // Second call: after receiving the error observation, LLM self-corrects
                     return ReasoningStep.pending(
                             "The web_search tool doesn't exist. I'll finish with what I know.",
                             ReasoningStep.FINISH,
-                            Map.of("answer", "Self-corrected after tool not found."), 0, 0);
+                            Map.of("answer", "Self-corrected after tool not found."), 100, 100);
                 }
 
                 @Override
@@ -96,7 +96,7 @@ class AgentResilienceTest {
                     return ReasoningStep.pending(
                         "I'll keep trying the github tool.",
                         "github",
-                        Map.of("repo", "test/repo"), 0, 0);
+                        Map.of("repo", "test/repo"), 100, 100);
                 }
 
                 @Override
@@ -128,7 +128,7 @@ class AgentResilienceTest {
                     return ReasoningStep.pending(
                         "I'm done.",
                         ReasoningStep.FINISH,
-                        Map.of("answer", "Task complete."), 0, 0);
+                        Map.of("answer", "Task complete."), 100, 100);
                 }
 
                 @Override

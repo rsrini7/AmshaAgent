@@ -174,6 +174,9 @@ class AgentStateMachineRunnerTest {
         when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
         when(destructiveFilter.filter(anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+
+        when(qualityGuard.guard(any(), any())).thenAnswer(inv ->
+                new AnswerGuardStrategy.AnswerGuardResult(inv.getArgument(0), false, null));
     }
 
 
@@ -187,7 +190,7 @@ class AgentStateMachineRunnerTest {
     @Test
     void testFinishOnFirstStep() {
         ReasoningStep finishStep = ReasoningStep.pending(
-                "done", ReasoningStep.FINISH, Map.of("answer", "Hello"), 0, 0);
+                "done", ReasoningStep.FINISH, Map.of("answer", "Hello"), 100, 100);
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(finishStep);
 
@@ -203,7 +206,7 @@ class AgentStateMachineRunnerTest {
 
     @Test
     void testLoopExceededAfterMaxIterations() {
-        ReasoningStep toolStep = ReasoningStep.pending("thought", "tool", Map.of(), 0, 0);
+        ReasoningStep toolStep = ReasoningStep.pending("thought", "tool", Map.of(), 100, 100);
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep);
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
@@ -226,9 +229,9 @@ class AgentStateMachineRunnerTest {
     @Test
     void testHallucinatedToolIntercepted() {
         ReasoningStep hallucinatedStep = ReasoningStep.pending(
-                "thought", "fake-tool", Map.of(), 0, 0);
+                "thought", "fake-tool", Map.of(), 100, 100);
         ReasoningStep finishStep = ReasoningStep.pending(
-                "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 0, 0);
+                "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 100, 100);
 
 
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
@@ -270,7 +273,7 @@ class AgentStateMachineRunnerTest {
     void testAwaitingApprovalPausesLoop() {
         WorkspaceContext.run("s1", "u1", "c1", AutonomyLevel.SUPERVISED, "coordinator", () -> {
             ReasoningStep toolStep = ReasoningStep.pending(
-                    "thought", "protected-tool", Map.of(), 0, 0);
+                    "thought", "protected-tool", Map.of(), 100, 100);
             when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                     .thenReturn(toolStep);
             when(toolRegistry.findTool("protected-tool"))
@@ -299,9 +302,9 @@ class AgentStateMachineRunnerTest {
     @Test
     void testCircuitBreakerTripsAfter2Failures() {
         ReasoningStep toolStep1 = ReasoningStep.pending(
-                "thought1", "broken-tool", Map.of("arg", 1), 0, 0);
+                "thought1", "broken-tool", Map.of("arg", 1), 100, 100);
         ReasoningStep toolStep2 = ReasoningStep.pending(
-                "thought2", "broken-tool", Map.of("arg", 2), 0, 0);
+                "thought2", "broken-tool", Map.of("arg", 2), 100, 100);
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep1)
                 .thenReturn(toolStep2);
@@ -326,7 +329,7 @@ class AgentStateMachineRunnerTest {
     void testSchemaErrorSelfHealsOnce() {
         InvalidRequestException ex = new InvalidRequestException("tool call validation failed");
         ReasoningStep finishStep = ReasoningStep.pending(
-                "done", ReasoningStep.FINISH, Map.of("answer", "healed"), 0, 0);
+                "done", ReasoningStep.FINISH, Map.of("answer", "healed"), 100, 100);
 
 
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
@@ -346,7 +349,7 @@ class AgentStateMachineRunnerTest {
     @Test
     void testSchedulingToolFastPathExits() {
         ReasoningStep scheduleStep = ReasoningStep.pending(
-                "planning", "schedule_task", Map.of("task", "clean"), 0, 0);
+                "planning", "schedule_task", Map.of("task", "clean"), 100, 100);
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(scheduleStep);
         when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(mock(AgentTool.class)));
@@ -385,9 +388,9 @@ class AgentStateMachineRunnerTest {
     @Test
     void testReactKeywordDoesNotPersistToHistory() {
         ReasoningStep reactStep = ReasoningStep.pending(
-                "I will observe the result", "OBSERVE", Map.of(), 0, 0);
+                "I will observe the result", "OBSERVE", Map.of(), 100, 100);
         ReasoningStep finishStep = ReasoningStep.pending(
-                "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 0, 0);
+                "done", ReasoningStep.FINISH, Map.of("answer", "fixed"), 100, 100);
 
 
         when(engine.nextStep(any(), any(), any(), anyList()))
