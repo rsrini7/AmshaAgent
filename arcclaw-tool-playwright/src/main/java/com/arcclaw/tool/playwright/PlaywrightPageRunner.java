@@ -102,10 +102,6 @@ public class PlaywrightPageRunner {
      */
     private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
 
-    // -------------------------------------------------------------------------
-    // Public API
-    // -------------------------------------------------------------------------
-
     public boolean isEnabled() {
         return enabled;
     }
@@ -113,10 +109,6 @@ public class PlaywrightPageRunner {
     public boolean isInitialized() {
         return initFuture.isDone() && !initFuture.isCompletedExceptionally() && browser != null;
     }
-
-    // -------------------------------------------------------------------------
-    // Lifecycle — startup
-    // -------------------------------------------------------------------------
 
     void onStart(@Observes StartupEvent ev) {
         if (!enabled) {
@@ -128,19 +120,14 @@ public class PlaywrightPageRunner {
         playwrightThread.submit(() -> {
             try {
                 long t0 = System.currentTimeMillis();
-
                 Map<String, String> env = resolvePlaywrightEnv();
-
                 playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
                 browser = playwright.chromium().launch(
                     new BrowserType.LaunchOptions().setHeadless(headless)
                 );
-
                 log.infof("Playwright Chromium ready in %dms (headless=%s)",
                         System.currentTimeMillis() - t0, headless);
-
                 initFuture.complete(null);
-
             } catch (Exception e) {
                 handleInitFailure(e);
                 initFuture.completeExceptionally(e);
@@ -148,25 +135,16 @@ public class PlaywrightPageRunner {
         });
     }
 
-    // -------------------------------------------------------------------------
-    // Lifecycle — shutdown
-    // -------------------------------------------------------------------------
-
     @PreDestroy
     void destroy() {
         playwrightThread.submit(() -> {
             closeBrowserQuietly(browser, "destroy");
             browser = null;
             if (playwright != null) {
-                try {
-                    playwright.close();
-                } catch (Exception e) {
-                    log.debugf("Playwright close during destroy: %s", safeMessage(e));
-                }
+                try { playwright.close(); } catch (Exception ignored) {}
                 playwright = null;
             }
         });
-
         playwrightThread.shutdown();
         try {
             if (!playwrightThread.awaitTermination(10, TimeUnit.SECONDS)) {
@@ -177,18 +155,9 @@ public class PlaywrightPageRunner {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Scheduled browser refresh
-    // -------------------------------------------------------------------------
-
     @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
-        if (!enabled
-                || !initFuture.isDone()
-                || initFuture.isCompletedExceptionally()) {
-            return;
-        }
-
+        if (!enabled || !initFuture.isDone() || initFuture.isCompletedExceptionally()) return;
         playwrightThread.submit(() -> {
             log.info("Playwright browser refresh");
             closeBrowserQuietly(browser, "refresh");
@@ -198,10 +167,6 @@ public class PlaywrightPageRunner {
             log.info("Playwright browser refreshed successfully");
         });
     }
-
-    // -------------------------------------------------------------------------
-    // Core run — public entry point
-    // -------------------------------------------------------------------------
 
     /**
      * Executes a Playwright action against the given URL.
@@ -221,16 +186,13 @@ public class PlaywrightPageRunner {
         browser != null ? "OK" : "NULL");
 
         awaitReady();
-
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
             throw new IllegalArgumentException("Unsafe URL rejected: " + url);
         }
-
         try {
             return playwrightThread
                 .submit(() -> doRun(url, action, selector, timeoutMs))
                 .get(timeoutMs + RUN_FUTURE_BUFFER_MS, TimeUnit.MILLISECONDS);
-
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (cause instanceof PlaywrightException pe) throw pe;
@@ -246,10 +208,6 @@ public class PlaywrightPageRunner {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Internal — MUST only be called on playwrightThread
-    // -------------------------------------------------------------------------
-
     private String doRun(String url, String action, String selector, int timeoutMs) {
         if (browser == null) {
             throw new PlaywrightException("Playwright is not correctly initialized. " +
@@ -258,8 +216,8 @@ public class PlaywrightPageRunner {
 
         // Derive proportional sub-budgets from the caller's total timeoutMs.
         // This prevents NETWORKIDLE from eating the entire budget on JS-heavy SPAs.
-        int networkIdleTimeoutMs = (int) (timeoutMs * NETWORK_IDLE_RATIO);  // e.g. 30s → 9s
-        int loadFallbackTimeoutMs = (int) (timeoutMs * LOAD_FALLBACK_RATIO); // e.g. 30s → 4.5s
+        int networkIdleTimeoutMs = (int) (timeoutMs * NETWORK_IDLE_RATIO);
+        int loadFallbackTimeoutMs = (int) (timeoutMs * LOAD_FALLBACK_RATIO);
 
         long t0 = System.currentTimeMillis();
         log.infof("[Playwright] Starting action=%s url=%s (nav=%dms idle=%dms load=%dms)",
@@ -267,8 +225,6 @@ public class PlaywrightPageRunner {
 
         try (BrowserContext context = browser.newContext()) {
             Page page = context.newPage();
-
-            // Navigation timeout = full caller budget
             page.setDefaultNavigationTimeout(timeoutMs);
             page.setDefaultTimeout(timeoutMs);
 
@@ -289,6 +245,14 @@ public class PlaywrightPageRunner {
             // JS-heavy SPAs (quarkus.io, spring.io) rarely reach NETWORKIDLE —
             // we degrade to LOAD fallback quickly rather than burning the full budget.
             waitForPageReady(page, url, networkIdleTimeoutMs, loadFallbackTimeoutMs);
+
+            // --- Human-Like Interaction to trigger lazy-loading ---
+            try {
+                page.evaluate("window.scrollBy(0, window.innerHeight * 0.5)");
+                Thread.sleep(500); 
+                page.evaluate("window.scrollBy(0, window.innerHeight)");
+                Thread.sleep(500);
+            } catch (Exception ignored) {}
 
             String result = switch (action) {
                 case "screenshot" -> captureScreenshot(page);
@@ -311,20 +275,16 @@ public class PlaywrightPageRunner {
      * Previously used hardcoded 10s/5s values regardless of caller's timeoutMs, causing
      * total doRun() time to exceed caller budget on slow sites.
      */
-    private void waitForPageReady(Page page, String url,
-                                   int networkIdleTimeoutMs, int loadFallbackTimeoutMs) {
+    private void waitForPageReady(Page page, String url, int networkIdleTimeoutMs, int loadFallbackTimeoutMs) {
         try {
-            page.waitForLoadState(LoadState.NETWORKIDLE,
-                new Page.WaitForLoadStateOptions().setTimeout(networkIdleTimeoutMs));
+            page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions().setTimeout(networkIdleTimeoutMs));
             log.debugf("[Playwright] NETWORKIDLE reached for: %s", url);
         } catch (TimeoutError e) {
             log.debugf("[Playwright] NETWORKIDLE timeout (%dms) for %s — falling back to LOAD",
                     networkIdleTimeoutMs, url);
             try {
-                page.waitForLoadState(LoadState.LOAD,
-                    new Page.WaitForLoadStateOptions().setTimeout(loadFallbackTimeoutMs));
-                log.debugf("[Playwright] LOAD reached for: %s", url);
-            } catch (TimeoutError loadTimeout) {
+                page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(loadFallbackTimeoutMs));
+            } catch (TimeoutError ignored) {
                 log.warnf("[Playwright] LOAD fallback also timed out (%dms) for %s — proceeding with partial content",
                         loadFallbackTimeoutMs, url);
             }
@@ -332,19 +292,15 @@ public class PlaywrightPageRunner {
     }
 
     private String extractText(Page page, String llmSelector) {
-        // 1. Try LLM-provided selector — wait for visibility on SPAs.
-        // Threshold is minContentChars (default 200) to reject single-heading
-        // results like "Blog" (103 chars) that pass the old hardcoded 50-char floor.
+        // 1. Try LLM-provided selector
         if (llmSelector != null && !llmSelector.isBlank()) {
             try {
                 Locator loc = page.locator(llmSelector);
-                loc.first().waitFor(new Locator.WaitForOptions()
-                    .setState(WaitForSelectorState.VISIBLE)
-                    .setTimeout(selectorWaitMs));
+                loc.first().waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.VISIBLE).setTimeout(selectorWaitMs));
                 String result = loc.allInnerTexts().stream()
                     .map(t -> normalizeWhitespace(t.trim()))
                     .filter(s -> s.length() > minFilterChars)
-                    .collect(Collectors.joining("\n"));
+                    .collect(Collectors.joining("\n\n---\n\n"));
                 if (result.length() > minContentChars) return result;
                 log.warnf("[Playwright] Selector '%s' returned only %d chars (min=%d) — engaging fallback chain",
                         llmSelector, result.length(), minContentChars);
@@ -353,83 +309,49 @@ public class PlaywrightPageRunner {
             }
         }
 
-        // 2. Semantic fallback chain.
-        // Ordered from most specific (blog/post listing containers) to broadest (body).
-        // Each selector:
-        //   a) waits up to selectorWaitMs for at least one element to become visible —
-        //      this handles React/Vue lazy-render where elements mount after NETWORKIDLE
-        //   b) collects all inner texts, filters noise below minFilterChars
-        //   c) accepts the result only if total length exceeds minContentChars —
-        //      prevents a single short heading from short-circuiting the chain
-        String[] fallbackSelectors = {
-            "[class*='blog'] h2, [class*='post'] h2, [class*='card'] h2",
-            "[class*='blog'] h3, [class*='post'] h3, [class*='card'] h3",
-            "article h1, article h2, article h3",
-            "main h1, main h2, main h3",
-            "[class*='title'], [class*='heading'], [class*='post-title']",
-            "h1, h2, h3",
-            "main p",
+        // 2. Greedy Semantic Fallback
+        String[] fallbacks = {
+            "main", "article", "[class*='blog'] .post, .post, .card",
+            "[class*='blog'] h2, [class*='post'] h2, article h2",
             "body"
         };
-        for (String sel : fallbackSelectors) {
+        String best = "";
+        for (String sel : fallbacks) {
             try {
-                // Wait for the selector to appear before collecting.
-                // Without this, allInnerTexts() returns empty on SPAs that mount
-                // elements asynchronously — even after NETWORKIDLE has fired.
-                // selectorWaitMs (default 2000ms) keeps this from burning too much
-                // of the caller budget; TimeoutError is caught and the chain continues.
-                page.waitForSelector(sel, new Page.WaitForSelectorOptions()
-                    .setState(WaitForSelectorState.VISIBLE)
-                    .setTimeout(selectorWaitMs));
-
-                String result = page.locator(sel).allInnerTexts().stream()
+                page.waitForSelector(sel, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.VISIBLE).setTimeout(selectorWaitMs));
+                String current = page.locator(sel).allInnerTexts().stream()
                     .map(t -> normalizeWhitespace(t.trim()))
                     .filter(s -> s.length() > minFilterChars)
-                    .distinct()
-                    .collect(Collectors.joining("\n"));
-                if (result.length() > minContentChars) {
-                    log.infof("[Playwright] Fallback selector '%s' yielded %d chars (min=%d)", sel, result.length(), minContentChars);
-                    return result;
-                }
+                    .collect(Collectors.joining("\n\n---\n\n"));
+                if (current.length() > best.length()) best = current;
+                if (best.length() > 3000) break; // found a good large chunk
             } catch (Exception ignored) {}
         }
 
-        // 3. Nuclear fallback — full body text, 10s hard cap.
-        // No minContentChars threshold here — if everything above failed,
-        // return whatever body has rather than giving up entirely.
+        if (!best.isBlank() && best.length() > minContentChars) return best;
+
         try {
             return normalizeWhitespace(page.locator("body").innerText(
                 new Locator.InnerTextOptions().setTimeout(10000)));
         } catch (Exception e) {
-            return "Error: Could not extract text from page body.";
+            return "Error: Could not extract content.";
         }
     }
 
     private String captureScreenshot(Page page) {
-        byte[] png = page.screenshot(
-            new Page.ScreenshotOptions().setFullPage(false));
-
+        byte[] png = page.screenshot(new Page.ScreenshotOptions().setFullPage(false));
         if (png.length > MAX_SCREENSHOT_BYTES) {
-            png = page.screenshot(new Page.ScreenshotOptions()
-                .setFullPage(false)
-                .setScale(ScreenshotScale.CSS));
+            png = page.screenshot(new Page.ScreenshotOptions().setFullPage(false).setScale(ScreenshotScale.CSS));
         }
         return Base64.getEncoder().encodeToString(png);
     }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     /**
      * Fast-path: if initFuture is already done and successful, return immediately.
      * This avoids Future.get() overhead on every hot-path invocation after startup.
      */
     private void awaitReady() {
-        if (!enabled) return;
-        // Fast path — already initialized, skip Future.get() overhead
-        if (initFuture.isDone() && !initFuture.isCompletedExceptionally()) return;
-        // Slow path — init still in flight or failed
+        if (!enabled || (initFuture.isDone() && !initFuture.isCompletedExceptionally())) return;
         try {
             initFuture.get(60, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
@@ -446,9 +368,7 @@ public class PlaywrightPageRunner {
 
     private Map<String, String> resolvePlaywrightEnv() {
         Map<String, String> env = new HashMap<>(System.getenv());
-
-        String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH",
-                System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
+        String browsersPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
         if (browsersPath != null && !browsersPath.isBlank()) {
             String resolvedPath = Path.of(browsersPath).toAbsolutePath().normalize().toString();
             env.put("PLAYWRIGHT_BROWSERS_PATH", resolvedPath);
