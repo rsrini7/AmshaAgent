@@ -18,6 +18,7 @@ import java.util.Set;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -455,6 +456,42 @@ class LangChainReasoningEngineTest {
             assertTrue(userRequestPresent,
                 "User message must pass through history reconstruction unchanged");
         });
+    }
+
+    @InjectMock
+    IntentClassificationService intentClassifier;
+
+    @Test
+    void testWriteIntentForcesIngestDocumentCorrection() {
+        // Arrange
+        String sessionId = "write-intent-test";
+        String goal = "save my name as Srini";
+        
+        when(intentClassifier.isWriteIntent(goal)).thenReturn(true);
+        
+        // Mock a successful parse that returns a FINISH action with the JSON answer
+        ReasoningStep parsedStep = ReasoningStep.pending(
+            "I will save your name.", 
+            ReasoningStep.FINISH, 
+            Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, "{\"label\":\"name\",\"text\":\"Srini\"}"), 
+            100, 100);
+        
+        when(stepParser.parse(any(), any(), any())).thenReturn(parsedStep);
+        
+        // Set up other necessary mocks
+        AiMessage mockAiMessage = AiMessage.aiMessage("{\"label\":\"name\",\"text\":\"Srini\"}");
+        ChatResponse mockResponse = ChatResponse.builder().aiMessage(mockAiMessage).build();
+        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+
+        // Act
+        ReasoningStep resultStep = reasoningEngine.nextStep(createCtx(sessionId), "coordinator", goal, List.of());
+
+        // Assert
+        // Should be intercepted and turned into an OBSERVE step with a correction hint
+        assertEquals("OBSERVE", resultStep.action());
+        assertTrue(resultStep.observation().contains("CORRECTION: The user wants to STORE data. You MUST call ingest_document"));
     }
 
     @InjectMock

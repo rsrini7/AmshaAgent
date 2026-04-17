@@ -134,4 +134,10 @@ class MemorySearchToolTest {
         assertEquals(500, result.exitCode());
         assertEquals("Memory search failed: connection reset", result.output());
     }
+
+    @Test
+    void testRequiresManualApprovalReturnsTrue() {
+        MemorySearchTool tool = new MemorySearchTool();
+        assertTrue(tool.requiresManualApproval(Map.of()), "memory_search MUST always require manual approval");
+    }
 }
