@@ -35,6 +35,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;
 
@@ -54,6 +55,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject RateLimitTracker rateLimitTracker;
     @Inject AgentOtelContext otelContext;
     @Inject IntentClassificationService intentClassifier;
+    @Inject MeterRegistry meterRegistry;
 
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
@@ -223,6 +225,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             if (e instanceof LlmRateLimitException) {
                 log.warnf("[LangChainReasoningEngine] Rate limit — root cause: %s", 
                     AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage()));
+                meterRegistry.counter("arcclaw.llm.rate_limit.hit").increment();
                 rateLimitTracker.recordHit("primary");
                 throw e;
             }

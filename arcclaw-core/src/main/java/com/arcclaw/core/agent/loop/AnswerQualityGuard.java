@@ -1,11 +1,14 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -31,7 +34,7 @@ import org.jboss.logging.Logger;
  * All methods are stateless; this bean may be called from any thread.
  */
 @ApplicationScoped
-public class AnswerQualityGuard {
+public class AnswerQualityGuard implements AnswerGuardStrategy {
 
     private static final Logger log = Logger.getLogger(AnswerQualityGuard.class);
 
@@ -153,6 +156,30 @@ public class AnswerQualityGuard {
         if (nvidiaMatcher.find()) return nvidiaMatcher.group(1);
         if (answer.contains("delegatetoagent")) return "delegatetoagent";
         return "the intended tool";
+    }
+
+    @Override
+    public AnswerGuardResult guard(String rawAnswer, List<ReasoningStep> history) {
+        if (rawAnswer == null || rawAnswer.isBlank()) {
+            return new AnswerGuardResult("I wasn't able to generate a response. Please try again.", false, "null_or_blank");
+        }
+
+        String sessionId = "unknown"; // Strategy signature change - may need contextual session lookup if logging is critical here
+        
+        // Existing leak detection
+        if (isRawToolCallLeak(rawAnswer)) {
+            String toolName = extractLeakedToolName(rawAnswer);
+            return new AnswerGuardResult(rawAnswer, false, "raw_tool_call_leak:" + toolName);
+        }
+
+        String guarded = guardFinalAnswer(rawAnswer, 0, sessionId);
+        boolean salvaged = !guarded.equals(rawAnswer.strip());
+        
+        if (guarded.contains("Please try again") && !salvaged) {
+            return new AnswerGuardResult(guarded, false, "answer_validation_failed");
+        }
+
+        return new AnswerGuardResult(guarded, salvaged, null);
     }
 
     /**

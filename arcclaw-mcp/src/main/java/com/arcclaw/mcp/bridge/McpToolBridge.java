@@ -1,9 +1,5 @@
 package com.arcclaw.mcp.bridge;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -13,10 +9,18 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.mcp.config.McpToolAllowlist;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 @ApplicationScoped
 public class McpToolBridge {
@@ -24,6 +28,32 @@ public class McpToolBridge {
 
     @Inject ToolRegistry toolRegistry;
     @Inject McpToolAllowlist allowlist;
+    @Inject ObjectMapper objectMapper;
+
+    private final Map<String, String> schemaCache = new ConcurrentHashMap<>();
+ 
+    @jakarta.annotation.PostConstruct
+    void warmSchemaCache() {
+        log.info("McpToolBridge: Warming schema cache for exposed tools...");
+        allowlist.exposedTools().forEach(name -> {
+            AgentTool tool = toolRegistry.findTool(name)
+                .orElseThrow(() -> new IllegalStateException(
+                    "McpToolBridge: exposed tool '" + name +
+                    "' is not registered in ToolRegistry (§4.1)"));
+            try {
+                schemaCache.put(name,
+                    objectMapper.writeValueAsString(tool.parametersSchema()));
+            } catch (Exception e) {
+                throw new IllegalStateException(
+                    "Failed to cache MCP schema for tool: " + name, e);
+            }
+        });
+    }
+ 
+    public void clearCache() {
+        schemaCache.clear();
+        log.info("McpToolBridge: Schema cache cleared.");
+    }
 
     public List<McpToolDescriptor> getExposedTools() {
         return allowlist.exposedTools().stream()
@@ -97,10 +127,16 @@ public class McpToolBridge {
     }
 
     private String buildInputSchema(ToolCapability cap) {
-        return switch (cap) {
-            case GITHUB -> "{\"type\":\"object\",\"properties\":{\"operation\":{\"type\":\"string\"},\"params\":{\"type\":\"object\"}},\"required\":[\"operation\"]}";
-            case MEMORY_SEARCH -> "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}";
-            default -> "{\"type\":\"object\"}";
-        };
+        String toolName = cap.toolName();
+        return schemaCache.computeIfAbsent(toolName, name -> {
+            AgentTool tool = toolRegistry.findTool(name)
+                .orElseThrow(() -> new IllegalStateException("Tool not found in registry: " + name));
+            try {
+                return objectMapper.writeValueAsString(tool.parametersSchema());
+            } catch (Exception e) {
+                log.errorf("Failed to serialize schema for tool '%s': %s", name, e.getMessage());
+                return "{\"type\":\"object\"}";
+            }
+        });
     }
 }

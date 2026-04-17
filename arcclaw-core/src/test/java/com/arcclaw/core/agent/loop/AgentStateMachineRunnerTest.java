@@ -81,9 +81,9 @@ class AgentStateMachineRunnerTest {
 
     // Phase 3 Collaborators
     private FinishActionHandler finishActionHandler;
-    private AnswerQualityGuard qualityGuard;
+    private AnswerGuardStrategy qualityGuard;
     private CodeGenerationPolicy codePolicy;
-    private SelfCorrectionRetryManager selfCorrectionRetryManager;
+    private CorrectionStrategy correctionStrategy;
     private LoopExitPublisher loopExitPublisher = mock(LoopExitPublisher.class);
     private ParallelToolStepExecutor parallelExecutor = mock(ParallelToolStepExecutor.class);
     private RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
@@ -104,9 +104,9 @@ class AgentStateMachineRunnerTest {
         intentClassifier = mock(IntentClassificationService.class);
 
         // Core extraction collaborators
-        qualityGuard = new AnswerQualityGuard();
-        codePolicy = new CodeGenerationPolicy();
-        selfCorrectionRetryManager = new SelfCorrectionRetryManager();
+        qualityGuard          = mock(AnswerGuardStrategy.class);
+        codePolicy            = mock(CodeGenerationPolicy.class);
+        correctionStrategy    = mock(CorrectionStrategy.class);
 
         finishActionHandler = new FinishActionHandler();
         finishActionHandler.qualityGuard = qualityGuard;
@@ -154,7 +154,7 @@ class AgentStateMachineRunnerTest {
         runner.loopExitPublisher = loopExitPublisher;
         runner.finishActionHandler = finishActionHandler;
         runner.qualityGuard = qualityGuard;
-        runner.selfCorrectionRetryManager = selfCorrectionRetryManager;
+        runner.correctionStrategy = correctionStrategy;
 
 
         when(observers.iterator()).thenReturn(Collections.emptyIterator());

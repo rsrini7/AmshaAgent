@@ -92,10 +92,10 @@ public class AgentStateMachineRunner {
     @Inject IntentClassificationService intentClassifier;
     @Inject LoopExitPublisher loopExitPublisher;
 
-    // Phase 3 extracted collaborators
-    @Inject AnswerQualityGuard qualityGuard;
+    // Phase 3 extracted collaborators — switched to interfaces for T2-4
+    @Inject AnswerGuardStrategy qualityGuard;
     @Inject FinishActionHandler finishActionHandler;
-    @Inject SelfCorrectionRetryManager selfCorrectionRetryManager;
+    @Inject CorrectionStrategy correctionStrategy;
 
     // -------------------------------------------------------------------------
     // Main loop
@@ -162,19 +162,19 @@ public class AgentStateMachineRunner {
                     engineDecision = engineStepHandler.processEngineStep(
                             context, engine, history, transientError, llmSchemaErrorCount, iteration);
                 } catch (StructuredOutputException soe) {
-                    // Delegate schema-error handling to SelfCorrectionRetryManager
-                    SelfCorrectionRetryManager.RetryDecision retryDecision =
-                            selfCorrectionRetryManager.onSchemaError(
-                                    soe, llmSchemaErrorCount, context.sessionId(),
-                                    iteration, context.maxIterations());
-                    llmSchemaErrorCount = retryDecision.newErrorCount();
-                    if (retryDecision.budgetExhausted()) {
+                    // Delegate schema-error handling to CorrectionStrategy
+                    if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {
+                        log.warnf("StateMachine schema self-correction exhausted for session %s", context.sessionId());
                         AgentResult res = AgentResult.loopExceeded(
                                 context.maxIterations(), List.copyOf(history));
                         loopExitPublisher.publish(context, res); 
                         return res;
                     }
-                    transientError = retryDecision.correctionHint();
+
+                    llmSchemaErrorCount++;
+                    transientError = correctionStrategy.buildCorrectionHint(llmSchemaErrorCount, soe.getMessage());
+                    log.warnf("StateMachine schema self-correction attempt %d for session %s",
+                            llmSchemaErrorCount, context.sessionId());
                     continue;
                 }
 

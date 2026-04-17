@@ -12,6 +12,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
@@ -46,6 +47,8 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class SessionReaper {
+
+    @Inject MeterRegistry meterRegistry;
 
     private static final Logger log = Logger.getLogger(SessionReaper.class);
 
@@ -156,6 +159,7 @@ public class SessionReaper {
                 return;
             }
             log.warnf("GC sweep: session=%s expired", sessionId);
+            meterRegistry.counter("arcclaw.agent.orphaned.sweep").increment();
             cliResultBridge.cancel(sessionId); 
             compactionInFlight.remove(sessionId);
             workspaceManager.terminateSession(sessionId);
@@ -190,6 +194,8 @@ public class SessionReaper {
         for (AgentCheckpoint cp : stale) {
             log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh — auto-denying.",
                     cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
+            meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
+                    "role", cp.getAgentRole()).increment();
             markApprovalTimedOut(cp);
         }
     }

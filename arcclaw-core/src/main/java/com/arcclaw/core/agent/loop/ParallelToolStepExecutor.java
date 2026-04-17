@@ -16,6 +16,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -60,6 +62,7 @@ public class ParallelToolStepExecutor {
     @Inject Instance<AgentObserver> observers;
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
+    @Inject MeterRegistry meterRegistry;
 
     @ConfigProperty(name = "arcclaw.hitl.pre-executable-tools",
                     defaultValue = "")
@@ -231,6 +234,8 @@ public class ParallelToolStepExecutor {
                     ParallelToolCall timedOut = allowedCalls.get(i);
                     log.warnf("[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",
                               context.sessionId(), timedOut.toolName(), toolTimeoutSeconds);
+                    meterRegistry.counter("arcclaw.agent.tool.timeout",
+                            "tool", timedOut.toolName()).increment();
                     allowedCompleted.add(timedOut.withResult(
                         String.format("Tool timed out after %ds.", toolTimeoutSeconds),
                         false));

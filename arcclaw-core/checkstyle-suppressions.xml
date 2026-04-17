@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter  Config 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+<suppressions>
+    <!-- Baseline suppressions for pre-existing MethodLength violations -->
+    <!-- These files are scheduled for refactoring to meet the 60-line limit (§T2-7) -->
+    <suppress checks="MethodLength" files="SandboxExecTool\.java"/>
+    <suppress checks="MethodLength" files="GithubTool\.java"/>
+    <suppress checks="MethodLength" files="ScheduleTaskTool\.java"/>
+    
+    <!-- File length baseline -->
+    <suppress checks="FileLength" files="SandboxExecTool\.java"/>
+</suppressions>
