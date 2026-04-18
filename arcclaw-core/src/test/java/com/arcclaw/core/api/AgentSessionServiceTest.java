@@ -25,6 +25,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.reflex.ReflexRegistry;
@@ -38,9 +39,11 @@ import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -296,10 +299,10 @@ class AgentSessionServiceTest {
         
         Optional<Response> result = service.validateSession("sess-1");
         
-        org.junit.jupiter.api.Assertions.assertTrue(result.isPresent());
+        Assertions.assertTrue(result.isPresent());
         assertEquals(401, result.get().getStatus());
         verify(auditService).recordMandatory(
-            org.mockito.ArgumentMatchers.eq("sess-1"), org.mockito.ArgumentMatchers.eq("key-B"), any(),
-            org.mockito.ArgumentMatchers.eq(com.arcclaw.core.audit.SecurityEventType.UNAUTHORIZED_ACCESS), any());
+            ArgumentMatchers.eq("sess-1"), ArgumentMatchers.eq("key-B"), any(),
+            ArgumentMatchers.eq(SecurityEventType.UNAUTHORIZED_ACCESS), any());
     }
 }

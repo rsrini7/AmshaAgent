@@ -2,6 +2,7 @@ package com.arcclaw.core.scope;
 
 import java.util.concurrent.Callable;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.Logger;
@@ -190,11 +191,11 @@ public final class WorkspaceScopeHolder {
             if (channelType != null) {
                 // M1 Fix: Validate channel type before running, but don't throw to avoid crashing ongoing sessions
                 // Instead, default to TELEGRAM and log a warning if unrecognized
-                String validatedChannel = com.arcclaw.channel.api.ChannelType.fromString(channelType)
-                        .map(com.arcclaw.channel.api.ChannelType::name)
+                String validatedChannel = ChannelType.fromString(channelType)
+                        .map(ChannelType::name)
                         .orElseGet(() -> {
                             Logger.getLogger(WorkspaceScopeHolder.class).warnf("Unrecognized channel type '%s' requested for session %s, defaulting to TELEGRAM", channelType, sessionId);
-                            return com.arcclaw.channel.api.ChannelType.TELEGRAM.name();
+                            return ChannelType.TELEGRAM.name();
                         });
                 return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, validatedChannel, callable);
             } else if (autonomy != null && agentRole != null) {
