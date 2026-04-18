@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -23,6 +24,7 @@ import io.vertx.core.http.HttpServerRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 class McpToolBridgeTest {
@@ -49,8 +51,8 @@ class McpToolBridgeTest {
     void testGetExposedTools() throws Exception {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("github", "memory_search"));
         AgentTool mockTool = mock(AgentTool.class);
-        when(mockRegistry.findTool(anyString())).thenReturn(java.util.Optional.of(mockTool));
-        when(mockObjectMapper.writeValueAsString(org.mockito.ArgumentMatchers.any())).thenReturn("{}");
+        when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
+        when(mockObjectMapper.writeValueAsString(ArgumentMatchers.any())).thenReturn("{}");
         
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(2, tools.size());
@@ -64,7 +66,7 @@ class McpToolBridgeTest {
         AgentTool mockTool = mock(AgentTool.class);
         JsonObjectSchema schema = JsonObjectSchema.builder().build();
         when(mockTool.parametersSchema()).thenReturn(schema);
-        when(mockRegistry.findTool("github")).thenReturn(java.util.Optional.of(mockTool));
+        when(mockRegistry.findTool("github")).thenReturn(Optional.of(mockTool));
         when(mockObjectMapper.writeValueAsString(schema)).thenReturn("{\"schema\":\"v1\"}");
 
         List<McpToolDescriptor> tools = bridge.getExposedTools();
@@ -166,7 +168,7 @@ class McpToolBridgeTest {
     @Test
     void testWarmSchemaCacheThrowsOnMissingTool() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("missing_tool"));
-        when(mockRegistry.findTool("missing_tool")).thenReturn(java.util.Optional.empty());
+        when(mockRegistry.findTool("missing_tool")).thenReturn(Optional.empty());
 
         assertThrows(IllegalStateException.class, () -> bridge.warmSchemaCache());
     }

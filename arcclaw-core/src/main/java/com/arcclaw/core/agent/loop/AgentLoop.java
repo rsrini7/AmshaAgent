@@ -29,7 +29,6 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcManaged;
-
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;

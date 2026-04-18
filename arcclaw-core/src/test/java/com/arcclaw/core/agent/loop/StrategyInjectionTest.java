@@ -1,15 +1,16 @@
 package com.arcclaw.core.agent.loop;
 
-import io.quarkus.test.junit.QuarkusTest;
+import java.util.List;
+
+import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import jakarta.annotation.Priority;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
 
 /**
  * Demonstrates CDI @Alternative injection support for orchestration strategies.

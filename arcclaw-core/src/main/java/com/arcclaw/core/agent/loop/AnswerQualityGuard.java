@@ -8,7 +8,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
-
 import org.jboss.logging.Logger;
 
 /**

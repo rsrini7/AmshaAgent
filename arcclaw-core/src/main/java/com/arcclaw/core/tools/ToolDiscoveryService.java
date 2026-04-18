@@ -1,5 +1,7 @@
 package com.arcclaw.core.tools;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -13,8 +15,6 @@ import com.arcclaw.core.agent.role.Capability;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import org.jboss.logging.Logger;
-
-import java.lang.reflect.Method;
 
 /**
  * Handles CDI tool discovery, metadata scanning, and initialization-time
@@ -100,7 +100,7 @@ public class ToolDiscoveryService {
         }
     }
 
-    private <T extends java.lang.annotation.Annotation> T findAnnotation(Class<?> clazz, Class<T> annotationClass) {
+    private <T extends Annotation> T findAnnotation(Class<?> clazz, Class<T> annotationClass) {
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
             T ann = current.getAnnotation(annotationClass);

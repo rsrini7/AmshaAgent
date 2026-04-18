@@ -1,7 +1,8 @@
 package com.arcclaw.core.agent.loop;
 
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import java.util.List;
+
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 
 /**
  * Strategy interface for validating and sanitizing agent answers.

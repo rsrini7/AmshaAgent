@@ -1,5 +1,12 @@
 package com.arcclaw.mcp.bridge;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -16,12 +23,6 @@ import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-
 @ApplicationScoped
 public class McpToolBridge {
     private static final Logger log = Logger.getLogger(McpToolBridge.class);
@@ -32,7 +33,7 @@ public class McpToolBridge {
 
     private final Map<String, String> schemaCache = new ConcurrentHashMap<>();
  
-    @jakarta.annotation.PostConstruct
+    @PostConstruct
     void warmSchemaCache() {
         log.info("McpToolBridge: Warming schema cache for exposed tools...");
         allowlist.exposedTools().forEach(name -> {
