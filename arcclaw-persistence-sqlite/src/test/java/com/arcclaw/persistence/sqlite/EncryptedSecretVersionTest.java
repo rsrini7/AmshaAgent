@@ -27,7 +27,8 @@ class EncryptedSecretVersionTest {
     @Test
     @Transactional
     void testEncryptedSecret_versionFieldExistsAndStartsAtZero() {
-        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId("session-1", "key-1");
+        String sessionId = java.util.UUID.randomUUID().toString();
+        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, "key-1");
         EncryptedSecret secret = new EncryptedSecret();
         secret.id = id;
         secret.ciphertext = "cipher".getBytes();
@@ -41,7 +42,8 @@ class EncryptedSecretVersionTest {
 
     @Test
     void testEncryptedSecret_versionIncrementsOnCiphertextUpdate() {
-        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId("session-2", "key-2");
+        String sessionId = java.util.UUID.randomUUID().toString();
+        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, "key-2");
 
         // Step 1: persist in committed transaction
         QuarkusTransaction.requiringNew().run(() -> {
@@ -70,7 +72,8 @@ class EncryptedSecretVersionTest {
 
     @Test
     void testEncryptedSecret_optimisticLockPreventsLostUpdate() {
-        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId("session-3", "key-3");
+        String sessionId = java.util.UUID.randomUUID().toString();
+        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, "key-3");
 
         // 1. Persist in a committed transaction
         QuarkusTransaction.requiringNew().run(() -> {

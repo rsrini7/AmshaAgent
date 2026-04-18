@@ -317,9 +317,7 @@ public class AgentStateMachineRunner {
                             break; 
                         }
 
-                        // Validation passed, add thought/action to history
-                        history.add(step);
-
+                        // Validation passed, proceed to invocation
                         // --- Tool invocation ---
                         // Fetch skill snapshot lazily
                         var skillSnapshot = skillRegistry.currentSnapshot();
@@ -337,6 +335,8 @@ public class AgentStateMachineRunner {
                             }
                         }
 
+                        // NOTE: ToolStepHandler.invokeToolAndObserve() is responsible for adding
+                        // the completed step to history. Do NOT add step to history here.
                         StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
                                 context, history, step, consecutiveFailures, skillSnapshot);
 

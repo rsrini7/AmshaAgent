@@ -53,7 +53,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     ObjectMapper objectMapper;
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional
     public List<ChatMessage> getMessages(Object memoryId) {
         String id = String.valueOf(memoryId);
         
@@ -118,7 +118,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         memoryStore.save(new ChatMemoryDto(id, json, metadataJson));
     }
 
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional
     public List<Long> getTimestamps(String sessionId) {
         return memoryStore.findById(sessionId)
                 .map(ChatMemoryDto::metadataJson)
