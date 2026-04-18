@@ -31,10 +31,10 @@ public class FallbackChatModel implements ChatModel {
     public ChatResponse chat(ChatRequest chatRequest) {
         try {
             return primary.chat(chatRequest);
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             if (isRateLimitException(e)) {
-                log.warnf("[ArcClaw] ⚠️ Primary model %s rate-limited, falling back to %s", 
-                         primaryName, fallbackName);
+                log.warnf("[ArcClaw] ⚠️ Primary model '%s' rate-limited, falling back to '%s'. Cause: %s", 
+                         primaryName, fallbackName, e.getMessage());
                 return fallback.chat(chatRequest);
             }
             throw e;
@@ -43,9 +43,20 @@ public class FallbackChatModel implements ChatModel {
 
     private boolean isRateLimitException(Throwable e) {
         if (e == null) return false;
+        
+        // Direct type check (for our classified exceptions)
+        if (e.getClass().getSimpleName().contains("RateLimit")) return true;
+
         String msg = e.getMessage();
-        if (msg != null && (msg.contains("429") || msg.toLowerCase().contains("rate limit"))) {
-            return true;
+        if (msg != null) {
+            String lower = msg.toLowerCase();
+            if (lower.contains("429") || 
+                lower.contains("rate limit") || 
+                lower.contains("too many requests") ||
+                lower.contains("rate_limit_exceeded") ||
+                lower.contains("tokens per minute")) {
+                return true;
+            }
         }
         return isRateLimitException(e.getCause());
     }

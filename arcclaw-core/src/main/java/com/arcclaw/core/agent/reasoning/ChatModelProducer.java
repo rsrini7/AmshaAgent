@@ -76,26 +76,41 @@ public class ChatModelProducer {
                 "'. Available providers: " +
                 providers.stream().map(AgentChatModelProvider::providerName).toList()));
 
-        log.infof("ChatModelProducer: using provider=%s", provider);
+        log.infof("ChatModelProducer: using primary provider=%s", provider);
         ChatModel primary = providerFactory.create();
 
-        String configuredFallbackModel = fallbackModel.orElse("").trim();
-        if (!configuredFallbackModel.isBlank()) {
-            String configuredFallbackBaseUrl = fallbackBaseUrl.orElse("");
-            String configuredFallbackApiKey = fallbackApiKey.orElse("");
-            log.infof("ChatModelProducer: fallback configured model=%s", configuredFallbackModel);
-            String fbProvider = fallbackProvider.filter(p -> !p.isBlank())
-                .orElseGet(() -> LlmModelFactory.inferProviderFromUrl(configuredFallbackBaseUrl));
+        String configuredFallbackModel = fallbackModel.filter(s -> !s.isBlank()).orElse("").trim();
+        String configuredFallbackProvider = fallbackProvider.filter(s -> !s.isBlank()).orElse("").trim();
+
+        // Fallback is enabled if a provider is explicitly set OR a model name is provided
+        boolean hasFallback = !configuredFallbackProvider.isBlank() || !configuredFallbackModel.isBlank();
+
+        if (hasFallback) {
+            String configuredFallbackBaseUrl = fallbackBaseUrl.filter(s -> !s.isBlank()).orElse("");
+            String configuredFallbackApiKey = fallbackApiKey.filter(s -> !s.isBlank()).orElse("");
             
-            log.infof("ChatModelProducer: fallback provider=%s", fbProvider);
-            ChatModel fallback = modelFactory.createModel(
-                fbProvider, configuredFallbackBaseUrl, configuredFallbackApiKey,
-                configuredFallbackModel, 8192, timeout, maxRetries,
-                ollamaBaseUrl, ollamaModelId);
-                
-            return new FallbackChatModel(primary, fallback, modelName, configuredFallbackModel);
+            String fbProvider = !configuredFallbackProvider.isBlank() ? configuredFallbackProvider
+                : LlmModelFactory.inferProviderFromUrl(configuredFallbackBaseUrl);
+            
+            String displayModel = !configuredFallbackModel.isBlank() ? configuredFallbackModel : 
+                                 ("ollama".equalsIgnoreCase(fbProvider) ? ollamaModelId : "default");
+
+            log.infof("ChatModelProducer: 🟢 Fallback ENABLED. provider=%s, model=%s", fbProvider, displayModel);
+
+            try {
+                ChatModel fallback = modelFactory.createModel(
+                    fbProvider, configuredFallbackBaseUrl, configuredFallbackApiKey,
+                    configuredFallbackModel, 8192, timeout, maxRetries,
+                    ollamaBaseUrl, ollamaModelId);
+                    
+                return new FallbackChatModel(primary, fallback, modelName, displayModel);
+            } catch (Exception e) {
+                log.errorf("ChatModelProducer: Failed to initialize fallback model: %s. Falling back to primary ONLY.", e.getMessage());
+                return primary;
+            }
         }
 
+        log.infof("ChatModelProducer: ⚪ Fallback NOT enabled (no fallback provider or model configured)");
         return primary;
     }
 }
