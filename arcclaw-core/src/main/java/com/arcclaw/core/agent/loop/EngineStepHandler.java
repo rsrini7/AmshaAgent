@@ -115,13 +115,17 @@ public class EngineStepHandler {
                 // If the model degraded (often after a rate-limit sleep) and returned
                 // 1 token or blank, inject a recovery hint rather than passing it through
                 // to the quality guard fallback.
-                if (step.outputTokens() <= 1 && !ReasoningStep.FINISH.equals(step.action())) {
-                    log.warnf("[STATE-MACHINE] session %s: detected degraded 1-token response — injecting recovery hint",
-                            context.sessionId());
+                boolean isBlankFinish = ReasoningStep.FINISH.equals(step.action()) 
+                        && (step.actionInput() == null || step.actionInput().get("answer") == null 
+                            || step.actionInput().get("answer").toString().isBlank());
+
+                if (step.outputTokens() <= 1 || isBlankFinish) {
+                    log.warnf("[STATE-MACHINE] session %s: detected degraded %d-token response (action=%s) — injecting recovery hint",
+                            context.sessionId(), step.outputTokens(), step.action());
                     return StepDecision.retryEngine(
-                        "System: Your last response was empty or contained only one token. " +
-                        "This often happens due to infrastructure limits. " +
-                        "Please retry now with your full thought process and a clear FINISH answer.",
+                        "System: Your last response was empty, contained only one token, or lacked a FINISH answer. " +
+                        "This often happens due to infrastructure limits or model collapse after a rate-limit hit. " +
+                        "Please retry now with your full thought process and a complete FINISH answer.",
                         llmSchemaErrorCount);
                     // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
                 }

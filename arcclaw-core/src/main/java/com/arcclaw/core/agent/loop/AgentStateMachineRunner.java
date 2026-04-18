@@ -390,7 +390,7 @@ public class AgentStateMachineRunner {
             
             log.debugf("Loop complete for role %s", context.agentRole());
 
-            // Bridge to CLI if configured
+            // Bridge to CLI if configured (authoritative completion point)
             if (cliResultBridge != null && res != null) {
                 cliResultBridge.complete(context.sessionId(), res);
             }

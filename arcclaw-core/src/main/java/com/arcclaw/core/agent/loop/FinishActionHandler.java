@@ -166,7 +166,7 @@ public class FinishActionHandler {
         AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(answer, history);
         answer = guardResult.answer();
         if (guardResult.isFailure()) {
-            log.warnf("FINISH-GUARD failure in session %s: %s", sessionId, guardResult.failureReason());        
+            log.warnf("FINISH-GUARD failure in session %s: %s (possible model collapse)", sessionId, guardResult.failureReason());        
         }
 
         // --- Observers ---
