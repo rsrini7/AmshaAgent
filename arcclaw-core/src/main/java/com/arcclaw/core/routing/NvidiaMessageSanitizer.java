@@ -43,13 +43,18 @@ public class NvidiaMessageSanitizer implements ChatModel {
         List<ChatMessage> originalMessages = request.messages();
         List<ChatMessage> sanitizedIn = sanitize(originalMessages);
         
-        ChatRequest sanitizedRequest = ChatRequest.builder()
-                .messages(sanitizedIn)
-                .toolSpecifications(request.toolSpecifications())
-                .parameters(request.parameters())
-                .build();
+        // 🟢 FIX: Avoid setting both parameters and toolSpecifications if they might conflict.
+        // LangChain4j builder is strict about this.
+        ChatRequest.Builder builder = ChatRequest.builder()
+                .messages(sanitizedIn);
+
+        if (request.toolSpecifications() != null && !request.toolSpecifications().isEmpty()) {
+            builder.toolSpecifications(request.toolSpecifications());
+        } else if (request.parameters() != null) {
+            builder.parameters(request.parameters());
+        }
                 
-        ChatResponse response = model.chat(sanitizedRequest);
+        ChatResponse response = model.chat(builder.build());
         
         if (response.aiMessage() != null) {
              AiMessage sanitizedAi = sanitizeAiMessage(response.aiMessage(), new HashMap<>());
