@@ -1,7 +1,5 @@
 package com.arcclaw.core.agent.loop;
 
-import java.net.ConnectException;
-import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -42,26 +40,48 @@ import org.jboss.logging.Logger;
 /**
  * Handles LLM engine invocation, budget events, and all exception classification
  * (schema errors, rate limits, network faults, failed_generation extraction).
+ * Refactored to constructor injection as part of T4-1.
  */
 @ApplicationScoped
 public class EngineStepHandler {
 
     private static final Logger log = Logger.getLogger(EngineStepHandler.class);
 
-    @Inject GovernanceStrategy governanceLayer;
-    @Inject Instance<AgentObserver> observers;
-    @Inject ObjectMapper objectMapper;
-    @Inject RateLimitTracker rateLimitTracker;
-    @Inject StatefulAgentStore agentStore;
+    private final GovernanceStrategy governanceLayer;
+    private final Instance<AgentObserver> observers;
+    private final ObjectMapper objectMapper;
+    private final RateLimitTracker rateLimitTracker;
+    private final StatefulAgentStore agentStore;
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
         Pattern.compile("^([A-Za-z*#\\[]).*\\s.*[.!?]\\s*$", Pattern.DOTALL);
 
     private static final Set<String> AGENT_IDENTIFIERS = AgentRoleEnum.values().stream()
             .flatMap(r -> Stream.concat(
-                    Stream.of(r.id()), 
+                    Stream.of(r.id()),
                     r.definition().aliases().stream()))
             .collect(Collectors.toUnmodifiableSet());
+
+    protected EngineStepHandler() {
+        this.governanceLayer = null;
+        this.observers = null;
+        this.objectMapper = null;
+        this.rateLimitTracker = null;
+        this.agentStore = null;
+    }
+
+    @Inject
+    public EngineStepHandler(GovernanceStrategy governanceLayer,
+                             Instance<AgentObserver> observers,
+                             ObjectMapper objectMapper,
+                             RateLimitTracker rateLimitTracker,
+                             StatefulAgentStore agentStore) {
+        this.governanceLayer = governanceLayer;
+        this.observers = observers;
+        this.objectMapper = objectMapper;
+        this.rateLimitTracker = rateLimitTracker;
+        this.agentStore = agentStore;
+    }
 
     StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
             List<ReasoningStep> history, String transientError,
@@ -99,7 +119,7 @@ public class EngineStepHandler {
                     if (llmSchemaErrorCount >= 4) {
                         log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", context.sessionId());
                         return StepDecision.terminal(AgentResult.failed(
-                                "The agent could not complete this request due to repeated formatting errors.",
+                                "The agent could not complete this request due to repeated formatting errors.", 
                                 AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                     }
                     return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
@@ -108,9 +128,9 @@ public class EngineStepHandler {
                 try {
                     governanceLayer.recordLlmCall(context.sessionId(), step.inputTokens(), step.outputTokens());
                     for (var observer : observers)
-                        observer.recordLlmCall(context.sessionId(), step.inputTokens(), step.outputTokens());
+                        observer.recordLlmCall(context.sessionId(), step.inputTokens(), step.outputTokens());   
                 } catch (BudgetWarningException bw) {
-                    log.warnf("Budget warning for session %s: %s", context.sessionId(), bw.getMessage());
+                    log.warnf("Budget warning for session %s: %s", context.sessionId(), bw.getMessage());       
                     step = step.withObservation("⚠️ BUDGET WARNING: " + bw.getMessage() +
                             " Keep all subsequent responses to 1-2 sentences maximum.");
                     history.add(step);
@@ -126,7 +146,7 @@ public class EngineStepHandler {
                 }
             }
         } catch (Exception e) {
-            return handleEngineException(e, context.sessionId(), llmSchemaErrorCount, iteration, history);
+            return handleEngineException(e, context.sessionId(), llmSchemaErrorCount, iteration, history);      
         }
 
         if (step == null) {
@@ -142,15 +162,15 @@ public class EngineStepHandler {
     private StepDecision handleEngineException(Exception e, String sessionId,
             int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
 
-        LlmProviderException classified = 
+        LlmProviderException classified =
             LlmExceptionClassifier.classify(e);
 
         if (classified instanceof LlmMalformedResponseException) {
-            log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, classified.getMessage());
+            log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, classified.getMessage());   
 
             llmSchemaErrorCount++;
             if (llmSchemaErrorCount >= 4) {
-                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);      
                 return StepDecision.terminal(AgentResult.failed(
                         "The agent encountered repeated tool schema errors and could not complete your request. Please try rephrasing your goal.",
                         AgentResult.FailureCategory.SCHEMA_ERROR,
@@ -172,12 +192,12 @@ public class EngineStepHandler {
 
         if (classified instanceof LlmToolCallException) {
             String rawError = classified.getMessage() != null ? classified.getMessage() : "";
-            
+
             if (rawError.contains("not in request.tools")) {
                 String unavailableTool = extractUnavailableToolName(rawError);
-                
+
                 // Bug fix: LLM hallucinated agent name as tool — inject correction and retry
-                if (unavailableTool != null && AGENT_IDENTIFIERS.contains(unavailableTool.toLowerCase())) {
+                if (unavailableTool != null && AGENT_IDENTIFIERS.contains(unavailableTool.toLowerCase())) {     
                     log.warnf("[STATE-MACHINE] session %s: LLM called agent '%s' as tool — retrying with correction",
                             sessionId, unavailableTool);
                     String correction = String.format(
@@ -194,14 +214,14 @@ public class EngineStepHandler {
                     String answer = extractFinishAnswer(failedGen);
                     if (answer != null && !answer.isBlank()) {
                         log.infof("[STATE-MACHINE] session %s: recovered FINISH answer despite schema error", sessionId);
-                        return StepDecision.terminal(AgentResult.finished(answer, List.copyOf(history)));
+                        return StepDecision.terminal(AgentResult.finished(answer, List.copyOf(history)));       
                     }
                 }
-                
+
                 String msg = unavailableTool != null
                     ? String.format(
                         "I tried to use `%s`, but that tool is not available in this role. "
-                        + "Try rephrasing, or start fresh with a more specific request.", unavailableTool)
+                        + "Try rephrasing, or start fresh with a more specific request.", unavailableTool)      
                     : "I tried to use a tool that is not available in my current role.";
                 log.warnf("[STATE-MACHINE] session %s: tool '%s' not in request.tools — terminating immediately",
                         sessionId, unavailableTool);
@@ -209,19 +229,19 @@ public class EngineStepHandler {
             }
 
             boolean isToolUseFailed = rawError.contains("tool_use_failed");
-            
+
             if (isToolUseFailed) {
                 String failedGen = extractFailedGeneration(rawError);
                 if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
                     log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose — extracting as FINISH", sessionId);
-                    return StepDecision.terminal(AgentResult.finished(failedGen, List.copyOf(history)));
+                    return StepDecision.terminal(AgentResult.finished(failedGen, List.copyOf(history)));        
                 }
 
                 llmSchemaErrorCount++;
                 if (llmSchemaErrorCount >= 4) {
-                    log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);
+                    log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);  
                     return StepDecision.terminal(AgentResult.failed(
-                            "The agent could not complete this request due to repeated tool schema errors. " +
+                            "The agent could not complete this request due to repeated tool schema errors. " +  
                             "Try rephrasing your goal.",
                             AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                 }
@@ -241,13 +261,13 @@ public class EngineStepHandler {
                         2. Pass exactly TWO flat string parameters only:
                         {"agent": "<name>", "goal": "<self-contained task>"}
                         3. Do NOT wrap in an array []. Do NOT nest under "parameters" or any other key.
-                        4. Valid agent names (one at a time): brahma, shiva, saraswati, brihaspati, dattatreya.
+                        4. Valid agent names (one at a time): brahma, shiva, saraswati, brihaspati, dattatreya. 
                         Retry now with a single flat call — one agent, one goal string.""";
 
                 } else {
                     correction = "System: Your previous tool call was rejected due to a schema validation error: "
                             + rawError
-                            + ". Review the tool schema carefully, correct the invalid fields, and retry.";
+                            + ". Review the tool schema carefully, correct the invalid fields, and retry.";     
                 }
 
                 log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
@@ -272,7 +292,7 @@ public class EngineStepHandler {
             // If the last step has a tool observation (e.g. delegate_to_agent result),
             // return it directly as FINISH rather than FAILED — the work is already done.
             if (!history.isEmpty()) {
-                String lastObs = history.getLast().observation();
+                String lastObs = history.get(history.size() - 1).observation();
                 if (lastObs != null && !lastObs.isBlank()
                         && !lastObs.startsWith("⚠️")
                         && !lastObs.startsWith("Tool execution failed")) {
@@ -283,13 +303,13 @@ public class EngineStepHandler {
 
             // Return AWAITING_RETRY so state machine pauses cleanly
             int retryMs = retryAfterSeconds * 1000;
-            return StepDecision.terminal(AgentResult.awaitingRetry(sessionId, retryMs, List.copyOf(history)));
+            return StepDecision.terminal(AgentResult.awaitingRetry(sessionId, retryMs, List.copyOf(history)));  
         }
 
         if (isNetworkError(e)) {
             log.errorf("ReasoningEngine network failure at iteration %d: %s", iteration, ExceptionUtils.getRootCauseMessage(e));
             return StepDecision.terminal(AgentResult.failed(
-                    "⚠️ Unable to reach the AI service. Please check your internet connection and try again.",
+                    "⚠️ Unable to reach the AI service. Please check your internet connection and try again.",  
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
         }
 
@@ -313,8 +333,6 @@ public class EngineStepHandler {
         if (m.find()) return (int) Math.ceil(Double.parseDouble(m.group(1)));
         return defaultSeconds;
     }
-
-
 
     private static final Pattern UNAVAILABLE_TOOL_PATTERN = Pattern.compile("attempted to call tool '([^']+)'");
 
@@ -377,9 +395,9 @@ public class EngineStepHandler {
     }
 
     private boolean isNetworkError(Exception e) {
-        if (e instanceof ConnectException || e instanceof SocketTimeoutException) return true;
-        if (e.getCause() instanceof ConnectException
-                || e.getCause() instanceof SocketTimeoutException) return true;
+        if (e instanceof java.net.ConnectException || e instanceof java.net.SocketTimeoutException) return true;
+        if (e.getCause() instanceof java.net.ConnectException
+                || e.getCause() instanceof java.net.SocketTimeoutException) return true;
         String msg = e.getMessage();
         return msg != null && (msg.contains("ConnectTimeoutException")
                 || msg.contains("connection timed out")

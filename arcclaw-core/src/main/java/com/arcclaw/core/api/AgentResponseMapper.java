@@ -142,6 +142,8 @@ public class AgentResponseMapper {
                     .entity(new ErrorResponse(f.reason(), "SYSTEM")).build();
             case RATE_LIMIT -> Response.status(429)
                     .entity(new ErrorResponse(f.reason(), "RATE_LIMIT")).build();
+            case SECURITY_POLICY -> Response.status(403)
+                    .entity(new ErrorResponse(f.reason(), "SECURITY_POLICY")).build();
         };
     }
 }

@@ -20,14 +20,31 @@ import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
+/**
+ * Handles checkpoint persistence and SSE notification logic.
+ * Refactored to constructor injection as part of T4-1.
+ */
 @ApplicationScoped
 public class ApprovalCheckpointManager {
 
     private static final Logger log = Logger.getLogger(ApprovalCheckpointManager.class);
 
-    @Inject StatefulAgentStore agentStore;
-    @Inject ObjectMapper objectMapper;
-    @Inject AgentSseService agentSseService;
+    private final StatefulAgentStore agentStore;
+    private final ObjectMapper objectMapper;
+    private final AgentSseService agentSseService;
+
+    @Inject
+    public ApprovalCheckpointManager(StatefulAgentStore agentStore,
+                                     AgentSseService agentSseService,
+                                     ObjectMapper objectMapper) {
+        this.agentStore = agentStore;
+        this.agentSseService = agentSseService;
+        this.objectMapper = objectMapper;
+    }
+
+    public void save(AgentCheckpoint cp) {
+        agentStore.save(cp);
+    }
 
     private AgentCheckpoint loadActiveOrCreate(String sessionId, String agentRole) {
         return agentStore.load(sessionId, agentRole)
@@ -50,7 +67,7 @@ public class ApprovalCheckpointManager {
     AgentResult persist(AgentExecutionContext context,
             String toolName, String paramsJson,
             List<ReasoningStep> history,
-            String channelType, String channelPlatformId) {  // ← added params
+            String channelType, String channelPlatformId) {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
@@ -76,6 +93,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelType(context.channelType());
             cp.setChannelPlatformId(context.channelPlatformId());
         }
+        
+        updateStateJson(cp, history);
 
         agentStore.save(cp);
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s " +
@@ -83,7 +102,7 @@ public class ApprovalCheckpointManager {
                   sessionId, toolName, channelType, channelPlatformId);
 
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), toolName, paramsJson, null, Instant.now()
+            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), toolName, paramsJson, null, Instant.now()   
         ));
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
     }
@@ -97,7 +116,7 @@ public class ApprovalCheckpointManager {
             String batchJson,
             List<ParallelToolCall> calls,
             List<ReasoningStep> history,
-            String channelType, String channelPlatformId) {  // ← added params
+            String channelType, String channelPlatformId) {
 
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
@@ -116,7 +135,7 @@ public class ApprovalCheckpointManager {
                        "session %s: %s", sessionId,
                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             return persist(context, compositeName, batchJson, history,
-                           channelType, channelPlatformId);  // ← pass through
+                           channelType, channelPlatformId);
         }
 
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
@@ -131,6 +150,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelType(context.channelType());
             cp.setChannelPlatformId(context.channelPlatformId());
         }
+        
+        updateStateJson(cp, history);
 
         agentStore.save(cp);
 
@@ -156,7 +177,7 @@ public class ApprovalCheckpointManager {
             List<ParallelToolCall> hitlCalls,
             String preExecutedResultsJson,
             List<ReasoningStep> history,
-            String channelType, String channelPlatformId) {  // ← added params
+            String channelType, String channelPlatformId) {
 
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
@@ -174,7 +195,7 @@ public class ApprovalCheckpointManager {
             log.errorf("[PARALLEL-HITL] Failed to serialize decisions: %s",
                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             return persist(context, compositeName, originalBatchJson, history,
-                           channelType, channelPlatformId);  // ← pass through
+                           channelType, channelPlatformId);
         }
 
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
@@ -190,6 +211,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelType(context.channelType());
             cp.setChannelPlatformId(context.channelPlatformId());
         }
+        
+        updateStateJson(cp, history);
 
         agentStore.save(cp);
 
@@ -203,5 +226,14 @@ public class ApprovalCheckpointManager {
         return AgentResult.awaitingApproval(
             compositeName, originalBatchJson, sessionId,
             List.copyOf(history));
+    }
+
+    private void updateStateJson(AgentCheckpoint cp, List<ReasoningStep> history) {
+        try {
+            cp.setStateJson(objectMapper.writeValueAsString(history));
+        } catch (Exception e) {
+            log.warnf("Failed to serialize history for session %s: %s",
+                      cp.getSessionId(), e.getMessage());
+        }
     }
 }

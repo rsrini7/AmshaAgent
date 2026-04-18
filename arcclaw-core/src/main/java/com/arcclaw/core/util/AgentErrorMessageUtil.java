@@ -189,6 +189,11 @@ public final class AgentErrorMessageUtil {
         return result.isEmpty() ? "a few moments" : result;
     }
 
+    public static String hashGoal(String goal) {
+        if (goal == null) return "none";
+        return String.valueOf(goal.hashCode()); // Simple hash for audit chaining
+    }
+
     private static String extractModelName(String message) {
         if (message == null) return "unknown";
         // Matches: model `name`, model "name", or model name (until space)

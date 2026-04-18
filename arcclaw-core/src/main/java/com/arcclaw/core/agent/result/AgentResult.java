@@ -27,7 +27,8 @@ public sealed interface AgentResult
         BUDGET_EXCEEDED,
         SCHEMA_ERROR,
         USER_DENIED,
-        RATE_LIMIT
+        RATE_LIMIT,
+        SECURITY_POLICY
     }
 
     @TemplateData
