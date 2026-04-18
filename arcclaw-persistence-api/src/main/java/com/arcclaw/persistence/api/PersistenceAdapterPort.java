@@ -1,16 +1,5 @@
 package com.arcclaw.persistence.api;
 
-import java.util.function.Consumer;
-
-import jakarta.persistence.EntityManager;
-
-/**
- * Port for executing database actions with backend-specific retry logic.
- * 
- * Rationale (§5.14.1): Retry-on-BUSY is a SQLite-specific concern.
- * This port allows Core (AsyncPersistenceEngine) to delegate writes
- * without knowing about SQLite locking states.
- */
 public interface PersistenceAdapterPort {
 
     /**
@@ -20,7 +9,7 @@ public interface PersistenceAdapterPort {
      * 
      * @param sessionId the context session ID
      * @param operationName descriptive name for logging/metrics
-     * @param action the action to execute, providing direct access to the EntityManager
+     * @param action the action to execute, providing access to a PersistenceContext
      */
-    void execute(String sessionId, String operationName, Consumer<EntityManager> action);
+    void execute(String sessionId, String operationName, PersistenceAction action);
 }

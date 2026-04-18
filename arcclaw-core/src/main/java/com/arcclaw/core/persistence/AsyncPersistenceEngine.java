@@ -20,6 +20,7 @@ import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
+import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import org.jboss.logging.Logger;
 
@@ -52,6 +53,7 @@ import org.jboss.logging.Logger;
  * {@link PersistenceRetryEngine} to keep this class focused on queue/drain concerns.
  */
 @ApplicationScoped
+@Unremovable
 public class AsyncPersistenceEngine {
 
     private static final Logger log = Logger.getLogger(AsyncPersistenceEngine.class);
@@ -223,7 +225,7 @@ public class AsyncPersistenceEngine {
         PersistenceEvent event = PersistenceEvent.critical(
                 checkpoint.getSessionId(),
                 SecurityEventType.CHECKPOINT_CREATED,
-                em -> em.merge(checkpoint));
+                ctx -> ctx.merge(checkpoint));
         submitCritical(event);
         return event.getFuture();
     }

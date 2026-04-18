@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -29,6 +31,9 @@ import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -43,6 +48,7 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -173,8 +179,14 @@ class CheckpointResumeHandlerTest {
         SystemPromptBuilder promptBuilder = mock(SystemPromptBuilder.class);
         ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
         ReasoningStepParser stepParser = mock(ReasoningStepParser.class);
+        IntentClassificationService intentClassifier = mock(IntentClassificationService.class);
+        GovernanceStrategy governanceLayer = mock(GovernanceStrategy.class);
+        RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
+        AgentOtelContext otelContext = mock(AgentOtelContext.class);
+        MeterRegistry meterRegistry = mock(MeterRegistry.class);
         
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
+        when(intentClassifier.isWriteIntent(anyString())).thenReturn(false);
 
         LangChainReasoningEngine engine = new LangChainReasoningEngine();
         
@@ -202,6 +214,26 @@ class CheckpointResumeHandlerTest {
         field = engine.getClass().getDeclaredField("stepParser");
         field.setAccessible(true);
         field.set(engine, stepParser);
+
+        field = engine.getClass().getDeclaredField("intentClassifier");
+        field.setAccessible(true);
+        field.set(engine, intentClassifier);
+
+        field = engine.getClass().getDeclaredField("governanceLayer");
+        field.setAccessible(true);
+        field.set(engine, governanceLayer);
+
+        field = engine.getClass().getDeclaredField("rateLimitTracker");
+        field.setAccessible(true);
+        field.set(engine, rateLimitTracker);
+
+        field = engine.getClass().getDeclaredField("otelContext");
+        field.setAccessible(true);
+        field.set(engine, otelContext);
+
+        field = engine.getClass().getDeclaredField("meterRegistry");
+        field.setAccessible(true);
+        field.set(engine, meterRegistry);
 
         WorkspaceContext.runWithFullAutonomy("test-session", "user", "chat", "coordinator", () -> {
             // Act

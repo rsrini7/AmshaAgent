@@ -27,6 +27,7 @@ import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
 /**
@@ -43,6 +44,7 @@ import org.jboss.logging.Logger;
  * Postgres adapters will handle retry differently or not at all.
  */
 @ApplicationScoped
+@Unremovable
 public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCheckpointStoreAdapter.class);

@@ -60,14 +60,15 @@ class ScheduleTaskToolTest {
 
     // Add a helper to your test class
     private <T> T executeInScope(String suggestedCron, Callable<T> task) throws Exception {
-        return WorkspaceContext.run(
+        Callable<T> op = () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, suggestedCron).call(task::call);
+        return WorkspaceContext.<T>run(
                 "test-session-id",
                 "test-user",
                 "test-chat",
                 AutonomyLevel.SUPERVISED,
                 "coordinator",
-                ChannelType.TELEGRAM,
-                () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, suggestedCron).call(task::call));
+                ChannelType.TELEGRAM.name(),
+                op);
     }
 
     @Test
@@ -126,16 +127,17 @@ class ScheduleTaskToolTest {
     void testMissingUserIdReturnsFailure403() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = WorkspaceContext.run(
+        Callable<ToolResponse> op = () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, "0 9 * * 1").call(() -> tool.execute(Map.of(
+                        "goal", "Send report"
+                )));
+        ToolResponse result = WorkspaceContext.<ToolResponse>run(
                 "test-session-id",
                 "",          // ← blank userId triggers the 403
                 "test-chat",
                 AutonomyLevel.SUPERVISED,
                 "coordinator",
-                ChannelType.TELEGRAM,
-                () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, "0 9 * * 1").call(() -> tool.execute(Map.of(
-                        "goal", "Send report"
-                ))));
+                ChannelType.TELEGRAM.name(),
+                op);
 
         assertFalse(result.success());
         assertEquals(403, result.exitCode());

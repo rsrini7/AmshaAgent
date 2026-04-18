@@ -10,7 +10,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
@@ -55,7 +54,6 @@ public class SessionReaper {
     private volatile boolean shuttingDown = false;
 
     @Inject WorkspaceManager workspaceManager;
-    @Inject EntityManager em;
     @Inject SessionHeartbeatTracker heartbeatTracker;
     @Inject Event<ApprovalDecisionEvent> decisionEvents;
     @Inject StatefulAgentStore agentStore;

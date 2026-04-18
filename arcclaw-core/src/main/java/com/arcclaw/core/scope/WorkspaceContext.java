@@ -3,7 +3,6 @@ package com.arcclaw.core.scope;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.MDC;
@@ -47,14 +46,14 @@ public final class WorkspaceContext {
 
 
     public static <T> T run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, ChannelType channelType, Callable<T> task) throws Exception {
+            AutonomyLevel autonomy, String role, String channelType, Callable<T> task) throws Exception {
         return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
             ScopedValue.where(SESSION_ID, sessionId)
                 .where(USER_ID, userId)
                 .where(CHAT_ID, chatId)
                 .where(AUTONOMY, autonomy)
                 .where(AGENT_ROLE, role)
-                .where(CHANNEL_TYPE, channelType.name())
+                .where(CHANNEL_TYPE, channelType)
                 .call(() -> task.call())
         );
     }
@@ -76,7 +75,7 @@ public final class WorkspaceContext {
 
 
     public static void run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, ChannelType channelType, Runnable task) {
+            AutonomyLevel autonomy, String role, String channelType, Runnable task) {
         try {
             run(sessionId, userId, chatId, autonomy, role, channelType, () -> {
                 task.run();

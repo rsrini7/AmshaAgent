@@ -32,6 +32,12 @@ import io.smallrye.common.annotation.Identifier;
 public class TestMockProducers {
 
     @Produces
+    @ApplicationScoped
+    public ChatModel defaultChatModel() {
+        return mock(ChatModel.class);
+    }
+
+    @Produces
     @Identifier("compaction")
     @ApplicationScoped
     public ChatModel compactionModel() {

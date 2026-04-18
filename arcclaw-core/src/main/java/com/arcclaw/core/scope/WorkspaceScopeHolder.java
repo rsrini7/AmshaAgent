@@ -2,7 +2,6 @@ package com.arcclaw.core.scope;
 
 import java.util.concurrent.Callable;
 
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.Logger;
@@ -159,7 +158,7 @@ public final class WorkspaceScopeHolder {
 
         return () -> {
             if (channelType != null) {
-                WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, ChannelType.fromString(channelType).orElseThrow(), runnable);
+                WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, runnable);
             } else if (autonomy != null && agentRole != null) {
                 WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, runnable);
             } else {
@@ -189,7 +188,7 @@ public final class WorkspaceScopeHolder {
 
         return () -> {
             if (channelType != null) {
-                return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, ChannelType.fromString(channelType).orElseThrow(), callable);
+                return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, callable);
             } else if (autonomy != null && agentRole != null) {
                 return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, callable);
             } else {

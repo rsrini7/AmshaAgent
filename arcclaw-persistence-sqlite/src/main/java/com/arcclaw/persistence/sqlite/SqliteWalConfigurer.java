@@ -12,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -24,6 +25,7 @@ import org.jboss.logging.Logger;
  * boot configuration from the core domain.
  */
 @ApplicationScoped
+@Unremovable
 public class SqliteWalConfigurer {
 
     private static final Logger log = Logger.getLogger(SqliteWalConfigurer.class);

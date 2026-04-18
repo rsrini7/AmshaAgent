@@ -86,7 +86,7 @@ public class SecretVaultImpl implements SecretVault {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
 
             // 3. Persist
-            EncryptedSecret entity = repository.findByKey(sessionId, keyName);
+            EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
             if (entity == null) {
                 entity = new EncryptedSecret();
                 entity.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
@@ -95,7 +95,7 @@ public class SecretVaultImpl implements SecretVault {
             entity.nonce = result.nonce();
             entity.setEncryptionKeyVersion(1);
 
-            repository.persist(entity);
+            repository.save(entity);
 
             // Only record audit for non-system sessions to avoid infinite recursion or
             // missing context
@@ -115,7 +115,7 @@ public class SecretVaultImpl implements SecretVault {
         String sessionId = WorkspaceContext.requireSessionId();
 
         // 1. Fetch
-        EncryptedSecret entity = repository.findByKey(sessionId, keyName);
+        EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
         String userId = WorkspaceContext.requireUserId();
 
         if (entity == null) {
@@ -143,7 +143,7 @@ public class SecretVaultImpl implements SecretVault {
     public Optional<VaultKey> retrieveSystemKey(String keyName) {
         String sessionId = VaultConstants.SYSTEM_SESSION_ID;
 
-        EncryptedSecret entity = repository.findByKey(sessionId, keyName);
+        EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
         if (entity == null) {
             return Optional.empty();
         }
@@ -163,7 +163,7 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public boolean systemKeyExists(String keyName) {
-        return repository.findByKey(VaultConstants.SYSTEM_SESSION_ID, keyName) != null;
+        return repository.find(VaultConstants.SYSTEM_SESSION_ID, keyName).isPresent();
     }
 
     @Override
@@ -177,7 +177,7 @@ public class SecretVaultImpl implements SecretVault {
         try {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, systemKey, keyName);
 
-            EncryptedSecret entity = repository.findByKey(sessionId, keyName);
+            EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
             if (entity == null) {
                 entity = new EncryptedSecret();
                 entity.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
@@ -186,7 +186,7 @@ public class SecretVaultImpl implements SecretVault {
             entity.nonce = result.nonce();
             entity.setEncryptionKeyVersion(1);
 
-            repository.persist(entity);
+            repository.save(entity);
         } catch (Exception e) {
             throw e;
         }
@@ -195,6 +195,6 @@ public class SecretVaultImpl implements SecretVault {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void removeSystemKey(String keyName) {
-        repository.deleteByKey(VaultConstants.SYSTEM_SESSION_ID, keyName);
+        repository.delete(VaultConstants.SYSTEM_SESSION_ID, keyName);
     }
 }

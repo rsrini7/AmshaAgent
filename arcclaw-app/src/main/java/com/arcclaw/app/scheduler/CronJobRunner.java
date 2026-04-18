@@ -3,6 +3,7 @@ package com.arcclaw.app.scheduler;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -51,19 +52,10 @@ public class CronJobRunner {
     public void execute(AgentCronEntity job) {
         String executionId = UUID.randomUUID().toString();
         
-        // ORDERING CRITICAL: set delivery ID before workspace context is created.
-        // ApproveReflex.handleCronApproval() uses findByUserId() + deliveryId to locate
-        // the checkpoint for this execution. If this is moved after WorkspaceContext.run(),
-        // approval routing will break if setup fails mid-execution.
         cronRepository.setDeliveryId(job.id, executionId);
 
         String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.id + "-" + executionId;
 
-        // Register session in heartbeat tracker so it is visible in the UI Approvals tab.
-        // Background/cron sessions are intentionally left UNOWNED so they appear via
-        // getUnownedSessionIds() for all authenticated UI users. Binding to job.userId
-        // (Telegram user ID e.g. 945307929) would make them invisible because the UI
-        // authenticates with an API key whose identity doesn't match the Telegram ID.
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
         
         try {
@@ -90,45 +82,27 @@ public class CronJobRunner {
                 return;
             }
 
-            String systemNote = 
-                "[SYSTEM CONSTRAINT: CRON EXECUTION MODE. " +
-                "Do NOT call any tools unless the goal explicitly requires data retrieval (github, memory_search). " +
-                "For message delivery or greeting goals, use the FINISH action immediately with the message text as your answer. " +
-                "The framework delivers your output — you do NOT need to call any tool to 'send' it. " +
-                "NEVER output empty text. NEVER call schedule_task.]" +
-                "\n\n## GitHub Tool Result Handling (CRON MODE)" +
-                "\nWhen you call the github tool and receive a repository description:" +
-                "\n- The tool may return rich text (Markdown or HTML) including headings, bold text, links, and badges." +
-                "\n- DO NOT try to treat this description as JSON or as a function schema. It is plain text content." +
-                "\n- If the tool call succeeds but the provider reports tool_use_failed with a failed_generation field that already contains the repository description:" +
-                "\n  - Extract the human-readable description text from failed_generation." +
-                "\n  - Summarize it into 1–3 concise bullet points for the user." +
-                "\n  - Then FINISH with that summary as your answer." +
-                "\n- Only treat a tool call as a hard failure if there is no description text and the error is a network/auth problem." +
-                "\n- NEVER retry the same GitHub call more than once in CRON mode if description text is already present.";
+            String systemNote = "CRON MODE";
 
             ChannelType type = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
-
             String role = resolveRole(job);
-            AgentResult result = WorkspaceContext.run(
-                cronSessionId, 
-                job.userId, 
-                job.chatId, 
-                AutonomyLevel.SUPERVISED,
-                role, 
-                type,
-                () -> {
-                    MessageContext context = createCronContext(job, cronSessionId, executionId, job.goal, type);
-                    return agentLoop.run(
-                        cronSessionId,
-                        role,
-                        job.goal,
-                        systemNote,
-                        engine,
-                        cronMaxIterations,
-                        context
-                    );
-                }
+            String channel = type.name();
+
+            Callable<AgentResult> op = () -> {
+                MessageContext context = createCronContext(job, cronSessionId, executionId, job.goal, type);
+                return agentLoop.run(
+                    cronSessionId,
+                    role,
+                    job.goal,
+                    systemNote,
+                    engine,
+                    cronMaxIterations,
+                    context
+                );
+            };
+
+            AgentResult result = WorkspaceContext.<AgentResult>run(
+                cronSessionId, job.userId, job.chatId, AutonomyLevel.SUPERVISED, role, channel, op
             );
 
             resultHandler.handleSuccess(job, cronSessionId, executionId, result);
@@ -139,31 +113,6 @@ public class CronJobRunner {
     }
 
     private String resolveRole(AgentCronEntity job) {
-        String normalized = job.goal.replaceFirst("^CRON\\s+", "").toLowerCase();
-        
-        // Output-only goals: unconditionally override to coordinator
-        if (normalized.startsWith("output") || normalized.startsWith("say ")
-                || normalized.startsWith("send ") || normalized.startsWith("tell ")) {
-            return AgentRoleEnum.COORDINATOR.toScopedName();
-        }
-
-        if (job.executionRole != null && !job.executionRole.isBlank()) {
-            return job.executionRole;
-        }
-
-        // Priority 1 — Coordinator (Meta-scheduling / goal orchestration)
-        if (normalized.contains("coordinator task") || normalized.contains("meta-schedule") || normalized.contains("schedule next")) {
-            return AgentRoleEnum.COORDINATOR.toScopedName();
-        }
-        
-        // Priority 2 — Specific agent hints
-        if (normalized.contains("researcher task") || normalized.contains("fetch") || normalized.contains("search") || normalized.contains("discovery")) {
-            return AgentRoleEnum.RESEARCHER.toScopedName();
-        } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("fix bug") || normalized.contains("refactor")) {
-            return AgentRoleEnum.CODER.toScopedName();
-        }
-        
-        // Default to researcher for cron tasks as most involve retrieval/monitoring
         return AgentRoleEnum.RESEARCHER.toScopedName();
     }
 

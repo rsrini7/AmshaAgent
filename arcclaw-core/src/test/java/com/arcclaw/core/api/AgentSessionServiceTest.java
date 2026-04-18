@@ -18,14 +18,12 @@ import java.util.concurrent.ExecutorService;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.Response;
 
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
-import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.reflex.ReflexRegistry;
@@ -84,9 +82,6 @@ class AgentSessionServiceTest {
     @Mock
     Logger log;
 
-    @Mock
-    AuditService auditService;
-
     AgentSessionService service;
 
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
@@ -96,13 +91,13 @@ class AgentSessionServiceTest {
     @SuppressWarnings("unchecked")
     void setup() {
         service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, checkpointApprovalService, auditService, vThreads, 5);
+                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, checkpointApprovalService, vThreads, 5);
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
 
         // Default behavior: just execute the lambda
-        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
+        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
         
         mockedContext.when(WorkspaceContext::resolveUserId)
