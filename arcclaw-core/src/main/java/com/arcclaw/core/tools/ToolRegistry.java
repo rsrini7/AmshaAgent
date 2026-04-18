@@ -25,6 +25,7 @@ import com.arcclaw.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.opentelemetry.api.trace.Span;
+import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -47,6 +48,7 @@ import org.jboss.logging.Logger;
  * ScopedValues are propagated correctly across Quarkus virtual threads.
  */
 @ApplicationScoped
+@Unremovable
 public class ToolRegistry {
 
     private static final Logger log = Logger.getLogger(ToolRegistry.class);

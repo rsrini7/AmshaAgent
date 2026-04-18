@@ -4,11 +4,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 
 import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
@@ -43,6 +46,12 @@ class McpServerE2ETest {
         Mockito.doNothing().when(persistenceEngine).submitCritical(any());
         Mockito.when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
             .thenReturn(ToolResponse.success("mock-tool-result"));
+
+        AgentTool mockTool = Mockito.mock(AgentTool.class);
+        JsonObjectSchema schema = JsonObjectSchema.builder().build();
+        Mockito.when(mockTool.parametersSchema()).thenReturn(schema);
+        Mockito.when(mockTool.name()).thenReturn("mock-tool");
+        Mockito.when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
     }
 
     @Test

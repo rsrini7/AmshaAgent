@@ -6,8 +6,12 @@ import static org.hamcrest.Matchers.hasKey;
 import static org.mockito.ArgumentMatchers.anyString;
 
 import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolRegistry;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
@@ -30,10 +34,19 @@ class McpAdminResourceTest {
     @InjectMock
     ApiKeyRegistry apiKeyRegistry;
 
+    @InjectMock
+    ToolRegistry toolRegistry;
+
     @BeforeEach
     void setup() {
         Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
         Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+        
+        AgentTool mockTool = Mockito.mock(AgentTool.class);
+        JsonObjectSchema schema = JsonObjectSchema.builder().build();
+        Mockito.when(mockTool.parametersSchema()).thenReturn(schema);
+        Mockito.when(mockTool.name()).thenReturn("mock-tool");
+        Mockito.when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
     }
 
     @Test
