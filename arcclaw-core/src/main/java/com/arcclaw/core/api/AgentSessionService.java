@@ -16,6 +16,7 @@ import jakarta.ws.rs.core.Response;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
@@ -25,6 +26,8 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
@@ -56,6 +59,7 @@ public class AgentSessionService {
     private final ReflexRegistry reflexRegistry;
     private final CheckpointResumeHandler checkpointResumeHandler;
     private final CheckpointApprovalService checkpointApprovalService;
+    private final AuditService auditService;
     private final ExecutorService vThreads;
     private final int maxResumeIterations;
 
@@ -79,6 +83,7 @@ public class AgentSessionService {
         this.reflexRegistry = null;
         this.checkpointResumeHandler = null;
         this.checkpointApprovalService = null;
+        this.auditService = null;
         this.vThreads = null;
         this.maxResumeIterations = 0;
     }
@@ -94,6 +99,7 @@ public class AgentSessionService {
                                ReflexRegistry reflexRegistry,
                                CheckpointResumeHandler checkpointResumeHandler,
                                CheckpointApprovalService checkpointApprovalService,
+                               AuditService auditService,
                                @VirtualThreads ExecutorService vThreads,
                                @ConfigProperty(name = "arcclaw.approval.max-resume-iterations", defaultValue = "5") int maxResumeIterations) {
         this.log = log;
@@ -106,6 +112,7 @@ public class AgentSessionService {
         this.reflexRegistry = reflexRegistry;
         this.checkpointResumeHandler = checkpointResumeHandler;
         this.checkpointApprovalService = checkpointApprovalService;
+        this.auditService = auditService;
         this.vThreads = vThreads;
         this.maxResumeIterations = maxResumeIterations;
     }
@@ -149,6 +156,17 @@ public class AgentSessionService {
 
         String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
         int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
+
+        Optional<AgentCheckpoint> cpOpt = agentStore.load(sessionId, canonicalRole);
+        if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(Map.of(
+                        "error",  "Session is awaiting human approval",
+                        "code",   "AWAITING_APPROVAL",
+                        "hint",   "Use POST /sessions/" + sessionId + "/approve to proceed"
+                    ))
+                    .build();
+        }
 
         try {
             Callable<Response> op = () -> {
@@ -308,6 +326,31 @@ public class AgentSessionService {
     public Optional<Response> validateSession(String sessionId) {
         if (!heartbeatTracker.exists(sessionId)) {
             return Optional.of(Response.status(Response.Status.NOT_FOUND).entity("Session not found").build());
+        }
+
+        // Guard 2: per-key session ownership
+        Optional<String> owner = heartbeatTracker.getOwner(sessionId);
+        if (owner.isPresent()) {
+            String requestingKey = WorkspaceContext.resolveUserId();
+            if (requestingKey != null && !owner.get().equals(requestingKey)) {
+                log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
+                          requestingKey, sessionId, owner.get());
+                
+                auditService.recordMandatory(
+                    sessionId,
+                    requestingKey,
+                    AgentSentinels.SYSTEM_ROLE,
+                    SecurityEventType.UNAUTHORIZED_ACCESS,
+                    "Key " + requestingKey + " attempted cross-key session access"
+                );
+
+                return Optional.of(Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of(
+                        "error", "API key not authorized for this session",
+                        "code", "SESSION_ACCESS_DENIED"
+                    ))
+                    .build());
+            }
         }
         return Optional.empty();
     }

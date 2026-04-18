@@ -78,4 +78,16 @@ class CheckpointMapperTest {
         // All other fields null — verifies no NPE in mapper
         assertDoesNotThrow(() -> CheckpointMapper.toDto(sparse));
     }
+
+    @Test
+    void toEntity_nullTimestampsSafe() {
+        CheckpointDto dto = new CheckpointDto(
+            1L, "sess-1", "COORDINATOR", "IN_PROGRESS", "SUPERVISED", "{}", "user-1", "telegram",
+            "goal", null, null, null, null, null, null, null,
+            5, 0, null, null, null, null, null, Instant.now(), Instant.now()
+        );
+        AgentCheckpoint entity = assertDoesNotThrow(() -> CheckpointMapper.toEntity(dto));
+        assertNull(entity.getFailedAt());
+        assertNull(entity.getCompletedAt());
+    }
 }

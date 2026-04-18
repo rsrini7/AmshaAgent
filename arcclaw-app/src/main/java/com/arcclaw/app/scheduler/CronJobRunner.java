@@ -113,6 +113,32 @@ public class CronJobRunner {
     }
 
     private String resolveRole(AgentCronEntity job) {
+        // Priority 0 — Explicit stored role always wins
+        if (job.executionRole != null && !job.executionRole.isBlank()) {
+            return job.executionRole;
+        }
+
+        String normalized = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "").toLowerCase() : "";
+        
+        // Output-only goals: unconditionally override to coordinator
+        if (normalized.startsWith("output") || normalized.startsWith("say ")
+                || normalized.startsWith("send ") || normalized.startsWith("tell ")) {
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+
+        // Priority 1 — Coordinator (Meta-scheduling / goal orchestration)
+        if (normalized.contains("coordinator task") || normalized.contains("meta-schedule") || normalized.contains("schedule next")) {
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+        
+        // Priority 2 — Specific agent hints
+        if (normalized.contains("researcher task") || normalized.contains("fetch") || normalized.contains("search") || normalized.contains("discovery")) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("fix bug") || normalized.contains("refactor")) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+        
+        // Default to researcher for cron tasks as most involve retrieval/monitoring
         return AgentRoleEnum.RESEARCHER.toScopedName();
     }
 

@@ -24,6 +24,7 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.reflex.ReflexRegistry;
@@ -82,6 +83,9 @@ class AgentSessionServiceTest {
     @Mock
     Logger log;
 
+    @Mock
+    AuditService auditService;
+
     AgentSessionService service;
 
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
@@ -90,8 +94,21 @@ class AgentSessionServiceTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
-        service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, checkpointApprovalService, vThreads, 5);
+        service = new AgentSessionService(
+                log,
+                agentLoop,
+                reasoningEngine,
+                agentStore,
+                workspaceManager,
+                heartbeatTracker,
+                responseMapper,
+                reflexRegistry,
+                checkpointResumeHandler,
+                checkpointApprovalService,
+                auditService,
+                vThreads,
+                5
+        );
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
@@ -267,5 +284,22 @@ class AgentSessionServiceTest {
         Response response = service.terminateSession("sess1");
         assertEquals(204, response.getStatus());
         verify(workspaceManager).terminateSession("sess1");
+    }
+
+    @Test
+    void validateSession_crossKeyAccess_firesUnauthorizedAuditAndReturns401() {
+        when(heartbeatTracker.exists("sess-1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("sess-1")).thenReturn(Optional.of("key-A"));
+        
+        // WorkspaceContext.resolveUserId() returns "key-B"
+        mockedContext.when(WorkspaceContext::resolveUserId).thenReturn("key-B");
+        
+        Optional<Response> result = service.validateSession("sess-1");
+        
+        org.junit.jupiter.api.Assertions.assertTrue(result.isPresent());
+        assertEquals(401, result.get().getStatus());
+        verify(auditService).recordMandatory(
+            org.mockito.ArgumentMatchers.eq("sess-1"), org.mockito.ArgumentMatchers.eq("key-B"), any(),
+            org.mockito.ArgumentMatchers.eq(com.arcclaw.core.audit.SecurityEventType.UNAUTHORIZED_ACCESS), any());
     }
 }

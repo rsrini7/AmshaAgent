@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -26,6 +27,21 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
 
     @Inject
     EntityManager em;
+
+    @PostConstruct
+    void warmupQueryCache() {
+        // Force HQL compilation at startup to avoid timeout during first query in native mode
+        try {
+            em.createQuery(
+                "SELECT COUNT(a) FROM AuditEvent a WHERE a.sessionId = :sid",
+                Long.class)
+              .setParameter("sid", "warmup")
+              .setMaxResults(1)
+              .getResultList();
+        } catch (Exception ignored) {
+            // best effort warmup
+        }
+    }
 
     @Override
     @Transactional(Transactional.TxType.MANDATORY)

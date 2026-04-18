@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
@@ -44,6 +45,10 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<AgentCronDto> findByUserId(String userId) {
+        // IMPORTANT: em.clear() is the fix for the "chat mode changes not immediately visible" bug.
+        // When a cron status write and this read share the same REQUIRED persistence context
+        // (e.g. ApproveReflex step 5), Hibernate's L1 cache returns the pre-write snapshot.
+        // Clearing the cache forces a fresh DB read. Do not remove this.
         em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId",
@@ -58,6 +63,10 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<AgentCronDto> findAwaitingApprovalByUserId(String userId) {
+        // IMPORTANT: em.clear() is the fix for the "chat mode changes not immediately visible" bug.
+        // When a cron status write and this read share the same REQUIRED persistence context
+        // (e.g. ApproveReflex step 5), Hibernate's L1 cache returns the pre-write snapshot.
+        // Clearing the cache forces a fresh DB read. Do not remove this.
         em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = :status",
@@ -106,9 +115,9 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :active, c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("active", CronStatus.ACTIVE)
-         .setParameter("last", lastFireTime)
-         .setParameter("next", nextFireTime)
-         .setParameter("now", Instant.now())
+         .setParameter("last", lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null)
+         .setParameter("next", nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -119,8 +128,8 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :completed, c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("completed", CronStatus.COMPLETED)
-         .setParameter("last", lastFireTime)
-         .setParameter("now", Instant.now())
+         .setParameter("last", lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -131,7 +140,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         em.createQuery(
                 "UPDATE AgentCronEntity c SET c.status = :awaiting, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL)
-         .setParameter("now", Instant.now())
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -153,7 +162,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
                 "UPDATE AgentCronEntity c SET c.status = :failed, c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
         ).setParameter("failed", CronStatus.FAILED)
          .setParameter("err", errorReason)
-         .setParameter("now", Instant.now())
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -161,11 +170,12 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markSkipped(String id, Instant nextFireTime, Instant now) {
+        // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses Converter autoApply for bind parameters.
         em.createQuery(
             "UPDATE AgentCronEntity c SET c.status = :skipped, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
          ).setParameter("skipped", CronStatus.SKIPPED)
-          .setParameter("next", nextFireTime)
-          .setParameter("now", now)
+          .setParameter("next", nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null)
+          .setParameter("now", now != null ? TemporalUtils.formatIsoLex(now) : null)
          .setParameter("id", id)
          .executeUpdate();
     }
@@ -179,7 +189,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
                 "(c.lastFireTime <= :threshold OR (c.lastFireTime IS NULL AND c.createdAt <= :threshold))"
         ).setParameter("active", CronStatus.ACTIVE)
          .setParameter("running", CronStatus.RUNNING)
-         .setParameter("threshold", threshold)
+         .setParameter("threshold", threshold != null ? TemporalUtils.formatIsoLex(threshold) : null)
          .executeUpdate();
     }
 
