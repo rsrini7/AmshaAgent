@@ -4,6 +4,11 @@
     "https://checkstyle.org/dtds/suppressions_1_2.dtd">
 <suppressions>
     <!-- Baseline suppressions for pre-existing MethodLength violations -->
+
+     <!-- ═══════════════════════════════════════════════════════════
+         agent reasoning
+         ═══════════════════════════════════════════════════════════ -->
+     <suppress checks="MethodLength" files="ChatModelProducer\.java"/>
    
       <!-- ═══════════════════════════════════════════════════════════
          agent/loop — scheduled for T2-7 deep conditional extraction

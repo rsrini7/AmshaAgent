@@ -3,6 +3,8 @@ package com.arcclaw.persistence.sqlite;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.UUID;
+
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -27,7 +29,7 @@ class EncryptedSecretVersionTest {
     @Test
     @Transactional
     void testEncryptedSecret_versionFieldExistsAndStartsAtZero() {
-        String sessionId = java.util.UUID.randomUUID().toString();
+        String sessionId = UUID.randomUUID().toString();
         EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, "key-1");
         EncryptedSecret secret = new EncryptedSecret();
         secret.id = id;
@@ -42,7 +44,7 @@ class EncryptedSecretVersionTest {
 
     @Test
     void testEncryptedSecret_versionIncrementsOnCiphertextUpdate() {
-        String sessionId = java.util.UUID.randomUUID().toString();
+        String sessionId = UUID.randomUUID().toString();
         EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, "key-2");
 
         // Step 1: persist in committed transaction
@@ -72,7 +74,7 @@ class EncryptedSecretVersionTest {
 
     @Test
     void testEncryptedSecret_optimisticLockPreventsLostUpdate() {
-        String sessionId = java.util.UUID.randomUUID().toString();
+        String sessionId = UUID.randomUUID().toString();
         EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, "key-3");
 
         // 1. Persist in a committed transaction
