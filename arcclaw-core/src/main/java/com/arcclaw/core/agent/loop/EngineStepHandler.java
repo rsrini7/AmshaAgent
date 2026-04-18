@@ -74,7 +74,6 @@ public class EngineStepHandler {
      * to a method on a proxy instance backed by this constructor will NPE,
      * which is the correct failure signal for misconfigured injection.
      */
-    @SuppressWarnings("unused")
     EngineStepHandler() {
         this.governanceLayer = null;
         this.observers = null;

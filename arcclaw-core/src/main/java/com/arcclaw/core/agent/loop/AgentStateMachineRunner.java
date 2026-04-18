@@ -2,7 +2,6 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -181,7 +180,7 @@ public class AgentStateMachineRunner {
                     log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
                     // --- Write-intent hint injection (iteration 1 only) ---
-                    if (iteration == 1 && intentDetector.isWriteIntent(goal)) {
+                    if (iteration == 1 && intentDetector.isWriteIntent(context.goal())) {
                         transientError = "The user wants to store data. Call ingest_document immediately. "
                                 + "Pass REDACTED-* placeholders as-is. No explanation needed.";
                     }
@@ -401,24 +400,5 @@ public class AgentStateMachineRunner {
                 o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res);
             });
         }
-    }
-
-    private record FinishDecision(AgentResult result, String transientError) {}
-
-    private AgentResult handleSynthesizerFinish(List<ReasoningStep> history, String answer) {
-        String combinedContext = history.stream()
-                .filter(s -> s.observation() != null && !s.observation().isBlank()
-                        && (s.success() == null || s.success())
-                        && !"Task completed.".equals(s.observation()))
-                .map(s -> "Thought: " + s.thought() + "\n" + s.observation())
-                .collect(Collectors.joining("\n"));
-
-        // If no combined context, just return the answer as-is
-        if (combinedContext.isBlank()) {
-            return AgentResult.finished(answer, List.copyOf(history));
-        }
-
-        // Synthesizer has useful prior observations — return enriched answer
-        return AgentResult.finished(answer, List.copyOf(history));
     }
 }
