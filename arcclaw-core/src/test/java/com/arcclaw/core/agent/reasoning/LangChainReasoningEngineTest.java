@@ -459,7 +459,7 @@ class LangChainReasoningEngineTest {
     }
 
     @InjectMock
-    IntentClassificationService intentClassifier;
+    IntentClassificationService intentDetector;
 
     @Test
     void testWriteIntentForcesIngestDocumentCorrection() {
@@ -467,7 +467,7 @@ class LangChainReasoningEngineTest {
         String sessionId = "write-intent-test";
         String goal = "save my name as Srini";
         
-        when(intentClassifier.isWriteIntent(goal)).thenReturn(true);
+        when(intentDetector.isWriteIntent(goal)).thenReturn(true);
         
         // Mock a successful parse that returns a FINISH action with the JSON answer
         ReasoningStep parsedStep = ReasoningStep.pending(

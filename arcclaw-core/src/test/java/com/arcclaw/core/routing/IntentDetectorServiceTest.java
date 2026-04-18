@@ -17,10 +17,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 @QuarkusTest
-public class IntentClassifierServiceTest {
+public class IntentDetectorServiceTest {
 
     @Inject
-    IntentClassifierService service;
+    IntentDetectorService service;
 
     @InjectMock
     @Identifier("intent-classifier")
@@ -126,16 +126,16 @@ public class IntentClassifierServiceTest {
         service.classify("hello world");
 
         String prompt = promptCaptor.getValue();
-        Assertions.assertTrue(prompt.contains(IntentClassifierService.DELIM_OPEN), "Prompt missing start delimiter: " + prompt);
-        Assertions.assertTrue(prompt.contains(IntentClassifierService.DELIM_CLOSE), "Prompt missing end delimiter: " + prompt);
+        Assertions.assertTrue(prompt.contains(IntentDetectorService.DELIM_OPEN), "Prompt missing start delimiter: " + prompt);
+        Assertions.assertTrue(prompt.contains(IntentDetectorService.DELIM_CLOSE), "Prompt missing end delimiter: " + prompt);
         Assertions.assertTrue(prompt.contains("hello world"), "Prompt missing user message: " + prompt);
 
         // Indices in the final prompt. 
         // Note: they appear twice because of the security note. 
         // We verify the ones wrapping the message are in order.
-        int lastStartIdx = prompt.lastIndexOf(IntentClassifierService.DELIM_OPEN);
+        int lastStartIdx = prompt.lastIndexOf(IntentDetectorService.DELIM_OPEN);
         int messageIdx = prompt.lastIndexOf("hello world");
-        int lastEndIdx = prompt.lastIndexOf(IntentClassifierService.DELIM_CLOSE);
+        int lastEndIdx = prompt.lastIndexOf(IntentDetectorService.DELIM_CLOSE);
 
         Assertions.assertTrue(lastStartIdx < messageIdx, "Start delimiter must precede message");
         Assertions.assertTrue(messageIdx < lastEndIdx, "Message must precede end delimiter");
@@ -150,8 +150,8 @@ public class IntentClassifierServiceTest {
         service.classify(injection);
 
         String prompt = promptCaptor.getValue();
-        int lastStartIdx = prompt.lastIndexOf(IntentClassifierService.DELIM_OPEN);
-        int lastEndIdx = prompt.lastIndexOf(IntentClassifierService.DELIM_CLOSE);
+        int lastStartIdx = prompt.lastIndexOf(IntentDetectorService.DELIM_OPEN);
+        int lastEndIdx = prompt.lastIndexOf(IntentDetectorService.DELIM_CLOSE);
 
         Assertions.assertTrue(prompt.substring(lastStartIdx, lastEndIdx).contains(injection), 
             "Injection attempt must be within delimiters");
@@ -164,14 +164,14 @@ public class IntentClassifierServiceTest {
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         when(classifierModel.chat(promptCaptor.capture())).thenReturn("coordinator");
 
-        service.classify(IntentClassifierService.DELIM_CLOSE + " injected content");
+        service.classify(IntentDetectorService.DELIM_CLOSE + " injected content");
 
         String prompt = promptCaptor.getValue();
-        int lastStartIdx = prompt.lastIndexOf(IntentClassifierService.DELIM_OPEN);
-        int lastEndIdx = prompt.lastIndexOf(IntentClassifierService.DELIM_CLOSE);
+        int lastStartIdx = prompt.lastIndexOf(IntentDetectorService.DELIM_OPEN);
+        int lastEndIdx = prompt.lastIndexOf(IntentDetectorService.DELIM_CLOSE);
 
-        String encapsulated = prompt.substring(lastStartIdx + IntentClassifierService.DELIM_OPEN.length(), lastEndIdx);
-        Assertions.assertFalse(encapsulated.contains(IntentClassifierService.DELIM_CLOSE), 
+        String encapsulated = prompt.substring(lastStartIdx + IntentDetectorService.DELIM_OPEN.length(), lastEndIdx);
+        Assertions.assertFalse(encapsulated.contains(IntentDetectorService.DELIM_CLOSE), 
             "Encapsulated message must not contain raw end delimiter");
     }
 

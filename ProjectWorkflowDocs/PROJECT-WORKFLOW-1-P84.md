@@ -80,13 +80,13 @@ Telegram Bot API
   → TelegramAgentHandler.handleExchange(Exchange)
   → ChannelServices.processAsync(ChannelMessage)
   → SessionRegistry.resolveOrCreate(channelType, channelId, userId)
-  → SkillAwareIntentClassifier.classify(text)    ← regex fast-path
+  → SkillAwareIntentDetector.classify(text)    ← regex fast-path
        ↓ (no skill match)
-  → IntentClassifierService.classify(text)       ← LLM classification
+  → IntentDetectorService.classify(text)       ← LLM classification
   → AgentDispatchHandler → AgentLoop.run()
 ```
 
-`SkillAwareIntentClassifier` iterates compiled `Pattern[]` from `SkillRegistry` — if any matches, it bypasses the LLM call entirely and returns `skill:{name}` as the role. Only on a miss does it fall through to the LLM-backed `IntentClassifierService`. 
+`SkillAwareIntentDetector` iterates compiled `Pattern[]` from `SkillRegistry` — if any matches, it bypasses the LLM call entirely and returns `skill:{name}` as the role. Only on a miss does it fall through to the LLM-backed `IntentDetectorService`. 
 
 ### Path C: Cron Scheduler
 
@@ -299,7 +299,7 @@ StartupEvent
 ```
 
 ### Routing
-`SkillAwareIntentClassifier` (CDI `@Alternative @Priority(1)` overriding `IntentClassifierService`) iterates compiled patterns in O(n·p) where p = pattern count; if any matches, returns `skill:{name}` immediately. `SystemPromptBuilder` detects the `skill:` prefix and injects the skill's custom system prompt and tool restrictions. 
+`SkillAwareIntentDetector` (CDI `@Alternative @Priority(1)` overriding `IntentDetectorService`) iterates compiled patterns in O(n·p) where p = pattern count; if any matches, returns `skill:{name}` immediately. `SystemPromptBuilder` detects the `skill:` prefix and injects the skill's custom system prompt and tool restrictions. 
 
 ***
 
@@ -432,7 +432,7 @@ External Input
   SessionRegistry → SessionId
          │
          ▼
-  SkillAwareIntentClassifier → agentRole
+  SkillAwareIntentDetector → agentRole
          │
          ▼
   WorkspaceContext.run() ──────────────────┐

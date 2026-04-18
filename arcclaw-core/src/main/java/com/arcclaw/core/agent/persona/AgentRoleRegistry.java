@@ -36,7 +36,7 @@ public class AgentRoleRegistry {
             .findFirst();
     }
 
-    /** Convenience: resolve by raw string (used in IntentClassifierService). */
+    /** Convenience: resolve by raw string (used in IntentDetectorService). */
     public Optional<Agent> resolveByName(String roleName) {
         return resolve(AgentRoleEnum.fromString(roleName));
     }

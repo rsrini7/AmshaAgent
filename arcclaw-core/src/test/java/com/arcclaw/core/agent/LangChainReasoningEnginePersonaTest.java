@@ -43,7 +43,7 @@ class LangChainReasoningEnginePersonaTest {
     private SystemPromptBuilder mockPromptBuilder;
     private ChatHistoryAssembler mockHistoryAssembler;
     private ReasoningStepParser mockStepParser;
-    private IntentClassificationService mockIntentClassifier;
+    private IntentClassificationService mockIntentDetector;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -56,7 +56,7 @@ class LangChainReasoningEnginePersonaTest {
         mockPromptBuilder = mock(SystemPromptBuilder.class);
         mockHistoryAssembler = mock(ChatHistoryAssembler.class);
         mockStepParser = mock(ReasoningStepParser.class);
-        mockIntentClassifier = mock(IntentClassificationService.class);
+        mockIntentDetector = mock(IntentClassificationService.class);
         GovernanceStrategy mockGovernanceLayer = mock(GovernanceStrategy.class);
         RateLimitTracker mockRateLimitTracker = mock(RateLimitTracker.class);
         AgentOtelContext mockOtelContext = mock(AgentOtelContext.class);
@@ -66,7 +66,7 @@ class LangChainReasoningEnginePersonaTest {
         when(mockRoleRegistry.permittedTools(any())).thenReturn(Set.of());
         when(mockToolRegistry.listTools()).thenReturn(Collections.emptyList());
         when(mockHistoryAssembler.assemble(any(), any(), any())).thenReturn(Collections.emptyList());
-        when(mockIntentClassifier.isWriteIntent(anyString())).thenReturn(false);
+        when(mockIntentDetector.isWriteIntent(anyString())).thenReturn(false);
 
         ChatResponse mockResponse = mock(ChatResponse.class);
         when(mockResponse.aiMessage()).thenReturn(AiMessage.aiMessage("mock response"));
@@ -82,7 +82,7 @@ class LangChainReasoningEnginePersonaTest {
         injectField(engine, "promptBuilder", mockPromptBuilder);
         injectField(engine, "historyAssembler", mockHistoryAssembler);
         injectField(engine, "stepParser", mockStepParser);
-        injectField(engine, "intentClassifier", mockIntentClassifier);
+        injectField(engine, "intentDetector", mockIntentDetector);
         injectField(engine, "governanceLayer", mockGovernanceLayer);
         injectField(engine, "rateLimitTracker", mockRateLimitTracker);
         injectField(engine, "otelContext", mockOtelContext);

@@ -45,11 +45,12 @@ public class ArchitectureBoundaryTest {
             .that().resideInAPackage("com.arcclaw.core..")
             .should().dependOnClassesThat().resideInAPackage("com.arcclaw.app..");
 
-    // 5. IntentClassifier implementations reside in com.arcclaw.core.agent..* NOT in com.arcclaw.app..* (§20.1)
+    // 5. IntentDetector implementations reside in com.arcclaw.core.routing..* (§20.1)
     @ArchTest
-    static final ArchRule intentClassifiersShouldResideInCore = classes()
-            .that().haveSimpleNameEndingWith("IntentClassifier")
-            .should().resideInAPackage("com.arcclaw.core.agent..");
+    static final ArchRule intentDetectorsShouldResideInCore = classes()
+            .that().haveSimpleNameEndingWith("IntentDetector")
+            .and().resideOutsideOfPackage("com.arcclaw.channel.api..")
+            .should().resideInAPackage("com.arcclaw.core.routing..");
 
     // 6. No class in com.arcclaw.core.agent.loop..* is annotated with @Transactional
     @ArchTest

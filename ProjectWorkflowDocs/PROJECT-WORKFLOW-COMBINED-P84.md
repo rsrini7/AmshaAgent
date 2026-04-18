@@ -99,13 +99,13 @@ Telegram Bot API
   → TelegramAllowlistGuard  (numeric userId check against allowlist)
   → ChannelServices.processAsync(ChannelMessage)
   → SessionRegistry.resolveOrCreate(channelType, channelId, userId)
-  → SkillAwareIntentClassifier.classify(text)    ← compiled Pattern[] fast-path, zero LLM tokens
+  → SkillAwareIntentDetector.classify(text)    ← compiled Pattern[] fast-path, zero LLM tokens
        ↓ (no skill match)
-  → IntentClassifierService.classify(text)       ← LLM-backed classification
+  → IntentDetectorService.classify(text)       ← LLM-backed classification
   → AgentDispatchHandler → AgentLoop.run(...)
 ```
 
-`SkillAwareIntentClassifier` iterates `static final Pattern[]` from pre-compiled `CompiledSkillEntry` objects in `SkillRegistry`. If any regex matches, it returns `skill:{name}` as the role — zero LLM tokens spent on routing. Only on a miss does it fall through to the LLM-backed `IntentClassifierService`.
+`SkillAwareIntentDetector` iterates `static final Pattern[]` from pre-compiled `CompiledSkillEntry` objects in `SkillRegistry`. If any regex matches, it returns `skill:{name}` as the role — zero LLM tokens spent on routing. Only on a miss does it fall through to the LLM-backed `IntentDetectorService`.
 
 ### Path C: WebSocket (Web Channel)
 
@@ -525,7 +525,7 @@ Database skills can override classpath skills by name (lower priority number = h
 
 ### Routing
 
-`SkillAwareIntentClassifier` (CDI `@Alternative @Priority(1)`, overriding `IntentClassifierService`) iterates `CompiledSkillEntry[]` in O(n·p) where p = pattern count per skill. On match, returns `skill:{name}` immediately. `SystemPromptBuilder` detects the `skill:` prefix and injects the skill's custom system prompt and its `RoleDefinition`-derived tool restrictions.
+`SkillAwareIntentDetector` (CDI `@Alternative @Priority(1)`, overriding `IntentDetectorService`) iterates `CompiledSkillEntry[]` in O(n·p) where p = pattern count per skill. On match, returns `skill:{name}` immediately. `SystemPromptBuilder` detects the `skill:` prefix and injects the skill's custom system prompt and its `RoleDefinition`-derived tool restrictions.
 
 ---
 
@@ -771,7 +771,7 @@ External Input
   │ AllowlistHandler (priority 10)          │
   │ SessionResolutionHandler (priority 20)  │  ← SessionRegistry → sessionId
   │ IntentClassificationHandler (priority 30)  ← ReflexRegistry → short-circuit reply
-  │   └─ SkillAwareIntentClassifier         │     or skill:name / coordinator role
+  │   └─ SkillAwareIntentDetector         │     or skill:name / coordinator role
   │ CompactionHandler (priority 60)         │  ← summarize if over threshold
   │ AgentDispatchHandler (priority 70)      │
   └─────────────────────────────────────────┘

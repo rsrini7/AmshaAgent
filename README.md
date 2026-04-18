@@ -55,7 +55,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 |---|---|
 | **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces; Session-constrained workspaces |
 | **State** | JDBC-backed `ChatMemoryStore` + SQLite (WAL) for 100% session persistence and graceful continuity |
-| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch; `SkillAwareIntentClassifier` checks `SkillRegistry` first (zero classification tokens) |
+| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch; `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.83 |
@@ -152,7 +152,7 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 1. **REST API:** The edge layer (`AgentResource`) intercepts the request on a Virtual Thread and provisions a session.
 2. **Message Pipeline:** Incoming channel messages pass through an ordered `MessagePipeline` of handlers: `AllowlistHandler` → `SessionResolutionHandler` → `CommandDispatchHandler` (reflexes) → `IntentClassificationHandler` (skill routing + LLM classification) → `CompactionHandler` → `AgentDispatchHandler`.
 3. **Reflex System:** Before the LLM is ever invoked, the `ReflexRegistry` scans the input for deterministic fast-path commands. If a reflex matches, it executes without consuming any LLM tokens and short-circuits the pipeline.
-4. **Skill System:** Inside `IntentClassificationHandler`, `SkillAwareIntentClassifier` checks `SkillRegistry.findMatch()` first. If matched, the skill's system prompt is injected and the agent runs directly — bypassing LLM intent classification entirely (zero additional classification tokens).
+4. **Skill System:** Inside `IntentClassificationHandler`, `SkillAwareIntentDetector` checks `SkillRegistry.findMatch()` first. If matched, the skill's system prompt is injected and the agent runs directly — bypassing LLM intent classification entirely (zero additional classification tokens).
 5. **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 6. **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or budget-exceeded).
 7. **Parallel Tool Execution:** When the LLM requests multiple tools in one step, `ParallelToolStepExecutor` executes them concurrently. Pre-executable tools (FULL autonomy or configured safe list) run immediately; remaining tools are held for batch HITL approval with Telegram inline keyboard.
@@ -188,7 +188,7 @@ graph TD
         Pipeline --> ALH[AllowlistHandler<br/>priority 10 — user allowlist check]
         ALH --> SRH[SessionResolutionHandler<br/>priority 15 — session binding]
         SRH --> CDH[CommandDispatchHandler<br/>priority 30 — Reflex fast-path]
-        CDH --> ICH[IntentClassificationHandler<br/>priority 50 — SkillAwareIntentClassifier first<br/>then llama-3.1-8b-instant]
+        CDH --> ICH[IntentClassificationHandler<br/>priority 50 — SkillAwareIntentDetector first<br/>then llama-3.1-8b-instant]
         ICH --> CH[CompactionHandler<br/>priority 60 — async CDI event if threshold exceeded]
         CH --> ADH[AgentDispatchHandler<br/>priority 70 — Agent run]
     end
@@ -210,7 +210,7 @@ graph TD
     end
 
     subgraph Skill System - No Intent Classification Tokens
-        ICH -->|trigger matches| SR[SkillAwareIntentClassifier<br/>SkillRegistry.findMatch]
+        ICH -->|trigger matches| SR[SkillAwareIntentDetector<br/>SkillRegistry.findMatch]
         SR --> SB[Built-in Skills<br/>classpath resources/skills/]
         SR --> SD[Dynamic Skills<br/>SQLite AgentSkillEntity]
         SR --> SP[Skill system prompt injected<br/>agent runs with skill persona]
@@ -287,8 +287,8 @@ sequenceDiagram
     participant CH as Channel Adapter<br/>(AgentResource · ChatCommand · TelegramAgentHandler)
     participant PP as MessagePipeline
     participant RR as ReflexRegistry
-    participant SK as SkillAwareIntentClassifier
-    participant IC as IntentClassifier (llama-3.1-8b-instant)
+    participant SK as SkillAwareIntentDetector
+    participant IC as IntentDetector (llama-3.1-8b-instant)
     participant AL as AgentLoop
     participant LLM as LangChainReasoningEngine
     participant TR as ToolRegistry
@@ -546,8 +546,8 @@ arcclaw-app/                  ← Application entrypoint and wiring
     │                           Vec0NativeLibraryInstaller, AppReflectionConfig
     ├── mcp/                    McpAdminResource, McpConnectResource
     ├── observability/          MetricsAgentObserver (Micrometer)
-    ├── routing/                IntentClassifierService, ModelProducer (intent-classifier model),
-    │                           SkillAwareIntentClassifier, LlmModelFactory,
+    ├── routing/                IntentDetectorService, ModelProducer (intent-classifier model),
+    │                           SkillAwareIntentDetector, LlmModelFactory,
     │                           GroqLlmProviderFactory, OpenAiLlmProviderFactory,
     │                           OllamaLlmProviderFactory, OpenRouterLlmProviderFactory,
     │                           RoutingChatModelProvider SPI
@@ -648,7 +648,7 @@ MessagePipeline:
     10 — AllowlistHandler            → blocks non-allowlisted users before any processing
     15 — SessionResolutionHandler    → derives or creates deterministic session UUID
     30 — CommandDispatchHandler      → routes /commands and zero-token reflexes (no LLM call)
-    50 — IntentClassificationHandler → SkillAwareIntentClassifier.findMatch() first (zero classification tokens);
+    50 — IntentClassificationHandler → SkillAwareIntentDetector.findMatch() first (zero classification tokens);
                                        falls through to llama-3.1-8b-instant for unmatched messages
     60 — CompactionHandler           → fires async CDI event if chat window exceeds threshold;
                                        returns immediately without blocking the pipeline
@@ -703,7 +703,7 @@ This matters for three reasons:
 > [!NOTE]
 > The `PiiScanReflex` and `PromptInjectionReflex` run on **every message** via their `sanitize()` hook in `ReflexRegistry.processIfReflex()`, even when no other reflex matches. PII mode is configurable: `REDACT_AND_FORWARD` (default) silently redacts and passes to the LLM; `BLOCK_AND_NOTIFY` rejects the message outright. Override at runtime via `ARCCLAW_PII_MODE` in your `.env`.
 >
-> **Note on skill routing**: `SkillReflex` handles only the `/skills` list command. Zero-token skill routing for regular messages uses `SkillAwareIntentClassifier.findMatch()` called inside `IntentClassificationHandler` — these are distinct mechanisms.
+> **Note on skill routing**: `SkillReflex` handles only the `/skills` list command. Zero-token skill routing for regular messages uses `SkillAwareIntentDetector.findMatch()` called inside `IntentClassificationHandler` — these are distinct mechanisms.
 
 ---
 
@@ -736,7 +736,7 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 
 ## 🎯 Custom Skills System
 
-ArcClaw's Skills system is a zero-LLM-token routing mechanism that intercepts messages **before** the intent classifier. When a message matches a skill's trigger pattern (checked by `SkillAwareIntentClassifier` inside `IntentClassificationHandler`), the skill's system prompt is injected directly and the agent runs — no classification tokens spent.
+ArcClaw's Skills system is a zero-LLM-token routing mechanism that intercepts messages **before** the intent classifier. When a message matches a skill's trigger pattern (checked by `SkillAwareIntentDetector` inside `IntentClassificationHandler`), the skill's system prompt is injected directly and the agent runs — no classification tokens spent.
 
 ### Skill Document Format
 

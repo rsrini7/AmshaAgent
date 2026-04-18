@@ -14,10 +14,6 @@ import com.arcclaw.core.agent.AgentSentinels;
  */
 @Entity
 @Table(name = "audit_event")
-@NamedQuery(
-    name = "AuditEvent.recordInsert",
-    query = "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid"
-)
 public class AuditEvent {
 
     @Id

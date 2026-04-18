@@ -99,7 +99,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Channel API (IntentClassifier, ChannelServices interfaces) -->
+        <!-- Channel API (IntentDetector, ChannelServices interfaces) -->
         <dependency>
             <groupId>com.arcclaw</groupId>
             <artifactId>arcclaw-channel-api</artifactId>

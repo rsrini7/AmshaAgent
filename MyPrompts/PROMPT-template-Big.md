@@ -26,7 +26,7 @@ A production-grade, enterprise AI Agent Kernel built with:
     RULE: Enum CONSTANT = role name. Display name = deity + role in parens.
     RULE: NEVER use DATTATREYA as an enum constant. The constant is SYNTHESIZER.
     RULE: NEVER use BRIHASPATI as an enum constant. The constant is ARCHITECT.
-  - IntentClassifierService (llama-3.1-8b-instant via Groq OpenAI-compatible API,
+  - IntentDetectorService (llama-3.1-8b-instant via Groq OpenAI-compatible API,
     accessed via quarkus.langchain4j.openai.* namespace — quarkus.langchain4j.groq.*
     namespace was removed during migration. CompactionModelProducer reads
     quarkus.langchain4j.openai.base-url and quarkus.langchain4j.openai.api-key.)
@@ -139,7 +139,7 @@ A production-grade, enterprise AI Agent Kernel built with:
   AgentSkillRepository (raw EntityManager, NOT Panache), SkillDefinition record,
   CompiledSkillEntry record (pure in-memory, NOT a JPA entity), SkillRegistry
   (AtomicReference<List<CompiledSkillEntry>>), SkillLoader, RoleRegistry
-  .registerDynamic(), SkillReflex (/skills command), SkillAwareIntentClassifier,
+  .registerDynamic(), SkillReflex (/skills command), SkillAwareIntentDetector,
   SkillSystemPrompt.html Qute wrapper, REST CRUD /api/v1/skills + /refresh + /delete,
   SecurityEventType: SKILL_LOADED / SKILL_REFRESHED (telemetry tier).
 - Phase 60.1: Quarkus 3.23.0 → 3.27.2 LTS migration. ArcClawSQLiteDialect
@@ -192,7 +192,7 @@ A production-grade, enterprise AI Agent Kernel built with:
 
 **Nuance #10** — No `ALTER TABLE` or migration scripts of any kind. All regular table schema changes are `@Entity` only. Raw DDL reserved for virtual tables (`USING fts5/vec0`), triggers, and indexes ONLY.
 
-**Nuance #11** — `SkillAwareIntentClassifier` checks `SkillRegistry` FIRST, then falls through to the LLM-based `IntentClassifierService`. Never invert this order.
+**Nuance #11** — `SkillAwareIntentDetector` checks `SkillRegistry` FIRST, then falls through to the LLM-based `IntentDetectorService`. Never invert this order.
 
 **Nuance #12** — `ToolCapability` enum constants use underscores: `GITHUB`, `MEMORY_SEARCH`, `SCHEDULE_TASK`, `MANAGE_SCHEDULE`, `SANDBOX_EXEC`. `ToolCapability.toolName()` returns the lowercase no-underscore form: `"github"`, `"memory_search"`, etc. `McpToolAllowlist @WithDefault` uses `toolName()` values (lowercase), NOT the enum constant names, because it is matched against external MCP server tool names which are always lowercase.
 
@@ -323,7 +323,7 @@ StructuredTaskScope is FORBIDDEN. Use ManagedExecutor + virtual threads instead.
     ReflectiveClassBuildItem.
 12. Any new AgentRoleEnum constant must be added to ALL switch expressions:
     PromptTemplateEngine.templateFor(), AgentStateMachineRunner routing,
-    IntentClassifierService roles list, and sanitize() fallback map.
+    IntentDetectorService roles list, and sanitize() fallback map.
     Exhaustive switch = compile error on missing case. Use this as the safety net.
 
 ## Execution Order

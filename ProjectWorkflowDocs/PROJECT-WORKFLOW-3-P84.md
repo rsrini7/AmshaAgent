@@ -42,12 +42,12 @@ Telegram Bot API → Apache Camel (camel-quarkus-telegram)
   → TelegramAllowlistGuard (numeric userId check)
   → ChannelServices.processAsync(ChannelMessage)
   → SessionRegistry.resolveOrCreate(channelType, channelId, userId)
-  → SkillAwareIntentClassifier.classify(text) [compiled Pattern[] from SkillRegistry — LLM bypassed on match]
-       ↓ (miss) → IntentClassifierService.classify(text) [LLM-backed classification]
+  → SkillAwareIntentDetector.classify(text) [compiled Pattern[] from SkillRegistry — LLM bypassed on match]
+       ↓ (miss) → IntentDetectorService.classify(text) [LLM-backed classification]
   → AgentDispatchHandler → AgentLoop.run(...)
 ```
 
-`SkillAwareIntentClassifier` iterates `static final Pattern[]` from compiled `CompiledSkillEntry` objects. If any matches, it returns `skill:{name}` as the role — zero LLM tokens spent on routing.
+`SkillAwareIntentDetector` iterates `static final Pattern[]` from compiled `CompiledSkillEntry` objects. If any matches, it returns `skill:{name}` as the role — zero LLM tokens spent on routing.
 
 **Path C — Cron Scheduler:**
 ```

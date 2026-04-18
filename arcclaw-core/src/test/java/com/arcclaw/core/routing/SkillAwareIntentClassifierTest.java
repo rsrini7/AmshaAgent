@@ -24,19 +24,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
-class SkillAwareIntentClassifierTest {
+class SkillAwareIntentDetectorTest {
 
     @InjectMock
     SkillRegistry skillRegistry;
 
     @InjectMock
-    IntentClassifierService fallbackService;
+    IntentDetectorService fallbackService;
 
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
     @Inject
-    SkillAwareIntentClassifier classifier;
+    SkillAwareIntentDetector classifier;
 
     @BeforeEach
     void setup() {

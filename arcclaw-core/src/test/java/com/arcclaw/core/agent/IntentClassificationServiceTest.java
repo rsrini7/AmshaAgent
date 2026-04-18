@@ -11,57 +11,57 @@ import org.junit.jupiter.api.Test;
 class IntentClassificationServiceTest {
 
     @Inject
-    IntentClassificationService intentClassifier;
+    IntentClassificationService intentDetector;
 
     @Test
     void testWriteIntentDetection() {
         // Core "memory" intents
-        assertTrue(intentClassifier.isWriteIntent("save this for later"));
-        assertTrue(intentClassifier.isWriteIntent("store the following result"));
-        assertTrue(intentClassifier.isWriteIntent("ingest this document"));
-        assertTrue(intentClassifier.isWriteIntent("remember my name is Srini"));
-        assertTrue(intentClassifier.isWriteIntent("add to memory: the user likes cats"));
-        assertTrue(intentClassifier.isWriteIntent("note that the project is finished"));
-        assertTrue(intentClassifier.isWriteIntent("call me the Galactic Emperor"));
+        assertTrue(intentDetector.isWriteIntent("save this for later"));
+        assertTrue(intentDetector.isWriteIntent("store the following result"));
+        assertTrue(intentDetector.isWriteIntent("ingest this document"));
+        assertTrue(intentDetector.isWriteIntent("remember my name is Srini"));
+        assertTrue(intentDetector.isWriteIntent("add to memory: the user likes cats"));
+        assertTrue(intentDetector.isWriteIntent("note that the project is finished"));
+        assertTrue(intentDetector.isWriteIntent("call me the Galactic Emperor"));
 
         // Case insensitivity
-        assertTrue(intentClassifier.isWriteIntent("REMEMBER this"));
+        assertTrue(intentDetector.isWriteIntent("REMEMBER this"));
         
         // Word boundaries
-        assertFalse(intentClassifier.isWriteIntent("passenger")); // contains 'save' but not as word
+        assertFalse(intentDetector.isWriteIntent("passenger")); // contains 'save' but not as word
         
         // Negative cases (read intents)
-        assertFalse(intentClassifier.isWriteIntent("read the file"));
-        assertFalse(intentClassifier.isWriteIntent("list all tasks"));
-        assertFalse(intentClassifier.isWriteIntent("what was the result?"));
-        assertFalse(intentClassifier.isWriteIntent(null));
-        assertFalse(intentClassifier.isWriteIntent(""));
+        assertFalse(intentDetector.isWriteIntent("read the file"));
+        assertFalse(intentDetector.isWriteIntent("list all tasks"));
+        assertFalse(intentDetector.isWriteIntent("what was the result?"));
+        assertFalse(intentDetector.isWriteIntent(null));
+        assertFalse(intentDetector.isWriteIntent(""));
     }
 
     @Test
     void testFollowUpHeuristic() {
-        assertTrue(intentClassifier.isFollowUpHeuristic("retry same command"));
-        assertTrue(intentClassifier.isFollowUpHeuristic("run it again"));
-        assertTrue(intentClassifier.isFollowUpHeuristic("in java please"));
-        assertTrue(intentClassifier.isFollowUpHeuristic("use sandbox for this"));
+        assertTrue(intentDetector.isFollowUpHeuristic("retry same command"));
+        assertTrue(intentDetector.isFollowUpHeuristic("run it again"));
+        assertTrue(intentDetector.isFollowUpHeuristic("in java please"));
+        assertTrue(intentDetector.isFollowUpHeuristic("use sandbox for this"));
         
         // Too long
-        assertFalse(intentClassifier.isFollowUpHeuristic("a".repeat(151)));
+        assertFalse(intentDetector.isFollowUpHeuristic("a".repeat(151)));
         
         // No signals
-        assertFalse(intentClassifier.isFollowUpHeuristic("hello world"));
+        assertFalse(intentDetector.isFollowUpHeuristic("hello world"));
     }
 
     @Test
     void testContinuityCommand() {
-        assertTrue(intentClassifier.isContinuityCommand("retry"));
-        assertTrue(intentClassifier.isContinuityCommand("  proceed  "));
-        assertTrue(intentClassifier.isContinuityCommand("try again"));
-        assertTrue(intentClassifier.isContinuityCommand("redo"));
-        assertTrue(intentClassifier.isContinuityCommand("continue"));
+        assertTrue(intentDetector.isContinuityCommand("retry"));
+        assertTrue(intentDetector.isContinuityCommand("  proceed  "));
+        assertTrue(intentDetector.isContinuityCommand("try again"));
+        assertTrue(intentDetector.isContinuityCommand("redo"));
+        assertTrue(intentDetector.isContinuityCommand("continue"));
         
         // Pattern uses matches() with optional suffix so it matches full phrases starting with signal
-        assertTrue(intentClassifier.isContinuityCommand("retry the task"));
-        assertTrue(intentClassifier.isContinuityCommand("retry carefully"));
+        assertTrue(intentDetector.isContinuityCommand("retry the task"));
+        assertTrue(intentDetector.isContinuityCommand("retry carefully"));
     }
 }

@@ -13,7 +13,7 @@ import dev.langchain4j.model.chat.ChatModel;
 
 /**
  * Common factory for creating LangChain4j ChatModels based on provider configuration.
- * Consolidates the switch logic previously duplicated in IntentClassifierModelProducer and
+ * Consolidates the switch logic previously duplicated in IntentDetectorModelProducer and
  * CompactionModelProducer.
  */
 @ApplicationScoped

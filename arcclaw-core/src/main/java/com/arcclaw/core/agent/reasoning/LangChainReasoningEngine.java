@@ -54,7 +54,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
     @Inject AgentOtelContext otelContext;
-    @Inject IntentClassificationService intentClassifier;
+    @Inject IntentClassificationService intentDetector;
     @Inject MeterRegistry meterRegistry;
 
     @Override
@@ -322,7 +322,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     private boolean goalIsWriteIntent(String goal) {
-        return intentClassifier.isWriteIntent(goal);
+        return intentDetector.isWriteIntent(goal);
     }
 
     /**

@@ -11,7 +11,7 @@ import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.persona.AgentRoleRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -25,9 +25,9 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 @Default
 @Unremovable
-public class IntentClassifierService implements IntentClassifier {
+public class IntentDetectorService implements IntentDetector {
 
-    private static final Logger log = Logger.getLogger(IntentClassifierService.class);
+    private static final Logger log = Logger.getLogger(IntentDetectorService.class);
     
 
     @Inject
@@ -44,7 +44,7 @@ public class IntentClassifierService implements IntentClassifier {
     AgentRoleRegistry agentRoleRegistry;
 
     @Inject
-    IntentClassificationService intentClassifier;
+    IntentClassificationService intentDetector;
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.sla-warn-ms", defaultValue = "2000")
     long slaWarnMs;
@@ -106,7 +106,7 @@ public class IntentClassifierService implements IntentClassifier {
 
     @Override
     public String classify(String userMessage) {
-        if (intentClassifier.isContinuityCommand(userMessage)) {
+        if (intentDetector.isContinuityCommand(userMessage)) {
             log.debugf("CLASSIFIER: continuity phrase matched → fall back to previous role");
             return "__CONTINUE__";
         }
@@ -148,11 +148,11 @@ public class IntentClassifierService implements IntentClassifier {
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
         if (elapsedMs > slaWarnMs) {
-            log.warnf("IntentClassifier SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
+            log.warnf("IntentDetector SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
         }
 
         if (raw == null || raw.isBlank()) {
-            log.warnf("IntentClassifier SLA exceeded or null response — raw was null"); 
+            log.warnf("IntentDetector SLA exceeded or null response — raw was null"); 
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 

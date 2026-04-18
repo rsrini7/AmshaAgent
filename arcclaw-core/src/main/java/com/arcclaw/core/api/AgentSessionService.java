@@ -8,10 +8,8 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.ws.rs.container.AsyncResponse;
-import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -40,10 +38,14 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.MdcManaged;
+
 import io.quarkus.virtual.threads.VirtualThreads;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.core.Response;
 
 @ApplicationScoped
 @MdcManaged
@@ -185,7 +187,7 @@ public class AgentSessionService {
             return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
         } catch (Exception e) {
             log.errorf("Sync agent run failed: %s", e.getMessage());
-            return Response.serverError().entity(e.getMessage()).build();
+            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
 
@@ -225,7 +227,8 @@ public class AgentSessionService {
                     return res;
                 });
             } catch (Exception e) {
-                response.resume(Response.serverError().entity(e.getMessage()).build());
+                log.errorf("Async agent run failed: %s", e.getMessage());
+                response.resume(Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build());
             }
         }));
     }
@@ -239,7 +242,7 @@ public class AgentSessionService {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
                 var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return Response.status(Response.Status.CONFLICT).entity("No pending approval").build();
+                    return Response.status(Response.Status.CONFLICT).entity(Map.of("error", "No pending approval")).build();
                 }
 
                 checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
@@ -256,7 +259,8 @@ public class AgentSessionService {
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            return Response.serverError().entity(e.getMessage()).build();
+            log.errorf("Approve failed: %s", e.getMessage());
+            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
 
@@ -269,15 +273,16 @@ public class AgentSessionService {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
                 var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return Response.status(Response.Status.CONFLICT).entity("No pending approval").build();
+                    return Response.status(Response.Status.CONFLICT).entity(Map.of("error", "No pending approval")).build();
                 }
                 AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                 checkpointApprovalService.triggerResume(cp);
-                return Response.ok(Map.of("status", "DENIED", "session", sessionId)).build();
+                return Response.ok(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId)).build();
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            return Response.serverError().entity(e.getMessage()).build();
+            log.errorf("Deny failed: %s", e.getMessage());
+            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
 
@@ -293,12 +298,13 @@ public class AgentSessionService {
                             List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
                             return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                         } catch (Exception e) {
-                            return Response.serverError().entity(e.getMessage()).build();
+                            log.errorf("Failed to load steps: %s", e.getMessage());
+                            return Response.serverError().entity(Map.of("error", e.getMessage())).build();
                         }
                     })
                     .orElseGet(() -> Response.ok(Map.of("sessionId", sessionId, "status", "NOT_STARTED")).build());
         } catch (Exception e) {
-            return Response.status(Response.Status.BAD_REQUEST).entity(e.getMessage()).build();
+            return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", e.getMessage())).build();
         }
     }
 
@@ -318,14 +324,14 @@ public class AgentSessionService {
 
     private Optional<Response> validateRole(String role) {
         if (!AgentRoleEnum.isKnownRole(role)) {
-            return Optional.of(Response.status(Response.Status.BAD_REQUEST).entity("Unknown role").build());
+            return Optional.of(Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "Unknown role: " + role)).build());
         }
         return Optional.empty();
     }
 
     public Optional<Response> validateSession(String sessionId) {
         if (!heartbeatTracker.exists(sessionId)) {
-            return Optional.of(Response.status(Response.Status.NOT_FOUND).entity("Session not found").build());
+            return Optional.of(Response.status(Response.Status.NOT_FOUND).entity(Map.of("error", "Session not found: " + sessionId)).build());
         }
 
         // Guard 2: per-key session ownership

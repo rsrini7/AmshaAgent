@@ -552,7 +552,7 @@ curl -s "http://localhost:8080/api/v1/audit/$SESSION/verify" \
 
 Skills intercept messages before intent classification — zero LLM tokens for routing.
 
-> **Nuance #11**: `SkillAwareIntentClassifier` checks `SkillRegistry` FIRST before falling through to Groq-based `IntentClassifierService`. Never invert this order.  
+> **Nuance #11**: `SkillAwareIntentDetector` checks `SkillRegistry` FIRST before falling through to Groq-based `IntentDetectorService`. Never invert this order.  
 > **Nuance #13**: `maxBudgetUsd` is explicitly excluded from skill frontmatter — skills cannot override the per-session USD budget cap.
 
 ### 8.1 List all loaded skills

@@ -234,7 +234,7 @@ public class SystemPromptBuilder {
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
         // --- Skill persona resolution ---
-        // When SkillAwareIntentClassifier routes to "skill:code-reviewer", we replace
+        // When SkillAwareIntentDetector routes to "skill:code-reviewer", we replace
         // the persona section with the skill's own system prompt. The base AgentRoleEnum
         // (RESEARCHER) governs the tool-binding section only.
         final String personaPrompt;

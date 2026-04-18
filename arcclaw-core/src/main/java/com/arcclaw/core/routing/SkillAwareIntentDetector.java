@@ -7,7 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
-import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillRegistry;
@@ -15,7 +15,7 @@ import io.quarkus.arc.Unremovable;
 
 /**
  * An alternative intent classifier that sits in front of the default
- * {@link IntentClassifierService}.
+ * {@link IntentDetectorService}.
  * <p>
  * Evaluates user input against the rapidly executable pre-compiled regex
  * trigger patterns
@@ -26,13 +26,13 @@ import io.quarkus.arc.Unremovable;
 @Alternative
 @Priority(1)
 @Unremovable
-public class SkillAwareIntentClassifier implements IntentClassifier {
+public class SkillAwareIntentDetector implements IntentDetector {
 
     @Inject
     SkillRegistry skillRegistry;
 
     @Inject
-    IntentClassifierService fallbackService;
+    IntentDetectorService fallbackService;
 
     @Override
     public String classify(String userMessage) {

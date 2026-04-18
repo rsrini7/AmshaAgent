@@ -49,7 +49,7 @@ public class TestMockProducers {
     @Produces
     @Identifier("intent-classifier")
     @ApplicationScoped
-    public ChatModel intentClassifierModel() {
+    public ChatModel intentDetectorModel() {
         ChatModel m = mock(ChatModel.class);
         when(m.chat(anyString())).thenReturn("mock-intent-result");
         return m;
