@@ -48,18 +48,21 @@ During the initial constructor migration, large sections of the execution loop l
 - **Budget & Governance**: Reinstated the catch blocks in `EngineStepHandler` for `BudgetExceededException` and `BudgetWarningException`, ensuring they propagate to the loop correctly.
 - **PII & Observability**: Restored `PiiRedactionTransformer.transform()` to sanitize the goal before logging, and `CliResultBridge.complete()` to unblock synchronous CLI commands.
 - **Cron Context Propagation**: Reinstated the extraction of `SUGGESTED_CRON` and `SUGGESTED_NEXT_FIRE_TIME` in `ToolStepHandler`. This was implemented using native `ScopedValue.where().call()` wrapping the tool invocation to ensure metadata reaches the tool thread.
+- **History Integrity**: Fixed a regression where steps were doubled in reasoning history by removing a redundant `history.add()` call in the runner (now correctly handled exclusively by `ToolStepHandler`).
 
 ### 3. NVIDIA NIM Compliance (T4-2 Improvements)
 - **`NvidiaMessageSanitizer`**: Updated to implement `ChatModel` as a decorator.
 - **Strict ID Rewriting**: Verified that all tool-call IDs are rewritten to exactly 9 alphanumeric characters as required by NVIDIA NIM.
-- **Specific Pattern Matching**: Refined `BRACKET_TOOL_PATTERN` to `\\[[a-zA-Z0-9_]+[\\(\\s][^\\]]*\\]`. This specifically targets leaked tool calls like `[tool_name(args)]` while preserving legitimate citations like `[1]`.
+- **Specific Pattern Matching**: Refined `BRACKET_TOOL_PATTERN` to `\\[[a-zA-Z0-9_]+[\\(\\s][^\\]]*\\]`. This specifically targets leaked tool calls like `[tool_name(args)]` or `[tool_name args]` while preserving legitimate citations like `[1]`.
 - **Orphan Pruning**: Implemented and verified logic to drop `AiMessage` objects that contain tool calls not followed by a `ToolExecutionResultMessage`, preventing "DEGRADED function" 400 errors.
 
 ### 4. Persistence Boundary (T4-3 Improvements)
 - **`CheckpointMapper`**: Restored full 25-field round-trip assertions in `CheckpointMapperTest`.
 - **Stateless DTO Mapping**: Ensured that the mapper correctly handles `null` timestamps (common in new session creation) and accurately reflects `iterationsUsed`, `autonomyLevel`, and `failedAt` states.
+- **Native SQL Updates**: Converted all bulk updates in `SqliteCronStoreAdapter` to **Native SQL** to bypass Hibernate 6 bulk update type-mismatch bugs on `Instant` fields.
+- **Transactional Memory**: Added `@Transactional` to `PersistentChatMemoryStore` and `SqliteChatMemoryStoreAdapter` to resolve session errors when retrieving history from Telegram reflexes.
 
 ### 5. Code Quality & Invariants
 - **Zero-Transactional Invariant**: Verified that all loop handlers in `com.arcclaw.core.agent.loop` remain free of `@Transactional` annotations (confirmed via grep).
 - **Observer Telemetry**: Fixed parameter mismatches in `onStepComplete` and `onLoopComplete` calls.
-- **Cleanup**: Removed all unused imports and redundant local variables identified during the review.
+- **Cleanup**: Removed unused `FinishDecision` records and redundant synthesizer methods in `AgentStateMachineRunner.java`.
