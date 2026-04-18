@@ -4,10 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.IntentClassificationService;
-import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -21,13 +22,10 @@ import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the Thought-Plan-Act-Observe loop.
@@ -81,7 +79,6 @@ public class AgentStateMachineRunner {
     private final ToolStepHandler toolStepHandler;
     private final ChatMemoryWriter writer;
     private final Instance<AgentObserver> observers;
-    private final AgentPersonaRegistry personaRegistry;
     private final SkillRegistry skillRegistry;
     private final InputSanitizer piiScanReflex;
     private final PiiRedactionTransformer piiTransformer;
@@ -97,7 +94,6 @@ public class AgentStateMachineRunner {
                                    ToolStepHandler toolStepHandler,
                                    ChatMemoryWriter writer,
                                    Instance<AgentObserver> observers,
-                                   AgentPersonaRegistry personaRegistry,
                                    SkillRegistry skillRegistry,
                                    @InputSanitizer.PII InputSanitizer piiScanReflex,
                                    PiiRedactionTransformer piiTransformer,
@@ -111,7 +107,6 @@ public class AgentStateMachineRunner {
         this.toolStepHandler = toolStepHandler;
         this.writer = writer;
         this.observers = observers;
-        this.personaRegistry = personaRegistry;
         this.skillRegistry = skillRegistry;
         this.piiScanReflex = piiScanReflex;
         this.piiTransformer = piiTransformer;
@@ -151,6 +146,7 @@ public class AgentStateMachineRunner {
         
         // --- 1. PII Redaction & Goal Preparation ---
         String goal = piiTransformer != null ? piiTransformer.transform(null, originalGoal) : originalGoal;
+        if (goal == null) goal = originalGoal;
         String goalHash = AgentErrorMessageUtil.hashGoal(goal);
 
         if (log.isInfoEnabled()) {
@@ -164,6 +160,10 @@ public class AgentStateMachineRunner {
         // Fire initial status event (§7.8)
         loopExitPublisher.publishStart(context);
 
+        // Privacy-first (§7.35): saves the PII-redacted goal to ChatMemory.
+        // REDACTED-* placeholder tokens will appear in reconstructed conversation
+        // history. The original unredacted goal is preserved in context.goal
+        // for internal use only and is never written to ChatMemory.
         writer.saveGoal(context.sessionId(), goal);
 
         AgentResult finalResult = null;
@@ -197,17 +197,24 @@ public class AgentStateMachineRunner {
                             log.warnf("StateMachine schema self-correction exhausted for session %s", context.sessionId());
                             finalResult = AgentResult.loopExceeded(
                                     context.maxIterations(), List.copyOf(history));
+                            // loopExitPublisher fires in finally — see first TERMINAL comment above.
                             return finalResult;
                         }
 
                         llmSchemaErrorCount++;
                         transientError = correctionStrategy.buildCorrectionHint(llmSchemaErrorCount, soe.getMessage());
+                        // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
                         log.warnf("StateMachine schema self-correction attempt %d for session %s",
                                 llmSchemaErrorCount, context.sessionId());
                         continue;
                     }
 
                     // --- Terminal decision ---
+                    // loopExitPublisher.publish() is called unconditionally in the finally
+                    // block below — do not call it here. The publisher is idempotent for the
+                    // same context+result pair (see LoopExitPublisher contract): publishing
+                    // twice for the same session is safe but the finally path is the single
+                    // authoritative publish point in this runner.
                     if (engineDecision.type() == DecisionType.TERMINAL) {
                         finalResult = engineDecision.result();
                         return finalResult;
@@ -232,21 +239,52 @@ public class AgentStateMachineRunner {
                                 log.errorf("PARALLEL INVARIANT VIOLATION: session %s parallel batch step reached "      
                                         + "FINISH handler.", context.sessionId());
                             }
-                            FinishDecision finishDecision = processFinish(context, history, step, llmSchemaErrorCount);
-                            if (finishDecision.result() != null) {
-                                finalResult = finishDecision.result();
+                            
+                            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
+                                    context.sessionId(), context.agentRole(), history, step, llmSchemaErrorCount);
+
+                            if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
+                                // §3.6: writer.saveAnswer() belongs here, NOT inside FinishActionHandler
+                                if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
+                                    writer.saveAnswer(context.sessionId(), c.answer());
+                                }
+                                history.add(step.withObservation("Task completed."));
+                                
+                                AgentResult res = c.result();
+                                if (AgentRoleEnum.SYNTHESIZER.toScopedName().equals(context.agentRole())) {
+                                    // Synthesizer has useful prior observations
+                                    res = AgentResult.finished(c.answer(), List.copyOf(history));
+                                } else if (res instanceof AgentResult.Finished f) {
+                                    res = AgentResult.finished(f.answer(), List.copyOf(history));
+                                }
+                                finalResult = res;
+                                // loopExitPublisher fires in finally — see first TERMINAL comment above.
+                                return finalResult;
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
+                                history.add(rl.correctedStep());
+                                transientError = rl.correctionHint();
+                                llmSchemaErrorCount++;
+                                break; // exit validation loop to retry engine
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed sf) {
+                                history.add(step.withObservation("Salvage failed."));
+                                AgentResult failedResult = (sf.result() instanceof AgentResult.Failed f)
+                                    ? AgentResult.failed(f.reason(), f.category(), List.copyOf(history))
+                                    : sf.result();
+                                finalResult = failedResult;
+                                // loopExitPublisher fires in finally — see first TERMINAL comment above.
                                 return finalResult;
                             }
-                            // RetryLeak outcome: correction hint provided, continue loop
-                            transientError = finishDecision.transientError();
-                            llmSchemaErrorCount++;
-                            break; // exit validation loop to retry engine
                         }
 
                         // --- Tool validation ---
                         StepDecision validationDecision = toolStepHandler.validateTool(
                                 context, history, step, consecutiveFailures);
 
+                        // loopExitPublisher.publish() is called unconditionally in the finally
+                        // block below — do not call it here. The publisher is idempotent for the
+                        // same context+result pair (see LoopExitPublisher contract): publishing
+                        // twice for the same session is safe but the finally path is the single
+                        // authoritative publish point in this runner.
                         if (validationDecision.type() == DecisionType.TERMINAL) {
                             finalResult = validationDecision.result();
                             return finalResult;
@@ -255,6 +293,7 @@ public class AgentStateMachineRunner {
                         if (validationDecision.isRetryValidation()) {
                             consecutiveFailures = validationDecision.consecutiveFailures();
                             // Deduplication logic: validationDecision added the dedup step to history
+                            // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
                             break; // exit validation loop to retry engine
                         }
 
@@ -268,13 +307,14 @@ public class AgentStateMachineRunner {
 
                         // Re-dispatch if validateTool rewrote a hallucinated tool to FINISH
                         if (ReasoningStep.FINISH.equals(step.action())) {
-                            FinishDecision finishDecision = processFinish(context, history, step, llmSchemaErrorCount);
-                            if (finishDecision.result() != null) {
-                                finalResult = finishDecision.result();
+                            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
+                                    context.sessionId(), context.agentRole(), history, step, llmSchemaErrorCount);
+                            if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
+                                finalResult = c.result();
+                                // loopExitPublisher fires in finally — see first TERMINAL comment above.
                                 return finalResult;
                             }
-                            transientError = finishDecision.transientError();
-                            llmSchemaErrorCount++;
+                            // Other outcomes (leak, salvage) follow same retry/terminal path as above
                             break; 
                         }
 
@@ -282,6 +322,9 @@ public class AgentStateMachineRunner {
                         history.add(step);
 
                         // --- Tool invocation ---
+                        // Fetch skill snapshot lazily
+                        var skillSnapshot = skillRegistry.currentSnapshot();
+
                         // HITL State Check
                         if (context.isStatusDirty()) {
                             var cpOpt = engineStepHandler.loadCheckpointStatus(context);
@@ -290,21 +333,24 @@ public class AgentStateMachineRunner {
                                         + "until state is flushed as IN_PROGRESS.", context.sessionId());
                                 finalResult = AgentResult.failed("State corrupted — tool execution attempted before approval persistence completed.",
                                         AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+                                // loopExitPublisher fires in finally — see first TERMINAL comment above.
                                 return finalResult;
                             }
                         }
 
                         StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
-                                context, history, step, consecutiveFailures, skillRegistry.currentSnapshot());
+                                context, history, step, consecutiveFailures, skillSnapshot);
 
                         if (invocationDecision.type() == DecisionType.TERMINAL) {
                             finalResult = invocationDecision.result();
+                            // loopExitPublisher fires in finally — see first TERMINAL comment above.
                             return finalResult;
                         }
 
                         if (invocationDecision.result() instanceof AgentResult.AwaitingApproval) {
                             context.markStatusDirty();
                             finalResult = invocationDecision.result();
+                            // loopExitPublisher fires in finally — see first TERMINAL comment above.
                             return finalResult;
                         }
 
@@ -326,8 +372,13 @@ public class AgentStateMachineRunner {
             // Loop exhausted
             log.warnf("StateMachine exceeded %d iterations for session %s", context.maxIterations(), context.sessionId());
             finalResult = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
+            // loopExitPublisher fires in finally — see first TERMINAL comment above.
             return finalResult;
 
+        // finalResult is set before return. The finally block below calls
+        // loopExitPublisher.publish(context, res) exactly once — no explicit
+        // publish needed here. finally always executes before the return exits
+        // this method (JLS §14.20.2).
         } catch (BudgetExceededException e) {
             finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history));
             return finalResult;
@@ -338,11 +389,7 @@ public class AgentStateMachineRunner {
         } finally {
             AgentResult res = finalResult;
             
-            // Apply persona-specific answer formatting if needed
-            if (res instanceof AgentResult.Finished _ && personaRegistry != null) {
-                 // Removed invalid find() call. Persona prompt extraction is handled in SystemPromptBuilder.
-                 log.debugf("Loop complete for role %s", context.agentRole());
-            }
+            log.debugf("Loop complete for role %s", context.agentRole());
 
             // Bridge to CLI if configured
             if (cliResultBridge != null && res != null) {
@@ -357,61 +404,6 @@ public class AgentStateMachineRunner {
     }
 
     private record FinishDecision(AgentResult result, String transientError) {}
-
-    /**
-     * Processes a FINISH step via {@link FinishActionHandler}.
-     *
-     * <p>Returns a {@link FinishDecision} describing the calculated result or
-     * the retry hint for a detected leak.
-     *
-     * <p>§3.6: {@code writer.saveAnswer()} is called HERE — not inside
-     * {@link FinishActionHandler}.
-     */
-    private FinishDecision processFinish(AgentExecutionContext context,
-                                         List<ReasoningStep> history,
-                                         ReasoningStep step,
-                                         int llmSchemaErrorCount) {
-
-        FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                context.sessionId(), context.agentRole(), history, step, llmSchemaErrorCount);
-
-        return switch (outcome) {
-            case FinishActionHandler.FinishOutcome.Completed c -> {
-                // §3.6: writer.saveAnswer() belongs here, NOT inside FinishActionHandler
-                if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
-                    writer.saveAnswer(context.sessionId(), c.answer());
-                }
-
-                // Add the finish step itself to history so it appears in AgentResult
-                history.add(step.withObservation("Task completed."));
-
-                // Synthesizer path logic integrated into loop
-                if (AgentRoleEnum.SYNTHESIZER.toScopedName().equals(context.agentRole())) {
-                    yield new FinishDecision(handleSynthesizerFinish(history, c.answer()), null);
-                }
-
-                // Re-create the result with the updated history
-                AgentResult finalResult = (c.result() instanceof AgentResult.Finished f)
-                    ? AgentResult.finished(f.answer(), List.copyOf(history))
-                    : c.result();
-
-                yield new FinishDecision(finalResult, null);
-            }
-            case FinishActionHandler.FinishOutcome.RetryLeak rl -> {
-                // Add cleaned step to history and let caller continue the loop
-                history.add(rl.correctedStep());
-                yield new FinishDecision(null, rl.correctionHint());
-            }
-            case FinishActionHandler.FinishOutcome.SalvageFailed sf -> {
-                 // Add the failed finish step to history
-                 history.add(step.withObservation("Salvage failed."));
-                 AgentResult failedResult = (sf.result() instanceof AgentResult.Failed f)
-                     ? AgentResult.failed(f.reason(), f.category(), List.copyOf(history))
-                     : sf.result();
-                 yield new FinishDecision(failedResult, null);
-            }
-        };
-    }
 
     private AgentResult handleSynthesizerFinish(List<ReasoningStep> history, String answer) {
         String combinedContext = history.stream()

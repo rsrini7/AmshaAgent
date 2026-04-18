@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -62,7 +64,18 @@ public class EngineStepHandler {
                     r.definition().aliases().stream()))
             .collect(Collectors.toUnmodifiableSet());
 
-    protected EngineStepHandler() {
+    /**
+     * CDI proxyability constructor — required by @ApplicationScoped for
+     * subclass proxy generation. NEVER called at runtime; all real
+     * instances are created via the @Inject constructor below.
+     *
+     * <p>GraalVM native image may invoke this reflectively at build time.
+     * Do NOT throw here. Fields are intentionally null — any runtime call
+     * to a method on a proxy instance backed by this constructor will NPE,
+     * which is the correct failure signal for misconfigured injection.
+     */
+    @SuppressWarnings("unused")
+    EngineStepHandler() {
         this.governanceLayer = null;
         this.observers = null;
         this.objectMapper = null;
@@ -111,6 +124,7 @@ public class EngineStepHandler {
                         "This often happens due to infrastructure limits. " +
                         "Please retry now with your full thought process and a clear FINISH answer.",
                         llmSchemaErrorCount);
+                    // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
                 }
 
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
@@ -123,6 +137,7 @@ public class EngineStepHandler {
                                 AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                     }
                     return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
+                    // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
                 }
 
                 try {
@@ -395,9 +410,9 @@ public class EngineStepHandler {
     }
 
     private boolean isNetworkError(Exception e) {
-        if (e instanceof java.net.ConnectException || e instanceof java.net.SocketTimeoutException) return true;
-        if (e.getCause() instanceof java.net.ConnectException
-                || e.getCause() instanceof java.net.SocketTimeoutException) return true;
+        if (e instanceof ConnectException || e instanceof SocketTimeoutException) return true;
+        if (e.getCause() instanceof ConnectException
+                || e.getCause() instanceof SocketTimeoutException) return true;
         String msg = e.getMessage();
         return msg != null && (msg.contains("ConnectTimeoutException")
                 || msg.contains("connection timed out")

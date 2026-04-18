@@ -21,9 +21,20 @@ public record StepDecision(
     }
 
     public static StepDecision continueLoop(String error, int schemaErrorCount) {
-        return new StepDecision(DecisionType.CONTINUE, null, null, error, schemaErrorCount, 0, false);
+        // Semantic alias for retryEngine() — both signal "fetch a new LLM
+        // thought on the next iteration". Kept as a named alias for call-site
+        // readability at schema-retry paths vs engine-retry paths.
+        return retryEngine(error, schemaErrorCount);
     }
 
+    /**
+     * Signals that the state machine should invoke the LLM for a new thought
+     * on the next iteration. Sets {@code isRetryValidation = false}.
+     *
+     * <p>Contrast with {@link #retryValidation(int)}, which skips the LLM
+     * call entirely and re-enters the inner validation loop immediately
+     * (used for deduplication-cache hits).
+     */
     public static StepDecision retryEngine(String error, int schemaErrorCount) {
         return new StepDecision(DecisionType.CONTINUE, null, null, error, schemaErrorCount, 0, false);
     }

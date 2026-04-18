@@ -6,7 +6,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -21,10 +23,7 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Handles tool name validation, 4-phase tool invocation,
@@ -161,6 +160,7 @@ public class ToolStepHandler {
             return StepDecision.retryEngine(String.format(
                     "System: '%s' is a ReAct reasoning keyword. Available tools: %s.",
                     toolName, toolRegistry.listTools()), 0);
+            // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
         }
 
         String errorObs = String.format("Tool '%s' does not exist. Available tools: %s.",
@@ -175,6 +175,7 @@ public class ToolStepHandler {
                     "❌ I encountered repeated errors. Please rephrase your request.", List.copyOf(history)));  
         }
         return StepDecision.retryValidation(failures);
+        // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
     }
 
     // ── Invocation
@@ -250,6 +251,7 @@ public class ToolStepHandler {
             observers.forEach(o -> o.onStepComplete(
                 context.sessionId(), context.agentRole(), blockedStep));
             return StepDecision.retryValidation(0);
+            // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
         }
 
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
@@ -280,6 +282,7 @@ public class ToolStepHandler {
                     AgentResult.finished(b.observation(), List.copyOf(history)));
             }
             return StepDecision.retryValidation(0);
+            // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
         }
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
@@ -323,10 +326,15 @@ public class ToolStepHandler {
     }
 
     private String buildObservation(ToolResponse response) {
-        if (response == null) return "Tool execution returned null response.";
+        if (response == null) {
+            return "Tool invocation returned no response.";
+        }
         if (response.success()) return response.output();
         String out = response.output();
-        if (out != null && out.startsWith("Tool execution failed:")) return out;
+        if (out == null) {
+            return "Tool invocation returned no response.";
+        }
+        if (out.startsWith("Tool execution failed:")) return out;
         return "Tool execution failed: " + out + " (exit=" + response.exitCode() + ")";
     }
 

@@ -9,7 +9,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -19,11 +21,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.IntentClassificationService;
-import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -38,6 +40,7 @@ import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -51,7 +54,11 @@ import dev.langchain4j.exception.InvalidRequestException;
 import io.opentelemetry.api.trace.Span;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class AgentStateMachineRunnerTest {
 
     private AgentStateMachineRunner runner;
@@ -63,13 +70,12 @@ class AgentStateMachineRunnerTest {
     private ToolInvoker invoker;
     private ChatMemoryWriter writer;
     private SkillRegistry skillRegistry;
-    private PiiScanReflex piiScanReflex;
+    private InputSanitizer piiScanReflex;
     private AgentOtelContext agentOtelContext;
     private IntentClassificationService intentDetector;
 
     @SuppressWarnings("unchecked")
     private Instance<DynamicToolLookup> dynamicToolLookup = mock(Instance.class);
-    private AgentSseService agentSseService = mock(AgentSseService.class);
     @SuppressWarnings("unchecked")
     private Instance<AgentObserver> observers = mock(Instance.class);
     private DestructiveVocabularyFilter destructiveFilter = mock(DestructiveVocabularyFilter.class);
@@ -81,9 +87,11 @@ class AgentStateMachineRunnerTest {
     private LoopExitPublisher loopExitPublisher = mock(LoopExitPublisher.class);
     private ParallelToolStepExecutor parallelExecutor = mock(ParallelToolStepExecutor.class);
     private RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
-    private AgentPersonaRegistry personaRegistry = mock(AgentPersonaRegistry.class);
     private PiiRedactionTransformer piiTransformer = mock(PiiRedactionTransformer.class);
     private CliResultBridge cliResultBridge = mock(CliResultBridge.class);
+
+    @Mock
+    AgentSseService agentSseService;
 
     @BeforeEach
     void setUp() {
@@ -95,7 +103,7 @@ class AgentStateMachineRunnerTest {
         invoker          = mock(ToolInvoker.class);
         writer           = mock(ChatMemoryWriter.class);
         skillRegistry    = mock(SkillRegistry.class);
-        piiScanReflex    = mock(PiiScanReflex.class);
+        piiScanReflex    = mock(InputSanitizer.class);
         agentOtelContext = mock(AgentOtelContext.class);
         intentDetector   = mock(IntentClassificationService.class);
 
@@ -116,7 +124,6 @@ class AgentStateMachineRunnerTest {
                 toolStepHandler,
                 writer,
                 observers,
-                personaRegistry,
                 skillRegistry,
                 piiScanReflex,
                 piiTransformer,
@@ -128,30 +135,28 @@ class AgentStateMachineRunnerTest {
                 correctionStrategy
         );
 
-        when(observers.iterator()).thenReturn(Collections.emptyIterator());
-        when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
-        when(intentDetector.isWriteIntent(anyString())).thenReturn(false);
+        lenient().when(observers.iterator()).thenReturn(Collections.emptyIterator());
+        lenient().when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+        lenient().when(intentDetector.isWriteIntent(anyString())).thenReturn(false);
 
         Span invalidSpan = Span.getInvalid();
-        when(agentOtelContext.startIterationSpan(anyString(), anyInt(), anyString()))
+        lenient().when(agentOtelContext.startIterationSpan(anyString(), anyInt(), anyString()))
                 .thenReturn(invalidSpan);
-        when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString()))
+        lenient().when(agentOtelContext.startToolSpan(anyString(), anyString(), anyString()))
                 .thenReturn(invalidSpan);
 
-        when(dynamicToolLookup.isUnsatisfied()).thenReturn(true);
+        lenient().when(dynamicToolLookup.isUnsatisfied()).thenReturn(true);
 
-        when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
-        when(destructiveFilter.filter(anyString(), anyString()))
+        lenient().when(destructiveFilter.isDestructive(anyString())).thenReturn(false);
+        lenient().when(destructiveFilter.filter(anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        when(qualityGuard.guard(any(), any())).thenAnswer(inv ->
+        lenient().when(qualityGuard.guard(any(), any())).thenAnswer(inv ->
                 new AnswerGuardStrategy.AnswerGuardResult(inv.getArgument(0), false, null));
-    }
-
-    private AgentExecutionContext createCtx() {
-        return new AgentExecutionContext(
-                "session-1", "user-1", "chat-1", "coordinator",
-                "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        
+        // Fix NPE: stub sanitizers to return input by default
+        lenient().when(piiTransformer.transform(any(), anyString())).thenAnswer(inv -> inv.getArgument(1));
+        lenient().when(piiScanReflex.sanitize(anyString())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -161,7 +166,9 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(finishStep);
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("Hello", ((AgentResult.Finished) result).answer());
@@ -199,7 +206,9 @@ class AgentStateMachineRunnerTest {
         when(toolRegistry.findTool("fake-tool")).thenReturn(Optional.empty());
         when(toolRegistry.listTools()).thenReturn(List.of("valid-tool"));
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("fixed", ((AgentResult.Finished) result).answer());
@@ -213,7 +222,9 @@ class AgentStateMachineRunnerTest {
         doThrow(new BudgetExceededException("Budget blown"))
                 .when(governanceLayer).recordLlmCall(anyString(), anyInt(), anyInt());
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Failed.class, result);
         assertEquals(AgentResult.FailureCategory.BUDGET_EXCEEDED,
@@ -222,8 +233,9 @@ class AgentStateMachineRunnerTest {
     }
 
     @Test
-    void testAwaitingApprovalPausesLoop() {
-        WorkspaceContext.run("s1", "u1", "c1", AutonomyLevel.SUPERVISED, "coordinator", () -> {
+    void testAwaitingApprovalPausesLoop() throws Exception {
+        // FIX #10: uses String "telegram" instead of ChannelType.TELEGRAM
+        WorkspaceContext.run("s1", "u1", "c1", AutonomyLevel.SUPERVISED, "coordinator", "telegram", (Callable<Void>) () -> {
             ReasoningStep toolStep = ReasoningStep.pending(
                     "thought", "protected-tool", Map.of(), 100, 100);
             when(engine.nextStep(any(), anyString(), anyString(), anyList()))
@@ -238,12 +250,13 @@ class AgentStateMachineRunnerTest {
                     .thenReturn(Optional.of(new AgentCheckpoint()));
 
             AgentExecutionContext ctx = new AgentExecutionContext(
-                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, null, null, null, null);
+                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, "telegram", "platform-1", null, null);
             AgentResult result = runner.run(ctx, engine, List.of());
 
             assertInstanceOf(AgentResult.AwaitingApproval.class, result);
             assertEquals("protected-tool",
                     ((AgentResult.AwaitingApproval) result).toolName());
+            return null;
         });
     }
 
@@ -263,7 +276,9 @@ class AgentStateMachineRunnerTest {
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(ToolResponse.failure(1, "error"));
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
@@ -280,7 +295,9 @@ class AgentStateMachineRunnerTest {
                 .thenThrow(ex)
                 .thenReturn(finishStep);
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("healed", ((AgentResult.Finished) result).answer());
@@ -299,7 +316,9 @@ class AgentStateMachineRunnerTest {
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(ToolResponse.success("Scheduled cleaning"));
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("Scheduled cleaning"));
@@ -311,7 +330,9 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenThrow(ex);
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.AwaitingRetry.class, result);
         assertEquals(20000, ((AgentResult.AwaitingRetry) result).retryAfterMs());
@@ -327,10 +348,12 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(any(), any(), any(), anyList()))
                 .thenReturn(reactStep)
                 .thenReturn(finishStep);
-        when(toolRegistry.findTool("OBSERVE")).thenReturn(Optional.empty());
-        when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search"));
+        lenient().when(toolRegistry.findTool("OBSERVE")).thenReturn(Optional.empty());
+        lenient().when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search"));
 
-        AgentResult result = runner.run(createCtx(), engine, List.of());
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertEquals("fixed", ((AgentResult.Finished) result).answer());

@@ -12,23 +12,22 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.IntentDetector;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
-
 import dev.langchain4j.exception.HttpException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class IntentClassificationHandlerTest {
 
@@ -37,7 +36,7 @@ class IntentClassificationHandlerTest {
     private ChannelSender sender;
     private ChannelPluginRegistry registry;
     private AgentRoleCache roleCache;
-    private com.arcclaw.core.agent.IntentClassificationService intentDetector;
+    private IntentClassificationService intentDetector;
 
     @BeforeEach
     void setUp() {
@@ -46,7 +45,7 @@ class IntentClassificationHandlerTest {
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
         roleCache = mock(AgentRoleCache.class);
-        intentDetector = mock(com.arcclaw.core.agent.IntentClassificationService.class);
+        intentDetector = mock(IntentClassificationService.class);
 
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);

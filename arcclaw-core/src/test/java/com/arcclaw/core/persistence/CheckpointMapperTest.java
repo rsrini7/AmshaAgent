@@ -33,6 +33,8 @@ class CheckpointMapperTest {
         entity.setRootCauseClass("java.lang.RuntimeException");
         entity.setCreatedAt(Instant.now());
         entity.setUpdatedAt(Instant.now());
+        entity.setFailedAt(Instant.now().plusSeconds(1));
+        entity.setCompletedAt(Instant.now().plusSeconds(2));
 
         CheckpointDto dto = CheckpointMapper.toDto(entity);
         
@@ -55,6 +57,8 @@ class CheckpointMapperTest {
         assertEquals(entity.getRootCauseClass(), dto.rootCauseClass());
         assertEquals(entity.getCreatedAt(), dto.createdAt());
         assertEquals(entity.getUpdatedAt(), dto.updatedAt());
+        assertEquals(entity.getFailedAt(), dto.failedAt());
+        assertEquals(entity.getCompletedAt(), dto.completedAt());
 
         AgentCheckpoint backToEntity = CheckpointMapper.toEntity(dto);
         
@@ -62,7 +66,26 @@ class CheckpointMapperTest {
         assertEquals(entity.getSessionId(), backToEntity.getSessionId());
         assertEquals(entity.getAgentRole(), backToEntity.getAgentRole());
         assertEquals(entity.getOriginalGoal(), backToEntity.getOriginalGoal());
+        assertEquals(entity.getSystemNote(), backToEntity.getSystemNote());
         assertEquals(entity.getStatus(), backToEntity.getStatus());
+        assertEquals(entity.getStateJson(), backToEntity.getStateJson());
+        assertEquals(entity.getPendingToolName(), backToEntity.getPendingToolName());
+        assertEquals(entity.getPendingToolParametersJson(), backToEntity.getPendingToolParametersJson());
+        assertEquals(entity.getBatchToolDecisions(), backToEntity.getBatchToolDecisions());
+        assertEquals(entity.getMaxIterations(), backToEntity.getMaxIterations());
+        assertEquals(entity.getChannelType(), backToEntity.getChannelType());
+        assertEquals(entity.getChannelPlatformId(), backToEntity.getChannelPlatformId());
+        assertEquals(entity.getPreExecutedResults(), backToEntity.getPreExecutedResults());
+        assertEquals(entity.getErrorCode(), backToEntity.getErrorCode());
+        assertEquals(entity.getTraceId(), backToEntity.getTraceId());
+        assertEquals(entity.getRootCauseClass(), backToEntity.getRootCauseClass());
+        assertEquals(entity.getCreatedAt(), backToEntity.getCreatedAt());
+        assertEquals(entity.getUpdatedAt(), backToEntity.getUpdatedAt());
+        assertEquals(entity.getFailedAt(), backToEntity.getFailedAt());
+        assertEquals(entity.getCompletedAt(), backToEntity.getCompletedAt());
+        assertEquals(entity.getIterationsUsed(), backToEntity.getIterationsUsed());
+        assertEquals(entity.getRetryAfterMs(), backToEntity.getRetryAfterMs());
+        assertEquals(entity.getAutonomyLevel(), backToEntity.getAutonomyLevel());
     }
 
     @Test

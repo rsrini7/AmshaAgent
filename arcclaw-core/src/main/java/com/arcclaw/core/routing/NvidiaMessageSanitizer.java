@@ -32,7 +32,8 @@ public class NvidiaMessageSanitizer implements ChatModel {
         this.model = model;
     }
 
-    private static final Pattern BRACKET_TOOL_PATTERN = Pattern.compile("\\[[a-zA-Z0-9_]+\\(.*?\\)\\]");
+    private static final Pattern BRACKET_TOOL_PATTERN =
+        Pattern.compile("\\[[a-zA-Z0-9_]+[\\(\\s][^\\]]*\\]");
 
     @Override
     public ChatResponse chat(ChatRequest request) {
@@ -67,8 +68,21 @@ public class NvidiaMessageSanitizer implements ChatModel {
         List<ChatMessage> result = new ArrayList<>();
         Map<String, String> idMap = new HashMap<>();
 
-        for (ChatMessage msg : messages) {
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessage msg = messages.get(i);
             if (msg instanceof AiMessage ai) {
+                // §7.32: NVIDIA 'DEGRADED function' protection.
+                // If an Assistant message has tool calls, it MUST be followed by ToolExecutionResultMessage(s).
+                // If the very next message is NOT a tool result, this is an abandoned/leaked call
+                // that will cause a 400 error. We drop it.
+                if (ai.hasToolExecutionRequests()) {
+                    boolean hasFollowingResult = (i + 1 < messages.size()) 
+                            && (messages.get(i + 1) instanceof ToolExecutionResultMessage);
+                    if (!hasFollowingResult) {
+                        log.warn("NvidiaMessageSanitizer: pruning orphaned tool call");
+                        continue; // Skip abandoned tool call
+                    }
+                }
                 result.add(sanitizeAiMessage(ai, idMap));
             } else if (msg instanceof ToolExecutionResultMessage tool) {
                 String newId = idMap.get(tool.id());
