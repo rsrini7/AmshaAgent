@@ -82,6 +82,8 @@ class McpToolBridgeTest {
     @Test
     void testMatchingUsesToolNameNotEnumName() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("memory_search"));
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockRegistry.findTool("memory_search")).thenReturn(Optional.of(mockTool));
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
         assertEquals("memory_search", tools.get(0).name()); // must NOT be "MEMORY_SEARCH"
@@ -90,6 +92,8 @@ class McpToolBridgeTest {
     @Test
     void testEntryWithNoMatchingToolName() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("invalid_tool", "github"));
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockRegistry.findTool("github")).thenReturn(Optional.of(mockTool));
         
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
