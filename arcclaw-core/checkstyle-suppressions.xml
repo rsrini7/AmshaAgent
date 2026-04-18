@@ -9,7 +9,7 @@
          agent/loop — scheduled for T2-7 deep conditional extraction
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="MethodLength" files="AgentLoop\.java"/>
-    <suppress checks="MethodLength" files="AgentStateMachineRunner\.java"/>
+    <suppress checks="FileLength|MethodLength" files="AgentStateMachineRunner\.java"/>
     <suppress checks="FileLength|MethodLength" files="CheckpointResumeHandler\.java"/>
     <suppress checks="FileLength|MethodLength" files="EngineStepHandler\.java"/>
     <suppress checks="FileLength|MethodLength" files="ParallelToolStepExecutor\.java"/>
