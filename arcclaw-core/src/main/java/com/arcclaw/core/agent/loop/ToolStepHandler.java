@@ -347,20 +347,22 @@ public class ToolStepHandler {
         int consecutiveFailures) {
 
         // 1. Tool-specific fast-paths
+        StepDecision decision = null;
         if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)) {
-            return handleScheduleTaskOutcome(context, response, observation, history);
-        }
-        if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
-            return handleManageScheduleOutcome(context, params, response, observation, history);
-        }
-        if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
-            return handleDelegateOutcome(context, response, observation, history);
-        }
-        if (ToolCapability.GITHUB.toolName().equalsIgnoreCase(toolName)) {
-            return handleGithubUnavailableOutcome(context, response, observation, history);
+            decision = handleScheduleTaskOutcome(context, response, observation, history);
+        } else if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
+            decision = handleManageScheduleOutcome(context, params, response, observation, history);
+        } else if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
+            decision = handleDelegateOutcome(context, response, observation, history);
+        } else if (ToolCapability.GITHUB.toolName().equalsIgnoreCase(toolName)) {
+            decision = handleGithubUnavailableOutcome(context, response, observation, history);
         }
 
-        // 2. Generic Circuit Breaker
+        if (decision != null) {
+            return decision;
+        }
+
+        // 2. Generic Circuit Breaker (evaluates failures and returns PROCEED or TERMINAL)
         return evaluateCircuitBreaker(completedStep, response, consecutiveFailures, context.sessionId(), history);
     }
 
