@@ -1,8 +1,8 @@
 package com.arcclaw.core.routing;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import java.time.Duration;
+
+import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
@@ -20,10 +20,15 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
-        return GoogleAiGeminiChatModel.builder()
-            .apiKey(config.apiKey()
+        String key = config.apiKey()
                 .orElseThrow(() -> new IllegalStateException(
-                    "Gemini provider requires an API key (ARCCLAW_LLM_API_KEY)")))
+                    "Gemini provider requires an API key (ARCCLAW_LLM_API_KEY)"));
+        
+        // Hardening: Strip quotes and whitespace
+        key = key.replaceAll("^\"|\"$", "").replaceAll("^'|'$", "").trim();
+
+        return GoogleAiGeminiChatModel.builder()
+            .apiKey(key)
             .modelName(config.modelName())
             .maxOutputTokens(config.maxTokens().orElse(null))
             .timeout(config.timeout().orElse(Duration.ofSeconds(30)))

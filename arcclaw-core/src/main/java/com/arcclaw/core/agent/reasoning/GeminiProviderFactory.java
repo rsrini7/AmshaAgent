@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * {@link AgentChatModelProvider} for Google Gemini AI using its native SDK.
@@ -14,7 +15,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class GeminiProviderFactory implements AgentChatModelProvider {
 
-    @ConfigProperty(name = "arcclaw.llm.gemini.api-key")
+    private static final Logger log = Logger.getLogger(GeminiProviderFactory.class);
+
+    @ConfigProperty(name = "arcclaw.llm.gemini.api-key", defaultValue = "not-configured")
     String apiKey;
 
     @ConfigProperty(name = "arcclaw.llm.gemini.model-name",
@@ -55,6 +58,17 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
         if (key == null || key.isBlank() || key.equals("not-configured") || key.contains("<")) {
             throw new IllegalStateException("Gemini provider requires a valid API key. " +
                     "Set ARCCLAW_LLM_API_KEY in your .env or arcclaw.llm.gemini.api-key in config.");
+        }
+
+        // Hardening: Strip quotes and whitespace that might be leaked from .env parsing
+        key = key.replaceAll("^\"|\"$", "").replaceAll("^'|'$", "").trim();
+
+        if (logHttp) {
+            String masked = key.length() > 8 
+                ? key.substring(0, 4) + "..." + key.substring(key.length() - 4)
+                : "****";
+            log.infof("[GeminiProviderFactory] Initializing model %s with key: %s (length: %d)", 
+                modelName, masked, key.length());
         }
 
         return GoogleAiGeminiChatModel.builder()
