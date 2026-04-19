@@ -166,6 +166,13 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * §7.29
      */
     boolean markBatchResuming(String sessionId);
+
+    /**
+     * Atomically claims a checkpoint for retry by transitioning its status
+     * from AWAITING_RETRY to IN_PROGRESS and clearing retry metadata.
+     * @return true if successfully claimed
+     */
+    boolean claimForRetry(Long id);
  
     /**
      * Returns true if the session is currently marked as RESUMING in-memory.

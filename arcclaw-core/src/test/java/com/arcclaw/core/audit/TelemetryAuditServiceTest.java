@@ -50,7 +50,7 @@ class TelemetryAuditServiceTest {
 
         // Capture the event created inside the callback
         ArgumentCaptor<AuditEvent> eventCaptor = ArgumentCaptor.forClass(AuditEvent.class);
-        captor.getValue().getDbAction().execute(null); // Execute the lambda
+        captor.getValue().getDbAction().execute(); // Execute the lambda (no null arg)
         verify(auditEventRepository).record(eventCaptor.capture());
         assertEquals("1.0.0", eventCaptor.getValue().appVersion);
     }

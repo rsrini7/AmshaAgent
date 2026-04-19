@@ -13,6 +13,7 @@ import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -88,10 +89,15 @@ public class IngestDocumentTool implements AgentTool {
         String sessionId = WorkspaceScopeHolder.getIfActive();
         if (sessionId == null) sessionId = "no-session";
 
-        String chunkId = memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
+        IngestResult result = memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
+
+        if (result.isGlobalFallback()) {
+            return ToolResponse.success(
+                "Document ingested into SESSION memory only (Global KB is currently offline). chunkId: " + result.id());
+        }
 
         return ToolResponse.success(
-            "Document ingested successfully. chunkId: " + chunkId);
+            "Document ingested successfully into Global KB. chunkId: " + result.id());
     }
 
     @Override

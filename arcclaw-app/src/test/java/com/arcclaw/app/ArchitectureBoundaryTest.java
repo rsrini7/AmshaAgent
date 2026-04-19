@@ -65,4 +65,10 @@ public class ArchitectureBoundaryTest {
                 .that().areDeclaredInClassesThat().resideInAPackage("com.arcclaw.core.agent.loop..")
                 .should().beAnnotatedWith(Transactional.class);            
 
+    // 8. com.arcclaw.core does NOT depend on jakarta.persistence.EntityManager (§5.14.1)
+    @ArchTest
+    static final ArchRule coreShouldNotUseEntityManager = noClasses()
+            .that().resideInAPackage("com.arcclaw.core..")
+            .should().dependOnClassesThat().haveFullyQualifiedName("jakarta.persistence.EntityManager");
+
 }

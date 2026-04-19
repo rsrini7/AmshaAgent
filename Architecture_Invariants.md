@@ -32,7 +32,7 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 ### 1.2 Core module
 - `arcclaw-core` owns agent runtime, workspace/session lifecycle, governance, persistence, skills, structured output, reflexes, audit, sandbox contracts, and generic pipeline behavior.
 - `arcclaw-core` MUST NOT depend on Telegram-specific behavior or any single channel assumption.
-- **P95 Storage Extraction:** `arcclaw-core` MUST NOT contain direct JPA `EntityManager` or JPQL queries. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`.
+- **P95 Storage Extraction:** `arcclaw-core` MUST NOT contain direct JPA `EntityManager` or JPQL queries. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`. (Enforced by `ArchitectureBoundaryTest`).
 
 ### 1.3 App module
 - `arcclaw-app` owns application wiring, REST resources, startup bootstrap, config producers, and current adapter registration.
@@ -1129,7 +1129,6 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Does any new `CheckpointStatus` terminal value need to be added to `doMarkCheckpointsFailedRequiresNew`? (§5.18)
 - [ ] Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19)
 - [ ] Does `AsyncPersistenceEngine` still bind `WorkspaceScopeHolder` per event, not per thread? (§5.17)
----
 
 ## 20. Routing and Classification Consolidation
 

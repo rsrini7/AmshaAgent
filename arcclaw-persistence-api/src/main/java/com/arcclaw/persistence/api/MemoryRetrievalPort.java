@@ -28,8 +28,9 @@ public interface MemoryRetrievalPort {
      * Indexes a memory entry for future retrieval.
      * 
      * @param entry the memory entry to index
+     * @return the result of the ingestion operation
      */
-    String index(MemoryEntryDto entry);
+    IngestResult index(MemoryEntryDto entry);
 
     /**
      * Gets the capabilities of the persistence backend.

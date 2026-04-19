@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
@@ -31,7 +30,7 @@ public class CheckpointApprovalServiceTest {
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
-        when(asyncEngine.persistAndWait(any())).thenReturn(CompletableFuture.completedFuture(null));
+        // persistAndWait mock removed: method deleted in Tier 3 refactor.
     }
 
     @Test

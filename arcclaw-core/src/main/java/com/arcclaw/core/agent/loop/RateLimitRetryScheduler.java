@@ -10,7 +10,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -46,10 +45,12 @@ public class RateLimitRetryScheduler {
 
     /**
      * Polls every 30 seconds for rate-limited sessions that are ready to resume.
+     * 
+     * <p><strong>§5.9 (MUST):</strong> This method is transaction-free. Atomic state 
+     * transition is handled by {@link StatefulAgentStore#claimForRetry(Long)}.
      */
     @Scheduled(every = "30s", identity = "rate-limit-retry")
     @ActivateRequestContext
-    @Transactional
     public void processPendingRetries() {
         List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
         log.debugf("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)", awaiting.size());
@@ -75,17 +76,17 @@ public class RateLimitRetryScheduler {
                 log.infof("Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
                         cp.getSessionId(), retryAfterMs, ageSec);
 
-                // Clear retry metadata before resume attempt
-                cp.setRetryAfterMs(null);
-                cp.setStatus(CheckpointStatus.IN_PROGRESS); // Set to IN_PROGRESS so it's not picked up again
-                agentStore.save(cp);
-
-                try {
-                    // Offload to background thread via AgentLoop.resume
-                    agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
-                } catch (Exception e) {
-                    log.errorf(e, "Failed to resume rate-limited session %s", cp.getSessionId());
-                    agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
+                // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the adapter
+                if (agentStore.claimForRetry(cp.getId())) {
+                    try {
+                        // Offload to background thread via AgentLoop.resume
+                        agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
+                    } catch (Exception e) {
+                        log.errorf(e, "Failed to resume rate-limited session %s", cp.getSessionId());
+                        agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
+                    }
+                } else {
+                    log.debugf("Session %s was already claimed by another thread, skipping", cp.getSessionId());
                 }
             } else {
                 long remaining = Duration.between(now, readyAt).toSeconds();

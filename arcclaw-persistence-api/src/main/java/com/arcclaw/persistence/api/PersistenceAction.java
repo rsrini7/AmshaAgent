@@ -4,9 +4,9 @@ package com.arcclaw.persistence.api;
 
 /**
  * Replaces Consumer<EntityManager> in PersistenceAdapterPort.
- * Core code constructs PersistenceAction lambdas without importing EntityManager.
+ * Decoupled from JPA context types to satisfy Tier 3 invariants.
  */
 @FunctionalInterface
 public interface PersistenceAction {
-    void execute(PersistenceContext ctx);
+    void execute();
 }

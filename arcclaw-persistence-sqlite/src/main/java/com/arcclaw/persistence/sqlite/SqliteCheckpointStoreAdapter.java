@@ -111,6 +111,67 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return new CheckpointUpsertResult(CheckpointMapper.toDto(entity), created);
     }
 
+    @Override
+    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, 
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
+        return withRetry(() -> self.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps), "upsert-and-finalize");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
+        
+        em.clear();
+        List<AgentCheckpoint> existing = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.agentRole = :role " +
+                "  AND c.status <> :archived " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("role", agentRole)
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
+                .setMaxResults(1)
+                .getResultList();
+
+        AgentCheckpoint entity;
+        boolean created = false;
+        CheckpointStatus status = CheckpointStatus.valueOf(finalStatus);
+
+        if (existing.isEmpty()) {
+            entity = new AgentCheckpoint();
+            entity.setSessionId(sessionId);
+            entity.setAgentRole(agentRole);
+            entity.setCreatedAt(Instant.now());
+            created = true;
+        } else {
+            entity = existing.get(0);
+        }
+
+        entity.setStatus(status);
+        entity.setStateJson(stateJson);
+        entity.setUpdatedAt(Instant.now());
+
+        if (status == CheckpointStatus.COMPLETED) {
+            entity.setCompletedAt(Instant.now());
+        } else if (status == CheckpointStatus.FAILED) {
+            entity.setFailedAt(Instant.now());
+        }
+
+        if (created) {
+            em.persist(entity);
+        } else {
+            entity = em.merge(entity);
+        }
+        
+        em.flush();
+        CheckpointDto savedDto = CheckpointMapper.toDto(entity);
+        doSaveSteps(savedDto.id(), steps);
+        
+        return new CheckpointUpsertResult(savedDto, created);
+    }
+
     /**
      * Saves or updates a checkpoint in a fresh, isolated transaction.
      * Handles both inserts and updates; clears L1 cache before querying existing.
@@ -653,6 +714,25 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             self.doMarkFailed(checkpointId, failReason, errorCode, traceId, rootCauseClass);
             return null;
         }, "mark-failed");
+    }
+
+    @Override
+    public boolean claimForRetry(Long id) {
+        return withRetry(() -> self.doClaimForRetry(id), "claim-for-retry");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doClaimForRetry(Long id) {
+        em.clear();
+        AgentCheckpoint entity = em.find(AgentCheckpoint.class, id);
+        if (entity != null && CheckpointStatus.AWAITING_RETRY == entity.getStatus()) {
+            entity.setStatus(CheckpointStatus.IN_PROGRESS);
+            entity.setRetryAfterMs(null);
+            entity.setUpdatedAt(Instant.now());
+            em.flush();
+            return true;
+        }
+        return false;
     }
 
     @Override

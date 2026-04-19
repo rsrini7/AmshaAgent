@@ -66,3 +66,9 @@ During the initial constructor migration, large sections of the execution loop l
 - **Zero-Transactional Invariant**: Verified that all loop handlers in `com.arcclaw.core.agent.loop` remain free of `@Transactional` annotations (confirmed via grep).
 - **Observer Telemetry**: Fixed parameter mismatches in `onStepComplete` and `onLoopComplete` calls.
 - **Cleanup**: Removed unused `FinishDecision` records and redundant synthesizer methods in `AgentStateMachineRunner.java`.
+
+### Review Refinements (April 19, 2026):
+*   **Resolved State Machine NPE**: Fixed a `NullPointerException` in `ToolStepHandler.resolveOutcome` where tool-specific fast-paths (like GitHub) were incorrectly returning `null` instead of falling through to the generic circuit breaker.
+*   **NVIDIA Builder Compliance**: Fixed an `IllegalArgumentException` in `NvidiaMessageSanitizer` by ensuring `parameters` and `toolSpecifications` are never set simultaneously on a `ChatRequest`, satisfying strict LangChain4j builder validation.
+*   **Architecture Boundary Alignment**: Refactored `RateLimitRetryScheduler` to be completely transaction-free (§5.9). Moved the atomic state transition logic to a new `claimForRetry()` method in the persistence layer, satisfying the loop invariant while maintaining concurrency safety.
+*   **Scheduler Context**: Fixed a missing `@ActivateRequestContext` in the retry scheduler, ensuring background threads have full access to CDI and JPA resources.

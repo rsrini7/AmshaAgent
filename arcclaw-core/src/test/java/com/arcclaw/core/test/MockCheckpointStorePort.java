@@ -200,6 +200,14 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
+    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
+        CheckpointUpsertResult result = upsertWithSteps(sessionId, agentRole, stateJson, "SUPERVISED", 0);
+        transitionStatus(result.checkpoint().id(), finalStatus);
+        saveSteps(result.checkpoint().id(), steps);
+        return new CheckpointUpsertResult(findById(result.checkpoint().id()).get(), result.created());
+    }
+
+    @Override
     public List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason) {
         List<CheckpointDto> zombies = findInProgressZombies(inProgressCutoff);
         zombies.forEach(c -> markFailed(c.id(), failReason, "ZOMBIE", null, null));
@@ -232,6 +240,25 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     @Override
     public void markOrphaned(Long checkpointId, String reason) {
         transitionStatus(checkpointId, "ARCHIVED");
+    }
+
+    @Override
+    public boolean claimForRetry(Long id) {
+        CheckpointDto existing = store.get(id);
+        if (existing != null && "AWAITING_RETRY".equals(existing.status())) {
+            // Updated to clear retryAfterMs to match real implementation
+            CheckpointDto updated = new CheckpointDto(existing.id(), existing.sessionId(), existing.agentRole(),
+                    "IN_PROGRESS", existing.autonomyLevel(), existing.stateJson(), existing.channelPlatformId(),
+                    existing.channelType(), existing.originalGoal(), existing.failedAt(), existing.completedAt(),
+                    existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
+                    existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
+                    existing.iterationsUsed(), null, // clear retryAfterMs
+                    existing.systemNote(), existing.errorCode(),
+                    existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
+            store.put(id, updated);
+            return true;
+        }
+        return false;
     }
 
     @Override

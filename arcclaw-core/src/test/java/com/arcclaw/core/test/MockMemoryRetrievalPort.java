@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 
 import com.arcclaw.persistence.api.BackendCapabilities;
+import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
@@ -23,8 +24,8 @@ public class MockMemoryRetrievalPort implements MemoryRetrievalPort {
     }
 
     @Override
-    public String index(MemoryEntryDto entry) {
-        return "mock-id";
+    public IngestResult index(MemoryEntryDto entry) {
+        return new IngestResult("mock-id", false);
     }
 
     @Override

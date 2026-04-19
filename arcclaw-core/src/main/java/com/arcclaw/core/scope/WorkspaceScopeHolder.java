@@ -194,8 +194,8 @@ public final class WorkspaceScopeHolder {
                 String validatedChannel = ChannelType.fromString(channelType)
                         .map(ChannelType::name)
                         .orElseGet(() -> {
-                            Logger.getLogger(WorkspaceScopeHolder.class).warnf("Unrecognized channel type '%s' requested for session %s, defaulting to TELEGRAM", channelType, sessionId);
-                            return ChannelType.TELEGRAM.name();
+                            Logger.getLogger(WorkspaceScopeHolder.class).warnf("Unrecognized channel type '%s' requested for session %s, defaulting to UNKNOWN", channelType, sessionId);
+                            return "UNKNOWN";
                         });
                 return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, validatedChannel, callable);
             } else if (autonomy != null && agentRole != null) {
