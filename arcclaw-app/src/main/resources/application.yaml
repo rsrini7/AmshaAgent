@@ -318,7 +318,7 @@ arcclaw:
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
-    min-score: 0.55f
+    min-score: -1.0f
     context-chunks: 3
     max-total-chars: 800
     max-chunk-chars: 300

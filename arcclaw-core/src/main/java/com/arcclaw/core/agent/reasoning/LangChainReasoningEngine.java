@@ -170,8 +170,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
-                        // intercept write intents before FINISH
-                        if (goalIsWriteIntent(goal)) {
+                        // intercept write intents before FINISH (only if not already done)
+                        if (goalIsWriteIntent(goal) && !historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {
                             log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced prose " +
                                             "instead of tool call for session %s — injecting correction",
                                     goal, sessionId);
@@ -257,7 +257,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // ── Fix 2: Force ingest_document for write intents even on successful parse ──
         // If the LLM successfully returned a FINISH step with text (prose), but the 
         // user's goal was a "write intent", we must intercept and force a tool call.
-        if (ReasoningStep.FINISH.equals(parsedStep.action()) && goalIsWriteIntent(goal)) {
+        if (ReasoningStep.FINISH.equals(parsedStep.action()) && goalIsWriteIntent(goal) 
+                && !historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {
             String answer = (String) parsedStep.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
             if (answer != null && !answer.isBlank()) {
                 log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced a FINISH step " +
@@ -451,5 +452,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 span.end();
             }
         }
+    }
+
+    private boolean historyAlreadyContains(List<ReasoningStep> history, String toolName) {
+        if (history == null) return false;
+        return history.stream().anyMatch(step ->
+                toolName.equals(step.action()) && step.observation() != null && !step.observation().isBlank()
+        );
     }
 }

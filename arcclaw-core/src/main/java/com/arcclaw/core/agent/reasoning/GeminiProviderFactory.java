@@ -74,17 +74,12 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
                 modelName, masked);
         }
 
-        // Note: Using the builder methods confirmed by your previous snippet.
-        // If thought_signature issues persist, we will look for a way to pass
-        // additional config to disable 'thinking' or set budget to 0.
         return AiGeminiChatLanguageModel.builder()
             .key(key)
             .modelId(modelName)
             .temperature(temperature)
             .maxOutputTokens(maxOutputTokens)
             .timeout(timeout)
-            .includeThoughts(false)
-            .thinkingBudget(0L)
             .logRequests(logRequests)
             .logResponses(logResponses)
             .build();

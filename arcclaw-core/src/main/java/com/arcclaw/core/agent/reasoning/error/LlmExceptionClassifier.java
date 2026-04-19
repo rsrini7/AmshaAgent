@@ -45,6 +45,14 @@ public class LlmExceptionClassifier {
                 }
             }
             
+            if (t instanceof NullPointerException) {
+                String msg = t.getMessage();
+                if (msg != null && msg.contains("\"parts\" is null")) {
+                    return new LlmContentFilterException("Gemini returned an empty response or was blocked by safety filters. " +
+                            "Try rephrasing your request or adjusting safety settings.", throwable);
+                }
+            }
+
             if (t instanceof IllegalArgumentException) {
                 String msg = t.getMessage();
                 if (msg != null && (msg.contains("Invalid REST Client URL") || msg.contains("chat/completions"))) {
