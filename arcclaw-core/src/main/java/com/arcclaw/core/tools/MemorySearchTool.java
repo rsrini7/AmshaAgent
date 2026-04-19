@@ -13,12 +13,14 @@ import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.Fts5QueryUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.arcclaw.persistence.api.MemoryChunkDto;
+import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.jboss.logging.Logger;
 
 /**
  * Agent tool for searching user's long-term memory (past session summaries)
- * via SQLite FTS5 full-text search.
+ * and the RAG knowledge base (ingested documents).
  * <p>
  * Tenant isolation is enforced by extracting userId from the ScopedValue,
  * never from LLM parameters. The LLM can only control the search query.
@@ -29,7 +31,10 @@ public class MemorySearchTool implements AgentTool {
     private static final Logger log = Logger.getLogger(MemorySearchTool.class);
 
     @Inject
-    CompactionStorePort repository;
+    CompactionStorePort compactionRepo;
+
+    @Inject
+    MemoryRetrievalPort memoryPort;
 
     @Override
     public String name() {
@@ -39,8 +44,8 @@ public class MemorySearchTool implements AgentTool {
     @Override
     public String description() {
         return """
-            Search the user's long-term memory (past session summaries) for specific keywords,
-            topics, or historical context.
+            Search the user's long-term memory (past session summaries) and the RAG knowledge
+            base (ingested documents) for specific keywords, topics, or historical context.
             IMPORTANT: Use concrete factual keywords that would appear in stored data —
             e.g. for 'who am I' use query='user name identity', NOT 'your name' or 'my name'.
             For 'what did I work on' use query='project task work'.
@@ -82,12 +87,10 @@ public class MemorySearchTool implements AgentTool {
         String sessionId;
 
         try {
-            // Step 1 — Extract and validate tenant context
-            // NS2: Fail fast on missing context
+            // NS2: Extract and validate tenant context
             userId    = WorkspaceContext.requireUserId();
             sessionId = WorkspaceContext.requireSessionId();
         } catch (IllegalStateException e) {
-            // NS2 backward compatibility: convert missing context into 403 ToolResponse
             if (e.getMessage() != null && e.getMessage().contains("unbound")) {
                 return ToolResponse.failure(403, "Security violation: tenant context not bound.");
             }
@@ -105,39 +108,46 @@ public class MemorySearchTool implements AgentTool {
 
         String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
 
-        // 4. Search
-        List<CompactionSummaryDto> results;
+        // 4. Search across BOTH tiers
+        StringBuilder combined = new StringBuilder();
+
+        // TIER A: Compaction Summaries (FTS5)
         try {
-            results = repository.search(userId, safeQuery, 5);
-        } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            if (msg.contains("no such table") || msg.contains("fts")) {
-                log.warnf("FTS index unavailable for session %s: %s", sessionId, msg);
-                return ToolResponse.success(
-                    "Memory index temporarily unavailable. Proceed with current context.");
+            List<CompactionSummaryDto> summaries = compactionRepo.search(userId, safeQuery, 5);
+            if (summaries != null && !summaries.isEmpty()) {
+                String formatted = summaries.stream()
+                        .map(r -> String.format("[Session %s @ %s]: %s",
+                                r.sessionId(), r.compactedAt(), r.summary()))
+                        .collect(Collectors.joining("\n---\n"));
+                combined.append("### Relevant Session Summaries:\n").append(formatted).append("\n\n");
             }
-            log.errorf("MemorySearchTool failed for session %s: %s", sessionId, msg);
-            log.debugf(e, "Full stacktrace for MemorySearchTool failure in session %s", sessionId);
-            return ToolResponse.failure(500, "Memory search failed: " + msg);
+        } catch (Exception e) {
+            log.warnf("Compaction search failed for session %s: %s", sessionId, e.getMessage());
         }
 
-        // 5. Format results
-        if (results == null || results.isEmpty()) {
+        // TIER B: RAG Knowledge Base (Vector + FTS5)
+        try {
+            List<MemoryChunkDto> chunks = memoryPort.search(safeQuery, 5, userId);
+            if (chunks != null && !chunks.isEmpty()) {
+                String formatted = chunks.stream()
+                        .map(MemoryChunkDto::text)
+                        .filter(t -> t != null && !t.isBlank())
+                        .collect(Collectors.joining("\n---\n"));
+                if (!formatted.isBlank()) {
+                    combined.append("### Relevant Ingested Documents:\n").append(formatted).append("\n\n");
+                }
+            }
+        } catch (Exception e) {
+            log.warnf("RAG search failed for session %s: %s", sessionId, e.getMessage());
+        }
+
+        // 5. Format final result
+        if (combined.isEmpty()) {
             return ToolResponse.success("No relevant memory found for query: " + query + 
                                         ". Proceed with current context only.");
         }
 
-        String formatted = results.stream()
-                .map((CompactionSummaryDto r) -> String.format("Session %s (%s): %s",
-                        r.sessionId(), r.compactedAt(), r.summary()))
-                .collect(Collectors.joining("\n---\n"));
-
-        if (formatted.isBlank()) {
-            return ToolResponse.success("No relevant memory found for query: " + query + 
-                                        ". Proceed with current context only.");
-        }
-
-        return ToolResponse.success(formatted);
+        return ToolResponse.success(combined.toString().trim());
     }
 
     private String normaliseMemoryQuery(String query) {
