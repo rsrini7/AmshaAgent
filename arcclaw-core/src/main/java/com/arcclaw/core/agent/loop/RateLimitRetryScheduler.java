@@ -53,7 +53,7 @@ public class RateLimitRetryScheduler {
     @ActivateRequestContext
     public void processPendingRetries() {
         List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
-        log.debugf("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)", awaiting.size());
+        log.tracef("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)", awaiting.size());
         
         if (awaiting.isEmpty()) {
             backlogMaxAge.set(0);
