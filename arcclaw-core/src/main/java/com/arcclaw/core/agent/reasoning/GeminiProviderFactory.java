@@ -21,7 +21,7 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
     String apiKey;
 
     @ConfigProperty(name = "arcclaw.llm.gemini.model-name",
-                    defaultValue = "gemini-1.5-flash")
+                    defaultValue = "gemini-flash-latest")
     String modelName;
 
     @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
@@ -74,12 +74,16 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
                 modelName, masked);
         }
 
+        // Note: Using the builder methods confirmed by your previous snippet.
+        // If thought_signature issues persist, we will look for a way to pass
+        // additional config to disable 'thinking' or set budget to 0.
         return AiGeminiChatLanguageModel.builder()
             .key(key)
             .modelId(modelName)
             .temperature(temperature)
             .maxOutputTokens(maxOutputTokens)
             .timeout(timeout)
+            .includeThoughts(true)
             .logRequests(logRequests)
             .logResponses(logResponses)
             .build();

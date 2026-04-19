@@ -1,8 +1,8 @@
 package com.arcclaw.core.routing;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import java.time.Duration;
+
+import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
@@ -31,6 +31,7 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
             .key(key)
             .modelId(config.modelName())
             .temperature(0.0)
+            .includeThoughts(true)
             .timeout(config.timeout().orElse(Duration.ofSeconds(30)))
             .logRequests(false)
             .logResponses(false)
