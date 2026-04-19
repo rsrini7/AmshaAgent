@@ -2,18 +2,18 @@ package com.arcclaw.core.routing;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.ChatMessageType;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
-import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -21,9 +21,7 @@ import org.jboss.logging.Logger;
 
 /**
  * Sanitizes messages for NVIDIA NIM compliance.
- * Rewrites tool-call IDs to 9-char alphanumeric and prunes orphans.
- * 
- * Note: Not ApplicationScoped as this is a decorator used by specific LLM adapters.
+ * §7.32: Hardens history against "DEGRADED function" and 500 sequence errors.
  */
 public class NvidiaMessageSanitizer implements ChatModel {
 
@@ -43,11 +41,8 @@ public class NvidiaMessageSanitizer implements ChatModel {
         log.debugf("NvidiaMessageSanitizer: sanitizing request with %d messages", request.messages().size());
         if (model == null) throw new IllegalStateException("NvidiaMessageSanitizer: model is null");
         
-        List<ChatMessage> originalMessages = request.messages();
-        List<ChatMessage> sanitizedIn = sanitize(originalMessages);
+        List<ChatMessage> sanitizedIn = sanitize(request.messages());
         
-        // 🟢 FIX: Avoid setting both parameters and toolSpecifications if they might conflict.
-        // LangChain4j builder is strict about this.
         ChatRequest.Builder builder = ChatRequest.builder()
                 .messages(sanitizedIn);
 
@@ -60,7 +55,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
         ChatResponse response = model.chat(builder.build());
         
         if (response.aiMessage() != null) {
-             AiMessage sanitizedAi = sanitizeAiMessage(response.aiMessage(), new HashMap<>());
+             AiMessage sanitizedAi = internalSanitizeAiMessage(response.aiMessage(), new HashMap<>(), response.aiMessage().toolExecutionRequests());
              return ChatResponse.builder()
                      .aiMessage(sanitizedAi)
                      .metadata(response.metadata())
@@ -73,55 +68,90 @@ public class NvidiaMessageSanitizer implements ChatModel {
     public List<ChatMessage> sanitize(List<ChatMessage> messages) {
         if (messages == null || messages.isEmpty()) return messages;
 
-        List<ChatMessage> result = new ArrayList<>();
+        // Pass 1: Build a complete ID map for EVERY tool call and result in history.
+        // Even if a call is orphaned, its ID must be compliant if we send it in a result.
         Map<String, String> idMap = new HashMap<>();
-        ChatMessageType lastType = null;
+        Set<String> callIdsInHistory = new HashSet<>();
+        Set<String> resultIdsInHistory = new HashSet<>();
 
+        for (ChatMessage m : messages) {
+            if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
+                for (ToolExecutionRequest req : ai.toolExecutionRequests()) {
+                    String id = req.id();
+                    if (id != null) {
+                        callIdsInHistory.add(id);
+                        if (!isNvidiaCompliant(id)) idMap.computeIfAbsent(id, k -> generateNvidiaId());
+                    }
+                }
+            } else if (m instanceof ToolExecutionResultMessage result) {
+                String id = result.id();
+                if (id != null) {
+                    resultIdsInHistory.add(id);
+                    if (!isNvidiaCompliant(id)) idMap.computeIfAbsent(id, k -> generateNvidiaId());
+                }
+            }
+        }
+
+        // Bipartite Enforcement: NIM backend (500) fails if result exists without call.
+        // We prune any result whose parent call is not in the history.
+        Set<String> validBipartiteIds = new HashSet<>(callIdsInHistory);
+        validBipartiteIds.retainAll(resultIdsInHistory);
+
+        List<ChatMessage> result = new ArrayList<>();
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
             
-            // 🟢 PROTOCOL FIX: NVIDIA NIM allows 'system' only at the start or in specific sequences.
-            // Mid-stream system hints (corrections) must be converted to user messages if they follow a tool result.
-            if (msg instanceof SystemMessage sm && lastType == ChatMessageType.TOOL_EXECUTION_RESULT) {
-                log.debug("NvidiaMessageSanitizer: converting mid-stream system hint to user message for protocol compliance");
-                msg = UserMessage.from("System Hint: " + sm.text());
+            // sequence guard: system hints following tool results must be merged into result text.
+            if (msg instanceof SystemMessage sm && !result.isEmpty() 
+                    && result.get(result.size() - 1) instanceof ToolExecutionResultMessage lastTool) {
+                
+                ToolExecutionResultMessage merged = ToolExecutionResultMessage.from(
+                    lastTool.id(), 
+                    lastTool.toolName(), 
+                    lastTool.text() + "\n\n[System Hint: " + sm.text() + "]");
+                
+                result.set(result.size() - 1, merged);
+                continue;
             }
 
             if (msg instanceof AiMessage ai) {
-                // §7.32: NVIDIA 'DEGRADED function' protection.
                 if (ai.hasToolExecutionRequests()) {
-                    boolean hasFollowingResult = (i + 1 < messages.size()) 
-                            && (messages.get(i + 1) instanceof ToolExecutionResultMessage);
-                    if (!hasFollowingResult) {
-                        log.warn("NvidiaMessageSanitizer: pruning orphaned tool call");
-                        continue; // Skip abandoned tool call
+                    // Only keep tool calls that have a corresponding result (NIM requirement)
+                    List<ToolExecutionRequest> bipartite = ai.toolExecutionRequests().stream()
+                            .filter(req -> validBipartiteIds.contains(req.id()))
+                            .toList();
+                    
+                    if (bipartite.isEmpty() && ai.text() != null && !ai.text().isBlank()) {
+                        result.add(AiMessage.from(stripBrackets(ai.text())));
+                    } else if (!bipartite.isEmpty()) {
+                        result.add(internalSanitizeAiMessage(ai, idMap, bipartite));
                     }
+                } else {
+                    result.add(msg);
                 }
-                AiMessage sanitized = sanitizeAiMessage(ai, idMap);
-                result.add(sanitized);
-                lastType = sanitized.type();
             } else if (msg instanceof ToolExecutionResultMessage tool) {
-                String newId = idMap.get(tool.id());
-                ToolExecutionResultMessage processed = newId != null 
-                    ? ToolExecutionResultMessage.from(newId, tool.toolName(), tool.text())
-                    : tool;
-                result.add(processed);
-                lastType = processed.type();
+                // Prune results missing their call (NIM backend protection)
+                if (validBipartiteIds.contains(tool.id())) {
+                    String newId = idMap.getOrDefault(tool.id(), tool.id());
+                    result.add(ToolExecutionResultMessage.from(newId, tool.toolName(), tool.text()));
+                } else {
+                    log.warnf("NvidiaMessageSanitizer: pruning orphaned tool result %s", tool.id());
+                }
             } else {
                 result.add(msg);
-                lastType = msg.type();
             }
         }
         return result;
     }
 
-    private AiMessage sanitizeAiMessage(AiMessage ai, Map<String, String> idMap) {
-        String text = ai.text();
-        if (text != null) {
-            text = BRACKET_TOOL_PATTERN.matcher(text).replaceAll("").strip();
-        }
+    private String stripBrackets(String text) {
+        if (text == null) return null;
+        return BRACKET_TOOL_PATTERN.matcher(text).replaceAll("").strip();
+    }
 
-        List<ToolExecutionRequest> requests = ai.toolExecutionRequests();
+    private AiMessage internalSanitizeAiMessage(AiMessage ai, Map<String, String> idMap, List<ToolExecutionRequest> requests) {
+        String text = stripBrackets(ai.text());
+
         if (requests == null || requests.isEmpty()) {
             return AiMessage.from(text);
         }
@@ -129,8 +159,9 @@ public class NvidiaMessageSanitizer implements ChatModel {
         List<ToolExecutionRequest> sanitizedRequests = new ArrayList<>();
         for (ToolExecutionRequest req : requests) {
             String oldId = req.id();
-            String newId = isNvidiaCompliant(oldId) ? oldId : generateNvidiaId();
-            idMap.put(oldId, newId);
+            String newId = idMap.getOrDefault(oldId, oldId);
+            if (!isNvidiaCompliant(newId)) newId = generateNvidiaId();
+            
             sanitizedRequests.add(ToolExecutionRequest.builder()
                     .id(newId)
                     .name(req.name())

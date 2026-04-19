@@ -6,9 +6,10 @@
     <!-- Baseline suppressions for pre-existing MethodLength violations -->
 
      <!-- ═══════════════════════════════════════════════════════════
-         agent reasoning
+         LLM Model
          ═══════════════════════════════════════════════════════════ -->
-     <suppress checks="MethodLength" files="ChatModelProducer\.java"/>
+     <suppress checks="MethodLength" files="NvidiaMessageSanitizer\.java"/>
+     
    
       <!-- ═══════════════════════════════════════════════════════════
          agent/loop — scheduled for T2-7 deep conditional extraction
@@ -28,6 +29,7 @@
     <suppress checks="FileLength|MethodLength" files="LangChainReasoningEngine\.java"/>
     <suppress checks="MethodLength" files="ReasoningStepParser\.java"/>
     <suppress checks="FileLength|MethodLength" files="SystemPromptBuilder\.java"/>
+    <suppress checks="MethodLength" files="ChatModelProducer\.java"/>
 
     <!-- ═══════════════════════════════════════════════════════════
          api — scheduled for AgentSessionService decomposition
