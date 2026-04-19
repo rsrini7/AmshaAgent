@@ -61,6 +61,7 @@ public class LlmModelFactory {
         if (baseUrl.contains("openai.com"))   return "openai";
         if (baseUrl.contains("groq.com"))     return "groq";
         if (baseUrl.contains("nvidia.com"))   return "nvidia";
+        if (baseUrl.contains("googleapis.com")) return "gemini";
         if (baseUrl.contains("localhost:11434")) return "ollama";
         return "openrouter"; // default: OpenAI-compatible
     }

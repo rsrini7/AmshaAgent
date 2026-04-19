@@ -27,6 +27,9 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                     defaultValue = "8192")
     int maxTokens;
 
+    @ConfigProperty(name = "arcclaw.llm.temperature", defaultValue = "0.1")
+    double temperature;    
+
     @ConfigProperty(name = "arcclaw.llm.timeout",
                     defaultValue = "PT60S")
     Duration timeout;
@@ -63,6 +66,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                 .maxTokens(maxTokens) 
                 .timeout(timeout)
                 .maxRetries(maxRetries)
+                .temperature(temperature)
                 // Required by OpenRouter — identifies your app, avoids anonymous rate limits
                 .customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName))
                 .logRequests(logHttp)

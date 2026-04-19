@@ -304,6 +304,7 @@ arcclaw:
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
     max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
     timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
+    temperature: ${ARCCLAW_LLM_TEMPERATURE:0.1}
     fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL}
     fallback-provider: ${ARCCLAW_LLM_FALLBACK_PROVIDER}
     fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL}

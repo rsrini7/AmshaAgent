@@ -125,6 +125,14 @@ public class CliUtils {
         "Also set:  ARCCLAW_LLM_BASE_URL=https://api.openai.com/v1"
     );
 
+    private static final VarSpec GEMINI_KEY_SPEC = new VarSpec(
+        "ARCCLAW_LLM_API_KEY",        // ← same key
+        "Google Gemini API key (provider=gemini).",
+        "1. Get a free key at https://aistudio.google.com",
+        "2. Add:  ARCCLAW_LLM_API_KEY=AIza...",
+        "Also set:  ARCCLAW_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/"
+    );
+
     /** Required for attach mode (hard) and validated for serve mode (soft). */
     private static final VarSpec[] TELEGRAM_VARS = {
         new VarSpec(
@@ -166,6 +174,7 @@ public class CliUtils {
         VarSpec providerKeySpec = switch (llmProvider) {
             case "openrouter" -> OPENROUTER_KEY_SPEC;
             case "openai"     -> OPENAI_KEY_SPEC;
+            case "gemini"     -> GEMINI_KEY_SPEC;
             case "ollama"     -> null;
             default           -> GROQ_KEY_SPEC;
         };

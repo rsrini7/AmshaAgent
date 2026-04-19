@@ -44,6 +44,14 @@ public class LlmExceptionClassifier {
                 }
             }
             
+            if (t instanceof IllegalArgumentException) {
+                String msg = t.getMessage();
+                if (msg != null && (msg.contains("Invalid REST Client URL") || msg.contains("chat/completions"))) {
+                    return new LlmServiceUnavailableException("Malformed LLM Base URL. " +
+                            "Check if ARCCLAW_LLM_BASE_URL is correct for this provider: " + msg, throwable);
+                }
+            }
+            
             String msg = AgentErrorMessageUtil.safeMessage(t);
             if (isRateLimitError(msg)) {
                 return new LlmRateLimitException(msg, throwable);
