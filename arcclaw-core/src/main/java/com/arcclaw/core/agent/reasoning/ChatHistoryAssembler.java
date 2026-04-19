@@ -101,49 +101,50 @@ public class ChatHistoryAssembler {
         }
 
         // STEP B — ReAct loop steps
-        for (int i = 0; i < history.size(); i++) {
+        int totalSteps = history.size();
+        for (int i = 0; i < totalSteps; i++) {
             ReasoningStep step = history.get(i);
+            
+            // 🟢 TOKEN OPTIMIZATION: Only send full details for the last 2 steps.
+            // Older steps get truncated thoughts and observations to save context space.
+            // This prevents hitting low TPM limits (e.g. 30k on Groq Free/Tier1).
+            boolean isRecent = (i >= totalSteps - 2);
+            String thought = step.thought() != null ? step.thought() : "";
+            if (!isRecent && thought.length() > 200) {
+                thought = thought.substring(0, 197) + "... [summary]";
+            }
 
             // NEW: Handle parallel batch step (§7.3)
             if (step.isParallelBatch()) {
                 List<ParallelToolCall> calls = deserializeBatch(step);
                 if (calls != null && !calls.isEmpty()) {
-                    // Build N ToolExecutionRequests for ONE AiMessage
                     List<ToolExecutionRequest> allRequests = calls.stream()
                         .map(call -> {
                             String argsJson;
                             try {
                                 argsJson = objectMapper.writeValueAsString(call.params());
-                            } catch (Exception e) {
-                                argsJson = "{}";
-                            }
+                            } catch (Exception e) { argsJson = "{}"; }
                             return ToolExecutionRequest.builder()
-                                .id(call.callId())
-                                .name(call.toolName())
-                                .arguments(argsJson)
-                                .build();
+                                .id(call.callId()).name(call.toolName()).arguments(argsJson).build();
                         })
                         .toList();
 
-                    // ONE AiMessage with ALL N tool requests (LangChain4j parallel protocol)
-                    messages.add(AiMessage.aiMessage(
-                        step.thought() != null ? step.thought() : "",
-                        allRequests));
+                    messages.add(AiMessage.aiMessage(thought, allRequests));
 
-                    // N ToolExecutionResultMessages — one per callId in order
                     for (ParallelToolCall call : calls) {
-                        String safeObs = truncateObservation(call.observation(), call.toolName());
+                        String obs = call.observation();
+                        if (!isRecent && obs != null && obs.length() > 500) {
+                            obs = obs.substring(0, 497) + "... [truncated]";
+                        }
+                        String safeObs = truncateObservation(obs, call.toolName());
                         messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(
                             call.callId(), call.toolName(), safeObs));
                     }
                 } else {
-                    // Deserialization failed — add error as plain AI message to preserve context continuity
-                    log.warnf("ChatHistoryAssembler: failed to deserialize parallel batch " +
-                              "at history index %d — adding error placeholder.", i);
-                    messages.add(AiMessage.aiMessage(
-                        "[PARALLEL-BATCH-ERROR: could not reconstruct tool calls]"));
+                    log.warnf("ChatHistoryAssembler: failed to deserialize parallel batch at index %d", i);
+                    messages.add(AiMessage.aiMessage("[PARALLEL-BATCH-ERROR]"));
                 }
-                continue;  // skip the single-tool path below
+                continue;
             }
 
             if (step.action() != null && !step.action().equals(ReasoningStep.FINISH)) {
@@ -151,39 +152,28 @@ public class ChatHistoryAssembler {
                 try {
                     if (step.actionInput() != null) {
                         Map<String, Object> input = step.actionInput();
-                        if (input.size() == 1 && input.containsKey("parameters") && input.get("parameters") instanceof String) {
-                            argsJson = (String) input.get("parameters");
-                        } else {
-                            argsJson = objectMapper.writeValueAsString(input);
-                        }
+                        argsJson = (input.size() == 1 && input.containsKey("parameters") && input.get("parameters") instanceof String)
+                            ? (String) input.get("parameters") : objectMapper.writeValueAsString(input);
                     }
-                } catch (Exception e) {
-                    argsJson = "{}";
-                    log.warnf("[ChatHistoryAssembler] Failed to serialize tool args at step %d" +
-                              " — using empty params. Cause: %s", i, e.getMessage());
-                }
+                } catch (Exception e) { argsJson = "{}"; }
 
                 String callId = "call_" + i;
                 ToolExecutionRequest request = ToolExecutionRequest.builder()
-                        .id(callId)
-                        .name(step.action())
-                        .arguments(argsJson)
-                        .build();
+                        .id(callId).name(step.action()).arguments(argsJson).build();
 
-                // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
-                messages.add(AiMessage.aiMessage(step.thought() != null ? step.thought() : "",
-                        Collections.singletonList(request)));
+                messages.add(AiMessage.aiMessage(thought, Collections.singletonList(request)));
 
                 String rawObs = step.observation();
+                if (!isRecent && rawObs != null && rawObs.length() > 500) {
+                    rawObs = rawObs.substring(0, 497) + "... [truncated]";
+                }
                 if (rawObs != null) {
                     String safeObs = truncateObservation(rawObs, step.action());
-                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                     messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(callId, step.action(), safeObs));
                 }
             } else {
-                if (step.thought() != null && !step.thought().isEmpty()) {
-                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
-                    messages.add(AiMessage.aiMessage(step.thought()));
+                if (!thought.isEmpty()) {
+                    messages.add(AiMessage.aiMessage(thought));
                 }
             }
         }

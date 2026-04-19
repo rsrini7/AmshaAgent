@@ -38,7 +38,7 @@ public class ChatModelProducer {
     @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
     int maxRetries;
 
-    @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT60S")
+    @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT120S")
     Duration timeout;
 
     @ConfigProperty(name = "arcclaw.llm.fallback-provider")

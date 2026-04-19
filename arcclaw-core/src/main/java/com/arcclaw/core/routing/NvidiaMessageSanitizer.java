@@ -41,7 +41,9 @@ public class NvidiaMessageSanitizer implements ChatModel {
         log.debugf("NvidiaMessageSanitizer: sanitizing request with %d messages", request.messages().size());
         if (model == null) throw new IllegalStateException("NvidiaMessageSanitizer: model is null");
         
-        List<ChatMessage> sanitizedIn = sanitize(request.messages());
+        // Pass 1 & 2: Sanitize input history
+        Map<String, String> idMap = new HashMap<>();
+        List<ChatMessage> sanitizedIn = sanitize(request.messages(), idMap);
         
         ChatRequest.Builder builder = ChatRequest.builder()
                 .messages(sanitizedIn);
@@ -54,6 +56,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 
         ChatResponse response = model.chat(builder.build());
         
+        // Pass 3: Sanitize model response to ensure future turns start with compliant IDs
         if (response.aiMessage() != null) {
              AiMessage sanitizedAi = internalSanitizeAiMessage(response.aiMessage(), new HashMap<>(), response.aiMessage().toolExecutionRequests());
              return ChatResponse.builder()
@@ -66,11 +69,14 @@ public class NvidiaMessageSanitizer implements ChatModel {
     }
 
     public List<ChatMessage> sanitize(List<ChatMessage> messages) {
+        return sanitize(messages, new HashMap<>());
+    }
+
+    public List<ChatMessage> sanitize(List<ChatMessage> messages, Map<String, String> idMap) {
         if (messages == null || messages.isEmpty()) return messages;
 
-        // Pass 1: Build a complete ID map for EVERY tool call and result in history.
-        // Even if a call is orphaned, its ID must be compliant if we send it in a result.
-        Map<String, String> idMap = new HashMap<>();
+        // Pass 1: Build a complete ID map and track occurrence for bipartite check.
+        // Force-rewrite EVERY ID to 9-char alphanumeric to be absolutely safe.
         Set<String> callIdsInHistory = new HashSet<>();
         Set<String> resultIdsInHistory = new HashSet<>();
 
@@ -80,20 +86,19 @@ public class NvidiaMessageSanitizer implements ChatModel {
                     String id = req.id();
                     if (id != null) {
                         callIdsInHistory.add(id);
-                        if (!isNvidiaCompliant(id)) idMap.computeIfAbsent(id, k -> generateNvidiaId());
+                        idMap.computeIfAbsent(id, k -> generateNvidiaId());
                     }
                 }
             } else if (m instanceof ToolExecutionResultMessage result) {
                 String id = result.id();
                 if (id != null) {
                     resultIdsInHistory.add(id);
-                    if (!isNvidiaCompliant(id)) idMap.computeIfAbsent(id, k -> generateNvidiaId());
+                    idMap.computeIfAbsent(id, k -> generateNvidiaId());
                 }
             }
         }
 
-        // Bipartite Enforcement: NIM backend (500) fails if result exists without call.
-        // We prune any result whose parent call is not in the history.
+        // Bipartite Check: Prune orphaned tool calls/results (NIM 500/400 protection)
         Set<String> validBipartiteIds = new HashSet<>(callIdsInHistory);
         validBipartiteIds.retainAll(resultIdsInHistory);
 
@@ -116,7 +121,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
             if (msg instanceof AiMessage ai) {
                 if (ai.hasToolExecutionRequests()) {
-                    // Only keep tool calls that have a corresponding result (NIM requirement)
+                    // Filter calls to only those that have a corresponding result in history
                     List<ToolExecutionRequest> bipartite = ai.toolExecutionRequests().stream()
                             .filter(req -> validBipartiteIds.contains(req.id()))
                             .toList();
@@ -130,12 +135,12 @@ public class NvidiaMessageSanitizer implements ChatModel {
                     result.add(msg);
                 }
             } else if (msg instanceof ToolExecutionResultMessage tool) {
-                // Prune results missing their call (NIM backend protection)
+                // Only keep results that have their matching call
                 if (validBipartiteIds.contains(tool.id())) {
-                    String newId = idMap.getOrDefault(tool.id(), tool.id());
+                    String newId = idMap.get(tool.id()); // Guaranteed to be in map from Pass 1
                     result.add(ToolExecutionResultMessage.from(newId, tool.toolName(), tool.text()));
                 } else {
-                    log.warnf("NvidiaMessageSanitizer: pruning orphaned tool result %s", tool.id());
+                    log.debugf("NvidiaMessageSanitizer: pruning orphaned tool result %s", tool.id());
                 }
             } else {
                 result.add(msg);
@@ -159,8 +164,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
         List<ToolExecutionRequest> sanitizedRequests = new ArrayList<>();
         for (ToolExecutionRequest req : requests) {
             String oldId = req.id();
-            String newId = idMap.getOrDefault(oldId, oldId);
-            if (!isNvidiaCompliant(newId)) newId = generateNvidiaId();
+            String newId = idMap.computeIfAbsent(oldId, k -> generateNvidiaId());
             
             sanitizedRequests.add(ToolExecutionRequest.builder()
                     .id(newId)
@@ -170,10 +174,6 @@ public class NvidiaMessageSanitizer implements ChatModel {
         }
 
         return AiMessage.from(text, sanitizedRequests);
-    }
-
-    private boolean isNvidiaCompliant(String id) {
-        return id != null && id.length() == 9 && id.matches("[a-zA-Z0-9]+");
     }
 
     private static String generateNvidiaId() {
