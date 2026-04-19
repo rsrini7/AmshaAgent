@@ -45,8 +45,20 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        String key = apiKey;
+        
+        // Fallback for environment variables if injected value is a placeholder
+        if (key == null || key.equals("not-configured") || key.contains("<") || key.contains("xxxx")) {
+            key = System.getProperty("ARCCLAW_LLM_API_KEY", System.getenv("ARCCLAW_LLM_API_KEY"));
+        }
+
+        if (key == null || key.isBlank() || key.equals("not-configured") || key.contains("<")) {
+            throw new IllegalStateException("Gemini provider requires a valid API key. " +
+                    "Set ARCCLAW_LLM_API_KEY in your .env or arcclaw.llm.gemini.api-key in config.");
+        }
+
         return GoogleAiGeminiChatModel.builder()
-            .apiKey(apiKey)
+            .apiKey(key)
             .modelName(modelName)
             .timeout(timeout)
             .maxOutputTokens(maxOutputTokens)

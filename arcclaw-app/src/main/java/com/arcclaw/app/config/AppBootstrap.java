@@ -746,11 +746,10 @@ public class AppBootstrap {
                 case "openai"     -> "https://api.openai.com/v1";
                 case "ollama"     -> "http://localhost:11434";
                 case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
-                case "gemini"     -> "https://generativelanguage.googleapis.com/v1beta/openai/";
                 default           -> null;
             };
 
-            if (defaultUrl != null) {
+            if (defaultUrl != null && !provider.equals("gemini")) {
                 System.err.println("[ArcClaw] ℹ️  ARCCLAW_LLM_BASE_URL missing for provider '" + provider + "' — auto-setting to: " + defaultUrl);
                 patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", defaultUrl);
                 System.setProperty("ARCCLAW_LLM_BASE_URL", defaultUrl);
