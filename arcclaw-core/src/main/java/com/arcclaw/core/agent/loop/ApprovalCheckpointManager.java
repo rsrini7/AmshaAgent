@@ -73,6 +73,7 @@ public class ApprovalCheckpointManager {
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
+        cp.setPendingToolRole(agentRole);
         cp.setPendingToolParametersJson(paramsJson);
 
         try {
@@ -140,6 +141,7 @@ public class ApprovalCheckpointManager {
 
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(compositeName);
+        cp.setPendingToolRole(agentRole);
         cp.setPendingToolParametersJson(batchJson);
         cp.setBatchToolDecisions(decisionsJson);
         cp.setOriginalGoal(context.goal());
@@ -200,6 +202,7 @@ public class ApprovalCheckpointManager {
 
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(compositeName);
+        cp.setPendingToolRole(agentRole);
         cp.setPendingToolParametersJson(originalBatchJson);
         cp.setBatchToolDecisions(decisionsJson);
         cp.setPreExecutedResults(preExecutedResultsJson);

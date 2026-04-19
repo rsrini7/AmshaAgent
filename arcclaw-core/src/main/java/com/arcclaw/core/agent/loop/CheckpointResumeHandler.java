@@ -336,12 +336,18 @@ public class CheckpointResumeHandler {
         String toolName = checkpoint.getPendingToolName();
         String paramsJson = checkpoint.getPendingToolParametersJson();
         String sessionId = context.sessionId();
+        
+        // Ensure we use the role that originally called the tool §7.31
+        String effectiveRole = checkpoint.getPendingToolRole() != null 
+                ? checkpoint.getPendingToolRole() 
+                : context.agentRole();
 
-        log.infof("[AgentLoop] Resuming session %s executing pending tool %s", sessionId, toolName);
+        log.infof("[AgentLoop] Resuming session %s executing pending tool %s as role %s", 
+                sessionId, toolName, effectiveRole);
 
         try {
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                    sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), context.agentRole(),
+                    sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
                     () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
             if (response.isInfraFailure()) return handleInfraFailure(history);
@@ -412,7 +418,7 @@ public class CheckpointResumeHandler {
                 continue;
             }
 
-            executeBatchCall(call, context, completed);
+            executeBatchCall(call, context, completed, checkpoint);
         }
 
         return finalizeParallelBatch(checkpoint, history, completed);
@@ -460,10 +466,11 @@ public class CheckpointResumeHandler {
         return false;
     }
 
-    private void executeBatchCall(ParallelToolCall call, AgentExecutionContext ctx, List<ParallelToolCall> completed) {
+    private void executeBatchCall(ParallelToolCall call, AgentExecutionContext ctx, List<ParallelToolCall> completed, AgentCheckpoint cp) {
         try {
+            String effectiveRole = cp.getPendingToolRole() != null ? cp.getPendingToolRole() : ctx.agentRole();
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                ctx.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), ctx.agentRole(),
+                ctx.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
                 () -> toolRegistry.invokeTool(call.toolName(), call.paramsJson(), ctx.sessionId()));
             completed.add(call.withResult(response.output(), response.success()));
         } catch (Exception e) {
