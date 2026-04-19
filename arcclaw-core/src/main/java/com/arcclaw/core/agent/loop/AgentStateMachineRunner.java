@@ -136,7 +136,7 @@ public class AgentStateMachineRunner {
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
 
         // Loop-scoped variables — must NOT be delegated to collaborators
-        int iteration = 0;
+        int iteration = context.startingIteration();
         int llmSchemaErrorCount = 0;   // plain int — NEVER AtomicInteger (§3.7)
         int consecutiveFailures = 0;
         String transientError = null;  // written by write-intent injection AND correction paths
@@ -179,8 +179,10 @@ public class AgentStateMachineRunner {
 
                     log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
-                    // --- Write-intent hint injection (iteration 1 only) ---
-                    if (iteration == 1 && intentDetector.isWriteIntent(context.goal())) {
+                    // --- Write-intent hint injection (initial start only) ---
+                    // §7.45: Only inject the hint if history is empty. If we are resuming,
+                    // history contains the tool call/result already.
+                    if (history.isEmpty() && intentDetector.isWriteIntent(context.goal())) {
                         transientError = "The user wants to store data. Call ingest_document immediately. "
                                 + "Pass REDACTED-* placeholders as-is. No explanation needed.";
                     }

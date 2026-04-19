@@ -32,7 +32,7 @@ class AgentPersonaRegistryTest {
     }
 
     private AgentExecutionContext createCtx() {
-        return new AgentExecutionContext("s1", "u1", "c1", "role", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+        return new AgentExecutionContext("s1", "u1", "c1", "role", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
     }
 
     @Test

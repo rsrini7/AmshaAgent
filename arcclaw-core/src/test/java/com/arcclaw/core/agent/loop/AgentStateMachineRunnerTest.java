@@ -165,7 +165,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(finishStep);
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
@@ -184,7 +184,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(ToolResponse.success("output"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 2, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.LoopExceeded.class, result);
@@ -205,7 +205,7 @@ class AgentStateMachineRunnerTest {
         when(toolRegistry.listTools()).thenReturn(List.of("valid-tool"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
@@ -221,7 +221,7 @@ class AgentStateMachineRunnerTest {
                 .when(governanceLayer).recordLlmCall(anyString(), anyInt(), anyInt());
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Failed.class, result);
@@ -248,7 +248,7 @@ class AgentStateMachineRunnerTest {
                     .thenReturn(Optional.of(new AgentCheckpoint()));
 
             AgentExecutionContext ctx = new AgentExecutionContext(
-                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, "telegram", "platform-1", null, null);
+                    "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, 5, 0, "telegram", "platform-1", null, null);
             AgentResult result = runner.run(ctx, engine, List.of());
 
             assertInstanceOf(AgentResult.AwaitingApproval.class, result);
@@ -275,7 +275,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(ToolResponse.failure(1, "error"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
@@ -294,7 +294,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(finishStep);
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
@@ -315,7 +315,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(ToolResponse.success("Scheduled cleaning"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);
@@ -329,7 +329,7 @@ class AgentStateMachineRunnerTest {
                 .thenThrow(ex);
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.AwaitingRetry.class, result);
@@ -350,7 +350,7 @@ class AgentStateMachineRunnerTest {
         lenient().when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
-                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, null, null, null, null);
+                "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
         AgentResult result = runner.run(ctx, engine, List.of());
 
         assertInstanceOf(AgentResult.Finished.class, result);

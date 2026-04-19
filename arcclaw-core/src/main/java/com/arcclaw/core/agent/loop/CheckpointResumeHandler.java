@@ -355,9 +355,10 @@ public class CheckpointResumeHandler {
             recordReasoningStep(toolName, paramsJson, response.output(), history, sessionId);
             completeInProgressCheckpoint(checkpoint);
 
-            // §7.32: Deliver the tool observation as the final result if this is a single turn resume.
-            // This prevents a redundant LLM call and state machine restart.
-            return AgentResult.finished(response.output(), List.copyOf(history));
+            // §7.32: Return null to allow the StateMachine to continue for one final synthesis turn.
+            // Hardening in AgentStateMachineRunner ensures it respects context.startingIteration()
+            // to avoid infinite loops.
+            return null;
         } catch (Exception e) {
             return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
         }
@@ -488,9 +489,8 @@ public class CheckpointResumeHandler {
             history.add(ReasoningStep.parallelBatch("Human Approved (batch)", Map.of("batch", completedJson), 0, 0).withObservation(summary));
             completeInProgressCheckpoint(checkpoint);
 
-            // §7.32: Deliver the batch summary as final result. 
-            // Prevents coordinator restart loop.
-            return AgentResult.finished(summary, List.copyOf(history));
+            // §7.32: Return null to allow the StateMachine to continue for one final synthesis turn.
+            return null;
         } catch (Exception e) {
             return handleCorruptBatch(checkpoint, history);
         }

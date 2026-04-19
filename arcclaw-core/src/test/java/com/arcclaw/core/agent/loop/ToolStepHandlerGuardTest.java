@@ -32,7 +32,7 @@ class ToolStepHandlerGuardTest {
     @InjectMocks ToolStepHandler handler;
 
     private AgentExecutionContext createCtx(String role, String goal) {
-        return new AgentExecutionContext("sess1", "user1", "chat1", role, goal, AutonomyLevel.FULL, 5, null, null, null, null);
+        return new AgentExecutionContext("sess1", "user1", "chat1", role, goal, AutonomyLevel.FULL, 5, 0, null, null, null, null);
     }
 
     @BeforeEach
