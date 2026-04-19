@@ -14,6 +14,7 @@ public final class SqliteErrorStrings {
     public static final String DATABASE_LOCKED = "database is locked";
     public static final String SQLITE_BUSY     = "sqlite_busy";
     public static final String BUSY            = "busy";
+    public static final String NO_TRANSACTION_ACTIVE = "no transaction is active";
     public static final String SQLITE_EXCEPTION = "SQLiteException";
     public static final String LOCK_ACQUISITION_EXCEPTION = "LockAcquisitionException";
     public static final String OPTIMISTIC_LOCK_EXCEPTION = "OptimisticLockException";
@@ -43,7 +44,8 @@ public final class SqliteErrorStrings {
                 if (lower.contains(BUSY) || 
                     lower.contains(DATABASE_LOCKED) || 
                     lower.contains(SQLITE_BUSY) ||
-                    lower.contains(SNAPSHOT)) {
+                    lower.contains(SNAPSHOT) ||
+                    lower.contains(NO_TRANSACTION_ACTIVE)) {
                     return true;
                 }
             }

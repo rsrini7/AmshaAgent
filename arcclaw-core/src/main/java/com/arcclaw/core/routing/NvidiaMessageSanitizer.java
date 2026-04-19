@@ -72,14 +72,20 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         List<ChatMessage> result = new ArrayList<>();
         Map<String, String> idMap = new HashMap<>();
+        dev.langchain4j.data.message.ChatMessageType lastType = null;
 
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
+            
+            // 🟢 PROTOCOL FIX: NVIDIA NIM allows 'system' only at the start or in specific sequences.
+            // Mid-stream system hints (corrections) must be converted to user messages if they follow a tool result.
+            if (msg instanceof dev.langchain4j.data.message.SystemMessage sm && lastType == dev.langchain4j.data.message.ChatMessageType.TOOL_EXECUTION_RESULT) {
+                log.debug("NvidiaMessageSanitizer: converting mid-stream system hint to user message for protocol compliance");
+                msg = dev.langchain4j.data.message.UserMessage.from("System Hint: " + sm.text());
+            }
+
             if (msg instanceof AiMessage ai) {
                 // §7.32: NVIDIA 'DEGRADED function' protection.
-                // If an Assistant message has tool calls, it MUST be followed by ToolExecutionResultMessage(s).
-                // If the very next message is NOT a tool result, this is an abandoned/leaked call
-                // that will cause a 400 error. We drop it.
                 if (ai.hasToolExecutionRequests()) {
                     boolean hasFollowingResult = (i + 1 < messages.size()) 
                             && (messages.get(i + 1) instanceof ToolExecutionResultMessage);
@@ -88,16 +94,19 @@ public class NvidiaMessageSanitizer implements ChatModel {
                         continue; // Skip abandoned tool call
                     }
                 }
-                result.add(sanitizeAiMessage(ai, idMap));
+                AiMessage sanitized = sanitizeAiMessage(ai, idMap);
+                result.add(sanitized);
+                lastType = sanitized.type();
             } else if (msg instanceof ToolExecutionResultMessage tool) {
                 String newId = idMap.get(tool.id());
-                if (newId != null) {
-                    result.add(ToolExecutionResultMessage.from(newId, tool.toolName(), tool.text()));
-                } else {
-                    result.add(tool);
-                }
+                ToolExecutionResultMessage processed = newId != null 
+                    ? ToolExecutionResultMessage.from(newId, tool.toolName(), tool.text())
+                    : tool;
+                result.add(processed);
+                lastType = processed.type();
             } else {
                 result.add(msg);
+                lastType = msg.type();
             }
         }
         return result;
