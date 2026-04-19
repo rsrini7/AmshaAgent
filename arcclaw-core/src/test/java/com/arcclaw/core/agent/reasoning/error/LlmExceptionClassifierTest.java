@@ -1,0 +1,43 @@
+package com.arcclaw.core.agent.reasoning.error;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.arcclaw.core.util.AgentErrorMessageUtil;
+import dev.langchain4j.exception.HttpException;
+import org.junit.jupiter.api.Test;
+
+class LlmExceptionClassifierTest {
+
+    @Test
+    void testNvidiaDegradedError() {
+        String msg = "{\"status\":400,\"title\":\"Bad Request\",\"detail\":\"Function id '7fe236cd-dab4-40d4-a139-b28d6673ffd3': DEGRADED function cannot be invoked\"}";
+        HttpException httpEx = new HttpException(400, msg);
+        
+        LlmProviderException classified = LlmExceptionClassifier.classify(httpEx);
+        
+        assertTrue(classified instanceof LlmServiceUnavailableException);
+        assertTrue(classified.getMessage().contains("DEGRADED"));
+        assertFalse(classified.getMessage().contains("Unclassified error"), "Should not be unclassified");
+    }
+
+    @Test
+    void testGroqRateLimit() {
+        String msg = "{\"error\":{\"message\":\"Rate limit reached for model meta-llama/llama-4-scout-17b-16e-instruct in organization org_01kj3acrf4frvbvqxnax4c9mth service tier on_demand on tokens per minute (TPM): Limit 30000, Used 22218, Requested 12526. Please try again in 9.488s.\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}";
+        HttpException httpEx = new HttpException(429, msg);
+        
+        LlmProviderException classified = LlmExceptionClassifier.classify(httpEx);
+        
+        assertTrue(classified instanceof LlmRateLimitException);
+        assertTrue(classified.getMessage().contains("Rate limit"));
+    }
+
+    @Test
+    void testSanitizeDetailKey() {
+        String msg = "{\"status\":400,\"title\":\"Bad Request\",\"detail\":\"Function id '123': DEGRADED function cannot be invoked\"}";
+        String sanitized = AgentErrorMessageUtil.sanitizeErrorMessage(msg);
+        
+        // Should extract the detail part and wrap it in API Error: %s
+        assertTrue(sanitized.contains("Function id '123'"));
+        assertTrue(sanitized.startsWith("⚠️ API Error:"));
+    }
+}

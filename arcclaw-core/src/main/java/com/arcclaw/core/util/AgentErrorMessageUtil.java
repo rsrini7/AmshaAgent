@@ -51,7 +51,7 @@ public final class AgentErrorMessageUtil {
         String apiMessage = stripped;
         boolean isJson = false;
 
-        Matcher messageMatcher = Pattern.compile("\"message\"\\s*:\\s*\"(.*?)(?<!\\\\)\"").matcher(stripped);
+        Matcher messageMatcher = Pattern.compile("\"(?:message|detail)\"\\s*:\\s*\"(.*?)(?<!\\\\)\"").matcher(stripped);
         if (messageMatcher.find()) {
             apiMessage = messageMatcher.group(1)
                                   .replace("\\\"", "\"")
