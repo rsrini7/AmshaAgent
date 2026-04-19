@@ -94,7 +94,19 @@ public class ChatHistoryAssembler {
                     }
 
                     if (!skip) {
-                        messages.add(msg);
+                        if (msg instanceof AiMessage ai && ai.text() != null && ai.text().length() > 2000) {
+                            String truncated = ai.text().substring(0, 1997) + "...";
+                            if (ai.hasToolExecutionRequests()) {
+                                messages.add(AiMessage.aiMessage(truncated, ai.toolExecutionRequests()));
+                            } else {
+                                messages.add(AiMessage.aiMessage(truncated));
+                            }
+                        } else if (msg instanceof UserMessage um && um.singleText() != null && um.singleText().length() > 2000) {
+                            String truncated = um.singleText().substring(0, 1997) + "...";
+                            messages.add(UserMessage.userMessage(truncated));
+                        } else {
+                            messages.add(msg);
+                        }
                     }
                 }
             }
