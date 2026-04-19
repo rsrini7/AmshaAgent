@@ -202,9 +202,24 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     @Override
     public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
         CheckpointUpsertResult result = upsertWithSteps(sessionId, agentRole, stateJson, "SUPERVISED", 0);
-        transitionStatus(result.checkpoint().id(), finalStatus);
-        saveSteps(result.checkpoint().id(), steps);
-        return new CheckpointUpsertResult(findById(result.checkpoint().id()).get(), result.created());
+        
+        // Finalize state and timestamps
+        CheckpointDto existing = result.checkpoint();
+        Instant completedAt = "COMPLETED".equals(finalStatus) ? Instant.now() : existing.completedAt();
+        Instant failedAt = "FAILED".equals(finalStatus) ? Instant.now() : existing.failedAt();
+        
+        CheckpointDto updated = new CheckpointDto(existing.id(), existing.sessionId(), existing.agentRole(),
+                finalStatus, existing.autonomyLevel(), existing.stateJson(), existing.channelPlatformId(),
+                existing.channelType(), existing.originalGoal(), failedAt, completedAt,
+                existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
+                existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
+                existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.errorCode(),
+                existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
+        
+        store.put(updated.id(), updated);
+        saveSteps(updated.id(), steps);
+        
+        return new CheckpointUpsertResult(updated, result.created());
     }
 
     @Override

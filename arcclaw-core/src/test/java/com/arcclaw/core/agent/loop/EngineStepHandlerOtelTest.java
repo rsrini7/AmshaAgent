@@ -38,7 +38,7 @@ public class EngineStepHandlerOtelTest {
     @Test
     void testOtelCalledExactlyOncePerStep() {
         // Arrange
-        ReasoningStep step = ReasoningStep.pending("thought", "FINISH", Map.of(), 10, 20);
+        ReasoningStep step = ReasoningStep.pending("thought", "FINISH", Map.of("answer", "done"), 10, 20);
         when(engine.nextStep(any(), anyString(), anyString(), any())).thenReturn(step);
 
         // Act

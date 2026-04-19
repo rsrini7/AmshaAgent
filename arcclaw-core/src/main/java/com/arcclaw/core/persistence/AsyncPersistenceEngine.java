@@ -6,20 +6,21 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
-import org.jboss.logging.Logger;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 
 /**
  * Asynchronous persistence engine using background Virtual Threads to drain
@@ -241,11 +242,18 @@ public class AsyncPersistenceEngine {
                 if (event.getFuture() != null) event.getFuture().complete(null);
                 break;
             } catch (IllegalStateException e) {
-                if (e.getMessage() != null && e.getMessage().contains("HMAC key unavailable") && hmacRetry++ < 3) {
-                    log.warnf("Audit HMAC key unavailable, retry %d/3", hmacRetry);
+                boolean isHmacFailure = e.getMessage() != null && e.getMessage().contains("HMAC key unavailable");
+                if (isHmacFailure && hmacRetry++ < 3) {
+                    log.warnf("Audit HMAC key not yet available, retry %d/3 in 100ms", hmacRetry);
                     sleepQuietly(100);
                     continue;
                 }
+                
+                // RESTORED: Increment failure counter on HMAC exhaustion
+                if (isHmacFailure) {
+                    registry.counter("arcclaw.audit.drain.hmac_failure").increment();
+                }
+
                 ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
                 if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
                 throw cve;
