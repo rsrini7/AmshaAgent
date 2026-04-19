@@ -1,14 +1,14 @@
 package com.arcclaw.core.routing;
 
-import java.time.Duration;
-
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.time.Duration;
+
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
+import io.quarkiverse.langchain4j.ai.runtime.gemini.AiGeminiChatLanguageModel;
 
 /**
- * {@link RoutingChatModelProvider} for Google Gemini AI using its native SDK.
+ * {@link RoutingChatModelProvider} for Google Gemini AI using the Quarkiverse implementation.
  */
 @ApplicationScoped
 public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
@@ -25,17 +25,16 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
                     "Gemini provider requires an API key (ARCCLAW_LLM_API_KEY)"));
         
         // Hardening: Strip quotes and whitespace
-        key = key.replaceAll("^\"|\"$", "").replaceAll("^'|'$", "").trim();
+        key = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
 
-        return GoogleAiGeminiChatModel.builder()
-            .apiKey(key)
-            .modelName(config.modelName())
-            .maxOutputTokens(config.maxTokens().orElse(null))
-            .timeout(config.timeout().orElse(Duration.ofSeconds(30)))
-            .maxRetries(config.maxRetries().orElse(3))
+        return AiGeminiChatLanguageModel.builder()
+            .key(key)
+            .modelId(config.modelName())
             .temperature(0.0)
+            .timeout(config.timeout().orElse(Duration.ofSeconds(30)))
             .logRequests(false)
             .logResponses(false)
             .build();
     }
+
 }

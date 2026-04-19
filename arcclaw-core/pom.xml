@@ -152,17 +152,6 @@
       </exclusions>
     </dependency>
 
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-google-ai-gemini</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>dev.langchain4j</groupId>
-          <artifactId>langchain4j-http-client-jdk</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-
     <!-- BouncyCastle — Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
     <dependency>
       <groupId>org.bouncycastle</groupId>
