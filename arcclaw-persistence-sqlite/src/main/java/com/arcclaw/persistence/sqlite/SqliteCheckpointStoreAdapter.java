@@ -9,7 +9,10 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -23,18 +26,14 @@ import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.quarkus.arc.Unremovable;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
+import org.jboss.logging.Logger;
 
 /**
  * SQLite implementation of CheckpointStorePort.
  * §1.2: All JPQL moved from core to here.
  * §5.8: Implements single-writer safe transaction patterns using REQUIRES_NEW
- *       at the outermost write boundary.
+ *       at the outermost write boundary via self-proxy interception.
  */
 @ApplicationScoped
 @Unremovable
@@ -46,7 +45,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     EntityManager em;
 
     @Inject
-    SqliteCheckpointStoreAdapter self; // self-proxy for @Transactional interception
+    public SqliteCheckpointStoreAdapter self; // self-proxy for @Transactional interception
 
     @Inject
     SqliteRetryTemplate retryTemplate;
@@ -57,6 +56,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public CheckpointDto save(CheckpointDto checkpointDto) {
         return withRetry(() -> self.doSaveEntity(checkpointDto), "save-entity");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
+        return internalSaveEntity(checkpointDto);
     }
 
     @Override
@@ -176,30 +180,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return new CheckpointUpsertResult(savedDto, created);
     }
 
-    /**
-     * Saves or updates a checkpoint in a fresh, isolated transaction.
-     * Handles both inserts and updates; clears L1 cache before querying existing.
-     */
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
-        em.clear();
-        
-        if (checkpointDto.id() == null) {
-            AgentCheckpoint entity = CheckpointMapper.toEntity(checkpointDto);
-            em.persist(entity);
-            return CheckpointMapper.toDto(entity);
-        } else {
-            AgentCheckpoint managed = em.find(AgentCheckpoint.class, checkpointDto.id());
-            if (managed == null) {
-                AgentCheckpoint newEntity = CheckpointMapper.toEntity(checkpointDto);
-                em.persist(newEntity);
-                return CheckpointMapper.toDto(newEntity);
-            }
-            updateEntityFromDto(managed, checkpointDto);
-            return CheckpointMapper.toDto(managed);
-        }
-    }
-
     @Override
     public CheckpointDto saveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
         return withRetry(() -> self.doSaveCheckpointWithSteps(checkpointDto, steps), "save-checkpoint-steps");
@@ -207,13 +187,13 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointDto doSaveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
-        // Direct calls bypass CDI proxy annotations, participating in THIS transaction.
         CheckpointDto saved = internalSaveEntity(checkpointDto);
         internalSaveSteps(saved.id(), steps);
         return saved;
     }
 
     private CheckpointDto internalSaveEntity(CheckpointDto checkpointDto) {
+        em.clear();
         if (checkpointDto.id() == null) {
             AgentCheckpoint entity = CheckpointMapper.toEntity(checkpointDto);
             em.persist(entity);
@@ -711,7 +691,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<CheckpointDto> doRecoverInProgressZombies(Instant inProgressCutoff, String failReason) {
         List<CheckpointDto> zombies = findInProgressZombies(inProgressCutoff);
-        zombies.forEach(c -> doMarkFailed(c.id(), failReason, "ZOMBIE", null, null));
+        zombies.forEach(c -> self.doMarkFailed(c.id(), failReason, "ZOMBIE", null, null));
         return zombies;
     }
 
@@ -758,12 +738,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     /**
      * Retry wrapper that delegates to retryTemplate with SQLite BUSY handling.
-     * 
-     * Encapsulates the SqliteRetryTemplate inside the adapter; callers see
-     * only the CheckpointStorePort interface, not retry semantics.
-     * 
-     * Architecture rule (§5.14.1): Retry-on-BUSY is a SQLite-specific concern
-     * that MUST NOT leak to core domain code via a PersistenceRetryPort interface.
      */
     private <T> T withRetry(Callable<T> task, String operation) {
         try {

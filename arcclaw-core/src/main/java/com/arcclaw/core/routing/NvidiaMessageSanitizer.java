@@ -10,7 +10,10 @@ import java.util.regex.Pattern;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ChatMessageType;
+import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -72,16 +75,16 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         List<ChatMessage> result = new ArrayList<>();
         Map<String, String> idMap = new HashMap<>();
-        dev.langchain4j.data.message.ChatMessageType lastType = null;
+        ChatMessageType lastType = null;
 
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
             
             // 🟢 PROTOCOL FIX: NVIDIA NIM allows 'system' only at the start or in specific sequences.
             // Mid-stream system hints (corrections) must be converted to user messages if they follow a tool result.
-            if (msg instanceof dev.langchain4j.data.message.SystemMessage sm && lastType == dev.langchain4j.data.message.ChatMessageType.TOOL_EXECUTION_RESULT) {
+            if (msg instanceof SystemMessage sm && lastType == ChatMessageType.TOOL_EXECUTION_RESULT) {
                 log.debug("NvidiaMessageSanitizer: converting mid-stream system hint to user message for protocol compliance");
-                msg = dev.langchain4j.data.message.UserMessage.from("System Hint: " + sm.text());
+                msg = UserMessage.from("System Hint: " + sm.text());
             }
 
             if (msg instanceof AiMessage ai) {
