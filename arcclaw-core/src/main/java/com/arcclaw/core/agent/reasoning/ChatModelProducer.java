@@ -70,8 +70,8 @@ public class ChatModelProducer {
 
     private void logConfig(String resolvedFbProvider, String displayModel) {
         if (loggedConfig.compareAndSet(false, true)) {
-            log.debugf("ChatModelProducer: primary=%s fallback=%s model=%s", 
-                provider, resolvedFbProvider.isEmpty() ? "none" : resolvedFbProvider, displayModel);
+            log.debugf("ChatModelProducer: primary=%s model=%s fallback=%s model=%s", 
+                provider, modelName, resolvedFbProvider.isEmpty() ? "none" : resolvedFbProvider, displayModel);
             
             if (log.isTraceEnabled()) {
                 log.trace("--- LLM Configuration Context ---");

@@ -83,7 +83,8 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
             .temperature(temperature)
             .maxOutputTokens(maxOutputTokens)
             .timeout(timeout)
-            .includeThoughts(true)
+            .includeThoughts(false)
+            .thinkingBudget(0L)
             .logRequests(logRequests)
             .logResponses(logResponses)
             .build();
