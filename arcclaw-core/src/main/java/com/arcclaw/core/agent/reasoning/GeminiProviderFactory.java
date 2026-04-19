@@ -5,34 +5,31 @@ import java.time.Duration;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * {@link AgentChatModelProvider} for Google Gemini AI using its OpenAI-compatible endpoint.
+ * {@link AgentChatModelProvider} for Google Gemini AI using its native SDK.
  */
 @ApplicationScoped
 public class GeminiProviderFactory implements AgentChatModelProvider {
 
-
-    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url", 
-                    defaultValue = "https://generativelanguage.googleapis.com/v1beta/openai/")
-    String baseUrl;
-
-    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
+    @ConfigProperty(name = "arcclaw.llm.gemini.api-key")
     String apiKey;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.model-name", defaultValue = "gemini-flash-latest")
+    @ConfigProperty(name = "arcclaw.llm.gemini.model-name",
+                    defaultValue = "gemini-flash-latest")
     String modelName;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.max-tokens",
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
                 defaultValue = "8192")
-    int maxTokens;
+    int maxOutputTokens;
 
     @ConfigProperty(name = "arcclaw.llm.temperature", defaultValue = "0.1")
     double temperature;
 
-    @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT60S")
+    @ConfigProperty(name = "arcclaw.llm.timeout",
+                    defaultValue = "PT60S")
     Duration timeout;
 
     @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
@@ -48,17 +45,11 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
-
-        String effectiveBaseUrl = baseUrl;
-        if (effectiveBaseUrl != null && !effectiveBaseUrl.endsWith("/")) {
-            effectiveBaseUrl += "/";
-        }
-
-        return OpenAiChatModel.builder()
-            .baseUrl(effectiveBaseUrl)
+        return GoogleAiGeminiChatModel.builder()
             .apiKey(apiKey)
             .modelName(modelName)
             .timeout(timeout)
+            .maxOutputTokens(maxOutputTokens)
             .maxRetries(maxRetries)
             .temperature(temperature)
             .logRequests(logHttp)

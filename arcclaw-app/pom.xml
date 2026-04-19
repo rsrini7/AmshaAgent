@@ -150,6 +150,17 @@
       </exclusions>
     </dependency>
 
+    <dependency>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-ai-gemini</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>dev.langchain4j</groupId>
+          <artifactId>langchain4j-http-client-jdk</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- Explicit Jackson dependency for LangChain4J guardrails -->
     <dependency>
       <groupId>io.quarkus</groupId>

@@ -303,6 +303,7 @@ arcclaw:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
     max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
+    max-output-tokens: ${ARCCLAW_LLM_MAX_OUTPUT_TOKENS:8192}
     timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
     temperature: ${ARCCLAW_LLM_TEMPERATURE:0.1}
     fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL}
@@ -311,6 +312,9 @@ arcclaw:
     fallback-api-key: ${ARCCLAW_LLM_FALLBACK_API_KEY}
     fallback-ollama-base-url: ${ARCCLAW_LLM_FALLBACK_OLLAMA_BASE_URL:http://localhost:11434}
     fallback-ollama-model: ${ARCCLAW_LLM_FALLBACK_OLLAMA_MODEL:llama3.2}
+    gemini:
+      api-key: ${ARCCLAW_LLM_API_KEY}
+      model-name: ${ARCCLAW_LLM_MODEL_NAME:gemini-flash-latest}
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
