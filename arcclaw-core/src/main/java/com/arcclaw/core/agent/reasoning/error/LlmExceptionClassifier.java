@@ -21,7 +21,8 @@ public class LlmExceptionClassifier {
                     return new LlmToolCallException(msg, throwable);
                 }
                 
-                if (msg != null && (msg.contains("model_not_found") || msg.contains("does not exist") || msg.contains("invalid_api_key"))) {
+                if (msg != null && (msg.contains("model_not_found") || msg.contains("does not exist") 
+                        || msg.contains("invalid_api_key") || msg.contains("API_KEY_INVALID"))) {
                     return new LlmAuthenticationException(msg, throwable);
                 }
 

@@ -60,15 +60,22 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
                     "Set ARCCLAW_LLM_API_KEY in your .env or arcclaw.llm.gemini.api-key in config.");
         }
 
-        // Hardening: Strip quotes and whitespace that might be leaked from .env parsing
-        key = key.replaceAll("^\"|\"$", "").replaceAll("^'|'$", "").trim();
+        // Hardening: Remove ALL non-printable characters, quotes, and whitespace
+        key = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
 
         if (logHttp) {
             String masked = key.length() > 8 
                 ? key.substring(0, 4) + "..." + key.substring(key.length() - 4)
                 : "****";
-            log.infof("[GeminiProviderFactory] Initializing model %s with key: %s (length: %d)", 
-                modelName, masked, key.length());
+            
+            // Log first 2 bytes in hex to detect encoding issues/invisible prefix
+            String hexPrefix = "";
+            if (key.length() > 2) {
+                hexPrefix = String.format(" (Hex Prefix: %02x %02x)", (int)key.charAt(0), (int)key.charAt(1));
+            }
+
+            log.infof("[GeminiProviderFactory] Initializing model %s with key: %s (length: %d)%s", 
+                modelName, masked, key.length(), hexPrefix);
         }
 
         return GoogleAiGeminiChatModel.builder()
