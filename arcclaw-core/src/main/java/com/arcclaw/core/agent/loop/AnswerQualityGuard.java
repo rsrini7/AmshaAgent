@@ -95,6 +95,16 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      */
     static final int MIN_ANSWER_ALPHA_LENGTH = 3;
 
+    /**
+     * Minimum length for a descriptive answer to bypass JSON leak detection
+     * (e.g. when describing tool schemas for 'capabilities ?' query).
+     */
+    static final int DESCRIPTIVE_BYPASS_MIN_LENGTH = 500;
+
+    /** Keywords that indicate a descriptive intent rather than a technical leak. */
+    static final Pattern DESC_KEYWORD_PATTERN =
+            Pattern.compile("(?i)capabilities|available tools|agent roles|schema");
+
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
@@ -108,6 +118,13 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      */
     public boolean isRawToolCallLeak(String answer) {
         if (answer == null || answer.isBlank()) return false;
+
+        // Heuristic: If the answer is long and contains descriptive keywords,
+        // it is likely a valid explanation of capabilities rather than a leak.
+        if (answer.length() > DESCRIPTIVE_BYPASS_MIN_LENGTH && DESC_KEYWORD_PATTERN.matcher(answer).find()) {
+            return false;
+        }
+
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
                 || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
                 || RAW_TOOL_JSON_PATTERN.matcher(answer).find()

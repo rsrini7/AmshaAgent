@@ -217,6 +217,20 @@ public class IntentDetectorServiceTest {
     }
 
     @Test
+    void testCapabilitiesQueryFastPath() {
+        // "capabilities ?" should trigger fast-path to coordinator
+        String role = service.classify("capabilities ?");
+        Assertions.assertEquals("coordinator", role);
+        
+        // "what can you do" should trigger fast-path to coordinator
+        role = service.classify("what can you do");
+        Assertions.assertEquals("coordinator", role);
+
+        // Verify LLM wasn't called (it's a fast-path)
+        Mockito.verify(classifierModel, Mockito.never()).chat(anyString());
+    }
+
+    @Test
     @DisplayName("Verify sanitize resolves all roles by deity name from displayName (B3 Hardening)")
     void testSanitizeResolvesAllRolesByDeityName() {
         for (AgentRoleEnum role : AgentRoleEnum.values()) {

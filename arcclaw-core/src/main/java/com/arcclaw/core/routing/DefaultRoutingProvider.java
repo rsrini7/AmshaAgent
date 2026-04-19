@@ -1,6 +1,5 @@
 package com.arcclaw.core.routing;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -11,12 +10,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class DefaultRoutingProvider implements IntentRoutingProvider {
     @Override
     public List<Pattern> fastPathTriggers() {
-        return Collections.emptyList();
+        return List.of(
+            Pattern.compile("(?i)^\\s*(capabilities\\s*\\??|what\\s+can\\s+you\\s+do\\s*\\??|who\\s+are\\s+you\\s*\\??)\\s*$")
+        );
     }
 
     @Override
     public List<String> promptDirectives() {
         return List.of(
+            "If the user asks about system capabilities, what you can do, or who you are — route to 'coordinator'.",
             "(UNLESS SCHEDULING) If the user mentions GitHub, gists, or repositories to LIST, FETCH, or VIEW existing content -> researcher.",
             "(UNLESS SCHEDULING) If the user mentions GitHub, gists, or repositories to CREATE, BUILD, or GENERATE new content -> coder.",
             "Only output 'debugger' if the user provides actual error text, stack traces, or explicitly says \"fix\", \"broken\", \"not working\" with technical detail. Negative words like \"no\", \"none\", or \"missing\" alone are NOT debugging signals.",
@@ -27,7 +29,7 @@ public class DefaultRoutingProvider implements IntentRoutingProvider {
 
     @Override
     public Optional<String> fastPathRole() {
-        return Optional.empty();
+        return Optional.of("coordinator");
     }
 
     @Override
