@@ -53,6 +53,9 @@ quarkus:
 arcclaw:
   llm:
     provider: mock
+    gemini:
+      api-key: "dummy-gemini-key"
+      model-name: "gemini-1.5-flash"
   channel:
     telegram:
       bot-token: "mock"
