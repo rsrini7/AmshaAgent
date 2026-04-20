@@ -2,6 +2,7 @@ package com.arcclaw.app.config;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
+import jakarta.enterprise.inject.Typed;
 import jakarta.inject.Named;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -16,6 +17,7 @@ public class ToolExecutorProducer {
     @Produces
     @ApplicationScoped
     @Named("internal-tool-executor")
+    @Typed(ManagedExecutor.class)
     public ManagedExecutor internalToolExecutor() {
         return ManagedExecutor.builder()
                 .maxAsync(20)
@@ -25,9 +27,11 @@ public class ToolExecutorProducer {
     @Produces
     @ApplicationScoped
     @Named("external-tool-executor")
+    @Typed(ManagedExecutor.class)
     public ManagedExecutor externalToolExecutor() {
         return ManagedExecutor.builder()
                 .maxAsync(10)
                 .build();
     }
 }
+

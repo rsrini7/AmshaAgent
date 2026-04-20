@@ -1,15 +1,30 @@
 package com.arcclaw.mcp.transport;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.stream.Stream;
+
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.util.AnnotationLiteral;
 
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.eclipse.microprofile.context.ManagedExecutor;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 class McpClientServiceTest {
@@ -23,12 +38,20 @@ class McpClientServiceTest {
     private DynamicToolCapabilityRegistry registry;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         service          = new McpClientService();
         registry         = new DynamicToolCapabilityRegistry();
         service.registry = registry;
         service.objectMapper = new ObjectMapper();
-        service.executor = ManagedExecutor.builder().build();
+        
+        service.managedExecutors = mock(Instance.class);
+        ManagedExecutor mockExec = ManagedExecutor.builder().build();
+        when(service.managedExecutors.select(any(Class.class))).thenReturn(service.managedExecutors);
+        when(service.managedExecutors.select(any(AnnotationLiteral.class))).thenReturn(service.managedExecutors);
+        when(service.managedExecutors.get()).thenReturn(mockExec);
+        when(service.managedExecutors.stream()).thenReturn(Stream.of(mockExec));
+
         service.init();
     }
 

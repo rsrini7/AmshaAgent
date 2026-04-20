@@ -10,6 +10,10 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
+
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.util.AnnotationLiteral;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -23,10 +27,18 @@ public class McpStdioReconnectTest {
     private ObjectMapper mapper = new ObjectMapper();
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setup() {
         service = new McpClientService();
         service.objectMapper = mapper;
-        service.executor = mock(ManagedExecutor.class);
+        
+        service.managedExecutors = mock(Instance.class);
+        ManagedExecutor mockExec = mock(ManagedExecutor.class);
+        when(service.managedExecutors.select(any(Class.class))).thenReturn(service.managedExecutors);
+        when(service.managedExecutors.select(any(AnnotationLiteral.class))).thenReturn(service.managedExecutors);
+        when(service.managedExecutors.get()).thenReturn(mockExec);
+        when(service.managedExecutors.stream()).thenReturn(Stream.of(mockExec));
+
         service.init();
     }
 
