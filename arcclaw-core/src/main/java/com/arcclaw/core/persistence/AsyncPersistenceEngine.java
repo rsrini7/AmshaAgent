@@ -18,7 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
-import jakarta.annotation.PostConstruct;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -61,13 +61,7 @@ public class AsyncPersistenceEngine {
     private Thread criticalDrainThread;
     private Thread telemetryDrainThread;
 
-    @PostConstruct
-    void startDrainThreads() {
-        if (Arc.container() == null || !Arc.container().isRunning()) {
-            log.warn("CDI container not ready — delaying drain thread start");
-            return;
-        }
-
+    void startDrainThreads(@Observes StartupEvent ev) {
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
 
         criticalDrainThread = Thread.ofVirtual()
@@ -152,7 +146,13 @@ public class AsyncPersistenceEngine {
      * <strong>For use in tests only.</strong>
      */
     public void waitForIdle() {
+        if (criticalDrainThread == null || !criticalDrainThread.isAlive()
+                || telemetryDrainThread == null || !telemetryDrainThread.isAlive()) {
+            return;
+        }
+
         sleepQuietly(10);
+        long start = System.currentTimeMillis();
         while (running.get() && (inFlightCritical.get() > 0
                 || inFlightTelemetry.get() > 0
                 || !criticalQueue.isEmpty()
@@ -160,6 +160,10 @@ public class AsyncPersistenceEngine {
                 || processingCritical.get()
                 || processingTelemetry.get())) {
             sleepQuietly(10);
+            if (System.currentTimeMillis() - start > 10000) {
+                log.warn("waitForIdle timed out after 10s — possible deadlock or hung drain thread");
+                break;
+            }
         }
     }
 
