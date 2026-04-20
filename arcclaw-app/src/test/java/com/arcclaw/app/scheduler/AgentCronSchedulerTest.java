@@ -21,6 +21,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
+import com.arcclaw.persistence.api.AdvisoryLockPort;
+
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -41,6 +43,9 @@ class AgentCronSchedulerTest {
 
     @InjectMock
     AgentCronRepository cronRepository;
+
+    @InjectMock
+    AdvisoryLockPort advisoryLockPort;
 
     @InjectMock
     CronJobRunner jobRunner;
@@ -66,7 +71,9 @@ class AgentCronSchedulerTest {
 
     @BeforeEach
     void setup() {
-        reset(cronRepository, jobRunner, vThreadsMock);
+        reset(cronRepository, jobRunner, vThreadsMock, advisoryLockPort);
+
+        when(advisoryLockPort.tryLock(ArgumentMatchers.anyString(), ArgumentMatchers.anyInt())).thenReturn(true);
 
         // Force synchronous execution for deterministic tests
         doAnswer(invocation -> {

@@ -22,6 +22,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
+import com.arcclaw.persistence.api.AdvisoryLockPort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
@@ -51,6 +52,9 @@ class AgentCronSchedulerConcurrencyTest {
     AgentCronRepository cronRepository;
 
     @InjectMock
+    AdvisoryLockPort advisoryLockPort;
+
+    @InjectMock
     CronJobRunner jobRunner;
 
     private AgentCronEntity createDueJob(boolean runOnce) {
@@ -70,7 +74,9 @@ class AgentCronSchedulerConcurrencyTest {
 
     @BeforeEach
     void setup() {
-        reset(cronRepository, jobRunner);
+        reset(cronRepository, jobRunner, advisoryLockPort);
+        
+        when(advisoryLockPort.tryLock(anyString(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(true);
 
         // Ensure exactly 2 permits are available via delegated method call
         scheduler.resetConcurrencyLimit(2);
