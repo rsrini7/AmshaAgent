@@ -3,20 +3,23 @@ package com.arcclaw.app.config;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.Typed;
-import jakarta.inject.Named;
 
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
  * Produces dedicated ManagedExecutor pools for tool execution (§T5-2).
  * Separates internal tools from slow external tools to prevent starvation.
+ * <p>
+ * Uses @Identifier instead of @Named to avoid implicit @Default qualifier
+ * which causes ambiguous dependency errors in core modules (§P84 fix).
  */
 @ApplicationScoped
 public class ToolExecutorProducer {
 
     @Produces
     @ApplicationScoped
-    @Named("internal-tool-executor")
+    @Identifier("internal-tool-executor")
     @Typed(ManagedExecutor.class)
     public ManagedExecutor internalToolExecutor() {
         return ManagedExecutor.builder()
@@ -26,7 +29,7 @@ public class ToolExecutorProducer {
 
     @Produces
     @ApplicationScoped
-    @Named("external-tool-executor")
+    @Identifier("external-tool-executor")
     @Typed(ManagedExecutor.class)
     public ManagedExecutor externalToolExecutor() {
         return ManagedExecutor.builder()
@@ -34,4 +37,3 @@ public class ToolExecutorProducer {
                 .build();
     }
 }
-
