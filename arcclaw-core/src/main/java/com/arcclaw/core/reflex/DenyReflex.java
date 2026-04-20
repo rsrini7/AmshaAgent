@@ -279,7 +279,7 @@ public class DenyReflex implements AgentReflex {
         // checkpoint row. Consistent with the same fix applied to ApproveReflex.
         String cronRole = pendingCheckpoint.getAgentRole();
 
-        if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
+        if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) {
             log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
                       "ignoring duplicate trigger.", cronSessionId);
             return ALREADY_PROCESSING_DENIAL;

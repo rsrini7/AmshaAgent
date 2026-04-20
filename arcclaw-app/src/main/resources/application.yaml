@@ -723,6 +723,24 @@ mp:
     recovery:
       stalled-threshold-minutes: 15
 
+    # ---------------------------------------------------------------------------
+    # TIER 5 — RESILIENCE PATTERNS (§Tire5.md)
+    # ---------------------------------------------------------------------------
+    tools:
+      # Slow tools that should be isolated to the 'external-tool-executor' bulkhead (§T5-2)
+      external-tools: "playwright_navigate,playwright_click,playwright_type,playwright_press,playwright_select,playwright_scroll,playwright_screenshot,playwright_content,web_search"
+    parallel:
+      # Timeout for individual tool executions within a parallel batch (§7.16)
+      tool-timeout-seconds: 60
+    notification:
+      retry:
+        # Channel delivery retry configuration with exponential backoff (§T5-5)
+        attempts: 3
+        initial-delay-ms: 1000
+    compaction:
+      # Token-based summary bounds enforcement (§T5-8)
+      max-tokens: 1000
+
 "%staging":
   quarkus:
     langchain4j:

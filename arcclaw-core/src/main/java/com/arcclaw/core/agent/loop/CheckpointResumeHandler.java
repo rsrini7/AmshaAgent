@@ -82,7 +82,7 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) {
 
-        if (!agentStore.markBatchResuming(sessionId)) {
+        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
             log.infof("BATCH-RESUME-GUARD: session %s already resuming", sessionId);
             return;
         }
@@ -206,11 +206,6 @@ public class CheckpointResumeHandler {
         }
     }
 
-    /**
-     * Synchronous version of resumeAfterBatchDecision.
-     * Returns the AgentResult directly instead of sending it to a channel.
-     * Used by the interactive CLI to avoid async delivery drops.
-     */
     public AgentResult resumeAfterBatchDecisionSync(
             String sessionId,
             String agentRole,
@@ -218,7 +213,7 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) throws Exception {
 
-        if (!agentStore.markBatchResuming(sessionId)) {
+        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
             log.infof("BATCH-RESUME-SYNC-GUARD: session %s already resuming", sessionId);
             return null;
         }

@@ -193,6 +193,12 @@
       <artifactId>quarkus-smallrye-context-propagation</artifactId>
     </dependency>
 
+    <!-- Fault Tolerance (Circuit Breaker for LLM) -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-fault-tolerance</artifactId>
+    </dependency>
+
     <!-- Health -->
     <dependency>
       <groupId>io.quarkus</groupId>

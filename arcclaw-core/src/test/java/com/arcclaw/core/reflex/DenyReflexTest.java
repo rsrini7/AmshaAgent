@@ -77,7 +77,7 @@ class DenyReflexTest {
         instance.jobCompletedEvent = jobCompletedEventMock;
         
         // §7.29 guard: allow tests to proceed by default
-        when(statefulAgentStore.markBatchResuming(anyString()))
+        when(statefulAgentStore.markBatchResuming(anyString(), anyString()))
                 .thenReturn(true);
                 
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
@@ -195,7 +195,7 @@ class DenyReflexTest {
         when(statefulAgentStore.findLatestAwaitingApprovalForCron(anyString())).thenReturn(Optional.of(cp));
         
         // MOCK THE GUARD TO FAIL
-        when(statefulAgentStore.markBatchResuming(anyString())).thenReturn(false);
+        when(statefulAgentStore.markBatchResuming(anyString(), anyString())).thenReturn(false);
 
         MessageContext ctx = createContext("/deny cron-123");
         ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny cron-123", ctx);

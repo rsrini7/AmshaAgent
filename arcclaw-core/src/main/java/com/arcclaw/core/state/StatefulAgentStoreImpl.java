@@ -144,16 +144,31 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     // ── Resume guard (§3.4 / §7.29 — all delegated, public API stays here) ───
 
     /**
-     * §3.4 / §7.29: Atomically marks the session as RESUMING.
-     * Delegates to {@link ResumeCoordinationGuard} — implementation detail hidden.
+     * §3.4 / §7.29 / §T5-4: Atomically marks the session as RESUMING.
+     * Delegates to {@link CheckpointStorePort#claimForResume} for distributed safety.
+     * Also maintains an in-memory mark in {@link ResumeCoordinationGuard} for
+     * instance-local backpressure.
      */
+    @Override
+    public boolean markBatchResuming(String sessionId, String agentRole) {
+        // 1. Instance-local check (fast path)
+        if (resumeGuard.isResuming(sessionId)) {
+            return false;
+        }
+
+        // 2. Distributed DB-backed lock (§T5-4)
+        // Transition AWAITING_APPROVAL -> RESUMING in SQLite
+        boolean claimed = storeAdapter.claimForResume(sessionId, agentRole);
+        if (claimed) {
+            resumeGuard.markResuming(sessionId);
+        }
+        return claimed;
+    }
+
     @Override
     public boolean claimForRetry(Long id) {
         return storeAdapter.claimForRetry(id);
     }
-
-    @Override
-    public boolean markBatchResuming(String sessionId) { return resumeGuard.markResuming(sessionId); }
 
     /**
      * §7.29: Returns true if the session is currently RESUMING (JVM-local).

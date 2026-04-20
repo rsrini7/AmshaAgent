@@ -20,6 +20,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ReasoningStepEntity;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
@@ -284,6 +285,46 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity.setStatus(CheckpointStatus.valueOf(newStatus));
             entity.setUpdatedAt(Instant.now());
         }
+    }
+
+    @Override
+    public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
+        return withRetry(() -> self.doAtomicTransition(id, expectedStatus, newStatus), "atomic-transition");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doAtomicTransition(Long id, String expectedStatus, String newStatus) {
+        int updated = em.createNativeQuery(
+                "UPDATE agentcheckpoint SET status = :new, updatedAt = :now " +
+                "WHERE id = :id AND status = :expected"
+        ).setParameter("new", newStatus)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
+         .setParameter("id", id)
+         .setParameter("expected", expectedStatus)
+         .executeUpdate();
+        return updated == 1;
+    }
+
+    @Override
+    public boolean claimForResume(String sessionId, String agentRole) {
+        return withRetry(() -> self.doClaimForResume(sessionId, agentRole), "claim-for-resume");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doClaimForResume(String sessionId, String agentRole) {
+        // Atomic transition of the latest checkpoint to RESUMING
+        // We need to find the latest ID first in a subquery or native SQL
+        int updated = em.createNativeQuery(
+                "UPDATE agentcheckpoint SET status = 'RESUMING', updatedAt = :now " +
+                "WHERE id = (SELECT id FROM agentcheckpoint " +
+                "            WHERE sessionId = :sid AND agentRole = :role " +
+                "            ORDER BY id DESC LIMIT 1) " +
+                "  AND status = 'AWAITING_APPROVAL'"
+        ).setParameter("sid", sessionId)
+         .setParameter("role", agentRole)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
+         .executeUpdate();
+        return updated == 1;
     }
 
     @Override

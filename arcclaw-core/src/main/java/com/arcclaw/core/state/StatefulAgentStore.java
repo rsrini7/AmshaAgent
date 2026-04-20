@@ -163,9 +163,9 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * Atomically marks the session as RESUMING.
      * @return true if this caller is the first to mark it (safe to resume)
      *         false if another thread already marked it (skip — already resuming)
-     * §7.29
+     * §7.29, §T5-4
      */
-    boolean markBatchResuming(String sessionId);
+    boolean markBatchResuming(String sessionId, String agentRole);
 
     /**
      * Atomically claims a checkpoint for retry by transitioning its status

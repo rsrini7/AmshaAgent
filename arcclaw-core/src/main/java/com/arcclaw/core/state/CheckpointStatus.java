@@ -87,6 +87,15 @@ public enum CheckpointStatus {
      */
     AWAITING_RETRY,
 
+    /**
+     * Agent loop is in the process of resuming from an {@link #AWAITING_APPROVAL}
+     * state. This status acts as a distributed double-resume lock (§T5-4).
+     * <p>
+     * Once the resume logic successfully enters the agent loop, it transitions
+     * to {@link #IN_PROGRESS}.
+     */
+    RESUMING,
+
      /**
       * Terminal status set by AgentLoop when a fresh turn starts over an existing
       * COMPLETED/FAILED/COMPROMISED checkpoint. Archived rows are excluded from
@@ -105,9 +114,13 @@ public enum CheckpointStatus {
     /**
      * Set of statuses that represent an end-of-life state for a checkpoint.
      * No further transitions are permitted once these are reached.
+     * <p>
+     * NOTE: RESUMING is included here not because it is end-of-life, but because
+     * it acts as a distributed lock that MUST NOT be overwritten by bulk
+     * cleanup or termination sweeps (§5.18).
      */
     private static final Set<CheckpointStatus> TERMINAL_STATES = EnumSet.of(
-        COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED
+        COMPLETED, FAILED, LOOP_EXCEEDED, DENIED, COMPROMISED, ARCHIVED, ORPHANED, RESUMING
     );
 
     /**

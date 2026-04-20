@@ -277,6 +277,26 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
+    public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
+        CheckpointDto existing = store.get(id);
+        if (existing != null && existing.status().equals(expectedStatus)) {
+            transitionStatus(id, newStatus);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean claimForResume(String sessionId, String agentRole) {
+        Optional<CheckpointDto> latest = findLatestAwaitingApproval(sessionId);
+        if (latest.isPresent() && latest.get().agentRole().equals(agentRole)) {
+            transitionStatus(latest.get().id(), "RESUMING");
+            return true;
+        }
+        return false;
+    }
+
+    @Override
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
         return true;
     }
