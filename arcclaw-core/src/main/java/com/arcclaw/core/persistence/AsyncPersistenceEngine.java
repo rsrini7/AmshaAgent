@@ -5,21 +5,23 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
-import org.jboss.logging.Logger;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 
 /**
  * Asynchronous persistence engine using background Virtual Threads to drain
@@ -53,6 +55,8 @@ public class AsyncPersistenceEngine {
     private final AtomicBoolean running          = new AtomicBoolean(true);
     private final AtomicBoolean processingCritical  = new AtomicBoolean(false);
     private final AtomicBoolean processingTelemetry = new AtomicBoolean(false);
+    private final AtomicInteger inFlightCritical  = new AtomicInteger(0);
+    private final AtomicInteger inFlightTelemetry = new AtomicInteger(0);
 
     private Thread criticalDrainThread;
     private Thread telemetryDrainThread;
@@ -119,6 +123,8 @@ public class AsyncPersistenceEngine {
             return;
         }
 
+        inFlightCritical.incrementAndGet();
+
         try {
             event.getFuture().join();
         } catch (CompletionException ce) {
@@ -136,6 +142,8 @@ public class AsyncPersistenceEngine {
         if (!telemetryQueue.offer(event)) {
             log.debug("Telemetry audit queue at capacity — dropping event (acceptable)");
             registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").increment();
+        } else {
+            inFlightTelemetry.incrementAndGet();
         }
     }
 
@@ -145,10 +153,12 @@ public class AsyncPersistenceEngine {
      */
     public void waitForIdle() {
         sleepQuietly(10);
-        while (!criticalQueue.isEmpty()
+        while (running.get() && (inFlightCritical.get() > 0
+                || inFlightTelemetry.get() > 0
+                || !criticalQueue.isEmpty()
                 || !telemetryQueue.isEmpty()
                 || processingCritical.get()
-                || processingTelemetry.get()) {
+                || processingTelemetry.get())) {
             sleepQuietly(10);
         }
     }
@@ -173,8 +183,8 @@ public class AsyncPersistenceEngine {
                 event = criticalQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (event == null) continue;
 
-                processingCritical.set(true);
                 try {
+                    processingCritical.set(true);
                     processEvent(event);
                 } catch (ComplianceViolationException e) {
                     if (event.getFuture() != null && !event.getFuture().isDone()) {
@@ -182,6 +192,7 @@ public class AsyncPersistenceEngine {
                     }
                 } finally {
                     processingCritical.set(false);
+                    inFlightCritical.decrementAndGet();
                 }
 
             } catch (InterruptedException ie) {
@@ -205,11 +216,12 @@ public class AsyncPersistenceEngine {
                 event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (event == null) continue;
 
-                processingTelemetry.set(true);
                 try {
+                    processingTelemetry.set(true);
                     processEvent(event);
                 } finally {
                     processingTelemetry.set(false);
+                    inFlightTelemetry.decrementAndGet();
                 }
 
             } catch (InterruptedException ie) {
