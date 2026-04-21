@@ -240,7 +240,7 @@ public class AppBootstrap {
                 case "openrouter" -> "openai/gpt-oss-20b:free";
                 case "nvidia"     -> "mistralai/devstral-2-123b-instruct-2512";
                 case "gemini"     -> "gemini-2.5-flash-lite";
-                case "cerebras"   -> "llama3.1-8b";
+                case "cerebras"   -> "qwen-3-235b-a22b-instruct-2507";
                 default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
             };
             System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
@@ -249,7 +249,7 @@ public class AppBootstrap {
                 case "openrouter" -> "google/gemma-3-27b-it:free";
                 case "nvidia"     -> "mistralai/mistral-7b-instruct-v0.3";
                 case "gemini"     -> "gemini-2.5-flash-lite";
-                case "cerebras"   -> "llama3.1-8b";
+                case "cerebras"   -> "qwen-3-235b-a22b-instruct-2507";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_COMPACTION_MODEL", compactionModel);
@@ -258,7 +258,7 @@ public class AppBootstrap {
                 case "openrouter" -> "openai/gpt-oss-20b:free";
                 case "nvidia"     -> "mistralai/mistral-7b-instruct-v0.3";
                 case "gemini"     -> "gemini-2.5-flash-lite";
-                case "cerebras"   -> "llama3.1-8b";
+                case "cerebras"   -> "qwen-3-235b-a22b-instruct-2507";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", intentModel);
@@ -783,7 +783,7 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openai/gpt-oss-20b:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "mistralai/devstral-2-123b-instruct-2512", "meta-llama/llama-4-scout-17b-16e-instruct");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "llama3.1-8b", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "qwen-3-235b-a22b-instruct-2507", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
@@ -796,7 +796,7 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
         } else if ("cerebras".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "llama3.1-8b");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "qwen-3-235b-a22b-instruct-2507");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
@@ -814,7 +814,7 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct-v0.3", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama3.1-8b", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "qwen-3-235b-a22b-instruct-2507", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://integrate.api.nvidia.com/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
@@ -828,7 +828,7 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
         } else if ("cerebras".equalsIgnoreCase(compactionProvider)) {
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "llama3.1-8b");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "qwen-3-235b-a22b-instruct-2507");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
@@ -846,7 +846,7 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct-v0.3", "llama-3.1-8b-instant");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama3.1-8b", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "qwen-3-235b-a22b-instruct-2507", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://integrate.api.nvidia.com/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
@@ -860,7 +860,7 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
         } else if ("cerebras".equalsIgnoreCase(intentProvider)) {
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "llama3.1-8b");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "qwen-3-235b-a22b-instruct-2507");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
