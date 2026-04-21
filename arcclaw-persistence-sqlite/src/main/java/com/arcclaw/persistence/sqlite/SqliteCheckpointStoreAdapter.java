@@ -100,9 +100,9 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity = existing.get(0);
         }
 
-        // §Retry-Fix: Only set status to IN_PROGRESS if not currently AWAITING_APPROVAL.
-        // This prevents intermediate saves from overwriting a HITL pause.
-        if (entity.getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+        // §Retry-Fix: Only set status to IN_PROGRESS if not currently AWAITING_APPROVAL or RESUMING.
+        // This prevents intermediate saves from overwriting a HITL pause or resume.
+        if (entity.getStatus() != CheckpointStatus.AWAITING_APPROVAL && entity.getStatus() != CheckpointStatus.RESUMING) {
             entity.setStatus(CheckpointStatus.IN_PROGRESS);
         }
         
