@@ -57,6 +57,9 @@ public class CronResultHandler {
     public void handleSuccess(AgentCronEntity job, String cronSessionId, String executionId, AgentResult result) {
         if (result instanceof AgentResult.AwaitingApproval a) {
             handleApprovalPause(job, cronSessionId, executionId, a);
+        } else if (result instanceof AgentResult.AwaitingRetry) {
+            log.infof("CronResultHandler: Session kept alive for cron=%s AWAITING_RETRY (rate limit).", cronSessionId);
+            // No-op termination — let the RateLimitRetryScheduler pick it up
         } else {
             handleNormalCompletion(job, cronSessionId, executionId, result);
         }
