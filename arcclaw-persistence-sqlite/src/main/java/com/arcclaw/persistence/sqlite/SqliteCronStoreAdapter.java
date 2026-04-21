@@ -85,6 +85,20 @@ public class SqliteCronStoreAdapter implements CronStorePort {
 
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
+    public List<AgentCronDto> findAllAwaitingApproval() {
+        em.clear();
+        return em.createQuery(
+                "SELECT c FROM AgentCronEntity c WHERE c.status = :status",
+                AgentCronEntity.class
+        ).setParameter("status", CronStatus.AWAITING_APPROVAL)
+         .getResultList()
+         .stream()
+         .map(this::toDto)
+         .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCronDto> findById(String id) {
         if (id == null || id.isBlank()) return Optional.empty();
         AgentCronEntity entity = em.find(AgentCronEntity.class, id);

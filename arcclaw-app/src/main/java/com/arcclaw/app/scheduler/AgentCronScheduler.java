@@ -30,6 +30,7 @@ import com.arcclaw.core.util.CronScheduleUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
+import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -77,6 +78,10 @@ public class AgentCronScheduler {
 
     Semaphore concurrencyLimiter;
 
+
+
+
+
     @PostConstruct
     void init() {
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
@@ -94,6 +99,42 @@ public class AgentCronScheduler {
             t.setDaemon(true);
             return t;
         });
+    }
+
+    /**
+     * One-time sweep on startup to fail any jobs that were stuck AWAITING_APPROVAL
+     * but whose sessions are now dead (as all sessions are non-persistent §5.17).
+     */
+    void onStartup(@Observes StartupEvent ev) {
+        vThreads.execute(() -> {
+            try {
+                // Wait briefly for persistence adapters to stabilize
+                Thread.sleep(5000);
+                sweepOrphanedApprovalJobs();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    private void sweepOrphanedApprovalJobs() {
+        log.info("AgentCronScheduler: starting orphan sweep for AWAITING_APPROVAL jobs...");
+        try {
+            List<AgentCronEntity> orphaned = cronRepository.findAllAwaitingApproval();
+            if (orphaned.isEmpty()) {
+                log.info("AgentCronScheduler: no orphaned approval jobs found.");
+                return;
+            }
+
+            for (AgentCronEntity job : orphaned) {
+                log.warnf("AgentCronScheduler: failing orphaned approval job id=%s goal='%s'",
+                        job.id, job.goal);
+                cronRepository.markFailed(job.id, "Orphaned — session expired before approval (server restart).");
+            }
+            log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
+        } catch (Exception e) {
+            log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
+        }
     }
 
     @PreDestroy

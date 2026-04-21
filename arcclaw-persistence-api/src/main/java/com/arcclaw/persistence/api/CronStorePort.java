@@ -12,6 +12,7 @@ public interface CronStorePort {
     List<AgentCronDto> findDueCrons();
     List<AgentCronDto> findByUserId(String userId);
     List<AgentCronDto> findAwaitingApprovalByUserId(String userId);
+    List<AgentCronDto> findAllAwaitingApproval();
     Optional<AgentCronDto> findById(String id);
 
     boolean claimForFire(String id);

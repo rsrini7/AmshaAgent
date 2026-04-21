@@ -408,6 +408,7 @@ arcclaw:
     max-concurrent: 10
     max-iterations: 3
     max-lookback-window: PT5M
+    list-retention-hours: 24
 
   channel:
     telegram:
