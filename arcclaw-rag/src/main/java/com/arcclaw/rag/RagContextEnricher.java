@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ContextEnricher;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.Fts5QueryUtil;
@@ -49,6 +50,13 @@ public class RagContextEnricher implements ContextEnricher {
     @Override
     public String enrich(String sessionId, String goal, String basePrompt) {
         if (goal == null || goal.isBlank()) return basePrompt;
+
+        // §7.45: Skip RAG for cron sessions to prevent scheduling context from
+        // leaking into background tasks (causes task refusal).
+        if (AgentSentinels.isCronGoal(goal)) {
+            log.debugf("RagContextEnricher: skipping — cron session detected (session=%s)", sessionId);
+            return basePrompt;
+        }
 
         if (isWriteIntent(goal)) {
             log.debugf("RagContextEnricher: skipping — write-intent goal (session=%s)", sessionId);
