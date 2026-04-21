@@ -75,3 +75,51 @@
 * **Done When:**
     * [x] Compaction respects `arcclaw.compaction.max-tokens` config
     * [x] Metric `arcclaw.compaction.token_ratio` exposed
+
+---
+
+### T5-9: Reasoning History Continuity (PAT2) [DONE]
+* **Problem:** Resuming a paused agent turn (HITL) often lost context, causing the agent to re-request tools or start from a blank slate.
+* **What to Do:** Transition history storage from a deprecated JSON blob (`stateJson`) to granular `ReasoningStepEntity` rows. Ensure restoration handles cross-role resumes (e.g. Coordinator resuming a Researcher checkpoint).
+* **Invariants Referenced:** §7.31, §7.46
+* **Done When:**
+    * [x] `StatefulAgentStoreImpl` prioritizes granular step loading
+    * [x] `CheckpointResumeCoordinator` resolves checkpoints by `sessionId` across all roles
+    * [x] `AgentLoop` correctly restores the original persona (role) on resume
+
+---
+
+### T5-10: Background Task Isolation (RC3) [DONE]
+* **Problem:** Cron sessions were being interfered with by irrelevant user RAG context or misinterpreted as fresh scheduling requests by weak models.
+* **What to Do:** Add a session-prefix guard in `RagContextEnricher` to skip RAG for cron tasks. Strip the internal `CRON ` goal prefix before the LLM sees it.
+* **Invariants Referenced:** §7.45
+* **Done When:**
+    * [x] RAG enrichment skipped for `cron-*` session IDs
+    * [x] `EngineStepHandler` strips `CRON ` prefix from the goal string passed to the LLM
+
+---
+
+### T5-11: Persistence Schema Integrity (RC4) [DONE]
+* **Problem:** Inconsistent naming and missing columns in SQLite caused `no such table` errors and lost execution metadata.
+* **What to Do:** Align JPA entity mapping with native SQL queries. Implement idempotent startup migrations for the `agentcron` table.
+* **Done When:**
+    * [x] `agentcheckpoint` renamed to `agent_checkpoint` with standardized snake_case columns
+    * [x] `CronSchemaEnforcer` adds missing metadata columns (`channelType`, `executionRole`, `updatedAt`)
+
+---
+
+### T5-12: Autonomous Recovery Hints (PAT3) [DONE]
+* **Problem:** Models would occasionally collapse into raw JSON output after a schema error or stall after Gemini safety filter blocks.
+* **What to Do:** Add prose detection in `EngineStepHandler` to intercept raw JSON. Classify Gemini safety blocks as `SECURITY_POLICY` failures.
+* **Done When:**
+    * [x] `looksLikeRawToolJson` guard prevents JSON-prose leaks with a structural `{` guard
+    * [x] `LlmExceptionClassifier` maps Gemini "parts is null" NPE to graceful security failures
+
+---
+
+### T5-13: Cron Lifecycle UX (M8) [DONE]
+* **Problem:** Stale cron jobs polluted the `/crons` list and orphaned approvals from previous server runs blocked new tasks.
+* **What to Do:** Add a configurable retention filter to the list command. Implement an automatic startup sweep to fail orphaned tasks.
+* **Done When:**
+    * [x] `/crons` filters terminal tasks by `arcclaw.cron.list-retention-hours` (default 24h)
+    * [x] `AgentCronScheduler` sweeps and fails orphaned `AWAITING_APPROVAL` jobs on boot
