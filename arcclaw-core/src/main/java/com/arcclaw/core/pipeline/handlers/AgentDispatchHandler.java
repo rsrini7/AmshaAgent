@@ -2,6 +2,7 @@ package com.arcclaw.core.pipeline.handlers;
 
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -40,6 +41,7 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class AgentDispatchHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AgentDispatchHandler.class);
+    private static final Pattern MARKDOWN_LINK_PATTERN = Pattern.compile("\\[([^\\]]+)]\\(([^)]+)\\)");
 
     private static final int DEFAULT_MAX_ITERATIONS = 5;
 
@@ -85,7 +87,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 : (context.getMessage() != null ? context.getMessage().text() : "");
 
         // §Retry-Fix: Restore originalGoal from latest checkpoint for continuity commands (e.g. "try again")
-        String goal = rawGoal;
+        String goal = normalizeGoal(rawGoal);
         String rawMessageText = context.getMessage() != null ? context.getMessage().text() : "";
         String restoredGoal = null;
         boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText);
@@ -100,7 +102,7 @@ public class AgentDispatchHandler implements MessageHandler {
             if (restoredGoal != null && !restoredGoal.isBlank()) {
                 log.infof("[AgentDispatch] Continuity detected for session %s — restoring original goal: %s", 
                         sessionId, restoredGoal);
-                goal = restoredGoal;
+                goal = normalizeGoal(restoredGoal);
             } else {
                 log.warnf("[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.", sessionId);
             }
@@ -187,5 +189,10 @@ public class AgentDispatchHandler implements MessageHandler {
             );
 
         return HandleResult.STOP;
+    }
+
+    static String normalizeGoal(String goal) {
+        if (goal == null || goal.isBlank()) return goal;
+        return MARKDOWN_LINK_PATTERN.matcher(goal).replaceAll("$2");
     }
 }
