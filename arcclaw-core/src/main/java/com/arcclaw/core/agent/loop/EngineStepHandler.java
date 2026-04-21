@@ -16,6 +16,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
@@ -102,7 +103,10 @@ public class EngineStepHandler {
         ReasoningStep step;
         try {
             String goal = context.goal();
-            String currentGoal = goal;
+            // §7.45: Strip 'CRON ' prefix so models don't confuse background execution
+            // with a new scheduling request (causes task refusal in weak models).
+            String currentGoal = AgentSentinels.stripCronPrefix(goal);
+            
             if (!context.systemNote().isBlank()) {
                 currentGoal = currentGoal + "\n\n" + context.systemNote();
             }
