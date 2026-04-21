@@ -96,6 +96,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void saveSteps(Long checkpointId, List<ReasoningStep> steps) {
         if (checkpointId == null || steps == null) return;
         List<ReasoningStepDto> dtos = steps.stream()
