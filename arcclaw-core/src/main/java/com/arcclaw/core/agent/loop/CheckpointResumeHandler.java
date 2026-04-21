@@ -180,10 +180,10 @@ public class CheckpointResumeHandler {
     }
 
     private void dispatchResumeResult(MessageContext context, AgentResult result, ChannelType cType, ChannelUser user, String sessionId) {
-        // 🟢 FIX: Avoid double-notification on Telegram/CLI during resume.
-        // ApproveReflex handles the delivery of the final answer for interactive channels.
-        if (!ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
-            log.debugf("CheckpointResumeHandler: skipping redundant notification for channel %s", cType.id());
+        // Interactive /approve paths depend on the resume handler to deliver the final result.
+        // CLI uses the synchronous resume path and must not receive an extra async notification.
+        if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
+            log.debugf("CheckpointResumeHandler: skipping async CLI notification for session %s", sessionId);
             return;
         }
 
