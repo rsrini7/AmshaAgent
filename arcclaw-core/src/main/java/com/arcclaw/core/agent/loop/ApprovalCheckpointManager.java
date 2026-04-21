@@ -95,9 +95,12 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        updateStateJson(cp, history);
+        // Save the base checkpoint first to ensure ID exists if new
+        cp = agentStore.save(cp);
 
-        agentStore.save(cp);
+        // 🟢 FIX: Save reasoning steps as ReasoningStepEntity rows for robust restoration
+        agentStore.save(sessionId, agentRole, history, context.goal());
+
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s " +
                   "(channel=%s platformId=%s)",
                   sessionId, toolName, channelType, channelPlatformId);
@@ -159,9 +162,9 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        updateStateJson(cp, history);
-
-        agentStore.save(cp);
+        // Save base checkpoint and then the granular steps
+        cp = agentStore.save(cp);
+        agentStore.save(sessionId, agentRole, history, context.goal());
 
         log.infof("[STATE-MACHINE] Pausing session %s for parallel HITL: %s " +
                   "(channel=%s platformId=%s)",
@@ -221,9 +224,9 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        updateStateJson(cp, history);
-
-        agentStore.save(cp);
+        // Save base checkpoint and then the granular steps
+        cp = agentStore.save(cp);
+        agentStore.save(sessionId, agentRole, history, context.goal());
 
         log.infof("[STATE-MACHINE] Pausing session %s — HITL tools pending: %d | batch: %s " +
                   "(channel=%s platformId=%s)",
@@ -235,14 +238,5 @@ public class ApprovalCheckpointManager {
         return AgentResult.awaitingApproval(
             compositeName, originalBatchJson, sessionId,
             List.copyOf(history));
-    }
-
-    private void updateStateJson(AgentCheckpoint cp, List<ReasoningStep> history) {
-        try {
-            cp.setStateJson(objectMapper.writeValueAsString(history));
-        } catch (Exception e) {
-            log.warnf("Failed to serialize history for session %s: %s",
-                      cp.getSessionId(), e.getMessage());
-        }
     }
 }
