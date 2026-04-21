@@ -102,9 +102,15 @@ public class ApprovalCheckpointManager {
                   "(channel=%s platformId=%s)",
                   sessionId, toolName, channelType, channelPlatformId);
 
+        // SSE HitlEvent is always sent for UI/Web tracking
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
             sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), toolName, paramsJson, null, Instant.now()   
         ));
+        
+        // Notification logic: 
+        // 1. Cron sessions: CronResultHandler handles Telegram notification (formatted with cron details).
+        // 2. Interactive sessions: MessagePipeline/AgentDispatchHandler handles the notification.
+        // ApprovalCheckpointManager should NOT trigger additional channel notifications.
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
     }
 
