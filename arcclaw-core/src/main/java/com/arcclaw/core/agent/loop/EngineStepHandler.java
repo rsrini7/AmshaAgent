@@ -19,6 +19,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
+import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
@@ -324,6 +325,13 @@ public class EngineStepHandler {
             // Return AWAITING_RETRY so state machine pauses cleanly
             int retryMs = retryAfterSeconds * 1000;
             return StepDecision.terminal(AgentResult.awaitingRetry(sessionId, retryMs, List.copyOf(history)));  
+        }
+
+        if (classified instanceof LlmContentFilterException) {
+            log.warnf("[STATE-MACHINE] session %s: content filter triggered: %s",
+                    sessionId, classified.getMessage());
+            return StepDecision.terminal(AgentResult.failed(classified.getMessage(),
+                    AgentResult.FailureCategory.SECURITY_POLICY, List.copyOf(history)));
         }
 
         if (isNetworkError(e)) {
