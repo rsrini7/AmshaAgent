@@ -42,6 +42,13 @@ public class MockCronStorePort implements CronStorePort {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public List<AgentCronDto> findAllAwaitingApproval() {
+        return store.values().stream()
+                .filter(c -> "AWAITING_APPROVAL".equals(c.status()))
+                .collect(Collectors.toList());
+    }
+
     @Override 
     public Optional<AgentCronDto> findById(String id) { 
         return Optional.ofNullable(store.get(id)); 
