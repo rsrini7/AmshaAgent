@@ -87,8 +87,11 @@ public class AgentDispatchHandler implements MessageHandler {
         // §Retry-Fix: Restore originalGoal from latest checkpoint for continuity commands (e.g. "try again")
         String goal = rawGoal;
         String rawMessageText = context.getMessage() != null ? context.getMessage().text() : "";
-        if (intentClassifier.isContinuityCommand(rawMessageText)) {
-            String restoredGoal = agentStore.findLatestCheckpoint(sessionId)
+        String restoredGoal = null;
+        boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText);
+
+        if (isContinuity) {
+            restoredGoal = agentStore.findLatestCheckpoint(sessionId)
                     .map(AgentCheckpoint::getOriginalGoal)
                     .orElse(null);
 
@@ -98,6 +101,8 @@ public class AgentDispatchHandler implements MessageHandler {
                 goal = restoredGoal;
             }
         }
+        log.infof("[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
+                rawGoal, rawMessageText, isContinuity, restoredGoal, goal);
 
         // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;
