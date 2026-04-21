@@ -13,12 +13,13 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import org.junit.jupiter.api.Test;
 
 class MemorySearchToolTest {
 
     private final CompactionStorePort compactionRepo = mock(CompactionStorePort.class);
-    private final com.arcclaw.persistence.api.MemoryRetrievalPort memoryPort = mock(com.arcclaw.persistence.api.MemoryRetrievalPort.class);
+    private final MemoryRetrievalPort memoryPort = mock(MemoryRetrievalPort.class);
 
     private MemorySearchTool createTool() {
         MemorySearchTool tool = new MemorySearchTool();

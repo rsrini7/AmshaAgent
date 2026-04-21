@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -23,6 +24,8 @@ import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import org.jboss.logging.Logger;
 
@@ -52,6 +55,12 @@ public class AgentDispatchHandler implements MessageHandler {
     @Inject
     ChannelPluginRegistry channelPluginRegistry;
 
+    @Inject
+    StatefulAgentStore agentStore;
+
+    @Inject
+    IntentClassificationService intentClassifier;
+
     @Override
     public int priority() {
         return 70;
@@ -71,9 +80,23 @@ public class AgentDispatchHandler implements MessageHandler {
 
         // Prioritize the sanitized goal from reflexes (StoreReflex, PII redact) 
         // over the raw message text.
-        String goal = (context.getGoal() != null && !context.getGoal().isBlank())
+        String rawGoal = (context.getGoal() != null && !context.getGoal().isBlank())
                 ? context.getGoal()
                 : (context.getMessage() != null ? context.getMessage().text() : "");
+
+        // §Retry-Fix: Restore originalGoal from latest checkpoint for continuity commands (e.g. "try again")
+        String goal = rawGoal;
+        if (intentClassifier.isContinuityCommand(rawGoal)) {
+            String restoredGoal = agentStore.findLatestCheckpoint(sessionId)
+                    .map(AgentCheckpoint::getOriginalGoal)
+                    .orElse(null);
+            
+            if (restoredGoal != null && !restoredGoal.isBlank()) {
+                log.infof("[AgentDispatch] Continuity detected for session %s — restoring original goal: %s", 
+                        sessionId, restoredGoal);
+                goal = restoredGoal;
+            }
+        }
 
         // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;
@@ -99,13 +122,14 @@ public class AgentDispatchHandler implements MessageHandler {
         }
         final String resolvedChatId = chatId;
 
+        final String resolvedGoal = goal;
         AgentResult result;
         try {
             String channel = context.getChannelType().name();
             Callable<AgentResult> op = () -> agentLoop.run(
                     sessionId,
                     role,
-                    goal,
+                    resolvedGoal,
                     reasoningEngine,
                     resolvedMaxIterations,
                     context

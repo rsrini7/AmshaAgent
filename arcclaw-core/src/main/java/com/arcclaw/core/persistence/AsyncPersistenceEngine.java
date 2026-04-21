@@ -7,21 +7,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jboss.logging.Logger;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
-
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 /**
  * Asynchronous persistence engine using background Virtual Threads to drain

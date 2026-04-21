@@ -22,7 +22,6 @@ import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
-
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.eclipse.microprofile.context.ManagedExecutor;

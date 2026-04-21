@@ -80,8 +80,6 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
         boolean isSentinelGoal = AgentSentinels.GOAL_TOOL_APPROVED.equals(goal)
                 || AgentSentinels.GOAL_RESUME_APPROVED.equals(goal);
 
-        boolean isRetryGoal = goal != null && goal.toLowerCase().contains("try again");
-
         boolean hasRecentGithubContext = history.stream()
                 .anyMatch(s -> GithubTool.NAME.equals(s.action())
                         && s.observation() != null
@@ -104,26 +102,9 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
             }
         }
 
-        // §Retry-Fix: If it's a "try again" goal, we check the latest checkpoint in the database
-        // to see if the ORIGINAL goal was github-related. This handles the case where the
-        // current iteration's goal is just "try again" but the session context is github.
-        boolean originalGoalWasGithub = false;
-        if (isRetryGoal && !hasRecentGithubContext) {
-            originalGoalWasGithub = agentStore.findLatestCheckpoint(sessionId)
-                    .map(cp -> {
-                        String og = cp.getOriginalGoal();
-                        return og != null && GITHUB_TRIGGER_PATTERN.matcher(og).find();
-                    })
-                    .orElse(false);
-            if (originalGoalWasGithub) {
-                log.debugf("[TOOL-INTENT-GUARD] Allowing github call for 'try again' goal based on persistent context in session %s", sessionId);
-            }
-        }
-
         if (!isPreApproved
                 && !isSentinelGoal
                 && !hasRecentGithubContext
-                && !originalGoalWasGithub
                 && !GITHUB_TRIGGER_PATTERN.matcher(goal).find()) {
             String guardObs = "GitHub tool blocked: the goal contains no GitHub repository or resource URL. " +
                     "If the goal contains a Java class reference (e.g. 'com.example.OrderService'), " +

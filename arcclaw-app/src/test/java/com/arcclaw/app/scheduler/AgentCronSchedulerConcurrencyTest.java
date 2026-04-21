@@ -30,6 +30,7 @@ import io.quarkus.test.junit.TestProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.ArgumentMatchers;
 
 /**
  * Concurrency-specific tests for {@link AgentCronScheduler}.
@@ -76,7 +77,7 @@ class AgentCronSchedulerConcurrencyTest {
     void setup() {
         reset(cronRepository, jobRunner, advisoryLockPort);
         
-        when(advisoryLockPort.tryLock(anyString(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(true);
+        when(advisoryLockPort.tryLock(anyString(), ArgumentMatchers.anyInt())).thenReturn(true);
 
         // Ensure exactly 2 permits are available via delegated method call
         scheduler.resetConcurrencyLimit(2);

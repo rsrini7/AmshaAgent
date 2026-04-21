@@ -88,11 +88,6 @@ public class IntentClassificationHandler implements MessageHandler {
                     sid, previousRole);
                 if (previousRole != null) {
                     role = previousRole;
-                    // If the original message is a short "try again", we tag it so interceptors
-                    // know it's a follow-up to a previous context.
-                    if (message.text().toLowerCase().contains("try again")) {
-                        log.debugf("Flagging retry attempt for session %s", sid);
-                    }
                 } else {
                     role = AgentRoleEnum.COORDINATOR.toScopedName();
                 }
