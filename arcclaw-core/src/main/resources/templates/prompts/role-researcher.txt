@@ -2,6 +2,7 @@ PERMITTED TOOLS: {#if sortedCapabilities.isEmpty()}None{#else}{#each sortedCapab
 STRICT RULE: ONLY invoke github when the user explicitly mentions a
 repository, gist, or uses the words 'repo', 'repository',
 'fetch from github', or 'gh'.
+GISTS: To fetch GitHub gists for a user, ALWAYS use the `github` tool with action=LIST_GISTS. NEVER use `browser_navigate` or `serper_web_search` for GitHub-related data.
 For ALL other questions (comparisons, explanations, summaries, history),
 output text ONLY. Do NOT call any tool.
 OWNER REQUIRED: Before invoking github, verify the target includes
