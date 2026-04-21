@@ -425,13 +425,18 @@ public class EngineStepHandler {
 
     private boolean looksLikeRawToolJson(String text) {
         if (text == null || text.isBlank()) return false;
-        String lower = text.toLowerCase(Locale.ROOT);
+        String trimmed = text.strip();
+        // Must look structurally like JSON first (§7.46)
+        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
+        
+        String lower = trimmed.toLowerCase(Locale.ROOT);
         // Look for common tool argument keys that should never be in a prose answer
-        return (lower.contains("\"cronexpression\"") || lower.contains("\"cron_expression\""))
-                || (lower.contains("\"goal\"") && lower.contains("\"runonce\""))
-                || lower.contains("\"task_payload\"")
-                || lower.contains("\"task_name\"")
-                || lower.contains("\"agent\"") && lower.contains("\"goal\"");
+        return lower.contains("\"cronexpression\"") 
+            || lower.contains("\"cron_expression\"")
+            || (lower.contains("\"goal\"") && lower.contains("\"runonce\""))
+            || lower.contains("\"task_payload\"")
+            || lower.contains("\"task_name\"")
+            || (lower.contains("\"agent\"") && lower.contains("\"goal\""));
     }
 
     private boolean looksLikeNaturalLanguage(String text) {
