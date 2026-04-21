@@ -66,13 +66,13 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
-        String stateJson, String autonomy, int iterationsUsed) {
-        return withRetry(() -> self.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed), "upsert-with-steps");
+        String stateJson, String autonomy, int iterationsUsed, String originalGoal) {
+        return withRetry(() -> self.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed, originalGoal), "upsert-steps");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
-        String stateJson, String autonomy, int iterationsUsed) {
+            String stateJson, String autonomy, int iterationsUsed, String originalGoal) {
         
         em.clear();
         List<AgentCheckpoint> existing = em.createQuery(
@@ -108,6 +108,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         entity.setIterationsUsed(iterationsUsed);
         entity.setUpdatedAt(Instant.now());
 
+        // §Retry-Fix: Only set originalGoal if not already present or if new checkpoint
+        if (originalGoal != null && (entity.getOriginalGoal() == null || entity.getOriginalGoal().isBlank())) {
+            entity.setOriginalGoal(originalGoal);
+        }
+
         if (created) {
             em.persist(entity);
         } else {
@@ -120,13 +125,13 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, 
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
-        return withRetry(() -> self.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps), "upsert-and-finalize");
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal) {
+        return withRetry(() -> self.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps, originalGoal), "upsert-and-finalize");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal) {
         
         em.clear();
         List<AgentCheckpoint> existing = em.createQuery(
@@ -164,6 +169,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity.setCompletedAt(Instant.now());
         } else if (status == CheckpointStatus.FAILED) {
             entity.setFailedAt(Instant.now());
+        }
+
+        // §Retry-Fix: Ensure originalGoal is preserved even on finalization
+        if (originalGoal != null && (entity.getOriginalGoal() == null || entity.getOriginalGoal().isBlank())) {
+            entity.setOriginalGoal(originalGoal);
         }
 
         if (created) {

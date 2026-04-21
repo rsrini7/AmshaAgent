@@ -105,7 +105,7 @@ public class AuditServiceIntegrationTest {
             WorkspaceContext.runWithFullAutonomy(sessionId, "test", "test", "coordinator", () -> {
             secretVault.init(sessionId); // statefulAgentStore might need vault
 
-            statefulAgentStore.save(sessionId, "coordinator", List.of());
+            statefulAgentStore.save(sessionId, "coordinator", List.of(), "test goal");
 
             // Wait for async persistence
             auditService.waitForIdle();

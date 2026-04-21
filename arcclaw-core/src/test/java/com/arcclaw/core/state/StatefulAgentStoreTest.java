@@ -58,10 +58,11 @@ class StatefulAgentStoreTest {
                             Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
 
             // Save
-            var checkpoint = store.save(SESSION, ROLE, steps);
+            var checkpoint = store.save(SESSION, ROLE, steps, "Analyzing the repo");
             assertNotNull(checkpoint.getId(), "Checkpoint should have a generated ID");
             assertEquals(SESSION, checkpoint.getSessionId());
             assertEquals(ROLE, checkpoint.getAgentRole());
+            assertEquals("Analyzing the repo", checkpoint.getOriginalGoal());
             assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
             assertNotNull(checkpoint.getStateJson());
             assertNotNull(checkpoint.getCreatedAt());
@@ -92,7 +93,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Trying something", "github",
                             Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
 
-            var checkpoint = store.save(sessionFail, ROLE, steps);
+            var checkpoint = store.save(sessionFail, ROLE, steps, "Trying something");
             store.markFailed(checkpoint.getId(), "LLM API timeout");
 
             var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(sessionFail, ROLE));
@@ -114,7 +115,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("All done", ReasoningStep.FINISH,
                             Map.of("answer", "42"), "Task completed.", 0, 0));
 
-            var checkpoint = store.save(sessionComplete, ROLE, steps);
+            var checkpoint = store.save(sessionComplete, ROLE, steps, "All done");
             store.markCompleted(checkpoint.getId());
 
             var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(sessionComplete, ROLE));
@@ -137,8 +138,8 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Step 1", "github", Map.of(), "obs1", 0, 0),
                     ReasoningStep.of("Step 2", "github", Map.of(), "obs2", 0, 0));
 
-            var cp1 = store.save(sessionUpsert, ROLE, steps1);
-            var cp2 = store.save(sessionUpsert, ROLE, steps2);
+            var cp1 = store.save(sessionUpsert, ROLE, steps1, "Goal 1");
+            var cp2 = store.save(sessionUpsert, ROLE, steps2, "Goal 1");
 
             assertEquals(cp1.getId(), cp2.getId(), "Upsert should update same entity, not create new");
 
@@ -159,7 +160,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Thinking 1", "github",
                             Map.of("repo", "old"), "obs", 0, 0)
             );
-            var cp1 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-old", role, steps1);
+            var cp1 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-old", role, steps1, "Cron Goal");
             cp1.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             store.save(cp1);
 
@@ -168,7 +169,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Thinking 2", "github",
                             Map.of("repo", "new"), "obs", 0, 0)
             );
-            var cp2 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new", role, steps2);
+            var cp2 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new", role, steps2, "Cron Goal");
             cp2.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             store.save(cp2);
 
@@ -177,7 +178,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Done", ReasoningStep.FINISH,
                             Map.of("answer", "42"), "Task completed.", 0, 0)
             );
-            var cp3 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-completed", role, steps3);
+            var cp3 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-completed", role, steps3, "Cron Goal");
             cp3.setStatus(CheckpointStatus.COMPLETED);
             store.save(cp3);
 
@@ -208,7 +209,7 @@ class StatefulAgentStoreTest {
                     ReasoningStep.of("Step B", ReasoningStep.FINISH, Map.of("ans", "42"), "obs2", 20, 10));
 
             // Save and finalize
-            var cp = store.saveAndFinalize(sessionFinal, ROLE, steps, CheckpointStatus.COMPLETED);
+            var cp = store.saveAndFinalize(sessionFinal, ROLE, steps, CheckpointStatus.COMPLETED, "Step A");
 
             assertNotNull(cp.getId());
             assertEquals(CheckpointStatus.COMPLETED, cp.getStatus());

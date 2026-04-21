@@ -56,11 +56,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     // ── Save / Load ───────────────────────────────────────────────────────────
 
     @Override
-    public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
+    public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal) {
         String json = serializer.serializeSteps(steps);
         AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
         CheckpointUpsertResult result = storeAdapter.upsertWithSteps(
-                sessionId, agentRole, json, autonomy.toString(), steps.size());
+                sessionId, agentRole, json, autonomy.toString(), steps.size(), goal);
         if (result.created()) {
             transitionService.emitCreated(
                     sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy);
@@ -89,13 +89,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
                                            List<ReasoningStep> steps,
-                                           CheckpointStatus finalStatus) {
+                                           CheckpointStatus finalStatus,
+                                           String goal) {
         String json = serializer.serializeSteps(steps);
         List<ReasoningStepDto> stepDtos = 
             steps.stream().map(serializer::toDto).toList();
 
         CheckpointUpsertResult result = storeAdapter.upsertAndFinalize(
-                sessionId, agentRole, json, finalStatus.name(), stepDtos);
+                sessionId, agentRole, json, finalStatus.name(), stepDtos, goal);
 
         CheckpointDto saved = result.checkpoint();
         boolean isNew = result.created();
@@ -217,6 +218,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId)
         { return storeAdapter.findLatestBySession(sessionId).map(CheckpointMapper::toEntity); }
+
+    @Override public Optional<AgentCheckpoint> findLatestNonArchivedCheckpoint(String sessionId)
+        { return storeAdapter.findLatestNonArchivedBySession(sessionId).map(CheckpointMapper::toEntity); }
 
     @Override public Optional<String> findLatestRole(String sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");

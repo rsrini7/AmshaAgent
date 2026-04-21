@@ -163,7 +163,7 @@ public class AgentLoop {
             } else if (result instanceof AgentResult.AwaitingRetry awaitingRetry) {
                 updateStoreForRetry(sessionId, canonicalRole, awaitingRetry, context);
             } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
-                updateStoreForTerminal(sessionId, canonicalRole, result);
+                updateStoreForTerminal(sessionId, canonicalRole, result, goal);
             }
 
             return result;
@@ -227,20 +227,20 @@ public class AgentLoop {
         ));
     }
 
-    private void updateStoreForTerminal(String sessionId, String canonicalRole, AgentResult result) {
+    private void updateStoreForTerminal(String sessionId, String canonicalRole, AgentResult result, String goal) {
         if (result instanceof AgentResult.Finished) {
-            agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED);
+            agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED, goal);
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
                     sessionId, canonicalRole, "COMPLETED", Instant.now()
             ));
         } else if (result instanceof AgentResult.Failed f) {
-            var cp = agentStore.save(sessionId, canonicalRole, result.steps());
+            var cp = agentStore.save(sessionId, canonicalRole, result.steps(), goal);
             agentStore.markFailed(cp.getId(), f.reason());
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
                     sessionId, canonicalRole, "FAILED", Instant.now()
             ));
         } else if (result instanceof AgentResult.LoopExceeded l) {
-            var cp = agentStore.save(sessionId, canonicalRole, result.steps());
+            var cp = agentStore.save(sessionId, canonicalRole, result.steps(), goal);
             agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
                     sessionId, canonicalRole, "FAILED", Instant.now()
