@@ -173,9 +173,6 @@ public class AgentCronScheduler {
         }
     }
 
-    /**
-     * Internal precise fire handler.
-     */
     @ActivateRequestContext
     public void executeSoonInternal(String jobId) {
         AgentCronEntity job = cronRepository.findById(jobId);
@@ -184,7 +181,19 @@ public class AgentCronScheduler {
         MDC.put(MdcKeys.USER_ID, job.userId);
         try {
             if (cronRepository.claimForFire(job.id)) {
-                 jobRunner.execute(job);
+                 log.infof("CRON-PRECISE-FIRE id=%s", job.id);
+                 
+                 final String capturedUserId = (String) MDC.get(MdcKeys.USER_ID);
+                 vThreads.execute(() -> {
+                     if (capturedUserId != null) MDC.put(MdcKeys.USER_ID, capturedUserId);
+                     try {
+                         jobRunner.execute(job);
+                     } catch (Exception e) {
+                         log.errorf(e, "CRON-EXEC-FAIL id=%s", job.id);
+                     } finally {
+                         MdcCleaner.clearAll();
+                     }
+                 });
             }
         } finally {
             MdcCleaner.clearAll();
