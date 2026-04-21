@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -76,7 +77,7 @@ public class CheckpointResumeCoordinator {
         record FreshStart() implements ResumeDecision {}
 
         /** Resume with existing history. */
-        record ResumedHistory(List<ReasoningStep> history, int iterationsUsed) implements ResumeDecision {}
+        record ResumedHistory(List<ReasoningStep> history, int iterationsUsed, String checkpointRole) implements ResumeDecision {}
 
         /** Stale approval was active but discarded; starting fresh. */
         record AbortedStale() implements ResumeDecision {}
@@ -108,7 +109,10 @@ public class CheckpointResumeCoordinator {
                                             String capturedUserId,
                                             MessageContext context) {
 
-        Optional<AgentCheckpoint> existingCheckpoint = agentStore.load(sessionId, canonicalRole);
+        // 🟢 FIX: Search by sessionId across ALL roles for this session. 
+        // specialized roles (researcher/coder) save checkpoints with their own role name,
+        // but the resume dispatcher may be the coordinator.
+        Optional<AgentCheckpoint> existingCheckpoint = agentStore.findLatestNonArchivedCheckpoint(sessionId);
         if (existingCheckpoint.isEmpty()) {
             return new ResumeDecision.FreshStart();
         }
@@ -116,13 +120,25 @@ public class CheckpointResumeCoordinator {
         AgentCheckpoint checkpoint = existingCheckpoint.get();
         CheckpointStatus status = checkpoint.getStatus();
 
+        // Ensure we only resume if the role matches, OR if it's a cross-role resume (§7.31/§7.46)
+        // If the checkpoint role is different but status is AWAITING/RESUMING, we MUST restore it.
+        boolean roleMatches = Objects.equals(checkpoint.getAgentRole(), canonicalRole);
+        boolean isResumableStatus = (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING);
+        
+        if (!roleMatches && !isResumableStatus) {
+             log.debugf("CheckpointResumeCoordinator: latest checkpoint role (%s) != current role (%s). Starting fresh.", 
+                     checkpoint.getAgentRole(), canonicalRole);
+             return new ResumeDecision.FreshStart();
+        }
+
         if (status == CheckpointStatus.IN_PROGRESS) {
             List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
             log.infof("CheckpointResumeCoordinator: restored %d steps from IN_PROGRESS for session=%s",
                     loadedSteps != null ? loadedSteps.size() : 0, sessionId);
             return new ResumeDecision.ResumedHistory(
                     loadedSteps != null ? loadedSteps : new ArrayList<>(),
-                    checkpoint.getIterationsUsed());
+                    checkpoint.getIterationsUsed(),
+                    checkpoint.getAgentRole());
         }
 
         if (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING) {
@@ -133,7 +149,8 @@ public class CheckpointResumeCoordinator {
                         loadedSteps != null ? loadedSteps.size() : 0, status, sessionId);
                 return new ResumeDecision.ResumedHistory(
                         loadedSteps != null ? loadedSteps : new ArrayList<>(),
-                        checkpoint.getIterationsUsed());
+                        checkpoint.getIterationsUsed(),
+                        checkpoint.getAgentRole());
             } else {
                 // Stale approval discard path (§3.4)
                 archiveStaleApproval(sessionId, canonicalRole, capturedUserId, checkpoint, context);
@@ -168,7 +185,7 @@ public class CheckpointResumeCoordinator {
             notifyStaleApprovalDiscarded(sessionId, staleTool, context);
         }
 
-        auditService.record(sessionId, capturedUserId, canonicalRole,
+        auditService.record(sessionId, capturedUserId, checkpoint.getAgentRole(),
                 SecurityEventType.CHECKPOINT_FAILED,
                 "Stale AWAITING_APPROVAL discarded — new message received. tool=" + staleTool);
     }

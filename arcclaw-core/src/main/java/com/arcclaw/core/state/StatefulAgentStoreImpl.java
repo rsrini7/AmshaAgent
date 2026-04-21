@@ -83,6 +83,15 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
+        if (checkpoint == null) return List.of();
+        
+        // 1. Try granular rows (new way)
+        if (checkpoint.getId() != null) {
+            List<ReasoningStep> granular = loadSteps(checkpoint.getId());
+            if (!granular.isEmpty()) return granular;
+        }
+
+        // 2. Fallback to stateJson (old way)
         return serializer.deserializeSteps(checkpoint);
     }
 

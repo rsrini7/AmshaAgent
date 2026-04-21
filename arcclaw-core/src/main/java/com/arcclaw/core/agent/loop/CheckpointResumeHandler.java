@@ -180,6 +180,14 @@ public class CheckpointResumeHandler {
     }
 
     private void dispatchResumeResult(MessageContext context, AgentResult result, ChannelType cType, ChannelUser user, String sessionId) {
+        // 🟢 FIX: Avoid double-notification on Telegram/CLI during resume.
+        // ApproveReflex returns the formatted result which CommandDispatchHandler sends.
+        // If we also send here, the user gets two approval prompts.
+        if (result instanceof AgentResult.AwaitingApproval && !ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
+            log.debugf("CheckpointResumeHandler: skipping redundant AwaitingApproval notification for channel %s", cType.id());
+            return;
+        }
+
         String output = AgentResultFormatter.format(result);
         channelPluginRegistry.find(cType.id())
             .map(ChannelPlugin::sender)

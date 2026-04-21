@@ -130,15 +130,19 @@ public class AgentLoop {
             var decision = checkpointResumeCoordinator.resolveResumePath(
                     sessionId, canonicalRole, capturedUserId, context);
 
+            String effectiveRole = canonicalRole;
             if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
                 resumedHistory.addAll(r.history());
+                effectiveRole = r.checkpointRole();
+                log.infof("[AgentLoop] Resuming session=%s as role=%s (canonical=%s)", 
+                        sessionId, effectiveRole, canonicalRole);
             }
 
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
                     capturedUserId,
                     WorkspaceContext.requireChatId(),
-                    canonicalRole,
+                    effectiveRole,
                     goal,
                     WorkspaceContext.requireAutonomyOrSupervised(),
                     maxIterations,
