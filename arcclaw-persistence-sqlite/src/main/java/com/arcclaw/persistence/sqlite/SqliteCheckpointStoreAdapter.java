@@ -295,8 +295,8 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doAtomicTransition(Long id, String expectedStatus, String newStatus) {
         int updated = em.createNativeQuery(
-                "UPDATE agentcheckpoint SET status = :new, updatedAt = :now " +
-                "WHERE id = :id AND status = :expected"
+                "UPDATE agent_checkpoint SET status = :new, updated_at = :now " +
+                "WHERE checkpoint_id = :id AND status = :expected"
         ).setParameter("new", newStatus)
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
          .setParameter("id", id)
@@ -315,10 +315,10 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         // Atomic transition of the latest checkpoint to RESUMING
         // We need to find the latest ID first in a subquery or native SQL
         int updated = em.createNativeQuery(
-                "UPDATE agentcheckpoint SET status = 'RESUMING', updatedAt = :now " +
-                "WHERE id = (SELECT id FROM agentcheckpoint " +
-                "            WHERE sessionId = :sid AND agentRole = :role " +
-                "            ORDER BY id DESC LIMIT 1) " +
+                "UPDATE agent_checkpoint SET status = 'RESUMING', updated_at = :now " +
+                "WHERE checkpoint_id = (SELECT checkpoint_id FROM agent_checkpoint " +
+                "            WHERE session_id = :sid AND agent_role = :role " +
+                "            ORDER BY checkpoint_id DESC LIMIT 1) " +
                 "  AND status = 'AWAITING_APPROVAL'"
         ).setParameter("sid", sessionId)
          .setParameter("role", agentRole)

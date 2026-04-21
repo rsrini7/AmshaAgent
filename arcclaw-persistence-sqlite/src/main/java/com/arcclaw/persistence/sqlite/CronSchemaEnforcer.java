@@ -39,20 +39,24 @@ public class CronSchemaEnforcer {
         // 1. Core table
         em.createNativeQuery("""
                 CREATE TABLE IF NOT EXISTS agentcron (
-                    id              TEXT PRIMARY KEY,
-                    sessionId       TEXT NOT NULL,
-                    userId          TEXT NOT NULL,
-                    chatId          TEXT NOT NULL,
-                    cronExpression  TEXT NOT NULL,
-                    timezone        TEXT NOT NULL DEFAULT 'UTC',
-                    runOnce         INTEGER NOT NULL DEFAULT 0,
-                    goal            TEXT NOT NULL,
-                    nextFireTime    TEXT NOT NULL,
-                    lastFireTime    TEXT,
-                    status          TEXT NOT NULL DEFAULT 'ACTIVE',
-                    errorReason     TEXT,
-                    lastDeliveryId  TEXT,
-                    createdAt       TEXT NOT NULL
+                    id                  TEXT PRIMARY KEY,
+                    sessionId           TEXT NOT NULL,
+                    userId              TEXT NOT NULL,
+                    chatId              TEXT NOT NULL,
+                    channelType         TEXT,
+                    channelPlatformId   TEXT,
+                    cronExpression      TEXT NOT NULL,
+                    timezone            TEXT NOT NULL DEFAULT 'UTC',
+                    runOnce             INTEGER NOT NULL DEFAULT 0,
+                    goal                TEXT NOT NULL,
+                    nextFireTime        TEXT NOT NULL,
+                    lastFireTime        TEXT,
+                    status              TEXT NOT NULL DEFAULT 'ACTIVE',
+                    executionRole       TEXT,
+                    errorReason         TEXT,
+                    lastDeliveryId      TEXT,
+                    createdAt           TEXT NOT NULL,
+                    updatedAt           TEXT
                 )
                 """).executeUpdate();
 
@@ -83,6 +87,38 @@ public class CronSchemaEnforcer {
             try {
                 em.createNativeQuery(
                         "ALTER TABLE agentcron ADD COLUMN lastDeliveryId TEXT"
+                ).executeUpdate();
+            } catch (Exception ignored) {}
+        }
+
+        if (!hasColumn("agentcron", "channelType")) {
+            try {
+                em.createNativeQuery(
+                        "ALTER TABLE agentcron ADD COLUMN channelType TEXT"
+                ).executeUpdate();
+            } catch (Exception ignored) {}
+        }
+
+        if (!hasColumn("agentcron", "channelPlatformId")) {
+            try {
+                em.createNativeQuery(
+                        "ALTER TABLE agentcron ADD COLUMN channelPlatformId TEXT"
+                ).executeUpdate();
+            } catch (Exception ignored) {}
+        }
+
+        if (!hasColumn("agentcron", "executionRole")) {
+            try {
+                em.createNativeQuery(
+                        "ALTER TABLE agentcron ADD COLUMN executionRole TEXT"
+                ).executeUpdate();
+            } catch (Exception ignored) {}
+        }
+
+        if (!hasColumn("agentcron", "updatedAt")) {
+            try {
+                em.createNativeQuery(
+                        "ALTER TABLE agentcron ADD COLUMN updatedAt TEXT"
                 ).executeUpdate();
             } catch (Exception ignored) {}
         }
