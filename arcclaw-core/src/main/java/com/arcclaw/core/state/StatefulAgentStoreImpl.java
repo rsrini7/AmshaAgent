@@ -212,7 +212,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         { return storeAdapter.findLatestAwaitingApprovalWithPrefix(prefix).map(CheckpointMapper::toEntity); }
 
     @Override public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
+        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId;
         return storeAdapter.findLatestAwaitingApprovalWithPrefix(sessionPrefix).map(CheckpointMapper::toEntity);
     }
 
