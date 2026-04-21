@@ -125,12 +125,12 @@ public class CheckpointResumeCoordinator {
                     checkpoint.getIterationsUsed());
         }
 
-        if (status == CheckpointStatus.AWAITING_APPROVAL) {
-            boolean isResume = context != null && context.isResumeSignal();
+        if (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING) {
+            boolean isResume = (context != null && context.isResumeSignal()) || status == CheckpointStatus.RESUMING;
             if (isResume) {
                 List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-                log.infof("CheckpointResumeCoordinator: restored %d steps from AWAITING_APPROVAL (resume signal) for session=%s",
-                        loadedSteps != null ? loadedSteps.size() : 0, sessionId);
+                log.infof("CheckpointResumeCoordinator: restored %d steps from %s for session=%s",
+                        loadedSteps != null ? loadedSteps.size() : 0, status, sessionId);
                 return new ResumeDecision.ResumedHistory(
                         loadedSteps != null ? loadedSteps : new ArrayList<>(),
                         checkpoint.getIterationsUsed());

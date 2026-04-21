@@ -91,12 +91,7 @@ public class CronResultHandler {
             SecurityEventType.LOOP_AWAITING_APPROVAL,
             "cronId=" + job.id + " pendingTool=" + result.toolName());
 
-        String displayGoal = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "") : "";
-        String answer = AgentResultFormatter.formatCronHitl(job.id, displayGoal, result.toolName());
-        // Fire delivery event — session intentionally kept alive for approval
-        fireCompletionEvent(job, executionId, answer, null);
-
-        log.infof("[CronResultHandler] Session kept alive for cron=%s — AWAITING_APPROVAL.", cronSessionId);
+        log.infof("[CronResultHandler] Session kept alive for cron=%s — AWAITING_APPROVAL. (Notification handled by StateMachine)", cronSessionId);
     }
 
     public void handleFailure(AgentCronEntity job, String cronSessionId, String executionId, Throwable t) {
