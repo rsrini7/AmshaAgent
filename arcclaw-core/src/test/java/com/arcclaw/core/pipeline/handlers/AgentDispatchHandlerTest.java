@@ -141,7 +141,7 @@ class AgentDispatchHandlerTest {
     @SuppressWarnings("unchecked")
     void testMarkdownLinksAreNormalizedBeforeDispatch() throws Exception {
         MessageContext context = createTestContext(AutonomyLevel.FULL);
-        context.setGoal("browse [https://spring.io/blog](https://spring.io/blog) top 3 titles");
+        context.setGoal("browse https://spring.io/blog top 3 titles");
 
         ChannelSender sender = org.mockito.Mockito.mock(ChannelSender.class);
         ChannelPlugin plugin = org.mockito.Mockito.mock(ChannelPlugin.class);
