@@ -137,8 +137,8 @@ class ApproveReflexTest {
         cp.setSessionId("cron-session-123");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
-        when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
-        when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.approveAll(eq(cronId), anyString())).thenReturn(cp);
+        when(cronRepository.findById(cronId)).thenReturn(cron);
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Cron Success", List.of()));
 
@@ -146,7 +146,7 @@ class ApproveReflexTest {
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve " + cronId, ctx);
 
         assertTrue(result.commandResponse().isPresent());
-        assertEquals("Cron Success", result.commandResponse().get());
+        assertEquals("", result.commandResponse().get());
         assertTrue(ctx.isResumeSignal());
         verify(cronRepository).markCompleted(eq(cronId), any(Instant.class));
         verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
@@ -215,12 +215,11 @@ class ApproveReflexTest {
         cron.id = "cron-123";
         cron.userId = userId;
         cron.status = CronStatus.AWAITING_APPROVAL;
-        when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
-        
         AgentCheckpoint cp2 = new AgentCheckpoint();
         cp2.setSessionId("cron-session-1");
         cp2.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
-        when(statefulAgentStore.findLatestAwaitingApprovalForCron("cron-123")).thenReturn(Optional.of(cp2));
+        when(checkpointApprovalService.approveAll(eq("cron-123"), anyString())).thenReturn(cp2);
+        when(cronRepository.findById("cron-123")).thenReturn(cron);
         
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve cron-123", ctx);
 

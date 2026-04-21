@@ -286,8 +286,9 @@ public class ToolStepHandler {
         }
 
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
+            List<ReasoningStep> historyAtPause = appendPendingStep(history, step);
             return StepDecision.terminal(
-                    checkpointManager.persist(context, p.toolName(), p.paramsJson(), history,
+                    checkpointManager.persist(context, p.toolName(), p.paramsJson(), historyAtPause,
                                               context.channelType(), context.channelPlatformId()));
         }
         return null; // PROCEED
@@ -315,14 +316,21 @@ public class ToolStepHandler {
                         invoker.invoke(toolName, params, context.sessionId())));
             });
         } catch (RequiresApprovalException e) {
+            List<ReasoningStep> historyAtPause = appendPendingStep(history, step);
             return new InvokeResult.ShortCircuit(StepDecision.terminal(
                     checkpointManager.persist(context,
-                        e.getToolName(), e.getToolParametersJson(), history,
+                        e.getToolName(), e.getToolParametersJson(), historyAtPause,
                         context.channelType(), context.channelPlatformId())));
         } catch (Exception e) {
             log.errorf("Tool invocation failed for '%s': %s", toolName, e.getMessage());
             return new InvokeResult.Responded(ToolResponse.failure(1, e.getMessage()));
         }
+    }
+
+    private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {
+        List<ReasoningStep> snapshot = new java.util.ArrayList<>(history);
+        snapshot.add(step);
+        return List.copyOf(snapshot);
     }
 
     private String buildObservation(ToolResponse response) {

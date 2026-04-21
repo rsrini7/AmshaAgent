@@ -306,7 +306,8 @@ public class CheckpointResumeHandler {
         var checkpoint = agentStore.load(context.sessionId(), context.agentRole()).orElse(null);
         if (checkpoint == null) return null;
 
-        if (checkpoint.getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+        if (checkpoint.getStatus() != CheckpointStatus.AWAITING_APPROVAL
+                && checkpoint.getStatus() != CheckpointStatus.RESUMING) {
             log.warnf("[AgentLoop] Attempted to resume session %s but status is %s.",
                     context.sessionId(), checkpoint.getStatus());
             return null;

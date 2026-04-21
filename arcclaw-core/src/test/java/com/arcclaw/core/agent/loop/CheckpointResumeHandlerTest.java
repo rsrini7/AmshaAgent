@@ -144,6 +144,35 @@ class CheckpointResumeHandlerTest {
     }
 
     @Test
+    void testApprovalPathWhenCheckpointAlreadyResuming() throws Exception {
+        WorkspaceContext.runWithFullAutonomy("session", "user", "chat", "coordinator", () -> {
+            AgentCheckpoint checkpoint = new AgentCheckpoint();
+            checkpoint.setSessionId("session");
+            checkpoint.setAgentRole("coordinator");
+            checkpoint.setStatus(CheckpointStatus.RESUMING);
+            checkpoint.setPendingToolName("testTool");
+            checkpoint.setPendingToolParametersJson("{\"param\":\"val\"}");
+
+            when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
+            when(toolRegistry.invokeTool(eq("testTool"), eq("{\"param\":\"val\"}"), eq("session")))
+                .thenReturn(ToolResponse.success("tool done"));
+
+            List<ReasoningStep> history = new ArrayList<>();
+            MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx);
+
+            assertNull(result);
+            assertEquals(1, history.size());
+            assertEquals("tool done", history.get(0).observation());
+
+            assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
+            assertNull(checkpoint.getPendingToolName());
+            assertNull(checkpoint.getPendingToolParametersJson());
+            verify(agentStore).save(checkpoint);
+        });
+    }
+
+    @Test
     void testToolExecutionFailurePath() throws Exception {
         WorkspaceContext.runWithFullAutonomy("session", "user", "chat", "coordinator", () -> {
             AgentCheckpoint checkpoint = new AgentCheckpoint();

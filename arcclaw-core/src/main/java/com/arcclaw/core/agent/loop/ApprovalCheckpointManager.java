@@ -95,11 +95,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        // Save the base checkpoint first to ensure ID exists if new
-        cp = agentStore.save(cp);
-
-        // 🟢 FIX: Save reasoning steps linked to this SPECIFIC checkpoint ID
-        agentStore.saveSteps(cp.getId(), history);
+        // Save checkpoint metadata and reasoning steps in one atomic store write.
+        cp = agentStore.saveWithSteps(cp, history);
 
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s " +
                   "(channel=%s platformId=%s)",
@@ -162,9 +159,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        // Save base checkpoint and then the granular steps
-        cp = agentStore.save(cp);
-        agentStore.saveSteps(cp.getId(), history);
+        // Save checkpoint metadata and reasoning steps in one atomic store write.
+        cp = agentStore.saveWithSteps(cp, history);
 
         log.infof("[STATE-MACHINE] Pausing session %s for parallel HITL: %s " +
                   "(channel=%s platformId=%s)",
@@ -224,9 +220,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        // Save base checkpoint and then the granular steps
-        cp = agentStore.save(cp);
-        agentStore.saveSteps(cp.getId(), history);
+        // Save checkpoint metadata and reasoning steps in one atomic store write.
+        cp = agentStore.saveWithSteps(cp, history);
 
         log.infof("[STATE-MACHINE] Pausing session %s — HITL tools pending: %d | batch: %s " +
                   "(channel=%s platformId=%s)",

@@ -377,9 +377,10 @@ public class ParallelToolStepExecutor {
 
         // If nothing is pre-executable, persist normally §7.31
         if (split.preExecutable().isEmpty()) {
+            List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
             return StepDecision.terminal(
                 checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, history,
+                    context, compositeName, originalBatchJson, calls, historyAtPause,
                     context.channelType(), context.channelPlatformId()));
         }
 
@@ -417,15 +418,17 @@ public class ParallelToolStepExecutor {
             preResultsJson = objectMapper.writeValueAsString(preResults);
         } catch (Exception e) {
             log.errorf("Failed to serialize pre-executed results: %s", e.getMessage());
+            List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
             return StepDecision.terminal(checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, history,
+                    context, compositeName, originalBatchJson, calls, historyAtPause,
                     context.channelType(), context.channelPlatformId()));
         }
 
+        List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
         return StepDecision.terminal(
             checkpointManager.persistBatchWithPreExecuted(
                 context, hitlCompositeName, originalBatchJson,
-                split.hitlPending(), preResultsJson, history,
+                split.hitlPending(), preResultsJson, historyAtPause,
                 context.channelType(), context.channelPlatformId()));
     }
 
@@ -438,6 +441,12 @@ public class ParallelToolStepExecutor {
         // Strip provider prefix if present (e.g. "github:read" -> "read")
         String baseName = toolName.contains(":") ? toolName.split(":")[1] : toolName;
         return externalTools.contains(toolName) || externalTools.contains(baseName);
+    }
+
+    private List<ReasoningStep> appendPendingBatchStep(List<ReasoningStep> history, ReasoningStep batchStep) {
+        List<ReasoningStep> snapshot = new ArrayList<>(history);
+        snapshot.add(batchStep);
+        return List.copyOf(snapshot);
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {

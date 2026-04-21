@@ -396,7 +396,7 @@ public class ApproveReflex implements AgentReflex {
                 }
             }
 
-            return AgentResultFormatter.format(result);
+            return "";
         } finally {
             // Defensive: ensure lock is always released even on exceptions.
             statefulAgentStore.clearBatchResuming(cronSessionId);
