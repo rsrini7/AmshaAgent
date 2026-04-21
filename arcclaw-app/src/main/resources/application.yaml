@@ -314,7 +314,7 @@ arcclaw:
     fallback-ollama-model: ${ARCCLAW_LLM_FALLBACK_OLLAMA_MODEL:llama3.2}
     gemini:
       api-key: ${ARCCLAW_LLM_API_KEY}
-      model-name: ${ARCCLAW_LLM_MODEL_NAME:gemini-flash-latest}
+      model-name: ${ARCCLAW_LLM_MODEL_NAME:gemini-2.5-flash-lite}
     openrouter:
       app-name: "${ARCCLAW_OPENROUTER_APP_NAME:https://github.com/rsrini7/arcclaw}"
       site-url: "${ARCCLAW_OPENROUTER_SITE_URL:https://github.com/rsrini7/arcclaw}"

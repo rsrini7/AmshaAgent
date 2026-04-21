@@ -10,6 +10,8 @@ const PROVIDERS = [
   { id:'claude-code', name:'Claude Code',  tag:'CLI tool',        icon:'C',  color:'#8b5cf6' },
   { id:'openrouter',  name:'OpenRouter',   tag:'Unified API',     icon:'R',  color:'#6561f5' },
   { id:'nvidia',      name:'NVIDIA',       tag:'NIM models',      icon:'N',  color:'#76b900' },
+  { id:'cerebras',    name:'Cerebras',     tag:'Ultra-fast LPU',  icon:'Cb', color:'#11e400' },
+  { id:'gemini',      name:'Gemini',       tag:'Google AI',       icon:'Ge', color:'#4285f4' },
 ];
 
 @customElement('arc-settings')

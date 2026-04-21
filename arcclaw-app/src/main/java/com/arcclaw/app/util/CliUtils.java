@@ -134,6 +134,15 @@ public class CliUtils {
         "Gemini uses native SDK, so ARCCLAW_LLM_BASE_URL not required to set."
     );
 
+    private static final VarSpec CEREBRAS_KEY_SPEC = new VarSpec(
+        "ARCCLAW_LLM_API_KEY",
+        "Cerebras AI API key (provider=cerebras).",
+        "1. Sign up at https://cloud.cerebras.ai",
+        "2. Create an API key — it starts with 'csk-'",
+        "3. Add:  ARCCLAW_LLM_API_KEY=csk-your_key_here",
+        "Also set:  ARCCLAW_LLM_BASE_URL=https://api.cerebras.ai/v1"
+    );
+
     /** Required for attach mode (hard) and validated for serve mode (soft). */
     private static final VarSpec[] TELEGRAM_VARS = {
         new VarSpec(
@@ -285,6 +294,8 @@ public class CliUtils {
         VarSpec providerKeySpec = switch (llmProvider) {
             case "openrouter" -> OPENROUTER_KEY_SPEC;
             case "openai"     -> OPENAI_KEY_SPEC;
+            case "gemini"     -> GEMINI_KEY_SPEC;
+            case "cerebras"   -> CEREBRAS_KEY_SPEC;
             case "ollama"     -> null;   // Ollama is local — no API key needed
             default           -> GROQ_KEY_SPEC;  // groq + any unknown provider
         };

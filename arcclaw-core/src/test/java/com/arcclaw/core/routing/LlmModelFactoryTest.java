@@ -39,6 +39,14 @@ class LlmModelFactoryTest {
     }
 
     @Test
+    void testCreateCerebrasModel() {
+        ChatModel model = factory.createModel(
+                "cerebras", "https://api.cerebras.ai/v1", "test-key",
+                "llama3.1-8b", 100, null, 1, null, null);
+        assertNotNull(model);
+    }
+
+    @Test
     void testUnknownProvider() {
         assertThrows(IllegalStateException.class, () -> {
             factory.createModel("unknown", null, null, null, null, null, 1, null, null);

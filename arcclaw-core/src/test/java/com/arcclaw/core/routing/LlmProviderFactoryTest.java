@@ -49,11 +49,20 @@ class LlmProviderFactoryTest {
     }
 
     @Test
+    void cerebrasProviderIsDiscoveredViaSpi() {
+        Exception e = assertThrows(IllegalStateException.class, () -> {
+            factory.createModel("cerebras", "https://api.cerebras.ai/v1", "", "model", 100, null, 1, null, null);
+        });
+        assertTrue(e.getMessage().contains("Cerebras provider requires an API key"));
+    }
+
+    @Test
     void allThreeBuiltInProviderIdsAreRegistered() {
         var ids = factories.stream().map(RoutingChatModelProvider::providerId).collect(Collectors.toSet());
         assertTrue(ids.contains("groq"));
         assertTrue(ids.contains("openai"));
         assertTrue(ids.contains("ollama"));
         assertTrue(ids.contains("nvidia"));
+        assertTrue(ids.contains("cerebras"));
     }
 }
