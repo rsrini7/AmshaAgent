@@ -53,6 +53,11 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint);
 
     /**
+     * Persists granular reasoning steps for a specific checkpoint.
+     */
+    void saveSteps(Long checkpointId, List<ReasoningStep> steps);
+
+    /**
      * Mark a checkpoint as failed with a reason.
      *
      * @param checkpointId The checkpoint entity ID.

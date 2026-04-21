@@ -96,6 +96,15 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public void saveSteps(Long checkpointId, List<ReasoningStep> steps) {
+        if (checkpointId == null || steps == null) return;
+        List<ReasoningStepDto> dtos = steps.stream()
+                .map(serializer::toDto)
+                .toList();
+        storeAdapter.saveSteps(checkpointId, dtos);
+    }
+
+    @Override
     public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
                                            List<ReasoningStep> steps,
                                            CheckpointStatus finalStatus,
