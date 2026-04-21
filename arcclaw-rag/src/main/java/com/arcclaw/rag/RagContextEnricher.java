@@ -53,7 +53,8 @@ public class RagContextEnricher implements ContextEnricher {
 
         // §7.45: Skip RAG for cron sessions to prevent scheduling context from
         // leaking into background tasks (causes task refusal).
-        if (AgentSentinels.isCronGoal(goal)) {
+        // Check sessionId because the CRON prefix may have been stripped from the goal text.
+        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             log.debugf("RagContextEnricher: skipping — cron session detected (session=%s)", sessionId);
             return basePrompt;
         }
