@@ -91,14 +91,20 @@ public class AgentDispatchHandler implements MessageHandler {
         boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText);
 
         if (isContinuity) {
+            // We search for the most recent checkpoint that has a MEANINGFUL originalGoal.
+            // If the latest checkpoint already has a "try again" goal, we might need to look deeper,
+            // but usually the persistence layer stores the first user intent in originalGoal.
             restoredGoal = agentStore.findLatestCheckpoint(sessionId)
                     .map(AgentCheckpoint::getOriginalGoal)
+                    .filter(g -> !intentClassifier.isContinuityCommand(g)) // Don't restore a retry as a goal
                     .orElse(null);
 
             if (restoredGoal != null && !restoredGoal.isBlank()) {
                 log.infof("[AgentDispatch] Continuity detected for session %s — restoring original goal: %s", 
                         sessionId, restoredGoal);
                 goal = restoredGoal;
+            } else {
+                log.warnf("[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.", sessionId);
             }
         }
         log.infof("[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
