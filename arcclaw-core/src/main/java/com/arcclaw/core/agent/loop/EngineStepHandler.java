@@ -133,6 +133,21 @@ public class EngineStepHandler {
                     // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
                 }
 
+                // 🟢 FIX: Detect if the model output raw JSON that looks like tool arguments instead of a tool call.
+                // This happens when a model 'collapses' after a prior tool_use_failed error.
+                if (ReasoningStep.FINISH.equals(step.action())) {
+                    String answer = step.actionInput() != null ? String.valueOf(step.actionInput().get("answer")) : "";
+                    if (looksLikeRawToolJson(answer)) {
+                        log.warnf("[STATE-MACHINE] session %s: detected raw JSON in prose answer — injecting recovery hint", context.sessionId());
+                        return StepDecision.retryEngine(
+                            "System: Your previous response contained raw JSON parameters in the prose answer field. " +
+                            "STRICT RULE: You MUST NOT output JSON in the 'answer' field. " +
+                            "If you want to perform an action, you MUST use a real structured tool call (e.g. schedule_task). " +
+                            "Please retry now using a proper tool call.",
+                            llmSchemaErrorCount);
+                    }
+                }
+
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
                     log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     llmSchemaErrorCount++;
@@ -406,6 +421,17 @@ public class EngineStepHandler {
             log.debugf("extractFinishAnswer parse failed: %s", e.getMessage());
         }
         return null;
+    }
+
+    private boolean looksLikeRawToolJson(String text) {
+        if (text == null || text.isBlank()) return false;
+        String lower = text.toLowerCase(Locale.ROOT);
+        // Look for common tool argument keys that should never be in a prose answer
+        return (lower.contains("\"cronexpression\"") || lower.contains("\"cron_expression\""))
+                || (lower.contains("\"goal\"") && lower.contains("\"runonce\""))
+                || lower.contains("\"task_payload\"")
+                || lower.contains("\"task_name\"")
+                || lower.contains("\"agent\"") && lower.contains("\"goal\"");
     }
 
     private boolean looksLikeNaturalLanguage(String text) {
