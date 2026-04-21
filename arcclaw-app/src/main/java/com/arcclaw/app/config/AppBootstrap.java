@@ -775,16 +775,30 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/auto", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openai/gpt-oss-20b:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "mistralai/devstral-2-123b-instruct-2512", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "llama3.1-8b", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
         } else if ("nvidia".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "mistralai/devstral-2-123b-instruct-2512");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://integrate.api.nvidia.com/v1");
         } else if ("gemini".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "gemini-2.5-flash-lite");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+        } else if ("cerebras".equalsIgnoreCase(provider)) {
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "llama3.1-8b");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
 
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
@@ -794,19 +808,29 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "google/gemma-3-27b-it:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/auto", "google/gemma-3-27b-it:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct-v0.3", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama3.1-8b", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://integrate.api.nvidia.com/v1", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
         } else if ("nvidia".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct-v0.3");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://integrate.api.nvidia.com/v1");
         } else if ("gemini".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "gemini-2.5-flash-lite");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+        } else if ("cerebras".equalsIgnoreCase(compactionProvider)) {
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "llama3.1-8b");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
 
         // Auto-fix intent classifier based on ARCCLAW_INTENT_CLASSIFIER_PROVIDER
@@ -816,19 +840,29 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/auto", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(intentProvider)) {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct-v0.3", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama3.1-8b", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://integrate.api.nvidia.com/v1", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
         } else if ("nvidia".equalsIgnoreCase(intentProvider)) {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct-v0.3");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://integrate.api.nvidia.com/v1");
         } else if ("gemini".equalsIgnoreCase(intentProvider)) {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "gemini-2.5-flash-lite");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+        } else if ("cerebras".equalsIgnoreCase(intentProvider)) {
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "llama3.1-8b");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
     }
 

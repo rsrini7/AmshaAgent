@@ -15,6 +15,17 @@ class LlmModelFactoryTest {
     LlmModelFactory factory;
 
     @Test
+    void testInferProviderFromUrl() {
+        assertEquals("groq", LlmModelFactory.inferProviderFromUrl("https://api.groq.com/openai/v1"));
+        assertEquals("openai", LlmModelFactory.inferProviderFromUrl("https://api.openai.com/v1"));
+        assertEquals("nvidia", LlmModelFactory.inferProviderFromUrl("https://integrate.api.nvidia.com/v1"));
+        assertEquals("cerebras", LlmModelFactory.inferProviderFromUrl("https://api.cerebras.ai/v1"));
+        assertEquals("gemini", LlmModelFactory.inferProviderFromUrl("https://generativelanguage.googleapis.com/v1beta/openai/"));
+        assertEquals("ollama", LlmModelFactory.inferProviderFromUrl("http://localhost:11434"));
+        assertEquals("openrouter", LlmModelFactory.inferProviderFromUrl("https://openrouter.ai/api/v1"));
+    }
+
+    @Test
     void testCreateGroqModel() {
         ChatModel model = factory.createModel(
                 "groq", "https://api.groq.com/openai/v1", "test-key",
