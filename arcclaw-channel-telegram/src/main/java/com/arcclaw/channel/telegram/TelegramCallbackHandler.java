@@ -5,6 +5,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
@@ -17,6 +19,7 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
@@ -37,6 +40,9 @@ public class TelegramCallbackHandler {
 
     @Inject
     ApprovalGateway approvalGateway;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
@@ -115,23 +121,31 @@ public class TelegramCallbackHandler {
 
     private void answerCallback(String callbackQueryId, String text) {
         log.debugf("Answering callback %s with text: %s", callbackQueryId, text);
-        String body = (text != null)
-                ? "{\"callback_query_id\":\"" + callbackQueryId + "\",\"text\":\"" + text + "\"}"
-                : "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
-        httpClient.sendAsync(
-            HttpRequest.newBuilder()
-                .uri(URI.create(
-                    "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
-                .timeout(Duration.ofSeconds(5))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(),
-            HttpResponse.BodyHandlers.discarding())
-        .exceptionally(ex -> {
-            log.warnf("Failed to answer Telegram callback %s: %s",
-                callbackQueryId, ex.getMessage());
-            return null;
-        });
+        try {
+            Map<String, String> payload = new HashMap<>();
+            payload.put("callback_query_id", callbackQueryId);
+            if (text != null) {
+                payload.put("text", text);
+            }
+            String body = objectMapper.writeValueAsString(payload);
+
+            httpClient.sendAsync(
+                HttpRequest.newBuilder()
+                    .uri(URI.create(
+                        "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build(),
+                HttpResponse.BodyHandlers.discarding())
+            .exceptionally(ex -> {
+                log.warnf("Failed to answer Telegram callback %s: %s",
+                    callbackQueryId, ex.getMessage());
+                return null;
+            });
+        } catch (Exception e) {
+            log.warnf("Failed to serialize Telegram callback answer: %s", e.getMessage());
+        }
     }
 
     private void answerCallback(String callbackQueryId) {
