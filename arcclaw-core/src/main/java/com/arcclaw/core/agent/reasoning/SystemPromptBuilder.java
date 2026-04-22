@@ -1,6 +1,8 @@
 package com.arcclaw.core.agent.reasoning;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -335,7 +337,9 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         }
 
         // 1. ArcClaw prefix + persona prompt
-        String baseSystemPrompt = "You are ArcClaw. Your active persona is described below.\n\n" +
+        // Generically inject system time into the very first line for all modes/roles.
+        String baseSystemPrompt = "You are ArcClaw. CURRENT SYSTEM TIME (UTC): " + formatTime(Instant.now()) + "\n" +
+                "Your active persona is described below.\n\n" +
                 personaPrompt +
                 "\n\n";
 
@@ -478,6 +482,16 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
                 + "For capability/self-description questions, answer directly without memory_search.\n"
                 + buildCompactExecutionBoundaryRule(roleEnum)
                 + buildCompactToolContaminationGuard(context, roleEnum);
+    }
+
+    private String formatTime(Instant systemTimeUtc) {
+        ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
+        return String.format(
+                "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
+                zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
+                zdt.getHour(), zdt.getMinute(),
+                zdt.getHour(), zdt.getMinute()
+        );
     }
 
     private List<String> getAvailableToolNames(AgentExecutionContext context, AgentRoleEnum roleEnum) {
