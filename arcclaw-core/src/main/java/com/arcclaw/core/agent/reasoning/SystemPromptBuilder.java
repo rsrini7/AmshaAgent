@@ -588,7 +588,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         return """
                 BROWSER EXTRACTION RETRY RULE:
                 If a browser extraction (`browser_navigate` with action=extract_text) returns fewer
-                than 50 characters, the CSS selector likely failed to capture the main content.
+                than 300 characters, the CSS selector likely failed to capture the main content.
                 In this case, do NOT give up or finish with an "unable to fetch" message.
                 Instead, attempt a second call with a broader selector (e.g. "h3", "article", or "body").
                 Only conclude the content is unavailable after multiple failed attempts with

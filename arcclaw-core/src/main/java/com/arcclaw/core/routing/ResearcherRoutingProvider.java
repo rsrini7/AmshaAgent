@@ -4,10 +4,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import com.arcclaw.core.util.FuzzyMatcher;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.util.FuzzyMatcher;
 
 /**
  * Fast-path routing for research and information retrieval requests.
