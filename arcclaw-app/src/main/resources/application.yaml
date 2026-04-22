@@ -395,7 +395,7 @@ arcclaw:
       enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
       headless: true
       timeout-ms: 30000
-      min-content-chars: 200   # minimum chars for a selector result to be accepted
+      min-content-chars: 500   # minimum chars for a selector result to be accepted
       min-filter-chars: 15     # minimum chars per individual text node to include
       selector-wait-ms: 2000
 

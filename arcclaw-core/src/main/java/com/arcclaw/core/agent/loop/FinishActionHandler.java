@@ -74,6 +74,13 @@ public class FinishActionHandler {
             Pattern.MULTILINE
     );
 
+    /**
+     * Matches raw JSON tool call blocks that occasionally leak into prose answers.
+     * Looks for braces containing "tool", "action", "function", or "callId".
+     */
+    private static final Pattern TOOL_CALL_JSON_LEAK =
+            Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId)\"\\s*:.*?\\}", Pattern.DOTALL);
+
     private final AnswerGuardStrategy qualityGuard;
     private final CodeGenerationPolicy codePolicy;
     private final RateLimitTracker rateLimitTracker;
@@ -147,6 +154,9 @@ public class FinishActionHandler {
                     .replace("\\u003e", ">")
                     .replace("\\u0026", "&")
                     .replace("\\u0027", "'");
+            
+            // --- Strip leaked tool-call JSON ---
+            answer = sanitizeAnswer(answer);
         }
 
         // --- Code-generation policy ---
@@ -176,6 +186,19 @@ public class FinishActionHandler {
 
         AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
         return new FinishOutcome.Completed(result, finalAnswer);
+    }
+
+    /**
+     * Strips any leaked tool-call JSON blocks from the final answer text.
+     */
+    private String sanitizeAnswer(String raw) {
+        if (raw == null) return null;
+        String stripped = TOOL_CALL_JSON_LEAK.matcher(raw).replaceAll("").strip();
+        if (!stripped.equals(raw)) {
+            log.warnf("FINISH-HANDLER stripped leaked tool-call JSON from answer (%d chars removed)",
+                    raw.length() - stripped.length());
+        }
+        return stripped;
     }
 
     private String sanitizeErrorForUser(String answer, String sessionId) {
