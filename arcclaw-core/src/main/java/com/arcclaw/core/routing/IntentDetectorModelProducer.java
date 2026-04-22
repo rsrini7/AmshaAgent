@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
+import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -18,6 +19,7 @@ import org.jboss.logging.Logger;
  * discovers the active {@link RoutingChatModelProvider} via CDI.
  */
 @ApplicationScoped
+@Unremovable
 public class IntentDetectorModelProducer {
 
     private static final Logger log = Logger.getLogger(IntentDetectorModelProducer.class);

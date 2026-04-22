@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.routing.FallbackChatModel;
 import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
+import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -24,6 +25,7 @@ import org.jboss.logging.Logger;
  * Selects the active {@link AgentChatModelProvider} and manages fallbacks.
  */
 @ApplicationScoped
+@Unremovable
 public class ChatModelProducer {
 
     private static final Logger log = Logger.getLogger(ChatModelProducer.class);

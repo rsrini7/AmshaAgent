@@ -1,6 +1,8 @@
 package com.arcclaw.onboarding;
 
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
 
 import com.arcclaw.core.agent.reasoning.AgentChatModelProvider;
@@ -10,6 +12,8 @@ import io.smallrye.common.annotation.Identifier;
 import org.mockito.Mockito;
 
 @ApplicationScoped
+@Alternative
+@Priority(1)
 public class MockChatModelProducer implements AgentChatModelProvider {
 
     @Override
@@ -25,12 +29,40 @@ public class MockChatModelProducer implements AgentChatModelProvider {
     @Produces
     @ApplicationScoped
     @Identifier("compaction")
+    @Alternative
+    @Priority(1)
     public ChatModel compactionModel() {
         return Mockito.mock(ChatModel.class);
     }
 
     @Produces
+    @Identifier("compaction-mode")
+    @Alternative
+    @Priority(1)
+    public String compactionMode() {
+        return "NATIVE";
+    }
+
+    @Produces
+    @Identifier("intent-classifier-mode")
+    @Alternative
+    @Priority(1)
+    public String intentClassifierMode() {
+        return "NATIVE";
+    }
+
+    @Produces
+    @Identifier("agent-output-mode")
+    @Alternative
+    @Priority(1)
+    public String agentOutputMode() {
+        return "NATIVE";
+    }
+
+    @Produces
     @ApplicationScoped
+    @Alternative
+    @Priority(1)
     public EmbeddingModel mockEmbeddingModel() {
         return Mockito.mock(EmbeddingModel.class);
     }

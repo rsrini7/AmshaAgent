@@ -32,6 +32,8 @@ import io.smallrye.common.annotation.Identifier;
 public class TestMockProducers {
 
     @Produces
+    @Alternative
+    @Priority(1)
     @ApplicationScoped
     public ChatModel defaultChatModel() {
         return mock(ChatModel.class);
@@ -39,6 +41,8 @@ public class TestMockProducers {
 
     @Produces
     @Identifier("compaction")
+    @Alternative
+    @Priority(1)
     @ApplicationScoped
     public ChatModel compactionModel() {
         ChatModel m = mock(ChatModel.class);
@@ -48,6 +52,8 @@ public class TestMockProducers {
 
     @Produces
     @Identifier("intent-classifier")
+    @Alternative
+    @Priority(1)
     @ApplicationScoped
     public ChatModel intentDetectorModel() {
         ChatModel m = mock(ChatModel.class);
@@ -56,6 +62,32 @@ public class TestMockProducers {
     }
 
     @Produces
+    @Identifier("compaction-mode")
+    @Alternative
+    @Priority(1)
+    public String compactionMode() {
+        return "NATIVE";
+    }
+
+    @Produces
+    @Identifier("intent-classifier-mode")
+    @Alternative
+    @Priority(1)
+    public String intentClassifierMode() {
+        return "NATIVE";
+    }
+
+    @Produces
+    @Identifier("agent-output-mode")
+    @Alternative
+    @Priority(1)
+    public String agentOutputMode() {
+        return "NATIVE";
+    }
+
+    @Produces
+    @Alternative
+    @Priority(1)
     @ApplicationScoped
     public EmbeddingModel embeddingModel() {
         return mock(EmbeddingModel.class);
