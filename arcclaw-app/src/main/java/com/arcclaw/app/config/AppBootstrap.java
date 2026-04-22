@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 import com.arcclaw.app.util.CliUtils;
 import com.arcclaw.core.sandbox.SandboxStrategy;
+import org.jboss.logging.Logger;
 
 /**
  * Bootstraps the application by resolving the binary directory, loading .env files,
@@ -26,7 +27,9 @@ import com.arcclaw.core.sandbox.SandboxStrategy;
  */
 public class AppBootstrap {
 
-    private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
+    private static final Logger log = Logger.getLogger(AppBootstrap.class);
+
+    private static final Pattern ENV_PATTERN = Pattern.compile("^\\\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\\\s*=\\\\s*(.*?)\\\\s*$");
 
     // Keys whose input should be hidden
     private static final Set<String> SENSITIVE_KEYS = Set.of(
@@ -837,7 +840,9 @@ public class AppBootstrap {
         System.setProperty("arcclaw.llm.compact-prompt-enabled", finalCompactValue);
 
         if (shouldEnable) {
-            System.err.println("[ArcClaw] ℹ️  Compact Prompt Mode ENABLED (window=" + effectiveWindow + ").");
+            String msg = "[ArcClaw] ℹ️  Compact Prompt Mode ENABLED (window=" + effectiveWindow + ").";
+            System.err.println(msg);
+            log.debug(msg);
         }
 
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
