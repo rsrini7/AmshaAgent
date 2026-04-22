@@ -829,11 +829,16 @@ public class AppBootstrap {
         System.setProperty("arcclaw.llm.context-window", effectiveWindow);
 
         String compactPromptEnabled = System.getProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", System.getenv("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED"));
-        if (compactPromptEnabled == null || compactPromptEnabled.isBlank()) {
-            compactPromptEnabled = "false";
+        boolean shouldEnable = "true".equalsIgnoreCase(compactPromptEnabled)
+                || (Integer.parseInt(effectiveWindow) <= 8192);
+
+        String finalCompactValue = shouldEnable ? "true" : "false";
+        System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalCompactValue);
+        System.setProperty("arcclaw.llm.compact-prompt-enabled", finalCompactValue);
+
+        if (shouldEnable) {
+            System.err.println("[ArcClaw] ℹ️  Compact Prompt Mode ENABLED (window=" + effectiveWindow + ").");
         }
-        System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", compactPromptEnabled);
-        System.setProperty("arcclaw.llm.compact-prompt-enabled", compactPromptEnabled);
 
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
         if ("openrouter".equalsIgnoreCase(compactionProvider)) {

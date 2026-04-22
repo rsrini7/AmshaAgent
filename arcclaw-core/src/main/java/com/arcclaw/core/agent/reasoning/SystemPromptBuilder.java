@@ -5,14 +5,10 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.ContextNotActiveException;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
@@ -21,8 +17,11 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 /**
  * Builds the system prompt for ArcClaw agents.
@@ -47,8 +46,6 @@ public class SystemPromptBuilder {
 
     @ConfigProperty(name = "arcclaw.llm.compact-prompt-enabled", defaultValue = "false")
     boolean compactPromptEnabled;
-
-    private final Set<String> loggedCompactSessions = ConcurrentHashMap.newKeySet();
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -314,12 +311,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         // (RESEARCHER) governs the tool-binding section only.
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
-        boolean isCompact = compactPromptEnabled || contextWindow <= 8192;
-
-        if (isCompact && sessionId != null && loggedCompactSessions.add(sessionId)) {
-            log.debugf("[SystemPromptBuilder] COMPACT PROMPT MODE active for session %s (window=%d, manual=%b)",
-                       sessionId, contextWindow, compactPromptEnabled);
-        }
+        boolean isCompact = compactPromptEnabled;
 
         if (AgentRoleEnum.isSkillRole(agentRole)) {
             String skillName = AgentRoleEnum.skillName(agentRole);
