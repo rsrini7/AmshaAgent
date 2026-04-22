@@ -127,4 +127,21 @@ class SystemPromptBuilderTest {
         assertTrue(!result.contains("retry once with a broader selector"),
                 "Compact browser retry rule should only appear for browser-capable roles");
     }
+
+    @Test
+    void testBuildSystemPrompt_compactPromptFlagForcesCompactMode() {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        builder.contextWindow = 128000;
+        builder.compactPromptEnabled = true;
+
+        String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal");
+
+        assertTrue(result.contains("TOOL PRIORITY RULES:"),
+                "Explicit compact prompt flag should force the compact prompt path");
+        assertTrue(!result.contains("TOOL_BINDING_MARKER"),
+                "Forced compact mode should bypass the full role template");
+    }
 }

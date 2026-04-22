@@ -24,6 +24,8 @@ class AppBootstrapTest {
         System.clearProperty("ARCCLAW_LLM_PROVIDER");
         System.clearProperty("ARCCLAW_LLM_CONTEXT_WINDOW");
         System.clearProperty("arcclaw.llm.context-window");
+        System.clearProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED");
+        System.clearProperty("arcclaw.llm.compact-prompt-enabled");
         System.clearProperty("ARCCLAW_COMPACTION_PROVIDER");
         System.clearProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER");
     }
@@ -80,6 +82,19 @@ class AppBootstrapTest {
 
         assertEquals("8192", System.getProperty("ARCCLAW_LLM_CONTEXT_WINDOW"));
         assertEquals("8192", System.getProperty("arcclaw.llm.context-window"));
+    }
+
+    @Test
+    void testValidateAndAutoFixLlmConfig_defaultsCompactPromptFlagToFalse(@TempDir Path tempDir) throws Exception {
+        System.setProperty("ARCCLAW_LLM_PROVIDER", "groq");
+
+        Path envFile = tempDir.resolve(".env");
+        Files.write(envFile, List.of("ARCCLAW_LLM_PROVIDER=groq"));
+
+        invokeValidateAndAutoFixLlmConfig(tempDir);
+
+        assertEquals("false", System.getProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED"));
+        assertEquals("false", System.getProperty("arcclaw.llm.compact-prompt-enabled"));
     }
 
     private static void invokeValidateAndAutoFixLlmConfig(Path binaryDir) throws Exception {

@@ -41,6 +41,9 @@ public class SystemPromptBuilder {
     @ConfigProperty(name = "arcclaw.llm.context-window", defaultValue = "128000")
     int contextWindow;
 
+    @ConfigProperty(name = "arcclaw.llm.compact-prompt-enabled", defaultValue = "false")
+    boolean compactPromptEnabled;
+
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
     private final CompactionSummaryCache summaryCache;
@@ -304,7 +307,7 @@ public class SystemPromptBuilder {
         // (RESEARCHER) governs the tool-binding section only.
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
-        boolean isCompact = contextWindow <= 8192;
+        boolean isCompact = compactPromptEnabled || contextWindow <= 8192;
 
         if (AgentRoleEnum.isSkillRole(agentRole)) {
             String skillName = AgentRoleEnum.skillName(agentRole);

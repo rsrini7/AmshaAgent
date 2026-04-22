@@ -828,6 +828,13 @@ public class AppBootstrap {
         System.setProperty("ARCCLAW_LLM_CONTEXT_WINDOW", effectiveWindow);
         System.setProperty("arcclaw.llm.context-window", effectiveWindow);
 
+        String compactPromptEnabled = System.getProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", System.getenv("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED"));
+        if (compactPromptEnabled == null || compactPromptEnabled.isBlank()) {
+            compactPromptEnabled = "false";
+        }
+        System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", compactPromptEnabled);
+        System.setProperty("arcclaw.llm.compact-prompt-enabled", compactPromptEnabled);
+
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
         if ("openrouter".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "google/gemma-3-27b-it:free");

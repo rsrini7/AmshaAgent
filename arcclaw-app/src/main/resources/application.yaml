@@ -307,6 +307,7 @@ arcclaw:
     timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
     temperature: ${ARCCLAW_LLM_TEMPERATURE:0.1}
     context-window: ${ARCCLAW_LLM_CONTEXT_WINDOW:128000}
+    compact-prompt-enabled: ${ARCCLAW_LLM_COMPACT_PROMPT_ENABLED:false}
     fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL}
     fallback-provider: ${ARCCLAW_LLM_FALLBACK_PROVIDER}
     fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL}
