@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.routing.FallbackChatModel;
 import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -136,8 +137,8 @@ public class ChatModelProducer {
     }
 
     @Produces
-    @ApplicationScoped
-    public StructuredOutputMode structuredOutputMode() {
+    @Identifier("agent-output-mode")
+    public String structuredOutputMode() {
         StructuredOutputMode primaryMode = findProvider().structuredOutputMode();
         
         // Resolve fallback mode from config
@@ -150,10 +151,10 @@ public class ChatModelProducer {
 
         // Effective logic: if EITHER needs a prompt directive, we include it.
         if (primaryMode == StructuredOutputMode.PROMPT_DIRECTIVE || fbMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
-            return StructuredOutputMode.PROMPT_DIRECTIVE;
+            return StructuredOutputMode.PROMPT_DIRECTIVE.name();
         }
         
-        return primaryMode;
+        return primaryMode.name();
     }
 
     private AgentChatModelProvider findProvider() {

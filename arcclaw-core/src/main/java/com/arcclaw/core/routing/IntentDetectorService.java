@@ -38,7 +38,9 @@ public class IntentDetectorService implements IntentDetector {
 
     @Inject
     @Identifier("intent-classifier-mode")
-    StructuredOutputMode structuredOutputMode;
+    String structuredOutputModeStr;
+
+    private StructuredOutputMode structuredOutputMode;
 
     @Inject
     DestructiveVocabularyFilter destructiveFilter;
@@ -63,6 +65,9 @@ public class IntentDetectorService implements IntentDetector {
 
     @PostConstruct
     void init() {
+
+        this.structuredOutputMode = StructuredOutputMode.valueOf(structuredOutputModeStr.toUpperCase());
+
         this.sortedProviders = providers.stream()
                 .sorted(Comparator.comparingInt(IntentRoutingProvider::priority))
                 .toList();

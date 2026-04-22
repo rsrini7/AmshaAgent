@@ -29,7 +29,7 @@ public class AppBootstrap {
 
     private static final Logger log = Logger.getLogger(AppBootstrap.class);
 
-    private static final Pattern ENV_PATTERN = Pattern.compile("^\\\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\\\s*=\\\\s*(.*?)\\\\s*$");
+    private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
     // Keys whose input should be hidden
     private static final Set<String> SENSITIVE_KEYS = Set.of(

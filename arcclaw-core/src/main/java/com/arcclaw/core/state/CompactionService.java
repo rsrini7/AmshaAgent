@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -55,7 +56,14 @@ public class CompactionService {
 
     @Inject
     @Identifier("compaction-mode")
-    StructuredOutputMode structuredOutputMode;
+    String structuredOutputModeStr;
+
+    private StructuredOutputMode structuredOutputMode;
+
+    @PostConstruct
+    void init() {
+        this.structuredOutputMode = StructuredOutputMode.valueOf(structuredOutputModeStr.toUpperCase());
+    }
 
     @Inject
     RateLimitTracker rateLimitTracker;

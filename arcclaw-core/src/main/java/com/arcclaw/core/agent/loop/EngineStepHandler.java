@@ -38,6 +38,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.smallrye.common.annotation.Identifier;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
@@ -56,6 +57,10 @@ public class EngineStepHandler {
     private final ObjectMapper objectMapper;
     private final RateLimitTracker rateLimitTracker;
     private final StatefulAgentStore agentStore;
+
+    @Inject
+    @Identifier("agent-output-mode")
+    String structuredOutputModeStr;
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
         Pattern.compile("^([A-Za-z*#\\[]).*\\s.*[.!?]\\s*$", Pattern.DOTALL);

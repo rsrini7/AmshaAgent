@@ -73,7 +73,15 @@ public class DestructiveVocabularyFilter {
         return role;
     }
 
+    /**
+     * Returns true if the role's primary mission is writing code (CODER), or if its
+     * ONLY capability is SANDBOX_EXEC. These roles are exempt
+     * from the destructive vocabulary filter because code creation often requires
+     * using words that would otherwise be flagged.
+     */
     boolean isSandboxOnlyRole(AgentRoleEnum role) {
+        if (role == AgentRoleEnum.CODER) return true;
+        
         Set<ToolCapability> caps = role.definition().capabilities();
         return caps.isEmpty() ||
             (caps.size() == 1 && caps.contains(ToolCapability.SANDBOX_EXEC));

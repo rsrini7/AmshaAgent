@@ -71,9 +71,8 @@ public class IntentDetectorModelProducer {
     }
 
     @Produces
-    @ApplicationScoped
     @Identifier("intent-classifier-mode")
-    public StructuredOutputMode intentDetectorMode() {
-        return structuredOutputMode;
+    public String intentDetectorMode() {
+        return structuredOutputMode.name();
     }
 }

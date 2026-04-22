@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.inject.Instance;
@@ -19,6 +20,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -46,8 +48,20 @@ public class SystemPromptBuilder {
     @ConfigProperty(name = "arcclaw.llm.compact-prompt-enabled", defaultValue = "false")
     boolean compactPromptEnabled;
 
-    @ConfigProperty(name = "arcclaw.llm.structured-output-mode", defaultValue = "NATIVE")
-    StructuredOutputMode structuredOutputMode;
+    @Inject
+    @Identifier("agent-output-mode")
+    String structuredOutputModeStr;
+
+    private StructuredOutputMode structuredOutputMode;
+
+    @PostConstruct
+    void init() {
+        if (structuredOutputModeStr != null) {
+            this.structuredOutputMode = StructuredOutputMode.valueOf(structuredOutputModeStr.toUpperCase());
+        } else {
+            this.structuredOutputMode = StructuredOutputMode.NATIVE;
+        }
+    }
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -327,7 +341,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         // (RESEARCHER) governs the tool-binding section only.
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
-        boolean isCompact = compactPromptEnabled;
+        boolean isCompact = compactPromptEnabled || (contextWindow > 0 && contextWindow <= 8192);
 
         if (AgentRoleEnum.isSkillRole(agentRole)) {
             String skillName = AgentRoleEnum.skillName(agentRole);

@@ -34,17 +34,31 @@ public class VaultStoreReflexTest {
     SecretVault secretVault;
 
     @Test
-    void testMatchesKnownSecrets() {
+    void testMatchesAnyVaultKeyPattern() {
         assertTrue(reflex.matches("vault GITHUB_TOKEN=abc"));
         assertTrue(reflex.matches("vault ARCCLAW_TOOLS_BRAVE_API_KEY=sk-123"));
-        assertTrue(reflex.matches("VAULT ARCCLAW_TOOLS_BRAVE_API_KEY = xyz"));
+        assertTrue(reflex.matches("VAULT some_random_key=value"), "Should match any key pattern to provide help");
     }
 
     @Test
-    void testDoesNotMatchRandomWords() {
-        assertFalse(reflex.matches("vault some_random_key=value"));
+    void testDoesNotMatchNonVaultPhrases() {
         assertFalse(reflex.matches("remember my name is srini"));
         assertFalse(reflex.matches("help me"));
+    }
+
+    @Test
+    void testExecuteHandlesUnknownKeyHelpfully() {
+        String input = "vault MY_BAD_KEY=secret-123";
+        ChannelUser user = new ChannelUser("user-1", "chat-123", "User 1", ChannelType.CLI);
+        ChannelMessage message = new ChannelMessage.CliMessage(user, input, "sess-1", Instant.now());
+        MessageContext context = new MessageContext("chat-123", user, message);
+
+        ReflexResult result = reflex.execute("sess-1", "user-1", "chat-123", input, context);
+
+        assertTrue(result.commandResponse().get().contains("Unknown vault key"), 
+            "Should return helpful error for unknown key");
+        assertTrue(result.commandResponse().get().contains("GITHUB_TOKEN"),
+            "Error message should list known keys");
     }
 
     @Test
