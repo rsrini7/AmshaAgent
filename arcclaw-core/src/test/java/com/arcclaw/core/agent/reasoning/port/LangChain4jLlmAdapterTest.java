@@ -7,6 +7,7 @@ import java.util.Arrays;
 
 import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
 import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
+import dev.langchain4j.model.chat.request.ChatRequest;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +16,7 @@ class LangChain4jLlmAdapterTest {
     @Test
     void nextStepWithCb_doesNotCountModelSchemaOrToolCallErrorsAsCircuitBreakerFailures() throws Exception {
         Method method = LangChain4jLlmAdapter.class.getDeclaredMethod("nextStepWithCb",
-                dev.langchain4j.model.chat.request.ChatRequest.class);
+                ChatRequest.class);
         CircuitBreaker annotation = method.getAnnotation(CircuitBreaker.class);
 
         assertTrue(annotation != null, "nextStepWithCb should have a circuit breaker annotation");

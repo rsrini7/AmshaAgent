@@ -1,5 +1,7 @@
 package com.arcclaw.core.util;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -110,8 +112,19 @@ public class AgentResultFormatter {
                 .split(",");
             sb.append("⏸ Parallel batch execution requires approval.\n\n");
             sb.append("Tools pending:\n");
+
+            // Count occurrences to group duplicates
+            Map<String, Integer> toolCounts = new LinkedHashMap<>();
             for (String ts : tools) {
-                sb.append("• ").append(ts).append("\n");
+                toolCounts.put(ts, toolCounts.getOrDefault(ts, 0) + 1);
+            }
+
+            for (Map.Entry<String, Integer> entry : toolCounts.entrySet()) {
+                sb.append("• ").append(entry.getKey());
+                if (entry.getValue() > 1) {
+                    sb.append(" (").append(entry.getValue()).append(" calls)");
+                }
+                sb.append("\n");
             }
         } else {
             sb.append("⏸ Approval needed for tool: ").append(compositeName);
