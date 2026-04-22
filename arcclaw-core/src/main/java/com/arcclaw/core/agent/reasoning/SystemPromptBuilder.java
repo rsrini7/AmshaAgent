@@ -5,6 +5,8 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -45,6 +47,8 @@ public class SystemPromptBuilder {
 
     @ConfigProperty(name = "arcclaw.llm.compact-prompt-enabled", defaultValue = "false")
     boolean compactPromptEnabled;
+
+    private final Set<String> loggedCompactSessions = ConcurrentHashMap.newKeySet();
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -312,7 +316,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         final AgentRoleEnum roleEnum;
         boolean isCompact = compactPromptEnabled || contextWindow <= 8192;
 
-        if (isCompact) {
+        if (isCompact && sessionId != null && loggedCompactSessions.add(sessionId)) {
             log.debugf("[SystemPromptBuilder] COMPACT PROMPT MODE active for session %s (window=%d, manual=%b)",
                        sessionId, contextWindow, compactPromptEnabled);
         }
