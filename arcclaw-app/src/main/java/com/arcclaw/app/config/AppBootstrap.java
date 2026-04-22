@@ -768,7 +768,7 @@ public class AppBootstrap {
         String intentProvider = System.getProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER", System.getenv("ARCCLAW_INTENT_CLASSIFIER_PROVIDER"));
         if (intentProvider == null || intentProvider.isBlank()) intentProvider = provider;
 
-        // Auto-fix main model based on ARCCLAW_LLM_PROVIDER
+        // Auto-fix main model and URL based on ARCCLAW_LLM_PROVIDER
         if ("openrouter".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/auto", "openai/gpt-oss-20b:free");
@@ -783,7 +783,7 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openai/gpt-oss-20b:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "mistralai/devstral-2-123b-instruct-2512", "meta-llama/llama-4-scout-17b-16e-instruct");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "qwen-3-235b-a22b-instruct-2507", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "llama3.1-8b", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
@@ -796,11 +796,11 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
         } else if ("cerebras".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "qwen-3-235b-a22b-instruct-2507");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "llama3.1-8b");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
-
+           
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
         if ("openrouter".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "google/gemma-3-27b-it:free");
