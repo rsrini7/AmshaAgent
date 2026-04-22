@@ -102,6 +102,14 @@ class SystemPromptBuilderTest {
                 "Compact prompt should use the minimal tool binding contract");
         assertTrue(!result.contains("TOOL_BINDING_MARKER"),
                 "Compact prompt should not render the full role template");
+        assertTrue(result.contains("If the user asks about your capabilities"),
+                "Compact prompt should include cross-tool priority rules for tiny models");
+        assertTrue(result.contains("A denied or failed tool call does not block a different valid tool"),
+                "Compact prompt should avoid cross-turn suppression after a denied tool");
+        assertTrue(result.contains("For capability/self-description questions, answer directly without memory_search"),
+                "Compact binding should explicitly protect capability questions from memory_search");
+        assertTrue(result.contains("For explicit owner/repo GitHub requests, prefer `github` over text-only fallback"),
+                "Compact binding should explicitly prefer github for direct repo requests");
         assertTrue(!result.contains("YOUR INTERNAL ARCHITECTURE"),
                 "Non-coordinator roles should not contain the coordinator architecture block");
     }

@@ -275,6 +275,18 @@ public class SystemPromptBuilder {
             such as `article` or `body` before concluding the content is unavailable.
             """;
 
+    private static final String COMPACT_TOOL_PRIORITY_RULES = """
+            TOOL PRIORITY RULES:
+            1. If the user asks about your capabilities, who you are, this conversation, or current context: answer in plain text. Do not call tools.
+            2. If the user says store/save/remember/ingest/call me: call `ingest_document`, not memory_search.
+            3. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
+            4. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
+            5. Use `memory_search` only for past-session recall not present in the current conversation.
+            6. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
+            7. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
+            8. A denied or failed tool call does not block a different valid tool on the next user message.
+            """;
+
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = """
             EXECUTION BOUNDARY:
             Use `sandbox_exec` for run/execute/compile requests. If it is offline, say so plainly.
@@ -343,6 +355,9 @@ public class SystemPromptBuilder {
         // "I cannot execute code" boundary. This prevents the LLM from incorrectly
         // refusing sandbox_exec calls while maintaining the boundary for text-only roles.
         baseSystemPrompt += isCompact ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
+        if (isCompact) {
+            baseSystemPrompt += COMPACT_TOOL_PRIORITY_RULES;
+        }
         baseSystemPrompt += buildExecutionBoundaryRule(roleEnum);
 
         baseSystemPrompt += isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum);
@@ -443,6 +458,9 @@ public class SystemPromptBuilder {
                 + "PERMITTED TOOLS: " + toolList + "\n"
                 + "If a required tool is not listed, output text only.\n"
                 + "Never call a tool named only in prior chat history.\n"
+                + "When current context already answers the question, answer directly without tools.\n"
+                + "For explicit owner/repo GitHub requests, prefer `github` over text-only fallback.\n"
+                + "For capability/self-description questions, answer directly without memory_search.\n"
                 + buildCompactExecutionBoundaryRule(roleEnum)
                 + buildCompactToolContaminationGuard(context, roleEnum);
     }
