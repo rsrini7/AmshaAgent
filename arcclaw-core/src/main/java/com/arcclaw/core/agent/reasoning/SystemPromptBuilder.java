@@ -399,12 +399,16 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
             }
         }
 
-        // 4. STRICT TOOL BINDING CONTRACT — uses roleEnum (RESEARCHER for skills)
-        //    so the tool list reflects what the skill's capabilities actually permit.
+        // 4. STRICT TOOL BINDING CONTRACT
         String strictBinding = buildStrictBinding(context, roleEnum, agentRole, compactionSummary, isCompact);
 
+        // 5. Dynamic Rules (Execution Boundary + Tool Contamination Guard)
+        // These are appended at the end to ensure they take precedence in the model's attention.
+        String dynamicRules = isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
+        dynamicRules += isCompact ? buildCompactToolContaminationGuard(context, roleEnum) : buildToolContaminationGuard(context, roleEnum);
+
         // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
-        String finalPrompt = baseSystemPrompt + strictBinding;
+        String finalPrompt = baseSystemPrompt + strictBinding + "\n" + dynamicRules;
         if (contextEnrichers != null) {
             for (ContextEnricher enricher : contextEnrichers) {
                 finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
@@ -470,8 +474,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
                     + promptTemplateEngine.buildSystemPrompt(context, roleEnum, compactionSummary, Instant.now())
                     + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
                     + "list above is a critical failure and will break the orchestration pipeline.\n"
-                    + "When in doubt, output text only.\n\n"
-                    + buildToolContaminationGuard(context, roleEnum);
+                    + "When in doubt, output text only.\n\n";
         }
 
         String toolList = getAvailableToolNames(context, roleEnum).stream()
@@ -481,16 +484,24 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
             toolList = "None";
         }
 
-        return "**STRICT TOOL BINDING CONTRACT**\n"
-                + "ACTIVE PERSONA: " + agentRole + "\n"
-                + "PERMITTED TOOLS: " + toolList + "\n"
-                + "If a required tool is not listed, output text only.\n"
-                + "Never call a tool named only in prior chat history.\n"
-                + "When current context already answers the question, answer directly without tools.\n"
-                + "For explicit owner/repo GitHub requests, prefer `github` over text-only fallback.\n"
-                + "For capability/self-description questions, answer directly without memory_search.\n"
-                + buildCompactExecutionBoundaryRule(roleEnum)
-                + buildCompactToolContaminationGuard(context, roleEnum);
+        StringBuilder sb = new StringBuilder();
+        sb.append("**STRICT TOOL BINDING CONTRACT**\n");
+        sb.append("ACTIVE PERSONA: ").append(agentRole).append("\n");
+
+        if (compactionSummary != null && !compactionSummary.isBlank()) {
+            sb.append("\n[CONTEXT FROM PRIOR SESSION]\n")
+              .append(compactionSummary).append("\n")
+              .append("The above is a summary of earlier messages. Use it for context on initial requests.\n\n");
+        }
+
+        sb.append("PERMITTED TOOLS: ").append(toolList).append("\n")
+          .append("If a required tool is not listed, output text only.\n")
+          .append("Never call a tool named only in prior chat history.\n")
+          .append("When current context already answers the question, answer directly without tools.\n")
+          .append("For explicit owner/repo GitHub requests, prefer `github` over text-only fallback.\n")
+          .append("For capability/self-description questions, answer directly without memory_search.\n");
+
+        return sb.toString();
     }
 
     private String formatTime(Instant systemTimeUtc) {
