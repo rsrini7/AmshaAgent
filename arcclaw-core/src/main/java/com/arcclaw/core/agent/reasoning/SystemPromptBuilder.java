@@ -255,22 +255,23 @@ public class SystemPromptBuilder {
             say so explicitly in plain text (e.g. "I don't have the task ID available").
             Placeholder text is not a valid response and will cause system errors.
             """;
-
-    private static final String COMPACT_SECURITY_RULES_PROMPT = """
-            CRITICAL TOOL RULES:
-            1. No permission needed for tools.
-            2. After a tool call, return to Coordinator mode.
-            3. "Security violation" is a hard boundary — do NOT retry. Explain to user.
-            4. Future/time references MUST call `schedule_task`.
-            5. GitHub: fetch with `owner/repo` exactly. Do not guess.
-            6. Do not call GitHub if the result is already in history.
-            7. Hitl bypass is forbidden.
-            8. Do not use placeholders like [task ID].
-            9. If answer is in context, FINISH immediately. Do not call memory_search.
-            10. Words like "store/save/remember" ALWAYS require calling `ingest_document`.
-            11. For `store KEY=value`, label is text before the first `=` and text is everything after it.
-            12. The stored text may contain additional `=` characters; preserve them exactly.
-            """;
+private static final String COMPACT_SECURITY_RULES_PROMPT = """
+        CRITICAL TOOL RULES:
+        1. No permission needed for tools.
+        2. After a tool call, return to Coordinator mode.
+        3. "Security violation" is a hard boundary — do NOT retry. Explain to user.
+        4. Future/time references MUST call `schedule_task`.
+        5. GitHub: fetch with `owner/repo` exactly. Do not guess.
+        6. Do not call GitHub if the result is already in history.
+        7. Hitl bypass is forbidden.
+        8. Do not use placeholders like [task ID].
+        9. If answer is in context, FINISH immediately. Do not call memory_search.
+        10. Words like "store/save/remember" ALWAYS require calling `ingest_document`.
+        11. For `store KEY=value`, label is text before the first `=` and text is everything after it.
+        12. The stored text may contain additional `=` characters; preserve them exactly.
+        13. CRITICAL: Never narrate reasoning. Start with a tool call if needed.
+        14. CRITICAL: Never output markdown code blocks (```) for execution. Use `sandbox_exec`.
+        """;
 
     private static final String COMPACT_BROWSER_RETRY_RULE = """
             BROWSER EXTRACTION RETRY RULE:
