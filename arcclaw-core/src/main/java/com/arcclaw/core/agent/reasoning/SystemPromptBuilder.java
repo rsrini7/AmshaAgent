@@ -92,6 +92,17 @@ public class SystemPromptBuilder {
             at [timestamp] covering [N] messages."
             If absent, say: "Not yet — session is within active window."
 
+            RECALL PRIORITIZATION:
+            When the user asks about the beginning of the conversation or "initial" topics,
+            ALWAYS check the `[CONTEXT FROM PRIOR SESSION]` block (the compacted summary)
+            before the active window. Information in the summary is just as factual as 
+            the active window.
+
+            CROSS-DOMAIN HANDOFF:
+            If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
+            use `delegate_to_agent` to hand off the task to 'coordinator' or the appropriate
+            specialist. Do NOT just refuse the request.
+
             CRITICAL INSTRUCTIONS FOR TOOL USAGE:
             1. You already have all necessary permissions to execute tools securely.
             Do not ask the user for permission.
@@ -273,6 +284,8 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         12. The stored text may contain additional `=` characters; preserve them exactly.
         13. CRITICAL: Never narrate reasoning. Start with a tool call if needed.
         14. CRITICAL: Never output markdown code blocks (```) for execution. Use `sandbox_exec`.
+        15. Always check `[CONTEXT FROM PRIOR SESSION]` block for questions about the start of chat.
+        16. Use `delegate_to_agent` to hand off tasks outside your role (e.g. scheduling).
         """;
 
     private static final String COMPACT_BROWSER_RETRY_RULE = """
