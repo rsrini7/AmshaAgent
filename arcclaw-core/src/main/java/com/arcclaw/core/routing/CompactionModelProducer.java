@@ -1,19 +1,26 @@
-package com.arcclaw.app.compaction;
+package com.arcclaw.core.routing;
 
 import java.time.Duration;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
-import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
+import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+/**
+ * Produces the {@code compaction} {@link ChatModel} bean.
+ * Reads provider config and delegates to {@link LlmModelFactory}.
+ */
 @ApplicationScoped
+@Default
+@Unremovable
 public class CompactionModelProducer {
 
     private static final Logger log = Logger.getLogger(CompactionModelProducer.class);
@@ -21,10 +28,12 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "arcclaw.memory.compaction.provider", defaultValue = "groq")
     String provider;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.base-url")
+    @ConfigProperty(name = "arcclaw.memory.compaction.base-url",
+                    defaultValue = "https://api.groq.com/openai/v1")
     String compactionBaseUrl;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.api-key")
+    @ConfigProperty(name = "arcclaw.memory.compaction.api-key",
+                    defaultValue = "not-configured")
     String compactionApiKey;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.model", defaultValue = "llama-3.1-8b-instant")
@@ -52,7 +61,8 @@ public class CompactionModelProducer {
     @Identifier("compaction")
     @ApplicationScoped
     public ChatModel compactionModel() {
-        log.infof("CompactionModelProducer provider=%s model=%s mode=%s", provider, modelId, structuredOutputMode);
+        log.infof("CompactionModelProducer compaction provider=%s model=%s mode=%s", 
+                  provider, modelId, structuredOutputMode);
         return modelFactory.createModel(
             provider, compactionBaseUrl, compactionApiKey,
             modelId, compactionMaxTokens, Duration.ofSeconds(10),
