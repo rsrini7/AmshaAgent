@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -274,6 +275,16 @@ public class SystemPromptBuilder {
             such as `article` or `body` before concluding the content is unavailable.
             """;
 
+    private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = """
+            EXECUTION BOUNDARY:
+            Use `sandbox_exec` for run/execute/compile requests. If it is offline, say so plainly.
+            """;
+
+    private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = """
+            EXECUTION BOUNDARY:
+            Do not claim to run code. Explain that execution is unavailable in this role.
+            """;
+
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
         // --- Skill persona resolution ---
         // When SkillAwareIntentDetector routes to "skill:code-reviewer", we replace
@@ -353,19 +364,7 @@ public class SystemPromptBuilder {
 
         // 4. STRICT TOOL BINDING CONTRACT — uses roleEnum (RESEARCHER for skills)
         //    so the tool list reflects what the skill's capabilities actually permit.
-        String strictBinding = "**STRICT TOOL BINDING CONTRACT**\n"
-                + "ACTIVE PERSONA: " + agentRole + "\n"
-                + promptTemplateEngine.buildSystemPrompt(context, roleEnum, compactionSummary, Instant.now())
-                + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
-                + "list above is a critical failure and will break the orchestration pipeline.\n"
-                + "When in doubt, output text only.\n\n"
-
-                // Cross-turn tool contamination guard.
-                // Groq error "attempted to call tool X which was not in request.tools" is caused
-                // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
-                // a prior coordinator turn and trying to call it in a role that does not have it.
-                // This block is a hard LLM-level instruction to prevent that contamination.
-                + buildToolContaminationGuard(context, roleEnum);
+        String strictBinding = buildStrictBinding(context, roleEnum, agentRole, compactionSummary, isCompact);
 
         // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
         String finalPrompt = baseSystemPrompt + strictBinding;
@@ -415,6 +414,49 @@ public class SystemPromptBuilder {
                 """;
     }
 
+    private String buildCompactExecutionBoundaryRule(AgentRoleEnum roleEnum) {
+        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
+        return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;
+    }
+
+    private String buildStrictBinding(AgentExecutionContext context, AgentRoleEnum roleEnum,
+                                      String agentRole, String compactionSummary, boolean isCompact) {
+        if (!isCompact) {
+            return "**STRICT TOOL BINDING CONTRACT**\n"
+                    + "ACTIVE PERSONA: " + agentRole + "\n"
+                    + promptTemplateEngine.buildSystemPrompt(context, roleEnum, compactionSummary, Instant.now())
+                    + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
+                    + "list above is a critical failure and will break the orchestration pipeline.\n"
+                    + "When in doubt, output text only.\n\n"
+                    + buildToolContaminationGuard(context, roleEnum);
+        }
+
+        String toolList = getAvailableToolNames(context, roleEnum).stream()
+                .sorted()
+                .collect(Collectors.joining(", "));
+        if (toolList.isBlank()) {
+            toolList = "None";
+        }
+
+        return "**STRICT TOOL BINDING CONTRACT**\n"
+                + "ACTIVE PERSONA: " + agentRole + "\n"
+                + "PERMITTED TOOLS: " + toolList + "\n"
+                + "If a required tool is not listed, output text only.\n"
+                + "Never call a tool named only in prior chat history.\n"
+                + buildCompactExecutionBoundaryRule(roleEnum)
+                + buildCompactToolContaminationGuard(context, roleEnum);
+    }
+
+    private List<String> getAvailableToolNames(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
+        return roleEnum.definition().toolNames()
+                .stream()
+                .filter(name -> toolRegistry.findTool(name).isPresent())
+                .filter(name -> !isBackground ||
+                        (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
+                .toList();
+    }
+
     /**
      * Builds the HARD TOOL OVERRIDE block that explicitly lists the tools available
      * in THIS turn and forbids calling any tool referenced in chat history that belongs
@@ -425,12 +467,7 @@ public class SystemPromptBuilder {
      * a tool that was available to a different persona in a prior message.
      */
     private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
-        boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
-        String toolList = roleEnum.definition().toolNames()
-                .stream()
-                .filter(name -> toolRegistry.findTool(name).isPresent())
-                .filter(name -> !isBackground || 
-                        (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
+        String toolList = getAvailableToolNames(context, roleEnum).stream()
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
 
@@ -457,6 +494,16 @@ public class SystemPromptBuilder {
                 + "If you need a capability outside this list, use FINISH to tell the "
                 + "user that the task requires a different role or that they should "
                 + "rephrase the request.\n";
+    }
+
+    private String buildCompactToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        String toolList = getAvailableToolNames(context, roleEnum).stream()
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.joining(", "));
+        if (toolList.isBlank()) {
+            return "No tools are available in this turn.\n";
+        }
+        return "Only these tools may be called in this turn: " + toolList + ".\n";
     }
 
     /**

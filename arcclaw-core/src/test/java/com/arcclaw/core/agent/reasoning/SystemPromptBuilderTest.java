@@ -98,6 +98,10 @@ class SystemPromptBuilderTest {
                 "Compact prompt should preserve values containing additional '='");
         assertTrue(result.contains("retry once with a broader selector"),
                 "Compact prompt should retain browser extraction retry guidance");
+        assertTrue(result.contains("PERMITTED TOOLS: None"),
+                "Compact prompt should use the minimal tool binding contract");
+        assertTrue(!result.contains("TOOL_BINDING_MARKER"),
+                "Compact prompt should not render the full role template");
         assertTrue(!result.contains("YOUR INTERNAL ARCHITECTURE"),
                 "Non-coordinator roles should not contain the coordinator architecture block");
     }

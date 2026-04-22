@@ -814,13 +814,16 @@ public class AppBootstrap {
             case "ollama"   -> "8192";
             default         -> "128000";
         };
+
         String effectiveWindow = contextWindow;
-        if (effectiveWindow == null || effectiveWindow.isBlank() || effectiveWindow.equals("128000")) {
+        // Auto-fix if unset OR if it matches one of our known standard defaults but is wrong for the current provider
+        boolean isDefaultOrKnown = contextWindow == null || contextWindow.isBlank()
+                || Set.of("128000", "8192", "65536", "1000000").contains(contextWindow);
+
+        if (isDefaultOrKnown && !targetWindow.equals(contextWindow)) {
             effectiveWindow = targetWindow;
-            if (!targetWindow.equals(contextWindow)) {
-                System.err.println("[ArcClaw] ℹ️  Setting context window to " + targetWindow + " for provider '" + provider + "'.");
-                patchEnvFile(envFile, "ARCCLAW_LLM_CONTEXT_WINDOW", targetWindow);
-            }
+            System.err.println("[ArcClaw] ℹ️  Setting context window to " + targetWindow + " for provider '" + provider + "'.");
+            patchEnvFile(envFile, "ARCCLAW_LLM_CONTEXT_WINDOW", targetWindow);
         }
         System.setProperty("ARCCLAW_LLM_CONTEXT_WINDOW", effectiveWindow);
         System.setProperty("arcclaw.llm.context-window", effectiveWindow);
