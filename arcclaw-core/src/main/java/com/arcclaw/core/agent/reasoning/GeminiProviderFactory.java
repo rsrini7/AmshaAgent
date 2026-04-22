@@ -44,9 +44,17 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
     int maxRetries;
 
+    @ConfigProperty(name = "arcclaw.llm.structured-output-mode", defaultValue = "NATIVE")
+    StructuredOutputMode structuredOutputMode;
+
     @Override
     public String providerName() {
         return "gemini";
+    }
+
+    @Override
+    public StructuredOutputMode structuredOutputMode() {
+        return structuredOutputMode;
     }
 
     @Override

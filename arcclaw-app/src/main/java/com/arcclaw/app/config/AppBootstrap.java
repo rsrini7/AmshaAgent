@@ -845,6 +845,59 @@ public class AppBootstrap {
             log.debug(msg);
         }
 
+        // --- Structured Output Optimization ---
+        // NOTE: System.setProperty() here is safe because @ApplicationScoped producers
+        // are lazy-initialized in Quarkus. These properties will be visible when
+        // ChatModelProducer / SystemPromptBuilder first inject their @ConfigProperty fields.
+        String structuredMode = System.getProperty("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE"));
+        if (structuredMode == null || structuredMode.isBlank()) {
+            String activeModel = System.getProperty("ARCCLAW_LLM_MODEL_NAME", System.getenv("ARCCLAW_LLM_MODEL_NAME"));
+            String targetMode = (activeModel != null && activeModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            
+            System.setProperty("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.llm.structured-output-mode", targetMode);
+        } else {
+            // Publish the explicit user override to the dotted key
+            System.setProperty("arcclaw.llm.structured-output-mode", structuredMode);
+        }
+
+        // --- Fallback Structured Mode ---
+        String fallbackMode = System.getProperty("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE"));
+        if (fallbackMode == null || fallbackMode.isBlank()) {
+            String fbModel = System.getProperty("ARCCLAW_LLM_FALLBACK_MODEL", System.getenv("ARCCLAW_LLM_FALLBACK_MODEL"));
+            String targetMode = (fbModel != null && fbModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            System.setProperty("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.llm.fallback-structured-output-mode", targetMode);
+        } else {
+            System.setProperty("arcclaw.llm.fallback-structured-output-mode", fallbackMode);
+        }
+
+        // --- Intent Classifier Structured Mode ---
+        String intentMode = System.getProperty("ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE"));
+        if (intentMode == null || intentMode.isBlank()) {
+            String intentModel = System.getProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", System.getenv("ARCCLAW_INTENT_CLASSIFIER_MODEL"));
+            String targetMode = (intentModel != null && intentModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            System.setProperty("ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.routing.intent-classifier.structured-output-mode", targetMode);
+        } else {
+            System.setProperty("arcclaw.routing.intent-classifier.structured-output-mode", intentMode);
+        }
+
+        // --- Compaction Structured Mode ---
+        String compactionMode = System.getProperty("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE"));
+        if (compactionMode == null || compactionMode.isBlank()) {
+            String compactionModel = System.getProperty("ARCCLAW_COMPACTION_MODEL", System.getenv("ARCCLAW_COMPACTION_MODEL"));
+            String targetMode = (compactionModel != null && compactionModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            System.setProperty("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.memory.compaction.structured-output-mode", targetMode);
+        } else {
+            System.setProperty("arcclaw.memory.compaction.structured-output-mode", compactionMode);
+        }
+
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
         if ("openrouter".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "google/gemma-3-27b-it:free");

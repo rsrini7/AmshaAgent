@@ -310,6 +310,7 @@ arcclaw:
     temperature: ${ARCCLAW_LLM_TEMPERATURE:0.1}
     context-window: ${ARCCLAW_LLM_CONTEXT_WINDOW:128000}
     compact-prompt-enabled: ${ARCCLAW_LLM_COMPACT_PROMPT_ENABLED:false}
+    structured-output-mode: ${ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE:NATIVE}
     fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL}
     fallback-provider: ${ARCCLAW_LLM_FALLBACK_PROVIDER}
     fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL}
@@ -354,6 +355,7 @@ arcclaw:
       provider: ${ARCCLAW_INTENT_CLASSIFIER_PROVIDER:groq}
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
       ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
+      structured-output-mode: ${ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE:NATIVE}
       timeout-seconds: 5
       max-retries: ${ARCCLAW_INTENT_CLASSIFIER_MAX_RETRIES:3}
       sla-warn-ms: 2000
@@ -369,6 +371,7 @@ arcclaw:
       provider: "${ARCCLAW_COMPACTION_PROVIDER:groq}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
+      structured-output-mode: ${ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE:NATIVE}
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
   chat:
     default-observation-max-length: 2000

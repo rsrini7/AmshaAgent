@@ -155,6 +155,9 @@ public class EngineStepHandler {
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
                     log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     llmSchemaErrorCount++;
+                    // TODO (LENIENT mode): When structuredOutputMode == LENIENT, increase
+                    // maxRetries for schema correction from 4 to 6+ before hard-failing the turn.
+                    // Tracked: EngineStepHandler retry budget should be mode-aware.
                     if (llmSchemaErrorCount >= 4) {
                         log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", context.sessionId());
                         return StepDecision.terminal(AgentResult.failed(

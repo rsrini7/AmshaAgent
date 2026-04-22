@@ -4,7 +4,9 @@ import java.time.Duration;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
 /**
@@ -21,7 +23,7 @@ public class GroqLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
-        return OpenAiChatModel.builder()
+        var builder = OpenAiChatModel.builder()
             .baseUrl(config.baseUrl())
             .apiKey(config.apiKey()
                 .orElseThrow(() -> new IllegalStateException(
@@ -32,7 +34,12 @@ public class GroqLlmProviderFactory implements RoutingChatModelProvider {
             .maxRetries(config.maxRetries().orElse(3))
             .temperature(0.0)
             .logRequests(false)
-            .logResponses(false)
-            .build();
+            .logResponses(false);
+
+        if (config.structuredOutputMode() == StructuredOutputMode.NATIVE && config.toolless()) {
+            builder.responseFormat(ResponseFormat.JSON);
+        }
+
+        return builder.build();
     }
 }

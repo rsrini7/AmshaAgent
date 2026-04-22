@@ -86,10 +86,7 @@ public class ChatModelProducer {
     @Produces
     @ApplicationScoped
     public ChatModel chatModel() {
-        AgentChatModelProvider providerFactory = providers.stream()
-            .filter(p -> p.providerName().equalsIgnoreCase(provider))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("No AgentChatModelProvider found for provider='" + provider + "'"));
+        AgentChatModelProvider providerFactory = findProvider();
 
         // 🟢 Robust fallback detection (bypassing injection quirks)
         Config config = ConfigProvider.getConfig();
@@ -136,6 +133,34 @@ public class ChatModelProducer {
         }
 
         return primary;
+    }
+
+    @Produces
+    @ApplicationScoped
+    public StructuredOutputMode structuredOutputMode() {
+        StructuredOutputMode primaryMode = findProvider().structuredOutputMode();
+        
+        // Resolve fallback mode from config
+        Config config = ConfigProvider.getConfig();
+        String fallbackModeStr = config.getOptionalValue("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE", String.class)
+                .or(() -> config.getOptionalValue("arcclaw.llm.fallback-structured-output-mode", String.class))
+                .orElse("NATIVE");
+        
+        StructuredOutputMode fbMode = StructuredOutputMode.valueOf(fallbackModeStr.toUpperCase());
+
+        // Effective logic: if EITHER needs a prompt directive, we include it.
+        if (primaryMode == StructuredOutputMode.PROMPT_DIRECTIVE || fbMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            return StructuredOutputMode.PROMPT_DIRECTIVE;
+        }
+        
+        return primaryMode;
+    }
+
+    private AgentChatModelProvider findProvider() {
+        return providers.stream()
+            .filter(p -> p.providerName().equalsIgnoreCase(provider))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("No AgentChatModelProvider found for provider='" + provider + "'"));
     }
 
     private String mask(String v) {

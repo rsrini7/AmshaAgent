@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
@@ -41,6 +42,9 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "arcclaw.memory.compaction.max-retries", defaultValue = "3")
     int maxRetries;
 
+    @ConfigProperty(name = "arcclaw.memory.compaction.structured-output-mode", defaultValue = "NATIVE")
+    StructuredOutputMode structuredOutputMode;
+
     @Inject
     LlmModelFactory modelFactory;
 
@@ -48,10 +52,17 @@ public class CompactionModelProducer {
     @Identifier("compaction")
     @ApplicationScoped
     public ChatModel compactionModel() {
-        log.infof("CompactionModelProducer provider=%s model=%s", provider, modelId);
+        log.infof("CompactionModelProducer provider=%s model=%s mode=%s", provider, modelId, structuredOutputMode);
         return modelFactory.createModel(
             provider, compactionBaseUrl, compactionApiKey,
             modelId, compactionMaxTokens, Duration.ofSeconds(10),
-            maxRetries, ollamaBaseUrl, ollamaModelId);
+            maxRetries, ollamaBaseUrl, ollamaModelId, structuredOutputMode, true);
+    }
+
+    @Produces
+    @ApplicationScoped
+    @Identifier("compaction-mode")
+    public StructuredOutputMode compactionMode() {
+        return structuredOutputMode;
     }
 }

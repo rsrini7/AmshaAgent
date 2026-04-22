@@ -9,6 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
@@ -51,6 +52,10 @@ public class CompactionService {
     @Inject
     @Identifier("compaction")
     ChatModel compactionModel;
+
+    @Inject
+    @Identifier("compaction-mode")
+    StructuredOutputMode structuredOutputMode;
 
     @Inject
     RateLimitTracker rateLimitTracker;
@@ -157,6 +162,10 @@ public class CompactionService {
                 .collect(Collectors.joining("\n"));
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
+
+        if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
+        }
 
         // ── Rate-limit fast-fail: if Groq throttles the summary call, record the
         // hit (so CompactionHandler skips compaction for the next BACKOFF_SECONDS)

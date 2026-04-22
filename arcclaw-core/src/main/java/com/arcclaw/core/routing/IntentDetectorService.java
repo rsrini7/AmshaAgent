@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.persona.AgentRoleRegistry;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.ClassUtils;
@@ -34,6 +35,10 @@ public class IntentDetectorService implements IntentDetector {
     @Inject
     @Identifier("intent-classifier")
     ChatModel classifierModel;
+
+    @Inject
+    @Identifier("intent-classifier-mode")
+    StructuredOutputMode structuredOutputMode;
 
     @Inject
     DestructiveVocabularyFilter destructiveFilter;
@@ -135,6 +140,10 @@ public class IntentDetectorService implements IntentDetector {
                 .replace(DELIM_CLOSE, "");
         String wrapped = DELIM_OPEN + "\n" + sanitized + "\n" + DELIM_CLOSE;
         String safePrompt = dynamicClassifierPrompt.formatted(wrapped);
+
+        if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            safePrompt = "CRITICAL: You MUST respond with ONLY a single role name token. No explanation, no JSON, no punctuation.\n\n" + safePrompt;
+        }
 
         String raw;
         long startNs = System.nanoTime();

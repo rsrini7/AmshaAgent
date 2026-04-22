@@ -46,6 +46,9 @@ public class SystemPromptBuilder {
     @ConfigProperty(name = "arcclaw.llm.compact-prompt-enabled", defaultValue = "false")
     boolean compactPromptEnabled;
 
+    @ConfigProperty(name = "arcclaw.llm.structured-output-mode", defaultValue = "NATIVE")
+    StructuredOutputMode structuredOutputMode;
+
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
     private final CompactionSummaryCache summaryCache;
@@ -347,10 +350,19 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
 
         // 1. ArcClaw prefix + persona prompt
         // Generically inject system time into the very first line for all modes/roles.
-        String baseSystemPrompt = "You are ArcClaw. CURRENT SYSTEM TIME (UTC): " + formatTime(Instant.now()) + "\n" +
-                "Your active persona is described below.\n\n" +
-                personaPrompt +
-                "\n\n";
+        StringBuilder sb = new StringBuilder();
+        
+        // --- Structured Output Directive ---
+        if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            sb.append("CRITICAL: You MUST respond ONLY in the required JSON schema. Never respond in prose.\n\n");
+        }
+
+        sb.append("You are ArcClaw. CURRENT SYSTEM TIME (UTC): ").append(formatTime(Instant.now())).append("\n")
+          .append("Your active persona is described below.\n\n")
+          .append(personaPrompt)
+          .append("\n\n");
+
+        String baseSystemPrompt = sb.toString();
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
         if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole) && !isCompact) {

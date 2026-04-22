@@ -18,9 +18,17 @@ public class OllamaProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
     boolean logHttp;
 
+    @ConfigProperty(name = "arcclaw.llm.structured-output-mode", defaultValue = "NATIVE")
+    StructuredOutputMode structuredOutputMode;
+
     @Override
     public String providerName() {
         return "ollama";
+    }
+
+    @Override
+    public StructuredOutputMode structuredOutputMode() {
+        return structuredOutputMode;
     }
 
     @Override
