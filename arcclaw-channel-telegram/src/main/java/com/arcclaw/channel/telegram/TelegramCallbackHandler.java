@@ -89,27 +89,23 @@ public class TelegramCallbackHandler {
 
             ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");
 
+            String popupText = null;
             switch (result.outcome()) {
-                case APPROVED, PARTIAL_STILL_PENDING -> sender.sendRaw(user, "✅ Approved: " + toolName);
-                case REJECTED -> sender.sendRaw(user, "❌ Rejected: " + toolName);
-                case EXPIRED -> sender.sendRaw(user, "⏱ Approval expired");
-                case NOT_FOUND -> sender.sendRaw(user, "⚠️ Session not found");
-                case ALREADY_DECIDED -> {
-                    // Answer callback silently, no visible message
-                }
+                case APPROVED, PARTIAL_STILL_PENDING -> popupText = "✅ Approved: " + toolName;
+                case REJECTED -> popupText = "❌ Rejected: " + toolName;
+                case EXPIRED -> popupText = "⏱ Approval expired";
+                case NOT_FOUND -> popupText = "⚠️ Session not found";
+                case ALREADY_DECIDED -> popupText = "Already decided";
             }
 
             // If completely done, we can remove the keyboard entirely
-            if (result.outcome() == ApprovalOutcome.APPROVED ||
-                result.outcome() == ApprovalOutcome.REJECTED ||
-                result.outcome() == ApprovalOutcome.EXPIRED ||
-                // Wait, if it's already decided, we shouldn't necessarily remove it unless it's done. 
-                // A better check is if remainingPendingTools == 0 and outcome != ALREADY_DECIDED (since ALREADY_DECIDED is a no-op)
-                (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0)) {
-                sender.editMessage(chatId, messageId, "Approval process completed.", null);
+            if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
+                // Clear the keyboard by editing the message, but keep the original text
+                String originalText = query.getMessage().getText();
+                sender.editMessage(chatId, messageId, originalText, null);
             }
 
-            answerCallback(query.getId());
+            answerCallback(query.getId(), popupText);
         } catch (Exception e) {
             log.error("Failed to process callback", e);
             sender.sendRaw(user, "❌ Failed to process callback");
@@ -117,9 +113,11 @@ public class TelegramCallbackHandler {
         }
     }
 
-    private void answerCallback(String callbackQueryId) {
-        log.debugf("Answering callback %s", callbackQueryId);
-        String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
+    private void answerCallback(String callbackQueryId, String text) {
+        log.debugf("Answering callback %s with text: %s", callbackQueryId, text);
+        String body = (text != null)
+                ? "{\"callback_query_id\":\"" + callbackQueryId + "\",\"text\":\"" + text + "\"}"
+                : "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
         httpClient.sendAsync(
             HttpRequest.newBuilder()
                 .uri(URI.create(
@@ -134,5 +132,9 @@ public class TelegramCallbackHandler {
                 callbackQueryId, ex.getMessage());
             return null;
         });
+    }
+
+    private void answerCallback(String callbackQueryId) {
+        answerCallback(callbackQueryId, null);
     }
 }
