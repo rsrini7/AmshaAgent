@@ -4,6 +4,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
+import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
+import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -34,7 +36,13 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         return self.nextStepWithCb(request);
     }
 
-    @CircuitBreaker(requestVolumeThreshold = 4, failureRatio = 0.5, delay = 10000, successThreshold = 2)
+    @CircuitBreaker(
+            requestVolumeThreshold = 4,
+            failureRatio = 0.5,
+            delay = 10000,
+            successThreshold = 2,
+            skipOn = {LlmMalformedResponseException.class, LlmToolCallException.class}
+    )
     public ChatResponse nextStepWithCb(ChatRequest request) {
         try {
             return chatModel.chat(request);
