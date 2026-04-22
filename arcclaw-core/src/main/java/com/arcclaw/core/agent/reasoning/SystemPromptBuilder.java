@@ -488,7 +488,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         sb.append("**STRICT TOOL BINDING CONTRACT**\n");
         sb.append("ACTIVE PERSONA: ").append(agentRole).append("\n");
 
-        if (compactionSummary != null && !compactionSummary.isBlank()) {
+        if (compactionSummary != null && !compactionSummary.isBlank() && isCompact) {
             sb.append("\n[CONTEXT FROM PRIOR SESSION]\n")
               .append(compactionSummary).append("\n")
               .append("The above is a summary of earlier messages. Use it for context on initial requests.\n\n");
