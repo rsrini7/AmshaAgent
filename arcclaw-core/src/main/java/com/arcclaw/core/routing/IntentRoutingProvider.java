@@ -40,4 +40,11 @@ public interface IntentRoutingProvider {
     default boolean shouldSkip(String userMessage) {
         return false;
     }
+
+    /**
+     * Returns true if the message matches a fuzzy pattern for this provider.
+     */
+    default boolean matchesFuzzy(String userMessage) {
+        return false;
+    }
 }

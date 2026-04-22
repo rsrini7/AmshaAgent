@@ -120,7 +120,7 @@ public class IntentDetectorService implements IntentDetector {
             }
 
             for (Pattern p : provider.fastPathTriggers()) {
-                if (p.matcher(userMessage).find()) {
+                if (p.matcher(userMessage).find() || provider.matchesFuzzy(userMessage)) {
                     String role = provider.fastPathRole()
                             .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
                     log.debugf("CLASSIFIER fast-path: match in %s -> %s", 

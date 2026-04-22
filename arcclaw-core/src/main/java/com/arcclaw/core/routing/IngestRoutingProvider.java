@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import com.arcclaw.core.util.FuzzyMatcher;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -31,6 +32,14 @@ public class IngestRoutingProvider implements IntentRoutingProvider {
     @Override
     public List<Pattern> fastPathTriggers() {
         return List.of(COORDINATOR_FORCE_PATTERN, STORE_CMD);
+    }
+
+    @Override
+    public boolean matchesFuzzy(String userMessage) {
+        return FuzzyMatcher.containsFuzzy(userMessage, "store")
+                || FuzzyMatcher.containsFuzzy(userMessage, "save")
+                || FuzzyMatcher.containsFuzzy(userMessage, "remember")
+                || FuzzyMatcher.containsFuzzy(userMessage, "ingest");
     }
 
     @Override
