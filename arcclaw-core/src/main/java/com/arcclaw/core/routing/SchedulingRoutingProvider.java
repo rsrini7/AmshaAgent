@@ -16,7 +16,7 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
     // Time signals like "tomorrow" or "in 30 min" are specific enough.
     // Added 'schedule' and common typos to ensure robust fast-path capture.
     private static final Pattern SCHEDULING_GUARD_PATTERN = Pattern.compile(
-        "(?i)\\b(after\\s+\\d|in\\s+(one|oen|two|three|four|five|ten|\\d+)\\s+(min|hour|day|sec|week)[a-z]*|tomorrow|" +
+        "(?i)\\b(after\\s+\\d|in\\s+(one|oen|noe|two|three|four|five|ten|\\d+)\\s+(min|hour|day|sec|week)[a-z]*|tomorrow|" +
         "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|remind(\\s+me)?|" +
         "every\\s+(day|week|hour)[a-z]*|once\\s+a\\s+(day|week)|later|" +
         "schedul?e|scheduel|schdeule|remind|reminder)\\b",
