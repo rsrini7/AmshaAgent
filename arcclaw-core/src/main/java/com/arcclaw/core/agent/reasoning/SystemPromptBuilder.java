@@ -367,7 +367,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         if (isCompact) {
             baseSystemPrompt += COMPACT_TOOL_PRIORITY_RULES;
         }
-        baseSystemPrompt += buildExecutionBoundaryRule(roleEnum);
+        baseSystemPrompt += isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
 
         baseSystemPrompt += isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum);
 
@@ -397,6 +397,12 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
                 finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
             }
         }
+
+        int charCount = finalPrompt.length();
+        int estTokens = charCount / 4; // Conservative estimate (1 token ~= 4 chars)
+        log.infof("[SystemPromptBuilder] System prompt formed for session %s (role=%s): %d chars (~%d tokens)",
+                sessionId, agentRole, charCount, estTokens);
+
         return finalPrompt;
     }
 
