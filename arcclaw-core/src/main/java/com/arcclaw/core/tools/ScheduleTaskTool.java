@@ -180,13 +180,16 @@ public class ScheduleTaskTool implements AgentTool {
 
         // Step 1 — Validate cronExpression or absolute time trigger
         String cronExpression = (String) params.get("cronExpression");
+        String suggestedNextFireTime = WorkspaceContext.suggestedNextFireTime();
+        
+        // If LLM didn't provide one, try the suggested one from context
         if (cronExpression == null || cronExpression.isBlank()) {
             cronExpression = WorkspaceContext.suggestedCron();
         }
 
-        String suggestedNextFireTime = WorkspaceContext.suggestedNextFireTime();
+        // We require AT LEAST a cronExpression OR an absolute fire time (for runOnce)
         if ((cronExpression == null || cronExpression.isBlank()) 
-                && !(runOnce && suggestedNextFireTime != null)) {
+                && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())) {
             return ToolResponse.failure(400, "Schedule context missing. " +
                     "Example: instead of 'deploy it', write 'deploy commit abc123 " +
                     "to production via gh workflow run deploy.yml'.");
