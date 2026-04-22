@@ -9,6 +9,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.ClassUtils;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
 import org.jboss.logging.Logger;
@@ -161,7 +162,7 @@ public class ObservabilityManager {
                 o.onLoopComplete(sessionId, userId, agentRole, goalHash, result);
             } catch (Exception e) {
                 log.warnf("ObservabilityManager: observer %s threw on onLoopComplete for session %s: %s",
-                        o.getClass().getSimpleName(), sessionId,
+                        ClassUtils.getCleanName(o), sessionId,
                         AgentErrorMessageUtil.safeMessage(e));
             }
         });
@@ -186,7 +187,7 @@ public class ObservabilityManager {
                 o.onStepComplete(sessionId, agentRole, step);
             } catch (Exception e) {
                 log.warnf("ObservabilityManager: observer %s threw on onStepComplete for session %s: %s",
-                        o.getClass().getSimpleName(), sessionId,
+                        ClassUtils.getCleanName(o), sessionId,
                         AgentErrorMessageUtil.safeMessage(e));
             }
         });

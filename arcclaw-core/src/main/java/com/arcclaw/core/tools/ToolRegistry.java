@@ -21,6 +21,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.RequiresSecret;
+import com.arcclaw.core.util.ClassUtils;
 import com.arcclaw.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -180,7 +181,7 @@ public class ToolRegistry {
     }
 
     private ToolResponse handleExecutionException(String toolName, Exception e) {
-        String raw = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        String raw = e.getMessage() != null ? e.getMessage() : ClassUtils.getCleanName(e);
         String traceId = Span.current().getSpanContext().getTraceId();
         
         String friendly;
@@ -191,7 +192,7 @@ public class ToolRegistry {
         }
 
         log.errorf("Tool '%s' execution failed: %s", toolName, raw);
-        ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, e.getClass().getSimpleName());
+        ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, ClassUtils.getCleanName(e));
         governanceGuard.recordToolFailureAudit(toolName, response);
         return response;
     }

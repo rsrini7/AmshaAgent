@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.message.UserMessages;
+import com.arcclaw.core.util.ClassUtils;
 import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 
@@ -31,12 +32,12 @@ public class MessagePipeline {
         this.handlers = handlerInstances.stream()
                 .sorted(Comparator.comparingInt(MessageHandler::priority))
                 .collect(Collectors.toList());
-        log.infof("Initialized MessagePipeline with %d handlers: %s", 
-                handlers.size(), 
-                handlers.stream().map(h -> h.getClass().getSimpleName()).collect(Collectors.joining(" -> ")));
+        log.infof("Initialized MessagePipeline with %d handlers: %s",
+                handlers.size(),
+                handlers.stream().map(ClassUtils::getCleanName).collect(Collectors.joining(" -> ")));
         log.infof("Pipeline handler order: %s",
             handlers.stream()
-                .map(h -> h.getClass().getSimpleName() + "(" + h.priority() + ")")
+                .map(h -> ClassUtils.getCleanName(h) + "(" + h.priority() + ")")
                 .collect(Collectors.joining(" → ")));
     }
 
@@ -44,19 +45,18 @@ public class MessagePipeline {
      * Executes the pipeline for a message.
      */
     public void process(MessageContext context) {
+        log.debugf("Executing message pipeline for chat %s", context.getChatId());
         for (MessageHandler handler : handlers) {
-            log.debugf("Running handler: %s", handler.getClass().getSimpleName());
             try {
                 HandleResult result = handler.handle(context);
                 if (result == HandleResult.STOP) {
-                    log.debugf("Pipeline stopped by handler: %s", handler.getClass().getSimpleName());
+                    log.debugf("Pipeline execution stopped by %s", ClassUtils.getCleanName(handler));
                     return;
                 }
             } catch (Exception e) {
                 log.errorf("Pipeline handler %s failed for chat %s: %s",
-                        handler.getClass().getSimpleName(), context.getChatId(), e.getMessage());
-                log.debugf(e, "Full stacktrace for pipeline failure in handler %s", handler.getClass().getSimpleName());
-                try {
+                        ClassUtils.getCleanName(handler), context.getChatId(), e.getMessage());
+                log.debugf(e, "Full stacktrace for pipeline failure in handler %s", ClassUtils.getCleanName(handler));                try {
                     channelPluginRegistry.find(context.getChannelType())
                         .map(ChannelPlugin::sender)
                         .ifPresentOrElse(

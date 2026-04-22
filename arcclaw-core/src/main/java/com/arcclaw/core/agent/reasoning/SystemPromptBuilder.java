@@ -310,6 +310,11 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         final AgentRoleEnum roleEnum;
         boolean isCompact = compactPromptEnabled || contextWindow <= 8192;
 
+        if (isCompact) {
+            log.debugf("[SystemPromptBuilder] COMPACT PROMPT MODE active for session %s (window=%d, manual=%b)",
+                       sessionId, contextWindow, compactPromptEnabled);
+        }
+
         if (AgentRoleEnum.isSkillRole(agentRole)) {
             String skillName = AgentRoleEnum.skillName(agentRole);
             roleEnum = AgentRoleEnum.fromString(agentRole); // returns RESEARCHER — correct tool set

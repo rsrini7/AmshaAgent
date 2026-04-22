@@ -245,6 +245,8 @@ smallrye:
         level: INFO
       "org.apache.camel.component.telegram":
         level: INFO
+      "io.smallrye.faulttolerance":
+        level: INFO
       "org.hibernate":
         level: WARN
       "io.sm.op.ru.util":

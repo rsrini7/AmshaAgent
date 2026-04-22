@@ -25,12 +25,12 @@ public final class AgentErrorMessageUtil {
  
     /**
      * Returns a safe message from a Throwable.
-     * Returns e.getMessage() if present, otherwise returns the class simple name.
+     * Returns e.getMessage() if present, otherwise returns the clean class simple name.
      * If the throwable is null, returns "Unknown Error".
      */
     public static String safeMessage(Throwable t) {
         if (t == null) return "Unknown Error";
-        return t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
+        return t.getMessage() != null ? t.getMessage() : ClassUtils.getCleanName(t);
     }
  
     public static String sanitizeErrorMessage(String raw) {

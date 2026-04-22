@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.util.ClassUtils;
 
 public interface AgentReflex {
     /**
@@ -43,9 +44,7 @@ public interface AgentReflex {
      * Default uses the reflex class name stripped of CDI proxy suffixes.
      */
     default String auditDetail(String sessionId, String input) {
-        return "command=" + getClass().getSimpleName()
-            .replace("_ClientProxy", "")
-            .replace("_Subclass", "");
+        return "command=" + ClassUtils.getCleanName(this);
     }
 
     /**

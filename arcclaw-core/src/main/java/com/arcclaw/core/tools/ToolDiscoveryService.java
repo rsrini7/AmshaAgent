@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.Capability;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.util.ClassUtils;
 import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
@@ -93,10 +94,10 @@ public class ToolDiscoveryService {
                     throw new IllegalStateException(String.format(
                         "Mismatch between tool name '%s' and @Capability value '%s' on %s.%s. " +
                         "Capability name must match the tool name (§T2-5).",
-                        name, cap.value(), toolClass.getSimpleName(), method.getName()));
+                        name, cap.value(), ClassUtils.getCleanName(tool), method.getName()));
                 }
                 log.debugf("Discovered @Capability on %s.%s: %s", 
-                    toolClass.getSimpleName(), method.getName(), cap.value());
+                    ClassUtils.getCleanName(tool), method.getName(), cap.value());
                 grantToRoles(cap.defaultRoles(), name);
             }
         }

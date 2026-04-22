@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.util.ClassUtils;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -63,8 +64,7 @@ public class ReflexRegistry {
             try {
                 auditService.record(
                     sessionId, userId,
-                    reflex.getClass().getSimpleName()
-                        .replace("_ClientProxy", "").replace("_Subclass", ""),
+                    ClassUtils.getCleanName(reflex),
                     reflex.auditEventType(),
                     reflex.auditDetail(sessionId, input));
                 return reflex.execute(sessionId, userId, chatId, input, context);
@@ -72,7 +72,7 @@ public class ReflexRegistry {
                 String truncated = input != null && input.length() > 200
                     ? input.substring(0, 200) + "…" : input;
                 log.errorf("REFLEX-FAILURE reflex=%s session=%s user=%s input=%s error=%s",
-                    reflex.getClass().getSimpleName(), sessionId, userId, truncated,
+                    ClassUtils.getCleanName(reflex), sessionId, userId, truncated,
                     e.getMessage());
                 return ReflexResult.respond("System Error: " + e.getMessage(), context);
             }
@@ -87,14 +87,13 @@ public class ReflexRegistry {
                 if (reflex.emitsSanitizeAudit() && !sanitized.equals(before)) {
                     auditService.record(
                         sessionId, userId,
-                        reflex.getClass().getSimpleName()
-                            .replace("_ClientProxy", "").replace("_Subclass", ""),
+                        ClassUtils.getCleanName(reflex),
                         SecurityEventType.PII_SCAN_REDACTED,
                         reflex.auditDetail(sessionId, before));
                 }
             } catch (Exception e) {
                 log.errorf("REFLEX-SANITIZE-FAILURE reflex=%s session=%s error=%s",
-                    reflex.getClass().getSimpleName(), sessionId, e.getMessage(), e);
+                    ClassUtils.getCleanName(reflex), sessionId, e.getMessage(), e);
             }
         }
         return new ReflexResult(Optional.empty(), sanitized);
