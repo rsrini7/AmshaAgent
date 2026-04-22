@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -328,7 +329,7 @@ public class ToolStepHandler {
     }
 
     private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {
-        List<ReasoningStep> snapshot = new java.util.ArrayList<>(history);
+        List<ReasoningStep> snapshot = new ArrayList<>(history);
         snapshot.add(step);
         return List.copyOf(snapshot);
     }

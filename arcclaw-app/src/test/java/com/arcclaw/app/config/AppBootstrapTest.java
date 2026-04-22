@@ -3,6 +3,7 @@ package com.arcclaw.app.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -20,6 +21,11 @@ class AppBootstrapTest {
         System.clearProperty("KEY_C");
         System.clearProperty("KEY_D");
         System.clearProperty("KEY_E");
+        System.clearProperty("ARCCLAW_LLM_PROVIDER");
+        System.clearProperty("ARCCLAW_LLM_CONTEXT_WINDOW");
+        System.clearProperty("arcclaw.llm.context-window");
+        System.clearProperty("ARCCLAW_COMPACTION_PROVIDER");
+        System.clearProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER");
     }
 
     @Test
@@ -57,5 +63,32 @@ class AppBootstrapTest {
     @Test
     void testLoadDotEnv_missingFile_doesNotThrow() {
         AppBootstrap.loadDotEnv(Path.of("/nonexistent/path/at/all/ever"));
+    }
+
+    @Test
+    void testValidateAndAutoFixLlmConfig_publishesEffectiveContextWindowToDottedKey(@TempDir Path tempDir) throws Exception {
+        System.setProperty("ARCCLAW_LLM_PROVIDER", "cerebras");
+        System.setProperty("ARCCLAW_LLM_CONTEXT_WINDOW", "8192");
+
+        Path envFile = tempDir.resolve(".env");
+        Files.write(envFile, List.of(
+            "ARCCLAW_LLM_PROVIDER=cerebras",
+            "ARCCLAW_LLM_CONTEXT_WINDOW=8192"
+        ));
+
+        invokeValidateAndAutoFixLlmConfig(tempDir);
+
+        assertEquals("8192", System.getProperty("ARCCLAW_LLM_CONTEXT_WINDOW"));
+        assertEquals("8192", System.getProperty("arcclaw.llm.context-window"));
+    }
+
+    private static void invokeValidateAndAutoFixLlmConfig(Path binaryDir) throws Exception {
+        Method method = AppBootstrap.class.getDeclaredMethod("validateAndAutoFixLlmConfig", Path.class);
+        method.setAccessible(true);
+        try {
+            method.invoke(null, binaryDir);
+        } finally {
+            method.setAccessible(false);
+        }
     }
 }

@@ -800,7 +800,31 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
-           
+
+        // --- Context Window Optimization ---
+        // Compute the effective window once, persist it when using the provider default,
+        // and always publish the resolved value to both env-style and dotted config keys.
+        String contextWindow = System.getProperty("ARCCLAW_LLM_CONTEXT_WINDOW", System.getenv("ARCCLAW_LLM_CONTEXT_WINDOW"));
+        String targetWindow = switch (provider.toLowerCase()) {
+            case "gemini"   -> "1000000";
+            case "cerebras" -> {
+                String model = System.getProperty("ARCCLAW_LLM_MODEL_NAME", System.getenv("ARCCLAW_LLM_MODEL_NAME"));
+                yield (model != null && model.contains("qwen")) ? "65536" : "8192";
+            }
+            case "ollama"   -> "8192";
+            default         -> "128000";
+        };
+        String effectiveWindow = contextWindow;
+        if (effectiveWindow == null || effectiveWindow.isBlank() || effectiveWindow.equals("128000")) {
+            effectiveWindow = targetWindow;
+            if (!targetWindow.equals(contextWindow)) {
+                System.err.println("[ArcClaw] ℹ️  Setting context window to " + targetWindow + " for provider '" + provider + "'.");
+                patchEnvFile(envFile, "ARCCLAW_LLM_CONTEXT_WINDOW", targetWindow);
+            }
+        }
+        System.setProperty("ARCCLAW_LLM_CONTEXT_WINDOW", effectiveWindow);
+        System.setProperty("arcclaw.llm.context-window", effectiveWindow);
+
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
         if ("openrouter".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "google/gemma-3-27b-it:free");

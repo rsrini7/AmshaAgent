@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -35,6 +36,9 @@ import org.jboss.logging.Logger;
 public class SystemPromptBuilder {
 
     private static final Logger log = Logger.getLogger(SystemPromptBuilder.class);
+
+    @ConfigProperty(name = "arcclaw.llm.context-window", defaultValue = "128000")
+    int contextWindow;
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -248,6 +252,28 @@ public class SystemPromptBuilder {
             Placeholder text is not a valid response and will cause system errors.
             """;
 
+    private static final String COMPACT_SECURITY_RULES_PROMPT = """
+            CRITICAL TOOL RULES:
+            1. No permission needed for tools.
+            2. After a tool call, return to Coordinator mode.
+            3. "Security violation" is a hard boundary — do NOT retry. Explain to user.
+            4. Future/time references MUST call `schedule_task`.
+            5. GitHub: fetch with `owner/repo` exactly. Do not guess.
+            6. Do not call GitHub if the result is already in history.
+            7. Hitl bypass is forbidden.
+            8. Do not use placeholders like [task ID].
+            9. If answer is in context, FINISH immediately. Do not call memory_search.
+            10. Words like "store/save/remember" ALWAYS require calling `ingest_document`.
+            11. For `store KEY=value`, label is text before the first `=` and text is everything after it.
+            12. The stored text may contain additional `=` characters; preserve them exactly.
+            """;
+
+    private static final String COMPACT_BROWSER_RETRY_RULE = """
+            BROWSER EXTRACTION RETRY RULE:
+            If `browser_navigate` extraction returns too little text, retry once with a broader selector
+            such as `article` or `body` before concluding the content is unavailable.
+            """;
+
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
         // --- Skill persona resolution ---
         // When SkillAwareIntentDetector routes to "skill:code-reviewer", we replace
@@ -255,6 +281,7 @@ public class SystemPromptBuilder {
         // (RESEARCHER) governs the tool-binding section only.
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
+        boolean isCompact = contextWindow <= 8192;
 
         if (AgentRoleEnum.isSkillRole(agentRole)) {
             String skillName = AgentRoleEnum.skillName(agentRole);
@@ -281,7 +308,7 @@ public class SystemPromptBuilder {
                 "\n\n";
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
-        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole)) {
+        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole) && !isCompact) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main
@@ -304,9 +331,10 @@ public class SystemPromptBuilder {
         // affirmative instruction to use the tool; all other roles receive the standard
         // "I cannot execute code" boundary. This prevents the LLM from incorrectly
         // refusing sandbox_exec calls while maintaining the boundary for text-only roles.
-        baseSystemPrompt += SECURITY_RULES_PROMPT;
+        baseSystemPrompt += isCompact ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
         baseSystemPrompt += buildExecutionBoundaryRule(roleEnum);
-        baseSystemPrompt += buildBrowserRetryRule(roleEnum);
+
+        baseSystemPrompt += isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum);
 
         // Build compaction summary for template injection — cached for session duration
         // to prevent redundant DB hits during the multi-turn agent loop.
@@ -454,5 +482,10 @@ public class SystemPromptBuilder {
                 NEVER suggest external scripts, Python code, or manual steps as a substitute
                 for using your browser tools to find the information.
                 """;
+    }
+
+    private String buildCompactBrowserRetryRule(AgentRoleEnum roleEnum) {
+        boolean hasBrowser = roleEnum.definition().toolNames().contains(ToolCapability.BROWSER_NAVIGATE.toolName());
+        return hasBrowser ? COMPACT_BROWSER_RETRY_RULE : "";
     }
 }

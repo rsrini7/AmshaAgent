@@ -81,4 +81,38 @@ class SystemPromptBuilderTest {
         String resultDebugger = builder.build(createCtx("s2"), "debugger", "s2", null);
         assertTrue(!resultDebugger.contains("YOUR INTERNAL ARCHITECTURE"), "Debugger should NOT have trimurti block");
     }
+
+    @Test
+    void testBuildSystemPrompt_compactModeRetainsCriticalStorageAndBrowserRules() {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        builder.contextWindow = 8192;
+
+        String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal");
+
+        assertTrue(result.contains("label is text before the first `=`"),
+                "Compact prompt should preserve KEY=VALUE parsing guidance");
+        assertTrue(result.contains("preserve them exactly"),
+                "Compact prompt should preserve values containing additional '='");
+        assertTrue(result.contains("retry once with a broader selector"),
+                "Compact prompt should retain browser extraction retry guidance");
+        assertTrue(!result.contains("YOUR INTERNAL ARCHITECTURE"),
+                "Non-coordinator roles should not contain the coordinator architecture block");
+    }
+
+    @Test
+    void testBuildSystemPrompt_compactModeWithoutBrowserOmitsRetryRule() {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        builder.contextWindow = 8192;
+
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal");
+
+        assertTrue(!result.contains("retry once with a broader selector"),
+                "Compact browser retry rule should only appear for browser-capable roles");
+    }
 }
