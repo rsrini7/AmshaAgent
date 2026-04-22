@@ -14,11 +14,12 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
     // NEGATION SAFETY §4.11: This pattern is non-anchored to allow natural phrasing 
     // (e.g. "please remind me"), but "schedule" is removed because it's too broad.
     // Time signals like "tomorrow" or "in 30 min" are specific enough.
-    // Broader negations (e.g. "do not schedule") are filtered via shouldSkip().
+    // Added 'schedule' and common typos to ensure robust fast-path capture.
     private static final Pattern SCHEDULING_GUARD_PATTERN = Pattern.compile(
         "(?i)\\b(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec|week)[a-z]*|tomorrow|" +
         "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|remind(\\s+me)?|" +
-        "every\\s+(day|week|hour)[a-z]*|once\\s+a\\s+(day|week)|later)\\b",
+        "every\\s+(day|week|hour)[a-z]*|once\\s+a\\s+(day|week)|later|" +
+        "schedul?e|scheduel|schdeule|remind|reminder)\\b",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -27,25 +28,25 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
         Pattern.compile(
             "(?i)(don'?t|do not|not|never|stop|cancel|no longer)"
             + "\\s{0,10}(want to |need to |going to )?"
-            + "(schedule|remind|set.{0,15}reminder)",
+            + "(schedule|remind|set.{0,15}reminder|schedul?e|scheduel|schdeule)",
             Pattern.CASE_INSENSITIVE
         );
 
     // FAST-PATH for listing tasks — still anchored as these are command-like
     private static final Pattern LIST_TASKS_PATTERN = Pattern.compile(
-        "(?i)^\\s*(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?)\\b"
+        "(?i)^\\s*(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?|reminders?)\\b"
     );
     private static final Pattern MY_TASKS_PATTERN = Pattern.compile(
-        "(?i)^\\s*my\\s+(tasks?|crons?|jobs?|scheduled\\s+tasks?)\\b"
+        "(?i)^\\s*my\\s+(tasks?|crons?|jobs?|scheduled\\s+tasks?|reminders?)\\b"
     );
 
     private static final Pattern STANDALONE_CRON_PATTERN = Pattern.compile(
-        "(?i)^/?crons?$"
+        "(?i)^/?(crons?|schedules?|tasks?|reminders?)$"
     );
 
     // FAST-PATH for hybrid intents (e.g. "remind me to fetch") §7.36
     private static final Pattern SCHEDULE_RESEARCH_ACTION_PATTERN = Pattern.compile(
-        "(?i)^(remind me|schedule to)\\s+(fetch|get|search|find|check)\\b.*"
+        "(?i)^(remind me|schedule to|scheduel to|schdeule to|remind me to|schedule for)\\s+(fetch|get|search|find|check|view|describe|lookup)\\b.*"
     );
 
     @Override
