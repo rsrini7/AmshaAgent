@@ -93,15 +93,16 @@ public class NvidiaMessageSanitizer implements ChatModel {
         if (text == null) return response;
 
         Matcher m = MISTRAL_RAW_TOOL_CALL.matcher(text);
-        if (m.find()) {
-            int toolCallIdx = m.start();
-            String thought = text.substring(0, toolCallIdx).strip();
+        List<ToolExecutionRequest> requests = new ArrayList<>();
+        int firstMatchIdx = -1;
+
+        while (m.find()) {
+            if (firstMatchIdx == -1) firstMatchIdx = m.start();
             
             String toolName = m.group(1);
             String jsonPayload = m.group(2);
 
             try {
-                List<ToolExecutionRequest> requests = new ArrayList<>();
                 if (jsonPayload.startsWith("[")) {
                     // It's a list of tool calls: [{"name": "...", "arguments": "{...}"}]
                     JsonNode root = mapper.readTree(jsonPayload);
@@ -122,19 +123,21 @@ public class NvidiaMessageSanitizer implements ChatModel {
                             .arguments(jsonPayload)
                             .build());
                 }
-
-                if (!requests.isEmpty()) {
-                    log.infof("[NvidiaSanitizer] Normalized %d Mistral tool calls — routing through approval gate", requests.size());
-                    return ChatResponse.builder()
-                            .aiMessage(AiMessage.from(thought.isEmpty() ? null : thought, requests))
-                            .tokenUsage(response.tokenUsage())
-                            .finishReason(FinishReason.TOOL_EXECUTION)
-                            .build();
-                }
             } catch (Exception e) {
                 log.warnf("Failed to normalize Mistral tool call from response: %s", e.getMessage());
             }
         }
+
+        if (!requests.isEmpty()) {
+            String thought = text.substring(0, firstMatchIdx).strip();
+            log.infof("[NvidiaSanitizer] Normalized %d chained Mistral tool calls — routing through approval gate", requests.size());
+            return ChatResponse.builder()
+                    .aiMessage(AiMessage.from(thought.isEmpty() ? null : thought, requests))
+                    .tokenUsage(response.tokenUsage())
+                    .finishReason(FinishReason.TOOL_EXECUTION)
+                    .build();
+        }
+
         return response;
     }
 
