@@ -36,7 +36,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     private static final Pattern MISTRAL_RAW_TOOL_CALL =
-            Pattern.compile("\\[TOOL_CALLS\\]\\s*([a-zA-Z0-9_-]+)?\\s*(\\[.*\\]|\\{.*\\})", Pattern.DOTALL);
+            Pattern.compile("\\[TOOL_CALLS\\]\\s*([a-zA-Z0-9_-]+)?\\s*(\\{[^\\[]*\\}|\\[[^\\[]*\\])", Pattern.DOTALL);
 
     public NvidiaMessageSanitizer(ChatModel model) {
         this.model = model;
