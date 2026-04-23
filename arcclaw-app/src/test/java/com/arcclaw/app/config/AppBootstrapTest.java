@@ -22,10 +22,20 @@ class AppBootstrapTest {
         System.clearProperty("KEY_D");
         System.clearProperty("KEY_E");
         System.clearProperty("ARCCLAW_LLM_PROVIDER");
+        System.clearProperty("ARCCLAW_LLM_BASE_URL");
+        System.clearProperty("ARCCLAW_LLM_MODEL_NAME");
         System.clearProperty("ARCCLAW_LLM_CONTEXT_WINDOW");
         System.clearProperty("arcclaw.llm.context-window");
         System.clearProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED");
         System.clearProperty("arcclaw.llm.compact-prompt-enabled");
+        System.clearProperty("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE");
+        System.clearProperty("arcclaw.llm.structured-output-mode");
+        System.clearProperty("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE");
+        System.clearProperty("arcclaw.llm.fallback-structured-output-mode");
+        System.clearProperty("ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE");
+        System.clearProperty("arcclaw.routing.intent-classifier.structured-output-mode");
+        System.clearProperty("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE");
+        System.clearProperty("arcclaw.memory.compaction.structured-output-mode");
         System.clearProperty("ARCCLAW_COMPACTION_PROVIDER");
         System.clearProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER");
     }

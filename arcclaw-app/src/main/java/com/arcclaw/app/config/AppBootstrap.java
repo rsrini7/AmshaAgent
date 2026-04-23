@@ -855,7 +855,7 @@ public class AppBootstrap {
             System.err.println(msg);
             log.debug(msg);
         } else {
-            String msg = "[ArcClaw] ℹ️  Compact Prompt Mode DISABLED (window=" + effectiveWindow + ").";
+            String msg = "[ArcClaw] ℹ️  Compact Prompt Mode DISABLED (window=" + (effectiveWindow != null ? effectiveWindow : "unknown") + ").";
             System.err.println(msg);
             log.debug(msg);
         }
