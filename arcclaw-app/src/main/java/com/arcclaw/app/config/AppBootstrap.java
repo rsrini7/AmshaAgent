@@ -774,10 +774,6 @@ public class AppBootstrap {
         // Auto-fix main model and URL based on ARCCLAW_LLM_PROVIDER
         if ("openrouter".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/auto", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(provider)) {
@@ -917,9 +913,6 @@ public class AppBootstrap {
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
         if ("openrouter".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/auto", "google/gemma-3-27b-it:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(compactionProvider)) {
@@ -949,9 +942,6 @@ public class AppBootstrap {
         // Auto-fix intent classifier based on ARCCLAW_INTENT_CLASSIFIER_PROVIDER
         if ("openrouter".equalsIgnoreCase(intentProvider)) {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/auto", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(intentProvider)) {
