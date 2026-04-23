@@ -82,7 +82,7 @@ class LangChainReasoningEnginePersonaTest {
         injectField(engine, "promptBuilder", mockPromptBuilder);
         injectField(engine, "historyAssembler", mockHistoryAssembler);
         injectField(engine, "stepParser", mockStepParser);
-        injectField(engine, "intentDetector", mockIntentDetector);
+        injectField(engine, "intentClassifier", mockIntentDetector);
         injectField(engine, "governanceLayer", mockGovernanceLayer);
         injectField(engine, "rateLimitTracker", mockRateLimitTracker);
         injectField(engine, "otelContext", mockOtelContext);

@@ -208,14 +208,14 @@ class CheckpointResumeHandlerTest {
         SystemPromptBuilder promptBuilder = mock(SystemPromptBuilder.class);
         ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
         ReasoningStepParser stepParser = mock(ReasoningStepParser.class);
-        IntentClassificationService intentDetector = mock(IntentClassificationService.class);
+        IntentClassificationService intentClassifier = mock(IntentClassificationService.class);
         GovernanceStrategy governanceLayer = mock(GovernanceStrategy.class);
         RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
         AgentOtelContext otelContext = mock(AgentOtelContext.class);
         MeterRegistry meterRegistry = mock(MeterRegistry.class);
         
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
-        when(intentDetector.isWriteIntent(anyString())).thenReturn(false);
+        when(intentClassifier.isWriteIntent(anyString())).thenReturn(false);
 
         LangChainReasoningEngine engine = new LangChainReasoningEngine();
         
@@ -244,9 +244,9 @@ class CheckpointResumeHandlerTest {
         field.setAccessible(true);
         field.set(engine, stepParser);
 
-        field = engine.getClass().getDeclaredField("intentDetector");
+        field = engine.getClass().getDeclaredField("intentClassifier");
         field.setAccessible(true);
-        field.set(engine, intentDetector);
+        field.set(engine, intentClassifier);
 
         field = engine.getClass().getDeclaredField("governanceLayer");
         field.setAccessible(true);
