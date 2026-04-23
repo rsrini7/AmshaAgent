@@ -77,7 +77,7 @@ public class IntentDetectorService implements IntentDetector {
         StringBuilder sb = new StringBuilder();
         sb.append("""
                 You are a router. Classify the following user message into exactly
-                one of these agent roles. Reply with ONLY the role name, nothing else.
+                one of these agent roles. Respond with a JSON object containing the field 'role'.
 
                 Roles:
                 """);
