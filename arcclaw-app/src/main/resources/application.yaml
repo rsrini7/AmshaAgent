@@ -534,7 +534,7 @@ mp:
   quarkus:
     log:
       console:
-        enable: false
+        enabled: false
       level: ERROR
       category:
         "io.quarkus":
@@ -548,7 +548,7 @@ mp:
         "org.hibernate":
           level: ERROR
       file:
-        enable: true
+        enabled: true
         path: ./arcclaw-cli.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
@@ -577,9 +577,9 @@ mp:
     log:
       level: DEBUG                          # single root block — no duplicate
       console:
-        enable: false
+        enabled: false
       file:
-        enable: true
+        enabled: true
         path: ./arcclaw-dev.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"

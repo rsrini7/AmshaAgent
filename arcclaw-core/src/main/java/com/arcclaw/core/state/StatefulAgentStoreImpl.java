@@ -63,7 +63,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 sessionId, agentRole, json, autonomy.toString(), steps.size(), goal);
         if (result.created()) {
             transitionService.emitCreated(
-                    sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy);
+                    sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy,
+                    result.checkpoint().id(), result.checkpoint().createdAt());
         }
         return CheckpointMapper.toEntity(result.checkpoint());
     }
@@ -133,11 +134,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         if (isNew) {
             // Single-shot agents create the checkpoint here — emit CREATED once.
             transitionService.emitCreated(sessionId, agentRole, userId,
-                    WorkspaceContext.requireAutonomyOrSupervised());
+                    WorkspaceContext.requireAutonomyOrSupervised(), saved.id(), saved.createdAt());
         }
         // Emit audit-only: status is already baked into the checkpoint by
         // upsertAndFinalize above.
-        transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id());
+        transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id(), saved.createdAt());
         return CheckpointMapper.toEntity(saved);
     }
 

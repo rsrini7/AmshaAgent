@@ -74,4 +74,6 @@
     <suppress checks="MethodLength" files="CheckListTool\.java"/>
     <suppress checks="MethodLength" files="DelegateToAgentTool\.java"/>
     <suppress checks="MethodLength" files="SerperWebSearchTool\.java"/>
+    <suppress checks="MethodLength" files="PodmanHealthCheck\.java"/>
+    <suppress checks="MethodLength" files="PodmanImageHealthCheck\.java"/>   
 </suppressions>

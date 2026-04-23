@@ -24,6 +24,13 @@ public class PodmanImageHealthCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
+        if (!sandboxEnabled) {
+            return HealthCheckResponse.named("Podman Image: " + containerImage)
+                .up()
+                .withData("status", "DISABLED")
+                .withData("sandbox-enabled", "false")
+                .build();
+        }
         try {
             ProcessBuilder pb = new ProcessBuilder(podmanPath, "image", "inspect", containerImage, "--format", "{{.Id}}");
             pb.redirectErrorStream(true);

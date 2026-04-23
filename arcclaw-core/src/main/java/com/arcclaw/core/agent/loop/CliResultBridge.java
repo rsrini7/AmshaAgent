@@ -59,6 +59,7 @@ public class CliResultBridge {
 
         AgentResult buffered = bufferedResults.remove(sessionId);
         if (buffered != null) {
+            signaled.remove(sessionId); // Allow next turn
             log.infof("CliResultBridge: delivering buffered result for session %s immediately", sessionId);
             return CompletableFuture.completedFuture(buffered);
         }
@@ -80,6 +81,7 @@ public class CliResultBridge {
         }
         CompletableFuture<AgentResult> waiter = waiters.remove(sessionId);
         if (waiter != null) {
+            signaled.remove(sessionId); // Result consumed by active waiter
             log.infof("CliResultBridge: signaling active waiter for session %s", sessionId);
             waiter.complete(result);
         } else {
