@@ -88,9 +88,11 @@ public class NvidiaMessageSanitizer implements ChatModel {
     }
 
     private ChatResponse normalizeMistralResponse(ChatResponse response) {
-        String text = response.aiMessage().text().trim();
+        String text = response.aiMessage().text();
+        if (text == null) return response;
+
         Matcher m = MISTRAL_RAW_TOOL_CALL.matcher(text);
-        if (m.matches()) {
+        if (m.find()) {
             String toolName = m.group(1);
             String jsonPayload = m.group(2);
 

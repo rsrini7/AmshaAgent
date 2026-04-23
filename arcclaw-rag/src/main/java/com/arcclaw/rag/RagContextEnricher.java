@@ -94,9 +94,9 @@ public class RagContextEnricher implements ContextEnricher {
 
                 log.debugf("RagContextEnricher: adaptive threshold=%.4f (mean=%.4f, stdDev=%.4f, floor=%.4f) for session %s",
                         (Object) computedThreshold, mean, stdDev, minScore, sessionId);
-            } else if (chunks.size() >= 1) {
+            } else {
                 // Too few samples for distribution — use a modest floor for small KBs (§ recommendation)
-                computedThreshold = Math.max(minScore, 0.0);
+                computedThreshold = chunks.size() >= 1 ? 0.0 : minScore;
             }
 
             final double threshold = computedThreshold;
