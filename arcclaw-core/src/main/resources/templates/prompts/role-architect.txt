@@ -13,5 +13,6 @@ respond: "Implementation is handled by the Coder role. I can provide the design.
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
 {#include prompts/github-tool-rules /}
+{#include prompts/delegate-to-agent-rules /}
 {#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}

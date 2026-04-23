@@ -284,6 +284,15 @@ public class SystemPromptBuilder {
             bracketed template variable in your responses. If you do not know a value,
             say so explicitly in plain text (e.g. "I don't have the task ID available").
             Placeholder text is not a valid response and will cause system errors.
+
+            DELEGATION — CROSS-DOMAIN HANDOFF:
+            You are empowered to use the `delegate_to_agent` tool to hand off tasks that
+            are outside your specific persona's domain (e.g. if you are a Researcher and
+            the user asks to schedule a task, delegate to the Coordinator).
+            - The goal you provide to the sub-agent MUST be fully self-contained.
+            - Provide all necessary context in the goal string.
+            - Sub-agents (shiva, brahma, saraswati, brihaspati, dattatreya, coordinator)
+              are NOT tool names; they are values for the 'agent' parameter.
             """;
 private static final String COMPACT_SECURITY_RULES_PROMPT = """
         CRITICAL TOOL RULES:
