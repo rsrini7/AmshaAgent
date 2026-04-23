@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -25,6 +27,9 @@ public class ReasoningStepParser {
     private static final Logger log = Logger.getLogger(ReasoningStepParser.class);
 
     private final ObjectMapper objectMapper;
+
+    private static final Pattern MISTRAL_TOOL_CALL_PATTERN =
+            Pattern.compile("^\\[TOOL_CALLS\\]\\s*([a-zA-Z0-9_-]+)\\s*(\\{.*\\})$", Pattern.DOTALL);
 
     protected ReasoningStepParser() {
         this.objectMapper = null;
@@ -104,6 +109,19 @@ public class ReasoningStepParser {
                     inputTokens,
                     outputTokens
                 );
+            }
+        }
+
+        // 🟢 SAFETY NET: Mistral native [TOOL_CALLS] leak (§ recommendation)
+        if (aiMessage.text() != null && aiMessage.text().contains("[TOOL_CALLS]")) {
+            Matcher m = MISTRAL_TOOL_CALL_PATTERN.matcher(aiMessage.text().trim());
+            if (m.matches()) {
+                String toolName = m.group(1);
+                String argsJson = m.group(2);
+                log.infof("[MISTRAL-FIX] Caught leaked native tool call: '%s' with args: %s", toolName, argsJson);
+
+                Map<String, Object> actionInput = deserializeParams(sessionId, argsJson);
+                return ReasoningStep.pending("Intercepted native Mistral tool call", toolName, actionInput, inputTokens, outputTokens);
             }
         }
         

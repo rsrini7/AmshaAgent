@@ -57,6 +57,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     static final Pattern NVIDIA_TOOL_CALL_PATTERN =
             Pattern.compile("TOOLCALLS", Pattern.CASE_INSENSITIVE);
 
+    /** Detects Mistral-style [TOOL_CALLS] prefix leaking into FINISH text. */
+    static final Pattern MISTRAL_TOOL_CALL_PATTERN =
+            Pattern.compile("\\[TOOL_CALLS\\]", Pattern.CASE_INSENSITIVE);
+
     /**
      * Extracts the tool name from a standard JSON leak so the correction hint
      * can name the tool explicitly.
@@ -80,6 +84,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      */
     static final Pattern NVIDIA_STRIP_PATTERN =
             Pattern.compile("(?i)TOOLCALLS.*", Pattern.DOTALL);
+
+    /** Strips everything from the first [TOOL_CALLS] token onwards. */
+    static final Pattern MISTRAL_STRIP_PATTERN =
+            Pattern.compile("(?i)\\[TOOL_CALLS\\].*", Pattern.DOTALL);
 
     /**
      * Matches suspiciously short non-answers: "Done.", "OK.", "ok", etc.
@@ -128,7 +136,8 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
                 || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
                 || RAW_TOOL_JSON_PATTERN.matcher(answer).find()
-                || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find();
+                || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find()
+                || MISTRAL_TOOL_CALL_PATTERN.matcher(answer).find();
     }
 
     /**
@@ -154,6 +163,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         stripped = stripped.replaceAll("(?s)\\{[^{}]*\"name\"[^{}]*\"parameters\"[^{}]*}", "");
         // §9.1 fix: was compiled inline — now uses static final NVIDIA_STRIP_PATTERN
         stripped = NVIDIA_STRIP_PATTERN.matcher(stripped).replaceAll("");
+        stripped = MISTRAL_STRIP_PATTERN.matcher(stripped).replaceAll("");
         return stripped.strip();
     }
 
