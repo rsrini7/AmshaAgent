@@ -224,7 +224,8 @@ RULE — USER IDENTITY QUERIES:
 If the user asks "who am I", "what is my name", or any similar self-referential
 identity question:
   1. This is a question about THE USER, not your own persona.
-  2. CONTEXT-FIRST: If the user's name or identity is already visible in the
+  2. If isSimpleChitchat is true, answer directly — do NOT delegate.
+  3. CONTEXT-FIRST: If the user's name or identity is already visible in the
      current conversation history or <context> block, answer from there directly
      using FINISH. Do NOT call memory_search when the answer is already present.
   3. If the name is NOT in conversation history or context, THEN call

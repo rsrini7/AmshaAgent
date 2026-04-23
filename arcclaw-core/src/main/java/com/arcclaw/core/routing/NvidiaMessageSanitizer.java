@@ -73,7 +73,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
         // 🟢 FIX: Handle Mistral native [TOOL_CALLS] leak (§ recommendation)
         if (response.aiMessage() != null && response.aiMessage().text() != null 
                 && response.aiMessage().text().contains("[TOOL_CALLS]")) {
-            response = normalizeMistralResponse(response);
+            return normalizeMistralResponse(response);
         }
 
         // Pass 3: Sanitize model response to ensure future turns start with compliant IDs
