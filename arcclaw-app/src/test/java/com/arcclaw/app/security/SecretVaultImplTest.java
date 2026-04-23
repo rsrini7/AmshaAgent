@@ -19,7 +19,6 @@ import java.util.concurrent.TimeUnit;
 
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.audit.AuditEvent;
@@ -165,15 +164,14 @@ public class SecretVaultImplTest {
             EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
             assertNotNull(entity);
             assertEquals(1, entity.getEncryptionKeyVersion(), "Application key version must be 1");
-            assertTrue(entity.getOrmVersion() >= 0, "ORM version must be managed by Hibernate (>= 0)");
         });
     }
 
     @Test
-    void testConcurrentStore_NoConflictWithHibernateVersion() throws InterruptedException {
-        // As per requirement: call store() twice on the same key concurrently
-        // Assert no OptimisticLockException is thrown.
-        // NOTE: Hibernate 7+ managing version automatically avoids app-driven corruption.
+    void testConcurrentStore_LastWriteWins() throws InterruptedException {
+        // Since @Version was removed to support 'last write wins' and avoid noisy
+        // OptimisticLockExceptions, this test confirms no exception is thrown
+        // even during race conditions.
         
         String key = "CONCURRENT_KEY";
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -184,39 +182,22 @@ public class SecretVaultImplTest {
             cleanDb();
         });
 
-        Thread.ofVirtual().start(() -> {
+        Runnable r = () -> {
             try {
                 startLatch.await();
                 WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
                     vault.store(key, SECRET_PAYLOAD);
                 });
             } catch (Exception e) {
-                // We assert no OptimisticLockException is thrown
-                if (e instanceof OptimisticLockException) {
-                    fail("Should not throw OptimisticLockException when Hibernate manages version: " + e.getMessage());
-                }
                 e.printStackTrace();
+                fail("No exception should be thrown during concurrent store: " + e.getMessage());
             } finally {
                 doneLatch.countDown();
             }
-        });
+        };
 
-        Thread.ofVirtual().start(() -> {
-            try {
-                startLatch.await();
-                WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
-                    vault.store(key, SECRET_PAYLOAD);
-                });
-            } catch (Exception e) {
-                // We assert no OptimisticLockException is thrown
-                if (e instanceof OptimisticLockException) {
-                    fail("Should not throw OptimisticLockException when Hibernate manages version: " + e.getMessage());
-                }
-                e.printStackTrace();
-            } finally {
-                doneLatch.countDown();
-            }
-        });
+        Thread.ofVirtual().start(r);
+        Thread.ofVirtual().start(r);
 
         startLatch.countDown();
         assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should finish");

@@ -832,15 +832,25 @@ public class AppBootstrap {
         System.setProperty("arcclaw.llm.context-window", effectiveWindow);
 
         String compactPromptEnabled = System.getProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", System.getenv("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED"));
-        boolean shouldEnable = "true".equalsIgnoreCase(compactPromptEnabled)
-                || (Integer.parseInt(effectiveWindow) <= 8192);
-
-        String finalCompactValue = shouldEnable ? "true" : "false";
-        System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalCompactValue);
-        System.setProperty("arcclaw.llm.compact-prompt-enabled", finalCompactValue);
+        boolean shouldEnable;
+        
+        if (compactPromptEnabled == null || compactPromptEnabled.isBlank()) {
+            int windowSize = Integer.parseInt(effectiveWindow);
+            shouldEnable = (windowSize > 0 && windowSize <= 8192);
+            String finalValue = shouldEnable ? "true" : "false";
+            System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalValue);
+            System.setProperty("arcclaw.llm.compact-prompt-enabled", finalValue);
+        } else {
+            shouldEnable = "true".equalsIgnoreCase(compactPromptEnabled);
+            System.setProperty("arcclaw.llm.compact-prompt-enabled", compactPromptEnabled);
+        }
 
         if (shouldEnable) {
             String msg = "[ArcClaw] ℹ️  Compact Prompt Mode ENABLED (window=" + effectiveWindow + ").";
+            System.err.println(msg);
+            log.debug(msg);
+        } else {
+            String msg = "[ArcClaw] ℹ️  Compact Prompt Mode DISABLED (window=" + effectiveWindow + ").";
             System.err.println(msg);
             log.debug(msg);
         }
@@ -850,6 +860,7 @@ public class AppBootstrap {
         // are lazy-initialized in Quarkus. These properties will be visible when
         // ChatModelProducer / SystemPromptBuilder first inject their @ConfigProperty fields.
         String structuredMode = System.getProperty("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE"));
+
         if (structuredMode == null || structuredMode.isBlank()) {
             String activeModel = System.getProperty("ARCCLAW_LLM_MODEL_NAME", System.getenv("ARCCLAW_LLM_MODEL_NAME"));
             String targetMode = (activeModel != null && activeModel.contains("llama-4-scout")) 

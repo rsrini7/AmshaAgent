@@ -75,15 +75,13 @@ public class AgentCronScheduler {
     Duration maxLookbackWindow;
 
     private ScheduledExecutorService preciseScheduler;
+    private volatile boolean active = true;
 
     Semaphore concurrencyLimiter;
 
-
-
-
-
     @PostConstruct
     void init() {
+        this.active = true;
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
         
         // Confirm resolution of the optional advisory lock port
@@ -118,6 +116,7 @@ public class AgentCronScheduler {
     }
 
     private void sweepOrphanedApprovalJobs() {
+        if (!active) return;
         log.info("AgentCronScheduler: starting orphan sweep for AWAITING_APPROVAL jobs...");
         try {
             List<AgentCronEntity> orphaned = cronRepository.findAllAwaitingApproval();
@@ -132,6 +131,12 @@ public class AgentCronScheduler {
                 cronRepository.markFailed(job.id, "Orphaned — session expired before approval (server restart).");
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
+        } catch (IllegalStateException e) {
+            if (active) {
+                log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
+            } else {
+                log.debug("AgentCronScheduler: persistence closed during sweep — suppression intentional.");
+            }
         } catch (Exception e) {
             log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
         }
@@ -139,6 +144,7 @@ public class AgentCronScheduler {
 
     @PreDestroy
     void shutdown() {
+        this.active = false;
         if (preciseScheduler != null) {
             preciseScheduler.shutdown();
             try {
