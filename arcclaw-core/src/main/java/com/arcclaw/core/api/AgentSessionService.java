@@ -199,13 +199,20 @@ public class AgentSessionService {
 
         vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
-                if ("approve".equalsIgnoreCase(request.goal())) {
+                var commandResponse = handleSlashCommand(sessionId, request);
+                if (commandResponse.isPresent()) {
+                    response.resume(commandResponse.get());
+                    return;
+                }
+
+                String goal = request.goal() != null ? request.goal().trim() : "";
+                if ("approve".equalsIgnoreCase(goal) || "/approve".equalsIgnoreCase(goal)) {
                     AgentCheckpoint cp = checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
                     checkpointApprovalService.triggerResume(cp);
                     response.resume(Response.accepted(Map.of("status", "APPROVED")).build());
                     return;
                 }
-                if ("deny".equalsIgnoreCase(request.goal())) {
+                if ("deny".equalsIgnoreCase(goal) || "/deny".equalsIgnoreCase(goal)) {
                     AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                     checkpointApprovalService.triggerResume(cp);
                     response.resume(Response.ok(Map.of("status", "DENIED")).build());

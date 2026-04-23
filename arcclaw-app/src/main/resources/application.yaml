@@ -306,7 +306,7 @@ arcclaw:
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
     max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
     max-output-tokens: ${ARCCLAW_LLM_MAX_OUTPUT_TOKENS:8192}
-    timeout: ${ARCCLAW_LLM_TIMEOUT:PT60S}
+    timeout: ${ARCCLAW_LLM_TIMEOUT:PT120S}
     temperature: ${ARCCLAW_LLM_TEMPERATURE:0.1}
     context-window: ${ARCCLAW_LLM_CONTEXT_WINDOW:128000}
     compact-prompt-enabled: ${ARCCLAW_LLM_COMPACT_PROMPT_ENABLED:false}

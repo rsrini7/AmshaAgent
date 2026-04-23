@@ -81,7 +81,8 @@ public class FallbackChatModel implements ChatModel {
             // 3. retriable 5xx errors (service unavailable/overloaded)
             if (lower.contains("502") || lower.contains("503") || lower.contains("504") ||
                 lower.contains("service unavailable") || lower.contains("bad gateway") ||
-                lower.contains("gateway timeout") || lower.contains("overloaded")) {
+                lower.contains("gateway timeout") || lower.contains("overloaded") ||
+                lower.contains("timeout") || lower.contains("exceeded")) {
                 return true;
             }
 
