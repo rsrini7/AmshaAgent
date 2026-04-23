@@ -140,6 +140,11 @@ public class FinishActionHandler {
                     step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
         }
 
+        // 🟢 FIX: Strip "FINISH:" prefix if present (internal state-machine token leak)
+        if (candidateAnswer != null && candidateAnswer.startsWith("FINISH:")) {
+            candidateAnswer = candidateAnswer.substring("FINISH:".length()).strip();
+        }
+
         // --- Raw tool-call leak detection ---
         if (qualityGuard.isRawToolCallLeak(candidateAnswer)) {
             return handleLeak(candidateAnswer, step, history, llmSchemaErrorCount, sessionId);
