@@ -20,6 +20,7 @@ import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.FinishReason;
 import org.jboss.logging.Logger;
 
 /**
@@ -93,6 +94,9 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         Matcher m = MISTRAL_RAW_TOOL_CALL.matcher(text);
         if (m.find()) {
+            int toolCallIdx = m.start();
+            String thought = text.substring(0, toolCallIdx).strip();
+            
             String toolName = m.group(1);
             String jsonPayload = m.group(2);
 
@@ -120,12 +124,11 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 }
 
                 if (!requests.isEmpty()) {
-                    log.infof("[NvidiaSanitizer] Normalized %d Mistral tool calls from text content", requests.size());
+                    log.infof("[NvidiaSanitizer] Normalized %d Mistral tool calls — routing through approval gate", requests.size());
                     return ChatResponse.builder()
-                            .aiMessage(AiMessage.from(requests))
-                            .metadata(response.metadata())
+                            .aiMessage(AiMessage.from(thought.isEmpty() ? null : thought, requests))
                             .tokenUsage(response.tokenUsage())
-                            .finishReason(response.finishReason())
+                            .finishReason(FinishReason.TOOL_EXECUTION)
                             .build();
                 }
             } catch (Exception e) {
