@@ -97,6 +97,8 @@ class AppBootstrapTest {
     @Test
     void testValidateAndAutoFixLlmConfig_defaultsCompactPromptFlagToFalse(@TempDir Path tempDir) throws Exception {
         System.setProperty("ARCCLAW_LLM_PROVIDER", "groq");
+        // Ensure environment variable doesn't override the test by setting property to blank
+        System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", "");
 
         Path envFile = tempDir.resolve(".env");
         Files.write(envFile, List.of("ARCCLAW_LLM_PROVIDER=groq"));
