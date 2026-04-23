@@ -6,7 +6,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
@@ -109,8 +108,9 @@ public class SerperWebSearchTool implements AgentTool {
                 .description("Number of organic results to return (integer, 1-10). Default is 5. " +
                             "Set this parameter to the specific number if the user asks for 'top N' results.")
                 .build())
-            // Use 2-arg version to avoid potential MethodNotFound error (Fix I1)
-            .addEnumProperty("type", List.of("search", "news"))
+            .addProperty("type", JsonStringSchema.builder()
+                .description("Optional result type: 'search' (default) for web results, or 'news' for latest news articles.")
+                .build())
             .required("query")  // keep count optional so model can omit it safely
             .build();
     }
@@ -226,11 +226,11 @@ public class SerperWebSearchTool implements AgentTool {
                 }
             }
 
-            // C. organic
-            JsonNode organic = root.path("organic");
-            if (organic.isArray() && organic.size() > 0) {
-                sb.append("## Web Results\n\n");
-                for (JsonNode res : organic) {
+            // C. organic / news
+            JsonNode results = root.has("news") ? root.path("news") : root.path("organic");
+            if (results.isArray() && results.size() > 0) {
+                sb.append(root.has("news") ? "## News Results\n\n" : "## Web Results\n\n");
+                for (JsonNode res : results) {
                     sb.append("Title: ").append(res.path("title").asText("Untitled")).append("\n");
                     sb.append("URL:   ").append(res.path("link").asText("Unknown URL")).append("\n");
                     sb.append("Snippet: ").append(res.path("snippet").asText("No snippet available.")).append("\n");

@@ -30,6 +30,7 @@ import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ChatMessageType;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -63,6 +64,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
 
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
+ 
+        boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(context.goal());
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(systemPrompt));
@@ -76,7 +79,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             ));
         }
  
-        messages.addAll(assembled);
+        if (isSimpleChitchat) {
+            // Strip tool calls/results from history to prevent pattern-matching leaks
+            List<ChatMessage> filtered = assembled.stream()
+                    .filter(m -> m.type() == ChatMessageType.SYSTEM
+                            || m.type() == ChatMessageType.USER)
+                    .collect(Collectors.toList());
+            messages.addAll(filtered);
+        } else {
+            messages.addAll(assembled);
+        }
 
         if (log.isDebugEnabled()) {
             long totalContentChars = messages.stream()
@@ -101,8 +113,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             context.autonomyLevel() == AutonomyLevel.BACKGROUND
             || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
  
-        boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(context.goal());
-
         List<ToolSpecification> toolSpecifications;
         if (isSimpleChitchat) {
             log.debugf("[LangChainReasoningEngine] Simple chitchat detected for session %s — stripping all tools from request", sessionId);
