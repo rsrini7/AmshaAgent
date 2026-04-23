@@ -818,12 +818,11 @@ public class AppBootstrap {
             default         -> "128000";
         };
 
-        String effectiveWindow = contextWindow;
-        // Auto-fix if unset OR if it matches one of our known standard defaults but is wrong for the current provider
-        boolean isDefaultOrKnown = contextWindow == null || contextWindow.isBlank()
-                || Set.of("128000", "8192", "65536", "1000000").contains(contextWindow);
+        String effectiveWindow = (contextWindow == null || contextWindow.isBlank()) ? targetWindow : contextWindow;
+        // Auto-fix if it matches one of our known standard defaults but is wrong for the current provider
+        boolean isKnownDefault = Set.of("128000", "8192", "65536", "1000000").contains(contextWindow);
 
-        if (isDefaultOrKnown && !targetWindow.equals(contextWindow)) {
+        if ((contextWindow == null || contextWindow.isBlank() || isKnownDefault) && !targetWindow.equals(contextWindow)) {
             effectiveWindow = targetWindow;
             System.err.println("[ArcClaw] ℹ️  Setting context window to " + targetWindow + " for provider '" + provider + "'.");
             patchEnvFile(envFile, "ARCCLAW_LLM_CONTEXT_WINDOW", targetWindow);
@@ -835,14 +834,20 @@ public class AppBootstrap {
         boolean shouldEnable;
         
         if (compactPromptEnabled == null || compactPromptEnabled.isBlank()) {
-            int windowSize = Integer.parseInt(effectiveWindow);
+            int windowSize = 0;
+            try {
+                windowSize = Integer.parseInt(effectiveWindow);
+            } catch (NumberFormatException ignored) {}
+            
             shouldEnable = (windowSize > 0 && windowSize <= 8192);
             String finalValue = shouldEnable ? "true" : "false";
             System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalValue);
             System.setProperty("arcclaw.llm.compact-prompt-enabled", finalValue);
         } else {
             shouldEnable = "true".equalsIgnoreCase(compactPromptEnabled);
-            System.setProperty("arcclaw.llm.compact-prompt-enabled", compactPromptEnabled);
+            String finalValue = shouldEnable ? "true" : "false";
+            System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalValue);
+            System.setProperty("arcclaw.llm.compact-prompt-enabled", finalValue);
         }
 
         if (shouldEnable) {
