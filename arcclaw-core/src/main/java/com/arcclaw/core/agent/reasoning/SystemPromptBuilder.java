@@ -363,11 +363,12 @@ public class SystemPromptBuilder {
             """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
-        boolean isSimpleChitchat = intentService != null && intentService.isSimpleConversational(goal);
+        String detectionGoal = (context != null) ? context.goal() : goal;
+        boolean isSimpleChitchat = intentService != null && intentService.isSimpleConversational(detectionGoal);
         boolean isCompact = compactPromptEnabled || (contextWindow > 0 && contextWindow <= 8192);
 
-        log.infof("[SPB] goal='%s' intentService=%s isSimpleChitchat=%b isCompact=%b",
-                   goal,
+        log.debugf("[SPB] goal='%s' intentService=%s isSimpleChitchat=%b isCompact=%b",
+                   detectionGoal,
                    intentService == null ? "NULL" : "OK",
                    isSimpleChitchat,
                    isCompact);

@@ -54,7 +54,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject GovernanceStrategy governanceLayer;
     @Inject RateLimitTracker rateLimitTracker;
     @Inject AgentOtelContext otelContext;
-    @Inject IntentClassificationService intentDetector;
+    @Inject IntentClassificationService intentClassifier;
     @Inject MeterRegistry meterRegistry;
 
     @Override
@@ -101,17 +101,25 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             context.autonomyLevel() == AutonomyLevel.BACKGROUND
             || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
  
-        List<ToolSpecification> toolSpecifications = toolRegistry.listTools().stream()
-                .filter(allowedTools::contains)
-                .filter(name -> !isBackgroundSession || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
-                        && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
-                .map(name -> toolRegistry.findTool(name).orElseThrow())
-                .map(tool -> ToolSpecification.builder()
-                        .name(tool.name())
-                        .description(tool.description())
-                        .parameters(tool.parametersSchema())
-                        .build())
-                .collect(Collectors.toList());
+        boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(context.goal());
+
+        List<ToolSpecification> toolSpecifications;
+        if (isSimpleChitchat) {
+            log.debugf("[LangChainReasoningEngine] Simple chitchat detected for session %s — stripping all tools from request", sessionId);
+            toolSpecifications = List.of();
+        } else {
+            toolSpecifications = toolRegistry.listTools().stream()
+                    .filter(allowedTools::contains)
+                    .filter(name -> !isBackgroundSession || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
+                            && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
+                    .map(name -> toolRegistry.findTool(name).orElseThrow())
+                    .map(tool -> ToolSpecification.builder()
+                            .name(tool.name())
+                            .description(tool.description())
+                            .parameters(tool.parametersSchema())
+                            .build())
+                    .collect(Collectors.toList());
+        }
 
         ChatRequest request = toolSpecifications.isEmpty()
                 ? ChatRequest.builder().messages(messages).build()
@@ -356,7 +364,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     private boolean goalIsWriteIntent(String goal) {
-        return intentDetector.isWriteIntent(goal);
+        return intentClassifier.isWriteIntent(goal);
     }
 
     /**
