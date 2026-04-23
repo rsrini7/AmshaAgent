@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -21,6 +22,7 @@ import com.arcclaw.core.util.ClassUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -155,8 +157,11 @@ public class IntentDetectorService implements IntentDetector {
         try {
             raw = classifierModel.chat(safePrompt);
         } catch (Exception e) {
-            log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", e.getMessage());
-            log.debugf(e, "Full stacktrace for intent classifier failure");
+            log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Intent classifier failure cause chain: %s",
+                ExceptionUtils.getThrowableList(e).stream()
+                    .map(t -> t.getClass().getSimpleName() + ": " + t.getMessage())
+                    .collect(Collectors.joining(" -> ")));
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
