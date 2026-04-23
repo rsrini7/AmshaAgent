@@ -99,6 +99,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param checkpointId The checkpoint entity ID.
      */
     void markCompleted(Long checkpointId);
+    void archive(Long checkpointId);
 
     /**
      * Save the final state of a checkpoint and mark it as completed or failed.
@@ -181,6 +182,12 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     boolean markBatchResuming(String sessionId, String agentRole);
 
     /**
+     * Atomically marks the session as RESUMING (generic execution lock).
+     * @return true if successfully claimed
+     */
+    boolean markResuming(String sessionId);
+
+    /**
      * Atomically claims a checkpoint for retry by transitioning its status
      * from AWAITING_RETRY to IN_PROGRESS and clearing retry metadata.
      * @return true if successfully claimed
@@ -194,10 +201,14 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     boolean isBatchResuming(String sessionId);
 
     /**
-     * Clears the RESUMING flag for the session. §7.29
-     * Called by WorkspaceManager.terminateSession() and on resume failure.
+     * Clears the RESUMING flag for the session.
      */
     void clearBatchResuming(String sessionId);
+
+    /**
+     * Clears the RESUMING flag for the session (generic execution lock).
+     */
+    void clearResuming(String sessionId);
 
     /**
      * Returns the most-recent checkpoint for this session that is in

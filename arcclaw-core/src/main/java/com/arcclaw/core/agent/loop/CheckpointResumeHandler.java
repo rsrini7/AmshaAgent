@@ -82,11 +82,6 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) {
 
-        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
-            log.infof("BATCH-RESUME-GUARD: session %s already resuming", sessionId);
-            return;
-        }
-
         MessageContext context = null;
         try {
             AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);

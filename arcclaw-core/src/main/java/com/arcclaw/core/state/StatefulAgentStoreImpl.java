@@ -171,6 +171,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public void markCompleted(Long checkpointId)
         { transitionService.markCompleted(checkpointId); }
 
+    @Override public void archive(Long checkpointId)
+        { storeAdapter.archive(checkpointId); }
+
     // ── Resume guard (§3.4 / §7.29 — all delegated, public API stays here) ───
 
     /**
@@ -196,6 +199,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public boolean markResuming(String sessionId) {
+        return resumeGuard.markResuming(sessionId);
+    }
+
+    @Override
     public boolean claimForRetry(Long id) {
         return storeAdapter.claimForRetry(id);
     }
@@ -211,6 +219,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      * path and by WorkspaceManager.terminateSession(). Never suppress.
      */
     @Override public void clearBatchResuming(String sessionId)
+        { resumeGuard.clearResuming(sessionId); }
+
+    @Override public void clearResuming(String sessionId)
         { resumeGuard.clearResuming(sessionId); }
 
     // ── Batch tool decisions ──────────────────────────────────────────────────

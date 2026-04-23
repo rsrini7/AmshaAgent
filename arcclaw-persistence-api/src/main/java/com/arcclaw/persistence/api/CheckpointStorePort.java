@@ -176,6 +176,7 @@ public interface CheckpointStorePort {
     void markFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass);
     void markCompleted(Long checkpointId);
     void markOrphaned(Long checkpointId, String reason);
+    void archive(Long checkpointId);
 
     /**
      * Atomically claims a checkpoint for retry by transitioning its status

@@ -142,6 +142,11 @@ public class CheckpointResumeCoordinator {
         }
 
         if (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING) {
+            // §7.29 / §T5-4: RESUMING status is an explicit "active" signal. 
+            // If the checkpoint is RESUMING, it means a thread has already claimed
+            // it and is currently executing the tool. We MUST restore history 
+            // so the new message can be processed AFTER the current turn finishes
+            // (or rejected by the concurrency lock).
             boolean isResume = (context != null && context.isResumeSignal()) || status == CheckpointStatus.RESUMING;
             if (isResume) {
                 List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);

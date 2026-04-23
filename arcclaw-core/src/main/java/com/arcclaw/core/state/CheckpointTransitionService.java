@@ -1,5 +1,7 @@
 package com.arcclaw.core.state;
 
+import java.time.Instant;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -56,7 +58,7 @@ public class CheckpointTransitionService {
      * @param createdAt   the creation time
      */
     public void emitCreated(String sessionId, String agentRole, String userId, AutonomyLevel autonomy,
-                            Long checkpointId, java.time.Instant createdAt) {
+                            Long checkpointId, Instant createdAt) {
         String idempotencyKey = "CP_CREATED:" + checkpointId + ":" + createdAt.toEpochMilli();
         auditService.recordWithIdempotency(sessionId, userId, agentRole,
                 SecurityEventType.CHECKPOINT_CREATED, autonomy + " autonomy", idempotencyKey);
@@ -124,7 +126,7 @@ public class CheckpointTransitionService {
     // ── markCompleted ─────────────────────────────────────────────────────────
 
     /**
-     * Marks a checkpoint COMPLETED and emits audit.
+     * Marks a checkpoint COMPLETED, emits audit, and archives it to prevent reuse.
      */
     public void markCompleted(Long checkpointId) {
         storeAdapter.markCompleted(checkpointId);
@@ -135,6 +137,10 @@ public class CheckpointTransitionService {
                     SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
             log.infof("Checkpoint %d marked COMPLETED for session %s",
                     checkpointId, dto.sessionId());
+
+            // §7.31: Immediately archive COMPLETED checkpoints so findLatestNonArchived
+            // correctly ignores them in the next turn's FreshStart check.
+            storeAdapter.archive(checkpointId);
         });
     }
 
@@ -155,7 +161,7 @@ public class CheckpointTransitionService {
      * @param createdAt   the creation time of the checkpoint
      */
     public void emitFinalStatus(String sessionId, String agentRole, String userId,
-                                CheckpointStatus finalStatus, Long checkpointId, java.time.Instant createdAt) {
+                                CheckpointStatus finalStatus, Long checkpointId, Instant createdAt) {
         SecurityEventType eventType = finalStatus == CheckpointStatus.COMPLETED
                 ? SecurityEventType.CHECKPOINT_COMPLETED
                 : SecurityEventType.CHECKPOINT_FAILED;

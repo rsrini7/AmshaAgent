@@ -137,24 +137,36 @@ public class AgentDispatchHandler implements MessageHandler {
         final String resolvedGoal = goal;
         AgentResult result;
         try {
-            String channel = context.getChannelType().name();
-            Callable<AgentResult> op = () -> agentLoop.run(
+            if (!agentStore.markResuming(sessionId)) {
+                log.warnf("[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.", sessionId);
+                channelPluginRegistry.find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(context.getUser(), "⚠️ I'm already busy with your previous request. Please wait a moment until I finish."));
+                return HandleResult.STOP;
+            }
+
+            try {
+                String channel = context.getChannelType().name();
+                Callable<AgentResult> op = () -> agentLoop.run(
+                        sessionId,
+                        role,
+                        resolvedGoal,
+                        reasoningEngine,
+                        resolvedMaxIterations,
+                        context
+                    );
+                result = WorkspaceContext.<AgentResult>run(
                     sessionId,
+                    context.getUser().platformId(),
+                    resolvedChatId,
+                    finalLevel,
                     role,
-                    resolvedGoal,
-                    reasoningEngine,
-                    resolvedMaxIterations,
-                    context
+                    channel,
+                    op
                 );
-            result = WorkspaceContext.<AgentResult>run(
-                sessionId,
-                context.getUser().platformId(),
-                resolvedChatId,
-                finalLevel,
-                role,
-                channel,
-                op
-            );
+            } finally {
+                agentStore.clearResuming(sessionId);
+            }
         } catch (BudgetExceededException | BudgetWarningException e) {
             throw e;   // propagate typed — caller maps to 429
         } catch (Exception e) {

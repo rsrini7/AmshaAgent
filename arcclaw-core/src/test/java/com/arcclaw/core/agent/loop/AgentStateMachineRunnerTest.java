@@ -86,7 +86,6 @@ class AgentStateMachineRunnerTest {
     private ParallelToolStepExecutor parallelExecutor = mock(ParallelToolStepExecutor.class);
     private RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
     private PiiRedactionTransformer piiTransformer = mock(PiiRedactionTransformer.class);
-    private CliResultBridge cliResultBridge = mock(CliResultBridge.class);
 
     @Mock
     AgentSseService agentSseService;
@@ -126,7 +125,6 @@ class AgentStateMachineRunnerTest {
                 piiScanReflex,
                 piiTransformer,
                 agentOtelContext,
-                cliResultBridge,
                 intentDetector,
                 loopExitPublisher,
                 finishActionHandler,

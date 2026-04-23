@@ -82,7 +82,6 @@ public class AgentStateMachineRunner {
     private final InputSanitizer piiScanReflex;
     private final PiiRedactionTransformer piiTransformer;
     private final AgentOtelContext agentOtelContext;
-    private final CliResultBridge cliResultBridge;
     private final IntentClassificationService intentDetector;
     private final LoopExitPublisher loopExitPublisher;
     private final FinishActionHandler finishActionHandler;
@@ -97,7 +96,6 @@ public class AgentStateMachineRunner {
                                    @InputSanitizer.PII InputSanitizer piiScanReflex,
                                    PiiRedactionTransformer piiTransformer,
                                    AgentOtelContext agentOtelContext,
-                                   CliResultBridge cliResultBridge,
                                    IntentClassificationService intentDetector,
                                    LoopExitPublisher loopExitPublisher,
                                    FinishActionHandler finishActionHandler,
@@ -110,7 +108,6 @@ public class AgentStateMachineRunner {
         this.piiScanReflex = piiScanReflex;
         this.piiTransformer = piiTransformer;
         this.agentOtelContext = agentOtelContext;
-        this.cliResultBridge = cliResultBridge;
         this.intentDetector = intentDetector;
         this.loopExitPublisher = loopExitPublisher;
         this.finishActionHandler = finishActionHandler;

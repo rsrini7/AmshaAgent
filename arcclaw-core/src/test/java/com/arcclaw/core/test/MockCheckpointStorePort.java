@@ -258,6 +258,11 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
+    public void archive(Long checkpointId) {
+        transitionStatus(checkpointId, "ARCHIVED");
+    }
+
+    @Override
     public boolean claimForRetry(Long id) {
         CheckpointDto existing = store.get(id);
         if (existing != null && "AWAITING_RETRY".equals(existing.status())) {

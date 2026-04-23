@@ -721,6 +721,23 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public void archive(Long checkpointId) {
+        withRetry(() -> {
+            self.doArchive(checkpointId);
+            return null;
+        }, "archive");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doArchive(Long checkpointId) {
+        em.clear();
+        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
+        if (cp == null) return;
+        cp.setStatus(CheckpointStatus.ARCHIVED);
+        cp.setUpdatedAt(Instant.now());
+    }
+
+    @Override
     public boolean claimForRetry(Long id) {
         return withRetry(() -> self.doClaimForRetry(id), "claim-for-retry");
     }

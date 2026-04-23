@@ -127,26 +127,44 @@ public class CheckpointApprovalService {
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;
         
-        // findLatestAwaitingApproval may return empty if resumeAfterBatchDecision
-        // already transitioned the status — fall back to the pre-transition cp safely.
-        AgentCheckpoint fresh = agentStore.findLatestAwaitingApproval(cp.getSessionId())
-            .orElse(cp);
+        String sessionId = cp.getSessionId();
+        String agentRole = cp.getAgentRole();
 
-        String userId = fresh.getChannelPlatformId() != null
-                    ? fresh.getChannelPlatformId() : fresh.getSessionId();
-        String channelId = fresh.getChannelPlatformId() != null
+        // §7.29 / §T5-4: Synchronously acquire the distributed resume lock.
+        // This transitions AWAITING_APPROVAL -> RESUMING in the DB immediately,
+        // preventing CheckpointResumeCoordinator from archiving it as stale 
+        // if a new message arrives while the thread-handoff is pending.
+        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
+            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — ignoring duplicate trigger.", sessionId);
+            return;
+        }
+
+        try {
+            // findLatestNonArchivedCheckpoint instead of findLatestAwaitingApproval 
+            // since we just moved it to RESUMING.
+            AgentCheckpoint fresh = agentStore.findLatestNonArchivedCheckpoint(sessionId)
+                .orElse(cp);
+
+            String userId = fresh.getChannelPlatformId() != null
                         ? fresh.getChannelPlatformId() : fresh.getSessionId();
-        String channelType = fresh.getChannelType() != null
-                        ? fresh.getChannelType() : "websocket";
+            String channelId = fresh.getChannelPlatformId() != null
+                            ? fresh.getChannelPlatformId() : fresh.getSessionId();
+            String channelType = fresh.getChannelType() != null
+                            ? fresh.getChannelType() : "websocket";
 
-        log.debugf("resumeCheckpoint: session=%s channelType=%s channelId=%s",
-                fresh.getSessionId(), channelType, channelId);
+            log.debugf("resumeCheckpoint: session=%s channelType=%s channelId=%s",
+                    fresh.getSessionId(), channelType, channelId);
 
-        resumeHandler.resumeAfterBatchDecision(
-            fresh.getSessionId(), fresh.getAgentRole(), userId, channelId, channelType);
+            resumeHandler.resumeAfterBatchDecision(
+                fresh.getSessionId(), fresh.getAgentRole(), userId, channelId, channelType);
 
-        agentSseService.publish(fresh.getSessionId(), new AgentSseService.HitlEvent(
-            fresh.getSessionId(), HitlEventType.RESUMED.wireValue(), null, null, null, Instant.now()
-        ));
+            agentSseService.publish(fresh.getSessionId(), new AgentSseService.HitlEvent(
+                fresh.getSessionId(), HitlEventType.RESUMED.wireValue(), null, null, null, Instant.now()
+            ));
+        } catch (Exception e) {
+            log.errorf("Failed to trigger resume for session %s: %s", sessionId, e.getMessage());
+            agentStore.clearBatchResuming(sessionId);
+            throw e;
+        }
     }
 }
