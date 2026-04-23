@@ -447,7 +447,7 @@ public class SystemPromptBuilder {
         if (!isSimpleChitchat) {
             dynamicRules += isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
             dynamicRules += "\n" + (isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum));
-            dynamicRules += "\n" + (isCompact ? buildCompactToolContaminationGuard(context, roleEnum) : buildToolContaminationGuard(context, roleEnum, goal));
+            dynamicRules += "\n" + (isCompact ? buildCompactToolContaminationGuard(context, roleEnum) : buildToolContaminationGuard(context, roleEnum));
         }
 
         String finalPrompt = baseSystemPrompt + strictBinding + "\n" + securityPrompt + (dynamicRules.isEmpty() ? "" : "\n" + dynamicRules);
@@ -557,11 +557,6 @@ public class SystemPromptBuilder {
                 + "Your ONLY available tools in this turn are: " + toolList + ".\n"
                 + "The conversation history may reference tools from other roles. "
                 + "Those tools are NOT registered in your current schema.\n";
-    }
-
-    private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum, String goal) {
-        // TODO: use goal for goal-aware tool filtering to further optimize prompt size
-        return buildToolContaminationGuard(context, roleEnum);
     }
 
     private String buildCompactToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
