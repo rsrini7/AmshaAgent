@@ -8,7 +8,7 @@ Currently, some schema elements (Virtual Tables, WORM triggers, Session Registry
 2.  **Initial Migration**: Create `src/main/resources/db/migration/V1__initial_schema.sql` capturing current entity tables.
 3.  **WORM & FTS**: Migrate SQLite-specific WORM triggers and FTS5 virtual table creation to Flyway scripts.
 4.  **Specific Migration Task**: 
-    *   Rename `run_once` column to `runonce` in the `agentcron` table to align with the new `@Column(name="runonce")` mapping.
+    *   Rename `run_once` column to `runonce` in the `agent_cron` table to align with the new `@Column(name="runonce")` mapping.
     *   This ensures existing databases from the pre-P95 era can be upgraded without data loss.
 5.  **Decommission Enforcers**: Delete `SessionSchemaEnforcer` and `AuditSchemaEnforcer` once Flyway is verified.
 6.  **Architecture Invariant 5.23**: 

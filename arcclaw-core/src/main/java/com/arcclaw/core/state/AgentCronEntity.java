@@ -11,13 +11,13 @@ import jakarta.persistence.Table;
 import com.arcclaw.core.util.TemporalUtils;
 
 /**
- * Persistent cron job entity backed by the {@code agentcron} SQLite table.
+ * Persistent cron job entity backed by the {@code agent_cron} SQLite table.
  * <p>
  * All fields are public (project convention: no getters/setters).
  * Lifecycle: ACTIVE → RUNNING → ACTIVE (recurring) / COMPLETED (one-shot) / FAILED.
  */
 @Entity
-@Table(name = "agentcron")
+@Table(name = "agent_cron")
 public class AgentCronEntity {
 
     @Id

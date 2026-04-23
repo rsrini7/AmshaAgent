@@ -39,7 +39,7 @@ import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 /**
- * Polls {@code agentcron} table and dispatches due cron jobs to the {@link CronJobRunner}.
+ * Polls {@code agent_cron} table and dispatches due cron jobs to the {@link CronJobRunner}.
  * <p>
  * Architecture decisions:
  * <ul>

@@ -153,7 +153,7 @@ public class CronResultHandler {
         if (resolvedType.isEmpty()) {
             log.warnf("CRON-NOTIFY cronId=%d has null/unknown channelType='%s'. " +
                        "Cannot notify — see Architecture_Invariants.md §1.4. " +
-                       "Run migration: UPDATE agentcron SET channel_type='TELEGRAM' " +
+                       "Run migration: UPDATE agent_cron SET channel_type='TELEGRAM' " +
                        "WHERE channel_type IS NULL;",
                        job.id, job.channelType);
             // Use a deterministic sessionId for audit — cronId is always available

@@ -14,7 +14,7 @@ import io.quarkus.runtime.StartupEvent;
 import org.jboss.logging.Logger;
 
 /**
- * Creates the {@code agentcron} table and indexes at startup.
+ * Creates the {@code agent_cron} table and indexes at startup.
  * <p>
  * Runs AFTER Hibernate schema generation ({@code APPLICATION + 100}).
  * Uses {@code CREATE TABLE IF NOT EXISTS} and safe {@code ALTER TABLE}
@@ -38,7 +38,7 @@ public class CronSchemaEnforcer {
 
         // 1. Core table
         em.createNativeQuery("""
-                CREATE TABLE IF NOT EXISTS agentcron (
+                CREATE TABLE IF NOT EXISTS agent_cron (
                     id                  TEXT PRIMARY KEY,
                     sessionId           TEXT NOT NULL,
                     userId              TEXT NOT NULL,
@@ -62,68 +62,68 @@ public class CronSchemaEnforcer {
 
         // 2. Indexes — partial index on active rows for fast poll queries
         em.createNativeQuery(
-                "CREATE INDEX IF NOT EXISTS idx_cron_nextfire ON agentcron(nextFireTime) WHERE status='ACTIVE'"
+                "CREATE INDEX IF NOT EXISTS idx_cron_nextfire ON agent_cron(nextFireTime) WHERE status='ACTIVE'"
         ).executeUpdate();
 
         em.createNativeQuery(
-                "CREATE INDEX IF NOT EXISTS idx_cron_status ON agentcron(status)"
+                "CREATE INDEX IF NOT EXISTS idx_cron_status ON agent_cron(status)"
         ).executeUpdate();
 
         em.createNativeQuery(
-                "CREATE INDEX IF NOT EXISTS idx_cron_userid ON agentcron(userId)"
+                "CREATE INDEX IF NOT EXISTS idx_cron_userid ON agent_cron(userId)"
         ).executeUpdate();
 
         // 3. Schema migrations — safe ALTER TABLE for upgrades from older schemas
         // Check if columns exist before trying to add them to avoid SQLITE_ERROR log pollution
-        if (!hasColumn("agentcron", "runOnce")) {
+        if (!hasColumn("agent_cron", "runOnce")) {
             try {
                 em.createNativeQuery(
-                        "ALTER TABLE agentcron ADD COLUMN runOnce INTEGER NOT NULL DEFAULT 0"
+                        "ALTER TABLE agent_cron ADD COLUMN runOnce INTEGER NOT NULL DEFAULT 0"
                 ).executeUpdate();
             } catch (Exception ignored) {}
         }
 
-        if (!hasColumn("agentcron", "lastDeliveryId")) {
+        if (!hasColumn("agent_cron", "lastDeliveryId")) {
             try {
                 em.createNativeQuery(
-                        "ALTER TABLE agentcron ADD COLUMN lastDeliveryId TEXT"
+                        "ALTER TABLE agent_cron ADD COLUMN lastDeliveryId TEXT"
                 ).executeUpdate();
             } catch (Exception ignored) {}
         }
 
-        if (!hasColumn("agentcron", "channelType")) {
+        if (!hasColumn("agent_cron", "channelType")) {
             try {
                 em.createNativeQuery(
-                        "ALTER TABLE agentcron ADD COLUMN channelType TEXT"
+                        "ALTER TABLE agent_cron ADD COLUMN channelType TEXT"
                 ).executeUpdate();
             } catch (Exception ignored) {}
         }
 
-        if (!hasColumn("agentcron", "channelPlatformId")) {
+        if (!hasColumn("agent_cron", "channelPlatformId")) {
             try {
                 em.createNativeQuery(
-                        "ALTER TABLE agentcron ADD COLUMN channelPlatformId TEXT"
+                        "ALTER TABLE agent_cron ADD COLUMN channelPlatformId TEXT"
                 ).executeUpdate();
             } catch (Exception ignored) {}
         }
 
-        if (!hasColumn("agentcron", "executionRole")) {
+        if (!hasColumn("agent_cron", "executionRole")) {
             try {
                 em.createNativeQuery(
-                        "ALTER TABLE agentcron ADD COLUMN executionRole TEXT"
+                        "ALTER TABLE agent_cron ADD COLUMN executionRole TEXT"
                 ).executeUpdate();
             } catch (Exception ignored) {}
         }
 
-        if (!hasColumn("agentcron", "updatedAt")) {
+        if (!hasColumn("agent_cron", "updatedAt")) {
             try {
                 em.createNativeQuery(
-                        "ALTER TABLE agentcron ADD COLUMN updatedAt TEXT"
+                        "ALTER TABLE agent_cron ADD COLUMN updatedAt TEXT"
                 ).executeUpdate();
             } catch (Exception ignored) {}
         }
 
-        log.info("CronSchemaEnforcer: agentcron table, indexes, and migrations verified.");
+        log.info("CronSchemaEnforcer: agent_cron table, indexes, and migrations verified.");
     }
 
     /**

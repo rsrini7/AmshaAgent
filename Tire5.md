@@ -101,7 +101,7 @@
 
 ### T5-11: Persistence Schema Integrity (RC4) [DONE]
 * **Problem:** Inconsistent naming and missing columns in SQLite caused `no such table` errors and lost execution metadata.
-* **What to Do:** Align JPA entity mapping with native SQL queries. Implement idempotent startup migrations for the `agentcron` table.
+* **What to Do:** Align JPA entity mapping with native SQL queries. Implement idempotent startup migrations for the `agent_cron` table.
 * **Done When:**
     * [x] `agentcheckpoint` renamed to `agent_checkpoint` with standardized snake_case columns
     * [x] `CronSchemaEnforcer` adds missing metadata columns (`channelType`, `executionRole`, `updatedAt`)
