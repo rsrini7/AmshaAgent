@@ -180,6 +180,12 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+POST {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
 ### [DEL-9] Alias: "brahma" → CODER inner loop runs as coder role
 # Expect 200 Finished: Brahma's code propagated.
 POST {{baseUrl}}/api/v1/sessions/{{aliasDelSession.response.body.sessionId}}/run
@@ -360,6 +366,17 @@ X-ArcClaw-API-Key: {{validKey}}
     "agentRole": "coordinator",
     "maxIterations": 3
 }
+
+###
+
+GET {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
