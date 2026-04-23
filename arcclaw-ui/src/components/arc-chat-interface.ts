@@ -225,7 +225,7 @@ export class ArcChatInterface extends LitElement {
           text: m.text,
           timestamp: m.timestamp || Date.now(),
           historic: true,
-          isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸ Approval needed'),
+          isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸'),
           actionId: m.actionId || null
         }));
       await this.updateComplete;
@@ -304,7 +304,7 @@ export class ArcChatInterface extends LitElement {
       this._isTyping = false;
       this._awaitingApproval = false;
       this._showDenyReason = false;
-      const isApproval = frame.text.includes('⏸ Approval needed');
+      const isApproval = frame.text.includes('⏸');
       this._messages = [...this._messages, {
         id: crypto.randomUUID(), role: 'assistant', text: frame.text, timestamp: frame.timestamp || Date.now(), isApprovalPrompt: isApproval
       }];
