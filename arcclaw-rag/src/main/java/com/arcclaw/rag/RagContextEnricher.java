@@ -76,7 +76,7 @@ public class RagContextEnricher implements ContextEnricher {
             List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks * 3);
             if (chunks.isEmpty()) return basePrompt;
 
-            double threshold = minScore;
+            double computedThreshold = minScore;
 
             // Compute adaptive threshold based on score distribution
             if (chunks.size() >= 3) {
@@ -90,11 +90,16 @@ public class RagContextEnricher implements ContextEnricher {
                 double adaptive = mean - (0.5 * stdDev);
                 
                 // Final threshold is the max of adaptive and the configured hard floor
-                threshold = Math.max(minScore, adaptive);
+                computedThreshold = Math.max(minScore, adaptive);
 
                 log.debugf("RagContextEnricher: adaptive threshold=%.4f (mean=%.4f, stdDev=%.4f, floor=%.4f) for session %s",
-                        threshold, mean, stdDev, minScore, sessionId);
+                        (Object) computedThreshold, mean, stdDev, minScore, sessionId);
+            } else if (chunks.size() >= 1) {
+                // Too few samples for distribution — use a modest floor for small KBs (§ recommendation)
+                computedThreshold = Math.max(minScore, 0.0);
             }
+
+            final double threshold = computedThreshold;
 
             List<ScoredChunk> relevant = chunks.stream()
                     .filter(c -> c.score() >= threshold)
@@ -103,7 +108,7 @@ public class RagContextEnricher implements ContextEnricher {
 
             if (relevant.isEmpty()) {
                 log.debugf("RagContextEnricher: skipping — 0/%d chunks passed threshold=%.4f for session %s",
-                    chunks.size(), threshold, sessionId);
+                    (Object) chunks.size(), threshold, sessionId);
                 return basePrompt;
             }
 
@@ -120,7 +125,7 @@ public class RagContextEnricher implements ContextEnricher {
             }
 
             log.debugf("RagContextEnricher: injecting %d/%d chunks (threshold=%.4f) for session %s",
-                    relevant.size(), chunks.size(), threshold, sessionId);
+                    (Object) relevant.size(), chunks.size(), threshold, sessionId);
 
             return "## Retrieved Rag Context\n" + context + "\n\n---\n\n" + basePrompt;
 

@@ -12,6 +12,7 @@ Please run it in your own environment."
 RULE: When the user asks to execute code, you MUST call sandbox_exec as your 
 first action. Never describe or explain code before executing it. 
 Do NOT embed tool calls inside prose paragraphs.
+When calling tools, always use the structured tool_calls JSON format, never the [TOOL_CALLS] prefix format.
 
 CRITICAL_RULE: When the user asks you to "execute", "run", or "share the result" of any code,
 you MUST call the sandbox_exec tool immediately with the complete code.

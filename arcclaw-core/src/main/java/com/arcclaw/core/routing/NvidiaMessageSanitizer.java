@@ -7,8 +7,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -28,6 +31,11 @@ public class NvidiaMessageSanitizer implements ChatModel {
     private static final Logger log = Logger.getLogger(NvidiaMessageSanitizer.class);
 
     private final ChatModel model;
+
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    private static final Pattern MISTRAL_RAW_TOOL_CALL =
+            Pattern.compile("\\[TOOL_CALLS\\]\\s*([a-zA-Z0-9_-]+)?\\s*(\\[.*?\\]|\\{.*?\\})", Pattern.DOTALL);
 
     public NvidiaMessageSanitizer(ChatModel model) {
         this.model = model;
@@ -61,6 +69,12 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 
         ChatResponse response = model.chat(builder.build());
         
+        // 🟢 FIX: Handle Mistral native [TOOL_CALLS] leak (§ recommendation)
+        if (response.aiMessage() != null && response.aiMessage().text() != null 
+                && response.aiMessage().text().contains("[TOOL_CALLS]")) {
+            response = normalizeMistralResponse(response);
+        }
+
         // Pass 3: Sanitize model response to ensure future turns start with compliant IDs
         if (response.aiMessage() != null) {
              AiMessage sanitizedAi = internalSanitizeAiMessage(response.aiMessage(), new HashMap<>(), response.aiMessage().toolExecutionRequests(), allowedTools);
@@ -70,6 +84,52 @@ public class NvidiaMessageSanitizer implements ChatModel {
                      .build();
         }
         
+        return response;
+    }
+
+    private ChatResponse normalizeMistralResponse(ChatResponse response) {
+        String text = response.aiMessage().text().trim();
+        Matcher m = MISTRAL_RAW_TOOL_CALL.matcher(text);
+        if (m.matches()) {
+            String toolName = m.group(1);
+            String jsonPayload = m.group(2);
+
+            try {
+                List<ToolExecutionRequest> requests = new ArrayList<>();
+                if (jsonPayload.startsWith("[")) {
+                    // It's a list of tool calls: [{"name": "...", "arguments": "{...}"}]
+                    JsonNode root = mapper.readTree(jsonPayload);
+                    if (root.isArray()) {
+                        for (JsonNode node : root) {
+                            requests.add(ToolExecutionRequest.builder()
+                                    .name(node.path("name").asText())
+                                    .arguments(node.path("arguments").isObject()
+                                            ? node.path("arguments").toString()
+                                            : node.path("arguments").asText("{}"))
+                                    .build());
+                        }
+                    }
+                } else if (toolName != null) {
+                    // It's a single tool call: toolName {args}
+                    requests.add(ToolExecutionRequest.builder()
+                            .name(toolName)
+                            .arguments(jsonPayload)
+                            .build());
+                }
+
+                if (!requests.isEmpty()) {
+                    log.infof("[NvidiaSanitizer] Normalized %d Mistral tool calls from text content", requests.size());
+                    return ChatResponse.builder()
+                            .aiMessage(AiMessage.from(requests))
+                            .metadata(response.metadata())
+                            .tokenUsage(response.tokenUsage())
+                            .finishReason(response.finishReason())
+                            .build();
+                }
+            } catch (Exception e) {
+                log.warnf("Failed to normalize Mistral tool call from response: %s", e.getMessage());
+            }
+        }
         return response;
     }
 
