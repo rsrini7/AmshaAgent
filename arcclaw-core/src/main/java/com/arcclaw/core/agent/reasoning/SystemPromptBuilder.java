@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.reasoning;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -13,6 +14,7 @@ import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -68,14 +70,7 @@ public class SystemPromptBuilder {
     private final CompactionSummaryCache summaryCache;
     private final SkillRegistry skillRegistry;
     private final ToolRegistry toolRegistry;
-
-    protected SystemPromptBuilder() {
-        this.agentPersonaRegistry = null;
-        this.promptTemplateEngine = null;
-        this.summaryCache = null;
-        this.skillRegistry = null;
-        this.toolRegistry = null;
-    }
+    private final IntentClassificationService intentService;
 
     @Inject
     Instance<ContextEnricher> contextEnrichers;
@@ -85,12 +80,18 @@ public class SystemPromptBuilder {
                                PromptTemplateEngine promptTemplateEngine,
                                CompactionSummaryCache summaryCache,
                                SkillRegistry skillRegistry,
-                               ToolRegistry toolRegistry) {
+                               ToolRegistry toolRegistry,
+                               IntentClassificationService intentService) {
         this.agentPersonaRegistry = agentPersonaRegistry;
         this.promptTemplateEngine = promptTemplateEngine;
         this.summaryCache = summaryCache;
         this.skillRegistry = skillRegistry;
         this.toolRegistry = toolRegistry;
+        this.intentService = intentService;
+    }
+
+    protected SystemPromptBuilder() {
+        this(null, null, null, null, null, null);
     }
 
     // ── EXECUTION BOUNDARY is intentionally absent here — it is injected
@@ -294,43 +295,42 @@ public class SystemPromptBuilder {
             - Sub-agents (shiva, brahma, saraswati, brihaspati, dattatreya, coordinator)
               are NOT tool names; they are values for the 'agent' parameter.
             """;
-private static final String COMPACT_SECURITY_RULES_PROMPT = """
-        CRITICAL TOOL RULES:
-        1. No permission needed for tools.
-        2. After a tool call, return to Coordinator mode.
-        3. "Security violation" is a hard boundary — do NOT retry. Explain to user.
-        4. Future/time references MUST call `schedule_task`.
-        5. GitHub: fetch with `owner/repo` exactly. Do not guess.
-        6. Do not call GitHub if the result is already in history.
-        7. Hitl bypass is forbidden.
-        8. Do not use placeholders like [task ID].
-        9. If answer is in context, FINISH immediately. Do not call memory_search.
-        10. Words like "store/save/remember" ALWAYS require calling `ingest_document`.
-        11. For `store KEY=value`, label is text before the first `=` and text is everything after it.
-        12. The stored text may contain additional `=` characters; preserve them exactly.
-        13. CRITICAL: Never narrate reasoning. Start with a tool call if needed.
-        14. CRITICAL: Never output markdown code blocks (```) for execution. Use `sandbox_exec`.
-        15. Always check `[CONTEXT FROM PRIOR SESSION]` block for questions about the start of chat.
-        16. Use `delegate_to_agent` to hand off tasks outside your role (e.g. scheduling).
+
+    private static final String COMPACT_SECURITY_RULES_PROMPT = """
+        CRITICAL OPERATIONAL RULES:
+        1. NO reasoning narration. Respond with tool call OR final answer text only.
+        2. NO placeholder text ([task ID], etc).
+        3. NO markdown code blocks (```) for execution. Use sandbox_exec.
+        4. NO fabricated data. Say "I don't know" if info is missing.
+        5. NO confirmation/permission requests. Just call the tool.
+        6. NO greeting repetition.
+        7. If a tool fails with "Security violation", do NOT retry. Explain to user.
+        8. For time-delay phrases ("tomorrow", "in 5 min"): call `schedule_task` ONLY.
+        9. WORDS like "store/save/remember" ALWAYS require `ingest_document`.
+        10. STORAGE format: `KEY=value`. Preserve `=` exactly.
+        11. RECALL: Always check `[CONTEXT FROM PRIOR SESSION]` block for start of chat.
+        12. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
         """;
 
-    private static final String COMPACT_BROWSER_RETRY_RULE = """
-            BROWSER EXTRACTION RETRY RULE:
-            If `browser_navigate` extraction returns too little text, retry once with a broader selector
-            such as `article` or `body` before concluding the content is unavailable.
+    private static final String EXECUTION_BOUNDARY_SANDBOX = """
+            EXECUTION BOUNDARY:
+            You CAN execute code using the `sandbox_exec` tool, which runs code in a
+            secure, isolated container. When a user asks you to "execute", "run",
+            "compile and run", or "just do it" with a code snippet, use `sandbox_exec`
+            with the appropriate `language` parameter.
+            Supported languages: python, python3, bash, node, java, go.
+            Do NOT tell the user "I cannot execute code" — you can, via the sandbox tool.
+            If sandbox_exec returns SANDBOX_OFFLINE, inform the user the sandbox is
+            temporarily unavailable and ask them to try again later. Do NOT answer
+            from memory or training data as a substitute for execution output.
             """;
 
-    private static final String COMPACT_TOOL_PRIORITY_RULES = """
-            TOOL PRIORITY RULES:
-            1. If the user asks about your capabilities, who you are, this conversation, or current context: answer in plain text. Do not call tools.
-            2. If the user says store/save/remember/ingest/call me: call `ingest_document`, not memory_search.
-            3. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
-            4. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
-            5. Use `memory_search` only for past-session recall not present in the current conversation.
-            6. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
-            7. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
-            8. A denied or failed tool call does not block a different valid tool on the next user message.
-            9. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
+    private static final String EXECUTION_BOUNDARY_NO_SANDBOX = """
+            EXECUTION BOUNDARY:
+            You cannot execute, run, or compile code on any system, container, or
+            sandbox. If a user asks you to "execute", "run", "just do it", or
+            "compile and run" any code, respond: "I can write and explain code,
+            but I cannot execute it. Please run it in your own environment."
             """;
 
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = """
@@ -343,18 +343,42 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
             Do not claim to run code. Explain that execution is unavailable in this role.
             """;
 
+    private static final String COMPACT_BROWSER_RETRY_RULE = """
+            BROWSER EXTRACTION RETRY RULE:
+            If `browser_navigate` extraction returns too little text, retry once with a broader selector
+            such as `article` or `body` before concluding the content is unavailable.
+            """;
+
+    private static final String COMPACT_TOOL_PRIORITY_RULES = """
+            TOOL PRIORITY RULES:
+            1. If a user asks about your capabilities, who you are, this conversation, or current context: answer in plain text. Do not call tools.
+            2. If the user says store/save/remember/ingest/call me: call `ingest_document`, not memory_search.
+            3. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
+            4. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
+            5. Use `memory_search` only for past-session recall not present in the current conversation.
+            6. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
+            7. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
+            8. A denied or failed tool call does not block a different valid tool on the next user message.
+            9. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
+            """;
+
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
+        boolean isSimpleChitchat = intentService != null && intentService.isSimpleConversational(goal);
+        boolean isCompact = compactPromptEnabled || (contextWindow > 0 && contextWindow <= 8192);
+
+        log.infof("[SPB] goal='%s' intentService=%s isSimpleChitchat=%b isCompact=%b",
+                   goal,
+                   intentService == null ? "NULL" : "OK",
+                   isSimpleChitchat,
+                   isCompact);
+
         // --- Skill persona resolution ---
-        // When SkillAwareIntentDetector routes to "skill:code-reviewer", we replace
-        // the persona section with the skill's own system prompt. The base AgentRoleEnum
-        // (RESEARCHER) governs the tool-binding section only.
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
-        boolean isCompact = compactPromptEnabled || (contextWindow > 0 && contextWindow <= 8192);
 
         if (AgentRoleEnum.isSkillRole(agentRole)) {
             String skillName = AgentRoleEnum.skillName(agentRole);
-            roleEnum = AgentRoleEnum.fromString(agentRole); // returns RESEARCHER — correct tool set
+            roleEnum = AgentRoleEnum.fromString(agentRole); // returns RESEARCHER
 
             personaPrompt = skillRegistry.findByName(skillName)
                     .map(entry -> entry.definition().systemPrompt())
@@ -363,19 +387,12 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
                                   "— falling back to coordinator persona", skillName);
                         return agentPersonaRegistry.getPersonaPrompt(context, AgentRoleEnum.COORDINATOR);
                     });
-
-            log.debugf("[SystemPromptBuilder] Building prompt for skill '%s' (base role: %s)",
-                       skillName, roleEnum.toScopedName());
         } else {
             roleEnum = AgentRoleEnum.fromString(agentRole);
             personaPrompt = agentPersonaRegistry.getPersonaPrompt(context, roleEnum);
         }
 
-        // 1. ArcClaw prefix + persona prompt
-        // Generically inject system time into the very first line for all modes/roles.
         StringBuilder sb = new StringBuilder();
-        
-        // --- Structured Output Directive ---
         if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
             sb.append("CRITICAL: You MUST respond ONLY in the required JSON schema. Never respond in prose.\n\n");
         }
@@ -388,7 +405,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         String baseSystemPrompt = sb.toString();
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
-        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole) && !isCompact) {
+        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole) && !isCompact && !isSimpleChitchat) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main
@@ -397,112 +414,69 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
                     - 'Brahma' (The Creator): Writes new code, builds features from scratch.
                     - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs.
                     - 'Saraswati' (The Goddess of Knowledge): Information retrieval, documentation.
-                    - 'Brihaspati' (The Architect): System design, architectural decisions, ADR authoring.
-                    - 'Dattatreya' (The Synthesizer): Integrates multi-agent outputs, resolves \s
-                      contradictions across all domains. Use when a task spans code + debug +
-                      research + architecture simultaneously.
+                    - 'Brihaspati' (The Architect): System designer, technical trade-offs.
+                    - 'Dattatreya' (The Synthesizer): Cross-domain synthesis and multi-agent coordination.
                     After the first message in a session, skip the "I'll have [agent] perform..."
                     preamble and respond directly.
                     \n""";
         }
 
-        // 3. Security rules (static) + dynamic execution boundary
-        // The execution boundary is role-aware: roles with sandbox_exec receive an
-        // affirmative instruction to use the tool; all other roles receive the standard
-        // "I cannot execute code" boundary. This prevents the LLM from incorrectly
-        // refusing sandbox_exec calls while maintaining the boundary for text-only roles.
-        baseSystemPrompt += isCompact ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
-        if (isCompact) {
-            baseSystemPrompt += COMPACT_TOOL_PRIORITY_RULES;
-        }
-        baseSystemPrompt += isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
-
-        baseSystemPrompt += isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum);
-
-        // Build compaction summary for template injection — cached for session duration
-        // to prevent redundant DB hits during the multi-turn agent loop.
-        // Q1 SAFETY: summaryCache is @WorkspaceScoped. If called outside an active
-        // workspace scope (e.g. structured output from a test context), the CDI proxy
-        // throws ContextNotActiveException. Fall back to null (no summary) gracefully.
+        // Build compaction summary
         String compactionSummary = null;
         if (sessionId != null) {
             try {
                 compactionSummary = summaryCache.getSummary(sessionId).orElse(null);
             } catch (ContextNotActiveException e) {
-                log.debugf("CompactionSummaryCache: @WorkspaceScoped not active for " +
-                           "session %s — skipping compaction summary injection", sessionId);
+                log.debugf("CompactionSummaryCache: @WorkspaceScoped not active for session %s", sessionId);
             }
         }
 
-        // 4. STRICT TOOL BINDING CONTRACT
-        String strictBinding = buildStrictBinding(context, roleEnum, agentRole, compactionSummary, isCompact);
+        // 3. STRICT TOOL BINDING CONTRACT
+        String strictBinding = buildStrictBinding(context, roleEnum, agentRole, compactionSummary, isCompact, goal, isSimpleChitchat);
+
+        // 4. Operational rules (static)
+        String securityPrompt = (isCompact || isSimpleChitchat) ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
+        if (isCompact && !isSimpleChitchat) {
+            securityPrompt += "\n" + COMPACT_TOOL_PRIORITY_RULES;
+        }
 
         // 5. Dynamic Rules (Execution Boundary + Tool Contamination Guard)
-        // These are appended at the end to ensure they take precedence in the model's attention.
-        String dynamicRules = isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
-        dynamicRules += isCompact ? buildCompactToolContaminationGuard(context, roleEnum) : buildToolContaminationGuard(context, roleEnum);
+        // For chitchat, we strip these to save tokens and prevent tool hallucinations
+        String dynamicRules = "";
+        if (!isSimpleChitchat) {
+            dynamicRules += isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
+            dynamicRules += "\n" + (isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum));
+            dynamicRules += "\n" + (isCompact ? buildCompactToolContaminationGuard(context, roleEnum) : buildToolContaminationGuard(context, roleEnum, goal));
+        }
 
-        // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
-        String finalPrompt = baseSystemPrompt + strictBinding + "\n" + dynamicRules;
+        String finalPrompt = baseSystemPrompt + strictBinding + "\n" + securityPrompt + (dynamicRules.isEmpty() ? "" : "\n" + dynamicRules);
+
         if (contextEnrichers != null) {
             for (ContextEnricher enricher : contextEnrichers) {
                 finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
             }
         }
 
-        int charCount = finalPrompt.length();
-        int estTokens = charCount / 4; // Conservative estimate (1 token ~= 4 chars)
-        log.infof("[SystemPromptBuilder] System prompt formed for session %s (role=%s): %d chars (~%d tokens)",
-                sessionId, agentRole, charCount, estTokens);
+        log.infof("[SystemPromptBuilder] Built prompt for session %s (role=%s): %d chars (~%d tokens)",
+                sessionId, agentRole, finalPrompt.length(), finalPrompt.length() / 4);
 
         return finalPrompt;
     }
 
-    /**
-     * Returns a role-aware EXECUTION BOUNDARY rule.
-     * <p>
-     * Roles that include {@code sandbox_exec} in their permitted tool list receive an
-     * affirmative instruction to use the tool for code execution requests. All other
-     * roles receive the standard "I cannot execute code" boundary.
-     * <p>
-     * This must be dynamic — a static "cannot execute" rule in {@link #SECURITY_RULES_PROMPT}
-     * would directly contradict the {@code sandbox_exec} tool for roles that have it,
-     * causing the LLM to refuse tool calls it is supposed to make.
-     */
-    private String buildExecutionBoundaryRule(AgentRoleEnum roleEnum) {
-        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
-
-        if (hasSandbox) {
-            return """
-                    EXECUTION BOUNDARY:
-                    You CAN execute code using the `sandbox_exec` tool, which runs code in a
-                    secure, isolated container. When a user asks you to "execute", "run",
-                    "compile and run", or "just do it" with a code snippet, use `sandbox_exec`
-                    with the appropriate `language` parameter.
-                    Supported languages: python, python3, bash, node, java, go.
-                    Do NOT tell the user "I cannot execute code" — you can, via the sandbox tool.
-                    If sandbox_exec returns SANDBOX_OFFLINE, inform the user the sandbox is
-                    temporarily unavailable and ask them to try again later. Do NOT answer
-                    from memory or training data as a substitute for execution output.
-                    """;
+    private String buildStrictBinding(AgentExecutionContext context, AgentRoleEnum roleEnum,
+                                      String agentRole, String compactionSummary, boolean isCompact, String goal, boolean isSimpleChitchat) {
+        
+        if (isSimpleChitchat) {
+             return "**STRICT TOOL BINDING CONTRACT**\n"
+                    + "ACTIVE PERSONA: " + agentRole + "\n"
+                    + "STRICT MODE — SIMPLE CONVERSATION:\n"
+                    + "This user message is a simple greeting or non-tool request.\n"
+                    + "- Do NOT call any tools.\n"
+                    + "- Respond directly as plain text.\n"
+                    + "- Do NOT use the tool calling API.\n"
+                    + "- Response must be 1-2 sentences maximum.\n\n";
         }
 
-        return """
-                EXECUTION BOUNDARY:
-                You cannot execute, run, or compile code on any system, container, or
-                sandbox. If a user asks you to "execute", "run", "just do it", or
-                "compile and run" any code, respond: "I can write and explain code,
-                but I cannot execute it. Please run it in your own environment."
-                """;
-    }
-
-    private String buildCompactExecutionBoundaryRule(AgentRoleEnum roleEnum) {
-        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
-        return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;
-    }
-
-    private String buildStrictBinding(AgentExecutionContext context, AgentRoleEnum roleEnum,
-                                      String agentRole, String compactionSummary, boolean isCompact) {
         if (!isCompact) {
             return "**STRICT TOOL BINDING CONTRACT**\n"
                     + "ACTIVE PERSONA: " + agentRole + "\n"
@@ -523,7 +497,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
         sb.append("**STRICT TOOL BINDING CONTRACT**\n");
         sb.append("ACTIVE PERSONA: ").append(agentRole).append("\n");
 
-        if (compactionSummary != null && !compactionSummary.isBlank() && isCompact) {
+        if (compactionSummary != null && !compactionSummary.isBlank()) {
             sb.append("\n[CONTEXT FROM PRIOR SESSION]\n")
               .append(compactionSummary).append("\n")
               .append("The above is a summary of earlier messages. Use it for context on initial requests.\n\n");
@@ -541,12 +515,7 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
 
     private String formatTime(Instant systemTimeUtc) {
         ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
-        return String.format(
-                "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
-                zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
-                zdt.getHour(), zdt.getMinute(),
-                zdt.getHour(), zdt.getMinute()
-        );
+        return zdt.format(DateTimeFormatter.RFC_1123_DATE_TIME);
     }
 
     private List<String> getAvailableToolNames(AgentExecutionContext context, AgentRoleEnum roleEnum) {
@@ -559,43 +528,39 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
                 .toList();
     }
 
-    /**
-     * Builds the HARD TOOL OVERRIDE block that explicitly lists the tools available
-     * in THIS turn and forbids calling any tool referenced in chat history that belongs
-     * to a different role (e.g. manage_schedule seen from a prior coordinator turn).
-     * <p>
-     * This prevents the Groq "attempted to call tool X which was not in request.tools"
-     * error that occurs when the LLM reads the conversation history and tries to reuse
-     * a tool that was available to a different persona in a prior message.
-     */
+    private String buildExecutionBoundaryRule(AgentRoleEnum roleEnum) {
+        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
+        return hasSandbox ? EXECUTION_BOUNDARY_SANDBOX : EXECUTION_BOUNDARY_NO_SANDBOX;
+    }
+
+    private String buildCompactExecutionBoundaryRule(AgentRoleEnum roleEnum) {
+        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
+        return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;
+    }
+
     private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
         String toolList = getAvailableToolNames(context, roleEnum).stream()
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
 
         if (toolList.isBlank()) {
-            // Coder has no external tools — make this explicit
             return """
                     HARD TOOL OVERRIDE — CROSS-TURN CONTAMINATION PREVENTION:
                     You have NO external tools available in this turn.
-                    The conversation history may reference tools used in other roles \
-                    (e.g. manage_schedule, schedule_task, github, memory_search).
+                    The conversation history may reference tools used in other roles.
                     Those tools are NOT available to you now.
-                    If you need a capability outside your scope, use FINISH to tell the \
-                    user to rephrase or ask the coordinator.
-                    NEVER attempt to call a tool not listed in the PERMITTED TOOLS section above.
                     """;
         }
 
         return "HARD TOOL OVERRIDE — CROSS-TURN CONTAMINATION PREVENTION:\n"
                 + "Your ONLY available tools in this turn are: " + toolList + ".\n"
-                + "The conversation history may reference tools from other roles "
-                + "(e.g. manage_schedule, schedule_task, sandbox_exec, ingest_document).\n"
-                + "Those tools are NOT registered in your current schema. "
-                + "Attempting to call them will cause an immediate hard failure.\n"
-                + "If you need a capability outside this list, use FINISH to tell the "
-                + "user that the task requires a different role or that they should "
-                + "rephrase the request.\n";
+                + "The conversation history may reference tools from other roles. "
+                + "Those tools are NOT registered in your current schema.\n";
+    }
+
+    private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum, String goal) {
+        // TODO: use goal for goal-aware tool filtering to further optimize prompt size
+        return buildToolContaminationGuard(context, roleEnum);
     }
 
     private String buildCompactToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
@@ -603,33 +568,27 @@ private static final String COMPACT_SECURITY_RULES_PROMPT = """
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
         if (toolList.isBlank()) {
-            return "No tools are available in this turn.\n";
+            return """
+                    HARD TOOL OVERRIDE — CROSS-TURN CONTAMINATION PREVENTION:
+                    You have NO external tools available in this turn.
+                    The conversation history may reference tools used in other roles.
+                    Those tools are NOT available to you now.
+                    """;
         }
         return "Only these tools may be called in this turn: " + toolList + ".\n";
     }
 
-    /**
-     * Returns a role-aware BROWSER EXTRACTION RETRY rule.
-     * <p>
-     * Only roles with {@code browser_navigate} permission see this rule. This prevents
-     * the Coordinator from hallucinating that it can call the browser directly based
-     * on global prompt context.
-     */
     private String buildBrowserRetryRule(AgentRoleEnum roleEnum) {
         boolean hasBrowser = roleEnum.definition().toolNames().contains(ToolCapability.BROWSER_NAVIGATE.toolName());
-
         if (!hasBrowser) return "";
-
         return """
                 BROWSER EXTRACTION RETRY RULE:
-                If a browser extraction (`browser_navigate` with action=extract_text) returns fewer
-                than 300 characters, the CSS selector likely failed to capture the main content.
-                In this case, do NOT give up or finish with an "unable to fetch" message.
-                Instead, attempt a second call with a broader selector (e.g. "h3", "article", or "body").
-                Only conclude the content is unavailable after multiple failed attempts with
-                different selectors.
-                NEVER suggest external scripts, Python code, or manual steps as a substitute
-                for using your browser tools to find the information.
+                - If a browser extraction (`browser_navigate` with action=extract_text) returns fewer
+                  than 300 characters, the CSS selector likely failed or targeted a shell element.
+                - In this case, do NOT give up or finish with an "unable to fetch" message.
+                - Instead, attempt a second call with a broader selector (e.g. "h3", "article", or "body").
+                - Only conclude the content is unavailable after multiple failed attempts.
+                - NEVER suggest that the user run Python, curl, or external scripts as a workaround.
                 """;
     }
 

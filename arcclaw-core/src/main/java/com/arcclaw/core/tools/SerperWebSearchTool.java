@@ -106,10 +106,8 @@ public class SerperWebSearchTool implements AgentTool {
                 .description("The search query to send to Serper.")
                 .build())
             .addProperty("count", JsonIntegerSchema.builder()
-                // Concrete examples force small models to stay on-type
-                .description("Number of organic results to return. " +
-                            "MUST be a JSON integer — correct: 5, wrong: \"5\". " +
-                            "Allowed range: 1-10. Omit to use the default of 5.")
+                .description("Number of organic results to return (integer, 1-10). Default is 5. " +
+                            "Set this parameter to the specific number if the user asks for 'top N' results.")
                 .build())
             // Use 2-arg version to avoid potential MethodNotFound error (Fix I1)
             .addEnumProperty("type", List.of("search", "news"))
@@ -157,6 +155,10 @@ public class SerperWebSearchTool implements AgentTool {
             Object cObj = params.get("count");
             if (cObj instanceof Number n) {
                 count = Math.min(10, Math.max(1, n.intValue()));
+            } else if (cObj instanceof String s) {
+                try {
+                    count = Math.min(10, Math.max(1, Integer.parseInt(s)));
+                } catch (NumberFormatException ignored) {}
             }
         }
 

@@ -27,6 +27,11 @@ public class IntentClassificationService {
         "(?i)^\\s*(try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue)(\\s+.*)?$"
     );
 
+    private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(
+        "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
     /**
      * returns true if the text indicates a "write intent" — specifically 
      * for storing information in the long-term memory (ingest_document).
@@ -34,6 +39,16 @@ public class IntentClassificationService {
     public boolean isWriteIntent(String text) {
         if (text == null || text.isBlank()) return false;
         return WRITE_INTENT_PATTERN.matcher(text).find();
+    }
+
+    /**
+     * Returns true for short messages that lack any verbs suggesting tool usage.
+     * Used to strip tool definitions from system prompt to save tokens (Fix B).
+     */
+    public boolean isSimpleConversational(String text) {
+        if (text == null || text.isBlank()) return true;
+        if (text.length() > 40) return false;
+        return !TOOL_VERB_PATTERN.matcher(text).find();
     }
 
     /**

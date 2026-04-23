@@ -234,8 +234,7 @@ public class FinishActionHandler {
         if (llmSchemaErrorCount >= 1
                 && !cleanThought.isBlank()
                 && cleanThought.length() > SALVAGE_MIN_LENGTH
-                && !cleanThought.contains(SALVAGE_REJECT_PHRASE)
-                && (step.outputTokens() >= 50 || step.outputTokens() <= 0)) {      
+                && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {      
             log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s — clean thought is usable",   
                     llmSchemaErrorCount, sessionId);
             return new FinishOutcome.Completed(
