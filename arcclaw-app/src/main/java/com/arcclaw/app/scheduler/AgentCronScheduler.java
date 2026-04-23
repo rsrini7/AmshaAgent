@@ -19,6 +19,7 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
@@ -108,6 +109,7 @@ public class AgentCronScheduler {
             try {
                 // Wait briefly for persistence adapters to stabilize
                 Thread.sleep(5000);
+                if (!active) return;
                 sweepOrphanedApprovalJobs();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -131,7 +133,7 @@ public class AgentCronScheduler {
                 cronRepository.markFailed(job.id, "Orphaned — session expired before approval (server restart).");
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException | PersistenceException e) {
             if (active) {
                 log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
             } else {
