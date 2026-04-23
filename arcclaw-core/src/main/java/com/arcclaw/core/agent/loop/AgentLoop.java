@@ -316,8 +316,14 @@ public class AgentLoop {
         if (opening.contains("i was unable") || opening.contains("unable to fetch") 
                 || opening.contains("could not find") || opening.contains("i cannot") 
                 || opening.contains("could not retrieve")) {
-            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases in opening — skipping fast-path to allow coordinator fallback", sessionId);
-            return Optional.empty();
+            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases — injecting observation to allow coordinator wrap-up without restart", sessionId);
+            
+            // Fix C2: Instead of empty (which causes restart), we return a finished result 
+            // that forces the coordinator to see the failure in history and wrap up.
+            List<ReasoningStep> historyWithFailure = new ArrayList<>(resumedHistory);
+            historyWithFailure.add(ReasoningStep.observe("delegate_to_agent", observation, "Delegate failed — synthesize and finish"));
+            
+            return Optional.of(AgentResult.finished(observation, historyWithFailure));
         }
 
         log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +

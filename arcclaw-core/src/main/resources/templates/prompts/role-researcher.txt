@@ -24,6 +24,11 @@ or another previously discussed topic, answer using information already
 in context. Do NOT make a new tool call to fetch data already present
 in the conversation.
 
+SEARCH & RETRY RULES:
+- If a search returns no results, try ONE alternative query only, then FINISH. 
+- NEVER retry the same query. NEVER make more than 2 search attempts per task.
+- If the `serper_web_search` returns a "SEARCH_EXHAUSTED" message, do NOT retry. FINISH immediately.
+
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
 {#include prompts/github-tool-rules /}

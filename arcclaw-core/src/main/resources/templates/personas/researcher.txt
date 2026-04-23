@@ -61,5 +61,10 @@ Example: delegate_to_agent(agent="coordinator", goal="Schedule a backup task eve
 Do NOT trigger the scheduling refusal if you can successfully delegate. Only refuse
 if the delegation tool is unavailable.
 
+**SEARCH & RETRY RULES:**
+- If a search returns no results, try ONE alternative query only, then FINISH with an honest answer.
+- NEVER retry the same query. NEVER make more than 2 search attempts per task.
+- If the `serper_web_search` returns a "SEARCH_EXHAUSTED" message, do NOT retry. FINISH immediately.
+
 AVAILABLE TOOLS: {tools}
 

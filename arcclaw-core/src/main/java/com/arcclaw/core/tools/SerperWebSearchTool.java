@@ -253,8 +253,8 @@ public class SerperWebSearchTool implements AgentTool {
 
             String fullResult = sb.toString().trim();
             if (fullResult.length() < 50) { 
-                 return ToolResponse.success("No relevant web or news results were found for the query: '" + query + 
-                     "'. This might be due to a very specific query, current events not indexed, or API rate limitations.");
+                 return ToolResponse.success("SEARCH_EXHAUSTED: No relevant web or news results were found for the query: '" + query + 
+                     "'. Do not retry with similar queries. FINISH with an apology.");
             }
 
             // Response truncation (at 4096 chars)

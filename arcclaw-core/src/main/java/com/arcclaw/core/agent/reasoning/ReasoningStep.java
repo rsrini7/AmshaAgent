@@ -101,6 +101,11 @@ public record ReasoningStep(
         return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk, false, "SCHEMA_ERROR", null, null);
     }
 
+    /** Create a step representing an observation of an action result. */
+    public static ReasoningStep observe(String action, String observation, String thought) {
+        return new ReasoningStep(thought, action, Map.of(), observation, 0, 0, true, null, null, null);
+    }
+
     /** Create a copy of this step with the observation filled in, without success metadata. */
     public ReasoningStep withObservation(String observation) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
