@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -96,7 +97,7 @@ class LangChainReasoningEnginePersonaTest {
     }
 
     private AgentExecutionContext createCtx(String sessionId) {
-        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @Test

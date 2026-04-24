@@ -15,6 +15,7 @@ import java.util.Optional;
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -44,7 +45,7 @@ class ToolStepHandlerGuardTest {
     @InjectMocks ToolStepHandler handler;
 
     private AgentExecutionContext createCtx(String role, String goal) {
-        return new AgentExecutionContext("sess1", "user1", "chat1", role, goal, AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        return new AgentExecutionContext("sess1", "user1", "chat1", role, goal, AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @BeforeEach

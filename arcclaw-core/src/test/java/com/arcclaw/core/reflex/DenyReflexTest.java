@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -79,6 +80,11 @@ class DenyReflexTest {
         // §7.29 guard: allow tests to proceed by default
         when(statefulAgentStore.markBatchResuming(anyString(), anyString()))
                 .thenReturn(true);
+
+        lenient().when(checkpointApprovalService.denyAll(anyString(), anyString()))
+                .thenReturn(new AgentCheckpoint());
+        lenient().when(checkpointApprovalService.denyTool(anyString(), anyString(), anyString()))
+                .thenReturn(new AgentCheckpoint());
                 
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
@@ -119,9 +125,9 @@ class DenyReflexTest {
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId("cron-session-1");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
-        when(statefulAgentStore.findLatestAwaitingApprovalForCron(cronId)).thenReturn(Optional.of(cp));
-
-        when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
+        
+        when(checkpointApprovalService.denyAll(eq(cronId), anyString())).thenReturn(cp);
+        when(cronRepository.findById(cronId)).thenReturn(cron);
         when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), eq(1), any()))
                 .thenReturn(AgentResult.finished("Denial Ack", List.of()));
 
@@ -186,13 +192,14 @@ class DenyReflexTest {
         cron.id = "cron-123";
         cron.userId = userId;
         cron.status = CronStatus.AWAITING_APPROVAL;
-        when(cronRepository.findByUserId(userId)).thenReturn(List.of(cron));
+        
+        when(cronRepository.findById("cron-123")).thenReturn(cron);
 
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
-        when(statefulAgentStore.findLatestAwaitingApprovalForCron(anyString())).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.denyAll(eq("cron-123"), anyString())).thenReturn(cp);
         
         // MOCK THE GUARD TO FAIL
         when(statefulAgentStore.markBatchResuming(anyString(), anyString())).thenReturn(false);

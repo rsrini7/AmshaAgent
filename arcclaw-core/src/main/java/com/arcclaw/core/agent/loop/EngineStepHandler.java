@@ -19,6 +19,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
 import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
@@ -40,6 +41,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.smallrye.common.annotation.Identifier;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -57,6 +59,8 @@ public class EngineStepHandler {
     private final ObjectMapper objectMapper;
     private final RateLimitTracker rateLimitTracker;
     private final StatefulAgentStore agentStore;
+    private final int schemaMaxRetriesStrict;
+    private final int schemaMaxRetriesLenient;
 
     @Inject
     @Identifier("agent-output-mode")
@@ -87,6 +91,8 @@ public class EngineStepHandler {
         this.objectMapper = null;
         this.rateLimitTracker = null;
         this.agentStore = null;
+        this.schemaMaxRetriesStrict = 0;
+        this.schemaMaxRetriesLenient = 0;
     }
 
     @Inject
@@ -94,12 +100,16 @@ public class EngineStepHandler {
                              Instance<AgentObserver> observers,
                              ObjectMapper objectMapper,
                              RateLimitTracker rateLimitTracker,
-                             StatefulAgentStore agentStore) {
+                             StatefulAgentStore agentStore,
+                             @ConfigProperty(name = "arcclaw.agent.schema-correction.max-retries-strict", defaultValue = "4") int schemaMaxRetriesStrict,
+                             @ConfigProperty(name = "arcclaw.agent.schema-correction.max-retries-lenient", defaultValue = "6") int schemaMaxRetriesLenient) {
         this.governanceLayer = governanceLayer;
         this.observers = observers;
         this.objectMapper = objectMapper;
         this.rateLimitTracker = rateLimitTracker;
         this.agentStore = agentStore;
+        this.schemaMaxRetriesStrict = schemaMaxRetriesStrict;
+        this.schemaMaxRetriesLenient = schemaMaxRetriesLenient;
     }
 
     StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
@@ -160,11 +170,15 @@ public class EngineStepHandler {
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
                     log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     llmSchemaErrorCount++;
-                    // TODO (LENIENT mode): When structuredOutputMode == LENIENT, increase
-                    // maxRetries for schema correction from 4 to 6+ before hard-failing the turn.
-                    // Tracked: EngineStepHandler retry budget should be mode-aware.
-                    if (llmSchemaErrorCount >= 4) {
-                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", context.sessionId());
+                    
+                    // Schema correction retry budget is mode-aware:
+                    // STRICT (default): arcclaw.agent.schema-correction.max-retries-strict (default 4)
+                    // LENIENT: arcclaw.agent.schema-correction.max-retries-lenient (default 6)
+                    int schemaRetryBudget = resolveSchemaRetryBudget(context.structuredOutputMode());
+
+                    if (llmSchemaErrorCount >= schemaRetryBudget) {
+                        log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit (%d)", 
+                                context.sessionId(), schemaRetryBudget);
                         return StepDecision.terminal(AgentResult.failed(
                                 "The agent could not complete this request due to repeated formatting errors.", 
                                 AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
@@ -194,7 +208,7 @@ public class EngineStepHandler {
                 }
             }
         } catch (Exception e) {
-            return handleEngineException(e, context.sessionId(), llmSchemaErrorCount, iteration, history);      
+            return handleEngineException(e, context, llmSchemaErrorCount, iteration, history);      
         }
 
         if (step == null) {
@@ -207,18 +221,27 @@ public class EngineStepHandler {
         return StepDecision.proceed(step);
     }
 
-    private StepDecision handleEngineException(Exception e, String sessionId,
+    private int resolveSchemaRetryBudget(StructuredOutputMode mode) {
+        return switch (mode) {
+            case LENIENT -> schemaMaxRetriesLenient;
+            case NATIVE, PROMPT_DIRECTIVE -> schemaMaxRetriesStrict;
+        };
+    }
+
+    private StepDecision handleEngineException(Exception e, AgentExecutionContext context,
             int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
 
         LlmProviderException classified =
             LlmExceptionClassifier.classify(e);
 
         if (classified instanceof LlmMalformedResponseException) {
-            log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", sessionId, classified.getMessage());   
+            log.warnf("[STATE-MACHINE] LLM schema error session=%s: %s", context.sessionId(), classified.getMessage());   
 
             llmSchemaErrorCount++;
-            if (llmSchemaErrorCount >= 4) {
-                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);      
+            int schemaRetryBudget = resolveSchemaRetryBudget(context.structuredOutputMode());
+            if (llmSchemaErrorCount >= schemaRetryBudget) {
+                log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit (%d)", 
+                        context.sessionId(), schemaRetryBudget);      
                 return StepDecision.terminal(AgentResult.failed(
                         "The agent encountered repeated tool schema errors and could not complete your request. Please try rephrasing your goal.",
                         AgentResult.FailureCategory.SCHEMA_ERROR,
@@ -233,7 +256,7 @@ public class EngineStepHandler {
         if (classified instanceof LlmAuthenticationException) {
             String sanitizedMsg = AgentErrorMessageUtil.sanitizeErrorMessage(classified.getMessage());
             log.warnf("[STATE-MACHINE] session %s: terminal configuration error (400): %s",
-                    sessionId, sanitizedMsg);
+                    context.sessionId(), sanitizedMsg);
             return StepDecision.terminal(AgentResult.failed(sanitizedMsg,
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
         }
@@ -247,7 +270,7 @@ public class EngineStepHandler {
                 // Bug fix: LLM hallucinated agent name as tool — inject correction and retry
                 if (unavailableTool != null && AGENT_IDENTIFIERS.contains(unavailableTool.toLowerCase())) {     
                     log.warnf("[STATE-MACHINE] session %s: LLM called agent '%s' as tool — retrying with correction",
-                            sessionId, unavailableTool);
+                            context.sessionId(), unavailableTool);
                     String correction = String.format(
                         "System: You called '%s' as if it were a tool, but that is an agent name. " +
                         "STRICT RULE: Only use 'delegate_to_agent' for delegation. " +
@@ -261,7 +284,7 @@ public class EngineStepHandler {
                     String failedGen = extractFailedGeneration(rawError);
                     String answer = extractFinishAnswer(failedGen);
                     if (answer != null && !answer.isBlank()) {
-                        log.infof("[STATE-MACHINE] session %s: recovered FINISH answer despite schema error", sessionId);
+                        log.infof("[STATE-MACHINE] session %s: recovered FINISH answer despite schema error", context.sessionId());
                         return StepDecision.terminal(AgentResult.finished(answer, List.copyOf(history)));       
                     }
                 }
@@ -272,7 +295,7 @@ public class EngineStepHandler {
                         + "Try rephrasing, or start fresh with a more specific request.", unavailableTool)      
                     : "I tried to use a tool that is not available in my current role.";
                 log.warnf("[STATE-MACHINE] session %s: tool '%s' not in request.tools — terminating immediately",
-                        sessionId, unavailableTool);
+                        context.sessionId(), unavailableTool);
                 return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
             }
 
@@ -281,13 +304,15 @@ public class EngineStepHandler {
             if (isToolUseFailed) {
                 String failedGen = extractFailedGeneration(rawError);
                 if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
-                    log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose — extracting as FINISH", sessionId);
+                    log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose — extracting as FINISH", context.sessionId());
                     return StepDecision.terminal(AgentResult.finished(failedGen, List.copyOf(history)));        
                 }
 
                 llmSchemaErrorCount++;
-                if (llmSchemaErrorCount >= 4) {
-                    log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit", sessionId);  
+                int schemaRetryBudget = resolveSchemaRetryBudget(context.structuredOutputMode());
+                if (llmSchemaErrorCount >= schemaRetryBudget) {
+                    log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit (%d)", 
+                            context.sessionId(), schemaRetryBudget);  
                     return StepDecision.terminal(AgentResult.failed(
                             "The agent could not complete this request due to repeated tool schema errors. " +  
                             "Try rephrasing your goal.",
@@ -319,19 +344,19 @@ public class EngineStepHandler {
                 }
 
                 log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
-                        sessionId, llmSchemaErrorCount);
+                        context.sessionId(), llmSchemaErrorCount);
                 return StepDecision.retryEngine(correction, llmSchemaErrorCount);
             }
 
         }
 
         if (classified instanceof LlmRateLimitException) {
-            log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", sessionId, ExceptionUtils.getRootCauseMessage(e));
+            log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", context.sessionId(), ExceptionUtils.getRootCauseMessage(e));
 
             int retryAfterSeconds = extractRetryAfter(classified.getMessage(), 10);
             if (retryAfterSeconds <= 15) { // only auto-retry for short waits
                 log.warnf("[STATE-MACHINE] Rate limit session=%s — sleeping %ds then retrying",
-                        sessionId, retryAfterSeconds);
+                        context.sessionId(), retryAfterSeconds);
                 try { Thread.sleep(retryAfterSeconds * 1000L); }
                 catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                 return StepDecision.retryEngine("Rate limit hit, retrying now.", llmSchemaErrorCount);
@@ -344,19 +369,19 @@ public class EngineStepHandler {
                 if (lastObs != null && !lastObs.isBlank()
                         && !lastObs.startsWith("⚠️")
                         && !lastObs.startsWith("Tool execution failed")) {
-                    log.infof("[STATE-MACHINE] session %s: rate-limit on wrap-up — surfacing last tool observation as FINISH", sessionId);
+                    log.infof("[STATE-MACHINE] session %s: rate-limit on wrap-up — surfacing last tool observation as FINISH", context.sessionId());
                     return StepDecision.terminal(AgentResult.finished(lastObs, List.copyOf(history)));
                 }
             }
 
             // Return AWAITING_RETRY so state machine pauses cleanly
             int retryMs = retryAfterSeconds * 1000;
-            return StepDecision.terminal(AgentResult.awaitingRetry(sessionId, retryMs, List.copyOf(history)));  
+            return StepDecision.terminal(AgentResult.awaitingRetry(context.sessionId(), retryMs, List.copyOf(history)));  
         }
 
         if (classified instanceof LlmContentFilterException) {
             log.warnf("[STATE-MACHINE] session %s: content filter triggered: %s",
-                    sessionId, classified.getMessage());
+                    context.sessionId(), classified.getMessage());
             return StepDecision.terminal(AgentResult.failed(classified.getMessage(),
                     AgentResult.FailureCategory.SECURITY_POLICY, List.copyOf(history)));
         }

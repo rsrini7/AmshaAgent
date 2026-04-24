@@ -792,6 +792,10 @@ mp:
     rag:
       # Switch embedding provider to Jina for native binary build (§Graal-Ollama-Fix)
       embed-provider: jina 
+    agent:
+      schema-correction:
+        max-retries-strict: ${ARCCLAW_AGENT_SCHEMA_CORRECTION_MAX_RETRIES_STRICT:4}
+        max-retries-lenient: ${ARCCLAW_AGENT_SCHEMA_CORRECTION_MAX_RETRIES_LENIENT:6}
     workspace:
       root-dir: "${ARCCLAW_DATA_DIR:./data}/workspaces"
     sandbox:

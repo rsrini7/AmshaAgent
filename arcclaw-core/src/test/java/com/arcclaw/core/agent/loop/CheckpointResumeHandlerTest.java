@@ -27,6 +27,7 @@ import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -81,7 +82,7 @@ class CheckpointResumeHandlerTest {
     }
 
     private AgentExecutionContext createCtx(String sessionId, String goal) {
-        return new AgentExecutionContext(sessionId, "user", "chat", "coordinator", goal, AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        return new AgentExecutionContext(sessionId, "user", "chat", "coordinator", goal, AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @Test

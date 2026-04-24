@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -42,7 +43,7 @@ public class EngineStepHandlerOtelTest {
         when(engine.nextStep(any(), anyString(), anyString(), any())).thenReturn(step);
 
         // Act
-        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        AgentExecutionContext context = new AgentExecutionContext("test-session", "user", "chat", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
         handler.processEngineStep(context, engine, Collections.emptyList(), null, 0, 1);
 
         // Assert

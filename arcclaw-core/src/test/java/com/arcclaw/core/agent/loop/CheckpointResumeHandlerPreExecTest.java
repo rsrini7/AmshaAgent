@@ -17,6 +17,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -53,7 +54,7 @@ class CheckpointResumeHandlerPreExecTest {
         String agentRole = "COORDINATOR";
         
         AgentExecutionContext context = new AgentExecutionContext(
-            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, 5, 0, null, null, null, null);
+            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
 
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId(sessionId);

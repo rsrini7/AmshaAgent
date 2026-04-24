@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +13,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -32,6 +34,7 @@ import com.arcclaw.core.util.ClassUtils;
 import com.arcclaw.core.util.MdcManaged;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
+import io.smallrye.common.annotation.Identifier;
 import org.jboss.logging.Logger;
 
 /**
@@ -78,6 +81,10 @@ public class AgentLoop {
 
     @Inject
     ObservabilityManager observabilityManager;
+
+    @Inject
+    @Identifier("agent-output-mode")
+    String structuredOutputModeStr;
 
     @Inject
     MeterRegistry meterRegistry;
@@ -139,6 +146,11 @@ public class AgentLoop {
                         sessionId, effectiveRole, canonicalRole);
             }
 
+            StructuredOutputMode mode = Arrays.stream(StructuredOutputMode.values())
+                .filter(m -> m.name().equalsIgnoreCase(structuredOutputModeStr))
+                .findFirst()
+                .orElse(StructuredOutputMode.NATIVE);
+
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
                     capturedUserId,
@@ -146,6 +158,7 @@ public class AgentLoop {
                     effectiveRole,
                     goal,
                     WorkspaceContext.requireAutonomyOrSupervised(),
+                    mode,
                     maxIterations,
                     decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
                     context != null && context.getUser() != null ? context.getUser().channel().name() : null,

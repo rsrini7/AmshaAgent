@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.security.AutonomyLevel;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,7 @@ class AgentStateTest {
     @Test
     void testExecutionContextFromRequest() {
         RunAgentRequest req = new RunAgentRequest("my goal", "coder", 10);
-        AgentExecutionContext ctx = AgentExecutionContext.from(req, "sid", "uid", "cid", AutonomyLevel.FULL);
+        AgentExecutionContext ctx = AgentExecutionContext.from(req, "sid", "uid", "cid", AutonomyLevel.FULL, StructuredOutputMode.NATIVE);
         
         assertEquals("sid", ctx.sessionId());
         assertEquals("uid", ctx.userId());
@@ -44,7 +45,7 @@ class AgentStateTest {
     @Test
     void testExecutionContextDefaultIterations() {
         RunAgentRequest req = new RunAgentRequest("goal", "role", null);
-        AgentExecutionContext ctx = AgentExecutionContext.from(req, "s", "u", "c", AutonomyLevel.SUPERVISED);
+        AgentExecutionContext ctx = AgentExecutionContext.from(req, "s", "u", "c", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE);
         assertEquals(5, ctx.maxIterations());
     }
 
