@@ -362,9 +362,44 @@ class LangChainReasoningEngineTest {
         // Researcher must NOT have shell or vault access — safety boundary
         assertFalse(toolNames.contains("execute_shell"), "researcher must NOT have execute_shell");
         assertFalse(toolNames.contains("vault_access"),  "researcher must NOT have vault_access");
-    }
-@Test
-void testCronFiredSessionStripsScheduleTools() {
+        }
+
+        @Test
+        void testForceFinishRetryStripsTools() {
+        // Arrange
+        AgentExecutionContext ctx = createCtx("force-finish-retry-session");
+        ctx.setForceFinishRetry(true);
+
+        AiMessage msg = AiMessage.aiMessage("Done.");
+        ChatResponse response = ChatResponse.builder()
+                .aiMessage(msg).tokenUsage(new TokenUsage(5, 10))
+                .finishReason(FinishReason.STOP).build();
+
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
+        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("Done.", ReasoningStep.FINISH, Map.of(), 100, 100));
+
+        // Mock RoleRegistry to return permitted tools
+        when(roleRegistry.permittedTools(any())).thenReturn(Set.of("github"));
+
+        // Act
+        reasoningEngine.nextStep(ctx, "coordinator", "goal", List.of());
+
+        // Assert
+        ChatRequest sent = captor.getValue();
+        assertTrue(sent.toolSpecifications() == null || sent.toolSpecifications().isEmpty(),
+                "Tools must be stripped when forceFinishRetry is active");
+
+        List<ChatMessage> messages = sent.messages();
+        boolean foundConstraint = messages.stream().anyMatch(m -> m instanceof UserMessage 
+                && ((UserMessage)m).singleText().contains("Answer in plain prose only"));
+        assertTrue(foundConstraint, "Force finish retry constraint must be injected");
+        }
+
+        @Test
+        void testCronFiredSessionStripsScheduleTools() {
     ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
     when(llmProviderPort.nextStep(captor.capture())).thenReturn(
             ChatResponse.builder().aiMessage(new AiMessage("OK")).build());

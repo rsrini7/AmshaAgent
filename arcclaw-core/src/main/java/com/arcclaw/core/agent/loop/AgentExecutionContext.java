@@ -35,6 +35,7 @@ public final class AgentExecutionContext {
     // Hot-path cache (§7.22 / F22)
     private CheckpointStatus lastCheckpointStatus;
     private boolean statusDirty = true;
+    private boolean forceFinishRetry = false;
 
     public AgentExecutionContext(
             String sessionId,
@@ -87,6 +88,9 @@ public final class AgentExecutionContext {
 
     public boolean isStatusDirty() { return statusDirty; }
     public void markStatusDirty() { this.statusDirty = true; }
+
+    public boolean isForceFinishRetry() { return forceFinishRetry; }
+    public void setForceFinishRetry(boolean forceFinishRetry) { this.forceFinishRetry = forceFinishRetry; }
 
     /** Convenience: true when full channel stamping info is available. */
     public boolean hasChannelInfo() {

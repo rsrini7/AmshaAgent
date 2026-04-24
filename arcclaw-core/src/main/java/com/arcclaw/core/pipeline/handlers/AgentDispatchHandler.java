@@ -141,7 +141,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 log.warnf("[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.", sessionId);
                 channelPluginRegistry.find(context.getChannelType())
                     .map(ChannelPlugin::sender)
-                    .ifPresent(s -> s.sendRaw(context.getUser(), "⚠️ I'm already busy with your previous request. Please wait a moment until I finish."));
+                    .ifPresent(s -> s.sendRaw(context.getUser(), "⚠️ I'm currently processing another request. Your message was not queued — please resend it once I finish."));
                 return HandleResult.STOP;
             }
 

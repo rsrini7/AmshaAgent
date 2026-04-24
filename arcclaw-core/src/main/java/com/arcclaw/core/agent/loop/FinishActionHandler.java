@@ -126,11 +126,13 @@ public class FinishActionHandler {
         record SalvageFailed(AgentResult result) implements FinishOutcome {}
     }
 
-    public FinishOutcome handle(String sessionId,
-                                String agentRole,
+    public FinishOutcome handle(AgentExecutionContext context,
                                 List<ReasoningStep> history,
                                 ReasoningStep step,
                                 int llmSchemaErrorCount) {
+
+        String sessionId = context.sessionId();
+        String agentRole = context.agentRole();
 
         // --- Extract candidate answer ---
         String candidateAnswer = step.thought();
@@ -147,7 +149,11 @@ public class FinishActionHandler {
 
         // --- Raw tool-call leak detection ---
         if (qualityGuard.isRawToolCallLeak(candidateAnswer)) {
-            return handleLeak(candidateAnswer, step, history, llmSchemaErrorCount, sessionId);
+            FinishOutcome outcome = handleLeak(candidateAnswer, step, history, llmSchemaErrorCount, sessionId);
+            if (outcome instanceof FinishOutcome.RetryLeak) {
+                context.setForceFinishRetry(true);
+            }
+            return outcome;
         }
 
         // --- HTML unescape + unicode normalisation ---

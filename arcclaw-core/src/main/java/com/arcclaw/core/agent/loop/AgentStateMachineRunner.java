@@ -239,9 +239,10 @@ public class AgentStateMachineRunner {
                             }
                             
                             FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                                    context.sessionId(), context.agentRole(), history, step, llmSchemaErrorCount);
+                                    context, history, step, llmSchemaErrorCount);
 
                             if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
+                                context.setForceFinishRetry(false); // clear — no longer needed
                                 // §3.6: writer.saveAnswer() belongs here, NOT inside FinishActionHandler
                                 if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
                                     writer.saveAnswer(context.sessionId(), c.answer());
@@ -306,7 +307,7 @@ public class AgentStateMachineRunner {
                         // Re-dispatch if validateTool rewrote a hallucinated tool to FINISH
                         if (ReasoningStep.FINISH.equals(step.action())) {
                             FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                                    context.sessionId(), context.agentRole(), history, step, llmSchemaErrorCount);
+                                    context, history, step, llmSchemaErrorCount);
                             if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
                                 finalResult = c.result();
                                 // loopExitPublisher fires in finally — see first TERMINAL comment above.

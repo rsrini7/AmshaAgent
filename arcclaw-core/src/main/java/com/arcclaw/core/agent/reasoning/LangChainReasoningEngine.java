@@ -86,6 +86,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             messages.add(UserMessage.userMessage(goal));
         } else {
             messages.addAll(assembled);
+            
+            // ── Fix 3: Force finish retry constraint ──
+            if (context.isForceFinishRetry()) {
+                messages.add(UserMessage.userMessage(
+                    "Your previous response contained raw JSON or tool-call syntax. " +
+                    "Answer in plain prose only. All tools have already returned their results " +
+                    "— do NOT call any more tools. Summarize the findings and call FINISH."
+                ));
+            }
         }
 
         if (log.isDebugEnabled()) {
@@ -112,8 +121,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
  
         List<ToolSpecification> toolSpecifications;
-        if (isSimpleChitchat) {
-            log.debugf("[LangChainReasoningEngine] Simple chitchat detected for session %s — stripping all tools from request", sessionId);
+        if (isSimpleChitchat || context.isForceFinishRetry()) {
+            log.debugf("[LangChainReasoningEngine] %s detected for session %s — stripping all tools from request",
+                    isSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
             toolSpecifications = List.of();
         } else {
             toolSpecifications = toolRegistry.listTools().stream()
