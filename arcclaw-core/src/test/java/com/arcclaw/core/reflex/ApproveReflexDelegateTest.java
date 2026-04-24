@@ -12,13 +12,23 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
+import jakarta.enterprise.event.Event;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.AgentLoop;
+import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
+import com.arcclaw.core.agent.loop.CliResultBridge;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +43,14 @@ class ApproveReflexDelegateTest {
     @Mock AgentLoop agentLoop;
     @Mock DelegateApprovalGuard delegateGuard;
     @Mock CheckpointResumeHandler resumeHandler;
+    @Mock AgentCronRepository cronRepository;
+    @Mock ReasoningEngine reasoningEngine;
+    @Mock AuditService auditService;
+    @Mock ObjectMapper objectMapper;
+    @Mock CheckpointApprovalService checkpointApprovalService;
+    @Mock CliResultBridge cliResultBridge;
+    @Mock WorkspaceManager workspaceManager;
+    @Mock Event<AgentJobCompleted> jobCompletedEvent;
     
     ApproveReflex reflex;
     
@@ -43,6 +61,14 @@ class ApproveReflexDelegateTest {
         reflex.agentLoop = agentLoop;
         reflex.delegateGuard = delegateGuard;
         reflex.checkpointResumeHandler = resumeHandler;
+        reflex.cronRepository = cronRepository;
+        reflex.reasoningEngine = reasoningEngine;
+        reflex.auditService = auditService;
+        reflex.objectMapper = objectMapper;
+        reflex.checkpointApprovalService = checkpointApprovalService;
+        reflex.cliResultBridge = cliResultBridge;
+        reflex.workspaceManager = workspaceManager;
+        reflex.jobCompletedEvent = jobCompletedEvent;
         reflex.log = mock(Logger.class);
     }
 

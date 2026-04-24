@@ -81,11 +81,31 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 .filter(m -> !(m instanceof SystemMessage sm && sm.text().contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL)))
                 .toList();
 
+        boolean isWriteIntent = intentClassifier != null && intentClassifier.isWriteIntent(goal);
+        boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(goal);
+        boolean isHistoryQuery = intentClassifier != null && intentClassifier.isHistoryQuery(goal);
+        
+        // ── Fix: Mutual exclusion for functional roles and write intents ──
+        // If the user wants to store data, retrieve history, or if the agent is in a 
+        // functional role (coder/researcher/debugger), it's NOT simple chitchat.
+        if (isWriteIntent || isHistoryQuery 
+                || AgentRoleEnum.CODER.id().equalsIgnoreCase(agentRole)
+                || AgentRoleEnum.RESEARCHER.id().equalsIgnoreCase(agentRole)
+                || AgentRoleEnum.DEBUGGER.id().equalsIgnoreCase(agentRole)) {
+            isSimpleChitchat = false;
+        }
+
         String finalSystemPrompt = summaryContent.isEmpty() ? systemPrompt
                 : summaryContent + "\n\n" + systemPrompt;
 
-        boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(context.goal());
-        boolean isHistoryQuery = intentClassifier != null && intentClassifier.isHistoryQuery(context.goal());
+        // ── Fix: Write-intent correction override in system prompt ──
+        // Injected into system prompt on retry to force compliance from weaker fallback models.
+        if (isWriteIntent && context.isForceFinishRetry()) {
+            finalSystemPrompt = "CRITICAL OVERRIDE: The user wants to STORE data. " +
+                "You MUST call ingest_document RIGHT NOW as your ONLY action. " +
+                "Use the user's original message as the 'text' parameter. " +
+                "Do NOT call FINISH. Do NOT explain.\n\n" + finalSystemPrompt;
+        }
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(finalSystemPrompt));
@@ -188,7 +208,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            boolean isWriteIntent = intentClassifier != null && intentClassifier.isWriteIntent(goal);
             boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
 
             response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)

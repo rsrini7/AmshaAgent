@@ -171,14 +171,20 @@ public class AgentLoop {
                     context != null ? context.getData() : null
             );
 
-            AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);
-            if (resumeResult != null) {
-                result = resumeResult;
-            } else {
-                result = tryDelegateFinishFastPath(sessionId, resumedHistory)
-                        .orElseGet(() -> stateMachineRunner.run(
-                                agentExecutionContext, engine, resumedHistory));
-            }
+            final AgentExecutionContext finalCtx = agentExecutionContext;
+            final List<ReasoningStep> finalHistory = resumedHistory;
+
+            result = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
+                    .call(() -> {
+                        AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context);
+                        if (resumeResult != null) {
+                            return resumeResult;
+                        } else {
+                            return tryDelegateFinishFastPath(sessionId, finalHistory)
+                                    .orElseGet(() -> stateMachineRunner.run(
+                                            finalCtx, engine, finalHistory));
+                        }
+                    });
 
             if (result instanceof AgentResult.AwaitingApproval) {
                 tryStampChannelInfo(sessionId, canonicalRole, context);

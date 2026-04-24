@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 
 import jakarta.enterprise.event.Event;
@@ -253,5 +254,70 @@ class ApproveReflexTest {
         assertTrue(resultText.contains("Goal 1"));
         assertTrue(resultText.contains("cron-2"));
         assertTrue(resultText.contains("Goal 2"));
+    }
+
+    @Test
+    void testAmbiguityWarningWhenBothSessionAndCronPending() {
+        String userId = "user-1";
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setOriginalGoal("Store my API key");
+        cp.setAgentRole("coordinator");
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
+
+        AgentCronEntity cron = new AgentCronEntity();
+        cron.id = "cron-123";
+        cron.goal = "Periodic backup";
+        when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
+
+        MessageContext ctx = createContext("/approve");
+        ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
+        String resultText = result.commandResponse().get();
+
+        assertTrue(resultText.contains("Ambiguous approval"));
+        assertTrue(resultText.contains("This Chat"));
+        assertTrue(resultText.contains("Store my API key"));
+        assertTrue(resultText.contains("Background"));
+        assertTrue(resultText.contains("Periodic backup"));
+    }
+
+    @Test
+    void testCronUuidResolutionWithPrefix() {
+        String jobId = UUID.randomUUID().toString();
+        String fullId = "cron-" + jobId + "-" + UUID.randomUUID().toString();
+        
+        AgentCronEntity cron = new AgentCronEntity();
+        cron.id = jobId;
+        cron.userId = "user-1";
+        cron.status = CronStatus.AWAITING_APPROVAL;
+
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId(fullId);
+        cp.setAgentRole("coordinator");
+
+        when(checkpointApprovalService.approveAll(eq(fullId), anyString())).thenReturn(cp);
+        when(cronRepository.findById(jobId)).thenReturn(cron);
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), any(), anyInt(), any()))
+                .thenReturn(AgentResult.finished("Success", List.of()));
+
+        MessageContext ctx = createContext("/approve " + fullId);
+        approveReflex.execute("session-1", "user-1", "chat-1", "/approve " + fullId, ctx);
+
+        verify(cronRepository).findById(jobId);
+    }
+
+    @Test
+    void testFailedCheckpointGuidance() {
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.empty());
+        when(cronRepository.findAwaitingApprovalByUserId("user-1")).thenReturn(List.of());
+
+        AgentCheckpoint failedCp = new AgentCheckpoint();
+        failedCp.setStatus(CheckpointStatus.FAILED);
+        when(statefulAgentStore.findLatestCheckpoint("session-1")).thenReturn(Optional.of(failedCp));
+
+        MessageContext ctx = createContext("/approve");
+        ReflexResult result = approveReflex.execute("session-1", "user-1", "chat-1", "/approve", ctx);
+        
+        assertTrue(result.commandResponse().get().contains("last attempt failed"));
+        assertTrue(result.commandResponse().get().contains("rate limit"));
     }
 }

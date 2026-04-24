@@ -17,6 +17,8 @@ import com.arcclaw.core.compaction.CompactionAbortedException;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -48,6 +50,9 @@ public class CompactionService {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Inject
     @Identifier("compaction")
@@ -93,6 +98,7 @@ public class CompactionService {
         session cookies, private keys, or other credentials.
         Discard: pleasantries, repetition, step-by-step narration of obvious actions.
         Output ONLY the final merged summary. No preamble. No labels. Max 200 words.
+        If structuredOutputMode is NATIVE, you MUST respond with valid JSON.
 
         CRITICAL: If the conversation contains instances where the AI agreed to
         restrict or substitute its own capabilities (e.g. "I'll only provide Python",
@@ -189,7 +195,9 @@ public class CompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+        if (structuredOutputMode == StructuredOutputMode.NATIVE) {
+            prompt = "Respond with valid JSON. Include the merged summary in a field named 'summary'.\n\n" + prompt;
+        } else if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
             prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
         }
         return prompt;
@@ -202,7 +210,26 @@ public class CompactionService {
             try {
                 String responseText = compactionModel.chat(UserMessage.userMessage(prompt))
                         .aiMessage().text();
-                newSummary = responseText != null ? responseText.trim() : "";
+                
+                if (responseText == null || responseText.isBlank()) {
+                    newSummary = "";
+                } else if (structuredOutputMode == StructuredOutputMode.NATIVE) {
+                    try {
+                        JsonNode node = objectMapper.readTree(responseText);
+                        JsonNode summaryNode = node.get("summary");
+                        if (summaryNode == null) summaryNode = node.get("content");
+                        if (summaryNode == null) summaryNode = node.get("result");
+
+                        newSummary = (summaryNode != null && summaryNode.isTextual()) 
+                                ? summaryNode.asText().trim() : responseText.trim();
+                    } catch (Exception e) {
+                        log.warnf("Failed to parse compaction JSON for session %s, using raw text: %s", 
+                                sessionId, e.getMessage());
+                        newSummary = responseText.trim();
+                    }
+                } else {
+                    newSummary = responseText.trim();
+                }
                 break; // success
             } catch (Exception e) {
                 if (isRateLimit(e)) {

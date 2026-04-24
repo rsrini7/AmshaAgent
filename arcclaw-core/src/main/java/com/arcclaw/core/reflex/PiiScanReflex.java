@@ -195,4 +195,21 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     public String sanitize(String input) {
         return redactPii(input);
     }
+
+    /**
+     * Finds the first instance of PII of a given type in the input.
+     * Used by IngestDocumentTool to resolve [REDACTED-TYPE] placeholders.
+     */
+    public String extractFirstValue(String input, String type) {
+        if (input == null || input.isBlank() || type == null) return null;
+        for (PiiRule rule : RULES) {
+            if (rule.type().equalsIgnoreCase(type)) {
+                Matcher m = rule.pattern().matcher(input);
+                if (m.find()) {
+                    return m.group(0);
+                }
+            }
+        }
+        return null;
+    }
 }

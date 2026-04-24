@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -156,6 +157,35 @@ class ChatHistoryAssemblerTest {
         String expectedIndicator = "\n[... truncated 500 chars]";
         assertEquals(1000 + expectedIndicator.length(), obsMsg.text().length());
         assertTrue(obsMsg.text().endsWith("500 chars]"));
+    }
+
+    @Test
+    void testAssemble_scrubsToolMessagesFromPersistentHistory() {
+        // Arrange
+        String sessionId = "s3";
+        ToolExecutionRequest req = ToolExecutionRequest.builder()
+                .id("call_1")
+                .name("calc")
+                .arguments("{\"expr\":\"1+1\"}")
+                .build();
+        List<ChatMessage> history = List.of(
+                UserMessage.userMessage("Calculate 1+1"),
+                AiMessage.aiMessage(List.of(req)),
+                new ToolExecutionResultMessage("call_1", "calc", "2"),
+                AiMessage.aiMessage("The result is 2")
+        );
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(history);
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(sessionId, null, List.of());
+
+        // Assert
+        // Should only contain: UserMessage("Calculate 1+1"), AiMessage("The result is 2")
+        // ToolExecutionRequest and ToolExecutionResultMessage should be skipped.
+        assertEquals(2, result.size());
+        assertTrue(result.get(0) instanceof UserMessage);
+        assertTrue(result.get(1) instanceof AiMessage);
+        assertFalse(((AiMessage) result.get(1)).hasToolExecutionRequests());
     }
 
     @Test

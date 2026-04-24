@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 
 import jakarta.enterprise.event.Event;
@@ -128,7 +130,7 @@ class DenyReflexTest {
         
         when(checkpointApprovalService.denyAll(eq(cronId), anyString())).thenReturn(cp);
         when(cronRepository.findById(cronId)).thenReturn(cron);
-        when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), eq(1), any()))
+        when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), any(), anyInt(), any()))
                 .thenReturn(AgentResult.finished("Denial Ack", List.of()));
 
         MessageContext ctx = createContext("/deny " + cronId);
@@ -209,5 +211,68 @@ class DenyReflexTest {
 
         assertEquals("⏳ Already processing your denial. Please wait.", result.commandResponse().get());
         assertFalse(ctx.isResumeSignal());
+    }
+
+    @Test
+    void testAmbiguityWarningWhenBothSessionAndCronPending() {
+        String userId = "user-1";
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setOriginalGoal("Store my API key");
+        cp.setAgentRole("coordinator");
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
+
+        AgentCronEntity cron = new AgentCronEntity();
+        cron.id = "cron-123";
+        cron.goal = "Periodic backup";
+        when(cronRepository.findAwaitingApprovalByUserId(userId)).thenReturn(List.of(cron));
+
+        MessageContext ctx = createContext("/deny");
+        ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny", ctx);
+        String resultText = result.commandResponse().get();
+
+        assertTrue(resultText.contains("Ambiguous denial"));
+        assertTrue(resultText.contains("This Chat"));
+        assertTrue(resultText.contains("Store my API key"));
+        assertTrue(resultText.contains("Background"));
+        assertTrue(resultText.contains("Periodic backup"));
+    }
+
+    @Test
+    void testCronUuidResolutionWithPrefix() throws Exception {
+        String jobId = UUID.randomUUID().toString();
+        String fullId = "cron-" + jobId + "-" + UUID.randomUUID().toString();
+        
+        AgentCronEntity cron = new AgentCronEntity();
+        cron.id = jobId;
+        cron.userId = "user-1";
+        cron.status = CronStatus.AWAITING_APPROVAL;
+
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId(fullId);
+        cp.setAgentRole("coordinator");
+
+        when(checkpointApprovalService.denyAll(eq(fullId), anyString())).thenReturn(cp);
+        when(cronRepository.findById(jobId)).thenReturn(cron);
+        when(agentLoop.run(anyString(), anyString(), eq(AgentSentinels.GOAL_DENY_APPROVED), any(), any(), anyInt(), any()))
+                .thenReturn(AgentResult.finished("Denied", List.of()));
+
+        MessageContext ctx = createContext("/deny " + fullId);
+        denyReflex.execute("session-1", "user-1", "chat-1", "/deny " + fullId, ctx);
+
+        verify(cronRepository).findById(jobId);
+    }
+
+    @Test
+    void testPerToolDenialFeedback() {
+        AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setAgentRole("coordinator");
+        cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
+
+        MessageContext ctx = createContext("/deny github");
+        ReflexResult result = denyReflex.execute("session-1", "user-1", "chat-1", "/deny github", ctx);
+        
+        assertTrue(result.commandResponse().get().contains("github"));
+        assertTrue(result.commandResponse().get().contains("denied"));
     }
 }

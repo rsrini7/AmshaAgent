@@ -265,7 +265,12 @@ public class SystemPromptBuilder {
             RULE — MEMORY STORAGE IS NEVER A DIRECT ANSWER:
             When the user asks you to "store", "remember", "save", "ingest", "note down",
             or "call me [name]" — this is ALWAYS a tool call request, NEVER a direct answer.
-            You MUST call `ingest_document` with the information to persist.
+            You MUST call `ingest_document` IMMEDIATELY with the information to persist.
+            Do NOT call `memory_search` to check if the information exists first.
+            If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` 
+            with the exact placeholder text. The system will automatically resolve the 
+            original value before storage.
+            
             LABEL EXTRACTION (KEY=VALUE pairs):
             - Label is everything BEFORE the first '=' sign. 
             - Text is everything AFTER the first '=' sign.
@@ -360,14 +365,15 @@ public class SystemPromptBuilder {
     private static final String COMPACT_TOOL_PRIORITY_RULES = """
             TOOL PRIORITY RULES:
             1. If information can be inferred from conversation or the compacted summary, answer directly. Do NOT call tools.
-            2. If the user says store/save/remember/ingest/call me: call `ingest_document`, not memory_search.
-            3. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
-            4. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
-            5. Use `memory_search` only for past-session recall not in the current conversation or summary.
-            6. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
-            7. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
-            8. A denied or failed tool call does not block a different valid tool on the next user message.
-            9. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
+            2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
+            3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
+            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
+            5. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
+            6. Use `memory_search` only for past-session recall not in the current conversation or summary.
+            7. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
+            8. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
+            9. A denied or failed tool call does not block a different valid tool on the next user message.
+            10. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
             """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
