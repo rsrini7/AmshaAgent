@@ -26,6 +26,7 @@ public class WebJobNotifier implements ChannelJobNotifier {
             .add("type", "message")
             .add("role", "assistant")
             .add("text", renderedMessage)
+            .add("sessionId", sessionId)
             .build().toString();
 
         sendToSession(recipient, payload);
@@ -41,6 +42,7 @@ public class WebJobNotifier implements ChannelJobNotifier {
             .add("type", "message")
             .add("role", "assistant")
             .add("text", msg)
+            .add("sessionId", sessionId)
             .build().toString();
 
         sendToSession(recipient, payload);

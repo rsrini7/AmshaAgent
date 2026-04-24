@@ -26,9 +26,11 @@ public sealed interface ChannelCommand
                 ChannelCommand.Unknown {
 
     // Single compiled Pattern — avoids repeated compilation per message.
-    // The inner group (\\S+) matches the first non-whitespace token after the command.
+    // Group 1: command
+    // Group 2: first token (id or toolName)
+    // Group 3: rest of the line (optional reason)
     Pattern CMD_PATTERN = Pattern.compile(
-            "^/(start|approve|deny|status|halt|reset|history|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+.*)?",
+            "^/(start|approve|deny|status|halt|reset|history|cron|crons|deletecron|list(?:tasks?)?)(?:\\s+(\\S+))?(?:\\s+(.*))?",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -69,17 +71,21 @@ public sealed interface ChannelCommand
         }
         String cmd = matcher.group(1).toLowerCase();
         String arg = matcher.group(2); // may be null
+        String reason = matcher.group(3); // may be null
         Optional<String> optArg = Optional.ofNullable(arg);
+        Optional<String> optReason = Optional.ofNullable(reason != null && !reason.isBlank() ? reason.trim() : null);
 
         return switch (cmd) {
             case "approve" -> new Approve(
                 parseCronId(optArg),
                 parseToolName(optArg),
-                parseTargetSessionId(optArg));
+                parseTargetSessionId(optArg),
+                optReason);
             case "deny"    -> new Deny(
                 parseCronId(optArg),
                 parseToolName(optArg),
-                parseTargetSessionId(optArg));
+                parseTargetSessionId(optArg),
+                optReason);
             case "status"  -> new Status();
             case "halt"    -> new Halt();
             case "reset"   -> new Reset();
@@ -125,11 +131,13 @@ public sealed interface ChannelCommand
      *
      * @param cronId   if present, targets a specific cron-session approval;
      * @param toolName if present, targets a specific tool in a parallel batch
+     * @param reason   optional human-provided reason for approval
      */
     record Approve(
         Optional<String> cronId,
         Optional<String> toolName,
-        Optional<String> targetSessionId
+        Optional<String> targetSessionId,
+        Optional<String> reason
     ) implements ChannelCommand {}
 
     /**
@@ -138,11 +146,13 @@ public sealed interface ChannelCommand
      * @param cronId   if present, targets a specific cron-session approval;
      * @param toolName if present, targets a specific tool in a parallel batch
      * @param targetSessionId if present, targets a specific session for delegation (§7.33)
+     * @param reason   optional human-provided reason for denial
      */
     record Deny(
         Optional<String> cronId,
         Optional<String> toolName,
-        Optional<String> targetSessionId
+        Optional<String> targetSessionId,
+        Optional<String> reason
     ) implements ChannelCommand {}
 
      /**

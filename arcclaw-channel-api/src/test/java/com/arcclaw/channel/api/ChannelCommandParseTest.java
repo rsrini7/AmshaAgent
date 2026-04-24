@@ -147,11 +147,10 @@ class ChannelCommandParseTest {
     // ------------------------------------------------------------------
     // isControlCommand
     // ------------------------------------------------------------------
-
     @Test
     void controlCommandsShouldBeIdentified() {
-        assertTrue(new ChannelCommand.Approve(Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
-        assertTrue(new ChannelCommand.Deny(Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Approve(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Deny(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
         assertTrue(new ChannelCommand.Halt().isControlCommand());
         assertTrue(new ChannelCommand.Reset().isControlCommand());
 

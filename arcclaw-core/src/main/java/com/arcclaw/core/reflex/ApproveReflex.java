@@ -46,7 +46,6 @@ import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.core.util.CronScheduleUtil;
@@ -129,6 +128,7 @@ public class ApproveReflex implements AgentReflex {
                                 String input, MessageContext context) {
         ChannelCommand.Approve approve = (ChannelCommand.Approve) ChannelCommand.parse(input);
         Optional<String> cronId = approve.cronId();
+        String reason = approve.reason().orElse("CLI approve");
 
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
@@ -141,18 +141,18 @@ public class ApproveReflex implements AgentReflex {
                                   userId, targetSid);
                         return NOT_AUTHORIZED_DELEGATION;
                     }
-                    return handleDelegateApproval(targetSid, userId, chatId, context);
+                    return handleDelegateApproval(targetSid, userId, chatId, reason, context);
                 }
 
                 // 2. CronId explicit — always wins
                 if (cronId.isPresent()) {
-                    return handleCronApproval(cronId.get(), userId, chatId, context);
+                    return handleCronApproval(cronId.get(), userId, chatId, reason, context);
                 }
 
                 // Per-tool approval: `approve github` where toolName.isPresent()
                 if (approve.toolName().isPresent()) {
                     return handlePerToolApproval(
-                        approve.toolName().get(), sessionId, userId, chatId, context);
+                        approve.toolName().get(), sessionId, userId, chatId, reason, context);
                 }
 
                 // 3. Session checkpoint — interactive approval.
@@ -167,9 +167,9 @@ public class ApproveReflex implements AgentReflex {
                         List<String> pending = BatchDecisionUtil.pendingToolNames(latestPending.get(), objectMapper);
                         AgentCheckpoint cp = null;
                         if (pending.size() == 1) {
-                            cp = checkpointApprovalService.approveTool(sessionId, pending.get(0), "CLI approve");
+                            cp = checkpointApprovalService.approveTool(sessionId, pending.get(0), reason);
                         } else {
-                            cp = checkpointApprovalService.approveAll(sessionId, "CLI approve");
+                            cp = checkpointApprovalService.approveAll(sessionId, reason);
                         }
                         
                         if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
@@ -252,7 +252,7 @@ public class ApproveReflex implements AgentReflex {
 
     private String handlePerToolApproval(
             String toolName, String sessionId, String userId,
-            String chatId, MessageContext context) throws Exception {
+            String chatId, String reason, MessageContext context) throws Exception {
 
         // replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
         // Additionally filter for hasBatchToolDecisions() since per-tool approval
@@ -269,25 +269,12 @@ public class ApproveReflex implements AgentReflex {
         }
 
         try {
-            AgentCheckpoint cp = checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
+            AgentCheckpoint cp = checkpointApprovalService.approveTool(sessionId, toolName, reason);
             checkpointApprovalService.triggerResume(cp);
             return "";
         } catch (CheckpointResolutionException e) {
             return NO_PENDING_APPROVAL;
         }
-    }
-
-    // PHASE 80-A12: bulk path now delegates to CheckpointApprovalService.
-    // This method retained for handleCronApproval usage. Remove in Phase 81
-    // when cron approval is also migrated to CheckpointApprovalService.
-
-    private void autoApproveAllPending(String sessionId, String agentRole) {
-        AgentCheckpoint cp =
-            statefulAgentStore.load(sessionId, agentRole).orElseThrow();
-        BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
-            statefulAgentStore.updateBatchToolDecision(
-                sessionId, agentRole, toolName,
-                ToolDecision.APPROVED.name()));
     }
 
     private String triggerBatchResume(
@@ -306,11 +293,11 @@ public class ApproveReflex implements AgentReflex {
 
     private String handleCronApproval(
         String cronId, String userId, String chatId,
-        MessageContext context) throws Exception {
+        String reason, MessageContext context) throws Exception {
 
         // 1. Resolve and Approve via service (handles cronId alias correctly)
         // This ensures ToolDecision.APPROVED is set in DB and SSE events are fired.
-        AgentCheckpoint pendingCheckpoint = checkpointApprovalService.approveAll(cronId, "CLI approve");
+        AgentCheckpoint pendingCheckpoint = checkpointApprovalService.approveAll(cronId, reason);
 
         String cronSessionId = pendingCheckpoint.getSessionId();
         String cronRole = pendingCheckpoint.getAgentRole();
@@ -405,7 +392,7 @@ public class ApproveReflex implements AgentReflex {
 
     private String handleDelegateApproval(
             String targetSid, String adminId, String adminChatId,
-            MessageContext context) throws Exception {
+            String reason, MessageContext context) throws Exception {
 
         log.infof("[DELEGATE-APPROVE] admin=%s approving session=%s", adminId, targetSid);
 
@@ -426,14 +413,18 @@ public class ApproveReflex implements AgentReflex {
 
         // Auto-approve all tools in batch if parallel (§7.21, §7.33)
         if (cp.hasBatchToolDecisions()) {
-            autoApproveAllPending(targetSid, activeRole);
+            checkpointApprovalService.approveAll(targetSid, reason);
         }
 
         // §7.33: Log mandatory DELEGATE_APPROVAL audit event before triggering action
+        String auditMsg = reason.equals("CLI approve")
+            ? "Admin %s approved session %s".formatted(adminId, targetSid)
+            : "Admin %s approved session %s: %s".formatted(adminId, targetSid, reason);
+
         auditService.logSecurityEvent(
             SecurityEventType.DELEGATE_APPROVAL,
             adminId,
-            "Admin %s approved session %s".formatted(adminId, targetSid));
+            auditMsg);
 
         return triggerBatchResume(targetSid, adminId, adminChatId, activeRole, context);
     }

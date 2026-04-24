@@ -58,19 +58,25 @@ public class TelegramChannelSender implements ChannelSender {
             return;
         }
 
-        // Component 73-A4 — Intercept ApprovalPrompt to add Telegram inline keyboard for batch tools
+        // Component 73-A4 — Intercept ApprovalPrompt to add Telegram inline keyboard
         Optional<ReplyNode.ApprovalPrompt> promptOpt = nodes.stream()
             .filter(n -> n instanceof ReplyNode.ApprovalPrompt)
             .map(n -> (ReplyNode.ApprovalPrompt) n)
             .findFirst();
 
-        if (promptOpt.isPresent() && promptOpt.get().toolName() != null && promptOpt.get().toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
-            String toolNamesStr = promptOpt.get().toolName().substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
-            List<String> list = Arrays.asList(toolNamesStr.split(","));
-            InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(promptOpt.get().sessionId(), list);
-            // §7.28: escape at call site — rendered text from renderer.render() is already
-            // MarkdownV2-safe for structured nodes, but the HITL text portion from
-            // AgentResultFormatter is plain text and needs escaping.
+        if (promptOpt.isPresent()) {
+            ReplyNode.ApprovalPrompt prompt = promptOpt.get();
+            List<String> toolNames;
+            if (prompt.toolName() != null && prompt.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+                String toolNamesStr = prompt.toolName().substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
+                toolNames = Arrays.asList(toolNamesStr.split(","));
+            } else if (prompt.toolName() != null) {
+                toolNames = List.of(prompt.toolName());
+            } else {
+                toolNames = List.of();
+            }
+            
+            InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(prompt.sessionId(), toolNames);
             sendWithKeyboard(recipient, rendered, markup);
         } else {
             sendRawToChatId(chatId, rendered);

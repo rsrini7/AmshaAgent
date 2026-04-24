@@ -130,7 +130,8 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
 
     /**
      * Find the most recent AWAITING_APPROVAL checkpoint for a cron session
-     * with the given cronId. Matches sessionId pattern: "cron-{cronId}-%".
+     * with the given cronId. Matches sessionId pattern starting with 
+     * {@link com.arcclaw.core.agent.AgentSentinels#CRON_SESSION_PREFIX}.
      */
     Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId);
 
