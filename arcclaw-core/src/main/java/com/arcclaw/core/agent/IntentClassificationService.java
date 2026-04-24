@@ -28,12 +28,12 @@ public class IntentClassificationService {
     );
 
     private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(
-        "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info)\\b",
+        "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize)\\b",
         Pattern.CASE_INSENSITIVE
     );
 
     private static final Pattern HISTORY_QUERY_PATTERN = Pattern.compile(
-        "\\b(summarize|recap|reiterate|what did we|discussed|so far|bullet our points|bullets?|bullet points|bulletized|bulletized summary|history|above|earlier|previous|before)\\b",
+        "\\b(summarize|recap|reiterate|what did we|discussed|so far|bullet our points|bullets?|bullet points|bulletized|bulletized summary|history|above|earlier|previous|before|summary)\\b",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -60,7 +60,7 @@ public class IntentClassificationService {
      */
     public boolean isSimpleConversational(String text) {
         if (text == null || text.isBlank()) return true;
-        if (text.length() > 40) return false;
+        if (text.length() > 60) return false;
         return !TOOL_VERB_PATTERN.matcher(text).find();
     }
 
