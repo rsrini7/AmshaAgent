@@ -268,9 +268,20 @@ public class DenyReflex implements AgentReflex {
         String cronRole = pendingCheckpoint.getAgentRole();
 
         // 2. Fetch job entity for post-processing logic
-        AgentCronEntity cron = cronRepository.findById(cronId);
+        // Extract the jobId from the sessionId if a full sessionId was provided.
+        // Format: cron-JOB_UUID-EXEC_UUID
+        String resolvedJobId = cronId;
+        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            String suffix = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+            if (suffix.length() >= 36) {
+                resolvedJobId = suffix.substring(0, 36);
+            }
+        }
+
+        AgentCronEntity cron = cronRepository.findById(resolvedJobId);
 
         if (cron == null) {
+            log.warnf("[handleCronDenial] Cron job not found for jobId/sessionId: %s", cronId);
             return CRON_NOT_FOUND;
         }
 

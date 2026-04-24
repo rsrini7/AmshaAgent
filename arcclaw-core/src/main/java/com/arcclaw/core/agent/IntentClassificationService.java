@@ -14,7 +14,7 @@ public class IntentClassificationService {
 
     // Matches goals that indicate a desire to persist or store information
     private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
-        "\\b(save|store|ingest|remember|add to memory|note that|call me)\\b",
+        "\\b(save|store|ingest|remember|add to memory|note that|call me|my name is|refer to me as|address me as)\\b",
         Pattern.CASE_INSENSITIVE
     );
 
