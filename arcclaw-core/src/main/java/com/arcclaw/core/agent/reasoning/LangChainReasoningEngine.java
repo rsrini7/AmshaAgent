@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.reasoning;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,7 +30,9 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ChatMessageType;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -98,13 +101,33 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             ));
         }
  
+        List<ChatMessage> historyToInclude = filteredAssembled;
+        if (isSimpleChitchat || context.isForceFinishRetry()) {
+            log.debugf("[LangChainReasoningEngine] %s detected for session %s — scrubbing tool history to prevent pattern mimicry",
+                    isSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
+            
+            historyToInclude = filteredAssembled.stream()
+                .filter(m -> m.type() != ChatMessageType.TOOL_EXECUTION_RESULT)
+                .map(m -> {
+                    if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
+                        // If the AI message has text, keep ONLY the text to preserve conversational context.
+                        // If it has NO text (pure tool call), filter it out.
+                        return (ai.text() != null && !ai.text().isBlank()) 
+                                ? AiMessage.aiMessage(ai.text()) : null;
+                    }
+                    return m;
+                })
+                .filter(Objects::nonNull)
+                .toList();
+        }
+
         if (isSimpleChitchat && !isHistoryQuery) {
             // Force direct answer by stripping ALL prior turns (§ recommendation)
             // prevents pattern-matching hallucinations from conversation history.
             // finalSystemPrompt already contains the summary, so it's preserved here!
             messages.add(UserMessage.userMessage(goal));
         } else {
-            messages.addAll(filteredAssembled);
+            messages.addAll(historyToInclude);
             
             // ── Fix 3: Force finish retry constraint ──
             if (context.isForceFinishRetry()) {

@@ -266,16 +266,22 @@ public class SystemPromptBuilder {
             When the user asks you to "store", "remember", "save", "ingest", "note down",
             or "call me [name]" — this is ALWAYS a tool call request, NEVER a direct answer.
             You MUST call `ingest_document` with the information to persist.
-
             LABEL EXTRACTION (KEY=VALUE pairs):
             - Label is everything BEFORE the first '=' sign. 
             - Text is everything AFTER the first '=' sign.
             - The text may itself contain '=' characters (e.g. JWT tokens) — include them fully.
             Examples:
-              "store FOO=bar"                    -> label="FOO",      text="bar"
-              "store JWT_TOKEN=eyJhbG...Qssw5c" -> label="JWT_TOKEN", text="eyJhbG...Qssw5c"
-              "store API_KEY=abc=def=ghi"        -> label="API_KEY",  text="abc=def=ghi"
+            "store FOO=bar"                    -> label="FOO",      text="bar"
+            "store JWT_TOKEN=eyJhbG...Qssw5c"  -> label="JWT_TOKEN", text="eyJhbG...Qssw5c"
+            "store API_KEY=abc=def=ghi"        -> label="API_KEY",  text="abc=def=ghi"
 
+            HARD TOOL-CALLING CONSTRAINT:
+            If you are performing a storage operation (ingest_document), you MUST NOT 
+            output any thought or text answer. Your ONLY output must be the valid 
+            JSON tool call for `ingest_document`. Outputting a prose answer like 
+            "Information stored" before the tool observation is a CRITICAL FAILURE.
+
+            RULE — PII REDACTION FEEDBACK:
             DO NOT output "Done" or any confirmation text without first calling `ingest_document`.
             Outputting "Done" without calling the tool is a critical failure — the information
             will be lost and the user will think it was saved when it was not.
@@ -300,14 +306,14 @@ public class SystemPromptBuilder {
     private static final String COMPACT_SECURITY_RULES_PROMPT = """
         CRITICAL OPERATIONAL RULES:
         1. NO reasoning narration. Respond with tool call OR final answer text only. NEVER output raw tool-call JSON inside text.
-        2. NO placeholder text ([task ID], etc).
+        2. NO repo owner/path guesses. Derive owner/repo ONLY from user's CURRENT message. If missing, ask for it.
         3. NO markdown code blocks (```) for execution. Use sandbox_exec.
         4. NO fabricated data. Say "I don't know" if info is missing.
         5. NO confirmation/permission requests. Just call the tool.
         6. NO greeting repetition.
         7. If a tool fails with "Security violation", do NOT retry. Explain to user.
         8. For time-delay phrases ("tomorrow", "in 5 min"): call `schedule_task` ONLY.
-        9. WORDS like "store/save/remember" ALWAYS require `ingest_document`.
+        9. STORAGE rule: call `ingest_document`. Output JSON tool-call ONLY. NO thought or text answer before tool result.
         10. STORAGE format: `KEY=value`. Preserve `=` exactly.
         11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
         12. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
