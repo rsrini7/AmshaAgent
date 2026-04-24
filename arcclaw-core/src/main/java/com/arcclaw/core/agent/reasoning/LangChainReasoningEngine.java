@@ -191,20 +191,18 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             boolean isWriteIntent = intentClassifier != null && intentClassifier.isWriteIntent(goal);
             response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .call(() -> llmProviderPort.nextStep(request));
-        } catch (Exception e) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            if (cause instanceof RuntimeException re) throw re;
-            throw new RuntimeException("LLM call failed in reasoning loop", cause);
         } catch (Throwable e) {
+            // Unwrap if it's a generic Exception from ScopedValue.call (though shouldn't be for RuntimeExceptions)
+            Throwable effective = (e instanceof Exception && e.getCause() != null) ? e.getCause() : e;
             
-            if (e instanceof LlmMalformedResponseException) {
+            if (effective instanceof LlmMalformedResponseException) {
                 log.warnf("[LangChainReasoningEngine] Schema validation error — " +
-                        "re-throwing to state machine for retry handling: %s", e.getMessage());
-                throw e;
+                        "re-throwing to state machine for retry handling: %s", effective.getMessage());
+                throw (LlmMalformedResponseException) effective;
             }
 
-            if (e instanceof LlmToolCallException) {
-                String msg = e.getMessage();
+            if (effective instanceof LlmToolCallException) {
+                String msg = effective.getMessage();
 
                 if (isProseGenerationFailure(msg)) {
                     String extractedProse = extractProseFromFailedGeneration(msg);
