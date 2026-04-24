@@ -471,8 +471,16 @@ public class SystemPromptBuilder {
                                       String agentRole, String compactionSummary, boolean isCompact, String goal, boolean isSimpleChitchat) {
         
         if (isSimpleChitchat) {
+             String summaryBlock = "";
+             if (compactionSummary != null && !compactionSummary.isBlank()) {
+                 summaryBlock = "\n[CONTEXT FROM PRIOR SESSION]\n"
+                        + compactionSummary + "\n"
+                        + "The above is a summary of earlier messages. Use it for context.\n\n";
+             }
+
              return "**STRICT TOOL BINDING CONTRACT**\n"
                     + "ACTIVE PERSONA: " + agentRole + "\n"
+                    + summaryBlock
                     + "STRICT MODE — SIMPLE CONVERSATION:\n"
                     + "This user message is a simple greeting or non-tool request.\n"
                     + "- Do NOT call any tools.\n"
