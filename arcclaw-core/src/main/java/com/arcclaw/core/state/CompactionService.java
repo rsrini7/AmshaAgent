@@ -151,7 +151,6 @@ public class CompactionService {
         if (!enabled) return false;
 
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
-
         List<ChatMessage> nonSystemMessages = allMessages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
                 .toList();
@@ -164,6 +163,20 @@ public class CompactionService {
         List<ChatMessage> toCompact = nonSystemMessages.subList(0, size - keepRecent);
         List<ChatMessage> toKeep   = nonSystemMessages.subList(size - keepRecent, size);
 
+        String prompt = buildCompactionPrompt(sessionId, toCompact);
+        String newSummary = executeCompactionTurn(sessionId, prompt);
+
+        if (newSummary.isBlank()) {
+            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.",
+                    sessionId);
+            return false;
+        }
+
+        finalizeCompaction(sessionId, userId, newSummary, toCompact, toKeep);
+        return true;
+    }
+
+    private String buildCompactionPrompt(String sessionId, List<ChatMessage> toCompact) {
         Optional<CompactionSummaryDto> existingSummaryOpt =
                 summaryRepository.findLatestBySessionId(sessionId);
         String existingSummaryText =
@@ -180,8 +193,10 @@ public class CompactionService {
         if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
             prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
         }
+        return prompt;
+    }
 
-        // ── Rate-limit backoff: try up to 3 times before giving up
+    private String executeCompactionTurn(String sessionId, String prompt) {
         String newSummary = "";
         int maxRetries = 3;
         for (int i = 1; i <= maxRetries; i++) {
@@ -198,9 +213,7 @@ public class CompactionService {
                         log.warnf("CompactionService: rate-limited during summary for session %s (attempt %d/%d). Retrying in %d ms...",
                                 sessionId, i, maxRetries, backoffMs);
                         try {
-                            // NOTE: Thread.sleep is acceptable here because compaction runs on
-                            // the 'executor-thread-*' pool (blocking worker threads), not the Vert.x event loop.
-                            Thread.sleep(backoffMs);
+                            Thread.sleep(backoffMs); // safe: runs on blocking executor-thread-*, not event loop
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
                             throw new CompactionAbortedException("Interrupted during compaction backoff", ExceptionUtils.getRootCauseMessage(ie));
@@ -211,20 +224,18 @@ public class CompactionService {
                               "aborting compaction, latch will release via finally block", sessionId, maxRetries);
                     throw new CompactionAbortedException("Rate-limited during compaction", ExceptionUtils.getRootCauseMessage(e));
                 }
-                throw e;  // non-rate-limit errors propagate normally
+                throw e;
             }
         }
+        return newSummary;
+    }
 
-        if (newSummary.isBlank()) {
-            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.",
-                    sessionId);
-            return false;
-        }
-
-        newSummary = truncateSafely(newSummary);
+    private void finalizeCompaction(String sessionId, String userId, String newSummary,
+                                    List<ChatMessage> toCompact, List<ChatMessage> toKeep) {
+        String truncatedSummary = truncateSafely(newSummary);
 
         summaryRepository.upsert(new CompactionSummaryDto(
-            sessionId, newSummary, Instant.now(), toCompact.size(), userId));
+            sessionId, truncatedSummary, Instant.now(), toCompact.size(), userId));
 
         List<ChatMessage> filteredKeep = toKeep.stream()
                 .filter(m -> !(m instanceof SystemMessage))
@@ -234,14 +245,13 @@ public class CompactionService {
 
         String detail = String.format(
                 "{ \"messagesCompacted\": %d, \"keptRecent\": %d, \"summaryLength\": %d }",
-                toCompact.size(), filteredKeep.size(), newSummary.length());
+                toCompact.size(), filteredKeep.size(), truncatedSummary.length());
 
         auditService.record(sessionId, AgentSentinels.SYSTEM_USER, AgentSentinels.SYSTEM_ROLE,
                 SecurityEventType.CONTEXT_COMPACTED, detail);
 
         log.infof("Context compacted for session %s. Compacted %d messages, kept %d.",
                 sessionId, toCompact.size(), filteredKeep.size());
-        return true;
     }
 
     private static boolean isRateLimit(Throwable e) {
