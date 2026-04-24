@@ -23,7 +23,7 @@ class FallbackChatModelTest {
                 "Gemini returned an empty response or was blocked by safety filters."));
         when(fallback.chat(request)).thenReturn(fallbackResponse);
 
-        FallbackChatModel model = new FallbackChatModel(primary, fallback, "gemini", "openrouter");
+        FallbackChatModel model = new FallbackChatModel(primary, fallback, "gemini", "openrouter", 14);
 
         ChatResponse result = model.chat(request);
 
