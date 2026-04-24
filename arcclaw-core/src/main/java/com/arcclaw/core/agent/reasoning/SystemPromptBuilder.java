@@ -8,11 +8,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.ContextNotActiveException;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
@@ -22,9 +19,12 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
+
 import io.smallrye.common.annotation.Identifier;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 /**
  * Builds the system prompt for ArcClaw agents.
@@ -67,7 +67,6 @@ public class SystemPromptBuilder {
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
-    private final CompactionSummaryCache summaryCache;
     private final SkillRegistry skillRegistry;
     private final ToolRegistry toolRegistry;
     private final IntentClassificationService intentService;
@@ -84,7 +83,6 @@ public class SystemPromptBuilder {
                                IntentClassificationService intentService) {
         this.agentPersonaRegistry = agentPersonaRegistry;
         this.promptTemplateEngine = promptTemplateEngine;
-        this.summaryCache = summaryCache;
         this.skillRegistry = skillRegistry;
         this.toolRegistry = toolRegistry;
         this.intentService = intentService;
@@ -425,18 +423,8 @@ public class SystemPromptBuilder {
                     \n""";
         }
 
-        // Build compaction summary
-        String compactionSummary = null;
-        if (sessionId != null) {
-            try {
-                compactionSummary = summaryCache.getSummary(sessionId).orElse(null);
-            } catch (ContextNotActiveException e) {
-                log.debugf("CompactionSummaryCache: @WorkspaceScoped not active for session %s", sessionId);
-            }
-        }
-
         // 3. STRICT TOOL BINDING CONTRACT
-        String strictBinding = buildStrictBinding(context, roleEnum, agentRole, compactionSummary, isCompact, goal, isSimpleChitchat);
+        String strictBinding = buildStrictBinding(context, roleEnum, agentRole, isCompact, goal, isSimpleChitchat);
 
         // 4. Operational rules (static)
         String securityPrompt = (isCompact || isSimpleChitchat) ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
@@ -468,19 +456,11 @@ public class SystemPromptBuilder {
     }
 
     private String buildStrictBinding(AgentExecutionContext context, AgentRoleEnum roleEnum,
-                                      String agentRole, String compactionSummary, boolean isCompact, String goal, boolean isSimpleChitchat) {
+                                      String agentRole, boolean isCompact, String goal, boolean isSimpleChitchat) {
         
         if (isSimpleChitchat) {
-             String summaryBlock = "";
-             if (compactionSummary != null && !compactionSummary.isBlank()) {
-                 summaryBlock = "\n[CONTEXT FROM PRIOR SESSION]\n"
-                        + compactionSummary + "\n"
-                        + "The above is a summary of earlier messages. Use it for context.\n\n";
-             }
-
              return "**STRICT TOOL BINDING CONTRACT**\n"
                     + "ACTIVE PERSONA: " + agentRole + "\n"
-                    + summaryBlock
                     + "STRICT MODE — SIMPLE CONVERSATION:\n"
                     + "This user message is a simple greeting or non-tool request.\n"
                     + "- Do NOT call any tools.\n"
@@ -492,7 +472,7 @@ public class SystemPromptBuilder {
         if (!isCompact) {
             return "**STRICT TOOL BINDING CONTRACT**\n"
                     + "ACTIVE PERSONA: " + agentRole + "\n"
-                    + promptTemplateEngine.buildSystemPrompt(context, roleEnum, compactionSummary, Instant.now())
+                    + promptTemplateEngine.buildSystemPrompt(context, roleEnum, null, Instant.now())
                     + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
                     + "list above is a critical failure and will break the orchestration pipeline.\n"
                     + "When in doubt, output text only.\n\n";
@@ -508,12 +488,6 @@ public class SystemPromptBuilder {
         StringBuilder sb = new StringBuilder();
         sb.append("**STRICT TOOL BINDING CONTRACT**\n");
         sb.append("ACTIVE PERSONA: ").append(agentRole).append("\n");
-
-        if (compactionSummary != null && !compactionSummary.isBlank()) {
-            sb.append("\n[CONTEXT FROM PRIOR SESSION]\n")
-              .append(compactionSummary).append("\n")
-              .append("The above is a summary of earlier messages. Use it for context on initial requests.\n\n");
-        }
 
         sb.append("PERMITTED TOOLS: ").append(toolList).append("\n")
           .append("If a required tool is not listed, output text only.\n")

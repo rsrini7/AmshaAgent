@@ -33,6 +33,7 @@ public class ChatHistoryAssembler {
     @Inject Logger log;
     @Inject ChatMemoryStore chatMemoryStore;
     @Inject ObjectMapper objectMapper;
+    @Inject CompactionSummaryCache summaryCache;
 
     @ConfigProperty(name = "arcclaw.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -69,6 +70,19 @@ public class ChatHistoryAssembler {
 
     public List<ChatMessage> assemble(String sessionId, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
+
+        // STEP 0 — inject compacted summary (§ Resilience / Memory Re-capture)
+        if (sessionId != null) {
+            summaryCache.getSummary(sessionId).ifPresent(summary -> {
+                if (!summary.isBlank()) {
+                    String block = AgentSentinels.COMPACTED_SUMMARY_SENTINEL + "\n" 
+                                 + summary + "\n"
+                                 + "The above is a summary of earlier messages in this session. "
+                                 + "Use it for context and answer directly from it where possible.";
+                    messages.add(SystemMessage.systemMessage(block));
+                }
+            });
+        }
 
         // STEP A — persistent chat history
         if (sessionId != null) {
