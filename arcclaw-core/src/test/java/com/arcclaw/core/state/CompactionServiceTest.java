@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -194,5 +195,21 @@ class CompactionServiceTest {
         
         String expected = "A".repeat(1984) + "\uD83D\uDE00...[truncated]";
         assertEquals(expected, result);
+    }
+
+    @Test
+    void promptTemplatePreservesStableNonSecretIdentifiers() throws Exception {
+        Field field = CompactionService.class.getDeclaredField("PROMPT_TEMPLATE");
+        field.setAccessible(true);
+        String template = (String) field.get(null);
+
+        assertTrue(template.contains("preferred name"),
+                "Compaction prompt should preserve preferred names");
+        assertTrue(template.contains("GitHub username or repo owner"),
+                "Compaction prompt should preserve GitHub usernames/owners");
+        assertTrue(template.contains("Keep those identifiers verbatim"),
+                "Compaction prompt should keep stable identifiers exact");
+        assertTrue(template.contains("Do NOT preserve or restate secrets"),
+                "Compaction prompt should exclude secrets from summaries");
     }
 }

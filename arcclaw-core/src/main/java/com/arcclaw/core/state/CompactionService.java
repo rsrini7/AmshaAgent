@@ -86,6 +86,12 @@ public class CompactionService {
         with all new conversation turns.
         Preserve: all decisions made, all code written, all errors encountered,
         all tool results, all user preferences stated, all unresolved questions.
+        Preserve exactly when explicitly stated and relevant for future turns:
+        preferred name, username/handle, GitHub username or repo owner, repository
+        paths, branch names, URLs, model names, and other stable non-secret identifiers.
+        Keep those identifiers verbatim rather than paraphrasing them away.
+        Do NOT preserve or restate secrets such as passwords, API keys, access tokens,
+        session cookies, private keys, or other credentials.
         Discard: pleasantries, repetition, step-by-step narration of obvious actions.
         Output ONLY the final merged summary. No preamble. No labels. Max 200 words.
 
