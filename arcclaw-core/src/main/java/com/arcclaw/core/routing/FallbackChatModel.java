@@ -37,6 +37,8 @@ public class FallbackChatModel implements ChatModel {
         boolean isCompact = WorkspaceContext.IS_COMPACT.isBound() 
                 && WorkspaceContext.IS_COMPACT.get();
 
+        boolean triedFallback = false;
+
         // ── Tier 1: Write-intent (Reliability Path) ──
         // Primary (Gemini/GPT) is most reliable for tool-calling (ingest_document).
         // Never preemptively downgrade. Fallback only if primary throws.
@@ -59,24 +61,26 @@ public class FallbackChatModel implements ChatModel {
         // ── Tier 2: Compact/Chitchat (Efficiency Path) ──
         // Try fallback first — it's faster and cheaper for non-tool prose answers.
         if (isCompact) {
+            triedFallback = true;
             try {
                 return fallback.chat(chatRequest);
             } catch (Exception fe) {
                 log.warnf("[ArcClaw] Fallback failed on compact turn, promoting to primary: %s", 
                         fe.getMessage());
-                // Fall through to primary with normal error handling
+                // Fall through to primary
             }
         }
 
         // ── Tier 3: Large History Preemptive Reroute (Existing Logic) ──
-        if (chatRequest.messages().size() > messageThreshold) {
+        if (!triedFallback && chatRequest.messages().size() > messageThreshold) {
+            triedFallback = true;
             log.warnf("[ArcClaw] ⚠️ History is large (%d), preemptively using fallback model '%s' to avoid safety filters.",
                     chatRequest.messages().size(), fallbackName);
             try {
                 return fallback.chat(chatRequest);
             } catch (Exception fe) {
                 log.errorf("[ArcClaw] ❌ Fallback model '%s' failed on large history: %s", fallbackName, fe.getMessage());
-                // Let it fall through to primary if fallback fails
+                // Let it fall through to primary
             }
         }
 
@@ -84,7 +88,8 @@ public class FallbackChatModel implements ChatModel {
         try {
             return primary.chat(chatRequest);
         } catch (Throwable t) {
-            if (isRetriableOnFallback(t)) {
+            // If we haven't already tried the fallback in this turn, try it now
+            if (!triedFallback && isRetriableOnFallback(t)) {
                 log.warnf("[ArcClaw] ⚠️ Primary model '%s' failed, falling back to '%s'. Cause: %s", 
                          primaryName, fallbackName, t.getMessage());
                 try {
