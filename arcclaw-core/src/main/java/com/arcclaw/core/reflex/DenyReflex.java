@@ -117,6 +117,19 @@ public class DenyReflex implements AgentReflex {
                 // NOTE: deny.toolName() is always empty here — we returned above if present.
                 Optional<AgentCheckpoint> latestPending =
                     statefulAgentStore.findLatestAwaitingApproval(sessionId);
+                    
+                List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+                
+                if (latestPending.isPresent() && !pendingCrons.isEmpty()) {
+                    StringBuilder sb = new StringBuilder("⚠️ Ambiguous denial. You have multiple tasks waiting:\n\n");
+                    sb.append("• `/deny` — (This Chat) ").append(latestPending.get().getOriginalGoal()).append("\n");
+                    for (AgentCronEntity c : pendingCrons) {
+                        sb.append("• `/deny ").append(c.id).append("` — (Background) ").append(c.goal).append("\n");
+                    }
+                    sb.append("\nPlease reply with the specific command.");
+                    return sb.toString();
+                }
+
                 String activeRole = latestPending
                     .map(AgentCheckpoint::getAgentRole)
                     .orElse(null);

@@ -94,11 +94,19 @@ public class ChatHistoryAssembler {
 
                     if (msg instanceof SystemMessage) {
                         skip = true;
+                    } else if (msg instanceof ToolExecutionResultMessage) {
+                        // 🟢 FIX 5: Scrub tool results from persistent history. 
+                        // Current turn tools are reconstructed from ReAct 'history' parameter.
+                        // Persistent history tools are from PRIOR turns and cause hallucinations.
+                        skip = true;
                     } else if (msg instanceof AiMessage ai) {
                         String aiText = ai.text();
                         if (MessageTag.isTagged(aiText)) {
                             skip = true;
                         } else if (aiText != null && aiText.length() <= 4_000 && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
+                            skip = true;
+                        } else if (ai.hasToolExecutionRequests() && (aiText == null || aiText.isBlank())) {
+                            // Scrub AI messages that are ONLY tool calls (no thought/text)
                             skip = true;
                         }
                     } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_TOOL_APPROVED)) {

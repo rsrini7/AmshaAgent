@@ -181,22 +181,38 @@ public class CompactionService {
             prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
         }
 
-        // ── Rate-limit fast-fail: if Groq throttles the summary call, record the
-        // hit (so CompactionHandler skips compaction for the next BACKOFF_SECONDS)
-        // and throw CompactionAbortedException so CompactionEventBridge.finally
-        // releases the latch immediately — no waiting for AWAIT_TIMEOUT_SECONDS.
-        String newSummary;
-        try {
-            newSummary = compactionModel.chat(UserMessage.userMessage(prompt))
-                    .aiMessage().text().trim();
-        } catch (Exception e) {
-            if (isRateLimit(e)) {
-                rateLimitTracker.recordHit("compaction");
-                log.warnf("CompactionService: rate-limited during summary for session %s — " +
-                          "aborting compaction, latch will release via finally block", sessionId);
-                throw new CompactionAbortedException("Rate-limited during compaction", ExceptionUtils.getRootCauseMessage(e));
+        // ── Rate-limit backoff: try up to 3 times before giving up
+        String newSummary = "";
+        int maxRetries = 3;
+        for (int i = 1; i <= maxRetries; i++) {
+            try {
+                String responseText = compactionModel.chat(UserMessage.userMessage(prompt))
+                        .aiMessage().text();
+                newSummary = responseText != null ? responseText.trim() : "";
+                break; // success
+            } catch (Exception e) {
+                if (isRateLimit(e)) {
+                    rateLimitTracker.recordHit("compaction");
+                    if (i < maxRetries) {
+                        long backoffMs = (long) Math.pow(2, i) * 1000L;
+                        log.warnf("CompactionService: rate-limited during summary for session %s (attempt %d/%d). Retrying in %d ms...",
+                                sessionId, i, maxRetries, backoffMs);
+                        try {
+                            // NOTE: Thread.sleep is acceptable here because compaction runs on
+                            // the 'executor-thread-*' pool (blocking worker threads), not the Vert.x event loop.
+                            Thread.sleep(backoffMs);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            throw new CompactionAbortedException("Interrupted during compaction backoff", ExceptionUtils.getRootCauseMessage(ie));
+                        }
+                        continue;
+                    }
+                    log.warnf("CompactionService: rate-limited during summary for session %s after %d attempts — " +
+                              "aborting compaction, latch will release via finally block", sessionId, maxRetries);
+                    throw new CompactionAbortedException("Rate-limited during compaction", ExceptionUtils.getRootCauseMessage(e));
+                }
+                throw e;  // non-rate-limit errors propagate normally
             }
-            throw e;  // non-rate-limit errors propagate normally
         }
 
         if (newSummary.isBlank()) {

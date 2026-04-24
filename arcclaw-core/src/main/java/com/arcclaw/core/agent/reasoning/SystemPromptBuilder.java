@@ -126,7 +126,8 @@ public class SystemPromptBuilder {
             If the user only provides a repo name without the owner, ask for the
             full owner/repo path.
             3. When you have gathered enough information from the tools, output the
-            final answer as plain text. Do not call any further tools.
+            final answer as plain text. NEVER output raw tool-call JSON, placeholders,
+            or tool syntax in your final text answer.
             4. Do not use external tools to answer questions about your own
             performance, latency, cost, or internal state. Answer such queries
             using internal reasoning only.
@@ -298,7 +299,7 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_SECURITY_RULES_PROMPT = """
         CRITICAL OPERATIONAL RULES:
-        1. NO reasoning narration. Respond with tool call OR final answer text only.
+        1. NO reasoning narration. Respond with tool call OR final answer text only. NEVER output raw tool-call JSON inside text.
         2. NO placeholder text ([task ID], etc).
         3. NO markdown code blocks (```) for execution. Use sandbox_exec.
         4. NO fabricated data. Say "I don't know" if info is missing.
@@ -308,8 +309,9 @@ public class SystemPromptBuilder {
         8. For time-delay phrases ("tomorrow", "in 5 min"): call `schedule_task` ONLY.
         9. WORDS like "store/save/remember" ALWAYS require `ingest_document`.
         10. STORAGE format: `KEY=value`. Preserve `=` exactly.
-        11. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
-        12. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
+        11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
+        12. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
+        13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
         """;
 
     private static final String EXECUTION_BOUNDARY_SANDBOX = """

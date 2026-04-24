@@ -158,6 +158,19 @@ public class ApproveReflex implements AgentReflex {
                 // 3. Session checkpoint — interactive approval.
                 Optional<AgentCheckpoint> latestPending =
                     statefulAgentStore.findLatestAwaitingApproval(sessionId);
+                    
+                List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+                
+                if (latestPending.isPresent() && !pendingCrons.isEmpty()) {
+                    StringBuilder sb = new StringBuilder("⚠️ Ambiguous approval. You have multiple tasks waiting:\n\n");
+                    sb.append("• `/approve` — (This Chat) ").append(latestPending.get().getOriginalGoal()).append("\n");
+                    for (AgentCronEntity c : pendingCrons) {
+                        sb.append("• `/approve ").append(c.id).append("` — (Background) ").append(c.goal).append("\n");
+                    }
+                    sb.append("\nPlease reply with the specific command.");
+                    return sb.toString();
+                }
+
                 String activeRole = latestPending
                     .map(AgentCheckpoint::getAgentRole)
                     .orElse(null);
