@@ -2,6 +2,7 @@ package com.arcclaw.core.routing;
 
 import java.util.Objects;
 
+import com.arcclaw.core.scope.WorkspaceContext;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -31,7 +32,13 @@ public class FallbackChatModel implements ChatModel {
 
     @Override
     public ChatResponse chat(ChatRequest chatRequest) {
-        if (chatRequest.messages().size() > messageThreshold) {
+        // 🟢 FIX 3: Never preemptively downgrade write-intent operations.
+        // Fallback models (like Llama-4-Scout) lack reliable tool-calling for ingest_document
+        // under heavy history pressure, whereas primary models (Gemini/GPT) are more robust.
+        boolean isWriteIntent = WorkspaceContext.IS_WRITE_INTENT.isBound() 
+                && WorkspaceContext.IS_WRITE_INTENT.get();
+
+        if (chatRequest.messages().size() > messageThreshold && !isWriteIntent) {
             log.warnf("[ArcClaw] ⚠️ History is large (%d), preemptively using fallback model '%s' to avoid safety filters.",
                     chatRequest.messages().size(), fallbackName);
             try {

@@ -22,6 +22,7 @@ public final class WorkspaceContext {
     public static final ScopedValue<String> CHANNEL_TYPE = ScopedValue.newInstance();
     public static final ScopedValue<String> SUGGESTED_CRON = ScopedValue.newInstance();
     public static final ScopedValue<String> SUGGESTED_NEXT_FIRE_TIME = ScopedValue.newInstance();
+    public static final ScopedValue<Boolean> IS_WRITE_INTENT = ScopedValue.newInstance();
 
 
     private WorkspaceContext() {

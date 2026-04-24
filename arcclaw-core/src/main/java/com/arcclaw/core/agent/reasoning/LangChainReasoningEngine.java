@@ -26,6 +26,7 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -187,8 +188,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            response = llmProviderPort.nextStep(request);
-        } catch (LlmProviderException e) {
+            boolean isWriteIntent = intentClassifier != null && intentClassifier.isWriteIntent(goal);
+            response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
+                    .call(() -> llmProviderPort.nextStep(request));
+        } catch (Exception e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof RuntimeException re) throw re;
+            throw new RuntimeException("LLM call failed in reasoning loop", cause);
+        } catch (Throwable e) {
             
             if (e instanceof LlmMalformedResponseException) {
                 log.warnf("[LangChainReasoningEngine] Schema validation error — " +
