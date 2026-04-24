@@ -145,6 +145,12 @@ public class AsyncPersistenceEngine {
      * <strong>For use in tests only.</strong>
      */
     public void waitForIdle() {
+        if (inFlightCritical.get() == 0 && inFlightTelemetry.get() == 0
+                && criticalQueue.isEmpty() && telemetryQueue.isEmpty()
+                && !processingCritical.get() && !processingTelemetry.get()) {
+            return;
+        }
+
         if (criticalDrainThread == null || !criticalDrainThread.isAlive()
                 || telemetryDrainThread == null || !telemetryDrainThread.isAlive()) {
             return;
