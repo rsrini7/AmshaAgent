@@ -100,6 +100,7 @@ public class CheckpointApprovalServiceTest {
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
+        when(agentStore.markBatchResuming(anyString(), anyString())).thenReturn(true);
         
         checkpointApprovalService.triggerResume(cp);
         verify(resumeHandler).resumeAfterBatchDecision(eq("s1"), eq("coordinator"), any(), any(), any());

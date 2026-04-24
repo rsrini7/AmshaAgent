@@ -111,15 +111,20 @@ class WorkspaceManagerTest {
     @Test
     void testTerminationSkipsCompletedCheckpoints() {
         String sessionId = "skip-comp-" + UUID.randomUUID();
+        final Long[] checkpointId = new Long[1];
         WorkspaceScopeHolder.run(sessionId, () -> {
             var cp = agentStore.save(sessionId, "researcher", List.of(), "test goal");
+            checkpointId[0] = cp.getId();
             agentStore.markCompleted(cp.getId());
         });
 
         workspaceManager.terminateSession(sessionId);
 
-        WorkspaceScopeHolder.run(sessionId, () -> {
-            assertEquals(CheckpointStatus.COMPLETED, agentStore.load(sessionId, "researcher").get().getStatus());
+        // Use EM directly because load() filters out archived checkpoints
+        QuarkusTransaction.requiringNew().run(() -> {
+            AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId[0]);
+            // §7.31: Terminal COMPLETED checkpoints are immediately archived
+            assertEquals(CheckpointStatus.ARCHIVED, cp.getStatus());
         });
     }
 

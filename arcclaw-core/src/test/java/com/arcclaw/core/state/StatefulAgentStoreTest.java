@@ -120,7 +120,8 @@ class StatefulAgentStoreTest {
 
             var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(sessionComplete, ROLE));
             assertTrue(loaded.isPresent());
-            assertEquals(CheckpointStatus.COMPLETED, loaded.get().getStatus());
+            // §7.31: markCompleted now automatically archives to prevent turn shadowing
+            assertEquals(CheckpointStatus.ARCHIVED, loaded.get().getStatus());
         });
     }
 

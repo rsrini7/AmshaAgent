@@ -134,10 +134,13 @@ public class AgentCronScheduler {
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
         } catch (IllegalStateException | PersistenceException e) {
-            if (active) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = !active || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
                 log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
             } else {
-                log.debug("AgentCronScheduler: persistence closed during sweep — suppression intentional.");
+                log.infof("AgentCronScheduler: persistence closed during sweep (app shutting down) — suppression intentional.");
+                log.debugf(e, "Full shutdown race details:");
             }
         } catch (Exception e) {
             log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
