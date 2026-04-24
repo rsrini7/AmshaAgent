@@ -32,13 +32,44 @@ public class FallbackChatModel implements ChatModel {
 
     @Override
     public ChatResponse chat(ChatRequest chatRequest) {
-        // 🟢 FIX 3: Never preemptively downgrade write-intent operations.
-        // Fallback models (like Llama-4-Scout) lack reliable tool-calling for ingest_document
-        // under heavy history pressure, whereas primary models (Gemini/GPT) are more robust.
         boolean isWriteIntent = WorkspaceContext.IS_WRITE_INTENT.isBound() 
                 && WorkspaceContext.IS_WRITE_INTENT.get();
+        boolean isCompact = WorkspaceContext.IS_COMPACT.isBound() 
+                && WorkspaceContext.IS_COMPACT.get();
 
-        if (chatRequest.messages().size() > messageThreshold && !isWriteIntent) {
+        // ── Tier 1: Write-intent (Reliability Path) ──
+        // Primary (Gemini/GPT) is most reliable for tool-calling (ingest_document).
+        // Never preemptively downgrade. Fallback only if primary throws.
+        if (isWriteIntent) {
+            try {
+                return primary.chat(chatRequest);
+            } catch (Exception pe) {
+                log.warnf("[ArcClaw] Primary failed on write-intent, using fallback '%s': %s",
+                        fallbackName, pe.getMessage());
+                try {
+                    return fallback.chat(chatRequest);
+                } catch (Exception fe) {
+                    log.errorf("[ArcClaw] ❌ Fallback model '%s' also failed on write-intent: %s", 
+                            fallbackName, fe.getMessage());
+                    throw fe;
+                }
+            }
+        }
+
+        // ── Tier 2: Compact/Chitchat (Efficiency Path) ──
+        // Try fallback first — it's faster and cheaper for non-tool prose answers.
+        if (isCompact) {
+            try {
+                return fallback.chat(chatRequest);
+            } catch (Exception fe) {
+                log.warnf("[ArcClaw] Fallback failed on compact turn, promoting to primary: %s", 
+                        fe.getMessage());
+                // Fall through to primary with normal error handling
+            }
+        }
+
+        // ── Tier 3: Large History Preemptive Reroute (Existing Logic) ──
+        if (chatRequest.messages().size() > messageThreshold) {
             log.warnf("[ArcClaw] ⚠️ History is large (%d), preemptively using fallback model '%s' to avoid safety filters.",
                     chatRequest.messages().size(), fallbackName);
             try {
@@ -49,6 +80,7 @@ public class FallbackChatModel implements ChatModel {
             }
         }
 
+        // ── Tier 4: Primary with Normal Exception Fallback ──
         try {
             return primary.chat(chatRequest);
         } catch (Throwable t) {

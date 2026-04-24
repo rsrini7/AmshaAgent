@@ -189,7 +189,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         ChatResponse response;
         try {
             boolean isWriteIntent = intentClassifier != null && intentClassifier.isWriteIntent(goal);
+            boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
+
             response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
+                    .where(WorkspaceContext.IS_COMPACT, isCompact)
                     .call(() -> llmProviderPort.nextStep(request));
         } catch (Throwable e) {
             // Unwrap if it's a generic Exception from ScopedValue.call (though shouldn't be for RuntimeExceptions)
