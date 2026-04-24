@@ -32,6 +32,11 @@ public class IntentClassificationService {
         Pattern.CASE_INSENSITIVE
     );
 
+    private static final Pattern HISTORY_QUERY_PATTERN = Pattern.compile(
+        "\\b(summarize|recap|reiterate|what did we|discussed|so far|bullet our points|bullets?|bullet points|bulletized|bulletized summary|history|above|earlier|previous|before)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
     /**
      * returns true if the text indicates a "write intent" — specifically 
      * for storing information in the long-term memory (ingest_document).
@@ -39,6 +44,14 @@ public class IntentClassificationService {
     public boolean isWriteIntent(String text) {
         if (text == null || text.isBlank()) return false;
         return WRITE_INTENT_PATTERN.matcher(text).find();
+    }
+
+    /**
+     * Returns true if the goal inherently requires conversation history to answer.
+     */
+    public boolean isHistoryQuery(String text) {
+        if (text == null || text.isBlank()) return false;
+        return HISTORY_QUERY_PATTERN.matcher(text).find();
     }
 
     /**

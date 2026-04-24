@@ -65,6 +65,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
  
         boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(context.goal());
+        boolean isHistoryQuery = intentClassifier != null && intentClassifier.isHistoryQuery(context.goal());
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(systemPrompt));
@@ -78,7 +79,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             ));
         }
  
-        if (isSimpleChitchat) {
+        if (isSimpleChitchat && !isHistoryQuery) {
             // Force direct answer by stripping ALL prior turns (§ recommendation)
             // prevents pattern-matching hallucinations from conversation history.
             messages = new ArrayList<>();
