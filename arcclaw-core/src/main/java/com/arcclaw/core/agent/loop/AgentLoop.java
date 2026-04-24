@@ -103,8 +103,12 @@ public class AgentLoop {
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
         int budget = maxIterations;
-        if (goal != null && (goal.toLowerCase().contains("store") || goal.toLowerCase().contains("remember"))) {
-            budget = Math.max(budget, 3);
+        if (goal != null) {
+            String lower = goal.toLowerCase();
+            if (lower.contains("store") || lower.contains("remember") || lower.contains("call me") 
+                || lower.contains("my name is") || lower.contains("refer to me as") || lower.contains("address me as")) {
+                budget = Math.max(budget, 3);
+            }
         }
         return run(sessionId, agentRole, goal, null, engine, budget, null);
     }
