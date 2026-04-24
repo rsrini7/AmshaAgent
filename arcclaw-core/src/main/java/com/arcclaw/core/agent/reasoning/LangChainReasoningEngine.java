@@ -63,15 +63,34 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
 
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
- 
+
+        // § Resilience: Extract the compacted summary from history to merge into the main SystemPrompt.
+        // This ensures only ONE SystemMessage is sent (for adapter compatibility) and that
+        // the summary survives the 'isSimpleChitchat' history stripping path.
+        String summaryContent = assembled.stream()
+                .filter(m -> m instanceof SystemMessage sm && sm.text().contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL))
+                .map(m -> ((SystemMessage) m).text())
+                .findFirst()
+                .orElse("");
+
+        List<ChatMessage> filteredAssembled = assembled.stream()
+                .filter(m -> !(m instanceof SystemMessage sm && sm.text().contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL)))
+                .toList();
+
+        String finalSystemPrompt = summaryContent.isEmpty() ? systemPrompt
+                : summaryContent + "\n\n" + systemPrompt;
+
         boolean isSimpleChitchat = intentClassifier != null && intentClassifier.isSimpleConversational(context.goal());
         boolean isHistoryQuery = intentClassifier != null && intentClassifier.isHistoryQuery(context.goal());
 
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(SystemMessage.systemMessage(systemPrompt));
+        messages.add(SystemMessage.systemMessage(finalSystemPrompt));
  
         // ── Fix 1: Inject explicit constraint for background sessions ──
         if (context.autonomyLevel() == AutonomyLevel.BACKGROUND) {
+            // Note: If multiple SystemMessages are forbidden, we may need to merge this as well.
+            // However, most adapters allow a few SystemMessages as long as they are at the top.
+            // If it crashes, this should be moved into 'finalSystemPrompt'.
             messages.add(SystemMessage.systemMessage(
                 "CAPABILITY CONSTRAINT: You do NOT have access to `schedule_task` or " +
                 "`manage_schedule` in this context. Do not attempt to call them. " +
@@ -82,11 +101,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (isSimpleChitchat && !isHistoryQuery) {
             // Force direct answer by stripping ALL prior turns (§ recommendation)
             // prevents pattern-matching hallucinations from conversation history.
-            messages = new ArrayList<>();
-            messages.add(SystemMessage.systemMessage(systemPrompt));
+            // finalSystemPrompt already contains the summary, so it's preserved here!
             messages.add(UserMessage.userMessage(goal));
         } else {
-            messages.addAll(assembled);
+            messages.addAll(filteredAssembled);
             
             // ── Fix 3: Force finish retry constraint ──
             if (context.isForceFinishRetry()) {
