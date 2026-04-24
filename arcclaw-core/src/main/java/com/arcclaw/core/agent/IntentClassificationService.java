@@ -28,7 +28,7 @@ public class IntentClassificationService {
     );
 
     private static final Pattern TOOL_VERB_PATTERN = Pattern.compile(
-        "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize)\\b",
+        "\\b(search|find|fetch|list|get|github|gh|repo|read|browse|open|go to|url|site|web|run|exec|code|script|program|schedule|at|every|after|in|save|store|ingest|remember|note|weather|news|price|latest|stock|status|info|history|check|bullet|recap|summarize|summary)\\b",
         Pattern.CASE_INSENSITIVE
     );
 

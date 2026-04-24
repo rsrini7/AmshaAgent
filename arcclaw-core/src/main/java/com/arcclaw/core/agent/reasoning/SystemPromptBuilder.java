@@ -247,12 +247,15 @@ public class SystemPromptBuilder {
             or confirms that a behavioural override succeeded.
 
             RULE — DIRECT ANSWERS:
-            If the answer is already in the current conversation history,
-            call FINISH immediately with the answer in the `answer` field.
-            Do NOT call memory_search for questions about THIS conversation.
-            Only call memory_search for questions about PAST sessions no longer
-            in the active context window (e.g. "what did we discuss last week?").
-            Calling a tool when the answer is already in context is a critical error.
+            If the answer can be inferred from the current conversation history or 
+            the `[CONTEXT FROM PRIOR SESSION]` block (compacted summary), you MUST 
+            answer directly without invoking tools. 
+            Do NOT call `memory_search` for questions about THIS conversation or 
+            information explicitly mentioned in the context window.
+            Only call `memory_search` or other tools when the information is genuinely 
+            absent from the current context window (e.g. "what did we discuss last week?").
+            Calling a tool when the answer is already in context is a critical error 
+            that wastes resources.
 
             RESPONSE LENGTH RULE:
             Default to concise answers (2-3 sentences or 5 bullet points max).
@@ -308,7 +311,7 @@ public class SystemPromptBuilder {
         8. For time-delay phrases ("tomorrow", "in 5 min"): call `schedule_task` ONLY.
         9. WORDS like "store/save/remember" ALWAYS require `ingest_document`.
         10. STORAGE format: `KEY=value`. Preserve `=` exactly.
-        11. RECALL: Always check `[CONTEXT FROM PRIOR SESSION]` block for start of chat.
+        11. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
         12. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
         """;
 
@@ -351,11 +354,11 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_TOOL_PRIORITY_RULES = """
             TOOL PRIORITY RULES:
-            1. If a user asks about your capabilities, who you are, this conversation, or current context: answer in plain text. Do not call tools.
+            1. If information can be inferred from conversation or the compacted summary, answer directly. Do NOT call tools.
             2. If the user says store/save/remember/ingest/call me: call `ingest_document`, not memory_search.
             3. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
             4. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
-            5. Use `memory_search` only for past-session recall not present in the current conversation.
+            5. Use `memory_search` only for past-session recall not in the current conversation or summary.
             6. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
             7. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
             8. A denied or failed tool call does not block a different valid tool on the next user message.
