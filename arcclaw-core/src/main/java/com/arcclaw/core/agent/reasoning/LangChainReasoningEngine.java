@@ -84,6 +84,24 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             // prevents pattern-matching hallucinations from conversation history.
             messages = new ArrayList<>();
             messages.add(SystemMessage.systemMessage(systemPrompt));
+            
+            // § Resilience: Preserve the compacted summary if present.
+            // This ensures the agent can still answer questions present in 
+            // the long-term context even when tools are stripped.
+            assembled.stream()
+                .filter(m -> {
+                    String text = "";
+                    if (m instanceof SystemMessage sm) {
+                        text = sm.text();
+                    } else if (m instanceof UserMessage um) {
+                        // Safe extraction for potential multi-part messages (§ safety review)
+                        text = um.singleText(); 
+                    }
+                    return text != null && text.contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL);
+                })
+                .findFirst()
+                .ifPresent(messages::add);
+
             messages.add(UserMessage.userMessage(goal));
         } else {
             messages.addAll(assembled);
