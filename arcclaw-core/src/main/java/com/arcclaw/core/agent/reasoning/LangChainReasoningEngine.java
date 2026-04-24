@@ -195,17 +195,19 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     .where(WorkspaceContext.IS_COMPACT, isCompact)
                     .call(() -> llmProviderPort.nextStep(request));
         } catch (Throwable e) {
-            // Unwrap if it's a generic Exception from ScopedValue.call (though shouldn't be for RuntimeExceptions)
-            Throwable effective = (e instanceof Exception && e.getCause() != null) ? e.getCause() : e;
+            // ScopedValue.call propagates the exception type. 
+            // If the provider port threw LlmProviderException, it's here directly.
+            // If for some reason it was wrapped in a generic Exception, unwrap once.
+            Throwable effective = (e.getClass() == Exception.class && e.getCause() != null) ? e.getCause() : e;
             
-            if (effective instanceof LlmMalformedResponseException) {
+            if (effective instanceof LlmMalformedResponseException ex) {
                 log.warnf("[LangChainReasoningEngine] Schema validation error — " +
-                        "re-throwing to state machine for retry handling: %s", effective.getMessage());
-                throw (LlmMalformedResponseException) effective;
+                        "re-throwing to state machine for retry handling: %s", ex.getMessage());
+                throw ex;
             }
 
-            if (effective instanceof LlmToolCallException) {
-                String msg = effective.getMessage();
+            if (effective instanceof LlmToolCallException ex) {
+                String msg = ex.getMessage();
 
                 if (isProseGenerationFailure(msg)) {
                     String extractedProse = extractProseFromFailedGeneration(msg);
