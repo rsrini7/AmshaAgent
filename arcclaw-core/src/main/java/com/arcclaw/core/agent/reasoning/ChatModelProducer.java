@@ -56,6 +56,9 @@ public class ChatModelProducer {
     @ConfigProperty(name = "arcclaw.llm.fallback-api-key")
     Optional<String> fallbackApiKey;
 
+    @ConfigProperty(name = "arcclaw.llm.fallback-message-threshold", defaultValue = "14")
+    int fallbackMessageThreshold;
+
     @ConfigProperty(name = "arcclaw.llm.fallback-ollama-base-url",
                     defaultValue = "http://localhost:11434")
     String ollamaBaseUrl;
@@ -128,7 +131,7 @@ public class ChatModelProducer {
                     fbModel, 8192, timeout, maxRetries, 
                     ollamaBaseUrl, ollamaModelId);
                 
-                return new FallbackChatModel(primary, fallback, modelName, displayModel);
+                return new FallbackChatModel(primary, fallback, modelName, displayModel, fallbackMessageThreshold);
             } catch (Exception e) {
                 log.errorf("ChatModelProducer: Fallback init failed: %s", e.getMessage());
                 return primary;

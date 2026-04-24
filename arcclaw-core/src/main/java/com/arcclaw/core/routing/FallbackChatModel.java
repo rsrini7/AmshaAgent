@@ -19,16 +19,29 @@ public class FallbackChatModel implements ChatModel {
     private final ChatModel fallback;
     private final String primaryName;
     private final String fallbackName;
+    private final int messageThreshold;
 
-    public FallbackChatModel(ChatModel primary, ChatModel fallback, String primaryName, String fallbackName) {
+    public FallbackChatModel(ChatModel primary, ChatModel fallback, String primaryName, String fallbackName, int messageThreshold) {
         this.primary = Objects.requireNonNull(primary);
         this.fallback = Objects.requireNonNull(fallback);
         this.primaryName = primaryName;
         this.fallbackName = fallbackName;
+        this.messageThreshold = messageThreshold;
     }
 
     @Override
     public ChatResponse chat(ChatRequest chatRequest) {
+        if (chatRequest.messages().size() > messageThreshold) {
+            log.warnf("[ArcClaw] ⚠️ History is large (%d), preemptively using fallback model '%s' to avoid safety filters.",
+                    chatRequest.messages().size(), fallbackName);
+            try {
+                return fallback.chat(chatRequest);
+            } catch (Exception fe) {
+                log.errorf("[ArcClaw] ❌ Fallback model '%s' failed on large history: %s", fallbackName, fe.getMessage());
+                // Let it fall through to primary if fallback fails
+            }
+        }
+
         try {
             return primary.chat(chatRequest);
         } catch (Throwable t) {

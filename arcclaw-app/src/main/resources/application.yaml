@@ -315,6 +315,7 @@ arcclaw:
     fallback-provider: ${ARCCLAW_LLM_FALLBACK_PROVIDER}
     fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL}
     fallback-api-key: ${ARCCLAW_LLM_FALLBACK_API_KEY}
+    fallback-message-threshold: ${ARCCLAW_LLM_FALLBACK_MESSAGE_THRESHOLD:14}
     fallback-ollama-base-url: ${ARCCLAW_LLM_FALLBACK_OLLAMA_BASE_URL:http://localhost:11434}
     fallback-ollama-model: ${ARCCLAW_LLM_FALLBACK_OLLAMA_MODEL:llama3.2}
     gemini:
