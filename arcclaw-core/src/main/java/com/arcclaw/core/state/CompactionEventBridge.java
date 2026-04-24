@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -139,9 +140,11 @@ public class CompactionEventBridge {
             compactionService.compact(request.sessionId(), request.userId());
         } catch (Exception e) {
             log.errorf("Compaction failed for session %s: %s",
-                    request.sessionId(),
-                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            log.debug("Full compaction failure stack trace:", e);
+                    request.sessionId(), ExceptionUtils.getRootCauseMessage(e));
+            if (log.isTraceEnabled()) {
+                log.tracef("Full compaction failure detail for session %s: %s",
+                        request.sessionId(), ExceptionUtils.getStackTrace(e));
+            }
         } finally {
             // Clear the thread ownership record first, then release the latch.
             // Order matters: clearing first means any awaitIfInFlight() call that

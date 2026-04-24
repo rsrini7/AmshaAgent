@@ -22,7 +22,6 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -216,13 +215,13 @@ public class CompactionService {
                             Thread.sleep(backoffMs); // safe: runs on blocking executor-thread-*, not event loop
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
-                            throw new CompactionAbortedException("Interrupted during compaction backoff", ExceptionUtils.getRootCauseMessage(ie));
+                            throw new CompactionAbortedException("Interrupted during compaction backoff", ie);
                         }
                         continue;
                     }
                     log.warnf("CompactionService: rate-limited during summary for session %s after %d attempts — " +
                               "aborting compaction, latch will release via finally block", sessionId, maxRetries);
-                    throw new CompactionAbortedException("Rate-limited during compaction", ExceptionUtils.getRootCauseMessage(e));
+                    throw new CompactionAbortedException("Rate-limited during compaction", e);
                 }
                 throw e;
             }
