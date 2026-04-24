@@ -106,7 +106,7 @@ class SystemPromptBuilderTest {
                 "Compact prompt should use the minimal tool binding contract");
         assertTrue(!result.contains("TOOL_BINDING_MARKER"),
                 "Compact prompt should not render the full role template");
-        assertTrue(result.contains("If a user asks about your capabilities"),
+        assertTrue(result.contains("If information can be inferred from conversation or the compacted summary"),
                 "Compact prompt should include cross-tool priority rules for tiny models");
         assertTrue(result.contains("A denied or failed tool call does not block a different valid tool"),
                 "Compact prompt should avoid cross-turn suppression after a denied tool");

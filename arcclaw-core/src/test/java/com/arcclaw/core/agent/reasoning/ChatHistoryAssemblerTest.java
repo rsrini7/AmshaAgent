@@ -2,6 +2,8 @@ package com.arcclaw.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
@@ -9,15 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.arcclaw.core.agent.AgentSentinels;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.ToolExecutionResultMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +19,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
+
+import com.arcclaw.core.agent.AgentSentinels;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 class ChatHistoryAssemblerTest {
 
@@ -38,6 +42,9 @@ class ChatHistoryAssemblerTest {
     @Mock
     Logger log;
 
+    @Mock
+    CompactionSummaryCache summaryCache;
+
     @InjectMocks
     ChatHistoryAssembler assembler;
 
@@ -45,8 +52,11 @@ class ChatHistoryAssemblerTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         assembler.log = log;
+        assembler.summaryCache = summaryCache;
         assembler.defaultObservationMaxLength = 4000;
         assembler.toolSpecificLimits = Optional.empty();
+
+        lenient().when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
     }
 
     @Test
