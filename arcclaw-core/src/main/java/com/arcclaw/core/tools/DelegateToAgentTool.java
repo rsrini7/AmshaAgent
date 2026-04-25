@@ -23,6 +23,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -36,6 +37,9 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
+
+    @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
+    int maxDelegationDepth;
 
     @Override
     public String name() {
@@ -97,9 +101,11 @@ public class DelegateToAgentTool implements AgentTool {
 
         // 0. Recursion Guard: Prevent infinite delegation loops
         int depth = outerSessionId.split(Pattern.quote(AgentSentinels.DELEGATE_SESSION_SENTINEL)).length - 1;
-        if (depth >= 3) {
-            log.warnf("[DELEGATE] Hard block: delegation depth limit (3) exceeded for session %s", outerSessionId);
-            return ToolResponse.failure(400, "Recursion limit exceeded: Maximum delegation depth of 3 reached. A task cannot be delegated more than 3 levels deep.");
+        if (depth >= maxDelegationDepth) {
+            log.warnf("[DELEGATE] Hard block: delegation depth limit (%d) reached for session %s", maxDelegationDepth, outerSessionId);
+            return ToolResponse.failure(400, String.format(
+                "Recursion limit exceeded: Maximum delegation depth of %d reached. " +
+                "You cannot delegate further to prevent infinite loops.", maxDelegationDepth));
         }
 
         // 1. Self-delegation guard using registry metadata
@@ -149,7 +155,14 @@ public class DelegateToAgentTool implements AgentTool {
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",
                   agentName, goal, outerSessionId);
 
-        // CRITICAL: Rebind WorkspaceContext with AutonomyLevel.FULL for inner loop.
+        // Resolve inner autonomy level (§Invariant-Sub-Governance)
+        AutonomyLevel outerLevel = WorkspaceContext.requireAutonomyOrSupervised();
+        AutonomyLevel innerLevel = switch (outerLevel) {
+            case READONLY -> AutonomyLevel.READONLY;
+            default -> AutonomyLevel.FULL; // SUPERVISED/FULL -> FULL to avoid unresumable synchronous pauses
+        };
+
+        // CRITICAL: Rebind WorkspaceContext with resolved level for inner loop.
         // ToolInvocationGuard.evaluate() line 120 reads WorkspaceContext.autonomy()
         // — if SUPERVISED, all inner tool calls pause for HITL approval, creating
         // unresumable checkpoint corruption. FULL permits all operations.
@@ -167,7 +180,7 @@ public class DelegateToAgentTool implements AgentTool {
                 innerSessionId,
                 userId,
                 chatId,
-                AutonomyLevel.FULL,
+                innerLevel,
                 targetRole.toScopedName(),
                 () -> agentLoop.get().run(
                     innerSessionId,

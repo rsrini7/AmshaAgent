@@ -215,6 +215,9 @@ parameter schema, not the output schema, and produces silent wrong behavior in n
 
 `DelegateToAgentTool` MUST validate that the target role's capabilities are a subset of the delegating role's capabilities before constructing the sub-agent loop. Delegation that would grant the sub-agent capabilities the parent role does not have MUST be rejected with a descriptive tool observation. Transitive capability escalation via delegation chains is FORBIDDEN.
 
+### 4.10.1 Sub-Session Governance Level (§Invariant-Sub-Governance)
+Sub-sessions spawned by `DelegateToAgentTool` MUST inherit `READONLY` from the parent if the parent is `READONLY`. `SUPERVISED` and `FULL` both resolve to `FULL` to prevent unresumable synchronous HITL checkpoints inside the delegation chain. Max delegation depth is governed by `arcclaw.delegation.max-depth` (default 2).
+
 - The scheduling tools (`schedule-cron`, `delete-cron`, `list-crons`) are EXEMPT from
   HITL approval checks regardless of the delegating role's autonomy level, because
   scheduling is metadata-only and does not execute arbitrary tool actions.
