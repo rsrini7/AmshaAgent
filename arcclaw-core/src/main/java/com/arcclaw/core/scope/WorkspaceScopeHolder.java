@@ -87,9 +87,10 @@ public final class WorkspaceScopeHolder {
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
-        ManagedContext requestContext = Arc.container().requestContext();
-        boolean wasActive = requestContext.isActive();
-        if (!wasActive) requestContext.activate();
+        var container = Arc.container();
+        ManagedContext requestContext = container != null ? container.requestContext() : null;
+        boolean wasActive = requestContext != null && requestContext.isActive();
+        if (requestContext != null && !wasActive) requestContext.activate();
         
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
@@ -101,7 +102,7 @@ public final class WorkspaceScopeHolder {
             }
             scope.run(runnable);
         } finally {
-            if (!wasActive) requestContext.deactivate();
+            if (requestContext != null && !wasActive) requestContext.deactivate();
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);
@@ -123,9 +124,10 @@ public final class WorkspaceScopeHolder {
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
-        ManagedContext requestContext = Arc.container().requestContext();
-        boolean wasActive = requestContext.isActive();
-        if (!wasActive) requestContext.activate();
+        var container = Arc.container();
+        ManagedContext requestContext = container != null ? container.requestContext() : null;
+        boolean wasActive = requestContext != null && requestContext.isActive();
+        if (requestContext != null && !wasActive) requestContext.activate();
         
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
@@ -143,7 +145,7 @@ public final class WorkspaceScopeHolder {
                 }
             });
         } finally {
-            if (!wasActive) requestContext.deactivate();
+            if (requestContext != null && !wasActive) requestContext.deactivate();
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);
