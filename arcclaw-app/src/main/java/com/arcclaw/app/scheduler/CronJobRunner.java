@@ -67,7 +67,8 @@ public class CronJobRunner {
 
         String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.id + "-" + executionId;
 
-        heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.BACKGROUND);
+        // §Issue 4: Align heartbeat autonomy with execution context to ensure consistent HITL
+        heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
         
         try {
             String stripped = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "").trim() : "";
@@ -168,8 +169,21 @@ public class CronJobRunner {
             int goalStart = goal.indexOf("goal=\"");
             if (goalStart != -1) {
                 int start = goalStart + 6;
-                int end = goal.lastIndexOf("\"");
-                if (end > start) {
+                // §Issue 2: Safer quote scanning that respects escapes
+                int end = -1;
+                boolean escaped = false;
+                for (int i = start; i < goal.length(); i++) {
+                    char c = goal.charAt(i);
+                    if (escaped) {
+                        escaped = false;
+                    } else if (c == '\\') {
+                        escaped = true;
+                    } else if (c == '"') {
+                        end = i;
+                        break;
+                    }
+                }
+                if (end != -1) {
                     return goal.substring(start, end).replace("\\\"", "\"").trim();
                 }
             }
