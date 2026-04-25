@@ -5,6 +5,7 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.loop.CheckpointResumeCoordinator;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -40,7 +41,7 @@ public class RetryReflex implements AgentReflex {
         AgentCheckpoint checkpoint = latestOpt.get();
         if (checkpoint.getOriginalGoal() != null && 
             checkpoint.getFailReason() != null && 
-            checkpoint.getFailReason().contains("Discarded: new user message")) {
+            checkpoint.getFailReason().equals(CheckpointResumeCoordinator.FAIL_REASON_STALE_DISCARD)) {
             
             // Forward the original goal instead of "/retry", 
             // the LLM will see this as the user re-typing their request.

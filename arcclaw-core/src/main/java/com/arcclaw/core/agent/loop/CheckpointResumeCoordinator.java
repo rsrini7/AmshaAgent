@@ -173,6 +173,8 @@ public class CheckpointResumeCoordinator {
         return new ResumeDecision.FreshStart();
     }
 
+    public static final String FAIL_REASON_STALE_DISCARD = "Discarded: new user message received before approval was given.";
+
     private void archiveStaleApproval(String sessionId,
                                       String canonicalRole,
                                       String capturedUserId,
@@ -188,7 +190,7 @@ public class CheckpointResumeCoordinator {
         chatMemoryWriter.scrubUnfulfilledToolCalls(sessionId);
 
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
-        checkpoint.setFailReason("Discarded: new user message received before approval was given.");
+        checkpoint.setFailReason(FAIL_REASON_STALE_DISCARD);
         checkpoint.setPendingToolName(null);
         checkpoint.setPendingToolParametersJson(null);
         agentStore.save(checkpoint);
@@ -207,7 +209,7 @@ public class CheckpointResumeCoordinator {
                                               String staleTool,
                                               MessageContext context) {
         try {
-            String toolLabel = staleTool != null ? "`" + staleTool + "`" : "a pending tool";
+            String toolLabel = staleTool != null ? staleTool : "a pending tool";
             String notice = """
                     ⚠️ A previous approval request for `%s` was discarded because you sent a new message.
                     Starting fresh with your new goal.
