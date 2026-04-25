@@ -208,9 +208,11 @@ public class CheckpointResumeCoordinator {
                                               MessageContext context) {
         try {
             String toolLabel = staleTool != null ? "`" + staleTool + "`" : "a pending tool";
-            String notice = "⚠️ A previous approval request for " + toolLabel
-                    + " was discarded because you sent a new message. "
-                    + "Starting fresh with your new goal.";
+            String notice = """
+                    ⚠️ A previous approval request for `%s` was discarded because you sent a new message.
+                    Starting fresh with your new goal.
+                    Your previous task was cancelled. Reply /retry to run it again.
+                    """.formatted(toolLabel);
 
             channelPluginRegistry.find(context.getUser().channel().id())
                     .map(ChannelPlugin::sender)

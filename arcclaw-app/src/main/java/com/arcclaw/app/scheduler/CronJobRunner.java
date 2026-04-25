@@ -1,6 +1,9 @@
 package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -84,6 +87,16 @@ public class CronJobRunner {
                 return;
             }
 
+            // §Bug1: Short-circuit time checks to avoid code-gen failures in researcher role
+            if (isTimeCheck(stripped)) {
+                log.infof("CRON-SHORT-CIRCUIT cronId=%s time-check", job.id);
+                String time = ZonedDateTime.now(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.RFC_1123_DATE_TIME);
+                AgentResult result = AgentResult.finished("The current time is " + time, Collections.emptyList());
+                resultHandler.handleSuccess(job, cronSessionId, executionId, result);
+                return;
+            }
+
             // §New Issue 1: Unwrap goals stored as tool-call strings
             String finalGoal = unwrapToolCallGoal(stripped);
             if (!finalGoal.equals(stripped)) {
@@ -145,6 +158,15 @@ public class CronJobRunner {
                 || normalized.contains(ToolCapability.WEB_SEARCH_SERPER.toolName());
 
         return !hasActionVerb && goal.length() < 200;
+        }
+
+        private boolean isTimeCheck(String goal) {
+            if (goal == null || goal.isBlank()) return false;
+            String normalized = goal.toLowerCase().trim();
+            return normalized.contains("what is the current time") || 
+                   normalized.contains("what time is it") ||
+                   normalized.contains("tell me the time") ||
+                   normalized.equals("check: what is the current time?");
         }
 
         private String stripAnnouncementPrefix(String goal) {

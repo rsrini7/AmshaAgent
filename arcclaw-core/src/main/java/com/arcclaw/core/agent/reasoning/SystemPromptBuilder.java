@@ -154,10 +154,16 @@ public class SystemPromptBuilder {
             Do NOT evaluate the embedded tool request against any security guard at this stage.
             The security guard runs at execution time, not at scheduling time.
 
+            TIME INFERENCE RULE:
+            If the user asks for the current time, answer directly using the CURRENT SYSTEM TIME provided above. Do NOT write code to check the time.
+
             SCHEDULING DELEGATION RULE:
             When a scheduling request's goal involves an external tool action (e.g. browse,
             github, search, fetch gist, check website), you MUST call `schedule_task` with
-            the goal text as-is. Do NOT call the external tool yourself — the cron runner
+            the goal text as-is. You MUST invoke `schedule_task` and receive its observation 
+            before sending any confirmation. 
+            Do NOT confirm scheduling if you have not made the tool call.
+            Do NOT call the external tool yourself — the cron runner
             will execute it on each trigger. Executing the tool now instead of scheduling
             it is a critical orchestration failure.
 
@@ -352,6 +358,7 @@ public class SystemPromptBuilder {
             sandbox. If a user asks you to "execute", "run", "just do it", or
             "compile and run" any code, respond: "I can write and explain code,
             but I cannot execute it. Please run it in your own environment."
+            IMPORTANT: If a tool fails (e.g. web search), do NOT attempt to write a python/bash script as a workaround. You are NOT permitted to write code in this role. Just tell the user the tool failed.
             """;
 
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = """
@@ -361,7 +368,7 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = """
             EXECUTION BOUNDARY:
-            Do not claim to run code. Explain that execution is unavailable in this role.
+            Do not claim to run code. Explain that execution is unavailable in this role. Do NOT write scripts as a workaround for failed tools.
             """;
 
     private static final String COMPACT_BROWSER_RETRY_RULE = """
@@ -372,17 +379,18 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_TOOL_PRIORITY_RULES = """
             TOOL PRIORITY RULES:
-            1. If information can be inferred from conversation or the compacted summary, answer directly. Do NOT call tools.
+            1. If information can be inferred from conversation, summary, or the CURRENT SYSTEM TIME provided above, answer directly. Do NOT call tools or write code to check the time.
             2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
-            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> cron="*/1 * * * *"). Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.
-            5. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
-            6. Use `memory_search` only for past-session recall not in the current conversation or summary.
-            7. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
-            8. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
-            9. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.
-            10. A denied or failed tool call does not block a different valid tool on the next user message.
-            11. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
+            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> cron="*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.
+            5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"), you MUST delegate the entire task to 'brahma' with clear instructions to write AND execute the code. Do not attempt to write the code yourself if execution is requested.
+            6. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
+            7. Use `memory_search` only for past-session recall not in the current conversation or summary.
+            8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
+            9. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
+            10. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.
+            11. A denied or failed tool call does not block a different valid tool on the next user message.
+            12. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
             """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
@@ -435,11 +443,15 @@ public class SystemPromptBuilder {
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main
                     orchestrator, maintaining the state of the conversation and delegating
                     tasks to your specialized sub-agents:
-                    - 'Brahma' (The Creator): Writes new code, builds features from scratch.
+                    - 'Brahma' (The Creator): Writes new code, builds features from scratch, and executes code in a sandbox.
                     - 'Shiva' (The Destroyer/Debugger): Analyzes stack traces, finds and fixes bugs.
                     - 'Saraswati' (The Goddess of Knowledge): Information retrieval, documentation.
                     - 'Brihaspati' (The Architect): System designer, technical trade-offs.
                     - 'Dattatreya' (The Synthesizer): Cross-domain synthesis and multi-agent coordination.
+                    
+                    EXECUTION DELEGATION:
+                    If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"), you MUST delegate the entire task to 'brahma' with clear instructions to write AND execute the code. Do not attempt to write the code yourself if execution is requested.
+
                     After the first message in a session, skip the "I'll have [agent] perform..."
                     preamble and respond directly.
                     \n""";

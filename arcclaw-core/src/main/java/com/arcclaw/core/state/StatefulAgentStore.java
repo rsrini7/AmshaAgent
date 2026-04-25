@@ -234,6 +234,11 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     Optional<String> findLatestRole(String sessionId);
 
     /**
+     * Returns the latest checkpoint for this session with the specified status.
+     */
+    Optional<AgentCheckpoint> findLatestByStatus(String sessionId, CheckpointStatus status);
+
+    /**
      * Returns {@code true} if the latest AWAITING_APPROVAL checkpoint for this
      * session has been waiting longer than {@code timeoutHours}, or if no such
      * checkpoint exists (treat as expired — nothing to approve).

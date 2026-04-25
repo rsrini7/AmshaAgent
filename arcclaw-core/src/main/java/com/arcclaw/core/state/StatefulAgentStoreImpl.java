@@ -259,6 +259,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public Optional<AgentCheckpoint> findLatestNonArchivedCheckpoint(String sessionId)
         { return storeAdapter.findLatestNonArchivedBySession(sessionId).map(CheckpointMapper::toEntity); }
 
+    @Override
+    public Optional<AgentCheckpoint> findLatestByStatus(String sessionId, CheckpointStatus status) {
+        return storeAdapter.findLatestBySessionAndStatus(sessionId, status.name())
+                .map(CheckpointMapper::toEntity);
+    }
+
     @Override public Optional<String> findLatestRole(String sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         return storeAdapter.findLatestNonArchivedBySession(sessionId).map(dto -> dto.agentRole());
