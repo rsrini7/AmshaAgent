@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -19,6 +20,8 @@ public class IdentityExtractionReflex implements AgentReflex {
     private static final Logger log = Logger.getLogger(IdentityExtractionReflex.class);
 
     @Inject MemoryRetrievalPort memoryPort;
+    
+    @Inject ManagedExecutor managedExecutor;
 
     private static final Pattern NAME_PATTERN = Pattern.compile("(?i)(?:my name is|i am|i'm)\\s+([a-zA-Z\\s]+)");
     private static final Pattern ALIAS_PATTERN = Pattern.compile("(?i)(?:call me)\\s+([a-zA-Z\\s]+)");
@@ -64,12 +67,14 @@ public class IdentityExtractionReflex implements AgentReflex {
                 Map.of("label", label.name().toLowerCase())
             );
             
-            try {
-                memoryPort.index(dto);
-                log.infof("IdentityExtractionReflex ingested fact silently: label=%s, fact='%s'", label, fullText);
-            } catch (Exception e) {
-                log.warnf("IdentityExtractionReflex failed to ingest fact: %s", e.getMessage());
-            }
+            managedExecutor.submit(() -> {
+                try {
+                    memoryPort.index(dto);
+                    log.infof("IdentityExtractionReflex ingested fact silently: label=%s, fact='%s'", label, fullText);
+                } catch (Exception e) {
+                    log.warnf("IdentityExtractionReflex failed to ingest fact: %s", e.getMessage());
+                }
+            });
         }
     }
     

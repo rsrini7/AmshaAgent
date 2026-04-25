@@ -53,9 +53,9 @@ public class IdentityExtractionReflexTest {
         // It should forward to the LLM (no command response)
         Assertions.assertTrue(result.commandResponse().isEmpty());
         
-        // Verify MemoryPort got called
+        // Verify MemoryPort got called (with timeout since it's async)
         ArgumentCaptor<MemoryEntryDto> captor = ArgumentCaptor.forClass(MemoryEntryDto.class);
-        verify(memoryPort).index(captor.capture());
+        verify(memoryPort, org.mockito.Mockito.timeout(5000)).index(captor.capture());
         
         MemoryEntryDto captured = captor.getValue();
         Assertions.assertEquals("The user's name is Alice.", captured.text());
