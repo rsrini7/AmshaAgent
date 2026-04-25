@@ -223,8 +223,17 @@ public class CompactionService {
                         newSummary = (summaryNode != null && summaryNode.isTextual()) 
                                 ? summaryNode.asText().trim() : responseText.trim();
                     } catch (Exception e) {
-                        log.warnf("Failed to parse compaction JSON for session %s, using raw text: %s", 
-                                sessionId, e.getMessage());
+                        log.warnf("Failed to parse compaction JSON for session %s (attempt %d/%d): %s", 
+                                sessionId, i, maxRetries, e.getMessage());
+                        
+                        if (i < maxRetries) {
+                            log.info("Retrying compaction with PROMPT_DIRECTIVE fallback to avoid JSON errors.");
+                            // Temporarily switch to prompt directive for the retry
+                            String fallbackPrompt = "CRITICAL: You MUST respond ONLY with the summary prose. Do not use JSON.\n\n" + prompt;
+                            newSummary = executeCompactionTurn(sessionId, fallbackPrompt, i + 1, maxRetries);
+                            return newSummary;
+                        }
+                        
                         newSummary = responseText.trim();
                     }
                 } else {
@@ -232,28 +241,42 @@ public class CompactionService {
                 }
                 break; // success
             } catch (Exception e) {
-                if (isRateLimit(e)) {
-                    rateLimitTracker.recordHit("compaction");
+                if (isRateLimit(e) || isJsonError(e)) {
+                    String errorType = isRateLimit(e) ? "rate-limited" : "JSON validation failed";
                     if (i < maxRetries) {
                         long backoffMs = (long) Math.pow(2, i) * 1000L;
-                        log.warnf("CompactionService: rate-limited during summary for session %s (attempt %d/%d). Retrying in %d ms...",
-                                sessionId, i, maxRetries, backoffMs);
+                        log.warnf("CompactionService: %s for session %s (attempt %d/%d). Retrying in %d ms...",
+                                errorType, sessionId, i, maxRetries, backoffMs);
                         try {
-                            Thread.sleep(backoffMs); // safe: runs on blocking executor-thread-*, not event loop
+                            Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
                             throw new CompactionAbortedException("Interrupted during compaction backoff", ie);
                         }
                         continue;
                     }
-                    log.warnf("CompactionService: rate-limited during summary for session %s after %d attempts — " +
-                              "aborting compaction, latch will release via finally block", sessionId, maxRetries);
-                    throw new CompactionAbortedException("Rate-limited during compaction", e);
+                    throw new CompactionAbortedException(errorType + " during compaction", e);
                 }
                 throw e;
             }
         }
         return newSummary;
+    }
+
+    private String executeCompactionTurn(String sessionId, String prompt, int attempt, int maxRetries) {
+        try {
+            return compactionModel.chat(UserMessage.userMessage(prompt)).aiMessage().text();
+        } catch (Exception e) {
+            log.warnf("Compaction fallback attempt %d/%d failed: %s", attempt, maxRetries, e.getMessage());
+            return "";
+        }
+    }
+
+    private static boolean isJsonError(Throwable e) {
+        if (e == null) return false;
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("json_validate_failed") || msg.contains("invalid_json"))) return true;
+        return isJsonError(e.getCause());
     }
 
     private void finalizeCompaction(String sessionId, String userId, String newSummary,

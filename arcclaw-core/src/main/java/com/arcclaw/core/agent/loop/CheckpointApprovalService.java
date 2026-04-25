@@ -7,6 +7,7 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.agent.sse.HitlEventType;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -111,7 +112,12 @@ public class CheckpointApprovalService {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(idOrSid);
         if (cpOpt.isPresent()) return cpOpt.get();
 
-        // 2. Try cronId alias lookup
+        // 2. Try cron-session prefix lookup (if idOrSid is just the UUID part)
+        String cronPrefix = AgentSentinels.CRON_SESSION_PREFIX + idOrSid;
+        cpOpt = agentStore.findLatestAwaitingApprovalByPrefix(cronPrefix);
+        if (cpOpt.isPresent()) return cpOpt.get();
+
+        // 3. Try legacy/fallback alias lookup
         cpOpt = agentStore.findLatestAwaitingApprovalForCron(idOrSid);
         if (cpOpt.isPresent()) return cpOpt.get();
 

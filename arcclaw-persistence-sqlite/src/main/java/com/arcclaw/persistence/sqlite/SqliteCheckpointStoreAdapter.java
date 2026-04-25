@@ -535,7 +535,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :prefix AND c.status = :status ORDER BY c.id DESC",
                 AgentCheckpoint.class)
-                .setParameter("prefix", sessionPrefix + "%")
+                .setParameter("prefix", "%" + sessionPrefix + "%")
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setMaxResults(1)
                 .getResultList()

@@ -23,6 +23,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the execution of a single cron job, managing the workspace context,
@@ -30,6 +31,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
  */
 @ApplicationScoped
 public class CronJobRunner {
+
+    private static final Logger log = Logger.getLogger(CronJobRunner.class);
 
     @Inject
     AgentLoop agentLoop;
@@ -60,24 +63,11 @@ public class CronJobRunner {
         
         try {
             String stripped = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "").trim() : "";
-            String normalized = stripped.toLowerCase();
             
-            if (normalized.startsWith("output the following message:") || normalized.startsWith("say ") 
-                    || normalized.startsWith("tell ") || normalized.startsWith("send message:") || normalized.startsWith("send text:")) {
-                String text = stripped;
-                if (normalized.startsWith("output the following message:")) {
-                    text = stripped.substring("output the following message:".length()).trim();
-                } else if (normalized.startsWith("say ")) {
-                    text = stripped.substring("say ".length()).trim();
-                } else if (normalized.startsWith("tell ")) {
-                    text = stripped.substring("tell ".length()).trim();
-                } else if (normalized.startsWith("send message:")) {
-                    text = stripped.substring("send message:".length()).trim();
-                } else if (normalized.startsWith("send text:")) {
-                    text = stripped.substring("send text:".length()).trim();
-                }
-                
-                AgentResult result = AgentResult.finished(text, Collections.emptyList());
+            // §Bug2: Short-circuit pure announcements to direct send, bypassing agent loop
+            if (isPureAnnouncement(stripped)) {
+                log.infof("CRON-SHORT-CIRCUIT cronId=%s goal='%s' (pure announcement)", job.id, stripped);
+                AgentResult result = AgentResult.finished(stripped, Collections.emptyList());
                 resultHandler.handleSuccess(job, cronSessionId, executionId, result);
                 return;
             }
@@ -110,6 +100,26 @@ public class CronJobRunner {
         } catch (Throwable t) {
             resultHandler.handleFailure(job, cronSessionId, executionId, t);
         }
+    }
+
+    private boolean isPureAnnouncement(String goal) {
+        if (goal == null || goal.isBlank()) return false;
+        String normalized = goal.toLowerCase().trim();
+        
+        // Explicit announcement prefixes
+        if (normalized.startsWith("output") || normalized.startsWith("say ")
+                || normalized.startsWith("send ") || normalized.startsWith("tell ")) {
+            return true;
+        }
+
+        // Check for lack of tool-like verbs (heuristic for simple statements)
+        // Announcements typically don't have "fetch", "search", "check", "monitor", "run", "execute"
+        boolean hasActionVerb = normalized.contains("fetch") || normalized.contains("search") 
+                || normalized.contains("check") || normalized.contains("monitor") 
+                || normalized.contains("run") || normalized.contains("execute")
+                || normalized.contains("investigate") || normalized.contains("analyze");
+        
+        return !hasActionVerb && goal.length() < 200; // Small messages without verbs are likely announcements
     }
 
     private String resolveRole(AgentCronEntity job) {

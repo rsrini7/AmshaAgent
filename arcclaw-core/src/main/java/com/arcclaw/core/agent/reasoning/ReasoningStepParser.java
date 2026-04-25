@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -55,6 +56,20 @@ public class ReasoningStepParser {
                             inputTokens, outputTokens
                     );
                 }
+
+                // §Bug4: Validation for blank required parameters
+                if (ToolCapability.MEMORY_SEARCH.toolName().equals(req.name())) {
+                    String query = (String) actionInput.get("query");
+                    if (query == null || query.isBlank()) {
+                        log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", req.name(), sessionId);
+                        return ReasoningStep.schemaError(
+                            "System: The 'query' parameter for '" + req.name() + "' cannot be blank. " +
+                            "Please provide factual keywords for the search.",
+                            inputTokens, outputTokens
+                        );
+                    }
+                }
+
                 return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
             }
 
