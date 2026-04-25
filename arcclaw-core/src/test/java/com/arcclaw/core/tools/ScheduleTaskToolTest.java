@@ -104,7 +104,7 @@ class ScheduleTaskToolTest {
 
         assertFalse(result.success());
         assertEquals(400, result.exitCode());
-        assertTrue(result.output().contains("Schedule context missing"));
+        assertTrue(result.output().contains("Missing required parameter: cronExpression"));
 
         verify(cronRepository, never()).persist(any());
     }

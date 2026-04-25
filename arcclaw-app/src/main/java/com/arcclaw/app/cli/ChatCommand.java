@@ -1,10 +1,6 @@
 package com.arcclaw.app.cli;
 
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.UUID;
@@ -34,7 +30,7 @@ import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.CronTimeResolver;
+import com.arcclaw.core.util.TimeContextInjector;
 import io.quarkus.runtime.ShutdownEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -173,19 +169,7 @@ public class ChatCommand implements Runnable {
 
             MessageContext context = createCliContext(sessionId, input);
 
-            ZonedDateTime nowUtc = ZonedDateTime.now(ZoneOffset.UTC);
-            ZoneId userZone = ZoneId.of(defaultTimezone);
-            ZonedDateTime targetUtc = CronTimeResolver.resolveTargetTime(input, nowUtc, userZone);
-            if (targetUtc != null) {
-                context.setData("SUGGESTED_CRON", String.format("%d %d * * *",
-                        targetUtc.getMinute(), targetUtc.getHour()));
-                context.setData("TARGET_UTC_MINUTE", targetUtc.getMinute());
-                context.setData("TARGET_UTC_HOUR", targetUtc.getHour());
-                context.setData("SUGGESTED_NEXT_FIRE_TIME",
-                        targetUtc.toInstant().toString());
-                context.setData("CURRENT_LOCAL_TIME",
-                        ZonedDateTime.now(userZone).format(DateTimeFormatter.ofPattern("HH:mm z")));
-            }
+            TimeContextInjector.inject(context, input, defaultTimezone);
 
             ReflexResult reflexResult = reflexRegistry.processIfReflex(
                 sessionId, "cli-user", "cli-chat", input, context);

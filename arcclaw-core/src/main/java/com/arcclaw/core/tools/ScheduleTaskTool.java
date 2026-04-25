@@ -88,10 +88,16 @@ public class ScheduleTaskTool implements AgentTool {
                        "Do NOT include time references or re-scheduling instructions in the goal. " +
                        "NEVER use pronouns — replace 'it/this/that' with the explicit noun. " +
 
-               "2. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
+               "2. 'cronExpression' - Required for recurring tasks (runOnce=false). " +
+                       "Provide a valid 5-field UNIX cron expression. " +
+                       "Examples: '*/1 * * * *' (every minute), '*/5 * * * *' (every 5 minutes), " +
+                       "'0 * * * *' (every hour), '0 9 * * *' (daily at 9 AM UTC). " +
+                       "Omit only for one-time tasks (runOnce=true). " +
+
+               "3. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
                        "Leave unset or pass 'UTC' if unsure — do NOT pass an empty string. " +
 
-               "3. 'runOnce' - JSON boolean literal true or false (NOT a string). " +
+               "4. 'runOnce' - JSON boolean literal true or false (NOT a string). " +
                        "true for one-time tasks, false for recurring. " +
 
                "Returns the scheduled task ID immediately. Does NOT execute the goal now.";
@@ -113,6 +119,13 @@ public class ScheduleTaskTool implements AgentTool {
                 .addProperty("goal", JsonStringSchema.builder()
                         .description("Fully self-contained action for the future agent. " +
                                 "No pronouns, no time references, no re-scheduling instructions.")
+                        .build())
+                .addProperty("cronExpression", JsonStringSchema.builder()
+                        .description("Required for recurring tasks (runOnce=false). " +
+                                "Provide a valid 5-field UNIX cron expression. " +
+                                "Examples: '*/1 * * * *' (every minute), '*/5 * * * *' (every 5 minutes), " +
+                                "'0 * * * *' (every hour), '0 9 * * *' (daily at 9 AM UTC). " +
+                                "Omit only for one-time tasks (runOnce=true).")
                         .build())
                 .addProperty("timezone", JsonStringSchema.builder()
                         .description("IANA timezone for cron interpretation (default: UTC). " +
@@ -179,19 +192,40 @@ public class ScheduleTaskTool implements AgentTool {
 
         // Step 1 — Validate cronExpression or absolute time trigger
         String cronExpression = (String) params.get("cronExpression");
+        // Also accept 'cron' as an alias (the compact prompt uses cron= syntax)
+        if (cronExpression == null || cronExpression.isBlank()) {
+            cronExpression = (String) params.get("cron");
+        }
         String suggestedNextFireTime = WorkspaceContext.suggestedNextFireTime();
+        boolean cronFromJavaSide = false;
         
         // If LLM didn't provide one, try the suggested one from context
         if (cronExpression == null || cronExpression.isBlank()) {
             cronExpression = WorkspaceContext.suggestedCron();
+            if (cronExpression != null && !cronExpression.isBlank()) {
+                cronFromJavaSide = true;
+            }
+        }
+
+        // FIX: When the cron was pre-resolved to UTC by Java-side arithmetic
+        // (CommandDispatchHandler / ChatCommand), override the LLM-provided
+        // timezone to UTC. Otherwise, the scheduler would interpret a UTC cron
+        // expression in the user's local timezone, causing double conversion.
+        // e.g. "9 AM IST" → Java resolves to UTC 03:30 → cron "30 3 * * *"
+        //   Without fix: stored as cron="30 3 * * *" + TZ=Asia/Kolkata → fires 3:30 AM IST (wrong)
+        //   With fix:    stored as cron="30 3 * * *" + TZ=UTC → fires 9:00 AM IST (correct)
+        if (cronFromJavaSide || "UTC".equals(WorkspaceContext.suggestedCronSource())) {
+            zone = ZoneId.of("UTC");
         }
 
         // We require AT LEAST a cronExpression OR an absolute fire time (for runOnce)
         if ((cronExpression == null || cronExpression.isBlank()) 
                 && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())) {
-            return ToolResponse.failure(400, "Schedule context missing. " +
-                    "Example: instead of 'deploy it', write 'deploy commit abc123 " +
-                    "to production via gh workflow run deploy.yml'.");
+            return ToolResponse.failure(400, "Missing required parameter: cronExpression. " +
+                    "For recurring tasks (runOnce=false), you must supply a valid 5-field UNIX cron expression. " +
+                    "Examples: '*/1 * * * *' for every minute, '0 * * * *' for every hour, " +
+                    "'0 9 * * *' for daily at 9 AM UTC. " +
+                    "For one-time tasks (runOnce=true), the system will compute the fire time automatically.");
         }
         if (goal == null || goal.isBlank()) {
             return ToolResponse.failure(400, "goal is required.");

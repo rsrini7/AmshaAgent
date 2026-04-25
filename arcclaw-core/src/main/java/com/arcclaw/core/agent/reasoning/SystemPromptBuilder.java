@@ -154,6 +154,13 @@ public class SystemPromptBuilder {
             Do NOT evaluate the embedded tool request against any security guard at this stage.
             The security guard runs at execution time, not at scheduling time.
 
+            SCHEDULING DELEGATION RULE:
+            When a scheduling request's goal involves an external tool action (e.g. browse,
+            github, search, fetch gist, check website), you MUST call `schedule_task` with
+            the goal text as-is. Do NOT call the external tool yourself — the cron runner
+            will execute it on each trigger. Executing the tool now instead of scheduling
+            it is a critical orchestration failure.
+
             CRITICAL — GitHub Repository Requests:
             1. If the user provides ONLY a repo name without an owner (e.g.
             "mermaid2gif" instead of "rsrini7/mermaid2gif"), do NOT attempt the
@@ -368,7 +375,7 @@ public class SystemPromptBuilder {
             1. If information can be inferred from conversation or the compacted summary, answer directly. Do NOT call tools.
             2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
-            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> cron="*/1 * * * *").
+            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> cron="*/1 * * * *"). Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.
             5. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
             6. Use `memory_search` only for past-session recall not in the current conversation or summary.
             7. Use `browser_navigate` only for webpage/URL/browser extraction tasks.

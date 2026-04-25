@@ -305,6 +305,9 @@ public class ToolStepHandler {
             final String suggestedNextFireTime = (context != null && context.data() != null)
                 ? (String) context.data().get("SUGGESTED_NEXT_FIRE_TIME")
                 : null;
+            final String suggestedCronSource = (context != null && context.data() != null)
+                ? (String) context.data().get("SUGGESTED_CRON_SOURCE")
+                : null;
 
             return WorkspaceContext.run(context.sessionId(), context.userId(), context.chatId(), 
                     context.autonomyLevel(), context.agentRole(), context.channelType(), () -> {
@@ -313,6 +316,7 @@ public class ToolStepHandler {
                 // only supports basic 6 context values.
                 return ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, suggestedCron)
                     .where(WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME, suggestedNextFireTime)
+                    .where(WorkspaceContext.SUGGESTED_CRON_SOURCE, suggestedCronSource)
                     .call(() -> new InvokeResult.Responded(
                         invoker.invoke(toolName, params, context.sessionId())));
             });

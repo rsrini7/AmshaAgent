@@ -23,7 +23,12 @@ public class CronTimeResolver {
             Pattern.compile("at\\s+(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern VALID_CRON_PATTERN =
-            Pattern.compile("^\\d{1,2}\\s+\\d{1,2}\\s+[*\\d]+\\s+[*\\d]+\\s+[*\\d]+$");
+            Pattern.compile("^([*\\d/]+)\\s+([*\\d/]+)\\s+([*\\d/]+)\\s+([*\\d/]+)\\s+([*\\d/]+)$");
+
+    // Handles: "every minute", "every 5 minutes", "every hour", "every 2 hours"
+    private static final Pattern EVERY_PATTERN =
+            Pattern.compile("every\\s+(?:(\\d+)\\s+)?(min(?:utes?)?|hours?)",
+                    Pattern.CASE_INSENSITIVE);
 
     // Negation guard (Invariant 4.11)
     private static final Pattern NEGATION_GUARD =
@@ -32,6 +37,39 @@ public class CronTimeResolver {
 
     public static boolean isValidCron(String cron) {
         return cron != null && VALID_CRON_PATTERN.matcher(cron.trim()).matches();
+    }
+
+    /**
+     * Resolves recurring scheduling patterns ("every X minutes/hours") into
+     * a 5-field UNIX cron expression.
+     *
+     * <p>This runs on the Java side (zero LLM cost) so the LLM does not need
+     * to generate cron expressions for common recurring patterns. Returns
+     * {@code null} if the message does not contain a recognisable recurring
+     * pattern, allowing the caller to skip injection.
+     *
+     * @param msg raw user message text
+     * @return a 5-field UNIX cron expression, or {@code null}
+     */
+    public static String resolveRecurringCron(String msg) {
+        if (msg == null) return null;
+        if (NEGATION_GUARD.matcher(msg).find()) return null;
+
+        var m = EVERY_PATTERN.matcher(msg);
+        if (m.find()) {
+            String amount = m.group(1);
+            String unit = m.group(2).toLowerCase();
+
+            if (unit.startsWith("min")) {
+                if (amount == null || "1".equals(amount)) return "*/1 * * * *";
+                return "*/" + amount + " * * * *";
+            }
+            if (unit.startsWith("hour")) {
+                if (amount == null || "1".equals(amount)) return "0 * * * *";
+                return "0 */" + amount + " * * *";
+            }
+        }
+        return null;
     }
 
     public static ZonedDateTime resolveTargetTime(String msg, ZonedDateTime nowUtc, ZoneId userZone) {
