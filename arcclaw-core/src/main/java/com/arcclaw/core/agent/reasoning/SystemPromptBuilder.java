@@ -528,12 +528,12 @@ public class SystemPromptBuilder {
     }
 
     private String buildExecutionBoundaryRule(AgentRoleEnum roleEnum) {
-        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
+        boolean hasSandbox = roleEnum.definition().toolNames().contains(ToolCapability.SANDBOX_EXEC.toolName());
         return hasSandbox ? EXECUTION_BOUNDARY_SANDBOX : EXECUTION_BOUNDARY_NO_SANDBOX;
     }
 
     private String buildCompactExecutionBoundaryRule(AgentRoleEnum roleEnum) {
-        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
+        boolean hasSandbox = roleEnum.definition().toolNames().contains(ToolCapability.SANDBOX_EXEC.toolName());
         return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;
     }
 

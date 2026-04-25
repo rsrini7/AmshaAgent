@@ -108,7 +108,7 @@ public class PromptTemplateEngine {
             }
 
         boolean hasSandboxExec = sortedCapabilities.stream()
-                .anyMatch(c -> "sandbox_exec".equals(c.toolName()));
+                .anyMatch(c -> ToolCapability.SANDBOX_EXEC.toolName().equals(c.toolName()));
 
 
         var request = templateFor(role)

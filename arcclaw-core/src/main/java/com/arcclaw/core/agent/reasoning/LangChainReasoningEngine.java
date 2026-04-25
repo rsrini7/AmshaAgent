@@ -464,7 +464,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (prose == null) return false;
         String lower = prose.toLowerCase();
         // Detect embedded tool call JSON: must have tool name + code/language params
-        return (lower.contains("\"sandbox_exec\"") || lower.contains("sandbox_exec"))
+        return (lower.contains("\"sandbox_exec\"") || lower.contains(ToolCapability.SANDBOX_EXEC.toolName()))
                && (lower.contains("\"code\"") || lower.contains("\"language\""));
     }
 
