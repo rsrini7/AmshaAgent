@@ -88,7 +88,9 @@ public final class WorkspaceScopeHolder {
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
         ManagedContext requestContext = Arc.container().requestContext();
-        requestContext.activate();
+        boolean wasActive = requestContext.isActive();
+        if (!wasActive) requestContext.activate();
+        
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
             if (userId != null) {
@@ -99,7 +101,7 @@ public final class WorkspaceScopeHolder {
             }
             scope.run(runnable);
         } finally {
-            requestContext.deactivate();
+            if (!wasActive) requestContext.deactivate();
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);
@@ -122,7 +124,9 @@ public final class WorkspaceScopeHolder {
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
         ManagedContext requestContext = Arc.container().requestContext();
-        requestContext.activate();
+        boolean wasActive = requestContext.isActive();
+        if (!wasActive) requestContext.activate();
+        
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
             if (userId != null) {
@@ -139,7 +143,7 @@ public final class WorkspaceScopeHolder {
                 }
             });
         } finally {
-            requestContext.deactivate();
+            if (!wasActive) requestContext.deactivate();
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);

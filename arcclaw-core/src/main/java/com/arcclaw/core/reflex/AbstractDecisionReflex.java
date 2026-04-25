@@ -234,6 +234,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) return getAlreadyProcessingMessage();
 
+        AgentResult result = null;
         try {
             String goal = getCronResumeGoal(cronSessionId, cronRole);
             context.setResumeSignal(true);
@@ -241,7 +242,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
             int budget = pendingCheckpoint.getMaxIterations() != null ? Math.max(3, pendingCheckpoint.getMaxIterations()) : 3;
 
-            AgentResult result = WorkspaceContext.run(cronSessionId, cron.userId, cron.chatId, AutonomyLevel.BACKGROUND, cronRole,
+            result = WorkspaceContext.run(cronSessionId, cron.userId, cron.chatId, AutonomyLevel.BACKGROUND, cronRole,
                     () -> agentLoop.run(cronSessionId, cronRole, goal, pendingCheckpoint.getSystemNote(), reasoningEngine, budget, context));
 
             if (result == null) {
@@ -252,12 +253,16 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             postProcessCronDecision(cron, reason, result);
             notifyJobCompleted(cron, result);
 
-            if (isTerminalResult(result)) {
-                try { workspaceManager.terminateSession(cronSessionId); } catch (Exception e) { log.warn("Termination failed", e); }
-            }
             return getCronSuccessResponse(result);
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
+            if (result != null && isTerminalResult(result)) {
+                try {
+                    workspaceManager.terminateSession(cronSessionId);
+                } catch (Exception e) {
+                    log.warn("Termination failed: " + ExceptionUtils.getRootCauseMessage(e));
+                }
+            }
         }
     }
 
