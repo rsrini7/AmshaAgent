@@ -5,6 +5,8 @@ import java.util.concurrent.Callable;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -85,6 +87,8 @@ public final class WorkspaceScopeHolder {
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
+        ManagedContext requestContext = Arc.container().requestContext();
+        requestContext.activate();
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
             if (userId != null) {
@@ -95,6 +99,7 @@ public final class WorkspaceScopeHolder {
             }
             scope.run(runnable);
         } finally {
+            requestContext.deactivate();
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);
@@ -116,6 +121,8 @@ public final class WorkspaceScopeHolder {
         if (userId != null) MDC.put(MdcKeys.USER_ID, userId);
         if (chatId != null) MDC.put(MdcKeys.CHAT_ID, chatId);
         
+        ManagedContext requestContext = Arc.container().requestContext();
+        requestContext.activate();
         try {
             var scope = ScopedValue.where(WORKSPACE_ID, sessionId);
             if (userId != null) {
@@ -132,6 +139,7 @@ public final class WorkspaceScopeHolder {
                 }
             });
         } finally {
+            requestContext.deactivate();
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);

@@ -33,6 +33,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -111,8 +112,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             });
             return ReflexResult.respond(response, context);
         } catch (Exception e) {
-            log.errorf(e, "Failed to process %s for session %s", getActionName(), sessionId);
-            return ReflexResult.respond(getErrorMessage(), context);
+            log.errorf("Failed to process %s for session %s: %s", getActionName(), sessionId, ExceptionUtils.getRootCauseMessage(e));
+            return ReflexResult.respond(getErrorMessage() + ": " + ExceptionUtils.getRootCauseMessage(e), context);
         }
     }
 

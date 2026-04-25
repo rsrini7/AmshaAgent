@@ -104,6 +104,16 @@ class FinishActionHandlerTest {
     }
 
     @Test
+    void testHandleStripsBoldFinishSuffix() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        ReasoningStep step = ReasoningStep.pending("Hello world\n**FINISH**", ReasoningStep.FINISH, Map.of(), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+
+        assertEquals("Hello world", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
+    }
+
+    @Test
     void testHandleStripsFinishSuffixWithPunctuation() {
         AgentExecutionContext ctx = mock(AgentExecutionContext.class);
         ReasoningStep step = ReasoningStep.pending("Hello world\nFINISH:", ReasoningStep.FINISH, Map.of(), 0, 0);

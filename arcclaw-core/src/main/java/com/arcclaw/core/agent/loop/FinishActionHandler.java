@@ -84,17 +84,19 @@ public class FinishActionHandler {
     /**
      * Matches common token leaks at the START of an LLM response when it's
      * transitioning to/from a tool-calling state.
+     * Handles Markdown formatting like **FINISH** or __Answer:__.
      */
     private static final Pattern PREFIX_TOKEN_LEAK = Pattern.compile(
-            "(?i)^(\\s*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:)\\s*)+",
+            "(?i)^(\\s*[*_]*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:)[*_]*\\s*)+",
             Pattern.MULTILINE
     );
 
     /**
      * Matches common token leaks at the END of an LLM response.
+     * Handles Markdown formatting like **FINISH**.
      */
     private static final Pattern SUFFIX_TOKEN_LEAK = Pattern.compile(
-            "(?i)\\s*(FINISH:?|Action:\\s*FINISH)\\s*$",
+            "(?i)\\s*[*_]*(FINISH:?|Action:\\s*FINISH)[*_]*\\s*$",
             Pattern.MULTILINE
     );
 
