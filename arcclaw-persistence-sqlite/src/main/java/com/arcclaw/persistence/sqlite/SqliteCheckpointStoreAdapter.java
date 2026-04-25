@@ -526,16 +526,16 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    public Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
-        return withRetry(() -> self.doFindLatestAwaitingApprovalWithPrefix(sessionPrefix), "find-latest-prefix");
+    public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
+        return withRetry(() -> self.doFindLatestAwaitingApprovalBySessionContaining(segment), "find-latest-segment");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public Optional<CheckpointDto> doFindLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+    public Optional<CheckpointDto> doFindLatestAwaitingApprovalBySessionContaining(String segment) {
         return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :prefix AND c.status = :status ORDER BY c.id DESC",
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment AND c.status = :status ORDER BY c.id DESC",
                 AgentCheckpoint.class)
-                .setParameter("prefix", "%" + sessionPrefix + "%")
+                .setParameter("segment", "%" + segment + "%")
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setMaxResults(1)
                 .getResultList()

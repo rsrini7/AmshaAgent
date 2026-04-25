@@ -96,9 +96,9 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
-    public Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+    public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
         return store.values().stream()
-                .filter(c -> c.sessionId().startsWith(sessionPrefix) && "AWAITING_APPROVAL".equals(c.status()))
+                .filter(c -> c.sessionId().contains(segment) && "AWAITING_APPROVAL".equals(c.status()))
                 .max((c1, c2) -> c1.id().compareTo(c2.id()));
     }
 

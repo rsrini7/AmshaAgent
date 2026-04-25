@@ -15,9 +15,9 @@ public interface AutonomyPolicy {
     boolean isAllowed(AutonomyLevel level, ToolOperation operation);
 
     /**
-     * Default implementation of the governance logic.
+     * Standard implementation of the governance logic.
      */
-    class Default implements AutonomyPolicy {
+    class Standard implements AutonomyPolicy {
         @Override
         public boolean isAllowed(AutonomyLevel level, ToolOperation operation) {
             return switch (level) {

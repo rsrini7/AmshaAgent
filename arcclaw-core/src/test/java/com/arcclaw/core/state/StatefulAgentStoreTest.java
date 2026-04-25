@@ -187,7 +187,7 @@ class StatefulAgentStoreTest {
             store.save(cp3);
 
             // When: we query latest awaiting approval for this cronId
-            var found = store.findLatestAwaitingApprovalForCron(cronId);
+            var found = store.findLatestAwaitingApprovalBySessionContaining(cronId);
 
             // Then: we get the newest AWAITING_APPROVAL checkpoint (cp2)
             assertTrue(found.isPresent(), "Expected an awaiting-approval checkpoint");

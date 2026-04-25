@@ -52,6 +52,13 @@ public class CronJobRunner {
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
     int cronMaxIterations;
 
+    private static final String PREFIX_OUTPUT_MSG = "output the following message:";
+    private static final String PREFIX_OUTPUT     = "output ";
+    private static final String PREFIX_SAY        = "say ";
+    private static final String PREFIX_TELL       = "tell ";
+    private static final String PREFIX_SEND_MSG   = "send message:";
+    private static final String PREFIX_SEND_TEXT  = "send text:";
+
     public void execute(AgentCronEntity job) {
         String executionId = UUID.randomUUID().toString();
         
@@ -66,8 +73,9 @@ public class CronJobRunner {
             
             // §Bug2: Short-circuit pure announcements to direct send, bypassing agent loop
             if (isPureAnnouncement(stripped)) {
-                log.infof("CRON-SHORT-CIRCUIT cronId=%s goal='%s' (pure announcement)", job.id, stripped);
-                AgentResult result = AgentResult.finished(stripped, Collections.emptyList());
+                String announcement = stripAnnouncementPrefix(stripped);
+                log.infof("CRON-SHORT-CIRCUIT cronId=%s announcement='%s'", job.id, announcement);
+                AgentResult result = AgentResult.finished(announcement, Collections.emptyList());
                 resultHandler.handleSuccess(job, cronSessionId, executionId, result);
                 return;
             }
@@ -107,19 +115,31 @@ public class CronJobRunner {
         String normalized = goal.toLowerCase().trim();
         
         // Explicit announcement prefixes
-        if (normalized.startsWith("output") || normalized.startsWith("say ")
-                || normalized.startsWith("send ") || normalized.startsWith("tell ")) {
+        if (normalized.startsWith(PREFIX_OUTPUT) || normalized.startsWith(PREFIX_SAY)
+                || normalized.startsWith(PREFIX_TELL) 
+                || normalized.startsWith(PREFIX_SEND_MSG) || normalized.startsWith(PREFIX_SEND_TEXT)) {
             return true;
         }
 
         // Check for lack of tool-like verbs (heuristic for simple statements)
-        // Announcements typically don't have "fetch", "search", "check", "monitor", "run", "execute"
         boolean hasActionVerb = normalized.contains("fetch") || normalized.contains("search") 
                 || normalized.contains("check") || normalized.contains("monitor") 
                 || normalized.contains("run") || normalized.contains("execute")
                 || normalized.contains("investigate") || normalized.contains("analyze");
         
-        return !hasActionVerb && goal.length() < 200; // Small messages without verbs are likely announcements
+        return !hasActionVerb && goal.length() < 200;
+    }
+
+    private String stripAnnouncementPrefix(String goal) {
+        if (goal == null) return null;
+        String lower = goal.toLowerCase();
+        if (lower.startsWith(PREFIX_OUTPUT_MSG)) return goal.substring(PREFIX_OUTPUT_MSG.length()).trim();
+        if (lower.startsWith(PREFIX_OUTPUT))      return goal.substring(PREFIX_OUTPUT.length()).trim();
+        if (lower.startsWith(PREFIX_SAY))         return goal.substring(PREFIX_SAY.length()).trim();
+        if (lower.startsWith(PREFIX_TELL))        return goal.substring(PREFIX_TELL.length()).trim();
+        if (lower.startsWith(PREFIX_SEND_MSG))    return goal.substring(PREFIX_SEND_MSG.length()).trim();
+        if (lower.startsWith(PREFIX_SEND_TEXT))   return goal.substring(PREFIX_SEND_TEXT.length()).trim();
+        return goal;
     }
 
     private String resolveRole(AgentCronEntity job) {

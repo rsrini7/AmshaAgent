@@ -129,13 +129,6 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     List<ReasoningStep> loadSteps(Long checkpointId);
 
     /**
-     * Find the most recent AWAITING_APPROVAL checkpoint for a cron session
-     * with the given cronId. Matches sessionId pattern starting with 
-     * {@link com.arcclaw.core.agent.AgentSentinels#CRON_SESSION_PREFIX}.
-     */
-    Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId);
-
-    /**
      * Load the most recent autonomy level for a session from its checkpoints.
      */
     Optional<AutonomyLevel> loadLatestAutonomyForSession(String sessionId);
@@ -219,7 +212,10 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      */
     Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId);
 
-    Optional<AgentCheckpoint> findLatestAwaitingApprovalByPrefix(String prefix);
+    /**
+     * Finds the latest checkpoint awaiting approval for a session ID containing the given string (e.g. cronId).
+     */
+    Optional<AgentCheckpoint> findLatestAwaitingApprovalBySessionContaining(String segment);
 
     /**
      * Retrieves the absolute latest checkpoint for this session, regardless of status or role.

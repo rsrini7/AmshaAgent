@@ -242,6 +242,9 @@ public class CompactionService {
                 break; // success
             } catch (Exception e) {
                 if (isRateLimit(e) || isJsonError(e)) {
+                    if (isRateLimit(e)) {
+                        rateLimitTracker.recordHit("compaction");
+                    }
                     String errorType = isRateLimit(e) ? "rate-limited" : "JSON validation failed";
                     if (i < maxRetries) {
                         long backoffMs = (long) Math.pow(2, i) * 1000L;
@@ -268,7 +271,7 @@ public class CompactionService {
             return compactionModel.chat(UserMessage.userMessage(prompt)).aiMessage().text();
         } catch (Exception e) {
             log.warnf("Compaction fallback attempt %d/%d failed: %s", attempt, maxRetries, e.getMessage());
-            return "";
+            throw new CompactionAbortedException("Compaction fallback failed", e);
         }
     }
 

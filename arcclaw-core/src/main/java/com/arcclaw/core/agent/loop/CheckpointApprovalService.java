@@ -7,7 +7,6 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.agent.sse.HitlEventType;
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -105,20 +104,15 @@ public class CheckpointApprovalService {
 
     /**
      * Resolves the correct AWAITING_APPROVAL checkpoint. 
-     * Handles both direct sessionId and cronId aliases.
+     * Handles both direct sessionId and segments (e.g. cronId).
      */
     private AgentCheckpoint resolveAwaitingCheckpoint(String idOrSid) {
         // 1. Try direct sessionId lookup
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(idOrSid);
         if (cpOpt.isPresent()) return cpOpt.get();
 
-        // 2. Try cron-session prefix lookup (if idOrSid is just the UUID part)
-        String cronPrefix = AgentSentinels.CRON_SESSION_PREFIX + idOrSid;
-        cpOpt = agentStore.findLatestAwaitingApprovalByPrefix(cronPrefix);
-        if (cpOpt.isPresent()) return cpOpt.get();
-
-        // 3. Try legacy/fallback alias lookup
-        cpOpt = agentStore.findLatestAwaitingApprovalForCron(idOrSid);
+        // 2. Try segment lookup (for cron-sessions which may have extended IDs containing the UUID)
+        cpOpt = agentStore.findLatestAwaitingApprovalBySessionContaining(idOrSid);
         if (cpOpt.isPresent()) return cpOpt.get();
 
         throw new CheckpointResolutionException(

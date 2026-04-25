@@ -10,7 +10,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -248,12 +247,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId)
         { return storeAdapter.findLatestAwaitingApproval(sessionId).map(CheckpointMapper::toEntity); }
 
-    @Override public Optional<AgentCheckpoint> findLatestAwaitingApprovalByPrefix(String prefix)
-        { return storeAdapter.findLatestAwaitingApprovalWithPrefix(prefix).map(CheckpointMapper::toEntity); }
-
-    @Override public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId;
-        return storeAdapter.findLatestAwaitingApprovalWithPrefix(sessionPrefix).map(CheckpointMapper::toEntity);
+    @Override
+    public Optional<AgentCheckpoint> findLatestAwaitingApprovalBySessionContaining(String segment) {
+        return storeAdapter.findLatestAwaitingApprovalBySessionContaining(segment)
+                .map(CheckpointMapper::toEntity);
     }
 
     @Override public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId)

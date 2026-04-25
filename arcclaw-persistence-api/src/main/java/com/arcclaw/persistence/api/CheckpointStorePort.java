@@ -92,9 +92,9 @@ public interface CheckpointStorePort {
     List<CheckpointDto> findStaleApprovals(Instant cutoff);
 
     /**
-     * Finds the latest checkpoint awaiting approval for a given session prefix (e.g. cron).
+     * Finds the latest checkpoint awaiting approval for a session ID containing the given string (e.g. cronId).
      */
-    Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix);
+    Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment);
     /**
      * Returns the absolute latest checkpoint for this session, regardless of status.
      * Used for continuity and continuity phrases (§7.29).

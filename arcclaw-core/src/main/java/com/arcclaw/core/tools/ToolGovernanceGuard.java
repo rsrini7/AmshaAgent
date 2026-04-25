@@ -32,7 +32,7 @@ public class ToolGovernanceGuard {
     @Inject RoleRegistry roleRegistry;
     @Inject ObjectMapper objectMapper;
 
-    private final AutonomyPolicy autonomyPolicy = new AutonomyPolicy.Default();
+    private final AutonomyPolicy autonomyPolicy = new AutonomyPolicy.Standard();
 
     public void verifyRoleCapability(String toolName, String agentRole) {
         if (agentRole == null) return;

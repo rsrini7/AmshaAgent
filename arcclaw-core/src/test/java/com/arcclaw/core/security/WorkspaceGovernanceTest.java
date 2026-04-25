@@ -30,7 +30,7 @@ public class WorkspaceGovernanceTest {
 
     @Test
     void testAutonomyPolicyLogic() {
-        AutonomyPolicy policy = new AutonomyPolicy.Default();
+        AutonomyPolicy policy = new AutonomyPolicy.Standard();
 
         // READONLY
         assertTrue(policy.isAllowed(AutonomyLevel.READONLY, ToolOperation.READ_FS));
