@@ -26,7 +26,7 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
                     defaultValue = "qwen-3-235b-a22b-instruct-2507")
     String modelName;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.max-tokens",
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
                     defaultValue = "8192")
     int maxTokens;
 

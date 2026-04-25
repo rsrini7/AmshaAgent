@@ -38,6 +38,9 @@ public class ChatModelProducer {
                     defaultValue = "llama-3.3-70b-versatile")
     String modelName;
 
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens", defaultValue = "8192")
+    int maxTokens;
+
     @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
     int maxRetries;
 
@@ -128,7 +131,7 @@ public class ChatModelProducer {
 
                 ChatModel fallback = modelFactory.createModel(
                     resolvedFbProvider, fbBaseUrl, fbApiKey,
-                    fbModel, 8192, timeout, maxRetries, 
+                    fbModel, maxTokens, timeout, maxRetries, 
                     ollamaBaseUrl, ollamaModelId);
                 
                 return new FallbackChatModel(primary, fallback, modelName, displayModel, fallbackMessageThreshold);

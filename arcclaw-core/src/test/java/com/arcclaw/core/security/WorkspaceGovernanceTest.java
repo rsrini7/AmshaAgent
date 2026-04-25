@@ -35,13 +35,19 @@ public class WorkspaceGovernanceTest {
         // READONLY
         assertTrue(policy.isAllowed(AutonomyLevel.READONLY, ToolOperation.READ_FS));
         assertFalse(policy.isAllowed(AutonomyLevel.READONLY, ToolOperation.WRITE_FS));
+        assertFalse(policy.isAllowed(AutonomyLevel.READONLY, ToolOperation.WRITE_MEMORY));
 
         // FULL
         assertTrue(policy.isAllowed(AutonomyLevel.FULL, ToolOperation.EXECUTE_SHELL));
+        assertTrue(policy.isAllowed(AutonomyLevel.FULL, ToolOperation.WRITE_MEMORY));
+        assertTrue(policy.isAllowed(AutonomyLevel.FULL, ToolOperation.DELEGATE_AUTONOMOUS));
 
         // SUPERVISED
         assertTrue(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.READ_FS));
         assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.VAULT_ACCESS));
+        assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.WRITE_MEMORY));
+        assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.DELEGATE_AUTONOMOUS));
+        assertFalse(policy.isAllowed(AutonomyLevel.SUPERVISED, ToolOperation.WRITE_FS));
     }
 
 

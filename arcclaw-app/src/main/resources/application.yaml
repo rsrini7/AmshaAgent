@@ -4,6 +4,8 @@
 # =============================================================================
 
 quarkus:
+  shutdown:
+    timeout: 30S
   vertx:
     prefer-native-transport: true
     use-async-dns: true
@@ -365,7 +367,7 @@ arcclaw:
       enabled: true
       threshold: 10
       keep-recent: 5
-      max-tokens: 1024
+      max-output-tokens: 1024
       max-chars: 96000 
       api-key: "${ARCCLAW_COMPACTION_API_KEY:${ARCCLAW_LLM_API_KEY}}"
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:${ARCCLAW_LLM_BASE_URL}}"
@@ -705,6 +707,7 @@ mp:
       hot-reload: false
     memory:
       compaction:
+        max-output-tokens: 1024
         enabled: false
         threshold: 4
         keep-recent: 2
@@ -713,7 +716,6 @@ mp:
         enabled: true
     audit:
       hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
-
     channel:
       telegram:
         enabled: false
@@ -725,33 +727,22 @@ mp:
       strategy: NONE
     vault:
       pepper: "test-pepper-00000000000000000000000000000000"
-
     mcp:
       server-enabled: false
-
     cron:
       max-lookback-window: PT999H
-
     recovery:
       stalled-threshold-minutes: 15
-
-    # ---------------------------------------------------------------------------
-    # TIER 5 — RESILIENCE PATTERNS (§Tire5.md)
-    # ---------------------------------------------------------------------------
     tools:
       # Slow tools that should be isolated to the 'external-tool-executor' bulkhead (§T5-2)
       external-tools: "playwright_navigate,playwright_click,playwright_type,playwright_press,playwright_select,playwright_scroll,playwright_screenshot,playwright_content,web_search"
     parallel:
-      # Timeout for individual tool executions within a parallel batch (§7.16)
       tool-timeout-seconds: 60
     notification:
       retry:
-        # Channel delivery retry configuration with exponential backoff (§T5-5)
         attempts: 3
         initial-delay-ms: 1000
-    compaction:
-      # Token-based summary bounds enforcement (§T5-8)
-      max-tokens: 1000
+
 
 "%staging":
   quarkus:

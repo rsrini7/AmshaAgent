@@ -17,6 +17,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 @QuarkusTest
 public class IdentityExtractionReflexTest {
@@ -55,7 +56,7 @@ public class IdentityExtractionReflexTest {
         
         // Verify MemoryPort got called (with timeout since it's async)
         ArgumentCaptor<MemoryEntryDto> captor = ArgumentCaptor.forClass(MemoryEntryDto.class);
-        verify(memoryPort, org.mockito.Mockito.timeout(5000)).index(captor.capture());
+        verify(memoryPort, Mockito.timeout(5000)).index(captor.capture());
         
         MemoryEntryDto captured = captor.getValue();
         Assertions.assertEquals("The user's name is Alice.", captured.text());

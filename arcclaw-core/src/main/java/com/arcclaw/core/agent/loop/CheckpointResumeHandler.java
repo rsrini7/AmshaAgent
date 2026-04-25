@@ -31,6 +31,7 @@ import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -86,6 +87,11 @@ public class CheckpointResumeHandler {
             String userId,
             String chatId,
             String channelType) {
+
+        if (!AgentGuards.isContainerAvailable()) {
+            log.warnf("Container shut down — cannot resume session %s", sessionId);
+            return;
+        }
 
         executor.execute(() -> {
             MessageContext context = null;

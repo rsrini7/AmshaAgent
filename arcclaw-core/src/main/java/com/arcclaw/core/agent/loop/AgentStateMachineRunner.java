@@ -16,7 +16,6 @@ import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.structured.StructuredOutputException;
@@ -80,8 +79,6 @@ public class AgentStateMachineRunner {
     private final ChatMemoryWriter writer;
     private final Instance<AgentObserver> observers;
     private final SkillRegistry skillRegistry;
-    private final InputSanitizer piiScanReflex;
-    private final PiiRedactionTransformer piiTransformer;
     private final AgentOtelContext agentOtelContext;
     private final IntentClassificationService intentDetector;
     private final LoopExitPublisher loopExitPublisher;
@@ -95,8 +92,6 @@ public class AgentStateMachineRunner {
                                    ChatMemoryWriter writer,
                                    Instance<AgentObserver> observers,
                                    SkillRegistry skillRegistry,
-                                   @InputSanitizer.PII InputSanitizer piiScanReflex,
-                                   PiiRedactionTransformer piiTransformer,
                                    AgentOtelContext agentOtelContext,
                                    IntentClassificationService intentDetector,
                                    LoopExitPublisher loopExitPublisher,
@@ -108,8 +103,6 @@ public class AgentStateMachineRunner {
         this.writer = writer;
         this.observers = observers;
         this.skillRegistry = skillRegistry;
-        this.piiScanReflex = piiScanReflex;
-        this.piiTransformer = piiTransformer;
         this.agentOtelContext = agentOtelContext;
         this.intentDetector = intentDetector;
         this.loopExitPublisher = loopExitPublisher;
@@ -143,18 +136,13 @@ public class AgentStateMachineRunner {
         int rateLimitRetryCount = 0;
         String transientError = null;  // written by write-intent injection AND correction paths
 
-        String originalGoal = context.goal() != null ? context.goal() : "unknown";
-        
-        // --- 1. PII Redaction & Goal Preparation ---
-        String goal = piiTransformer != null ? piiTransformer.transform(null, originalGoal) : originalGoal;
-        if (goal == null) goal = originalGoal;
+        // --- 1. Goal Preparation ---
+        String goal = context.goal() != null ? context.goal() : "unknown";
         String goalHash = AgentErrorMessageUtil.hashGoal(goal);
 
         if (log.isInfoEnabled()) {
-            String sanitized = piiScanReflex != null ? piiScanReflex.sanitize(goal) : goal;
-            if (sanitized == null) sanitized = goal;
-            String preview = sanitized.length() > LOG_GOAL_MAX
-                    ? sanitized.substring(0, LOG_GOAL_MAX) : sanitized;
+            String preview = goal.length() > LOG_GOAL_MAX
+                    ? goal.substring(0, LOG_GOAL_MAX) : goal;
             log.infof(GOAL_LOG_FMT, context.sessionId(), preview, context.maxIterations());
         }
 

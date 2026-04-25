@@ -53,7 +53,8 @@ public enum ToolCapability {
         "Go: needs complete program with 'package main' and 'func main()'. " +
         "ALWAYS pass flat JSON. Examples: " +
         "{\"code\":\"System.out.println(\\\"Hello\\\");\",\"language\":\"java\"} — WRONG (no class). " +
-        "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} — CORRECT."),
+        "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} — CORRECT. " +
+        "CRITICAL: Keep your JSON payload under 2000 characters to prevent max_tokens truncation. For short snippets, use a compact single-line form without newlines."),
 
     /**
      * Ability to delegate tasks to a domain expert sub-agent.

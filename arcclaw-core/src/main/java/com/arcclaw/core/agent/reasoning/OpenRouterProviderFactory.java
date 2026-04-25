@@ -23,7 +23,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                     defaultValue = "openai/gpt-oss-20b:free")
     String modelName;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.max-tokens",
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
                     defaultValue = "8192")
     int maxTokens;
 

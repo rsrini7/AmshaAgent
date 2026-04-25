@@ -76,7 +76,10 @@ public class ToolGovernanceGuard {
             if (level == AutonomyLevel.SUPERVISED && !isSchedulingTool &&
                     (requiredOp == ToolOperation.NETWORK_OUTBOUND
                             || requiredOp == ToolOperation.VAULT_ACCESS
-                            || requiredOp == ToolOperation.EXECUTE_SHELL)) {
+                            || requiredOp == ToolOperation.EXECUTE_SHELL
+                            || requiredOp == ToolOperation.WRITE_MEMORY
+                            || requiredOp == ToolOperation.DELEGATE_AUTONOMOUS
+                            || requiredOp == ToolOperation.WRITE_FS)) {
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)",
                           toolName, level, requiredOp);
                 try {

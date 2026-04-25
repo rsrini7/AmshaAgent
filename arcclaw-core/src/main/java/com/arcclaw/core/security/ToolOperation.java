@@ -32,5 +32,15 @@ public enum ToolOperation {
     /**
      * Writing durable autonomous agent tasks (cron scheduling).
      */
-    SCHEDULE_AUTONOMOUS
+    SCHEDULE_AUTONOMOUS,
+
+    /**
+     * Storing or modifying information in long-term autonomous memory.
+     */
+    WRITE_MEMORY,
+
+    /**
+     * Delegating tasks to another autonomous agent.
+     */
+    DELEGATE_AUTONOMOUS
 }

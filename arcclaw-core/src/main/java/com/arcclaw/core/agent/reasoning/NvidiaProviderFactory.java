@@ -23,7 +23,7 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
                     defaultValue = "mistralai/devstral-2-123b-instruct-2512")
     String modelName;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.max-tokens",
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
                 defaultValue = "8192")
     int maxTokens;
 

@@ -123,8 +123,6 @@ class AgentStateMachineRunnerTest {
                 writer,
                 observers,
                 skillRegistry,
-                piiScanReflex,
-                piiTransformer,
                 agentOtelContext,
                 intentDetector,
                 loopExitPublisher,

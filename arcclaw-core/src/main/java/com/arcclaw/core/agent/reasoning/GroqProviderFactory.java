@@ -26,7 +26,7 @@ public class GroqProviderFactory implements AgentChatModelProvider {
                     defaultValue = "llama-3.3-70b-versatile")
     String modelName;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.max-tokens",
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
                     defaultValue = "8192")
     int maxTokens;
 

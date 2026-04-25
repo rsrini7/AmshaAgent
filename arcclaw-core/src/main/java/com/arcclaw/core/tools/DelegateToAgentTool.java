@@ -5,6 +5,7 @@ import static com.arcclaw.core.message.UserMessages.*;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -53,9 +54,7 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Override
     public ToolOperation requiredOperation() {
-        // Dispatching a goal is read-only at the coordinator level.
-        // The inner agent's own tool calls are gated by their specific Operations.
-        return ToolOperation.READ_FS;
+        return ToolOperation.DELEGATE_AUTONOMOUS;
     }
 
     @Override
@@ -96,8 +95,15 @@ public class DelegateToAgentTool implements AgentTool {
 
         String normalized = agentName.trim().toLowerCase();
 
+        // 0. Recursion Guard: Prevent infinite delegation loops
+        int depth = outerSessionId.split(Pattern.quote(AgentSentinels.DELEGATE_SESSION_SENTINEL)).length - 1;
+        if (depth >= 3) {
+            log.warnf("[DELEGATE] Hard block: delegation depth limit (3) exceeded for session %s", outerSessionId);
+            return ToolResponse.failure(400, "Recursion limit exceeded: Maximum delegation depth of 3 reached. A task cannot be delegated more than 3 levels deep.");
+        }
+
         // 1. Self-delegation guard using registry metadata
-        if (isSelfDelegation(normalized)) {
+        if (isSelfDelegation(normalized, currentRoleName)) {
             return ToolResponse.failure(400,
                 delegationSelfGuard(normalized, delegatableList));
         }
@@ -208,8 +214,8 @@ public class DelegateToAgentTool implements AgentTool {
                 .collect(Collectors.joining(", "));
     }
 
-    private boolean isSelfDelegation(String normalized) {
-        AgentRoleEnum current = AgentRoleEnum.COORDINATOR;
+    private boolean isSelfDelegation(String normalized, String currentRoleName) {
+        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
         return current.id().equals(normalized) ||
                current.definition().aliases().contains(normalized);
     }

@@ -41,7 +41,7 @@ public class IngestDocumentTool implements AgentTool {
 
     @Override
     public ToolOperation requiredOperation() {
-        return ToolOperation.READ_FS;
+        return ToolOperation.WRITE_MEMORY;
     }
 
     @Override
