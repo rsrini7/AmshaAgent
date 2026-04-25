@@ -30,7 +30,9 @@ public final class UserMessages {
     public static final String DELEGATION_GOAL_REQUIRED = "Parameter 'goal' is required. Please provide a clear, specific goal for the sub-agent.";
     public static final String DELEGATION_SELF_GUARD_FORMAT = "Cannot delegate to yourself (%s). Route to a specialist: %s.";
     public static final String DELEGATION_UNKNOWN_AGENT_FORMAT = "Unknown agent '%s'. Valid agents: %s.";
-    public static final String DELEGATION_REJECTED_CAPS_FORMAT = "Delegation to %s rejected: target role has capabilities [%s] not permitted for delegating role [%s]. Use a role with sufficient capabilities or request coordinator to delegate.";
+    public static final String DELEGATION_REJECTED_CAPS_FORMAT = "Delegation to %s rejected: target role has capabilities [%s] not permitted for delegating role [%s]. " +
+                                                                  "Only roles with sufficient capabilities (e.g. 'coder') can delegate to this agent. " +
+                                                                  "Please request the coordinator to delegate via coder.";
     public static final String DELEGATION_FAILED_FORMAT = "Delegation to '%s' failed: %s";
     public static final String DELEGATION_PAUSED_FORMAT = "Agent '%s' paused for human approval of tool '%s'. Delegation cannot complete until the inner session is approved. Session: %s";
     public static final String DELEGATION_EXCEEDED_FORMAT = "Agent '%s' exceeded its iteration budget (%d iterations). Try simplifying the goal.";
