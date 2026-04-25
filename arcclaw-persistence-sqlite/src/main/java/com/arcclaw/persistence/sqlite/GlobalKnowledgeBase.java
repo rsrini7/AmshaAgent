@@ -61,7 +61,7 @@ public class GlobalKnowledgeBase {
         }
     }
 
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional
     public List<MemoryChunkDto> search(String query, int topN) {
         if (!ftsInterceptor.isVectorSearchEnabled()) {
             return List.of();

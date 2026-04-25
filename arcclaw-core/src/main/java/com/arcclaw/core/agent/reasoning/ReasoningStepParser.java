@@ -143,25 +143,71 @@ public class ReasoningStepParser {
 
     private Map<String, Object> deserializeParams(String sessionId, String argsJson) {
         if (argsJson == null || argsJson.isBlank()) return Map.of();
+        
+        // Phase 1: Try direct parse
         try {
-            Map<String, Object> parsed = objectMapper.readValue(argsJson, new TypeReference<Map<String, Object>>() {});
-            if (parsed != null) {
-                // §Issue 3: Coerce "true"/"false" strings to booleans
-                parsed.entrySet().forEach(entry -> {
-                    if (entry.getValue() instanceof String s) {
-                        if ("true".equalsIgnoreCase(s)) {
-                            entry.setValue(Boolean.TRUE);
-                        } else if ("false".equalsIgnoreCase(s)) {
-                            entry.setValue(Boolean.FALSE);
-                        }
-                    }
-                });
-            }
-            return parsed != null ? parsed : Map.of();
+            return doDeserialize(argsJson);
         } catch (Exception e) {
-            log.warnf("Failed to parse tool arguments JSON for session %s: %s", sessionId, e.getMessage());
-            return Map.of("__error", e.getMessage(), "parameters", argsJson);
+            log.warnf("Initial JSON parse failed for session %s: %s. Attempting repair.", sessionId, e.getMessage());
+            
+            // Phase 2: Repair and retry
+            try {
+                String repaired = sanitizeJson(argsJson);
+                return doDeserialize(repaired);
+            } catch (Exception e2) {
+                log.errorf("JSON repair failed for session %s: %s", sessionId, e2.getMessage());
+                return Map.of("__error", e.getMessage(), "parameters", argsJson);
+            }
         }
+    }
+
+    private Map<String, Object> doDeserialize(String json) throws Exception {
+        Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        if (parsed != null) {
+            parsed.entrySet().forEach(entry -> {
+                if (entry.getValue() instanceof String s) {
+                    if ("true".equalsIgnoreCase(s)) {
+                        entry.setValue(Boolean.TRUE);
+                    } else if ("false".equalsIgnoreCase(s)) {
+                        entry.setValue(Boolean.FALSE);
+                    }
+                }
+            });
+        }
+        return parsed != null ? parsed : Map.of();
+    }
+
+    /**
+     * Attempts to repair common LLM tool-calling JSON errors:
+     * 1. Unescaped newlines within string values
+     * 2. Unescaped double-quotes within what looks like a code field
+     */
+    private String sanitizeJson(String json) {
+        if (json == null) return null;
+        
+        // Replace literal newlines with \n ONLY if they are not escaped
+        // This is a naive heuristic but works for code blocks.
+        // We look for a newline that is preceded by something other than \
+        StringBuilder sb = new StringBuilder();
+        boolean inString = false;
+        char prev = 0;
+        
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            
+            if (c == '"' && prev != '\\') {
+                inString = !inString;
+            }
+            
+            if (inString && (c == '\n' || c == '\r')) {
+                sb.append("\\n");
+            } else {
+                sb.append(c);
+            }
+            prev = c;
+        }
+        
+        return sb.toString();
     }
 
     private boolean isUnicodeCorrupted(String text) {

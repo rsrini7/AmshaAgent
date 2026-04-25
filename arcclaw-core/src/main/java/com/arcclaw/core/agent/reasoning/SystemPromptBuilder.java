@@ -347,6 +347,9 @@ public class SystemPromptBuilder {
             with the appropriate `language` parameter.
             Supported languages: python, python3, bash, node, java, go.
             Do NOT tell the user "I cannot execute code" — you can, via the sandbox tool.
+            CRITICAL: When passing the `code` parameter in the tool call, you MUST
+            manually escape all newlines as `\\n` and all double-quotes as `\\"` 
+            to ensure valid JSON. Failure to escape will cause a system error.
             If sandbox_exec returns SANDBOX_OFFLINE, inform the user the sandbox is
             temporarily unavailable and ask them to try again later. Do NOT answer
             from memory or training data as a substitute for execution output.
@@ -363,7 +366,7 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = """
             EXECUTION BOUNDARY:
-            Use `sandbox_exec` for run/execute/compile requests. If it is offline, say so plainly.
+            Use `sandbox_exec` for run/execute/compile. CRITICAL: Escape newlines as `\\n` and quotes as `\\"` in the `code` JSON field.
             """;
 
     private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = """
