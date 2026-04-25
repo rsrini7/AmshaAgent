@@ -344,7 +344,7 @@ public class AgentLoop {
             // Fix C2: Instead of empty (which causes restart), we return a finished result 
             // that forces the coordinator to see the failure in history and wrap up.
             List<ReasoningStep> historyWithFailure = new ArrayList<>(resumedHistory);
-            historyWithFailure.add(ReasoningStep.observe("delegate_to_agent", observation, "Delegate failed — synthesize and finish"));
+            historyWithFailure.add(ReasoningStep.observe(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed — synthesize and finish"));
             
             return Optional.of(AgentResult.finished(observation, historyWithFailure));
         }

@@ -17,6 +17,7 @@ import jakarta.enterprise.inject.Instance;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tool.DynamicToolLookup;
@@ -62,7 +63,7 @@ class ToolStepHandlerGuardTest {
         
         // Silently rewrites to delegate_to_agent instead of blocking with hint
         assertEquals(DecisionType.PROCEED, decision.type());
-        assertEquals("delegate_to_agent", decision.step().action());
+        assertEquals(ToolCapability.DELEGATE_TO_AGENT.toolName(), decision.step().action());
         // Thought is preserved from original step
         assertEquals("thought", decision.step().thought());
         // Parameter 'agent' should be 'researcher'

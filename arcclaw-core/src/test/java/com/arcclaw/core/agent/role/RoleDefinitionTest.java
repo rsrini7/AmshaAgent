@@ -67,7 +67,7 @@ public class RoleDefinitionTest {
     void testArchitectCapabilities() {
         RoleDefinition archDef = AgentRoleEnum.ARCHITECT.definition();
         assertEquals(Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.DELEGATE_TO_AGENT), archDef.capabilities());
-        Set<String> expectedTools = Set.of("github", "memory_search", "delegate_to_agent");
+        Set<String> expectedTools = Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName(), ToolCapability.DELEGATE_TO_AGENT.toolName());
         assertEquals(expectedTools, archDef.toolNames(), "Architect should have github, memory_search and delegate_to_agent tools");
     }
 
