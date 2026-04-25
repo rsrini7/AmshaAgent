@@ -69,6 +69,9 @@ public class CheckpointResumeCoordinator {
     @Inject
     ChannelPluginRegistry channelPluginRegistry;
 
+    @Inject
+    ChatMemoryWriter chatMemoryWriter;
+
     /**
      * Decision outcome for the checkpoint load phase.
      */
@@ -178,6 +181,11 @@ public class CheckpointResumeCoordinator {
         String staleTool = checkpoint.getPendingToolName();
         log.warnf("CheckpointResumeCoordinator: STALE-APPROVAL session=%s had pending tool '%s' "
                 + "but received new message. Archiving and starting fresh.", sessionId, staleTool);
+
+        // 🟢 FIX Bug 3: Scrub unfulfilled tool calls from ChatMemoryStore.
+        // This ensures the discarded tool call doesn't re-surface in the next turn's history
+        // when the LLM sees the previous AiMessage with tool requests but no results.
+        chatMemoryWriter.scrubUnfulfilledToolCalls(sessionId);
 
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
         checkpoint.setFailReason("Discarded: new user message received before approval was given.");

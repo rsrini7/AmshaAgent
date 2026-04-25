@@ -105,8 +105,10 @@ public class ChatHistoryAssembler {
                             skip = true;
                         } else if (aiText != null && aiText.length() <= 4_000 && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
                             skip = true;
-                        } else if (ai.hasToolExecutionRequests() && (aiText == null || aiText.isBlank())) {
-                            // Scrub AI messages that are ONLY tool calls (no thought/text)
+                        } else if (ai.hasToolExecutionRequests()) {
+                            // 🟢 FIX 1.1: Scrub tool calls from persistent history.
+                            // If we kept the AiMessage but scrubbed the ToolExecutionResultMessage,
+                            // the LLM would see an unfulfilled tool call and re-issue it.
                             skip = true;
                         }
                     } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_TOOL_APPROVED)) {

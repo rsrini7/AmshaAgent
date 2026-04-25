@@ -24,7 +24,6 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
-
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -277,9 +276,16 @@ public class AgentStateMachineRunner {
                                 finalResult = res;
                                 // loopExitPublisher fires in finally — see first TERMINAL comment above.
                                 return finalResult;
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
-                                history.add(rl.correctedStep());
-                                transientError = rl.correctionHint();
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.Correction correction) {
+                                log.warnf("STATE-MACHINE correction required in session %s — retrying with hint",
+                                        context.sessionId());
+                                history.add(correction.correctedStep());
+                                transientError = correction.correctionHint();
+                                llmSchemaErrorCount++;
+                                break; // exit validation loop to retry engine
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak _) {
+                                log.warnf("STATE-MACHINE raw tool-call leak detected in session %s — retrying with hint",
+                                        context.sessionId());
                                 llmSchemaErrorCount++;
                                 break; // exit validation loop to retry engine
                             } else if (outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed sf) {
@@ -330,6 +336,14 @@ public class AgentStateMachineRunner {
                                 finalResult = c.result();
                                 // loopExitPublisher fires in finally — see first TERMINAL comment above.
                                 return finalResult;
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.Correction correction) {
+                                history.add(correction.correctedStep());
+                                transientError = correction.correctionHint();
+                                llmSchemaErrorCount++;
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
+                                history.add(rl.correctedStep());
+                                transientError = rl.correctionHint();
+                                llmSchemaErrorCount++;
                             }
                             // Other outcomes (leak, salvage) follow same retry/terminal path as above
                             break; 

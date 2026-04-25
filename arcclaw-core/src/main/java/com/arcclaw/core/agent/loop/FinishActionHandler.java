@@ -124,7 +124,7 @@ public class FinishActionHandler {
      * decide what to do next without inspecting answer text directly.
      */
     public sealed interface FinishOutcome
-            permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.SalvageFailed {
+            permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.Correction, FinishOutcome.SalvageFailed {
 
         /**
          * The answer passed all guards — return it as the session result.
@@ -137,6 +137,11 @@ public class FinishActionHandler {
         record RetryLeak(ReasoningStep correctedStep,
                          String correctionHint,
                          String leakedToolName) implements FinishOutcome {}
+
+        /**
+         * A hallucination or policy violation was detected that requires a corrective turn.
+         */
+        record Correction(ReasoningStep correctedStep, String correctionHint) implements FinishOutcome {}
 
         /**
          * The schema self-correction budget was exhausted and no salvageable
@@ -153,23 +158,8 @@ public class FinishActionHandler {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
 
-        // --- Extract candidate answer ---
-        String candidateAnswer = step.thought();
-        if (step.actionInput() != null
-                && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
-            candidateAnswer = String.valueOf(
-                    step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
-        }
-
-        // 🟢 FIX: Strip "FINISH" token leaks from LLM output boundaries
-        if (candidateAnswer != null) {
-            candidateAnswer = candidateAnswer.strip();
-            // Match one or more common standalone prefixes
-            candidateAnswer = PREFIX_TOKEN_LEAK.matcher(candidateAnswer).replaceFirst("");
-            // Match common standalone words/lines at the very end
-            candidateAnswer = SUFFIX_TOKEN_LEAK.matcher(candidateAnswer).replaceFirst("");
-            candidateAnswer = candidateAnswer.strip();
-        }
+        // --- Extract and strip candidate answer ---
+        String candidateAnswer = extractCandidateAnswer(step);
 
         // --- Raw tool-call leak detection ---
         if (qualityGuard.isRawToolCallLeak(candidateAnswer)) {
@@ -180,27 +170,19 @@ public class FinishActionHandler {
             return outcome;
         }
 
-        // --- HTML unescape + unicode normalisation ---
-        String answer = candidateAnswer;
-        if (answer != null) {
-            answer = StringEscapeUtils.unescapeHtml4(answer);
-            answer = answer
-                    .replace("\\u003c", "<")
-                    .replace("\\u003e", ">")
-                    .replace("\\u0026", "&")
-                    .replace("\\u0027", "'");
-            
-            // --- Strip leaked tool-call JSON ---
-            answer = sanitizeAnswer(answer);
+        // --- HTML unescape + unicode normalisation + JSON strip ---
+        String answer = unescapeAndNormalize(candidateAnswer);
+
+        // --- Hallucination detection ---
+        FinishOutcome hallucinationCheck = checkHallucination(sessionId, history, step, answer);
+        if (hallucinationCheck != null) {
+            return hallucinationCheck;
         }
 
         // --- Code-generation policy ---
-        if (answer != null && codePolicy.isGeneratedCodeBlock(answer, agentRole)
-                && !codePolicy.canGenerateCode(agentRole)) {
-            String refusal = codePolicy.buildRefusalMessage(agentRole);
-            log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);     
-            AgentResult result = AgentResult.finished(refusal, List.copyOf(history));
-            return new FinishOutcome.Completed(result, refusal);
+        FinishOutcome codePolicyOutcome = applyCodePolicy(sessionId, agentRole, history, answer);
+        if (codePolicyOutcome != null) {
+            return codePolicyOutcome;
         }
 
         // --- Sanitization ---
@@ -221,6 +203,70 @@ public class FinishActionHandler {
 
         AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
         return new FinishOutcome.Completed(result, finalAnswer);
+    }
+
+    private String extractCandidateAnswer(ReasoningStep step) {
+        String candidateAnswer = step.thought();
+        if (step.actionInput() != null
+                && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY)) {
+            candidateAnswer = String.valueOf(
+                    step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
+        }
+
+        // 🟢 FIX: Strip "FINISH" token leaks from LLM output boundaries
+        if (candidateAnswer != null) {
+            candidateAnswer = candidateAnswer.strip();
+            // Match one or more common standalone prefixes
+            candidateAnswer = PREFIX_TOKEN_LEAK.matcher(candidateAnswer).replaceFirst("");
+            // Match common standalone words/lines at the very end
+            candidateAnswer = SUFFIX_TOKEN_LEAK.matcher(candidateAnswer).replaceFirst("");
+            candidateAnswer = candidateAnswer.strip();
+        }
+        return candidateAnswer;
+    }
+
+    private String unescapeAndNormalize(String candidateAnswer) {
+        if (candidateAnswer == null) return null;
+        String answer = StringEscapeUtils.unescapeHtml4(candidateAnswer);
+        answer = answer
+                .replace("\\u003c", "<")
+                .replace("\\u003e", ">")
+                .replace("\\u0026", "&")
+                .replace("\\u0027", "'");
+        
+        // --- Strip leaked tool-call JSON ---
+        return sanitizeAnswer(answer);
+    }
+
+    private FinishOutcome checkHallucination(String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
+        if (answer != null && answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)) {
+            boolean actuallyScheduled = history.stream().anyMatch(hStep -> 
+                "schedule_task".equals(hStep.action()) && hStep.success());
+            
+            if (!actuallyScheduled) {
+                log.warnf("FINISH-HANDLER: Hallucinated scheduling success detected for session %s. " +
+                          "No 'schedule_task' call found in history.", sessionId);
+                
+                ReasoningStep cleanStep = step.withObservation("Detected hallucinated scheduling success in FINISH answer");
+                String hint = "System: STOP. You claimed '" + AgentSentinels.SCHEDULE_SUCCESS_MESSAGE + "' but you did NOT call " +
+                    "the schedule_task tool in this turn. You must invoke the schedule_task tool with " +
+                    "the correct cron expression and goal BEFORE calling FINISH.";
+                
+                return new FinishOutcome.Correction(cleanStep, hint);
+            }
+        }
+        return null;
+    }
+
+    private FinishOutcome applyCodePolicy(String sessionId, String agentRole, List<ReasoningStep> history, String answer) {
+        if (answer != null && codePolicy.isGeneratedCodeBlock(answer, agentRole)
+                && !codePolicy.canGenerateCode(agentRole)) {
+            String refusal = codePolicy.buildRefusalMessage(agentRole);
+            log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);     
+            AgentResult result = AgentResult.finished(refusal, List.copyOf(history));
+            return new FinishOutcome.Completed(result, refusal);
+        }
+        return null;
     }
 
     /**

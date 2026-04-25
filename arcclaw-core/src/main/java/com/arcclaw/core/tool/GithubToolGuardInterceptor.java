@@ -109,8 +109,8 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
             String guardObs = "GitHub tool blocked: the goal contains no GitHub repository or resource URL. " +
                     "If the goal contains a Java class reference (e.g. 'com.example.OrderService'), " +
                     "that is a class name, NOT a GitHub path. " +
-                    "Analyze the stack trace or code snippet from the goal text directly. " +
-                    "FINISH with your analysis now — do NOT call any other tools.";
+                    "Analyze the stack trace or code snippet from the goal text directly in plain text. " +
+                    "FINISH with your analysis now — do NOT output JSON and do NOT call any other tools.";
             log.warnf("[TOOL-INTENT-GUARD] github blocked session=%s goal='%s'",
                     sessionId, goal.length() > 100 ? goal.substring(0, 100) + "..." : goal);
             return Optional.of(new ToolInvocationGuard.GuardDecision.Blocked(guardObs));

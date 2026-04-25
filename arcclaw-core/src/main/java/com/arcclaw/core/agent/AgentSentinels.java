@@ -35,6 +35,14 @@ public final class AgentSentinels {
 
     // PII Redaction
     public static final String REDACTED_HYPHEN = "REDACTED-";
+    public static final Pattern REDACTED_HYPHEN_PATTERN = Pattern.compile("REDACTED-");
+    public static final String DATA_IS_PII_REDACTED = "isPiiRedacted";
+
+    // Intent/Chitchat
+    public static final String DATA_IS_SIMPLE_CHITCHAT = "isSimpleChitchat";
+
+    // Scheduling
+    public static final String SCHEDULE_SUCCESS_MESSAGE = "Task scheduled successfully";
 
     public static boolean isCronGoal(String goal) {
         return goal != null && goal.toUpperCase().startsWith(CRON_PREFIX);

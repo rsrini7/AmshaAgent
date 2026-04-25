@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -141,5 +142,21 @@ class FinishActionHandlerTest {
         FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
 
         assertEquals("I will finish the task now.", ((FinishActionHandler.FinishOutcome.Completed) outcome).answer());
+    }
+
+    @Test
+    void testHandleBlocksHallucinatedScheduling() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s1");
+        when(ctx.agentRole()).thenReturn("coordinator");
+        
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH, 
+                Map.of("answer", "Task scheduled successfully. ID: fake-uuid"), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Correction);
+        String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
+        assertTrue(hint.contains("STOP. You claimed 'Task scheduled successfully' but you did NOT call the schedule_task tool"));
     }
 }

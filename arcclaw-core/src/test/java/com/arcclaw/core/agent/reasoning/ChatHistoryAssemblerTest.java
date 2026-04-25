@@ -181,11 +181,30 @@ class ChatHistoryAssemblerTest {
 
         // Assert
         // Should only contain: UserMessage("Calculate 1+1"), AiMessage("The result is 2")
-        // ToolExecutionRequest and ToolExecutionResultMessage should be skipped.
+        // AiMessage with ToolExecutionRequest and ToolExecutionResultMessage should be skipped.
         assertEquals(2, result.size());
         assertTrue(result.get(0) instanceof UserMessage);
         assertTrue(result.get(1) instanceof AiMessage);
         assertFalse(((AiMessage) result.get(1)).hasToolExecutionRequests());
+    }
+
+    @Test
+    void testAssemble_scrubsAiMessageWithTextAndToolCallsFromPersistentHistory() {
+        // Arrange
+        String sessionId = "s4";
+        ToolExecutionRequest req = ToolExecutionRequest.builder()
+                .id("call_1").name("calc").arguments("{}").build();
+        List<ChatMessage> history = List.of(
+                AiMessage.aiMessage("I will calculate it", List.of(req)),
+                new ToolExecutionResultMessage("call_1", "calc", "42")
+        );
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(history);
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(sessionId, null, List.of());
+
+        // Assert
+        assertTrue(result.isEmpty(), "AI message with tool requests AND the tool result should BOTH be scrubbed");
     }
 
     @Test

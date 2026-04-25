@@ -96,4 +96,16 @@ class IntentClassificationHandlerTest {
         assertEquals(AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
     }
 
+    @Test
+    void testHandle_stripsTrailingPunctuation() {
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "who am i /", "c1", Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg);
+
+        when(classifier.classify("who am i")).thenReturn("coordinator");
+
+        handler.handle(context);
+
+        verify(classifier).classify("who am i");
+    }
 }

@@ -5,8 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
@@ -147,5 +150,24 @@ class SystemPromptBuilderTest {
                 "Explicit compact prompt flag should force the compact prompt path");
         assertTrue(!result.contains("TOOL_BINDING_MARKER"),
                 "Forced compact mode should bypass the full role template");
+    }
+
+    @Test
+    void testBuildSystemPrompt_piiRedactedIncludesNotice() {
+        // Arrange
+        Map<String, Object> data = new HashMap<>();
+        data.put(AgentSentinels.DATA_IS_PII_REDACTED, true);
+        AgentExecutionContext ctx = new AgentExecutionContext("s1", "user-1", "chat-1", "coordinator", "goal", 
+                AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, data);
+        
+        when(intentService.isSimpleConversational(any())).thenReturn(true);
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("MOCK_PERSONA");
+
+        // Act
+        String result = builder.build(ctx, "coordinator", "s1", "some goal");
+
+        // Assert
+        assertTrue(result.contains("PII PROTECTION NOTICE:"), "Prompt should contain PII notice");
+        assertTrue(result.contains("Do NOT claim the data was stored or saved."), "Prompt should instruct not to claim storage");
     }
 }

@@ -13,6 +13,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
@@ -372,8 +373,9 @@ public class SystemPromptBuilder {
             6. Use `memory_search` only for past-session recall not in the current conversation or summary.
             7. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
             8. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
-            9. A denied or failed tool call does not block a different valid tool on the next user message.
-            10. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
+            9. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.
+            10. A denied or failed tool call does not block a different valid tool on the next user message.
+            11. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
             """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
@@ -472,7 +474,9 @@ public class SystemPromptBuilder {
                                       String agentRole, boolean isCompact, String goal, boolean isSimpleChitchat) {
         
         if (isSimpleChitchat) {
-             return "**STRICT TOOL BINDING CONTRACT**\n"
+             boolean isPiiRedacted = context != null && Boolean.TRUE.equals(context.data().get(AgentSentinels.DATA_IS_PII_REDACTED));
+             
+             String prompt = "**STRICT TOOL BINDING CONTRACT**\n"
                     + "ACTIVE PERSONA: " + agentRole + "\n"
                     + "STRICT MODE — SIMPLE CONVERSATION:\n"
                     + "This user message is a simple greeting or non-tool request.\n"
@@ -480,6 +484,17 @@ public class SystemPromptBuilder {
                     + "- Respond directly as plain text.\n"
                     + "- Do NOT use the tool calling API.\n"
                     + "- Response must be 1-2 sentences maximum.\n\n";
+             
+             if (isPiiRedacted) {
+                 prompt += "PII PROTECTION NOTICE:\n"
+                         + "The user's message contained PII that was redacted by the system. "
+                         + "Do NOT claim the data was stored or saved. "
+                         + "Answer the underlying question using only the [REDACTED-*] placeholder. "
+                         + "If the user asked a question (e.g. 'is that pattern secure?'), answer it "
+                         + "using publicly available information. "
+                         + "If the question is about security, explain that sharing real PII is unsafe.\n\n";
+             }
+             return prompt;
         }
 
         if (!isCompact) {
