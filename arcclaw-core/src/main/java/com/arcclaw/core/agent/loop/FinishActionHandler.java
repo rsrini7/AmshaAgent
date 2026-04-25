@@ -81,6 +81,23 @@ public class FinishActionHandler {
     private static final Pattern TOOL_CALL_JSON_LEAK =
             Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId)\"\\s*:.*?\\}", Pattern.DOTALL);
 
+    /**
+     * Matches common token leaks at the START of an LLM response when it's
+     * transitioning to/from a tool-calling state.
+     */
+    private static final Pattern PREFIX_TOKEN_LEAK = Pattern.compile(
+            "(?i)^(\\s*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:)\\s*)+",
+            Pattern.MULTILINE
+    );
+
+    /**
+     * Matches common token leaks at the END of an LLM response.
+     */
+    private static final Pattern SUFFIX_TOKEN_LEAK = Pattern.compile(
+            "(?i)\\s*(FINISH:?|Action:\\s*FINISH)\\s*$",
+            Pattern.MULTILINE
+    );
+
     private final AnswerGuardStrategy qualityGuard;
     private final CodeGenerationPolicy codePolicy;
     private final RateLimitTracker rateLimitTracker;
@@ -142,9 +159,14 @@ public class FinishActionHandler {
                     step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY));
         }
 
-        // 🟢 FIX: Strip "FINISH:" prefix if present (internal state-machine token leak)
-        if (candidateAnswer != null && candidateAnswer.startsWith("FINISH:")) {
-            candidateAnswer = candidateAnswer.substring("FINISH:".length()).strip();
+        // 🟢 FIX: Strip "FINISH" token leaks from LLM output boundaries
+        if (candidateAnswer != null) {
+            candidateAnswer = candidateAnswer.strip();
+            // Match one or more common standalone prefixes
+            candidateAnswer = PREFIX_TOKEN_LEAK.matcher(candidateAnswer).replaceFirst("");
+            // Match common standalone words/lines at the very end
+            candidateAnswer = SUFFIX_TOKEN_LEAK.matcher(candidateAnswer).replaceFirst("");
+            candidateAnswer = candidateAnswer.strip();
         }
 
         // --- Raw tool-call leak detection ---
