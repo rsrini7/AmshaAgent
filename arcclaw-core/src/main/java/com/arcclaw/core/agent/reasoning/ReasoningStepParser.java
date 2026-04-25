@@ -168,7 +168,7 @@ public class ReasoningStepParser {
         if (text == null || text.isBlank()) return false;
         // Count Unicode replacement characters or private-use area characters (Issue 7)
         long badChars = text.chars()
-                .filter(c -> c == '\uFFFD' || (c >= 0xE000 && c <= 0xF8FF))
+                .filter(c -> c == 0xFFFD || (c >= 0xE000 && c <= 0xF8FF))
                 .count();
         return badChars > 0;
     }
