@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.IntentDetector;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -69,6 +70,16 @@ public class IntentClassificationHandler implements MessageHandler {
                     context.getChatId());
                 return context.getChatId();
             });
+
+            // §Issue 2: If goal was redacted, force simple chitchat to avoid tool-calling loops
+            String currentGoal = context.getGoal();
+            if (currentGoal != null && currentGoal.contains(AgentSentinels.REDACTED_HYPHEN)) {
+                log.infof("PII-redacted goal detected for chat %s — forcing coordinator chitchat", context.getChatId());
+                context.setData("isSimpleChitchat", true);
+                context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+                return HandleResult.CONTINUE;
+            }
+
             String previousRole = roleCache.findLatestRole(sid).orElse(null);
 
             // Bug 2 Fix: Short follow-up heuristics for sticky roles

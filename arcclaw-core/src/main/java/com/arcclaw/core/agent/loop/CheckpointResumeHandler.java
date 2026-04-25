@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -351,6 +352,14 @@ public class CheckpointResumeHandler {
             if (response.isInfraFailure()) return handleInfraFailure(history);
 
             recordReasoningStep(toolName, paramsJson, response.output(), history, sessionId);
+            
+            // §Issue 4: Force summarization turn for ingest_document
+            if (ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)) {
+                history.add(ReasoningStep.systemMessage(
+                        "The document has been ingested successfully. " +
+                        "Summarize what was stored for the user in a natural conversational tone."));
+            }
+            
             completeInProgressCheckpoint(checkpoint);
 
             // §7.32: Return null to allow the StateMachine to continue for one final synthesis turn.

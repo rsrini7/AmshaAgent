@@ -129,7 +129,8 @@ class AgentStateMachineRunnerTest {
                 intentDetector,
                 loopExitPublisher,
                 finishActionHandler,
-                correctionStrategy
+                correctionStrategy,
+                3
         );
 
         lenient().when(observers.iterator()).thenReturn(Collections.emptyIterator());

@@ -10,14 +10,15 @@ public record StepDecision(
         String transientError,
         int llmSchemaErrorCount,
         int consecutiveFailures,
-        boolean isRetryValidation) {
+        boolean isRetryValidation,
+        boolean isRateLimitHit) {
 
     public static StepDecision proceed(ReasoningStep step) {
-        return new StepDecision(DecisionType.PROCEED, null, step, null, 0, 0, false);
+        return new StepDecision(DecisionType.PROCEED, null, step, null, 0, 0, false, false);
     }
 
     public static StepDecision terminal(AgentResult result) {
-        return new StepDecision(DecisionType.TERMINAL, result, null, null, 0, 0, false);
+        return new StepDecision(DecisionType.TERMINAL, result, null, null, 0, 0, false, false);
     }
 
     public static StepDecision continueLoop(String error, int schemaErrorCount) {
@@ -36,14 +37,18 @@ public record StepDecision(
      * (used for deduplication-cache hits).
      */
     public static StepDecision retryEngine(String error, int schemaErrorCount) {
-        return new StepDecision(DecisionType.CONTINUE, null, null, error, schemaErrorCount, 0, false);
+        return new StepDecision(DecisionType.CONTINUE, null, null, error, schemaErrorCount, 0, false, false);
+    }
+
+    public static StepDecision retryRateLimit(String error, int schemaErrorCount) {
+        return new StepDecision(DecisionType.CONTINUE, null, null, error, schemaErrorCount, 0, false, true);
     }
 
     public static StepDecision retryValidation(int consecutiveFailures) {
-        return new StepDecision(DecisionType.CONTINUE, null, null, null, 0, consecutiveFailures, true);
+        return new StepDecision(DecisionType.CONTINUE, null, null, null, 0, consecutiveFailures, true, false);
     }
 
     public static StepDecision proceedWithFailures(ReasoningStep step, int consecutiveFailures) {
-        return new StepDecision(DecisionType.PROCEED, null, step, null, 0, consecutiveFailures, false);
+        return new StepDecision(DecisionType.PROCEED, null, step, null, 0, consecutiveFailures, false, false);
     }
 }

@@ -345,7 +345,10 @@ public class EngineStepHandler {
 
                 log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
                         context.sessionId(), llmSchemaErrorCount);
-                return StepDecision.retryEngine(correction, llmSchemaErrorCount);
+                
+                String fallbackDirective = " If no tool is needed, do NOT call any function. " +
+                        "Produce a FINISH action with your response in the 'thought' field only.";
+                return StepDecision.retryEngine(correction + fallbackDirective, llmSchemaErrorCount);
             }
 
         }
@@ -359,7 +362,7 @@ public class EngineStepHandler {
                         context.sessionId(), retryAfterSeconds);
                 try { Thread.sleep(retryAfterSeconds * 1000L); }
                 catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-                return StepDecision.retryEngine("Rate limit hit, retrying now.", llmSchemaErrorCount);
+                return StepDecision.retryRateLimit("Rate limit hit, retrying now.", llmSchemaErrorCount);
             }
 
             // If the last step has a tool observation (e.g. delegate_to_agent result),

@@ -3,7 +3,6 @@ package com.arcclaw.core.tools;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -289,10 +288,10 @@ public class ScheduleTaskTool implements AgentTool {
      * a canonical IANA string, never an empty value.
      */
     private ZoneId parseTimezone(Map<String, Object> params) {
-        if (!params.containsKey("timezone")) return ZoneOffset.UTC;
+        if (!params.containsKey("timezone")) return ZoneId.of("UTC");
 
         String raw = String.valueOf(params.get("timezone")).strip();
-        if (raw.isEmpty() || "null".equalsIgnoreCase(raw)) return ZoneOffset.UTC;
+        if (raw.isEmpty() || "null".equalsIgnoreCase(raw)) return ZoneId.of("UTC");
 
         try {
             return ZoneId.of(raw);
@@ -301,7 +300,7 @@ public class ScheduleTaskTool implements AgentTool {
             // a 400 error that would be incorrectly fast-pathed as a terminal answer.
             Logger.getLogger(ScheduleTaskTool.class)
                 .warnf("[ScheduleTaskTool] Unrecognized timezone '%s' — defaulting to UTC", raw);
-            return ZoneOffset.UTC;
+            return ZoneId.of("UTC");
         }
     }
 

@@ -23,6 +23,8 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -192,7 +194,7 @@ public class CronJobRunner {
         // 2. Detect JSON-like tool call if LLM stored raw JSON
         if (goal.startsWith("{") && goal.contains("\"goal\"")) {
             try {
-                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(goal);
+                JsonNode node = new ObjectMapper().readTree(goal);
                 if (node.has("goal")) return node.get("goal").asText().trim();
             } catch (Exception e) {
                 // fallback to original

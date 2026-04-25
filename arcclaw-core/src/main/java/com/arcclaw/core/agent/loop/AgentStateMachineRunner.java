@@ -24,6 +24,8 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -86,6 +88,7 @@ public class AgentStateMachineRunner {
     private final LoopExitPublisher loopExitPublisher;
     private final FinishActionHandler finishActionHandler;
     private final CorrectionStrategy correctionStrategy;
+    private final int maxRateLimitRetries;
 
     @Inject
     public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
@@ -99,7 +102,8 @@ public class AgentStateMachineRunner {
                                    IntentClassificationService intentDetector,
                                    LoopExitPublisher loopExitPublisher,
                                    FinishActionHandler finishActionHandler,
-                                   CorrectionStrategy correctionStrategy) {
+                                   CorrectionStrategy correctionStrategy,
+                                   @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries) {
         this.engineStepHandler = engineStepHandler;
         this.toolStepHandler = toolStepHandler;
         this.writer = writer;
@@ -112,6 +116,7 @@ public class AgentStateMachineRunner {
         this.loopExitPublisher = loopExitPublisher;
         this.finishActionHandler = finishActionHandler;
         this.correctionStrategy = correctionStrategy;
+        this.maxRateLimitRetries = maxRateLimitRetries;
     }
 
     /**
@@ -136,6 +141,7 @@ public class AgentStateMachineRunner {
         int iteration = context.startingIteration();
         int llmSchemaErrorCount = 0;   // plain int — NEVER AtomicInteger (§3.7)
         int consecutiveFailures = 0;
+        int rateLimitRetryCount = 0;
         String transientError = null;  // written by write-intent injection AND correction paths
 
         String originalGoal = context.goal() != null ? context.goal() : "unknown";
@@ -189,6 +195,18 @@ public class AgentStateMachineRunner {
                     try {
                         engineDecision = engineStepHandler.processEngineStep(
                                 context, engine, history, transientError, llmSchemaErrorCount, iteration);
+
+                        // §Issue 3: Rate-limit retries are "free" iterations (up to a limit)
+                        if (engineDecision.isRateLimitHit()) {
+                            if (++rateLimitRetryCount > maxRateLimitRetries) {
+                                log.warnf("StateMachine rate limit retries exhausted (%d) for session %s", 
+                                        maxRateLimitRetries, context.sessionId());
+                                finalResult = AgentResult.failed("I hit repeated rate limits and cannot continue.", 
+                                        AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+                                break;
+                            }
+                            iteration--;
+                        }
                     } catch (StructuredOutputException soe) {
                         // Delegate schema-error handling to CorrectionStrategy
                         if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {

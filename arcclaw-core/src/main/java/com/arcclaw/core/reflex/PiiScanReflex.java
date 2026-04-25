@@ -9,6 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Default;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.InputSanitizer;
@@ -63,27 +64,27 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     private record PiiRule(Pattern pattern, String type, String replacement) {}
 
     private static final List<PiiRule> RULES = List.of(
-        new PiiRule(JWT,             "JWT",     "[REDACTED-JWT]"),
-        new PiiRule(EMAIL,           "EMAIL",   "[REDACTED-EMAIL]"),
-        new PiiRule(CREDIT_CARD,     "CARD",    "[REDACTED-CARD]"),
-        new PiiRule(AADHAAR_SPACED,  "AADHAAR", "[REDACTED-AADHAAR]"),
-        new PiiRule(SSN,             "SSN",     "[REDACTED-SSN]"),
+        new PiiRule(JWT,             "JWT",     "[" + AgentSentinels.REDACTED_HYPHEN + "JWT]"),
+        new PiiRule(EMAIL,           "EMAIL",   "[" + AgentSentinels.REDACTED_HYPHEN + "EMAIL]"),
+        new PiiRule(CREDIT_CARD,     "CARD",    "[" + AgentSentinels.REDACTED_HYPHEN + "CARD]"),
+        new PiiRule(AADHAAR_SPACED,  "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
+        new PiiRule(SSN,             "SSN",     "[" + AgentSentinels.REDACTED_HYPHEN + "SSN]"),
         // GSTIN before PAN — PAN is a subset of GSTIN
-        new PiiRule(GSTIN,           "GSTIN",   "[REDACTED-GSTIN]"),
-        new PiiRule(PAN,             "PAN",     "[REDACTED-PAN]"),
+        new PiiRule(GSTIN,           "GSTIN",   "[" + AgentSentinels.REDACTED_HYPHEN + "GSTIN]"),
+        new PiiRule(PAN,             "PAN",     "[" + AgentSentinels.REDACTED_HYPHEN + "PAN]"),
         // Phone before Aadhaar — +91 numbers can look like 12-digit Aadhaar
-        new PiiRule(PHONE_INDIA,     "PHONE",   "[REDACTED-PHONE]"),
-        new PiiRule(PHONE_INTL,      "PHONE",   "[REDACTED-PHONE]"),
-        new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[REDACTED-AADHAAR]"),
+        new PiiRule(PHONE_INDIA,     "PHONE",   "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
+        new PiiRule(PHONE_INTL,      "PHONE",   "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
+        new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
         new PiiRule(
             Pattern.compile("(?<!\\d)(?<!-)(?<![./])\\d{10}(?!\\d)(?!-)"), "PHONE",
-                        "[REDACTED-PHONE]"
+                        "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"
         ),
-        new PiiRule(PASSPORT_IN,     "PASSPORT","[REDACTED-PASSPORT]"),
-        new PiiRule(DATE_OF_BIRTH,   "DOB",     "[REDACTED-DOB]"),
-        new PiiRule(IPV4,            "IP",      "[REDACTED-IP]"),
-        new PiiRule(IPV6,            "IP",      "[REDACTED-IP]"),
-        new PiiRule(UPI_VPA,         "UPI",     "[REDACTED-UPI]")
+        new PiiRule(PASSPORT_IN,     "PASSPORT","[" + AgentSentinels.REDACTED_HYPHEN + "PASSPORT]"),
+        new PiiRule(DATE_OF_BIRTH,   "DOB",     "[" + AgentSentinels.REDACTED_HYPHEN + "DOB]"),
+        new PiiRule(IPV4,            "IP",      "[" + AgentSentinels.REDACTED_HYPHEN + "IP]"),
+        new PiiRule(IPV6,            "IP",      "[" + AgentSentinels.REDACTED_HYPHEN + "IP]"),
+        new PiiRule(UPI_VPA,         "UPI",     "[" + AgentSentinels.REDACTED_HYPHEN + "UPI]")
     );
 
     /** Triggers block mode only — sanitize() always runs in Pass 2 regardless. */

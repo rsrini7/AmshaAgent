@@ -33,6 +33,9 @@ public final class AgentSentinels {
     /** Sentinel used in chat history to identify the distilled context from prior messages. */
     public static final String COMPACTED_SUMMARY_SENTINEL = "[CONTEXT FROM PRIOR SESSION]";
 
+    // PII Redaction
+    public static final String REDACTED_HYPHEN = "REDACTED-";
+
     public static boolean isCronGoal(String goal) {
         return goal != null && goal.toUpperCase().startsWith(CRON_PREFIX);
     }
