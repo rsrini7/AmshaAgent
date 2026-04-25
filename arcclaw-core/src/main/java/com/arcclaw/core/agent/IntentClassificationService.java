@@ -37,6 +37,11 @@ public class IntentClassificationService {
         Pattern.CASE_INSENSITIVE
     );
 
+    private static final Pattern IDENTITY_QUERY_PATTERN = Pattern.compile(
+        "\\b(who am i|my name|do you know me|user name|user identity)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
     /**
      * returns true if the text indicates a "write intent" — specifically 
      * for storing information in the long-term memory (ingest_document).
@@ -55,6 +60,14 @@ public class IntentClassificationService {
     }
 
     /**
+     * Returns true if the goal is an identity-related query requiring memory lookup.
+     */
+    public boolean isIdentityQuery(String text) {
+        if (text == null || text.isBlank()) return false;
+        return IDENTITY_QUERY_PATTERN.matcher(text).find();
+    }
+
+    /**
      * Returns true for short messages that lack any verbs suggesting tool usage.
      * Used to strip tool definitions from system prompt to save tokens (Fix B).
      */
@@ -64,8 +77,7 @@ public class IntentClassificationService {
         if (text.contains(AgentSentinels.REDACTED_HYPHEN)) return true;
         
         // § Bug 2: Identity queries should not be classified as chitchat because they require memory lookup
-        String lowerText = text.toLowerCase();
-        if (lowerText.contains("who am i") || lowerText.contains("my name") || lowerText.contains("do you know me")) return false;
+        if (isIdentityQuery(text)) return false;
 
         if (text.length() > 60) return false;
         return !TOOL_VERB_PATTERN.matcher(text).find();

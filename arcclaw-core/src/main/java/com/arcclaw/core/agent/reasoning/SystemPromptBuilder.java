@@ -114,6 +114,12 @@ public class SystemPromptBuilder {
             before the active window. Information in the summary is just as factual as 
             the active window.
 
+            IDENTITY RECALL RULE:
+            If the user asks "who am I", "what is my name", or similar identity questions,
+            FIRST check the current conversation and compacted summary for any self-introduction
+            (e.g. "I am X", "my name is X", "call me X"). Only call memory_search if the name
+            is genuinely absent from both.
+
             CROSS-DOMAIN HANDOFF:
             If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
             use `delegate_to_agent` to hand off the task to 'coordinator' or the appropriate
@@ -337,6 +343,7 @@ public class SystemPromptBuilder {
         11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
         12. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
         13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
+        14. IDENTITY RECALL: For "who am I" / "my name" questions, check history and `[CONTEXT FROM PRIOR SESSION]` for self-introductions BEFORE calling memory_search.
         """;
 
     private static final String EXECUTION_BOUNDARY_SANDBOX = """
