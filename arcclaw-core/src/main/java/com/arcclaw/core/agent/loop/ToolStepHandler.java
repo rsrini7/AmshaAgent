@@ -365,6 +365,8 @@ public class ToolStepHandler {
             decision = handleDelegateOutcome(context, response, observation, history);
         } else if (ToolCapability.GITHUB.toolName().equalsIgnoreCase(toolName)) {
             decision = handleGithubUnavailableOutcome(context, response, observation, history);
+        } else if (ToolCapability.BROWSER_NAVIGATE.toolName().equalsIgnoreCase(toolName)) {
+            decision = handleBrowserOutcome(context, params, response, observation, history);
         }
 
         if (decision != null) {
@@ -411,6 +413,27 @@ public class ToolStepHandler {
         if (res != null && !res.success() && obs.contains("GitHub integration is not available")) {
             if (ctx.sessionId() != null) writer.saveAnswer(ctx.sessionId(), obs);
             return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
+        }
+        return null;
+    }
+
+    private StepDecision handleBrowserOutcome(AgentExecutionContext ctx, Map<String, Object> params, ToolResponse res, String obs, List<ReasoningStep> history) {
+        if (res != null && !res.success()) {
+            String url = String.valueOf(params.getOrDefault("url", ""));
+            if (!url.isBlank()) {
+                log.infof("[TOOL-STEP] browser_navigate failed for %s — triggering fallback to serper_web_search", url);
+                
+                String fallbackGoal = "The browser was unable to visit " + url + " directly. " +
+                        "Please use serper_web_search to find information about this page or its content.";
+                
+                // Inject a logical observation that guides the model to fallback
+                ReasoningStep fallbackStep = ReasoningStep.observe(ToolCapability.BROWSER_NAVIGATE.toolName(), 
+                        "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
+                        "Browser navigation failed, falling back to search.");
+                history.add(fallbackStep);
+                
+                return StepDecision.retryEngine(fallbackGoal, 0);
+            }
         }
         return null;
     }

@@ -60,6 +60,8 @@ public class IntentClassificationService {
      */
     public boolean isSimpleConversational(String text) {
         if (text == null || text.isBlank()) return true;
+        // §Issue 2: PII-redacted goals should be treated as simple chitchat
+        if (text.contains("REDACTED-")) return true;
         if (text.length() > 60) return false;
         return !TOOL_VERB_PATTERN.matcher(text).find();
     }

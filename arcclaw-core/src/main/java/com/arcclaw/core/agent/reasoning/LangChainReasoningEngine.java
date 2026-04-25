@@ -30,6 +30,8 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -60,6 +62,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject AgentOtelContext otelContext;
     @Inject IntentClassificationService intentClassifier;
     @Inject MeterRegistry meterRegistry;
+    @Inject ObjectMapper objectMapper;
 
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
@@ -429,8 +432,21 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (result.isBlank()) return null;
         
         // Final guard: if the extracted "prose" looks like a raw JSON object, 
-        // reject it so the correction/tool path is taken instead.
+        // try to extract the "answer" field if it's a FINISH-like structure
         if (result.startsWith("{") && result.endsWith("}")) {
+            try {
+                JsonNode node = objectMapper.readTree(result);
+                JsonNode answerNode = node.get("answer");
+                if (answerNode != null && !answerNode.isNull()) return answerNode.asText();
+
+                JsonNode paramsNode = node.get("parameters");
+                if (paramsNode != null && !paramsNode.isNull()) {
+                    JsonNode pAnswerNode = paramsNode.get("answer");
+                    if (pAnswerNode != null && !pAnswerNode.isNull()) return pAnswerNode.asText();
+                }
+            } catch (Exception e) {
+                // ignore and return null to trigger correction path
+            }
             return null;
         }
         

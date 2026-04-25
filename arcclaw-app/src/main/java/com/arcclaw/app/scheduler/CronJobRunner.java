@@ -125,8 +125,13 @@ public class CronJobRunner {
         boolean hasActionVerb = normalized.contains("fetch") || normalized.contains("search") 
                 || normalized.contains("check") || normalized.contains("monitor") 
                 || normalized.contains("run") || normalized.contains("execute")
-                || normalized.contains("investigate") || normalized.contains("analyze");
-        
+                || normalized.contains("investigate") || normalized.contains("analyze")
+                || normalized.contains("view") || normalized.contains("list")
+                || normalized.contains("delete") || normalized.contains("update")
+                || normalized.contains("create") || normalized.contains("github")
+                || normalized.contains("google") || normalized.contains("browser")
+                || normalized.contains("memory") || normalized.contains("serper");
+
         return !hasActionVerb && goal.length() < 200;
     }
 

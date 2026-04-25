@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -60,6 +61,19 @@ public class ReasoningStepParser {
                 // §Bug4: Validation for blank required parameters
                 if (ToolCapability.MEMORY_SEARCH.toolName().equals(req.name())) {
                     String query = (String) actionInput.get("query");
+                    
+                    // §Issue 7: Fallback to raw user goal if query looks garbled or empty
+                    if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
+                        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
+                                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+                        
+                        if (rawGoal != null && !rawGoal.isBlank()) {
+                            log.infof("Issue 7: Replacing garbled memory_search query '%s' with raw user goal", query);
+                            actionInput.put("query", rawGoal);
+                            query = rawGoal;
+                        }
+                    }
+
                     if (query == null || query.isBlank()) {
                         log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", req.name(), sessionId);
                         return ReasoningStep.schemaError(
@@ -131,10 +145,31 @@ public class ReasoningStepParser {
         if (argsJson == null || argsJson.isBlank()) return Map.of();
         try {
             Map<String, Object> parsed = objectMapper.readValue(argsJson, new TypeReference<Map<String, Object>>() {});
+            if (parsed != null) {
+                // §Issue 3: Coerce "true"/"false" strings to booleans
+                parsed.entrySet().forEach(entry -> {
+                    if (entry.getValue() instanceof String s) {
+                        if ("true".equalsIgnoreCase(s)) {
+                            entry.setValue(Boolean.TRUE);
+                        } else if ("false".equalsIgnoreCase(s)) {
+                            entry.setValue(Boolean.FALSE);
+                        }
+                    }
+                });
+            }
             return parsed != null ? parsed : Map.of();
         } catch (Exception e) {
             log.warnf("Failed to parse tool arguments JSON for session %s: %s", sessionId, e.getMessage());
             return Map.of("__error", e.getMessage(), "parameters", argsJson);
         }
+    }
+
+    private boolean isUnicodeCorrupted(String text) {
+        if (text == null || text.isBlank()) return false;
+        // Count Unicode replacement characters or private-use area characters (Issue 7)
+        long badChars = text.chars()
+                .filter(c -> c == '\uFFFD' || (c >= 0xE000 && c <= 0xF8FF))
+                .count();
+        return badChars > 0;
     }
 }
