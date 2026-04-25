@@ -46,6 +46,9 @@ quarkus:
     arcclaw-persistence-sqlite:
       group-id: com.arcclaw
       artifact-id: arcclaw-persistence-sqlite
+    arcclaw-mcp:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-mcp
   otel:
     sdk:
       disabled: true

@@ -40,6 +40,9 @@ quarkus:
     arcclaw-tool-playwright:
       group-id: com.arcclaw
       artifact-id: arcclaw-tool-playwright
+    arcclaw-mcp:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-mcp
 
   devservices:
     enabled: false

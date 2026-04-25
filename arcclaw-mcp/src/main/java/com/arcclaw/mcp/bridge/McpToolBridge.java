@@ -22,9 +22,11 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.tools.ToolSchemaProvider;
 import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@Unremovable
 public class McpToolBridge {
     private static final Logger log = Logger.getLogger(McpToolBridge.class);
 

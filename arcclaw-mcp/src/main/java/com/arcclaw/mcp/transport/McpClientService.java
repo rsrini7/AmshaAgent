@@ -36,9 +36,11 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
+import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@Unremovable
 public class McpClientService {
 
     private static final Logger log = Logger.getLogger(McpClientService.class);

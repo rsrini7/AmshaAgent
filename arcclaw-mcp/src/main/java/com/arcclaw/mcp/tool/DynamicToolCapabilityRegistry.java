@@ -6,9 +6,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
+@Unremovable
 public class DynamicToolCapabilityRegistry {
     private final ConcurrentHashMap<String, DynamicToolCapability> registry = new ConcurrentHashMap<>();
 
