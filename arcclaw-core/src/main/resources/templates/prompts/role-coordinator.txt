@@ -48,6 +48,7 @@ SCHEDULING RULES:
    NEVER wrap it in quotes ("true" or "false" are strings and will fail validation).
    - Always show your arithmetic in your thought process before generating the cron expression.
    - Example thought: "Current time is 12:33 UTC. User wants +2 minutes. Target time is 12:35 UTC. Cron: 35 12 * * *. RunOnce: true."
+   - Example thought: "User wants it every minute. Cron: */1 * * * *. RunOnce: false."
    - Never guess. Derive minute and hour strictly from the calculation above.
 
    SCHEMA ENFORCEMENT — VALID PARAMETERS ONLY:

@@ -97,6 +97,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 || AgentRoleEnum.DEBUGGER.id().equalsIgnoreCase(agentRole)) {
             isSimpleChitchat = false;
         }
+        
+        final boolean finalIsSimpleChitchat = isSimpleChitchat;
+        final boolean finalIsHistoryQuery = isHistoryQuery;
 
         String finalSystemPrompt = summaryContent.isEmpty() ? systemPrompt
                 : summaryContent + "\n\n" + systemPrompt;
@@ -126,14 +129,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
  
         List<ChatMessage> historyToInclude = filteredAssembled;
-        if (isSimpleChitchat || context.isForceFinishRetry()) {
+        if (finalIsSimpleChitchat || context.isForceFinishRetry()) {
             log.debugf("[LangChainReasoningEngine] %s detected for session %s — scrubbing tool history to prevent pattern mimicry",
-                    isSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
+                    finalIsSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
             
             historyToInclude = filteredAssembled.stream()
-                .filter(m -> m.type() != ChatMessageType.TOOL_EXECUTION_RESULT)
+                .filter(m -> !finalIsSimpleChitchat || m.type() != ChatMessageType.TOOL_EXECUTION_RESULT)
                 .map(m -> {
                     if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
+                        if (!finalIsSimpleChitchat) return m; // Preserve tool calls if not chitchat (i.e. force finish retry)
                         // If the AI message has text, keep ONLY the text to preserve conversational context.
                         // If it has NO text (pure tool call), filter it out.
                         return (ai.text() != null && !ai.text().isBlank()) 
@@ -145,7 +149,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 .toList();
         }
 
-        if (isSimpleChitchat && !isHistoryQuery) {
+        if (finalIsSimpleChitchat && !finalIsHistoryQuery) {
             // Force direct answer by stripping ALL prior turns (§ recommendation)
             // prevents pattern-matching hallucinations from conversation history.
             // finalSystemPrompt already contains the summary, so it's preserved here!
@@ -187,9 +191,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
  
         List<ToolSpecification> toolSpecifications;
-        if (isSimpleChitchat || context.isForceFinishRetry()) {
+        if (finalIsSimpleChitchat || context.isForceFinishRetry()) {
             log.debugf("[LangChainReasoningEngine] %s detected for session %s — stripping all tools from request",
-                    isSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
+                    finalIsSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
             toolSpecifications = List.of();
         } else {
             toolSpecifications = toolRegistry.listTools().stream()
@@ -211,7 +215,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
+            boolean isCompact = finalIsSimpleChitchat || context.isForceFinishRetry();
 
             response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
                     .where(WorkspaceContext.IS_COMPACT, isCompact)

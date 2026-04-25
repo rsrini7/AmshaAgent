@@ -94,10 +94,11 @@ class NvidiaMessageSanitizerTest {
         List<ChatMessage> sanitized = sanitizer.sanitize(messages);
 
         // The orphaned Tool call in orphanAi must be dropped, but the text "Thinking..." should remain.
-        assertEquals(2, sanitized.size());
+        assertEquals(3, sanitized.size());
         AiMessage sanitizedOrphan = (AiMessage) sanitized.get(0);
         assertFalse(sanitizedOrphan.hasToolExecutionRequests());
         assertEquals("Thinking...", sanitizedOrphan.text());
+        assertTrue(sanitized.get(2) instanceof UserMessage);
     }
 
     @Test
@@ -146,7 +147,8 @@ class NvidiaMessageSanitizerTest {
             AiMessage.from("thought")
         );
         List<ChatMessage> sanitized = sanitizer.sanitize(messages);
-        assertEquals(2, sanitized.size());
+        assertEquals(3, sanitized.size());
         assertEquals("hello", ((UserMessage) sanitized.get(0)).singleText());
+        assertTrue(sanitized.get(2) instanceof UserMessage);
     }
 }

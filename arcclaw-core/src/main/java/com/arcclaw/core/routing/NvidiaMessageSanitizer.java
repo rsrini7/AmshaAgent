@@ -17,6 +17,7 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -223,6 +224,13 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 result.add(msg);
             }
         }
+        
+        // sequence guard: if the final message is an assistant message, append a synthetic empty user turn
+        if (!result.isEmpty() && result.get(result.size() - 1) instanceof AiMessage) {
+            log.debugf("NvidiaMessageSanitizer: Sequence ends on an assistant message. Appending a synthetic empty user turn to avoid generation prompt errors.");
+            result.add(UserMessage.from("Please proceed."));
+        }
+        
         return result;
     }
 

@@ -62,6 +62,11 @@ public class IntentClassificationService {
         if (text == null || text.isBlank()) return true;
         // §Issue 2: PII-redacted goals should be treated as simple chitchat
         if (text.contains(AgentSentinels.REDACTED_HYPHEN)) return true;
+        
+        // § Bug 2: Identity queries should not be classified as chitchat because they require memory lookup
+        String lowerText = text.toLowerCase();
+        if (lowerText.contains("who am i") || lowerText.contains("my name") || lowerText.contains("do you know me")) return false;
+
         if (text.length() > 60) return false;
         return !TOOL_VERB_PATTERN.matcher(text).find();
     }

@@ -34,6 +34,7 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -76,6 +77,9 @@ public class CheckpointResumeHandler {
         this.cliResultBridge = cliResultBridge;
     }
 
+    @Inject
+    ManagedExecutor executor;
+
     public void resumeAfterBatchDecision(
             String sessionId,
             String agentRole,
@@ -83,28 +87,29 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) {
 
-        MessageContext context = null;
-        try {
-            AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);
-            if (checkpoint == null) return;
- 
-            String resumeGoal = resolveResumeGoal(checkpoint);
-            if (isGoalInvalid(resumeGoal, sessionId, agentRole)) return;
- 
-            ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.WEBSOCKET);
-            ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
-            context = prepareResumeMessageContext(chatId, user, cType, resumeGoal);
- 
-            AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
-            if (result != null) {
-                dispatchResumeResult(context, result, cType, user, sessionId);
+        executor.execute(() -> {
+            MessageContext context = null;
+            try {
+                AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);
+                if (checkpoint == null) return;
+     
+                String resumeGoal = resolveResumeGoal(checkpoint);
+                if (isGoalInvalid(resumeGoal, sessionId, agentRole)) return;
+     
+                ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.WEBSOCKET);
+                ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
+                context = prepareResumeMessageContext(chatId, user, cType, resumeGoal);
+     
+                AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
+                if (result != null) {
+                    dispatchResumeResult(context, result, cType, user, sessionId);
+                }
+            } catch (Exception e) {
+                handleResumeFailure(sessionId, context, e);
+            } finally {
+                agentStore.clearBatchResuming(sessionId);
             }
-        } catch (Exception e) {
-            handleResumeFailure(sessionId, context, e);
-            throw e;
-        } finally {
-            agentStore.clearBatchResuming(sessionId);
-        }
+        });
     }
 
     private AgentCheckpoint loadCheckpointForResume(String sessionId, String agentRole) {

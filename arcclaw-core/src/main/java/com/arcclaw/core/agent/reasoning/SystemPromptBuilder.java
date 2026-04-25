@@ -368,7 +368,7 @@ public class SystemPromptBuilder {
             1. If information can be inferred from conversation or the compacted summary, answer directly. Do NOT call tools.
             2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
-            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
+            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> cron="*/1 * * * *").
             5. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
             6. Use `memory_search` only for past-session recall not in the current conversation or summary.
             7. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
