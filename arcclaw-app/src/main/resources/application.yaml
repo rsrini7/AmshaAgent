@@ -288,6 +288,18 @@ smallrye:
         level: WARN
       "jakarta.json.spi":
         level: "OFF"
+      "io.netty.resolver.dns.DirContextUtils":
+        level: WARN
+      "io.smallrye.config":
+        level: INFO
+      "io.micrometer":
+        level: INFO
+      "io.vertx":
+        level: INFO
+      "io.quarkus.arc":
+        level: INFO
+      "org.hibernate.SQL":
+        level: INFO
       "org.hibernate.engine.jdbc.spi.SqlExceptionHelper":
         level: ERROR
       "org.hibernate.orm.jdbc.error":
@@ -592,7 +604,7 @@ mp:
         stdio:
           enabled: false
     log:
-      level: DEBUG                          # single root block — no duplicate
+      level: INFO                          # set to INFO to avoid infrastructure flood
       console:
         enabled: false
       file:
