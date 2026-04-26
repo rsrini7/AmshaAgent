@@ -302,6 +302,14 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
+    public void releaseResumeClaim(String sessionId, String agentRole) {
+        store.values().stream()
+                .filter(c -> c.sessionId().equals(sessionId) && c.agentRole().equals(agentRole) && "RESUMING".equals(c.status()))
+                .max((c1, c2) -> c1.id().compareTo(c2.id()))
+                .ifPresent(c -> transitionStatus(c.id(), "AWAITING_APPROVAL"));
+    }
+
+    @Override
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
         return true;
     }
