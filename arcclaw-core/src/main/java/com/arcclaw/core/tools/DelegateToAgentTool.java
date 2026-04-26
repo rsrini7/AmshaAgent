@@ -39,7 +39,7 @@ public class DelegateToAgentTool implements AgentTool {
     @Inject Instance<AgentLoop> agentLoop;
 
     @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
-    int maxDelegationDepth;
+    int maxDelegationDepth = 2;
 
     @Override
     public String name() {
