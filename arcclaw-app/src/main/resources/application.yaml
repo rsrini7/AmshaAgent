@@ -423,6 +423,8 @@ arcclaw:
       api-key: "${ARCCLAW_TOOLS_BRAVE_API_KEY:none}"
     serper:
       api-key: "${ARCCLAW_TOOLS_SERPER_API_KEY:none}"
+    github:
+      repos-per-page: ${ARCCLAW_GITHUB_REPOS_PER_PAGE:100}
     playwright:
       enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
       headless: true
