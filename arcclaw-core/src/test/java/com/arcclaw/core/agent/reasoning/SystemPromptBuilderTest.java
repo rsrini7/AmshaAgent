@@ -99,9 +99,9 @@ class SystemPromptBuilderTest {
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal");
 
-        assertTrue(result.contains("STORAGE format: `KEY=value`"),
+        assertTrue(result.contains("STORAGE format: \"label=value\""),
                 "Compact prompt should preserve STORAGE format guidance");
-        assertTrue(result.contains("Preserve `=` exactly"),
+        assertTrue(result.contains("Preserve the \"=\" exactly"),
                 "Compact prompt should preserve '=' instructions");
         assertTrue(result.contains("retry once with a broader selector"),
                 "Compact prompt should retain browser extraction retry guidance");

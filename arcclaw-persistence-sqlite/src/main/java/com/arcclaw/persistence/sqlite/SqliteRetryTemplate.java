@@ -8,9 +8,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.AgentGuards;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
-import com.arcclaw.core.util.AgentGuards;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 

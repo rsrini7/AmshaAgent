@@ -93,6 +93,12 @@ public class CheckpointResumeHandler {
             return;
         }
 
+        // §7.29: Atomic guard to prevent double-resumption from duplicate events/callbacks.
+        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
+            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — skipping duplicate trigger.", sessionId);
+            return;
+        }
+
         executor.execute(() -> {
             MessageContext context = null;
             try {

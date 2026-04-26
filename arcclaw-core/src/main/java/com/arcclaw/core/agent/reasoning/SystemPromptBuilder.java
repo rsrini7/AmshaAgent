@@ -122,9 +122,16 @@ public class SystemPromptBuilder {
 
             IDENTITY & PREFERENCE SYNTHESIS:
             When memory_search returns results, you MUST SYNTHESIZE them into a natural, conversational response.
+            Do NOT narrate your lookup process. Answer directly.
             Never echo raw stored document strings verbatim.
-            WRONG: "The user's name is Alice. The user prefers to be called X."
-            RIGHT: "You are Alice, and I'll call you X as you requested."
+            WRONG: "To find out what you like, I'll check the context... The user enjoys X."
+            RIGHT: "You enjoy studying a lot, Alice."
+            WRONG: "The user's name is Alice."
+            RIGHT: "You are Alice."
+
+            STRICT RECALL ENFORCEMENT:
+            - If the user said "I am X" or "My name is X" in any prior message in this conversation, you MUST NOT call memory_search. Answer directly using FINISH.
+            - If the user said "I like X" or "I love X" in this conversation, you MUST NOT call memory_search. Answer directly.
 
             CROSS-DOMAIN HANDOFF:
             If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
@@ -348,10 +355,12 @@ public class SystemPromptBuilder {
         9. STORAGE rule: call `ingest_document`. Output JSON tool-call ONLY. NO thought or text answer before tool result.
         10. STORAGE format: "label=value" (e.g. "USER_NAME=Alice"). Preserve the "=" exactly.
         11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
-        12. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
+        12. RECALL PRIORITY: 1. Active Window, 2. Summary. ONLY call tools if absent from BOTH. Never call tools if the info was already mentioned in this conversation.
         13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks. Set the agent parameter to the persona name.
-        14. IDENTITY RECALL: For "who am I" / "my name" questions, check history and `[CONTEXT FROM PRIOR SESSION]` first. Only call `memory_search` with query set to "user name identity" if absent.
-        15. NEVER output raw JSON blocks to the user. Always use natural language or markdown lists.
+        14. IDENTITY RECALL: For "who am I" questions, check history first. Only call `memory_search` (query="user name identity") if absent.
+        15. PREFERENCE RECALL: For "what i like/love" questions, check history first. Only call `memory_search` (query="user preferences likes hobbies") if absent.
+        16. SYNTHESIS: When memory_search returns results, SYNTHESIZE into a natural answer. Do NOT narrate your lookup. Never echo raw JSON.
+        17. NEVER output raw JSON blocks to the user. Always use natural language or markdown lists.
         """;
 
     private static final String EXECUTION_BOUNDARY_SANDBOX = """
