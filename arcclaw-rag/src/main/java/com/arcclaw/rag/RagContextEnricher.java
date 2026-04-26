@@ -72,16 +72,43 @@ public class RagContextEnricher implements ContextEnricher {
         try {
             String ftsQuery = Fts5QueryUtil.toFts5Phrase(goal);
 
-            List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks);
+            // Fetch more candidates than needed to compute a meaningful distribution (§ recommendation)
+            List<ScoredChunk> chunks = memoryService.search(ftsQuery, userId, contextChunks * 3);
             if (chunks.isEmpty()) return basePrompt;
 
+            double computedThreshold = minScore;
+
+            // Compute adaptive threshold based on score distribution
+            if (chunks.size() >= 3) {
+                double mean = chunks.stream().mapToDouble(ScoredChunk::score).average().orElse(0);
+                double sumSquares = chunks.stream()
+                        .mapToDouble(c -> Math.pow(c.score() - mean, 2))
+                        .sum();
+                double stdDev = Math.sqrt(sumSquares / chunks.size());
+
+                // Threshold keeps chunks within ~0.5 std-dev below the mean
+                double adaptive = mean - (0.5 * stdDev);
+                
+                // Final threshold is the max of adaptive and the configured hard floor
+                computedThreshold = Math.max(minScore, adaptive);
+
+                log.debugf("RagContextEnricher: adaptive threshold=%.4f (mean=%.4f, stdDev=%.4f, floor=%.4f) for session %s",
+                        (Object) computedThreshold, mean, stdDev, minScore, sessionId);
+            } else {
+                // Too few samples for distribution — use a modest floor for small KBs (§ recommendation)
+                computedThreshold = chunks.size() >= 1 ? 0.0 : minScore;
+            }
+
+            final double threshold = computedThreshold;
+
             List<ScoredChunk> relevant = chunks.stream()
-                    .filter(c -> c.score() >= minScore)
+                    .filter(c -> c.score() >= threshold)
+                    .limit(contextChunks)
                     .toList();
 
             if (relevant.isEmpty()) {
-                log.debugf("RagContextEnricher: injecting %d/%d chunks (min-score=%.2f) for session %s",
-                    (Object) relevant.size(), chunks.size(), minScore, sessionId);
+                log.debugf("RagContextEnricher: skipping — 0/%d chunks passed threshold=%.4f for session %s",
+                    (Object) chunks.size(), threshold, sessionId);
                 return basePrompt;
             }
 
@@ -97,8 +124,8 @@ public class RagContextEnricher implements ContextEnricher {
                 context = context.substring(0, maxTotalChars) + "\n…[truncated]";
             }
 
-            log.debugf("RagContextEnricher: injecting %d/%d chunks (min-score=%.2f) for session %s",
-                    (Object) relevant.size(), chunks.size(), minScore, sessionId);
+            log.debugf("RagContextEnricher: injecting %d/%d chunks (threshold=%.4f) for session %s",
+                    (Object) relevant.size(), chunks.size(), threshold, sessionId);
 
             return "## Retrieved Rag Context\n" + context + "\n\n---\n\n" + basePrompt;
 

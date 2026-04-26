@@ -343,6 +343,29 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public void releaseResumeClaim(String sessionId, String agentRole) {
+        withRetry(() -> {
+            self.doReleaseResumeClaim(sessionId, agentRole);
+            return null;
+        }, "release-resume-claim");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doReleaseResumeClaim(String sessionId, String agentRole) {
+        // Atomic transition back to AWAITING_APPROVAL to allow future attempts
+        em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'AWAITING_APPROVAL', updated_at = :now " +
+                "WHERE checkpoint_id = (SELECT checkpoint_id FROM agent_checkpoint " +
+                "            WHERE session_id = :sid AND agent_role = :role " +
+                "            ORDER BY checkpoint_id DESC LIMIT 1) " +
+                "  AND status = 'RESUMING'"
+        ).setParameter("sid", sessionId)
+         .setParameter("role", agentRole)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
+         .executeUpdate();
+    }
+
+    @Override
     public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) {
         return withRetry(() -> self.doFindLatestAwaitingApproval(sessionId), "find-latest-awaiting");
     }
@@ -526,16 +549,16 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    public Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
-        return withRetry(() -> self.doFindLatestAwaitingApprovalWithPrefix(sessionPrefix), "find-latest-prefix");
+    public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
+        return withRetry(() -> self.doFindLatestAwaitingApprovalBySessionContaining(segment), "find-latest-segment");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public Optional<CheckpointDto> doFindLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+    public Optional<CheckpointDto> doFindLatestAwaitingApprovalBySessionContaining(String segment) {
         return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :prefix AND c.status = :status ORDER BY c.id DESC",
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment AND c.status = :status ORDER BY c.id DESC",
                 AgentCheckpoint.class)
-                .setParameter("prefix", sessionPrefix + "%")
+                .setParameter("segment", "%" + segment + "%")
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setMaxResults(1)
                 .getResultList()
@@ -718,6 +741,23 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         cp.setStatus(CheckpointStatus.ORPHANED);
         cp.setFailedAt(Instant.now());
         cp.setFailReason(reason);
+    }
+
+    @Override
+    public void archive(Long checkpointId) {
+        withRetry(() -> {
+            self.doArchive(checkpointId);
+            return null;
+        }, "archive");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doArchive(Long checkpointId) {
+        em.clear();
+        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
+        if (cp == null) return;
+        cp.setStatus(CheckpointStatus.ARCHIVED);
+        cp.setUpdatedAt(Instant.now());
     }
 
     @Override

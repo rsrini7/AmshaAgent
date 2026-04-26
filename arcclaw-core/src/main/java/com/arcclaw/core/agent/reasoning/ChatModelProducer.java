@@ -13,6 +13,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.routing.FallbackChatModel;
 import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
+import io.quarkus.arc.Unremovable;
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -23,6 +25,7 @@ import org.jboss.logging.Logger;
  * Selects the active {@link AgentChatModelProvider} and manages fallbacks.
  */
 @ApplicationScoped
+@Unremovable
 public class ChatModelProducer {
 
     private static final Logger log = Logger.getLogger(ChatModelProducer.class);
@@ -34,6 +37,9 @@ public class ChatModelProducer {
     @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.model-name",
                     defaultValue = "llama-3.3-70b-versatile")
     String modelName;
+
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens", defaultValue = "8192")
+    int maxTokens;
 
     @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
     int maxRetries;
@@ -52,6 +58,9 @@ public class ChatModelProducer {
 
     @ConfigProperty(name = "arcclaw.llm.fallback-api-key")
     Optional<String> fallbackApiKey;
+
+    @ConfigProperty(name = "arcclaw.llm.fallback-message-threshold", defaultValue = "14")
+    int fallbackMessageThreshold;
 
     @ConfigProperty(name = "arcclaw.llm.fallback-ollama-base-url",
                     defaultValue = "http://localhost:11434")
@@ -86,10 +95,7 @@ public class ChatModelProducer {
     @Produces
     @ApplicationScoped
     public ChatModel chatModel() {
-        AgentChatModelProvider providerFactory = providers.stream()
-            .filter(p -> p.providerName().equalsIgnoreCase(provider))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("No AgentChatModelProvider found for provider='" + provider + "'"));
+        AgentChatModelProvider providerFactory = findProvider();
 
         // 🟢 Robust fallback detection (bypassing injection quirks)
         Config config = ConfigProvider.getConfig();
@@ -125,10 +131,10 @@ public class ChatModelProducer {
 
                 ChatModel fallback = modelFactory.createModel(
                     resolvedFbProvider, fbBaseUrl, fbApiKey,
-                    fbModel, 8192, timeout, maxRetries, 
+                    fbModel, maxTokens, timeout, maxRetries, 
                     ollamaBaseUrl, ollamaModelId);
                 
-                return new FallbackChatModel(primary, fallback, modelName, displayModel);
+                return new FallbackChatModel(primary, fallback, modelName, displayModel, fallbackMessageThreshold);
             } catch (Exception e) {
                 log.errorf("ChatModelProducer: Fallback init failed: %s", e.getMessage());
                 return primary;
@@ -136,6 +142,34 @@ public class ChatModelProducer {
         }
 
         return primary;
+    }
+
+    @Produces
+    @Identifier("agent-output-mode")
+    public String structuredOutputMode() {
+        StructuredOutputMode primaryMode = findProvider().structuredOutputMode();
+        
+        // Resolve fallback mode from config
+        Config config = ConfigProvider.getConfig();
+        String fallbackModeStr = config.getOptionalValue("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE", String.class)
+                .or(() -> config.getOptionalValue("arcclaw.llm.fallback-structured-output-mode", String.class))
+                .orElse("NATIVE");
+        
+        StructuredOutputMode fbMode = StructuredOutputMode.valueOf(fallbackModeStr.toUpperCase());
+
+        // Effective logic: if EITHER needs a prompt directive, we include it.
+        if (primaryMode == StructuredOutputMode.PROMPT_DIRECTIVE || fbMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            return StructuredOutputMode.PROMPT_DIRECTIVE.name();
+        }
+        
+        return primaryMode.name();
+    }
+
+    private AgentChatModelProvider findProvider() {
+        return providers.stream()
+            .filter(p -> p.providerName().equalsIgnoreCase(provider))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("No AgentChatModelProvider found for provider='" + provider + "'"));
     }
 
     private String mask(String v) {

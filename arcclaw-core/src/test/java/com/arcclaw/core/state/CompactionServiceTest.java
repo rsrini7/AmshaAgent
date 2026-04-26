@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import dev.langchain4j.data.message.AiMessage;
@@ -194,5 +196,43 @@ class CompactionServiceTest {
         
         String expected = "A".repeat(1984) + "\uD83D\uDE00...[truncated]";
         assertEquals(expected, result);
+    }
+
+    @Test
+    void testCompactRetriesOnRateLimit() {
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        
+        // Fail twice with 429, then succeed
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenThrow(new RuntimeException("Rate limit exceeded 429"))
+                .thenThrow(new RuntimeException("Rate limit exceeded 429"))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("Success After Retries"))
+                        .build());
+
+        service.rateLimitTracker = mock(RateLimitTracker.class);
+
+        assertTrue(service.compact("session1", "test-user"));
+
+        verify(mockModel, times(3)).chat(any(UserMessage.class));
+        verify(service.rateLimitTracker, times(2)).recordHit("compaction");
+        verify(mockPort).upsert(any());
+    }
+
+    @Test
+    void promptTemplatePreservesStableNonSecretIdentifiers() throws Exception {
+        Field field = CompactionService.class.getDeclaredField("PROMPT_TEMPLATE");
+        field.setAccessible(true);
+        String template = (String) field.get(null);
+
+        assertTrue(template.contains("preferred name"),
+                "Compaction prompt should preserve preferred names");
+        assertTrue(template.contains("GitHub username or repo owner"),
+                "Compaction prompt should preserve GitHub usernames/owners");
+        assertTrue(template.contains("Keep those identifiers verbatim"),
+                "Compaction prompt should keep stable identifiers exact");
+        assertTrue(template.contains("Do NOT preserve or restate secrets"),
+                "Compaction prompt should exclude secrets from summaries");
     }
 }

@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CompactionStorePort;
@@ -20,6 +21,7 @@ class MemorySearchToolTest {
 
     private final CompactionStorePort compactionRepo = mock(CompactionStorePort.class);
     private final MemoryRetrievalPort memoryPort = mock(MemoryRetrievalPort.class);
+    private final IntentClassificationService intentService = mock(IntentClassificationService.class);
 
     private MemorySearchTool createTool() {
         MemorySearchTool tool = new MemorySearchTool();
@@ -31,6 +33,10 @@ class MemorySearchToolTest {
             var portField = MemorySearchTool.class.getDeclaredField("memoryPort");
             portField.setAccessible(true);
             portField.set(tool, memoryPort);
+            
+            var intentField = MemorySearchTool.class.getDeclaredField("intentService");
+            intentField.setAccessible(true);
+            intentField.set(tool, intentService);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }

@@ -6,7 +6,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
+import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -17,6 +19,7 @@ import org.jboss.logging.Logger;
  * discovers the active {@link RoutingChatModelProvider} via CDI.
  */
 @ApplicationScoped
+@Unremovable
 public class IntentDetectorModelProducer {
 
     private static final Logger log = Logger.getLogger(IntentDetectorModelProducer.class);
@@ -51,6 +54,9 @@ public class IntentDetectorModelProducer {
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.max-retries", defaultValue = "3")
     int maxRetries;
 
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.structured-output-mode", defaultValue = "NATIVE")
+    StructuredOutputMode structuredOutputMode;
+
     @Inject
     LlmModelFactory modelFactory;
 
@@ -58,11 +64,17 @@ public class IntentDetectorModelProducer {
     @ApplicationScoped
     @Identifier("intent-classifier")
     public ChatModel intentDetectorModel() {
-        log.infof("IntentDetectorModelProducer intent-classifier provider=%s model=%s",
-                  provider, intentModelName);
+        log.infof("IntentDetectorModelProducer intent-classifier provider=%s model=%s mode=%s",
+                  provider, intentModelName, structuredOutputMode);
         return modelFactory.createModel(
             provider, intentBaseUrl, intentApiKey,
             intentModelName, 10, Duration.ofSeconds(timeoutSeconds),
-            maxRetries, ollamaBaseUrl, ollamaModelId);
+            maxRetries, ollamaBaseUrl, ollamaModelId, structuredOutputMode, true);
+    }
+
+    @Produces
+    @Identifier("intent-classifier-mode")
+    public String intentDetectorMode() {
+        return structuredOutputMode.name();
     }
 }

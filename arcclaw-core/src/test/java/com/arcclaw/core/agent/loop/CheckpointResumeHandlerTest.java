@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,6 +28,7 @@ import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -53,6 +55,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -64,6 +67,9 @@ class CheckpointResumeHandlerTest {
 
     @Mock
     ToolRegistry toolRegistry;
+
+    @Mock
+    AgentStateMachineRunner stateMachineRunner;
 
     CheckpointResumeHandler handler;
 
@@ -81,13 +87,13 @@ class CheckpointResumeHandlerTest {
     }
 
     private AgentExecutionContext createCtx(String sessionId, String goal) {
-        return new AgentExecutionContext(sessionId, "user", "chat", "coordinator", goal, AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        return new AgentExecutionContext(sessionId, "user", "chat", "coordinator", goal, AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @Test
     void testReturnsNullOnNonResumptionGoal() {
         MessageContext ctx = createContext("some normal goal", false);
-        AgentResult result = handler.handle(createCtx("session", "some normal goal"), new ArrayList<>(), ctx);
+        AgentResult result = handler.handle(createCtx("session", "some normal goal"), new ArrayList<>(), ctx, stateMachineRunner);
         assertNull(result);
     }
 
@@ -103,7 +109,7 @@ class CheckpointResumeHandlerTest {
         when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
 
         MessageContext ctx = createContext(AgentSentinels.GOAL_DENY_APPROVED, true);
-        AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_DENY_APPROVED), new ArrayList<>(), ctx);
+        AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_DENY_APPROVED), new ArrayList<>(), ctx, stateMachineRunner);
 
         assertNotNull(result);
         assertEquals("❌ Tool execution was denied and the task has been cancelled.", ((AgentResult.Finished) result).answer());
@@ -127,18 +133,52 @@ class CheckpointResumeHandlerTest {
             when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
             when(toolRegistry.invokeTool(eq("testTool"), eq("{\"param\":\"val\"}"), eq("session")))
                 .thenReturn(ToolResponse.success("tool done"));
+            
+            AgentResult mockResult = AgentResult.finished("done", new ArrayList<>());
+            when(stateMachineRunner.runFinishPass(any(), any(), any())).thenReturn(mockResult);
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
 
-            assertNull(result); // Null means continue loop
+            assertNotNull(result); 
             assertEquals(1, history.size());
             assertEquals("tool done", history.get(0).observation());
 
             assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
             assertNull(checkpoint.getPendingToolName());
             assertNull(checkpoint.getPendingToolParametersJson());
+            verify(agentStore).save(checkpoint);
+            verify(stateMachineRunner).runFinishPass(any(), any(), eq(history));
+        });
+    }
+
+    @Test
+    void testApprovalPath_whenToolReturnsFailure_returnsNullForStandardLoopFallback() throws Exception {
+        WorkspaceContext.runWithFullAutonomy("session", "user", "chat", "coordinator", () -> {
+            AgentCheckpoint checkpoint = new AgentCheckpoint();
+            checkpoint.setSessionId("session");
+            checkpoint.setAgentRole("coordinator");
+            checkpoint.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            checkpoint.setPendingToolName("testTool");
+            checkpoint.setPendingToolParametersJson("{\"param\":\"val\"}");
+
+            when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
+            // Simulate a failed tool call (e.g. compilation error) - success=false
+            when(toolRegistry.invokeTool(eq("testTool"), eq("{\"param\":\"val\"}"), eq("session")))
+                .thenReturn(new ToolResponse(1, "compilation failed", false, false, "ERROR", null, null));
+
+            List<ReasoningStep> history = new ArrayList<>();
+            MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
+
+            // Assert: returns null to trigger fallback to standard loop
+            assertNull(result, "Should return null on tool failure to trigger standard loop fallback"); 
+            assertEquals(1, history.size());
+            assertEquals("compilation failed", history.get(0).observation());
+            assertFalse(history.get(0).success());
+
+            assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
             verify(agentStore).save(checkpoint);
         });
     }
@@ -156,12 +196,15 @@ class CheckpointResumeHandlerTest {
             when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
             when(toolRegistry.invokeTool(eq("testTool"), eq("{\"param\":\"val\"}"), eq("session")))
                 .thenReturn(ToolResponse.success("tool done"));
+            
+            AgentResult mockResult = AgentResult.finished("done", new ArrayList<>());
+            when(stateMachineRunner.runFinishPass(any(), any(), any())).thenReturn(mockResult);
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
 
-            assertNull(result);
+            assertNotNull(result);
             assertEquals(1, history.size());
             assertEquals("tool done", history.get(0).observation());
 
@@ -169,6 +212,7 @@ class CheckpointResumeHandlerTest {
             assertNull(checkpoint.getPendingToolName());
             assertNull(checkpoint.getPendingToolParametersJson());
             verify(agentStore).save(checkpoint);
+            verify(stateMachineRunner).runFinishPass(any(), any(), eq(history));
         });
     }
 
@@ -188,7 +232,7 @@ class CheckpointResumeHandlerTest {
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
 
             assertNotNull(result);
             assertTrue(result instanceof AgentResult.Failed);
@@ -199,7 +243,6 @@ class CheckpointResumeHandlerTest {
         });
     }
 
-    // Moved from AgentLoopTest
     @Test
     void testResumedHistoryHasFlatToolArguments() throws Exception {
         LlmProviderPort model = mock(LlmProviderPort.class);
@@ -208,14 +251,14 @@ class CheckpointResumeHandlerTest {
         SystemPromptBuilder promptBuilder = mock(SystemPromptBuilder.class);
         ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
         ReasoningStepParser stepParser = mock(ReasoningStepParser.class);
-        IntentClassificationService intentDetector = mock(IntentClassificationService.class);
+        IntentClassificationService intentClassifier = mock(IntentClassificationService.class);
         GovernanceStrategy governanceLayer = mock(GovernanceStrategy.class);
         RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
         AgentOtelContext otelContext = mock(AgentOtelContext.class);
         MeterRegistry meterRegistry = mock(MeterRegistry.class);
         
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
-        when(intentDetector.isWriteIntent(anyString())).thenReturn(false);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("MOCK SYSTEM PROMPT");
+        when(intentClassifier.isWriteIntent(anyString())).thenReturn(false);
 
         LangChainReasoningEngine engine = new LangChainReasoningEngine();
         
@@ -244,9 +287,9 @@ class CheckpointResumeHandlerTest {
         field.setAccessible(true);
         field.set(engine, stepParser);
 
-        field = engine.getClass().getDeclaredField("intentDetector");
+        field = engine.getClass().getDeclaredField("intentClassifier");
         field.setAccessible(true);
-        field.set(engine, intentDetector);
+        field.set(engine, intentClassifier);
 
         field = engine.getClass().getDeclaredField("governanceLayer");
         field.setAccessible(true);
@@ -271,7 +314,6 @@ class CheckpointResumeHandlerTest {
 
             // Mock response to just return something
             when(model.nextStep(any(ChatRequest.class))).thenReturn(
-                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                     ChatResponse.builder().aiMessage(AiMessage.aiMessage("response")).build()
             );
 
@@ -281,7 +323,6 @@ class CheckpointResumeHandlerTest {
                     .arguments("{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}")
                     .build();
             when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of(
-                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                     AiMessage.aiMessage("thought", List.of(req))
             ));
             
@@ -309,6 +350,7 @@ class CheckpointResumeHandlerTest {
                 }
             }
             assertTrue(found, "Should have found the reconstructed ToolExecutionRequest in chat messages");
+            return null;
         });
     }
 }

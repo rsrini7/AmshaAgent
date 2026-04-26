@@ -19,7 +19,7 @@ public class StoreReflex implements AgentReflex {
 
     private static final Logger log = Logger.getLogger(StoreReflex.class);
 
-    // Matches commands like "store FOO=bar" or "remember my name is Srini"
+    // Matches commands like "store FOO=bar" or "remember my name is Alice"
     private static final Pattern STORE_REMEMBER_PATTERN =
             Pattern.compile("^(store|remember)\\s+(.+)$", Pattern.CASE_INSENSITIVE);
 

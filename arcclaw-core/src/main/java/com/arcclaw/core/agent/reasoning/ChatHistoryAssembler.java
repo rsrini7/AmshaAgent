@@ -33,6 +33,7 @@ public class ChatHistoryAssembler {
     @Inject Logger log;
     @Inject ChatMemoryStore chatMemoryStore;
     @Inject ObjectMapper objectMapper;
+    @Inject CompactionSummaryCache summaryCache;
 
     @ConfigProperty(name = "arcclaw.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -70,6 +71,19 @@ public class ChatHistoryAssembler {
     public List<ChatMessage> assemble(String sessionId, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
 
+        // STEP 0 — inject compacted summary (§ Resilience / Memory Re-capture)
+        if (sessionId != null) {
+            summaryCache.getSummary(sessionId).ifPresent(summary -> {
+                if (!summary.isBlank()) {
+                    String block = AgentSentinels.COMPACTED_SUMMARY_SENTINEL + "\n" 
+                                 + summary + "\n"
+                                 + "The above is a summary of earlier messages in this session. "
+                                 + "Use it for context and answer directly from it where possible.";
+                    messages.add(SystemMessage.systemMessage(block));
+                }
+            });
+        }
+
         // STEP A — persistent chat history
         if (sessionId != null) {
             List<ChatMessage> chatHistory = chatMemoryStore.getMessages(sessionId);
@@ -80,11 +94,21 @@ public class ChatHistoryAssembler {
 
                     if (msg instanceof SystemMessage) {
                         skip = true;
+                    } else if (msg instanceof ToolExecutionResultMessage) {
+                        // 🟢 FIX 5: Scrub tool results from persistent history. 
+                        // Current turn tools are reconstructed from ReAct 'history' parameter.
+                        // Persistent history tools are from PRIOR turns and cause hallucinations.
+                        skip = true;
                     } else if (msg instanceof AiMessage ai) {
                         String aiText = ai.text();
                         if (MessageTag.isTagged(aiText)) {
                             skip = true;
                         } else if (aiText != null && aiText.length() <= 4_000 && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
+                            skip = true;
+                        } else if (ai.hasToolExecutionRequests()) {
+                            // 🟢 FIX 1.1: Scrub tool calls from persistent history.
+                            // If we kept the AiMessage but scrubbed the ToolExecutionResultMessage,
+                            // the LLM would see an unfulfilled tool call and re-issue it.
                             skip = true;
                         }
                     } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_TOOL_APPROVED)) {
@@ -159,7 +183,7 @@ public class ChatHistoryAssembler {
                 continue;
             }
 
-            if (step.action() != null && !step.action().equals(ReasoningStep.FINISH)) {
+            if (step.action() != null && !step.action().equals(ReasoningStep.FINISH) && !ReasoningStep.OBSERVE.equals(step.action())) {
                 String argsJson = "{}";
                 try {
                     if (step.actionInput() != null) {
@@ -182,6 +206,18 @@ public class ChatHistoryAssembler {
                 if (rawObs != null) {
                     String safeObs = truncateObservation(rawObs, step.action());
                     messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(callId, step.action(), safeObs));
+                }
+            } else if (ReasoningStep.OBSERVE.equals(step.action())) {
+                String obs = step.observation();
+                if (obs != null && !obs.isBlank()) {
+                    ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
+                    // Use UserMessage if last was AiMessage to "flip" the turn, 
+                    // otherwise keep as SystemMessage.
+                    if (last instanceof AiMessage) {
+                        messages.add(UserMessage.userMessage(obs));
+                    } else {
+                        messages.add(SystemMessage.systemMessage(obs));
+                    }
                 }
             } else {
                 if (!thought.isEmpty()) {

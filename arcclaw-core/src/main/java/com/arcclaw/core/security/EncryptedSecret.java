@@ -8,7 +8,6 @@ import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "encrypted_secrets")
@@ -16,10 +15,6 @@ public class EncryptedSecret {
 
     @EmbeddedId
     public EncryptedSecretId id;
-
-    @Version
-    @Column(name = "orm_version", nullable = false, columnDefinition = "integer default 0")
-    private int ormVersion;
 
     @Column(name = "encryption_key_version", nullable = false, columnDefinition = "integer default 1")
     private int encryptionKeyVersion = 1;
@@ -29,10 +24,6 @@ public class EncryptedSecret {
 
     @Column(nullable = false)
     public byte[] nonce;
-
-    public int getOrmVersion() {
-        return ormVersion;
-    }
 
     public int getEncryptionKeyVersion() {
         return encryptionKeyVersion;

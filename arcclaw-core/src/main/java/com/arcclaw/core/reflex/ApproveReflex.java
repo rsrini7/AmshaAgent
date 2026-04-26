@@ -1,440 +1,78 @@
 package com.arcclaw.core.reflex;
 
-import static com.arcclaw.core.message.UserMessages.ALREADY_PROCESSING_APPROVAL;
-import static com.arcclaw.core.message.UserMessages.APPROVAL_ERROR;
-import static com.arcclaw.core.message.UserMessages.COULD_NOT_RESUME;
-import static com.arcclaw.core.message.UserMessages.CRON_MULTIPLE_AWAITING;
-import static com.arcclaw.core.message.UserMessages.CRON_NOT_FOUND;
-import static com.arcclaw.core.message.UserMessages.CRON_SINGLE_AWAITING_GUIDE;
-import static com.arcclaw.core.message.UserMessages.NOT_AUTHORIZED_DELEGATION;
-import static com.arcclaw.core.message.UserMessages.NO_BATCH_AWAITING;
-import static com.arcclaw.core.message.UserMessages.NO_PENDING_ANYWHERE;
-import static com.arcclaw.core.message.UserMessages.NO_PENDING_APPROVAL;
-import static com.arcclaw.core.message.UserMessages.RESUMING_TASK;
-import static com.arcclaw.core.message.UserMessages.TARGET_SESSION_NOT_AWAITING;
+import static com.arcclaw.core.message.UserMessages.*;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
-import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
-import com.arcclaw.core.agent.loop.CheckpointResolutionException;
-import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
-import com.arcclaw.core.agent.loop.CliResultBridge;
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.cron.AgentJobCompleted;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.state.ToolDecision;
-import com.arcclaw.core.util.AgentResultFormatter;
-import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.core.util.CronScheduleUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jboss.logging.Logger;
-
-// NOTE: AgentRoleEnum import intentionally removed — all three enum loops replaced
-// by statefulAgentStore.findLatestAwaitingApproval() to fix stale-row ambiguity.
-// When load() returned the oldest row for a (sessionId, agentRole) pair, a
-// COMPLETED checkpoint shadowed a newer AWAITING_APPROVAL one, causing
-// "/approve → No pending tool executions require approval" silently.
 
 @ApplicationScoped
 @ReflexPriority(100)
-public class ApproveReflex implements AgentReflex {
+public class ApproveReflex extends AbstractDecisionReflex {
 
-    @Inject
-    Logger log;
+    @Override public String getActionName() { return "APPROVE"; }
+    @Override public String getAmbiguityTitle() { return "Ambiguous approval"; }
+    @Override public String getNoPendingMessage() { return NO_PENDING_ANYWHERE; }
+    @Override public String getErrorMessage() { return APPROVAL_ERROR; }
+    @Override public String getNotAuthorizedMessage() { return NOT_AUTHORIZED_DELEGATION; }
+    @Override public String getTargetNotAwaitingMessage() { return TARGET_SESSION_NOT_AWAITING; }
 
-    @Inject
-    StatefulAgentStore statefulAgentStore;
-
-    @Inject
-    AgentLoop agentLoop;
-
-    @Inject
-    ReasoningEngine reasoningEngine;
-
-    @Inject
-    AgentCronRepository cronRepository;
-
-    @Inject
-    Event<AgentJobCompleted> jobCompletedEvent;
-
-    @Inject
-    AuditService auditService;
-
-    @Inject
-    ObjectMapper objectMapper;
-
-    @Inject
-    WorkspaceManager workspaceManager;
-
-    @Inject
-    DelegateApprovalGuard delegateGuard;
-
-    @Inject
-    CheckpointApprovalService checkpointApprovalService;
-
-    /**
-     * Resolves the original user goal from a paused checkpoint so
-     * {@code RagContextEnricher} embeds the real user intent on resume
-     * instead of the synthetic {@link AgentSentinels#GOAL_RESUME_APPROVED} string.
-     */
-    @Inject
-    CheckpointResumeHandler checkpointResumeHandler;
-
-    @Inject
-    CliResultBridge cliResultBridge;
+    @Override public String getAlreadyProcessingMessage() { return ALREADY_PROCESSING_APPROVAL; }
+    @Override public String getSingleCronFallbackMessage(AgentCronEntity cron) { return cronSingleAwaitingGuide(cron.goal, cron.id); }
+    @Override public String getMultipleCronFallbackMessage(String list) { return cronMultipleAwaiting(list); }
+    @Override public String getCronSuccessResponse(AgentResult result) { return ""; }
+    @Override public String getFailedRetryMessage() {
+        return "My last attempt failed before it could be approved (likely due to a rate limit). "
+             + "Please resend your original message to retry — I'll ask for approval again.";
+    }
+    @Override public String getPerToolSuccessResponse(String toolName) { return ""; }
 
     @Override
     public boolean matches(String input) {
-        ChannelCommand cmd = ChannelCommand.parse(input);
-        return cmd instanceof ChannelCommand.Approve;
+        return ChannelCommand.parse(input) instanceof ChannelCommand.Approve;
+    }
+
+    @Override public SecurityEventType auditEventType() { return SecurityEventType.APPROVAL_GRANTED; }
+    @Override public String auditDetail(String sessionId, String input) { return "action=APPROVE session=" + sessionId; }
+
+    @Override
+    protected AgentCheckpoint applyDecisionToTool(String sessionId, String toolName, String reason) {
+        return checkpointApprovalService.approveTool(sessionId, toolName, reason);
     }
 
     @Override
-    public SecurityEventType auditEventType() {
-        return SecurityEventType.APPROVAL_GRANTED;
+    protected AgentCheckpoint applyDecisionToAll(String idOrSid, String reason) {
+        return checkpointApprovalService.approveAll(idOrSid, reason);
     }
 
     @Override
-    public String auditDetail(String sessionId, String input) {
-        return "action=APPROVE session=" + sessionId;
+    protected String getCronResumeGoal(String cronSessionId, String cronRole) {
+        return checkpointResumeHandler.resolveResumeGoal(cronSessionId, cronRole);
     }
 
     @Override
-    @ActivateRequestContext
-    public ReflexResult execute(String sessionId, String userId, String chatId,
-                                String input, MessageContext context) {
-        ChannelCommand.Approve approve = (ChannelCommand.Approve) ChannelCommand.parse(input);
-        Optional<String> cronId = approve.cronId();
-
-        try {
-            String response = WorkspaceScopeHolder.call(sessionId, () -> {
-
-                // 1. SessionId explicit — delegation §7.33
-                if (approve.targetSessionId().isPresent()) {
-                    String targetSid = approve.targetSessionId().get();
-                    if (!delegateGuard.isDelegate(userId)) {
-                        log.warnf("[DELEGATE-DENIED] admin=%s attempted to approve session=%s",
-                                  userId, targetSid);
-                        return NOT_AUTHORIZED_DELEGATION;
-                    }
-                    return handleDelegateApproval(targetSid, userId, chatId, context);
-                }
-
-                // 2. CronId explicit — always wins
-                if (cronId.isPresent()) {
-                    return handleCronApproval(cronId.get(), userId, chatId, context);
-                }
-
-                // Per-tool approval: `approve github` where toolName.isPresent()
-                if (approve.toolName().isPresent()) {
-                    return handlePerToolApproval(
-                        approve.toolName().get(), sessionId, userId, chatId, context);
-                }
-
-                // 3. Session checkpoint — interactive approval.
-                Optional<AgentCheckpoint> latestPending =
-                    statefulAgentStore.findLatestAwaitingApproval(sessionId);
-                String activeRole = latestPending
-                    .map(AgentCheckpoint::getAgentRole)
-                    .orElse(null);
-
-                if (activeRole != null) {
-                    try {
-                        List<String> pending = BatchDecisionUtil.pendingToolNames(latestPending.get(), objectMapper);
-                        AgentCheckpoint cp = null;
-                        if (pending.size() == 1) {
-                            cp = checkpointApprovalService.approveTool(sessionId, pending.get(0), "CLI approve");
-                        } else {
-                            cp = checkpointApprovalService.approveAll(sessionId, "CLI approve");
-                        }
-                        
-                        if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
-                            // Register interest first to avoid race with concurrent REST resume
-                            cliResultBridge.register(sessionId);
-                            try {
-                                AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
-                                    sessionId, activeRole, userId, chatId, ChannelType.CLI.id());
-                                
-                                if (result == null) {
-                                    // Session is already resuming (likely via Browser/REST). 
-                                    // Wait for it to finish and signal us through the bridge.
-                                    result = cliResultBridge.waitForResult(sessionId, 10000);
-                                }
-                                return result != null ? AgentResultFormatter.format(result) : COULD_NOT_RESUME;
-                            } finally {
-                                cliResultBridge.cancel(sessionId);
-                            }
-                        } else {
-                            checkpointApprovalService.triggerResume(cp);
-                            return "";
-                        }
-                    } catch (CheckpointResolutionException e) {
-                        return NO_PENDING_APPROVAL;
-                    }
-                }
-
-                // 4. No session checkpoint — guide user to pending cron tasks
-                List<AgentCronEntity> pending =
-                    cronRepository.findAwaitingApprovalByUserId(userId);
-                if (pending.size() == 1) {
-                    AgentCronEntity cron = pending.getFirst();
-                    return String.format(CRON_SINGLE_AWAITING_GUIDE, cron.goal, cron.id, cron.id);
-                } else if (pending.size() > 1) {
-                    String list = pending.stream()
-                            .map(c -> "• `/approve " + c.id + "` — " + c.goal)
-                            .collect(Collectors.joining("\n"));
-                    return String.format(CRON_MULTIPLE_AWAITING, list);
-                }
-
-                // Check if last checkpoint is FAILED — guide user to retry
-                Optional<AgentCheckpoint> lastCheckpoint = statefulAgentStore.findLatestCheckpoint(sessionId);
-                if (lastCheckpoint.isPresent() && lastCheckpoint.get().getStatus() == CheckpointStatus.FAILED) {
-                    log.debugf("ApproveReflex: last checkpoint is FAILED for session %s — guiding user to retry", sessionId);
-                    return "⚠️ My last attempt failed before it could be approved (likely due to a rate limit). " +
-                           "Please **resend your original message** to retry — I'll ask for approval again.";
-                }
-
-                // 5. Check if it was JUST completed via another channel (signal bridge)
-                if (!statefulAgentStore.isSessionActive(sessionId)) {
-                    log.debugf("ApproveReflex: ignoring approval for already-completed session %s", sessionId);
-                    return NO_PENDING_ANYWHERE;
-                }
-
-                AgentResult bridgeResult = null;
-                cliResultBridge.register(sessionId);
-                try {
-                    bridgeResult = cliResultBridge.waitForResult(sessionId, 200);
-                } finally {
-                    cliResultBridge.cancel(sessionId);
-                }
-
-                if (bridgeResult != null) {
-                    return AgentResultFormatter.format(bridgeResult);
-                }
-
-                // 6. Nothing pending anywhere
-                return NO_PENDING_ANYWHERE;
-            });
-            return ReflexResult.respond(response, context);
-        } catch (Exception e) {
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            log.errorf("Failed to process approval for session %s: %s", sessionId, errMsg);
-            log.debug("Full approval processing failure stack trace:", e);
-            return ReflexResult.respond(
-                APPROVAL_ERROR,
-                context);
-        }
-    }
-
-    private String handlePerToolApproval(
-            String toolName, String sessionId, String userId,
-            String chatId, MessageContext context) throws Exception {
-
-        // replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
-        // Additionally filter for hasBatchToolDecisions() since per-tool approval
-        // only applies to parallel batch checkpoints.
-        Optional<AgentCheckpoint> latestPending =
-            statefulAgentStore.findLatestAwaitingApproval(sessionId);
-        String activeRole = latestPending
-            .filter(AgentCheckpoint::hasBatchToolDecisions)
-            .map(AgentCheckpoint::getAgentRole)
-            .orElse(null);
-
-        if (activeRole == null) {
-            return NO_BATCH_AWAITING;
-        }
-
-        try {
-            AgentCheckpoint cp = checkpointApprovalService.approveTool(sessionId, toolName, "CLI approve");
-            checkpointApprovalService.triggerResume(cp);
-            return "";
-        } catch (CheckpointResolutionException e) {
-            return NO_PENDING_APPROVAL;
-        }
-    }
-
-    // PHASE 80-A12: bulk path now delegates to CheckpointApprovalService.
-    // This method retained for handleCronApproval usage. Remove in Phase 81
-    // when cron approval is also migrated to CheckpointApprovalService.
-
-    private void autoApproveAllPending(String sessionId, String agentRole) {
-        AgentCheckpoint cp =
-            statefulAgentStore.load(sessionId, agentRole).orElseThrow();
-        BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
-            statefulAgentStore.updateBatchToolDecision(
-                sessionId, agentRole, toolName,
-                ToolDecision.APPROVED.name()));
-    }
-
-    private String triggerBatchResume(
-            String sessionId, String userId, String chatId,
-            String agentRole, MessageContext context) throws Exception {
-        // PHASE 80-A12: delegating to CheckpointResumeHandler.
-        // This wrapper retained for handleCronApproval and
-        // handleDelegateApproval which still pass MessageContext.
-        // Remove in Phase 81 when those paths are also migrated.
-        checkpointResumeHandler.resumeAfterBatchDecision(
-            sessionId, agentRole, context.getUser().platformId(), context.getChatId(),
-            context.getUser().channel().name()
-        );
-        return RESUMING_TASK;
-    }
-
-    private String handleCronApproval(
-        String cronId, String userId, String chatId,
-        MessageContext context) throws Exception {
-
-        // 1. Resolve and Approve via service (handles cronId alias correctly)
-        // This ensures ToolDecision.APPROVED is set in DB and SSE events are fired.
-        AgentCheckpoint pendingCheckpoint = checkpointApprovalService.approveAll(cronId, "CLI approve");
-
-        String cronSessionId = pendingCheckpoint.getSessionId();
-        String cronRole = pendingCheckpoint.getAgentRole();
-
-        // 2. Fetch job entity for post-processing logic
-        // Look up by jobId directly instead of filtering by userId to allow for admin-level approvals §7.33
-        AgentCronEntity cron = cronRepository.findById(cronId);
-
-        if (cron == null) {
-            return CRON_NOT_FOUND;
-        }
-
-        if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) {
-            log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
-                    "ignoring duplicate trigger.", cronSessionId);
-            return ALREADY_PROCESSING_APPROVAL;
-        }
-
-        try {
-            final String resumeGoal =
-                checkpointResumeHandler.resolveResumeGoal(cronSessionId, cronRole);
-
-            context.setResumeSignal(true);
-            context.setGoal(resumeGoal);
-
-            int cronBudget = pendingCheckpoint.getMaxIterations() != null
-                    ? Math.max(3, pendingCheckpoint.getMaxIterations())
-                    : 3;
-
-            AgentResult result = WorkspaceContext.run(
-                    cronSessionId, cron.userId, cron.chatId,
-                    AutonomyLevel.BACKGROUND, cronRole,
-                    () -> agentLoop.run(
-                        cronSessionId, cronRole, resumeGoal,
-                        pendingCheckpoint.getSystemNote(),
-                        reasoningEngine, cronBudget, context));
-
-            switch (result) {
-                case AgentResult.Finished _ -> {
-                    if (cron.runOnce)
-                        cronRepository.markCompleted(cron.id, Instant.now());
-                    else
-                        cronRepository.markFired(cron.id, Instant.now(),
-                            CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
-                }
-                case AgentResult.StructuredFinished _ -> {
-                    if (cron.runOnce)
-                        cronRepository.markCompleted(cron.id, Instant.now());
-                    else
-                        cronRepository.markFired(cron.id, Instant.now(),
-                            CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
-                }
-                case AgentResult.Failed f  -> cronRepository.markFailed(cron.id, f.reason());
-                case AgentResult.AwaitingApproval _ -> cronRepository.markAwaitingApproval(cron.id);
-                case AgentResult.AwaitingRetry _ -> {
-                    // No-op: retry handled by RateLimitRetryScheduler §736
-                }
-                case AgentResult.LoopExceeded _     -> cronRepository.markFailed(cron.id, "Loop exceeded");
+    protected void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result) {
+        switch (result) {
+            case AgentResult.Finished _ -> {
+                if (cron.runOnce) cronRepository.markCompleted(cron.id, Instant.now());
+                else cronRepository.markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
             }
-
-            ChannelType chType =
-                ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
-            String platformId =
-                cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
-
-            jobCompletedEvent.fire(new AgentJobCompleted(
-                    cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                    AgentResultFormatter.format(result),
-                    result instanceof AgentResult.Failed f ? f.category() : null));
-
-            // Clear the resume lock BEFORE termination — the agent loop is done,
-            // so the F12 guard in terminateSession no longer needs to protect us.
-            statefulAgentStore.clearBatchResuming(cronSessionId);
-
-            if (result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished 
-                || result instanceof AgentResult.Failed || result instanceof AgentResult.LoopExceeded) {
-                try {
-                    workspaceManager.terminateSession(cronSessionId);
-                } catch (Exception e) {
-                    log.warnf("Failed to terminate cron session %s after approval: %s",
-                            cronSessionId,
-                            e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-                }
+            case AgentResult.StructuredFinished _ -> {
+                if (cron.runOnce) cronRepository.markCompleted(cron.id, Instant.now());
+                else cronRepository.markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
             }
-
-            return "";
-        } finally {
-            // Defensive: ensure lock is always released even on exceptions.
-            statefulAgentStore.clearBatchResuming(cronSessionId);
+            case AgentResult.Failed f  -> cronRepository.markFailed(cron.id, f.reason());
+            case AgentResult.AwaitingApproval _ -> cronRepository.markAwaitingApproval(cron.id);
+            case AgentResult.AwaitingRetry _    -> {} // No-op — retry handled by RateLimitRetryScheduler
+            case AgentResult.LoopExceeded _     -> cronRepository.markFailed(cron.id, "Loop exceeded");
+            default -> {}
         }
-    }
-
-    private String handleDelegateApproval(
-            String targetSid, String adminId, String adminChatId,
-            MessageContext context) throws Exception {
-
-        log.infof("[DELEGATE-APPROVE] admin=%s approving session=%s", adminId, targetSid);
-
-        // replaced enum loop with findLatestAwaitingApproval() for same stale-row reason.
-        Optional<AgentCheckpoint> latestPending =
-            statefulAgentStore.findLatestAwaitingApproval(targetSid);
-        String activeRole = latestPending
-            .map(AgentCheckpoint::getAgentRole)
-            .orElse(null);
-
-        if (activeRole == null) {
-            return TARGET_SESSION_NOT_AWAITING;
-        }
-
-        AgentCheckpoint cp = latestPending.orElseThrow(() ->
-            new IllegalStateException(
-                "Checkpoint disappeared between lookup and load for session " + targetSid));
-
-        // Auto-approve all tools in batch if parallel (§7.21, §7.33)
-        if (cp.hasBatchToolDecisions()) {
-            autoApproveAllPending(targetSid, activeRole);
-        }
-
-        // §7.33: Log mandatory DELEGATE_APPROVAL audit event before triggering action
-        auditService.logSecurityEvent(
-            SecurityEventType.DELEGATE_APPROVAL,
-            adminId,
-            "Admin %s approved session %s".formatted(adminId, targetSid));
-
-        return triggerBatchResume(targetSid, adminId, adminChatId, activeRole, context);
     }
 }

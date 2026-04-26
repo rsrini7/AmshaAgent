@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
 
 /**
@@ -32,6 +33,37 @@ public class LlmModelFactory {
             Integer maxRetries,
             String ollamaBaseUrl,
             String ollamaModelId) {
+        return createModel(provider, baseUrl, apiKey, modelName, maxTokens, timeout, maxRetries, 
+                ollamaBaseUrl, ollamaModelId, StructuredOutputMode.NATIVE, false);
+    }
+
+    public ChatModel createModel(
+            String provider,
+            String baseUrl,
+            String apiKey,
+            String modelName,
+            Integer maxTokens,
+            Duration timeout,
+            Integer maxRetries,
+            String ollamaBaseUrl,
+            String ollamaModelId,
+            StructuredOutputMode structuredOutputMode) {
+        return createModel(provider, baseUrl, apiKey, modelName, maxTokens, timeout, maxRetries, 
+                ollamaBaseUrl, ollamaModelId, structuredOutputMode, false);
+    }
+
+    public ChatModel createModel(
+            String provider,
+            String baseUrl,
+            String apiKey,
+            String modelName,
+            Integer maxTokens,
+            Duration timeout,
+            Integer maxRetries,
+            String ollamaBaseUrl,
+            String ollamaModelId,
+            StructuredOutputMode structuredOutputMode,
+            boolean toolless) {
 
         String effectiveBaseUrl = "ollama".equalsIgnoreCase(provider) ? ollamaBaseUrl : baseUrl;
         String effectiveModel   = "ollama".equalsIgnoreCase(provider) ? ollamaModelId : modelName;
@@ -50,7 +82,9 @@ public class LlmModelFactory {
             Optional.ofNullable(apiKey).filter(k -> !k.isBlank()),
             Optional.ofNullable(maxTokens),
             Optional.ofNullable(timeout),
-            Optional.ofNullable(maxRetries)
+            Optional.ofNullable(maxRetries),
+            structuredOutputMode,
+            toolless
         );
 
         return factory.create(config);

@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 
@@ -46,8 +47,10 @@ public class AgentResultFormatter {
         String reply = switch (result) {
             case AgentResult.Finished f       -> sanitize(f.answer());
             case AgentResult.StructuredFinished sf -> sanitize(sf.answer());
-            case AgentResult.AwaitingApproval a -> formatHitlMessage(
-                    a.toolName(), a.paramsJson(), null, false);
+            case AgentResult.AwaitingApproval a -> {
+                boolean isCron = a.sessionId() != null && a.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX);
+                yield formatHitlMessage(a.toolName(), a.paramsJson(), a.sessionId(), isCron);
+            }
             case AgentResult.LoopExceeded _   -> "⏱ I ran out of steps. Try rephrasing your request.";
             case AgentResult.AwaitingRetry r -> "⏳ Rate limit hit. Automatically retrying in " + (r.retryAfterMs() / 1000) + "s...";
             case AgentResult.Failed f         -> {

@@ -99,6 +99,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param checkpointId The checkpoint entity ID.
      */
     void markCompleted(Long checkpointId);
+    void archive(Long checkpointId);
 
     /**
      * Save the final state of a checkpoint and mark it as completed or failed.
@@ -126,12 +127,6 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @return List of reasoning steps reconstructed from entities.
      */
     List<ReasoningStep> loadSteps(Long checkpointId);
-
-    /**
-     * Find the most recent AWAITING_APPROVAL checkpoint for a cron session
-     * with the given cronId. Matches sessionId pattern: "cron-{cronId}-%".
-     */
-    Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId);
 
     /**
      * Load the most recent autonomy level for a session from its checkpoints.
@@ -173,12 +168,31 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     List<AgentCheckpoint> findByStatus(CheckpointStatus status);
 
     /**
+     * Atomically transitions the latest checkpoint for a session/role to RESUMING
+     * if it is currently AWAITING_APPROVAL (§T5-4).
+     *
+     * @return true if successfully claimed for resume
+     */
+    boolean claimForResume(String sessionId, String agentRole);
+
+    /**
      * Atomically marks the session as RESUMING.
      * @return true if this caller is the first to mark it (safe to resume)
      *         false if another thread already marked it (skip — already resuming)
      * §7.29, §T5-4
      */
     boolean markBatchResuming(String sessionId, String agentRole);
+
+    /**
+     * Overloaded to accept a browser-tool flag for adjusting the resumption TTL.
+     */
+    boolean markBatchResuming(String sessionId, String agentRole, boolean hasBrowserTool);
+
+    /**
+     * Atomically marks the session as RESUMING (generic execution lock).
+     * @return true if successfully claimed
+     */
+    boolean markResuming(String sessionId);
 
     /**
      * Atomically claims a checkpoint for retry by transitioning its status
@@ -194,10 +208,16 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     boolean isBatchResuming(String sessionId);
 
     /**
-     * Clears the RESUMING flag for the session. §7.29
-     * Called by WorkspaceManager.terminateSession() and on resume failure.
+     * Clears the RESUMING flag for the session.
      */
     void clearBatchResuming(String sessionId);
+
+    /**
+     * Clears the RESUMING flag for the session (generic execution lock).
+     */
+    void clearResuming(String sessionId);
+
+    void releaseResumeClaim(String sessionId, String agentRole);
 
     /**
      * Returns the most-recent checkpoint for this session that is in
@@ -207,7 +227,10 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      */
     Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId);
 
-    Optional<AgentCheckpoint> findLatestAwaitingApprovalByPrefix(String prefix);
+    /**
+     * Finds the latest checkpoint awaiting approval for a session ID containing the given string (e.g. cronId).
+     */
+    Optional<AgentCheckpoint> findLatestAwaitingApprovalBySessionContaining(String segment);
 
     /**
      * Retrieves the absolute latest checkpoint for this session, regardless of status or role.
@@ -224,6 +247,11 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * Used for continuity phrases (e.g. "try again") to preserve current agent role.
      */
     Optional<String> findLatestRole(String sessionId);
+
+    /**
+     * Returns the latest checkpoint for this session with the specified status.
+     */
+    Optional<AgentCheckpoint> findLatestByStatus(String sessionId, CheckpointStatus status);
 
     /**
      * Returns {@code true} if the latest AWAITING_APPROVAL checkpoint for this

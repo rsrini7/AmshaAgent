@@ -13,6 +13,7 @@ import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,10 @@ class TelegramCallbackHandlerHttpClientTest {
         Field tokenField = TelegramCallbackHandler.class.getDeclaredField("botToken");
         tokenField.setAccessible(true);
         tokenField.set(handler, "dummy-token");
+
+        Field mapperField = TelegramCallbackHandler.class.getDeclaredField("objectMapper");
+        mapperField.setAccessible(true);
+        mapperField.set(handler, new ObjectMapper());
     }
 
     @Test

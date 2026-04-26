@@ -1,12 +1,31 @@
 package com.arcclaw.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
+import java.util.List;
+
+import com.arcclaw.core.tools.ToolRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class AnswerQualityGuardTest {
 
-    private final AnswerQualityGuard guard = new AnswerQualityGuard();
+    private AnswerQualityGuard guard;
+    private ToolRegistry toolRegistry;
+
+    @BeforeEach
+    void setUp() {
+        toolRegistry = mock(ToolRegistry.class);
+        when(toolRegistry.listTools()).thenReturn(List.of(
+            "memory_search", "ingest_document", "github", "sandbox_exec", 
+            "delegate_to_agent", "schedule_task", "manage_schedule"
+        ));
+        
+        guard = new AnswerQualityGuard();
+        guard.toolRegistry = toolRegistry;
+        guard.initialize();
+    }
 
     @Test
     void testRawToolCallLeak() {
@@ -45,12 +64,33 @@ class AnswerQualityGuardTest {
         String mix = "Prose before. {\"type\":\"function\", \"name\":\"sandbox_exec\"} Prose after.";
         String stripped = guard.stripRawToolJson(mix);
         
-        // Note: stripRawToolJson uses replaceAll on the pattern. 
-        // The current implementation in AnswerQualityGuard for stripping is:
-        // stripped = stripped.replaceAll("(?s)\\{[^{}]*\"type\"\\s*:\\s*\"function\"[^{}]*}", "");
-        
         assertTrue(stripped.contains("Prose before."));
         assertTrue(stripped.contains("Prose after."));
         assertFalse(stripped.contains("type"));
+    }
+
+    @Test
+    void testNakedFunctionCallLeak() {
+        // Suggested case
+        assertTrue(guard.isRawToolCallLeak("memory_search(query=\"test\")"),
+            "Naked function call pattern must match explicitly");
+
+        String leak = "I will check that for you: memory_search(query=\"what srini loves\")";
+        assertTrue(guard.isRawToolCallLeak(leak), "Should detect naked function call as a leak");
+        
+        String stripped = guard.stripRawToolJson(leak);
+        assertEquals("I will check that for you:", stripped);
+    }
+
+    @Test
+    void testNakedFunctionCallFalsePositiveProtection() {
+        // Coder agent common patterns should NOT match
+        String coderExplanation = "Use print(end=\"\\n\") to control line endings.";
+        assertFalse(guard.isRawToolCallLeak(coderExplanation), 
+            "Generic code explanations should NOT be flagged as leaks");
+        
+        String otherFunction = "Call connect(host=\"localhost\") to open the connection.";
+        assertFalse(guard.isRawToolCallLeak(otherFunction),
+            "Non-tool function calls should NOT be flagged as leaks");
     }
 }

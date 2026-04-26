@@ -92,9 +92,9 @@ public interface CheckpointStorePort {
     List<CheckpointDto> findStaleApprovals(Instant cutoff);
 
     /**
-     * Finds the latest checkpoint awaiting approval for a given session prefix (e.g. cron).
+     * Finds the latest checkpoint awaiting approval for a session ID containing the given string (e.g. cronId).
      */
-    Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix);
+    Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment);
     /**
      * Returns the absolute latest checkpoint for this session, regardless of status.
      * Used for continuity and continuity phrases (§7.29).
@@ -176,6 +176,7 @@ public interface CheckpointStorePort {
     void markFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass);
     void markCompleted(Long checkpointId);
     void markOrphaned(Long checkpointId, String reason);
+    void archive(Long checkpointId);
 
     /**
      * Atomically claims a checkpoint for retry by transitioning its status
@@ -183,6 +184,13 @@ public interface CheckpointStorePort {
      * @return true if successfully claimed
      */
     boolean claimForRetry(Long id);
+
+    /**
+     * Atomically transitions a checkpoint for a session/role from RESUMING back
+     * to AWAITING_APPROVAL if a thread handoff or execution setup fails.
+     * Prevents "stuck in RESUMING" scenarios.
+     */
+    void releaseResumeClaim(String sessionId, String agentRole);
 
     boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision);
 }

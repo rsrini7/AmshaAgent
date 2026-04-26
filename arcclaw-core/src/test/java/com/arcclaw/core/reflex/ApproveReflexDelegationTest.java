@@ -15,10 +15,13 @@ import java.util.concurrent.Callable;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +35,9 @@ public class ApproveReflexDelegationTest {
 
     @Mock CheckpointApprovalService checkpointApprovalService;
     @Mock StatefulAgentStore statefulAgentStore;
+    @Mock AgentCronRepository cronRepository;
+    @Mock CheckpointResumeHandler checkpointResumeHandler;
+    ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks ApproveReflex approveReflex;
     
     private MockedStatic<WorkspaceScopeHolder> mockedScope;
@@ -41,6 +47,7 @@ public class ApproveReflexDelegationTest {
     void setup() {
         MockitoAnnotations.openMocks(this);
         approveReflex.log = Logger.getLogger("test");
+        approveReflex.objectMapper = objectMapper;
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
@@ -65,7 +72,7 @@ public class ApproveReflexDelegationTest {
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
-        cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
+        cp.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
 
         when(statefulAgentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 

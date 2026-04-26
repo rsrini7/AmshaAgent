@@ -3,11 +3,16 @@ package com.arcclaw.core.agent.loop;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.TextPatternUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -37,6 +42,25 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
     private static final Logger log = Logger.getLogger(AnswerQualityGuard.class);
 
+    @Inject
+    ToolRegistry toolRegistry;
+
+    private Pattern nakedFunctionCallPattern;
+
+    @PostConstruct
+    void initialize() {
+        String toolNames = toolRegistry.listTools().stream()
+                .sorted()
+                .collect(Collectors.joining("|"));
+        
+        // Dynamic pattern: \b(tool1|tool2|...)\s*\(\s*[a-z0-9_]+\s*=\s*["'].*?["']\s*\)
+        this.nakedFunctionCallPattern = Pattern.compile(
+                "\\b(" + toolNames + ")\\s*\\(\\s*[a-z0-9_]+\\s*=\\s*[\"'].*?[\"']\\s*\\)",
+                Pattern.CASE_INSENSITIVE
+        );
+        log.debugf("AnswerQualityGuard initialized with dynamic naked call pattern for tools: %s", toolNames);
+    }
+
     // -------------------------------------------------------------------------
     // §9.1 — ALL patterns MUST be static final (no inline Pattern.compile)
     // -------------------------------------------------------------------------
@@ -56,6 +80,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     /** Detects NVIDIA-style TOOLCALLS prefix leaking into FINISH text. */
     static final Pattern NVIDIA_TOOL_CALL_PATTERN =
             Pattern.compile("TOOLCALLS", Pattern.CASE_INSENSITIVE);
+
+    /** Detects Mistral-style [TOOL_CALLS] prefix leaking into FINISH text. */
+    static final Pattern MISTRAL_TOOL_CALL_PATTERN =
+            Pattern.compile("\\[TOOL_CALLS\\]", Pattern.CASE_INSENSITIVE);
 
     /**
      * Extracts the tool name from a standard JSON leak so the correction hint
@@ -80,6 +108,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      */
     static final Pattern NVIDIA_STRIP_PATTERN =
             Pattern.compile("(?i)TOOLCALLS.*", Pattern.DOTALL);
+
+    /** Strips everything from the first [TOOL_CALLS] token onwards. */
+    static final Pattern MISTRAL_STRIP_PATTERN =
+            Pattern.compile("(?i)\\[TOOL_CALLS\\].*", Pattern.DOTALL);
 
     /**
      * Matches suspiciously short non-answers: "Done.", "OK.", "ok", etc.
@@ -128,7 +160,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
                 || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
                 || RAW_TOOL_JSON_PATTERN.matcher(answer).find()
-                || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find();
+                || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find()
+                || MISTRAL_TOOL_CALL_PATTERN.matcher(answer).find()
+                || (nakedFunctionCallPattern != null && nakedFunctionCallPattern.matcher(answer).find())
+                || TextPatternUtils.looksLikeJson(answer);
     }
 
     /**
@@ -154,6 +189,10 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         stripped = stripped.replaceAll("(?s)\\{[^{}]*\"name\"[^{}]*\"parameters\"[^{}]*}", "");
         // §9.1 fix: was compiled inline — now uses static final NVIDIA_STRIP_PATTERN
         stripped = NVIDIA_STRIP_PATTERN.matcher(stripped).replaceAll("");
+        stripped = MISTRAL_STRIP_PATTERN.matcher(stripped).replaceAll("");
+        if (nakedFunctionCallPattern != null) {
+            stripped = nakedFunctionCallPattern.matcher(stripped).replaceAll("");
+        }
         return stripped.strip();
     }
 
@@ -170,7 +209,23 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         if (nameMatcher.find()) return nameMatcher.group(1);
         Matcher nvidiaMatcher = NVIDIA_TOOL_NAME_PATTERN.matcher(answer);
         if (nvidiaMatcher.find()) return nvidiaMatcher.group(1);
+        
+        if (nakedFunctionCallPattern != null) {
+            Matcher nakedMatcher = nakedFunctionCallPattern.matcher(answer);
+            if (nakedMatcher.find()) {
+                 // Heuristic: get the part before the first '('
+                 String block = nakedMatcher.group(0);
+                 int parenIdx = block.indexOf('(');
+                 if (parenIdx > 0) return block.substring(0, parenIdx).trim();
+            }
+        }
+
         if (answer.contains("delegatetoagent")) return "delegatetoagent";
+        
+        if (TextPatternUtils.looksLikeJson(answer)) {
+            return "a structured JSON block";
+        }
+        
         return "the intended tool";
     }
 

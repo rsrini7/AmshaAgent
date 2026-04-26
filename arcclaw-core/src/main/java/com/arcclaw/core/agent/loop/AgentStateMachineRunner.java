@@ -12,11 +12,11 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.structured.StructuredOutputException;
@@ -24,6 +24,7 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -79,14 +80,12 @@ public class AgentStateMachineRunner {
     private final ChatMemoryWriter writer;
     private final Instance<AgentObserver> observers;
     private final SkillRegistry skillRegistry;
-    private final InputSanitizer piiScanReflex;
-    private final PiiRedactionTransformer piiTransformer;
     private final AgentOtelContext agentOtelContext;
-    private final CliResultBridge cliResultBridge;
     private final IntentClassificationService intentDetector;
     private final LoopExitPublisher loopExitPublisher;
     private final FinishActionHandler finishActionHandler;
     private final CorrectionStrategy correctionStrategy;
+    private final int maxRateLimitRetries;
 
     @Inject
     public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
@@ -94,27 +93,116 @@ public class AgentStateMachineRunner {
                                    ChatMemoryWriter writer,
                                    Instance<AgentObserver> observers,
                                    SkillRegistry skillRegistry,
-                                   @InputSanitizer.PII InputSanitizer piiScanReflex,
-                                   PiiRedactionTransformer piiTransformer,
                                    AgentOtelContext agentOtelContext,
-                                   CliResultBridge cliResultBridge,
                                    IntentClassificationService intentDetector,
                                    LoopExitPublisher loopExitPublisher,
                                    FinishActionHandler finishActionHandler,
-                                   CorrectionStrategy correctionStrategy) {
+                                   CorrectionStrategy correctionStrategy,
+                                   @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries) {
         this.engineStepHandler = engineStepHandler;
         this.toolStepHandler = toolStepHandler;
         this.writer = writer;
         this.observers = observers;
         this.skillRegistry = skillRegistry;
-        this.piiScanReflex = piiScanReflex;
-        this.piiTransformer = piiTransformer;
         this.agentOtelContext = agentOtelContext;
-        this.cliResultBridge = cliResultBridge;
         this.intentDetector = intentDetector;
         this.loopExitPublisher = loopExitPublisher;
         this.finishActionHandler = finishActionHandler;
         this.correctionStrategy = correctionStrategy;
+        this.maxRateLimitRetries = maxRateLimitRetries;
+    }
+
+    /**
+     * Performs a single terminal synthesis pass (FINISH) after a tool has been
+     * executed and approved during resumption. This bypasses the full iteration
+     * loop to prevent accidental tool re-invocation (§Bug-2).
+     */
+    public AgentResult runFinishPass(AgentExecutionContext context,
+                                     ReasoningEngine engine,
+                                     List<ReasoningStep> history) {
+        log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
+        
+        // 1. Mark as force-finish to guide the engine
+        context.setForceFinishRetry(true);
+        
+        // 🟢 §Bug-1 Fix: Ground the synthesis in the actual tool output.
+        // Inject a system directive with the raw observation as the unoverridable truth.
+        // 🟢 Root Cause 2 Fix: Only inject ground truth if a sandbox attempt was made in the CURRENT turn.
+        // This prevents injecting Python results as ground truth for Go/Java turns.
+        int offset = context.getCheckpointRestoreOffset();
+        ReasoningStep lastToolStep = history.stream()
+                .skip(offset) // current turn only
+                .filter(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
+                        && s.observation() != null
+                        && !s.observation().isBlank())
+                .reduce((_, second) -> second) // take last
+                .orElse(null);
+
+        boolean currentTurnHasSandboxAttempt = history.stream()
+                .skip(offset)
+                .anyMatch(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action()));
+
+        if (lastToolStep != null && currentTurnHasSandboxAttempt) {
+            history.add(ReasoningStep.systemMessage(
+                    "The sandbox_exec tool returned the following output. Report it EXACTLY:\n" +
+                    "OUTPUT: " + lastToolStep.observation() + "\n" +
+                    "Do NOT paraphrase, recalculate, or invent values. Use the exact value above."));
+        }
+
+        try {
+            // 2. Perform one tick of reasoning
+            ReasoningStep step = engine.nextStep(context, context.agentRole(), context.goal(), history);
+            
+            // 3. Process the finish outcome
+            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
+                    context, history, step, 0);
+
+            if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
+                if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
+                    writer.saveAnswer(context.sessionId(), c.answer());
+                }
+                // §Bug: Adding synthetic observations to FINISH steps is misleading.
+                // The tool execution step is already in history.
+                return c.result();
+            }
+            
+            // 🟢 §Bug-2 Fix: If it didn't finish, inject a strict guidance hint and retry ONCE.
+            log.warnf("StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.", 
+                    context.sessionId());
+            
+            int historySizeBeforeHint = history.size();
+            history.add(ReasoningStep.systemMessage("You have already executed the tool. " +
+                    "Summarize the result and provide your final answer using the FINISH action now. " +
+                    "Do NOT attempt to call any more tools."));
+            
+            try {
+                ReasoningStep retryStep = engine.nextStep(context, context.agentRole(), context.goal(), history);
+                FinishActionHandler.FinishOutcome retryOutcome = finishActionHandler.handle(
+                        context, history, retryStep, 0);
+
+                if (retryOutcome instanceof FinishActionHandler.FinishOutcome.Completed rc) {
+                    if (context.sessionId() != null && rc.answer() != null && !rc.answer().isBlank()) {
+                        writer.saveAnswer(context.sessionId(), rc.answer());
+                    }
+                    return rc.result();
+                }
+            } finally {
+                // 🟢 §Bug-2 Fix: Strip the guidance hint AND any partial steps from the failed retry attempt.
+                // Callers relying on history mutation from finishActionHandler during retry
+                // will not see those steps — they're cleaned up here to keep history consistent
+                // before handing off to the standard loop.
+                if (history.size() > historySizeBeforeHint) {
+                    history.subList(historySizeBeforeHint, history.size()).clear();
+                }
+            }
+
+            // If it STILL didn't finish, fall back to the standard loop as a safety net
+            log.errorf("StateMachine: terminal retry failed for session %s; falling back to standard loop.", 
+                    context.sessionId());
+            return run(context, engine, history);
+        } finally {
+            context.setForceFinishRetry(false);
+        }
     }
 
     /**
@@ -132,27 +220,23 @@ public class AgentStateMachineRunner {
     public AgentResult run(AgentExecutionContext context,
                            ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
-
+        context.setCheckpointRestoreOffset(resumedHistory.size());
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
 
         // Loop-scoped variables — must NOT be delegated to collaborators
         int iteration = context.startingIteration();
         int llmSchemaErrorCount = 0;   // plain int — NEVER AtomicInteger (§3.7)
         int consecutiveFailures = 0;
+        int rateLimitRetryCount = 0;
         String transientError = null;  // written by write-intent injection AND correction paths
 
-        String originalGoal = context.goal() != null ? context.goal() : "unknown";
-        
-        // --- 1. PII Redaction & Goal Preparation ---
-        String goal = piiTransformer != null ? piiTransformer.transform(null, originalGoal) : originalGoal;
-        if (goal == null) goal = originalGoal;
+        // --- 1. Goal Preparation ---
+        String goal = context.goal() != null ? context.goal() : "unknown";
         String goalHash = AgentErrorMessageUtil.hashGoal(goal);
 
         if (log.isInfoEnabled()) {
-            String sanitized = piiScanReflex != null ? piiScanReflex.sanitize(goal) : goal;
-            if (sanitized == null) sanitized = goal;
-            String preview = sanitized.length() > LOG_GOAL_MAX
-                    ? sanitized.substring(0, LOG_GOAL_MAX) : sanitized;
+            String preview = goal.length() > LOG_GOAL_MAX
+                    ? goal.substring(0, LOG_GOAL_MAX) : goal;
             log.infof(GOAL_LOG_FMT, context.sessionId(), preview, context.maxIterations());
         }
 
@@ -192,6 +276,18 @@ public class AgentStateMachineRunner {
                     try {
                         engineDecision = engineStepHandler.processEngineStep(
                                 context, engine, history, transientError, llmSchemaErrorCount, iteration);
+
+                        // §Issue 3: Rate-limit retries are "free" iterations (up to a limit)
+                        if (engineDecision.isRateLimitHit()) {
+                            if (++rateLimitRetryCount > maxRateLimitRetries) {
+                                log.warnf("StateMachine rate limit retries exhausted (%d) for session %s", 
+                                        maxRateLimitRetries, context.sessionId());
+                                finalResult = AgentResult.failed("I hit repeated rate limits and cannot continue.", 
+                                        AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+                                break;
+                            }
+                            iteration--;
+                        }
                     } catch (StructuredOutputException soe) {
                         // Delegate schema-error handling to CorrectionStrategy
                         if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {
@@ -242,9 +338,10 @@ public class AgentStateMachineRunner {
                             }
                             
                             FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                                    context.sessionId(), context.agentRole(), history, step, llmSchemaErrorCount);
+                                    context, history, step, llmSchemaErrorCount);
 
                             if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
+                                context.setForceFinishRetry(false); // clear — no longer needed
                                 // §3.6: writer.saveAnswer() belongs here, NOT inside FinishActionHandler
                                 if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
                                     writer.saveAnswer(context.sessionId(), c.answer());
@@ -261,9 +358,16 @@ public class AgentStateMachineRunner {
                                 finalResult = res;
                                 // loopExitPublisher fires in finally — see first TERMINAL comment above.
                                 return finalResult;
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
-                                history.add(rl.correctedStep());
-                                transientError = rl.correctionHint();
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.Correction correction) {
+                                log.warnf("STATE-MACHINE correction required in session %s — retrying with hint",
+                                        context.sessionId());
+                                history.add(correction.correctedStep());
+                                transientError = correction.correctionHint();
+                                llmSchemaErrorCount++;
+                                break; // exit validation loop to retry engine
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak _) {
+                                log.warnf("STATE-MACHINE raw tool-call leak detected in session %s — retrying with hint",
+                                        context.sessionId());
                                 llmSchemaErrorCount++;
                                 break; // exit validation loop to retry engine
                             } else if (outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed sf) {
@@ -309,11 +413,19 @@ public class AgentStateMachineRunner {
                         // Re-dispatch if validateTool rewrote a hallucinated tool to FINISH
                         if (ReasoningStep.FINISH.equals(step.action())) {
                             FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                                    context.sessionId(), context.agentRole(), history, step, llmSchemaErrorCount);
+                                    context, history, step, llmSchemaErrorCount);
                             if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
                                 finalResult = c.result();
                                 // loopExitPublisher fires in finally — see first TERMINAL comment above.
                                 return finalResult;
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.Correction correction) {
+                                history.add(correction.correctedStep());
+                                transientError = correction.correctionHint();
+                                llmSchemaErrorCount++;
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
+                                history.add(rl.correctedStep());
+                                transientError = rl.correctionHint();
+                                llmSchemaErrorCount++;
                             }
                             // Other outcomes (leak, salvage) follow same retry/terminal path as above
                             break; 
@@ -391,11 +503,6 @@ public class AgentStateMachineRunner {
             AgentResult res = finalResult;
             
             log.debugf("Loop complete for role %s", context.agentRole());
-
-            // Bridge to CLI if configured (authoritative completion point)
-            if (cliResultBridge != null && res != null) {
-                cliResultBridge.complete(context.sessionId(), res);
-            }
 
             loopExitPublisher.publish(context, res);
             observers.forEach(o -> {

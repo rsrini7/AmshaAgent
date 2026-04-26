@@ -46,7 +46,7 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
             .compile("(?i)you\\s+are\\s+no\\s+longer\\s+(an?\\s+)?(AI|assistant|restricted|limited)");
     private static final Pattern PRETEND = Pattern
             .compile("(?i)pretend\\s+(you\\s+are|to\\s+be|you're)\\s+(a|an|not|unrestricted)");
-    private static final Pattern ACT_AS = Pattern.compile("(?i)\\bact\\s+as\\s+(if\\s+you\\s+(are|were)|a|an)\\b");
+    private static final Pattern ACT_AS = Pattern.compile("(?i)\\bact\\s+as\\s+(if\\s+you\\s+(are|were)|a|an|dan|unrestricted)\\b");
     private static final Pattern DEVELOPER_MODE = Pattern.compile(
             "(?i)(switch|enable|activate|enter)\\s+(to\\s+)?(developer|jailbreak|DAN|unrestricted|god)\\s+mode");
     private static final Pattern FROM_NOW_ON = Pattern

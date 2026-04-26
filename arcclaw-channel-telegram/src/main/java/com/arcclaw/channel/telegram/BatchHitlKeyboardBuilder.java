@@ -29,7 +29,8 @@ class BatchHitlKeyboardBuilder {
 
         for (String toolName : toolNames) {
             String safeToolName = toolName.replace("|", "_").replace(":", "_");
-            String prefix = safeSessionId.length() > 8 ? safeSessionId.substring(0, 8) : safeSessionId;
+            // Increase prefix to 13 to catch "cron-uuid..." or full UUID
+            String prefix = safeSessionId.length() > 13 ? safeSessionId.substring(0, 13) : safeSessionId;
             String approveCb = truncateCb("BATCH_APPROVE|" + prefix + "|" + safeToolName);
             String denyCb = truncateCb("BATCH_DENY|" + prefix + "|" + safeToolName);
             
@@ -46,6 +47,24 @@ class BatchHitlKeyboardBuilder {
             row.add(denBtn);
             
             rows.add(row);
+        }
+
+        // Add Approve All / Deny All for batches
+        if (toolNames.size() > 1) {
+            List<InlineKeyboardButton> lastRow = new ArrayList<>();
+            String prefix = safeSessionId.length() > 13 ? safeSessionId.substring(0, 13) : safeSessionId;
+
+            InlineKeyboardButton appAll = new InlineKeyboardButton();
+            appAll.setText("✅ Approve All");
+            appAll.setCallbackData(truncateCb("BATCH_APPROVE|" + prefix + "|all"));
+            lastRow.add(appAll);
+
+            InlineKeyboardButton denAll = new InlineKeyboardButton();
+            denAll.setText("🚫 Deny All");
+            denAll.setCallbackData(truncateCb("BATCH_DENY|" + prefix + "|all"));
+            lastRow.add(denAll);
+
+            rows.add(lastRow);
         }
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();

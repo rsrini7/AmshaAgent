@@ -96,9 +96,9 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
-    public Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+    public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
         return store.values().stream()
-                .filter(c -> c.sessionId().startsWith(sessionPrefix) && "AWAITING_APPROVAL".equals(c.status()))
+                .filter(c -> c.sessionId().contains(segment) && "AWAITING_APPROVAL".equals(c.status()))
                 .max((c1, c2) -> c1.id().compareTo(c2.id()));
     }
 
@@ -258,6 +258,11 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
+    public void archive(Long checkpointId) {
+        transitionStatus(checkpointId, "ARCHIVED");
+    }
+
+    @Override
     public boolean claimForRetry(Long id) {
         CheckpointDto existing = store.get(id);
         if (existing != null && "AWAITING_RETRY".equals(existing.status())) {
@@ -294,6 +299,14 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void releaseResumeClaim(String sessionId, String agentRole) {
+        store.values().stream()
+                .filter(c -> c.sessionId().equals(sessionId) && c.agentRole().equals(agentRole) && "RESUMING".equals(c.status()))
+                .max((c1, c2) -> c1.id().compareTo(c2.id()))
+                .ifPresent(c -> transitionStatus(c.id(), "AWAITING_APPROVAL"));
     }
 
     @Override

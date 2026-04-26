@@ -69,6 +69,15 @@ public class LlmExceptionClassifier {
             if (isRateLimitError(msg)) {
                 return new LlmRateLimitException(msg, throwable);
             }
+
+            if (msg != null) {
+                String lower = msg.toLowerCase();
+                if (lower.contains("timeout") 
+                        || lower.contains("timed out")
+                        || (lower.contains("exceeded") && lower.contains("ms"))) {
+                    return new LlmServiceUnavailableException("LLM Request Timeout: " + msg, throwable);
+                }
+            }
             
             t = t.getCause();
         }

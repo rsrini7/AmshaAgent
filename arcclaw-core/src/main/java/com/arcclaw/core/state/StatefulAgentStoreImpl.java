@@ -10,7 +10,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -63,7 +62,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 sessionId, agentRole, json, autonomy.toString(), steps.size(), goal);
         if (result.created()) {
             transitionService.emitCreated(
-                    sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy);
+                    sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy,
+                    result.checkpoint().id(), result.checkpoint().createdAt());
         }
         return CheckpointMapper.toEntity(result.checkpoint());
     }
@@ -133,11 +133,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         if (isNew) {
             // Single-shot agents create the checkpoint here — emit CREATED once.
             transitionService.emitCreated(sessionId, agentRole, userId,
-                    WorkspaceContext.requireAutonomyOrSupervised());
+                    WorkspaceContext.requireAutonomyOrSupervised(), saved.id(), saved.createdAt());
         }
         // Emit audit-only: status is already baked into the checkpoint by
         // upsertAndFinalize above.
-        transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id());
+        transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id(), saved.createdAt());
         return CheckpointMapper.toEntity(saved);
     }
 
@@ -170,16 +170,28 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public void markCompleted(Long checkpointId)
         { transitionService.markCompleted(checkpointId); }
 
+    @Override public void archive(Long checkpointId)
+        { storeAdapter.archive(checkpointId); }
+
+    @Override
+    public boolean claimForResume(String sessionId, String agentRole) {
+        return storeAdapter.claimForResume(sessionId, agentRole);
+    }
+
     // ── Resume guard (§3.4 / §7.29 — all delegated, public API stays here) ───
 
     /**
-     * §3.4 / §7.29 / §T5-4: Atomically marks the session as RESUMING.
      * Delegates to {@link CheckpointStorePort#claimForResume} for distributed safety.
      * Also maintains an in-memory mark in {@link ResumeCoordinationGuard} for
      * instance-local backpressure.
      */
     @Override
     public boolean markBatchResuming(String sessionId, String agentRole) {
+        return markBatchResuming(sessionId, agentRole, false);
+    }
+
+    @Override
+    public boolean markBatchResuming(String sessionId, String agentRole, boolean hasBrowserTool) {
         // 1. Instance-local check (fast path)
         if (resumeGuard.isResuming(sessionId)) {
             return false;
@@ -189,9 +201,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         // Transition AWAITING_APPROVAL -> RESUMING in SQLite
         boolean claimed = storeAdapter.claimForResume(sessionId, agentRole);
         if (claimed) {
-            resumeGuard.markResuming(sessionId);
+            resumeGuard.markResuming(sessionId, hasBrowserTool);
         }
         return claimed;
+    }
+
+    @Override
+    public boolean markResuming(String sessionId) {
+        return resumeGuard.markResuming(sessionId, false);
     }
 
     @Override
@@ -211,6 +228,15 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      */
     @Override public void clearBatchResuming(String sessionId)
         { resumeGuard.clearResuming(sessionId); }
+
+    @Override public void clearResuming(String sessionId)
+        { resumeGuard.clearResuming(sessionId); }
+
+    @Override
+    public void releaseResumeClaim(String sessionId, String agentRole) {
+        storeAdapter.releaseResumeClaim(sessionId, agentRole);
+        resumeGuard.clearResuming(sessionId);
+    }
 
     // ── Batch tool decisions ──────────────────────────────────────────────────
 
@@ -236,12 +262,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public Optional<AgentCheckpoint> findLatestAwaitingApproval(String sessionId)
         { return storeAdapter.findLatestAwaitingApproval(sessionId).map(CheckpointMapper::toEntity); }
 
-    @Override public Optional<AgentCheckpoint> findLatestAwaitingApprovalByPrefix(String prefix)
-        { return storeAdapter.findLatestAwaitingApprovalWithPrefix(prefix).map(CheckpointMapper::toEntity); }
-
-    @Override public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId;
-        return storeAdapter.findLatestAwaitingApprovalWithPrefix(sessionPrefix).map(CheckpointMapper::toEntity);
+    @Override
+    public Optional<AgentCheckpoint> findLatestAwaitingApprovalBySessionContaining(String segment) {
+        return storeAdapter.findLatestAwaitingApprovalBySessionContaining(segment)
+                .map(CheckpointMapper::toEntity);
     }
 
     @Override public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId)
@@ -249,6 +273,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override public Optional<AgentCheckpoint> findLatestNonArchivedCheckpoint(String sessionId)
         { return storeAdapter.findLatestNonArchivedBySession(sessionId).map(CheckpointMapper::toEntity); }
+
+    @Override
+    public Optional<AgentCheckpoint> findLatestByStatus(String sessionId, CheckpointStatus status) {
+        return storeAdapter.findLatestBySessionAndStatus(sessionId, status.name())
+                .map(CheckpointMapper::toEntity);
+    }
 
     @Override public Optional<String> findLatestRole(String sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");

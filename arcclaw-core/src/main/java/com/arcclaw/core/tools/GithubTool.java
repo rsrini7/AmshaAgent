@@ -8,11 +8,13 @@ import java.util.Map;
 import java.util.Set;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -33,6 +35,10 @@ import org.jboss.logging.Logger;
 public class GithubTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(GithubTool.class);
+
+    @Inject
+    @ConfigProperty(name = "arcclaw.tools.github.repos-per-page", defaultValue = "100")
+    int reposPerPage;
 
     // ── SINGLE SOURCE OF TRUTH 
     // Keep ALLOWED_ACTIONS, ALLOWED_COMMANDS, description(), and parametersSchema()
@@ -74,7 +80,7 @@ public class GithubTool implements AgentTool {
 
 
     @Override
-    @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
+    @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "ARCCLAW_TOOLS_GITHUB_TOKEN")
     public List<String> sandboxCommand(Map<String, Object> params) {
         String action  = (String) params.getOrDefault("action", "repo");
         String command = (String) params.getOrDefault("command", "view");
@@ -92,7 +98,7 @@ public class GithubTool implements AgentTool {
             throw new IllegalArgumentException(
                     "Command '" + command + "' is not permitted. Only 'view' and 'list' are supported.");
         }
-        
+
         //SMART GUARDRAILS 
         if ("repo".equals(action)) {
             if ("view".equals(command) && (target == null || !target.contains("/"))) {
@@ -124,14 +130,14 @@ public class GithubTool implements AgentTool {
 
         List<String> cmd = new ArrayList<>();
 
-        // ── Use `gh api` for repo list to avoid credential-store hang in sandbox ──
+        // ── Use `gh api` for repo list with JQ sorting and truncation ──
         if ("repo".equals(action) && "list".equals(command)) {
             String owner = (target != null && !target.isBlank()) ? target : "@me";
             return List.of(
                     "gh", "api",
-                    "users/" + owner + "/repos?per_page=30"
-                    // Single HTTP request — no pagination loop, no timeout risk.
-                    // 100 is GitHub's max per_page, sufficient for most accounts. 
+                    "users/" + owner + "/repos?per_page=" + reposPerPage,
+                    "--jq",
+                    "[. | sort_by(.stargazers_count) | reverse | .[:10] | .[] | {name: .full_name, stars: .stargazers_count, description: .description, language: .language}]"
             );
         }
 

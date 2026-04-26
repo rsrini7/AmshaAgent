@@ -2,6 +2,7 @@ package com.arcclaw.core.routing;
 
 import java.util.Objects;
 
+import com.arcclaw.core.scope.WorkspaceContext;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -19,20 +20,76 @@ public class FallbackChatModel implements ChatModel {
     private final ChatModel fallback;
     private final String primaryName;
     private final String fallbackName;
+    private final int messageThreshold;
 
-    public FallbackChatModel(ChatModel primary, ChatModel fallback, String primaryName, String fallbackName) {
+    public FallbackChatModel(ChatModel primary, ChatModel fallback, String primaryName, String fallbackName, int messageThreshold) {
         this.primary = Objects.requireNonNull(primary);
         this.fallback = Objects.requireNonNull(fallback);
         this.primaryName = primaryName;
         this.fallbackName = fallbackName;
+        this.messageThreshold = messageThreshold;
     }
 
     @Override
     public ChatResponse chat(ChatRequest chatRequest) {
+        boolean isWriteIntent = WorkspaceContext.IS_WRITE_INTENT.isBound() 
+                && WorkspaceContext.IS_WRITE_INTENT.get();
+        boolean isCompact = WorkspaceContext.IS_COMPACT.isBound() 
+                && WorkspaceContext.IS_COMPACT.get();
+
+        boolean triedFallback = false;
+
+        // ── Tier 1: Write-intent (Reliability Path) ──
+        // Primary (Gemini/GPT) is most reliable for tool-calling (ingest_document).
+        // Never preemptively downgrade. Fallback only if primary throws.
+        if (isWriteIntent) {
+            try {
+                return primary.chat(chatRequest);
+            } catch (Exception pe) {
+                log.warnf("[ArcClaw] Primary failed on write-intent, using fallback '%s': %s",
+                        fallbackName, pe.getMessage());
+                try {
+                    return fallback.chat(chatRequest);
+                } catch (Exception fe) {
+                    log.errorf("[ArcClaw] ❌ Fallback model '%s' also failed on write-intent: %s", 
+                            fallbackName, fe.getMessage());
+                    throw fe;
+                }
+            }
+        }
+
+        // ── Tier 2: Compact/Chitchat (Efficiency Path) ──
+        // Try fallback first — it's faster and cheaper for non-tool prose answers.
+        if (isCompact) {
+            triedFallback = true;
+            try {
+                return fallback.chat(chatRequest);
+            } catch (Exception fe) {
+                log.warnf("[ArcClaw] Fallback failed on compact turn, promoting to primary: %s", 
+                        fe.getMessage());
+                // Fall through to primary
+            }
+        }
+
+        // ── Tier 3: Large History Preemptive Reroute (Existing Logic) ──
+        if (!triedFallback && chatRequest.messages().size() > messageThreshold) {
+            triedFallback = true;
+            log.warnf("[ArcClaw] ⚠️ History is large (%d), preemptively using fallback model '%s' to avoid safety filters.",
+                    chatRequest.messages().size(), fallbackName);
+            try {
+                return fallback.chat(chatRequest);
+            } catch (Exception fe) {
+                log.errorf("[ArcClaw] ❌ Fallback model '%s' failed on large history: %s", fallbackName, fe.getMessage());
+                // Let it fall through to primary
+            }
+        }
+
+        // ── Tier 4: Primary with Normal Exception Fallback ──
         try {
             return primary.chat(chatRequest);
         } catch (Throwable t) {
-            if (isRetriableOnFallback(t)) {
+            // If we haven't already tried the fallback in this turn, try it now
+            if (!triedFallback && isRetriableOnFallback(t)) {
                 log.warnf("[ArcClaw] ⚠️ Primary model '%s' failed, falling back to '%s'. Cause: %s", 
                          primaryName, fallbackName, t.getMessage());
                 try {
@@ -81,7 +138,8 @@ public class FallbackChatModel implements ChatModel {
             // 3. retriable 5xx errors (service unavailable/overloaded)
             if (lower.contains("502") || lower.contains("503") || lower.contains("504") ||
                 lower.contains("service unavailable") || lower.contains("bad gateway") ||
-                lower.contains("gateway timeout") || lower.contains("overloaded")) {
+                lower.contains("gateway timeout") || lower.contains("overloaded") ||
+                lower.contains("timeout") || lower.contains("exceeded")) {
                 return true;
             }
 

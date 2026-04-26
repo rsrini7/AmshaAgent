@@ -24,6 +24,7 @@ import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -63,6 +64,10 @@ public class AgentDispatchHandler implements MessageHandler {
     @Inject
     IntentClassificationService intentClassifier;
 
+    @Inject
+    @InputSanitizer.PII
+    InputSanitizer piiSanitizer;
+
     @Override
     public int priority() {
         return 70;
@@ -88,6 +93,10 @@ public class AgentDispatchHandler implements MessageHandler {
 
         // §Retry-Fix: Restore originalGoal from latest checkpoint for continuity commands (e.g. "try again")
         String goal = normalizeGoal(rawGoal);
+        if (piiSanitizer != null) {
+            goal = piiSanitizer.sanitize(goal);
+        }
+        
         String rawMessageText = context.getMessage() != null ? context.getMessage().text() : "";
         String restoredGoal = null;
         boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText);
@@ -107,8 +116,13 @@ public class AgentDispatchHandler implements MessageHandler {
                 log.warnf("[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.", sessionId);
             }
         }
+        
+        String logSafeRawGoal = piiSanitizer != null ? piiSanitizer.sanitize(rawGoal) : rawGoal;
+        String logSafeRawMessage = piiSanitizer != null ? piiSanitizer.sanitize(rawMessageText) : rawMessageText;
+        String logSafeRestoredGoal = piiSanitizer != null && restoredGoal != null ? piiSanitizer.sanitize(restoredGoal) : restoredGoal;
+
         log.infof("[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
-                rawGoal, rawMessageText, isContinuity, restoredGoal, goal);
+                logSafeRawGoal, logSafeRawMessage, isContinuity, logSafeRestoredGoal, goal);
 
         // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;
@@ -137,24 +151,36 @@ public class AgentDispatchHandler implements MessageHandler {
         final String resolvedGoal = goal;
         AgentResult result;
         try {
-            String channel = context.getChannelType().name();
-            Callable<AgentResult> op = () -> agentLoop.run(
+            if (!agentStore.markResuming(sessionId)) {
+                log.warnf("[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.", sessionId);
+                channelPluginRegistry.find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(context.getUser(), "⚠️ I'm currently processing another request. Your message was not queued — please resend it once I finish."));
+                return HandleResult.STOP;
+            }
+
+            try {
+                String channel = context.getChannelType().name();
+                Callable<AgentResult> op = () -> agentLoop.run(
+                        sessionId,
+                        role,
+                        resolvedGoal,
+                        reasoningEngine,
+                        resolvedMaxIterations,
+                        context
+                    );
+                result = WorkspaceContext.<AgentResult>run(
                     sessionId,
+                    context.getUser().platformId(),
+                    resolvedChatId,
+                    finalLevel,
                     role,
-                    resolvedGoal,
-                    reasoningEngine,
-                    resolvedMaxIterations,
-                    context
+                    channel,
+                    op
                 );
-            result = WorkspaceContext.<AgentResult>run(
-                sessionId,
-                context.getUser().platformId(),
-                resolvedChatId,
-                finalLevel,
-                role,
-                channel,
-                op
-            );
+            } finally {
+                agentStore.clearResuming(sessionId);
+            }
         } catch (BudgetExceededException | BudgetWarningException e) {
             throw e;   // propagate typed — caller maps to 429
         } catch (Exception e) {

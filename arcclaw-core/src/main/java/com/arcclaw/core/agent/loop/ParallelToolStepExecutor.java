@@ -218,17 +218,29 @@ public class ParallelToolStepExecutor {
                         // Restore OTel context in this thread
                         try (Scope _ = otelContext.makeCurrent()) {
                             try {
-                                ToolResponse response = toolInvoker.invoke(
-                                     call.toolName(), call.params(), context.sessionId());
-                                if (response.success()) {
-                                    guard.recordToolCall(context.sessionId(), call.toolName(), call.params(), response.output());
-                                }
-                                return call.withResult(response.output(), response.success());
+                                return WorkspaceContext.run(
+                                    context.sessionId(), context.userId(), context.chatId(),
+                                    context.autonomyLevel(), context.agentRole(), context.channelType(),
+                                    () -> {
+                                        try {
+                                            ToolResponse response = toolInvoker.invoke(
+                                                 call.toolName(), call.params(), context.sessionId());
+                                            if (response.success()) {
+                                                guard.recordToolCall(context.sessionId(), call.toolName(), call.params(), response.output());
+                                            }
+                                            return call.withResult(response.output(), response.success());
+                                        } catch (Exception e) {
+                                            log.warnf("[PARALLEL-EXEC] session=%s tool=%s failed: %s",
+                                                      context.sessionId(), call.toolName(), e.getMessage());
+                                            return call.withResult(
+                                                "Tool execution failed: " + e.getMessage(), false);
+                                        }
+                                    }
+                                );
                             } catch (Exception e) {
-                                log.warnf("[PARALLEL-EXEC] session=%s tool=%s failed: %s",
+                                log.errorf("[PARALLEL-EXEC] session=%s tool=%s context bind failed: %s",
                                           context.sessionId(), call.toolName(), e.getMessage());
-                                return call.withResult(
-                                    "Tool execution failed: " + e.getMessage(), false);
+                                return call.withResult("Internal context error: " + e.getMessage(), false);
                             }
                         }
                     }, executor);
@@ -330,18 +342,10 @@ public class ParallelToolStepExecutor {
 
         history.add(completedBatchStep);
 
-        // §7.14 (corrected): ReasoningStep history is in-memory during execution.
-        // AgentLoop.runWithRole() persists to SQLite via agentStore.save() at
-        // session end or HITL pause. ChatMemoryWriter handles user/AI messages
-        // only — it does NOT manage tool-step history. No write needed here.
-
-        for (ParallelToolCall c : completed) {
-            ReasoningStep toolStep = ReasoningStep.pending(
-                null, c.toolName(), c.params(), 0, 0)
-                .withObservation(c.observation());
-            observers.forEach(o -> o.onStepComplete(
-                context.sessionId(), context.agentRole(), toolStep));
-        }
+        // §7.14 (corrected): Send ONE consolidated event for the whole batch
+        // to avoid multiple Telegram/UI notifications for a single turn.
+        observers.forEach(o -> o.onStepComplete(
+                context.sessionId(), context.agentRole(), completedBatchStep));
 
         return StepDecision.proceed(completedBatchStep);
     }

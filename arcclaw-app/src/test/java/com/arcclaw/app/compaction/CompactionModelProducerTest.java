@@ -7,6 +7,7 @@ import java.util.Map;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.routing.CompactionModelProducer;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;

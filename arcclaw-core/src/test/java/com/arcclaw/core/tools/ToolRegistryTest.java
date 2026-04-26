@@ -120,8 +120,8 @@ class ToolRegistryTest {
     void testRequiresSecretExtraction() {
         var secrets = ToolRegistry.extractRequiredSecrets(GithubTool.class, "sandboxCommand");
         assertEquals(1, secrets.size(), "GithubTool should declare 1 secret");
-        assertEquals("GITHUB_TOKEN", secrets.get("GH_TOKEN"),
-                "GH_TOKEN env var should map to GITHUB_TOKEN vault key");
+        assertEquals("ARCCLAW_TOOLS_GITHUB_TOKEN", secrets.get("GH_TOKEN"),
+                "GH_TOKEN env var should map to ARCCLAW_TOOLS_GITHUB_TOKEN vault key");
     }
 
     /**

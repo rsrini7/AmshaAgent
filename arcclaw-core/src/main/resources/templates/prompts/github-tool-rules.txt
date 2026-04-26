@@ -1,19 +1,20 @@
 GITHUB TOOL USAGE (NON-NEGOTIABLE):
-  view  → fetch a specific repo or file. target MUST be "owner/repo".
-          ✅ {"action":"repo","command":"view","target":"rsrini7/arcclaw"}
-          ✅ {"action":"file","command":"view","target":"rsrini7/arcclaw","path":"src/Main.java"}
-  list  → list ALL repos for an owner. target MUST be ONLY the owner name.
-          ✅ {"action":"repo","command":"list","target":"rsrini7"}
-          ❌ {"action":"repo","command":"list","target":"rsrini7/arcclaw"} ← FORBIDDEN
-  When you need a specific repo, ALWAYS use "view", not "list".
-  If the repository or file is not accessible (missing token, private repo,404), STOP and report what you found from public context only.
+  view  → fetch a specific repo or file. Target MUST be 'owner/repo'.
+          ✅ use 'repo' for action, 'view' for command, and 'owner/repo' for target.
+          ✅ use 'file' for action, 'view' for command, 'owner/repo' for target, and the file path.
+  list  → list ALL repos for an owner. Target MUST be ONLY the owner name.
+          ✅ use 'repo' for action, 'list' for command, and the owner name for target.
+          ❌ using 'owner/repo' for target with 'list' is FORBIDDEN.
+  When you need a specific repo, ALWAYS use 'view', not 'list'.
+  If the repository or file is not accessible (missing token, private repo, 404), STOP and report what you found from public context only.
   Do NOT retry a tool call that already failed with the same parameters.
   
   PARAMETER EXTRACTION:
   The target parameter must be the exact repository slug only.
-  Strip any surrounding natural language words like "repo", "repository",
-  "details", "info" from the target value.
-  ✅ user says "fetch rsrini7/Private repo details" → target: "rsrini7/Private"
-  ✅ user says "check the arcclaw repository" → target: "rsrini7/arcclaw"
-  ❌ target: "rsrini7/Private repo"
-  ❌ target: "the arcclaw repository"
+  Strip any surrounding natural language words like 'repo', 'repository',
+  'details', 'info' from the target value.
+  ✅ user says 'fetch rsrini7/Private repo details' → target: 'rsrini7/Private'
+  ✅ user says 'check the arcclaw repository' → target: 'rsrini7/arcclaw'
+  ❌ target: 'rsrini7/Private repo'
+  ❌ target: 'the arcclaw repository'
+  

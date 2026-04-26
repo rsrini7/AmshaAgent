@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +13,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -32,6 +34,7 @@ import com.arcclaw.core.util.ClassUtils;
 import com.arcclaw.core.util.MdcManaged;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
+import io.smallrye.common.annotation.Identifier;
 import org.jboss.logging.Logger;
 
 /**
@@ -80,6 +83,10 @@ public class AgentLoop {
     ObservabilityManager observabilityManager;
 
     @Inject
+    @Identifier("agent-output-mode")
+    String structuredOutputModeStr;
+
+    @Inject
     MeterRegistry meterRegistry;
 
     @ActivateRequestContext
@@ -96,8 +103,12 @@ public class AgentLoop {
     public AgentResult run(String sessionId, String agentRole, String goal,
             ReasoningEngine engine, int maxIterations) {
         int budget = maxIterations;
-        if (goal != null && (goal.toLowerCase().contains("store") || goal.toLowerCase().contains("remember"))) {
-            budget = Math.max(budget, 3);
+        if (goal != null) {
+            String lower = goal.toLowerCase();
+            if (lower.contains("store") || lower.contains("remember") || lower.contains("call me") 
+                || lower.contains("my name is") || lower.contains("refer to me as") || lower.contains("address me as")) {
+                budget = Math.max(budget, 3);
+            }
         }
         return run(sessionId, agentRole, goal, null, engine, budget, null);
     }
@@ -139,6 +150,11 @@ public class AgentLoop {
                         sessionId, effectiveRole, canonicalRole);
             }
 
+            StructuredOutputMode mode = Arrays.stream(StructuredOutputMode.values())
+                .filter(m -> m.name().equalsIgnoreCase(structuredOutputModeStr))
+                .findFirst()
+                .orElse(StructuredOutputMode.NATIVE);
+
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
                     capturedUserId,
@@ -146,6 +162,7 @@ public class AgentLoop {
                     effectiveRole,
                     goal,
                     WorkspaceContext.requireAutonomyOrSupervised(),
+                    mode,
                     maxIterations,
                     decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
                     context != null && context.getUser() != null ? context.getUser().channel().name() : null,
@@ -154,14 +171,26 @@ public class AgentLoop {
                     context != null ? context.getData() : null
             );
 
-            AgentResult resumeResult = checkpointResumeHandler.handle(agentExecutionContext, resumedHistory, context);
-            if (resumeResult != null) {
-                result = resumeResult;
-            } else {
-                result = tryDelegateFinishFastPath(sessionId, resumedHistory)
-                        .orElseGet(() -> stateMachineRunner.run(
-                                agentExecutionContext, engine, resumedHistory));
-            }
+            final AgentExecutionContext finalCtx = agentExecutionContext;
+            final List<ReasoningStep> finalHistory = resumedHistory;
+
+            result = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
+                    .call(() -> {
+                        AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context, stateMachineRunner);
+                        if (resumeResult != null) {
+                            return resumeResult;
+                        } else if (context != null && context.isResumeSignal() && hasApprovedToolPending(sessionId, canonicalRole)) {
+                            // §Bug-2 Fix: If we are resuming and there's already an approved tool, 
+                            // DO NOT call nextStep/fastPath again. Procedural resumption is 
+                            // handled by stateMachineRunner or already handled by checkpointResumeHandler.
+                            // However, we need to ensure the state machine starts at the correct point.
+                            return stateMachineRunner.run(finalCtx, engine, finalHistory);
+                        } else {
+                            return tryDelegateFinishFastPath(sessionId, finalHistory)
+                                    .orElseGet(() -> stateMachineRunner.run(
+                                            finalCtx, engine, finalHistory));
+                        }
+                    });
 
             if (result instanceof AgentResult.AwaitingApproval) {
                 tryStampChannelInfo(sessionId, canonicalRole, context);
@@ -316,8 +345,14 @@ public class AgentLoop {
         if (opening.contains("i was unable") || opening.contains("unable to fetch") 
                 || opening.contains("could not find") || opening.contains("i cannot") 
                 || opening.contains("could not retrieve")) {
-            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases in opening — skipping fast-path to allow coordinator fallback", sessionId);
-            return Optional.empty();
+            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases — injecting observation to allow coordinator wrap-up without restart", sessionId);
+            
+            // Fix C2: Instead of empty (which causes restart), we return a finished result 
+            // that forces the coordinator to see the failure in history and wrap up.
+            List<ReasoningStep> historyWithFailure = new ArrayList<>(resumedHistory);
+            historyWithFailure.add(ReasoningStep.observe(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed — synthesize and finish"));
+            
+            return Optional.of(AgentResult.finished(observation, historyWithFailure));
         }
 
         log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +
@@ -344,6 +379,13 @@ public class AgentLoop {
             log.warnf("Failed to stamp channel info for session %s — Cause: %s",
                       sessionId, AgentErrorMessageUtil.safeMessage(e));
         }
+    }
+
+    private boolean hasApprovedToolPending(String sessionId, String role) {
+        return agentStore.load(sessionId, role)
+                .map(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL 
+                        || cp.getStatus() == CheckpointStatus.RESUMING)
+                .orElse(false);
     }
 
     @ActivateRequestContext

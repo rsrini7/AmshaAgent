@@ -23,6 +23,9 @@ class IntentClassificationServiceTest {
         assertTrue(intentDetector.isWriteIntent("add to memory: the user likes cats"));
         assertTrue(intentDetector.isWriteIntent("note that the project is finished"));
         assertTrue(intentDetector.isWriteIntent("call me the Galactic Emperor"));
+        assertTrue(intentDetector.isWriteIntent("my name is Srini"));
+        assertTrue(intentDetector.isWriteIntent("refer to me as Commander"));
+        assertTrue(intentDetector.isWriteIntent("address me as Sir"));
 
         // Case insensitivity
         assertTrue(intentDetector.isWriteIntent("REMEMBER this"));

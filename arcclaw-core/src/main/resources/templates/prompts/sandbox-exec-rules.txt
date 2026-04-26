@@ -9,21 +9,21 @@ SANDBOX EXECUTION RULES:
 SUPPORTED LANGUAGES:
 
 python / python3 — inline, no wrapper needed
-  Example: {"code":"print('Hello World')","language":"python"}
+  Example: use 'print("Hello World")' for the code and 'python' for the language.
 
 node — inline, use console.log() for output
-  Example: {"code":"console.log('Hello World')","language":"node"}
+  Example: use 'console.log("Hello World")' for the code and 'node' for the language.
 
 bash — inline, Linux/macOS or Windows Git Bash/WSL only
-  Example: {"code":"echo 'Hello World'","language":"bash"}
+  Example: use 'echo "Hello World"' for the code and 'bash' for the language.
 
 java — COMPILED. Must be a complete class with main method. Class name = filename.
-  Correct:  {"code":"public class Main { public static void main(String[] a) { System.out.println(\"Hello\"); } }","language":"java"}
-  WRONG:    {"code":"System.out.println(\"Hello\");","language":"java"}
+  Correct: use a complete class like 'public class Main { public static void main(String[] a) { System.out.println("Hello"); } }' and 'java' for the language.
+  WRONG: passing only 'System.out.println("Hello");' without a class.
 
 go — COMPILED. Must have package main and func main().
-  Correct:  {"code":"package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"Hello\") }","language":"go"}
-  WRONG:    {"code":"fmt.Println(\"Hello\")","language":"go"}
+  Correct: use a complete program with 'package main' and 'func main()' and 'go' for the language.
+  WRONG: passing only 'fmt.Println("Hello")' without the package and main function.
 
 UNSUPPORTED languages (do NOT attempt): ruby, php, rust, c, c++, swift, kotlin, scala.
 If asked for an unsupported language, respond:

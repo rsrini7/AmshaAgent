@@ -6,7 +6,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
@@ -106,13 +105,12 @@ public class SerperWebSearchTool implements AgentTool {
                 .description("The search query to send to Serper.")
                 .build())
             .addProperty("count", JsonIntegerSchema.builder()
-                // Concrete examples force small models to stay on-type
-                .description("Number of organic results to return. " +
-                            "MUST be a JSON integer — correct: 5, wrong: \"5\". " +
-                            "Allowed range: 1-10. Omit to use the default of 5.")
+                .description("Number of organic results to return (integer, 1-10). Default is 5. " +
+                            "Set this parameter to the specific number if the user asks for 'top N' results.")
                 .build())
-            // Use 2-arg version to avoid potential MethodNotFound error (Fix I1)
-            .addEnumProperty("type", List.of("search", "news"))
+            .addProperty("type", JsonStringSchema.builder()
+                .description("Optional result type: 'search' (default) for web results, or 'news' for latest news articles.")
+                .build())
             .required("query")  // keep count optional so model can omit it safely
             .build();
     }
@@ -157,6 +155,10 @@ public class SerperWebSearchTool implements AgentTool {
             Object cObj = params.get("count");
             if (cObj instanceof Number n) {
                 count = Math.min(10, Math.max(1, n.intValue()));
+            } else if (cObj instanceof String s) {
+                try {
+                    count = Math.min(10, Math.max(1, Integer.parseInt(s)));
+                } catch (NumberFormatException ignored) {}
             }
         }
 
@@ -224,11 +226,11 @@ public class SerperWebSearchTool implements AgentTool {
                 }
             }
 
-            // C. organic
-            JsonNode organic = root.path("organic");
-            if (organic.isArray() && organic.size() > 0) {
-                sb.append("## Web Results\n\n");
-                for (JsonNode res : organic) {
+            // C. organic / news
+            JsonNode results = root.has("news") ? root.path("news") : root.path("organic");
+            if (results.isArray() && results.size() > 0) {
+                sb.append(root.has("news") ? "## News Results\n\n" : "## Web Results\n\n");
+                for (JsonNode res : results) {
                     sb.append("Title: ").append(res.path("title").asText("Untitled")).append("\n");
                     sb.append("URL:   ").append(res.path("link").asText("Unknown URL")).append("\n");
                     sb.append("Snippet: ").append(res.path("snippet").asText("No snippet available.")).append("\n");
@@ -253,8 +255,8 @@ public class SerperWebSearchTool implements AgentTool {
 
             String fullResult = sb.toString().trim();
             if (fullResult.length() < 50) { 
-                 return ToolResponse.success("No relevant web or news results were found for the query: '" + query + 
-                     "'. This might be due to a very specific query, current events not indexed, or API rate limitations.");
+                 return ToolResponse.success("SEARCH_EXHAUSTED: No relevant web or news results were found for the query: '" + query + 
+                     "'. Do not retry with similar queries. FINISH with an apology.");
             }
 
             // Response truncation (at 4096 chars)

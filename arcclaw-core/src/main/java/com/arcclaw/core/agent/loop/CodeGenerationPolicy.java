@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -32,19 +33,27 @@ public class CodeGenerationPolicy {
      * optional language tag).
      *
      * <p><strong>§9.1:</strong> {@code static final} — never compiled per-call.
-     * <p><strong>Refinement:</strong> Removed 4-space indentation detection to avoid
-     * false positives for bulleted or numbered lists in non-coder roles.
      */
     static final Pattern PROSE_CODE_PATTERN =
             Pattern.compile("```[\\w]*\\n[\\s\\S]*?```", Pattern.MULTILINE);
 
+    static final Pattern FENCE_HEADER_PATTERN =
+            Pattern.compile("^```([\\w-]*)\\R");
+
+    /**
+     * Keywords that strongly suggest the block is actual source code,
+     * not just formatted data or version numbers.
+     */
+    static final Pattern SOURCE_CODE_INDICATOR =
+            Pattern.compile("(?i)\\b(public|private|class|import|def|function|lambda|if\\s*__name__|npm|mvn|pip)\\b");
+
     /**
      * Returns {@code true} if the answer contains a generated code block.
      *
-     * <p><strong>Optimization:</strong> For coder roles, we use a fast-path
-     * detection for fenced code blocks to ensure metrics and audit logs are
-     * consistent. For non-coder roles, we only block if the full
-     * {@link #PROSE_CODE_PATTERN} is matched.
+     * <p><strong>Refinement:</strong> For non-coder roles, we only block if the
+     * code block is large (> 10 lines) OR contains source-code keywords.
+     * This allows researchers to use small code blocks for formatting version
+     * numbers or simple configuration snippets.
      *
      * @param answer    the candidate FINISH answer
      * @param agentRole the canonical agent role
@@ -56,13 +65,42 @@ public class CodeGenerationPolicy {
 
         boolean isCoder = canGenerateCode(agentRole);
         if (isCoder) {
-            // Coder: detect code blocks faster for metrics/audit
             if (stripped.startsWith("```")) return true;
             return PROSE_CODE_PATTERN.matcher(stripped).find();
         } else {
-            // Non-coder: only block on full prose-announced code patterns
-            return PROSE_CODE_PATTERN.matcher(stripped).find();
+            Matcher m = PROSE_CODE_PATTERN.matcher(stripped);
+            while (m.find()) {
+                String block = m.group();
+                if (looksLikeStructuredDataBlock(block)) {
+                    continue;
+                }
+                // If it's a long block or looks like source code, block it
+                if (block.lines().count() > 10 || SOURCE_CODE_INDICATOR.matcher(block).find()) {
+                    return true;
+                }
+            }
+            return false;
         }
+    }
+
+    private boolean looksLikeStructuredDataBlock(String block) {
+        if (block == null || block.isBlank()) return false;
+
+        Matcher headerMatcher = FENCE_HEADER_PATTERN.matcher(block);
+        String language = headerMatcher.find() ? headerMatcher.group(1).toLowerCase() : "";
+        String body = block
+                .replaceFirst("^```[\\w-]*\\R", "")
+                .replaceFirst("\\R```\\s*$", "")
+                .trim();
+
+        if ("json".equals(language) || "yaml".equals(language) || "yml".equals(language)
+                || "text".equals(language) || "markdown".equals(language) || "md".equals(language)) {
+            return true;
+        }
+
+        boolean jsonLike = (body.startsWith("{") && body.endsWith("}"))
+                || (body.startsWith("[") && body.endsWith("]"));
+        return jsonLike && !SOURCE_CODE_INDICATOR.matcher(body).find();
     }
 
     /**

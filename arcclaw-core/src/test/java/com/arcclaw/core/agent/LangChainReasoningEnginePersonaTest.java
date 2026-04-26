@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.RoleRegistry;
@@ -35,6 +36,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 class LangChainReasoningEnginePersonaTest {
 
@@ -82,7 +84,7 @@ class LangChainReasoningEnginePersonaTest {
         injectField(engine, "promptBuilder", mockPromptBuilder);
         injectField(engine, "historyAssembler", mockHistoryAssembler);
         injectField(engine, "stepParser", mockStepParser);
-        injectField(engine, "intentDetector", mockIntentDetector);
+        injectField(engine, "intentClassifier", mockIntentDetector);
         injectField(engine, "governanceLayer", mockGovernanceLayer);
         injectField(engine, "rateLimitTracker", mockRateLimitTracker);
         injectField(engine, "otelContext", mockOtelContext);
@@ -96,14 +98,14 @@ class LangChainReasoningEnginePersonaTest {
     }
 
     private AgentExecutionContext createCtx(String sessionId) {
-        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @Test
     void testDebuggerRoleDoesNotSayCoordinator() {
         // Arrange
         String persona = "You are Shiva, the Debugger and Code Analyst.";
-        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
 
         // Act
         engine.nextStep(createCtx("sess-1"), "debugger", "fix this bug", Collections.emptyList());
@@ -126,7 +128,7 @@ class LangChainReasoningEnginePersonaTest {
     void testCoordinatorRoleContainsTrimurtiContext() {
         // Arrange
         String persona = "You are Vishnu, the Coordinator. THE TRIMURTI";
-        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
 
         // Act
         engine.nextStep(createCtx("sess-2"), "coordinator", "plan tasks", Collections.emptyList());

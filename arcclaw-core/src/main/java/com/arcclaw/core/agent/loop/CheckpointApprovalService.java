@@ -104,15 +104,15 @@ public class CheckpointApprovalService {
 
     /**
      * Resolves the correct AWAITING_APPROVAL checkpoint. 
-     * Handles both direct sessionId and cronId aliases.
+     * Handles both direct sessionId and segments (e.g. cronId).
      */
     private AgentCheckpoint resolveAwaitingCheckpoint(String idOrSid) {
         // 1. Try direct sessionId lookup
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(idOrSid);
         if (cpOpt.isPresent()) return cpOpt.get();
 
-        // 2. Try cronId alias lookup
-        cpOpt = agentStore.findLatestAwaitingApprovalForCron(idOrSid);
+        // 2. Try segment lookup (for cron-sessions which may have extended IDs containing the UUID)
+        cpOpt = agentStore.findLatestAwaitingApprovalBySessionContaining(idOrSid);
         if (cpOpt.isPresent()) return cpOpt.get();
 
         throw new CheckpointResolutionException(
@@ -126,27 +126,45 @@ public class CheckpointApprovalService {
      */
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;
-        
-        // findLatestAwaitingApproval may return empty if resumeAfterBatchDecision
-        // already transitioned the status — fall back to the pre-transition cp safely.
-        AgentCheckpoint fresh = agentStore.findLatestAwaitingApproval(cp.getSessionId())
-            .orElse(cp);
 
-        String userId = fresh.getChannelPlatformId() != null
-                    ? fresh.getChannelPlatformId() : fresh.getSessionId();
-        String channelId = fresh.getChannelPlatformId() != null
+        String sessionId = cp.getSessionId();
+        String agentRole = cp.getAgentRole();
+
+        // §7.29 / §T5-4: Synchronously transition AWAITING_APPROVAL -> RESUMING in the DB.
+        // This prevents CheckpointResumeCoordinator from archiving the checkpoint as "stale"
+        // if a new user message arrives in the millisecond gap before the executor
+        // thread picks up the task.
+        boolean claimed = agentStore.claimForResume(sessionId, agentRole);
+        if (!claimed) {
+             log.infof("[RESUME-DB-CLAIM] session=%s already claimed — skipping trigger.", sessionId);
+             return;
+        }
+
+        try {
+            // findLatestNonArchivedCheckpoint instead of findLatestAwaitingApproval 
+            // since we just moved it to RESUMING.
+            AgentCheckpoint fresh = agentStore.findLatestNonArchivedCheckpoint(sessionId)
+                .orElse(cp);
+            String userId = fresh.getChannelPlatformId() != null
                         ? fresh.getChannelPlatformId() : fresh.getSessionId();
-        String channelType = fresh.getChannelType() != null
-                        ? fresh.getChannelType() : "websocket";
+            String channelId = fresh.getChannelPlatformId() != null
+                            ? fresh.getChannelPlatformId() : fresh.getSessionId();
+            String channelType = fresh.getChannelType() != null
+                            ? fresh.getChannelType() : "websocket";
 
-        log.debugf("resumeCheckpoint: session=%s channelType=%s channelId=%s",
-                fresh.getSessionId(), channelType, channelId);
+            log.debugf("resumeCheckpoint: session=%s channelType=%s channelId=%s",
+                    fresh.getSessionId(), channelType, channelId);
 
-        resumeHandler.resumeAfterBatchDecision(
-            fresh.getSessionId(), fresh.getAgentRole(), userId, channelId, channelType);
+            resumeHandler.resumeAfterBatchDecision(
+                fresh.getSessionId(), fresh.getAgentRole(), userId, channelId, channelType);
 
-        agentSseService.publish(fresh.getSessionId(), new AgentSseService.HitlEvent(
-            fresh.getSessionId(), HitlEventType.RESUMED.wireValue(), null, null, null, Instant.now()
-        ));
+            agentSseService.publish(fresh.getSessionId(), new AgentSseService.HitlEvent(
+                fresh.getSessionId(), HitlEventType.RESUMED.wireValue(), null, null, null, Instant.now()
+            ));
+        } catch (Exception e) {
+            log.errorf("Failed to trigger resume for session %s: %s", sessionId, e.getMessage());
+            agentStore.clearBatchResuming(sessionId);
+            throw e;
+        }
     }
 }

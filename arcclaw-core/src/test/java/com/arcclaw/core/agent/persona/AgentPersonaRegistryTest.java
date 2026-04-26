@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.security.AutonomyLevel;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +33,7 @@ class AgentPersonaRegistryTest {
     }
 
     private AgentExecutionContext createCtx() {
-        return new AgentExecutionContext("s1", "u1", "c1", "role", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        return new AgentExecutionContext("s1", "u1", "c1", "role", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @Test

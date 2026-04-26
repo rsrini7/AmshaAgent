@@ -100,7 +100,11 @@ public class TelegramCallbackHandler {
                 case APPROVED, PARTIAL_STILL_PENDING -> popupText = "✅ Approved: " + toolName;
                 case REJECTED -> popupText = "❌ Rejected: " + toolName;
                 case EXPIRED -> popupText = "⏱ Approval expired";
-                case NOT_FOUND -> popupText = "⚠️ Session not found";
+                case NOT_FOUND -> {
+                    log.debugf("Stale callback for session %s, ignoring", sessionId);
+                    answerCallback(query.getId());
+                    return;
+                }
                 case ALREADY_DECIDED -> popupText = "Already decided";
             }
 

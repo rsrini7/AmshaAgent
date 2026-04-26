@@ -2,348 +2,66 @@ package com.arcclaw.core.reflex;
 
 import static com.arcclaw.core.message.UserMessages.*;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
-import jakarta.enterprise.event.Event;
-import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
-import com.arcclaw.core.agent.loop.CheckpointResolutionException;
-import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
-import com.arcclaw.core.agent.loop.CliResultBridge;
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.message.UserMessages;
-import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.CronStatus;
-import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.AgentResultFormatter;
-import com.arcclaw.core.util.BatchDecisionUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @ReflexPriority(200)
-public class DenyReflex implements AgentReflex {
+public class DenyReflex extends AbstractDecisionReflex {
 
-    @Inject Logger log;
-    @Inject StatefulAgentStore statefulAgentStore;
-    @Inject AgentCronRepository cronRepository;
-    @Inject AgentLoop agentLoop;
-    @Inject ReasoningEngine reasoningEngine;
-    @Inject Event<AgentJobCompleted> jobCompletedEvent;
-    @Inject AuditService auditService;
-    @Inject ObjectMapper objectMapper;
-    @Inject CheckpointResumeHandler checkpointResumeHandler;
-    @Inject DelegateApprovalGuard delegateGuard;
-    @Inject CheckpointApprovalService checkpointApprovalService;
-    @Inject CliResultBridge cliResultBridge;
+    @Override public String getActionName() { return "DENY"; }
+    @Override public String getAmbiguityTitle() { return "Ambiguous denial"; }
+    @Override public String getNoPendingMessage() { return NO_PENDING_ANYWHERE_SESSION; }
+    @Override public String getErrorMessage() { return DENIAL_ERROR; }
+    @Override public String getNotAuthorizedMessage() { return NOT_AUTHORIZED_DELEGATION; }
+    @Override public String getTargetNotAwaitingMessage() { return TARGET_SESSION_NOT_AWAITING; }
+
+    @Override public String getAlreadyProcessingMessage() { return ALREADY_PROCESSING_DENIAL; }
+    @Override protected String getSingleCronFallbackMessage(AgentCronEntity cron) { 
+        return "⚠️ No active denial in this chat session.\n\nA background task is waiting:\n• " + cron.goal + 
+               "\n\nUse: `/deny " + cron.id + "` to cancel it.";
+    }
+    @Override public String getMultipleCronFallbackMessage(String list) { return cronMultipleAwaiting(list); }
+    @Override public String getCronSuccessResponse(AgentResult result) { return AgentResultFormatter.format(result); }
+    @Override public String getFailedRetryMessage() { return null; }
+    @Override public String getPerToolSuccessResponse(String toolName) { return UserMessages.toolDenied(toolName); }
 
     @Override
     public boolean matches(String input) {
-        ChannelCommand cmd = ChannelCommand.parse(input);
-        return cmd instanceof ChannelCommand.Deny;
+        return ChannelCommand.parse(input) instanceof ChannelCommand.Deny;
+    }
+
+    @Override public SecurityEventType auditEventType() { return SecurityEventType.APPROVAL_DENIED; }
+    @Override public String auditDetail(String sessionId, String input) { return "action=DENY session=" + sessionId; }
+
+    @Override
+    protected AgentCheckpoint applyDecisionToTool(String sessionId, String toolName, String reason) {
+        return checkpointApprovalService.denyTool(sessionId, toolName, reason);
     }
 
     @Override
-    public SecurityEventType auditEventType() {
-        return SecurityEventType.APPROVAL_DENIED;
+    protected AgentCheckpoint applyDecisionToAll(String idOrSid, String reason) {
+        return checkpointApprovalService.denyAll(idOrSid, reason);
     }
 
     @Override
-    public String auditDetail(String sessionId, String input) {
-        return "action=DENY session=" + sessionId;
+    protected String getCronResumeGoal(String cronSessionId, String cronRole) {
+        return AgentSentinels.GOAL_DENY_APPROVED;
     }
 
     @Override
-    @ActivateRequestContext
-    public ReflexResult execute(String sessionId, String userId, String chatId,
-                                String input, MessageContext context) {
-        ChannelCommand.Deny deny = (ChannelCommand.Deny) ChannelCommand.parse(input);
-        Optional<String> cronId = deny.cronId();
-
-        try {
-            String response = WorkspaceScopeHolder.call(sessionId, () -> {
-                // 1. SessionId explicit — delegation §7.33
-                if (deny.targetSessionId().isPresent()) {
-                    String targetSid = deny.targetSessionId().get();
-                    if (!delegateGuard.isDelegate(userId)) {
-                        log.warnf("[DELEGATE-DENIED] admin=%s attempted to deny session=%s",
-                                  userId, targetSid);
-                        return NOT_AUTHORIZED_DELEGATION;
-                    }
-                    return handleDelegateDenial(targetSid, userId, chatId, context);
-                }
-
-                // 2. CronId explicit — always wins
-                if (cronId.isPresent()) {
-                    return handleCronDenial(cronId.get(), userId, chatId, context);
-                }
-
-                // 3. Per-tool denial: `deny github`
-                if (deny.toolName().isPresent()) {
-                    return handlePerToolDenial(
-                        deny.toolName().get(), sessionId, userId, chatId, context);
-                }
-
-                // 4. Session checkpoint — interactive denial
-                // NOTE: deny.toolName() is always empty here — we returned above if present.
-                Optional<AgentCheckpoint> latestPending =
-                    statefulAgentStore.findLatestAwaitingApproval(sessionId);
-                String activeRole = latestPending
-                    .map(AgentCheckpoint::getAgentRole)
-                    .orElse(null);
-
-                if (activeRole != null) {
-                    try {
-                        log.infof("[DenyReflex] User denied pending tool execution for session: %s", sessionId);
-                        List<String> pending = BatchDecisionUtil.pendingToolNames(latestPending.get(), objectMapper);
-                        AgentCheckpoint cp = null;
-                        if (pending.size() == 1) {
-                            cp = checkpointApprovalService.denyTool(sessionId, pending.get(0), "CLI deny");
-                        } else {
-                            cp = checkpointApprovalService.denyAll(sessionId, "CLI deny");
-                        }
-                        if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
-                            // Register interest first to avoid race with concurrent REST deny
-                            cliResultBridge.register(sessionId);
-                            try {
-                                AgentResult result = checkpointResumeHandler.resumeAfterBatchDecisionSync(
-                                    sessionId, activeRole, userId, chatId, ChannelType.CLI.id());
-                                
-                                if (result == null) {
-                                    // Session is already resuming/cancelling.
-                                    // Wait for it to finish and signal us through the bridge.
-                                    result = cliResultBridge.waitForResult(sessionId, 10000);
-                                }
-                                return result != null ? AgentResultFormatter.format(result) : COULD_NOT_RESUME;
-                            } finally {
-                                cliResultBridge.cancel(sessionId);
-                            }
-                        } else {
-                            checkpointApprovalService.triggerResume(cp);
-                            return "";
-                        }
-                    } catch (CheckpointResolutionException e) {
-                        return NO_PENDING_DENIAL;
-                    }
-                }
-
-                // 5. No session checkpoint — guide user to pending cron tasks
-                // Added to pass the junit test cases. Yet to verify this.
-                List<AgentCronEntity> pending =
-                    cronRepository.findAwaitingApprovalByUserId(userId);
-                if (pending.size() == 1) {
-                    AgentCronEntity cron = pending.getFirst();
-                    return "⚠️ No active denial in this chat session.\n\n" +
-                        "A background task is waiting:\n" +
-                        "• " + cron.goal + "\n\n" +
-                        "Use: `/deny " + cron.id + "` to cancel it.";
-                } else if (pending.size() > 1) {
-                    String list = pending.stream()
-                            .map(c -> "• `/deny " + c.id + "` — " + c.goal)
-                            .collect(Collectors.joining("\n"));
-                    return String.format(CRON_MULTIPLE_AWAITING, list);
-                }
-
-                // 2026-04-07: Bridge check for late-arriving results from other channels
-                if (!statefulAgentStore.isSessionActive(sessionId)) {
-                    log.debugf("DenyReflex: ignoring denial for already-completed session %s", sessionId);
-                    return NO_PENDING_ANYWHERE_SESSION;
-                }
-
-                AgentResult bridgeResult = null;
-                cliResultBridge.register(sessionId);
-                try {
-                    bridgeResult = cliResultBridge.waitForResult(sessionId, 200);
-                } finally {
-                    cliResultBridge.cancel(sessionId);
-                }
-
-                if (bridgeResult != null) {
-                    return AgentResultFormatter.format(bridgeResult);
-                }
-
-                // 6. Nothing pending anywhere
-                return NO_PENDING_ANYWHERE_SESSION;
-            });
-            return ReflexResult.respond(response, context);
-        } catch (Exception e) {
-            //  1: e.getMessage() can be null for bare exception construction
-            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            log.errorf("Failed to process denial for session %s: %s", sessionId, errMsg);
-            log.debug("Full denial processing failure stack trace:", e);
-            return ReflexResult.respond(
-                DENIAL_ERROR,
-                context);
+    protected void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result) {
+        if (result instanceof AgentResult.AwaitingRetry) {
+            return; // No-op — retry handled by RateLimitRetryScheduler (#736)
         }
-    }
-
-    private String handlePerToolDenial(
-            String toolName, String sessionId, String userId,
-            String chatId, MessageContext context) throws Exception {
-
-        Optional<AgentCheckpoint> latestPending =
-            statefulAgentStore.findLatestAwaitingApproval(sessionId);
-        String activeRole = latestPending
-            .filter(AgentCheckpoint::hasBatchToolDecisions)
-            .map(AgentCheckpoint::getAgentRole)
-            .orElse(null);
-
-        if (activeRole == null) {
-            return NO_BATCH_AWAITING;
-        }
-
-        try {
-            AgentCheckpoint cp = checkpointApprovalService.denyTool(sessionId, toolName, "CLI deny");
-            checkpointApprovalService.triggerResume(cp);
-            return UserMessages.toolDenied(toolName);
-        } catch (CheckpointResolutionException e) {
-            return NO_PENDING_DENIAL;
-        }
-    }
-
-
-    // PHASE 80-A12: bulk path now delegates to CheckpointApprovalService.
-    // This method retained for handleCronApproval usage. Remove in Phase 81
-    // when cron approval is also migrated to CheckpointApprovalService.
-    private void autoDenyAllPending(String sessionId, String agentRole) {
-        AgentCheckpoint cp =
-            statefulAgentStore.load(sessionId, agentRole).orElseThrow();
-        BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
-            statefulAgentStore.updateBatchToolDecision(
-                sessionId, agentRole, toolName,
-                ToolDecision.DENIED.name()));
-    }
-
-    private String triggerBatchResume(
-            String sessionId, String userId, String chatId,
-            String agentRole, MessageContext context) throws Exception {
-        // PHASE 80-A12: delegating to CheckpointResumeHandler.
-        // This wrapper retained for handleCronApproval and
-        // handleDelegateApproval which still pass MessageContext.
-        // Remove in Phase 81 when those paths are also migrated.
-        checkpointResumeHandler.resumeAfterBatchDecision(
-            sessionId, agentRole, context.getUser().platformId(), context.getChatId(),
-            context.getUser().channel().name()
-        );
-        return RESUMING_TASK;
-    }
-
-    private String handleCronDenial(
-            String cronId, String userId, String chatId,
-            MessageContext context) throws Exception {
-
-        AgentCronEntity cron = cronRepository.findByUserId(userId).stream()
-                .filter(c -> c.id.equals(cronId))
-                .findFirst()
-                .orElse(null);
-
-        if (cron == null) {
-            return CRON_NOT_FOUND;
-        }
-
-        if (cron.status != CronStatus.AWAITING_APPROVAL) {
-            return String.format(CRON_NOT_AWAITING, cron.status.name());
-        }
-
-        var pendingCheckpoint = statefulAgentStore
-                .findLatestAwaitingApprovalForCron(cronId)
-                .orElse(null);
-
-        if (pendingCheckpoint == null) {
-            return CRON_NO_CHECKPOINT;
-        }
-
-        String cronSessionId = pendingCheckpoint.getSessionId();
-        //  2: use the actual agent role stored in the checkpoint.
-        // Hardcoding COORDINATOR caused resolveResumeGoal() to look up the wrong
-        // checkpoint row. Consistent with the same fix applied to ApproveReflex.
-        String cronRole = pendingCheckpoint.getAgentRole();
-
-        if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) {
-            log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
-                      "ignoring duplicate trigger.", cronSessionId);
-            return ALREADY_PROCESSING_DENIAL;
-        }
-
-        try {
-            context.setResumeSignal(true);
-            context.setGoal(AgentSentinels.GOAL_DENY_APPROVED);
-
-            AgentResult result = WorkspaceContext.run(
-                    cronSessionId, cron.userId, cron.chatId,
-                    AutonomyLevel.BACKGROUND, cronRole,
-                    () -> agentLoop.run(
-                            cronSessionId, cronRole,
-                            AgentSentinels.GOAL_DENY_APPROVED,
-                            reasoningEngine, 1, context));
-
-            cronRepository.markFailed(cron.id, "User denied tool execution.");
-
-            ChannelType chType =
-                ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
-            String platformId =
-                cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
-
-            jobCompletedEvent.fire(new AgentJobCompleted(
-                    cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                    AgentResultFormatter.format(result),
-                    null));
-
-            return AgentResultFormatter.format(result);
-        } finally {
-            statefulAgentStore.clearBatchResuming(cronSessionId);
-        }
-    }
-
-    private String handleDelegateDenial(
-            String targetSid, String adminId, String adminChatId,
-            MessageContext context) throws Exception {
-
-        log.infof("[DELEGATE-DENY] admin=%s denying session=%s", adminId, targetSid);
-
-        Optional<AgentCheckpoint> latestPending =
-            statefulAgentStore.findLatestAwaitingApproval(targetSid);
-        String activeRole = latestPending
-            .map(AgentCheckpoint::getAgentRole)
-            .orElse(null);
-
-        if (activeRole == null) {
-            return TARGET_SESSION_NOT_AWAITING;
-        }
-
-        AgentCheckpoint cp = statefulAgentStore.load(targetSid, activeRole)
-                .orElseThrow(() -> new IllegalStateException(
-                    "Checkpoint disappeared between lookup and load for session " + targetSid));
-
-        if (cp.hasBatchToolDecisions()) {
-            autoDenyAllPending(targetSid, activeRole);
-        }
-
-        auditService.logSecurityEvent(
-            SecurityEventType.DELEGATE_APPROVAL,
-            adminId,
-            "Admin %s denied session %s".formatted(adminId, targetSid));
-
-        return triggerBatchResume(targetSid, adminId, adminChatId, activeRole, context);
+        cronRepository.markFailed(cron.id, reason != null ? reason : "User denied tool execution.");
     }
 }

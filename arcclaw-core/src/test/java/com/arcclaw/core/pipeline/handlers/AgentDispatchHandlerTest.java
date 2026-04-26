@@ -73,6 +73,7 @@ class AgentDispatchHandlerTest {
         mockedContext = mockStatic(WorkspaceContext.class);
         when(intentClassifier.isContinuityCommand(anyString())).thenReturn(false);
         lenient().when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.empty());
+        lenient().when(agentStore.markResuming(anyString())).thenReturn(true);
     }
 
     @AfterEach

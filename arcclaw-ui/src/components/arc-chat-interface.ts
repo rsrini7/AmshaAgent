@@ -12,6 +12,7 @@ interface ChatMessage {
   timestamp: number;
   isApprovalPrompt?: boolean;
   historic?: boolean;
+  targetSessionId?: string;
 }
 
 @customElement('arc-chat-interface')
@@ -225,7 +226,7 @@ export class ArcChatInterface extends LitElement {
           text: m.text,
           timestamp: m.timestamp || Date.now(),
           historic: true,
-          isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸ Approval needed'),
+          isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸'),
           actionId: m.actionId || null
         }));
       await this.updateComplete;
@@ -304,9 +305,14 @@ export class ArcChatInterface extends LitElement {
       this._isTyping = false;
       this._awaitingApproval = false;
       this._showDenyReason = false;
-      const isApproval = frame.text.includes('⏸ Approval needed');
+      const isApproval = frame.text.includes('⏸');
       this._messages = [...this._messages, {
-        id: crypto.randomUUID(), role: 'assistant', text: frame.text, timestamp: frame.timestamp || Date.now(), isApprovalPrompt: isApproval
+        id: crypto.randomUUID(), 
+        role: 'assistant', 
+        text: frame.text, 
+        timestamp: frame.timestamp || Date.now(), 
+        isApprovalPrompt: isApproval,
+        targetSessionId: frame.sessionId || null
       }];
       if (isApproval) this._awaitingApproval = true;
       this._scrollToBottom();
@@ -323,25 +329,32 @@ export class ArcChatInterface extends LitElement {
     this._scrollToBottom();
   }
   
-  private _sendApprove() {
-     this._ws?.send({ type: 'message', text: '/approve' });
+  private _sendApprove(msg: ChatMessage) {
+     const cmd = msg.targetSessionId ? `/approve ${msg.targetSessionId}` : '/approve';
+     this._ws?.send({ type: 'message', text: cmd });
      this._awaitingApproval = false;
      this._showDenyReason = false;
-     this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text: '/approve', timestamp: Date.now() }];
+     this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text: cmd, timestamp: Date.now() }];
      this._scrollToBottom();
   }
   
-  private _sendDeny() {
+  private _sendDeny(msg: ChatMessage) {
     if (!this._showDenyReason) {
       this._showDenyReason = true;
       return;
     }
-    const reasonText = this._denyReason.trim() ? `/deny ${this._denyReason.trim()}` : '/deny';
-    this._ws?.send({ type: 'message', text: reasonText });
+    let cmd = msg.targetSessionId ? `/deny ${msg.targetSessionId}` : '/deny';
+    if (this._denyReason.trim()) {
+        cmd = msg.targetSessionId 
+            ? `/deny ${msg.targetSessionId} ${this._denyReason.trim()}`
+            : `/deny ${this._denyReason.trim()}`;
+    }
+    
+    this._ws?.send({ type: 'message', text: cmd });
     this._awaitingApproval = false;
     this._showDenyReason = false;
     this._denyReason = '';
-    this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text: reasonText, timestamp: Date.now() }];
+    this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text: cmd, timestamp: Date.now() }];
     this._scrollToBottom();
   }
 
@@ -389,8 +402,8 @@ export class ArcChatInterface extends LitElement {
                 <div class="approval-card">
                    <div class="approval-body">${this._renderMarkdown(m.text)}</div>
                    <div class="approval-actions">
-                      <button class="btn-approve" @click="${this._sendApprove}">Approve Task</button>
-                      <button class="btn-deny" @click="${this._sendDeny}">Deny</button>
+                      <button class="btn-approve" @click="${() => this._sendApprove(m)}">Approve Task</button>
+                      <button class="btn-deny" @click="${() => this._sendDeny(m)}">Deny</button>
                    </div>
                 </div>
              ` : html`

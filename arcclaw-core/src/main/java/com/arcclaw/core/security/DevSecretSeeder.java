@@ -94,8 +94,8 @@ public class DevSecretSeeder {
         } else {
             log.debugf(
                 "[DevSecretSeeder] Auto-seed disabled (arcclaw.auto-seed-secrets=false). " +
-                "Tool secrets (GITHUB_TOKEN, SERPER, BRAVE) were not seeded. " +
-                "Provision them manually by sending the bot a message: store GITHUB_TOKEN=your_token"
+                "Tool secrets (GITHUB, SERPER, BRAVE) were not seeded. " +
+                "Provision them manually by sending the bot a message: store ARCCLAW_TOOLS_GITHUB_TOKEN=your_token"
             );
         }
     }
@@ -173,7 +173,7 @@ public class DevSecretSeeder {
         if (!autoSeedEnabled) {
             return;
         }
-        seedFromHostEnvAsSystemKey("GITHUB_TOKEN");
+        seedFromHostEnvAsSystemKey("ARCCLAW_TOOLS_GITHUB_TOKEN");
         seedFromHostEnvAsSystemKey("ARCCLAW_TOOLS_SERPER_API_KEY");
         seedFromHostEnvAsSystemKey("ARCCLAW_TOOLS_BRAVE_API_KEY");
     }

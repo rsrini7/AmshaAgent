@@ -48,6 +48,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 @QuarkusTest
@@ -74,15 +75,23 @@ class LangChainReasoningEngineTest {
     @InjectMock
     ToolRegistry toolRegistry;
 
+    @InjectMock
+    CompactionSummaryCache summaryCache;
+
     @BeforeEach
     void setUp() {
         // Default behavior for mocks
         when(roleRegistry.permittedTools(any())).thenReturn(Collections.emptySet());
         when(toolRegistry.listTools()).thenReturn(Collections.emptyList());
+        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
     }
 
     private AgentExecutionContext createCtx(String sessionId) {
-        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, 5, 0, null, null, null, null);
+        return createCtx(sessionId, "goal");
+    }
+
+    private AgentExecutionContext createCtx(String sessionId, String goal) {
+        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", goal, AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @Test
@@ -98,7 +107,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I have finished the task", ReasoningStep.FINISH, Map.of("answer", "I have finished the task"), 100, 100));
 
@@ -130,7 +139,7 @@ class LangChainReasoningEngineTest {
                 .build();
 
         when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", "github", Map.of("repo", "test/repo"), 100, 100));
 
@@ -175,7 +184,7 @@ class LangChainReasoningEngineTest {
             // Capture the request to verify filtered messages
             ArgumentCaptor<ChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatRequest.class);
             when(llmProviderPort.nextStep(requestCaptor.capture())).thenReturn(mockResponse);
-                when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+            when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
             // For the filter test, we need the assembler to actually return the filtered messages if it were the real one,
             // but here we are mocking the engine's call to assembler. 
             // Wait, the engine calls historyAssembler.assemble(). 
@@ -232,7 +241,7 @@ class LangChainReasoningEngineTest {
             ArgumentCaptor<ChatRequest> requestCaptor =
                 ArgumentCaptor.forClass(ChatRequest.class);
             when(llmProviderPort.nextStep(requestCaptor.capture())).thenReturn(ChatResponse.builder().aiMessage(new AiMessage("some response")).build());
-                when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+            when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
             // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
             // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
             // This test only verifies that the engine correctly uses the assembled list from historyAssembler.
@@ -273,7 +282,7 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 100, 100));
 
@@ -297,7 +306,7 @@ class LangChainReasoningEngineTest {
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(roleRegistry.permittedTools(any())).thenReturn(Set.of());                
         when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 100, 100));
 
@@ -337,7 +346,7 @@ class LangChainReasoningEngineTest {
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the ChatModel anyway. Let's make sure the tool is available.
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 100, 100));
 
@@ -362,9 +371,44 @@ class LangChainReasoningEngineTest {
         // Researcher must NOT have shell or vault access — safety boundary
         assertFalse(toolNames.contains("execute_shell"), "researcher must NOT have execute_shell");
         assertFalse(toolNames.contains("vault_access"),  "researcher must NOT have vault_access");
-    }
-@Test
-void testCronFiredSessionStripsScheduleTools() {
+        }
+
+        @Test
+        void testForceFinishRetryStripsTools() {
+        // Arrange
+        AgentExecutionContext ctx = createCtx("force-finish-retry-session");
+        ctx.setForceFinishRetry(true);
+
+        AiMessage msg = AiMessage.aiMessage("Done.");
+        ChatResponse response = ChatResponse.builder()
+                .aiMessage(msg).tokenUsage(new TokenUsage(5, 10))
+                .finishReason(FinishReason.STOP).build();
+
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("Done.", ReasoningStep.FINISH, Map.of(), 100, 100));
+
+        // Mock RoleRegistry to return permitted tools
+        when(roleRegistry.permittedTools(any())).thenReturn(Set.of("github"));
+
+        // Act
+        reasoningEngine.nextStep(ctx, "coordinator", "goal", List.of());
+
+        // Assert
+        ChatRequest sent = captor.getValue();
+        assertTrue(sent.toolSpecifications() == null || sent.toolSpecifications().isEmpty(),
+                "Tools must be stripped when forceFinishRetry is active");
+
+        List<ChatMessage> messages = sent.messages();
+        boolean foundConstraint = messages.stream().anyMatch(m -> m instanceof UserMessage 
+                && ((UserMessage)m).singleText().contains("Answer in plain prose only"));
+        assertTrue(foundConstraint, "Force finish retry constraint must be injected");
+        }
+
+        @Test
+        void testCronFiredSessionStripsScheduleTools() {
     ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
     when(llmProviderPort.nextStep(captor.capture())).thenReturn(
             ChatResponse.builder().aiMessage(new AiMessage("OK")).build());
@@ -386,7 +430,7 @@ void testCronFiredSessionStripsScheduleTools() {
         when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(sched));
         when(toolRegistry.findTool("manage_schedule")).thenReturn(Optional.of(manage));
 
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 100, 100));
 
@@ -425,7 +469,7 @@ void testCronFiredSessionStripsScheduleTools() {
                 .thenReturn(ChatResponse.builder()
                     .aiMessage(new AiMessage("Here is the sort function"))
                     .build());
-            when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+            when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
             // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
             // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
             // This test only verifies that the engine correctly uses the assembled list from historyAssembler.
@@ -481,7 +525,7 @@ void testCronFiredSessionStripsScheduleTools() {
         AiMessage mockAiMessage = AiMessage.aiMessage("{\"label\":\"name\",\"text\":\"Srini\"}");
         ChatResponse mockResponse = ChatResponse.builder().aiMessage(mockAiMessage).build();
         when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
 
         // Act
@@ -505,7 +549,7 @@ void testCronFiredSessionStripsScheduleTools() {
         );
         
         when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
 
         // Act
@@ -513,8 +557,179 @@ void testCronFiredSessionStripsScheduleTools() {
 
         // Assert
         assertEquals("OBSERVE", step.action());
-        assertTrue(step.observation().contains("STOP. You must EXECUTE code"));
+        assertTrue(step.observation().contains("STOP. The user asked you to EXECUTE the code"), "Hint should match actual code");
         assertTrue(step.observation().contains("Call sandbox_exec RIGHT NOW"));
+    }
+
+    @Test
+    void testCoderExecutionFollowUpReusesPriorCodeBlock() {
+        String codeAnswer = """
+                ```java
+                public class StringReverser {
+                    public static String reverse(String input) {
+                        return input.chars()
+                                .mapToObj(c -> (char) c)
+                                .reduce("", (s, c) -> c + s, (s1, s2) -> s2 + s1);
+                    }
+                }
+                ```
+                """;
+
+        ReasoningStep prior = ReasoningStep.pending(
+                "Here is the code",
+                ReasoningStep.FINISH,
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, codeAnswer),
+                0, 0);
+
+        ReasoningStep step = reasoningEngine.nextStep(
+                createCtx("test-session", "ok execute and share results"),
+                "coder",
+                "ok execute and share results",
+                List.of(prior));
+
+        assertEquals("sandbox_exec", step.action());
+        assertEquals("java", step.actionInput().get("language"));
+        assertTrue(((String) step.actionInput().get("code")).contains("public class StringReverser"));
+    }
+
+    @Test
+    void testCoderExecutionFollowUpDoesNotReusePriorCodeBlockAfterFailedSandboxExec() {
+        String codeAnswer = """
+                ```java
+                public class StringReverser {
+                    public static String reverse(String input) {
+                        return input.chars()
+                                .mapToObj(c -> (char) c)
+                                .reduce("", (s, c) -> c + s, (s1, s2) -> s2 + s1);
+                    }
+                }
+                ```
+                """;
+
+        ReasoningStep priorCode = ReasoningStep.pending(
+                "Here is the code",
+                ReasoningStep.FINISH,
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, codeAnswer),
+                0, 0);
+        ReasoningStep failedExec = ReasoningStep.pending(
+                "Executing code",
+                "sandbox_exec",
+                Map.of("language", "java", "code", "broken"),
+                0, 0
+        ).withObservation("Compilation failed", false);
+
+        ChatResponse mockResponse = ChatResponse.builder().aiMessage(AiMessage.aiMessage("LLM response")).build();
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("LLM response", "write_code", Map.of(), 100, 100));
+
+        ReasoningStep step = reasoningEngine.nextStep(
+                createCtx("test-session", "fix and run again"),
+                "coder",
+                "fix and run again",
+                List.of(priorCode, failedExec));
+
+        assertEquals("write_code", step.action());
+        Mockito.verify(llmProviderPort).nextStep(any(ChatRequest.class));
+    }
+
+    @Test
+    void testTruncationRecovery_extractsCodeAndFinishes() {
+        // Arrange
+        String sessionId = "trunc-test";
+        // JSON body truncated mid-code field
+        String failedGen = "{\"language\":\"java\",\"code\":\"public class Truncated {";
+        LlmToolCallException ex = new LlmToolCallException(
+                "{\"error\":{\"message\":\"tool_use_failed\"}, \"failed_generation\":\"" + failedGen.replace("\"", "\\\"") + "\"}");
+
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(createCtx(sessionId), "coder", "goal", List.of());
+
+        // Assert
+        assertEquals(ReasoningStep.FINISH, step.action());
+        String answer = (String) step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
+        assertTrue(answer.contains("public class Truncated"), "Should contain recovered code");
+        assertTrue(answer.startsWith("```java"), "Should infer language");
+    }
+
+    @Test
+    void testTruncationRecovery_forcesFinishAfterTwoRetries() {
+        // Arrange
+        String sessionId = "trunc-loop-test";
+        // History contains two previous truncation failures (identified by the specific hint text)
+        ReasoningStep retry1 = ReasoningStep.pending("th", "OBSERVE", Map.of())
+                .withObservation("Your previous response was cut off because the code was too large.", true);
+        ReasoningStep retry2 = ReasoningStep.pending("th", "OBSERVE", Map.of())
+                .withObservation("Your previous response was cut off because the code was too large.", true);
+
+        // Third attempt also truncates, but this time with raw prose instead of JSON tool call
+        String rawProse = "package main\n\nfunc main() { ... truncated";
+        LlmToolCallException ex = new LlmToolCallException(
+                "{\"error\":{\"message\":\"schema_parse_error\"}, \"failed_generation\":\"" + rawProse + "\"}");
+
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(createCtx(sessionId), "coder", "goal", List.of(retry1, retry2));
+
+        // Assert
+        assertEquals(ReasoningStep.FINISH, step.action(), "Should force early-exit FINISH");
+        String answer = (String) step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
+        assertTrue(answer.contains("package main"), "Should surface the raw partial prose");
+    }
+
+    @Test
+    void testLanguageScopedFastPath_allowsGoAfterJavaSuccess() {
+        // Arrange
+        String codeJava = "```java\n public class J { } \n```";
+        ReasoningStep priorJava = ReasoningStep.pending("th", ReasoningStep.FINISH, Map.of("answer", codeJava));
+        ReasoningStep execJava = ReasoningStep.pending("th", "sandbox_exec", Map.of("language", "java"))
+                .withObservation("Java done", true); // Successful Java execution
+        
+        String codeGo = "```go\n package main \n```";
+        ReasoningStep priorGo = ReasoningStep.pending("th", ReasoningStep.FINISH, Map.of("answer", codeGo));
+
+        // Current goal: run the GO code
+        String goal = "do same in go lang and execute it";
+        
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(
+                createCtx("s1", goal), "coder", goal, List.of(priorJava, execJava, priorGo));
+
+        // Assert
+        assertEquals("sandbox_exec", step.action(), "Should fast-path GO despite Java success");
+        assertEquals("go", step.actionInput().get("language"));
+    }
+
+    @Test
+    void testFastPathRetryHint_quotesCompilerError() {
+        // Arrange
+        String goal = "execute it";
+        ReasoningStep failedExec = ReasoningStep.pending("th", "sandbox_exec", Map.of("language", "java"))
+                .withObservation("cannot find symbol: Collectors.reverse()", false);
+        
+        // Model returns prose (code plan) after failure instead of fixing it
+        LlmToolCallException ex = new LlmToolCallException(
+                "{\"error\":{\"message\":\"tool_use_failed\"}, \"failed_generation\":\"Here is the plan...\"}");
+        
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(createCtx("s1", goal), "coder", goal, List.of(failedExec));
+
+        // Assert
+        assertEquals("OBSERVE", step.action());
+        assertTrue(step.observation().contains("cannot find symbol: Collectors.reverse()"), "Hint should quote the compiler error");
+        assertTrue(step.observation().contains("STOP. The user asked you to EXECUTE"), "Should still include the hard correction");
     }
 
     @InjectMock
@@ -527,7 +742,7 @@ void testCronFiredSessionStripsScheduleTools() {
                 .tokenUsage(new TokenUsage(100, 100))
                 .build();
         when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("sys prompt");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("sys prompt");
         
         Mockito.doThrow(new BudgetWarningException("budget low"))
             .when(governanceLayer).recordLlmCall(anyString(), any(Integer.class), any(Integer.class));

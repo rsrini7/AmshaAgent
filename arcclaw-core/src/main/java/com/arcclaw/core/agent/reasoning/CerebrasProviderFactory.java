@@ -26,7 +26,7 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
                     defaultValue = "qwen-3-235b-a22b-instruct-2507")
     String modelName;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.max-tokens",
+    @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
                     defaultValue = "8192")
     int maxTokens;
 
@@ -43,9 +43,17 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
     int maxRetries;
 
+    @ConfigProperty(name = "arcclaw.llm.structured-output-mode", defaultValue = "NATIVE")
+    StructuredOutputMode structuredOutputMode;
+
     @Override
     public String providerName() {
         return "cerebras";
+    }
+
+    @Override
+    public StructuredOutputMode structuredOutputMode() {
+        return structuredOutputMode;
     }
 
     @Override

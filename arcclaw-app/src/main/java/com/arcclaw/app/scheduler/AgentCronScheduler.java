@@ -19,6 +19,7 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
@@ -39,7 +40,7 @@ import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 /**
- * Polls {@code agentcron} table and dispatches due cron jobs to the {@link CronJobRunner}.
+ * Polls {@code agent_cron} table and dispatches due cron jobs to the {@link CronJobRunner}.
  * <p>
  * Architecture decisions:
  * <ul>
@@ -75,15 +76,13 @@ public class AgentCronScheduler {
     Duration maxLookbackWindow;
 
     private ScheduledExecutorService preciseScheduler;
+    private volatile boolean active = true;
 
     Semaphore concurrencyLimiter;
 
-
-
-
-
     @PostConstruct
     void init() {
+        this.active = true;
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
         
         // Confirm resolution of the optional advisory lock port
@@ -110,6 +109,7 @@ public class AgentCronScheduler {
             try {
                 // Wait briefly for persistence adapters to stabilize
                 Thread.sleep(5000);
+                if (!active) return;
                 sweepOrphanedApprovalJobs();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -118,6 +118,7 @@ public class AgentCronScheduler {
     }
 
     private void sweepOrphanedApprovalJobs() {
+        if (!active) return;
         log.info("AgentCronScheduler: starting orphan sweep for AWAITING_APPROVAL jobs...");
         try {
             List<AgentCronEntity> orphaned = cronRepository.findAllAwaitingApproval();
@@ -132,6 +133,15 @@ public class AgentCronScheduler {
                 cronRepository.markFailed(job.id, "Orphaned — session expired before approval (server restart).");
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = !active || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
+            } else {
+                log.infof("AgentCronScheduler: persistence closed during sweep (app shutting down) — suppression intentional.");
+                log.debugf(e, "Full shutdown race details:");
+            }
         } catch (Exception e) {
             log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
         }
@@ -139,6 +149,7 @@ public class AgentCronScheduler {
 
     @PreDestroy
     void shutdown() {
+        this.active = false;
         if (preciseScheduler != null) {
             preciseScheduler.shutdown();
             try {

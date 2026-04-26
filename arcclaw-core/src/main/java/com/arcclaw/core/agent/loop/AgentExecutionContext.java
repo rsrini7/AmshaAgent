@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -25,6 +26,7 @@ public final class AgentExecutionContext {
     private final String agentRole;
     private final String goal;
     private final AutonomyLevel autonomyLevel;
+    private final StructuredOutputMode structuredOutputMode;
     private final int maxIterations;
     private final int startingIteration;
     private final String channelType;
@@ -35,6 +37,9 @@ public final class AgentExecutionContext {
     // Hot-path cache (§7.22 / F22)
     private CheckpointStatus lastCheckpointStatus;
     private boolean statusDirty = true;
+    private boolean forceFinishRetry = false;
+    private int truncationRetryCount = 0;
+    private int checkpointRestoreOffset = 0;
 
     public AgentExecutionContext(
             String sessionId,
@@ -43,6 +48,7 @@ public final class AgentExecutionContext {
             String agentRole,
             String goal,
             AutonomyLevel autonomyLevel,
+            StructuredOutputMode structuredOutputMode,
             int maxIterations,
             int startingIteration,
             String channelType,
@@ -56,6 +62,7 @@ public final class AgentExecutionContext {
         this.agentRole = Objects.requireNonNull(agentRole, "agentRole must not be null");
         this.goal = Objects.requireNonNull(goal, "goal must not be null");
         this.autonomyLevel = Objects.requireNonNull(autonomyLevel, "autonomyLevel must not be null");
+        this.structuredOutputMode = structuredOutputMode != null ? structuredOutputMode : StructuredOutputMode.NATIVE;
         if (maxIterations <= 0)
             throw new IllegalArgumentException("maxIterations must be > 0, got: " + maxIterations);
         this.maxIterations = maxIterations;
@@ -73,6 +80,7 @@ public final class AgentExecutionContext {
     public String goal() { return goal; }
     public String systemNote() { return systemNote != null ? systemNote : ""; }
     public AutonomyLevel autonomyLevel() { return autonomyLevel; }
+    public StructuredOutputMode structuredOutputMode() { return structuredOutputMode; }
     public int maxIterations() { return maxIterations; }
     public int startingIteration() { return startingIteration; }
     public String channelType() { return channelType; }
@@ -88,6 +96,15 @@ public final class AgentExecutionContext {
     public boolean isStatusDirty() { return statusDirty; }
     public void markStatusDirty() { this.statusDirty = true; }
 
+    public boolean isForceFinishRetry() { return forceFinishRetry; }
+    public void setForceFinishRetry(boolean forceFinishRetry) { this.forceFinishRetry = forceFinishRetry; }
+
+    public int getTruncationRetryCount() { return truncationRetryCount; }
+    public void incrementTruncationRetry() { this.truncationRetryCount++; }
+
+    public int getCheckpointRestoreOffset() { return checkpointRestoreOffset; }
+    public void setCheckpointRestoreOffset(int offset) { this.checkpointRestoreOffset = offset; }
+
     /** Convenience: true when full channel stamping info is available. */
     public boolean hasChannelInfo() {
         return channelType != null && !channelType.isBlank()
@@ -99,7 +116,8 @@ public final class AgentExecutionContext {
             String sessionId,
             String userId,
             String chatId,
-            AutonomyLevel autonomyLevel
+            AutonomyLevel autonomyLevel,
+            StructuredOutputMode structuredOutputMode
     ) {
         int max = req.maxIterations() != null ? req.maxIterations() : 5;
         return new AgentExecutionContext(
@@ -109,6 +127,7 @@ public final class AgentExecutionContext {
                 req.agentRole(),
                 req.goal(),
                 autonomyLevel,
+                structuredOutputMode,
                 max,
                 0,
                 null,

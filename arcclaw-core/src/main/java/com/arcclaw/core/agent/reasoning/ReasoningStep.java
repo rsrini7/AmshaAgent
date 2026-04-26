@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.reasoning;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.quarkus.qute.TemplateData;
 
 /**
@@ -35,7 +36,11 @@ public record ReasoningStep(
         Boolean success,
         String errorCode,
         String traceId,
-        String rootCauseClass) {
+        String rootCauseClass,
+        boolean isFastPath,
+        // Jackson defaults missing primitive boolean fields to 'false' during deserialization.
+        @JsonProperty(defaultValue = "false")
+        boolean isTruncationRecovery) {
 
     /** Action value indicating the loop should terminate with a final answer. */
     public static final String FINISH = "FINISH";
@@ -61,6 +66,14 @@ public record ReasoningStep(
         return PARALLEL_SENTINEL_DUNDER.equals(this.action);
     }
 
+    /**
+     * Creates a fast-path tool call step that bypasses the LLM.
+     * These steps are exempted from "degraded response" token checks.
+     */
+    public static ReasoningStep fastPath(String thought, String action, Map<String, Object> actionInput) {
+        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null, null, null, null, true, false);
+    }
+
 
     /**
      * Creates a pre-execution parallel batch step.
@@ -78,7 +91,7 @@ public record ReasoningStep(
             null,          // observation filled in after execution
             inputTokens,
             outputTokens,
-            null, null, null, null
+            null, null, null, null, false, false
         );
     }
 
@@ -87,53 +100,71 @@ public record ReasoningStep(
      * until known.
      */
     public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput) {
-        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null, null, null, null);
+        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null, null, null, null, false, false);
     }
 
     /** Create a step with tokens explicitly provided. */
     public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput, int inputTk,
             int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk, null, null, null, null);
+        return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk, null, null, null, null, false, false);
     }
 
     /** Create a step representing a schema/parsing error to trigger LLM retry. */
     public static ReasoningStep schemaError(String observation, int inputTk, int outputTk) {
-        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk, false, "SCHEMA_ERROR", null, null);
+        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk, false, "SCHEMA_ERROR", null, null, false, false);
+    }
+
+    /**
+     * Create a step representing a system-level directive injected into history.
+     */
+    public static ReasoningStep systemMessage(String observation) {
+        return new ReasoningStep("System Directive", OBSERVE, Map.of(), observation, 0, 0, true, null, null, null, false, false);
+    }
+
+    /** Create a step representing an observation of an action result. */
+    public static ReasoningStep observe(String action, String observation, String thought) {
+        return new ReasoningStep(thought, action, Map.of(), observation, 0, 0, true, null, null, null, false, false);
     }
 
     /** Create a copy of this step with the observation filled in, without success metadata. */
     public ReasoningStep withObservation(String observation) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, this.success, this.errorCode, this.traceId, this.rootCauseClass);
+                this.outputTokens, this.success, this.errorCode, this.traceId, this.rootCauseClass, this.isFastPath, this.isTruncationRecovery);
     }
 
     /** Create a copy of this step with the observation and success metadata filled in. */
     public ReasoningStep withObservation(String observation, Boolean success) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, success, this.errorCode, this.traceId, this.rootCauseClass);
+                this.outputTokens, success, this.errorCode, this.traceId, this.rootCauseClass, this.isFastPath, this.isTruncationRecovery);
     }
 
     /** Create a copy of this step with full diagnostics metadata. */
     public ReasoningStep withDiagnostics(String observation, Boolean success, String errorCode, String traceId, String rootCauseClass) {
         return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, success, errorCode, traceId, rootCauseClass);
+                this.outputTokens, success, errorCode, traceId, rootCauseClass, this.isFastPath, this.isTruncationRecovery);
+    }
+
+    /** Create a copy of this step with truncation recovery flag. */
+    public ReasoningStep withTruncationRecovery(boolean truncationRecovery) {
+        return new ReasoningStep(this.thought, this.action, this.actionInput, this.observation, this.inputTokens,
+                this.outputTokens, this.success, this.errorCode, this.traceId, this.rootCauseClass, this.isFastPath, truncationRecovery);
     }
 
     /** Mapping factory: constructs a ReasoningStep from all its constituent fields (legacy). */
     public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
             int inputTk, int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, null, null, null, null);
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, null, null, null, null, false, false);
     }
 
     /** Mapping factory: constructs a ReasoningStep from all its constituent fields. */
     public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
             int inputTk, int outputTk, Boolean success) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, null, null, null);
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, null, null, null, false, false);
     }
 
     /** Mapping factory: constructs a ReasoningStep with diagnostics. */
     public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
             int inputTk, int outputTk, Boolean success, String errorCode, String traceId, String rootCauseClass) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass);
+        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass, false, false);
     }
 }

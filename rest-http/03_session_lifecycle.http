@@ -249,6 +249,18 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
+GET {{baseUrl}}/api/v1/sessions/{{maxIterSession.response.body.sessionId}}/status/coordinator
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+POST {{baseUrl}}/api/v1/sessions/{{maxIterSession.response.body.sessionId}}/approve?agentRole=coordinator
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+
+###
+
 ### [SESSION-19] Verify LOOP_MAX_ITERATIONS in audit
 GET {{baseUrl}}/api/v1/audit/session/{{maxIterSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}

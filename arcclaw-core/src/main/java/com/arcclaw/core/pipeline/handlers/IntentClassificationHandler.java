@@ -2,12 +2,15 @@ package com.arcclaw.core.pipeline.handlers;
 
 import static com.arcclaw.core.message.UserMessages.*;
 
+import java.util.regex.Pattern;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.IntentDetector;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -28,6 +31,7 @@ public class IntentClassificationHandler implements MessageHandler {
 
     private static final Logger log = Logger.getLogger(IntentClassificationHandler.class);
     
+    private static final Pattern TRAILING_PUNCTUATION_PATTERN = Pattern.compile("[/?\\s]+$");
 
     @Inject IntentDetector classifier;
     @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
@@ -69,10 +73,24 @@ public class IntentClassificationHandler implements MessageHandler {
                     context.getChatId());
                 return context.getChatId();
             });
+
+            // Bug 5 Fix: Strip trailing punctuation (like '/') that can confuse classifiers
+            String classificationInput = TRAILING_PUNCTUATION_PATTERN.matcher(message.text().trim()).replaceAll("");
+
+            // §Issue 2: If goal was redacted, force simple chitchat to avoid tool-calling loops
+            String currentGoal = context.getGoal();
+            if (currentGoal != null && AgentSentinels.REDACTED_HYPHEN_PATTERN.matcher(currentGoal).find()) {
+                log.infof("PII-redacted goal detected for chat %s — forcing coordinator chitchat", context.getChatId());
+                context.setData(AgentSentinels.DATA_IS_SIMPLE_CHITCHAT, true);
+                context.setData(AgentSentinels.DATA_IS_PII_REDACTED, true);
+                context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+                return HandleResult.CONTINUE;
+            }
+
             String previousRole = roleCache.findLatestRole(sid).orElse(null);
 
             // Bug 2 Fix: Short follow-up heuristics for sticky roles
-            boolean isFollowUpHeuristic = intentDetector.isFollowUpHeuristic(message.text());
+            boolean isFollowUpHeuristic = intentDetector.isFollowUpHeuristic(classificationInput);
 
             if (isFollowUpHeuristic && previousRole != null && 
                (AgentRoleEnum.CODER.toScopedName().equals(previousRole) || 
@@ -80,7 +98,7 @@ public class IntentClassificationHandler implements MessageHandler {
                 log.infof("Short follow-up detected for chat %s — preserving sticky role: %s", context.getChatId(), previousRole);
                 role = previousRole;
             } else {
-                role = classifier.classify(message.text());
+                role = classifier.classify(classificationInput);
             }
 
             if ("__CONTINUE__".equals(role)) {

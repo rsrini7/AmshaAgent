@@ -1,6 +1,8 @@
 package com.arcclaw.core.state;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -12,6 +14,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +33,7 @@ class StatefulAgentStoreTest {
     @Inject
     StatefulAgentStore store;
 
-    @Inject
+    @InjectMock
     AuditService auditService;
 
     @BeforeEach
@@ -120,7 +123,8 @@ class StatefulAgentStoreTest {
 
             var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(sessionComplete, ROLE));
             assertTrue(loaded.isPresent());
-            assertEquals(CheckpointStatus.COMPLETED, loaded.get().getStatus());
+            // §7.31: markCompleted now automatically archives to prevent turn shadowing
+            assertEquals(CheckpointStatus.ARCHIVED, loaded.get().getStatus());
         });
     }
 
@@ -183,7 +187,7 @@ class StatefulAgentStoreTest {
             store.save(cp3);
 
             // When: we query latest awaiting approval for this cronId
-            var found = store.findLatestAwaitingApprovalForCron(cronId);
+            var found = store.findLatestAwaitingApprovalBySessionContaining(cronId);
 
             // Then: we get the newest AWAITING_APPROVAL checkpoint (cp2)
             assertTrue(found.isPresent(), "Expected an awaiting-approval checkpoint");

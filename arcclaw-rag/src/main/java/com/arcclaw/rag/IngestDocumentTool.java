@@ -1,12 +1,15 @@
 package com.arcclaw.rag;
 
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
@@ -23,10 +26,10 @@ public class IngestDocumentTool implements AgentTool {
 
     @Inject MemoryRetrievalPort memoryPort;
     @Inject AuditService auditService;
+    @Inject PiiScanReflex piiReflex;
 
     @Override
-    public String name() {
-        return ToolCapability.INGEST_DOCUMENT.toolName();
+    public String name() {        return ToolCapability.INGEST_DOCUMENT.toolName();
     }
 
     @Override
@@ -38,7 +41,7 @@ public class IngestDocumentTool implements AgentTool {
 
     @Override
     public ToolOperation requiredOperation() {
-        return ToolOperation.READ_FS;
+        return ToolOperation.WRITE_MEMORY;
     }
 
     @Override
@@ -56,9 +59,10 @@ public class IngestDocumentTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
             .addStringProperty("text",
-                "The document text to ingest into the knowledge base.")
+                "The full factual statement or document text to store, e.g. 'The user's name is Alice'. " +
+                "Do NOT store just an entity name — store the complete fact as a standalone sentence.")
             .addStringProperty("label",
-                "Optional short label for the document (for audit).")
+                "A descriptive short label or key for this information (e.g. 'user_name', 'project_overview').")
             .required("text")
             .build();
     }
@@ -75,6 +79,9 @@ public class IngestDocumentTool implements AgentTool {
         if (text == null || text.isBlank()) {
             return ToolResponse.failure(400, "text parameter is required.");
         }
+
+        // 🟢 Fix Bug 2: Resolve [REDACTED-*] placeholders from RAW_USER_GOAL
+        text = resolveRedactedPlaceholders(text);
 
         text = sanitize(text);  // ← sanitize before blank re-check
 
@@ -98,6 +105,39 @@ public class IngestDocumentTool implements AgentTool {
 
         return ToolResponse.success(
             "Document ingested successfully into Global KB. chunkId: " + result.id());
+    }
+
+    private String resolveRedactedPlaceholders(String text) {
+        if (text == null || !text.contains("[REDACTED-")) {
+            return text;
+        }
+
+        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+        if (rawGoal == null) {
+            return text;
+        }
+
+        // We use the PII scanner to find what it redacted in the original goal
+        // This is a bit brute force but safe: we want to find the first match
+        // in rawGoal for each redaction tag present in 'text'.
+        String resolved = text;
+        
+        // Match [REDACTED-TYPE]
+        Pattern tagPattern = Pattern.compile("\\[REDACTED-([A-Z]+)\\]");
+        Matcher tagMatcher = tagPattern.matcher(text);
+        
+        while (tagMatcher.find()) {
+            String fullTag = tagMatcher.group(0); // e.g. [REDACTED-PHONE]
+            String type = tagMatcher.group(1);    // e.g. PHONE
+            
+            // Find the original value in rawGoal using the same PII logic
+            String originalValue = piiReflex.extractFirstValue(rawGoal, type);
+            if (originalValue != null) {
+                resolved = resolved.replace(fullTag, originalValue);
+            }
+        }
+
+        return resolved;
     }
 
     @Override

@@ -5,22 +5,25 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import io.smallrye.common.annotation.Identifier;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -49,8 +52,22 @@ public class CompactionService {
     AuditService auditService;
 
     @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
     @Identifier("compaction")
     ChatModel compactionModel;
+
+    @Inject
+    @Identifier("compaction-mode")
+    String structuredOutputModeStr;
+
+    private StructuredOutputMode structuredOutputMode;
+
+    @PostConstruct
+    void init() {
+        this.structuredOutputMode = StructuredOutputMode.valueOf(structuredOutputModeStr.toUpperCase());
+    }
 
     @Inject
     RateLimitTracker rateLimitTracker;
@@ -73,8 +90,15 @@ public class CompactionService {
         with all new conversation turns.
         Preserve: all decisions made, all code written, all errors encountered,
         all tool results, all user preferences stated, all unresolved questions.
+        Preserve exactly when explicitly stated and relevant for future turns:
+        preferred name, username/handle, GitHub username or repo owner, repository
+        paths, branch names, URLs, model names, and other stable non-secret identifiers.
+        Keep those identifiers verbatim rather than paraphrasing them away.
+        Do NOT preserve or restate secrets such as passwords, API keys, access tokens,
+        session cookies, private keys, or other credentials.
         Discard: pleasantries, repetition, step-by-step narration of obvious actions.
         Output ONLY the final merged summary. No preamble. No labels. Max 200 words.
+        If structuredOutputMode is NATIVE, you MUST respond with valid JSON.
 
         CRITICAL: If the conversation contains instances where the AI agreed to
         restrict or substitute its own capabilities (e.g. "I'll only provide Python",
@@ -132,7 +156,6 @@ public class CompactionService {
         if (!enabled) return false;
 
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
-
         List<ChatMessage> nonSystemMessages = allMessages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
                 .toList();
@@ -145,6 +168,20 @@ public class CompactionService {
         List<ChatMessage> toCompact = nonSystemMessages.subList(0, size - keepRecent);
         List<ChatMessage> toKeep   = nonSystemMessages.subList(size - keepRecent, size);
 
+        String prompt = buildCompactionPrompt(sessionId, toCompact);
+        String newSummary = executeCompactionTurn(sessionId, prompt);
+
+        if (newSummary.isBlank()) {
+            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.",
+                    sessionId);
+            return false;
+        }
+
+        finalizeCompaction(sessionId, userId, newSummary, toCompact, toKeep);
+        return true;
+    }
+
+    private String buildCompactionPrompt(String sessionId, List<ChatMessage> toCompact) {
         Optional<CompactionSummaryDto> existingSummaryOpt =
                 summaryRepository.findLatestBySessionId(sessionId);
         String existingSummaryText =
@@ -158,34 +195,99 @@ public class CompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        // ── Rate-limit fast-fail: if Groq throttles the summary call, record the
-        // hit (so CompactionHandler skips compaction for the next BACKOFF_SECONDS)
-        // and throw CompactionAbortedException so CompactionEventBridge.finally
-        // releases the latch immediately — no waiting for AWAIT_TIMEOUT_SECONDS.
-        String newSummary;
-        try {
-            newSummary = compactionModel.chat(UserMessage.userMessage(prompt))
-                    .aiMessage().text().trim();
-        } catch (Exception e) {
-            if (isRateLimit(e)) {
-                rateLimitTracker.recordHit("compaction");
-                log.warnf("CompactionService: rate-limited during summary for session %s — " +
-                          "aborting compaction, latch will release via finally block", sessionId);
-                throw new CompactionAbortedException("Rate-limited during compaction", ExceptionUtils.getRootCauseMessage(e));
+        if (structuredOutputMode == StructuredOutputMode.NATIVE) {
+            prompt = "Respond with valid JSON. Include the merged summary in a field named 'summary'.\n\n" + prompt;
+        } else if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
+        }
+        return prompt;
+    }
+
+    private String executeCompactionTurn(String sessionId, String prompt) {
+        String newSummary = "";
+        int maxRetries = 3;
+        for (int i = 1; i <= maxRetries; i++) {
+            try {
+                String responseText = compactionModel.chat(UserMessage.userMessage(prompt))
+                        .aiMessage().text();
+                
+                if (responseText == null || responseText.isBlank()) {
+                    newSummary = "";
+                } else if (structuredOutputMode == StructuredOutputMode.NATIVE) {
+                    try {
+                        JsonNode node = objectMapper.readTree(responseText);
+                        JsonNode summaryNode = node.get("summary");
+                        if (summaryNode == null) summaryNode = node.get("content");
+                        if (summaryNode == null) summaryNode = node.get("result");
+
+                        newSummary = (summaryNode != null && summaryNode.isTextual()) 
+                                ? summaryNode.asText().trim() : responseText.trim();
+                    } catch (Exception e) {
+                        log.warnf("Failed to parse compaction JSON for session %s (attempt %d/%d): %s", 
+                                sessionId, i, maxRetries, e.getMessage());
+                        
+                        if (i < maxRetries) {
+                            log.info("Retrying compaction with PROMPT_DIRECTIVE fallback to avoid JSON errors.");
+                            // Temporarily switch to prompt directive for the retry
+                            String fallbackPrompt = "CRITICAL: You MUST respond ONLY with the summary prose. Do not use JSON.\n\n" + prompt;
+                            newSummary = executeCompactionTurn(sessionId, fallbackPrompt, i + 1, maxRetries);
+                            return newSummary;
+                        }
+                        
+                        newSummary = responseText.trim();
+                    }
+                } else {
+                    newSummary = responseText.trim();
+                }
+                break; // success
+            } catch (Exception e) {
+                if (isRateLimit(e) || isJsonError(e)) {
+                    if (isRateLimit(e)) {
+                        rateLimitTracker.recordHit("compaction");
+                    }
+                    String errorType = isRateLimit(e) ? "rate-limited" : "JSON validation failed";
+                    if (i < maxRetries) {
+                        long backoffMs = (long) Math.pow(2, i) * 1000L;
+                        log.warnf("CompactionService: %s for session %s (attempt %d/%d). Retrying in %d ms...",
+                                errorType, sessionId, i, maxRetries, backoffMs);
+                        try {
+                            Thread.sleep(backoffMs);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            throw new CompactionAbortedException("Interrupted during compaction backoff", ie);
+                        }
+                        continue;
+                    }
+                    throw new CompactionAbortedException(errorType + " during compaction", e);
+                }
+                throw e;
             }
-            throw e;  // non-rate-limit errors propagate normally
         }
+        return newSummary;
+    }
 
-        if (newSummary.isBlank()) {
-            log.warnf("Compaction returned blank summary for session %s. Aborting compaction.",
-                    sessionId);
-            return false;
+    private String executeCompactionTurn(String sessionId, String prompt, int attempt, int maxRetries) {
+        try {
+            return compactionModel.chat(UserMessage.userMessage(prompt)).aiMessage().text();
+        } catch (Exception e) {
+            log.warnf("Compaction fallback attempt %d/%d failed: %s", attempt, maxRetries, e.getMessage());
+            throw new CompactionAbortedException("Compaction fallback failed", e);
         }
+    }
 
-        newSummary = truncateSafely(newSummary);
+    private static boolean isJsonError(Throwable e) {
+        if (e == null) return false;
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("json_validate_failed") || msg.contains("invalid_json"))) return true;
+        return isJsonError(e.getCause());
+    }
+
+    private void finalizeCompaction(String sessionId, String userId, String newSummary,
+                                    List<ChatMessage> toCompact, List<ChatMessage> toKeep) {
+        String truncatedSummary = truncateSafely(newSummary);
 
         summaryRepository.upsert(new CompactionSummaryDto(
-            sessionId, newSummary, Instant.now(), toCompact.size(), userId));
+            sessionId, truncatedSummary, Instant.now(), toCompact.size(), userId));
 
         List<ChatMessage> filteredKeep = toKeep.stream()
                 .filter(m -> !(m instanceof SystemMessage))
@@ -195,14 +297,13 @@ public class CompactionService {
 
         String detail = String.format(
                 "{ \"messagesCompacted\": %d, \"keptRecent\": %d, \"summaryLength\": %d }",
-                toCompact.size(), filteredKeep.size(), newSummary.length());
+                toCompact.size(), filteredKeep.size(), truncatedSummary.length());
 
         auditService.record(sessionId, AgentSentinels.SYSTEM_USER, AgentSentinels.SYSTEM_ROLE,
                 SecurityEventType.CONTEXT_COMPACTED, detail);
 
         log.infof("Context compacted for session %s. Compacted %d messages, kept %d.",
                 sessionId, toCompact.size(), filteredKeep.size());
-        return true;
     }
 
     private static boolean isRateLimit(Throwable e) {

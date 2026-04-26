@@ -69,6 +69,9 @@ public class CheckpointResumeCoordinator {
     @Inject
     ChannelPluginRegistry channelPluginRegistry;
 
+    @Inject
+    ChatMemoryWriter chatMemoryWriter;
+
     /**
      * Decision outcome for the checkpoint load phase.
      */
@@ -142,6 +145,11 @@ public class CheckpointResumeCoordinator {
         }
 
         if (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING) {
+            // §7.29 / §T5-4: RESUMING status is an explicit "active" signal. 
+            // If the checkpoint is RESUMING, it means a thread has already claimed
+            // it and is currently executing the tool. We MUST restore history 
+            // so the new message can be processed AFTER the current turn finishes
+            // (or rejected by the concurrency lock).
             boolean isResume = (context != null && context.isResumeSignal()) || status == CheckpointStatus.RESUMING;
             if (isResume) {
                 List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
@@ -158,12 +166,40 @@ public class CheckpointResumeCoordinator {
             }
         }
 
-        // Terminal status path: Archive to keep the "latest" query clean for future runs
-        log.debugf("CheckpointResumeCoordinator: ignoring terminal checkpoint (status=%s). Archiving.", status);
+        // §7.31/§7.46: If a checkpoint is COMPLETED, we still want to restore its history
+        // so the NEXT turn in the same session knows what happened (e.g. Coder seeing 
+        // the code it just wrote). We archive the status but keep the steps.
+        if (status == CheckpointStatus.COMPLETED && roleMatches) {
+            List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
+            log.infof("CheckpointResumeCoordinator: restored %d steps from COMPLETED turn for session=%s",
+                    loadedSteps != null ? loadedSteps.size() : 0, sessionId);
+            
+            // Archive it now so it's not "latest" for the next poll
+            checkpoint.setStatus(CheckpointStatus.ARCHIVED);
+            agentStore.save(checkpoint);
+
+            // §7.46: Prune history to prevent unbounded growth across many turns.
+            // 10 steps is enough to capture the prior code block and basic reasoning.
+            int MAX_CARRY_STEPS = 10;
+            List<ReasoningStep> pruned = (loadedSteps != null && loadedSteps.size() > MAX_CARRY_STEPS)
+                    ? loadedSteps.subList(loadedSteps.size() - MAX_CARRY_STEPS, loadedSteps.size())
+                    : (loadedSteps != null ? loadedSteps : new ArrayList<>());
+
+            return new ResumeDecision.ResumedHistory(
+                    pruned,
+                    0, // Reset iterations for the new goal
+                    checkpoint.getAgentRole());
+        }
+
+        // Other terminal statuses or role mismatches: Archive and start fresh
+        log.debugf("CheckpointResumeCoordinator: ignoring terminal checkpoint (status=%s, roleMatch=%b). Archiving.", 
+                status, roleMatches);
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
         agentStore.save(checkpoint);
         return new ResumeDecision.FreshStart();
     }
+
+    public static final String FAIL_REASON_STALE_DISCARD = "Discarded: new user message received before approval was given.";
 
     private void archiveStaleApproval(String sessionId,
                                       String canonicalRole,
@@ -174,8 +210,13 @@ public class CheckpointResumeCoordinator {
         log.warnf("CheckpointResumeCoordinator: STALE-APPROVAL session=%s had pending tool '%s' "
                 + "but received new message. Archiving and starting fresh.", sessionId, staleTool);
 
+        // 🟢 FIX Bug 3: Scrub unfulfilled tool calls from ChatMemoryStore.
+        // This ensures the discarded tool call doesn't re-surface in the next turn's history
+        // when the LLM sees the previous AiMessage with tool requests but no results.
+        chatMemoryWriter.scrubUnfulfilledToolCalls(sessionId);
+
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
-        checkpoint.setFailReason("Discarded: new user message received before approval was given.");
+        checkpoint.setFailReason(FAIL_REASON_STALE_DISCARD);
         checkpoint.setPendingToolName(null);
         checkpoint.setPendingToolParametersJson(null);
         agentStore.save(checkpoint);
@@ -194,10 +235,12 @@ public class CheckpointResumeCoordinator {
                                               String staleTool,
                                               MessageContext context) {
         try {
-            String toolLabel = staleTool != null ? "`" + staleTool + "`" : "a pending tool";
-            String notice = "⚠️ A previous approval request for " + toolLabel
-                    + " was discarded because you sent a new message. "
-                    + "Starting fresh with your new goal.";
+            String toolLabel = staleTool != null ? staleTool : "a pending tool";
+            String notice = """
+                    ⚠️ A previous approval request for `%s` was discarded because you sent a new message.
+                    Starting fresh with your new goal.
+                    Your previous task was cancelled. Reply /retry to run it again.
+                    """.formatted(toolLabel);
 
             channelPluginRegistry.find(context.getUser().channel().id())
                     .map(ChannelPlugin::sender)

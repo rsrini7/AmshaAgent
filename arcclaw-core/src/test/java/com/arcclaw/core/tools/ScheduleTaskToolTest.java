@@ -17,6 +17,7 @@ import java.util.concurrent.Callable;
 import jakarta.enterprise.event.Event;
 
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.CronTaskScheduled;
@@ -80,7 +81,7 @@ class ScheduleTaskToolTest {
         )));
 
         assertTrue(result.success(), "Valid cron should schedule successfully: " + result.output());
-        assertTrue(result.output().contains("Task scheduled successfully"));
+        assertTrue(result.output().contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE));
         assertTrue(result.output().contains("ID:"));
         assertTrue(result.output().contains("Next fire:"));
 
@@ -103,7 +104,7 @@ class ScheduleTaskToolTest {
 
         assertFalse(result.success());
         assertEquals(400, result.exitCode());
-        assertTrue(result.output().contains("Schedule context missing"));
+        assertTrue(result.output().contains("Missing required parameter: cronExpression"));
 
         verify(cronRepository, never()).persist(any());
     }

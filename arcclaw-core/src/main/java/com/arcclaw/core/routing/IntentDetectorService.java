@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -14,12 +15,14 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.persona.AgentRoleRegistry;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.ClassUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -34,6 +37,12 @@ public class IntentDetectorService implements IntentDetector {
     @Inject
     @Identifier("intent-classifier")
     ChatModel classifierModel;
+
+    @Inject
+    @Identifier("intent-classifier-mode")
+    String structuredOutputModeStr;
+
+    private StructuredOutputMode structuredOutputMode;
 
     @Inject
     DestructiveVocabularyFilter destructiveFilter;
@@ -58,6 +67,9 @@ public class IntentDetectorService implements IntentDetector {
 
     @PostConstruct
     void init() {
+
+        this.structuredOutputMode = StructuredOutputMode.valueOf(structuredOutputModeStr.toUpperCase());
+
         this.sortedProviders = providers.stream()
                 .sorted(Comparator.comparingInt(IntentRoutingProvider::priority))
                 .toList();
@@ -65,7 +77,7 @@ public class IntentDetectorService implements IntentDetector {
         StringBuilder sb = new StringBuilder();
         sb.append("""
                 You are a router. Classify the following user message into exactly
-                one of these agent roles. Reply with ONLY the role name, nothing else.
+                one of these agent roles. Respond with a JSON object containing the field 'role'.
 
                 Roles:
                 """);
@@ -136,13 +148,20 @@ public class IntentDetectorService implements IntentDetector {
         String wrapped = DELIM_OPEN + "\n" + sanitized + "\n" + DELIM_CLOSE;
         String safePrompt = dynamicClassifierPrompt.formatted(wrapped);
 
+        if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+            safePrompt = "CRITICAL: You MUST respond with ONLY a single role name token. No explanation, no JSON, no punctuation.\n\n" + safePrompt;
+        }
+
         String raw;
         long startNs = System.nanoTime();
         try {
             raw = classifierModel.chat(safePrompt);
         } catch (Exception e) {
-            log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", e.getMessage());
-            log.debugf(e, "Full stacktrace for intent classifier failure");
+            log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Intent classifier failure cause chain: %s",
+                ExceptionUtils.getThrowableList(e).stream()
+                    .map(t -> t.getClass().getSimpleName() + ": " + t.getMessage())
+                    .collect(Collectors.joining(" -> ")));
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);

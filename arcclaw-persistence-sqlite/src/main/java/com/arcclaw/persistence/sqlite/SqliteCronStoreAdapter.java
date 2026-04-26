@@ -110,7 +110,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     public boolean claimForFire(String id) {
         if (id == null || id.isBlank()) return false;
         int updated = em.createNativeQuery(
-                "UPDATE agentcron SET status=:running WHERE id=:id AND status=:active"
+                "UPDATE agent_cron SET status=:running WHERE id=:id AND status=:active"
         ).setParameter("id", id)
          .setParameter("running", CronStatus.RUNNING.name())
          .setParameter("active", CronStatus.ACTIVE.name())
@@ -123,7 +123,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     public void releaseClaimToActive(String id) {
         if (id == null || id.isBlank()) return;
         em.createNativeQuery(
-                "UPDATE agentcron SET status=:active WHERE id=:id AND status=:running"
+                "UPDATE agent_cron SET status=:active WHERE id=:id AND status=:running"
         ).setParameter("id", id)
          .setParameter("active", CronStatus.ACTIVE.name())
          .setParameter("running", CronStatus.RUNNING.name())
@@ -139,7 +139,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
         em.createNativeQuery(
-                "UPDATE agentcron SET status = :active, lastFireTime = :last, nextFireTime = :next, updatedAt = :now WHERE id = :id"
+                "UPDATE agent_cron SET status = :active, lastFireTime = :last, nextFireTime = :next, updatedAt = :now WHERE id = :id"
         ).setParameter("active", CronStatus.ACTIVE.name())
          .setParameter("last", lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null)
          .setParameter("next", nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null)
@@ -157,7 +157,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
         em.createNativeQuery(
-                "UPDATE agentcron SET status = :completed, lastFireTime = :last, updatedAt = :now WHERE id = :id"
+                "UPDATE agent_cron SET status = :completed, lastFireTime = :last, updatedAt = :now WHERE id = :id"
         ).setParameter("completed", CronStatus.COMPLETED.name())
          .setParameter("last", lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null)
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
@@ -174,7 +174,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
         em.createNativeQuery(
-                "UPDATE agentcron SET status = :awaiting, updatedAt = :now WHERE id = :id"
+                "UPDATE agent_cron SET status = :awaiting, updatedAt = :now WHERE id = :id"
         ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL.name())
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
@@ -186,7 +186,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     public void setDeliveryId(String id, String deliveryId) {
         if (id == null || id.isBlank()) return;
         em.createNativeQuery(
-                "UPDATE agentcron SET lastDeliveryId=:d WHERE id=:id"
+                "UPDATE agent_cron SET lastDeliveryId=:d WHERE id=:id"
         ).setParameter("d", deliveryId)
          .setParameter("id", id)
          .executeUpdate();
@@ -201,7 +201,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
         em.createNativeQuery(
-                "UPDATE agentcron SET status = :failed, errorReason = :err, updatedAt = :now WHERE id = :id"
+                "UPDATE agent_cron SET status = :failed, errorReason = :err, updatedAt = :now WHERE id = :id"
         ).setParameter("failed", CronStatus.FAILED.name())
          .setParameter("err", errorReason)
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
@@ -218,7 +218,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
         em.createNativeQuery(
-            "UPDATE agentcron SET status = :skipped, nextFireTime = :next, updatedAt = :now WHERE id = :id"
+            "UPDATE agent_cron SET status = :skipped, nextFireTime = :next, updatedAt = :now WHERE id = :id"
          ).setParameter("skipped", CronStatus.SKIPPED.name())
           .setParameter("next", nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null)
           .setParameter("now", now != null ? TemporalUtils.formatIsoLex(now) : null)
@@ -232,7 +232,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         if (threshold == null) return;
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
         em.createNativeQuery(
-                "UPDATE agentcron SET status = :active " +
+                "UPDATE agent_cron SET status = :active " +
                 "WHERE status = :running AND " +
                 "(lastFireTime <= :threshold OR (lastFireTime IS NULL AND createdAt <= :threshold))"
         ).setParameter("active", CronStatus.ACTIVE.name())

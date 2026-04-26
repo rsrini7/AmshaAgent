@@ -21,6 +21,13 @@ public class PodmanHealthCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
+        if (!sandboxEnabled) {
+            return HealthCheckResponse.named("Podman Engine")
+                .up()
+                .withData("status", "DISABLED")
+                .withData("sandbox-enabled", "false")
+                .build();
+        }
         try {
             ProcessBuilder pb = new ProcessBuilder(podmanPath, "ps", "--format", "json");
             pb.redirectErrorStream(true);

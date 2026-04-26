@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -11,6 +12,7 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.security.InputSanitizer;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
@@ -86,6 +88,38 @@ public class ChatMemoryWriter {
     public void clearMemory(String sessionId) {
         if (sessionId != null) {
             chatMemoryStore.deleteMessages(sessionId);
+        }
+    }
+
+    /**
+     * Scrubs unfulfilled tool calls from chat memory.
+     * Used when a pending approval is discarded in favor of a new goal.
+     * This prevents the discarded tool calls from re-surfacing in the next turn's history.
+     */
+    public void scrubUnfulfilledToolCalls(String sessionId) {
+        if (sessionId == null) return;
+
+        List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
+        if (currentHistory == null || currentHistory.isEmpty()) return;
+
+        Set<String> resultIds = currentHistory.stream()
+                .filter(m -> m instanceof ToolExecutionResultMessage)
+                .map(m -> ((ToolExecutionResultMessage) m).id())
+                .collect(Collectors.toSet());
+
+        List<ChatMessage> filteredHistory = currentHistory.stream()
+                .filter(m -> {
+                    if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
+                        // Keep only tool calls that have a matching result in history
+                        return ai.toolExecutionRequests().stream()
+                                .anyMatch(req -> resultIds.contains(req.id()));
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+
+        if (filteredHistory.size() < currentHistory.size()) {
+            chatMemoryStore.updateMessages(sessionId, filteredHistory);
         }
     }
 

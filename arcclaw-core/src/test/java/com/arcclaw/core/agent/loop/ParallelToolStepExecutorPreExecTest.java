@@ -18,6 +18,7 @@ import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
@@ -63,7 +64,7 @@ class ParallelToolStepExecutorPreExecTest {
         String agentRole = "COORDINATOR";
         
         AgentExecutionContext context = new AgentExecutionContext(
-            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, 5, 0, null, null, null, null);
+            sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
             
         var calls = List.of(
             new ParallelToolCall("c1", "safe_read", Map.of(), "{}", null, true),

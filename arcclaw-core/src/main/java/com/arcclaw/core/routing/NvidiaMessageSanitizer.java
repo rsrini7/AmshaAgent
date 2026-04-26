@@ -7,16 +7,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.FinishReason;
 import org.jboss.logging.Logger;
 
 /**
@@ -28,6 +33,11 @@ public class NvidiaMessageSanitizer implements ChatModel {
     private static final Logger log = Logger.getLogger(NvidiaMessageSanitizer.class);
 
     private final ChatModel model;
+
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    private static final Pattern MISTRAL_RAW_TOOL_CALL =
+            Pattern.compile("\\[TOOL_CALLS\\]\\s*([a-zA-Z0-9_-]+)?\\s*(\\{[^\\[]*\\}|\\[[^\\[]*\\])", Pattern.DOTALL);
 
     public NvidiaMessageSanitizer(ChatModel model) {
         this.model = model;
@@ -61,6 +71,12 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 
         ChatResponse response = model.chat(builder.build());
         
+        // 🟢 FIX: Handle Mistral native [TOOL_CALLS] leak (§ recommendation)
+        if (response.aiMessage() != null && response.aiMessage().text() != null 
+                && response.aiMessage().text().contains("[TOOL_CALLS]")) {
+            return normalizeMistralResponse(response);
+        }
+
         // Pass 3: Sanitize model response to ensure future turns start with compliant IDs
         if (response.aiMessage() != null) {
              AiMessage sanitizedAi = internalSanitizeAiMessage(response.aiMessage(), new HashMap<>(), response.aiMessage().toolExecutionRequests(), allowedTools);
@@ -70,6 +86,59 @@ public class NvidiaMessageSanitizer implements ChatModel {
                      .build();
         }
         
+        return response;
+    }
+
+    private ChatResponse normalizeMistralResponse(ChatResponse response) {
+        String text = response.aiMessage().text();
+        if (text == null) return response;
+
+        Matcher m = MISTRAL_RAW_TOOL_CALL.matcher(text);
+        List<ToolExecutionRequest> requests = new ArrayList<>();
+        int firstMatchIdx = -1;
+
+        while (m.find()) {
+            if (firstMatchIdx == -1) firstMatchIdx = m.start();
+            
+            String toolName = m.group(1);
+            String jsonPayload = m.group(2);
+
+            try {
+                if (jsonPayload.startsWith("[")) {
+                    // It's a list of tool calls: [{"name": "...", "arguments": "{...}"}]
+                    JsonNode root = mapper.readTree(jsonPayload);
+                    if (root.isArray()) {
+                        for (JsonNode node : root) {
+                            requests.add(ToolExecutionRequest.builder()
+                                    .name(node.path("name").asText())
+                                    .arguments(node.path("arguments").isObject()
+                                            ? node.path("arguments").toString()
+                                            : node.path("arguments").asText("{}"))
+                                    .build());
+                        }
+                    }
+                } else if (toolName != null) {
+                    // It's a single tool call: toolName {args}
+                    requests.add(ToolExecutionRequest.builder()
+                            .name(toolName)
+                            .arguments(jsonPayload)
+                            .build());
+                }
+            } catch (Exception e) {
+                log.warnf("Failed to normalize Mistral tool call from response: %s", e.getMessage());
+            }
+        }
+
+        if (!requests.isEmpty()) {
+            String thought = text.substring(0, firstMatchIdx).strip();
+            log.infof("[NvidiaSanitizer] Normalized %d chained Mistral tool calls — routing through approval gate", requests.size());
+            return ChatResponse.builder()
+                    .aiMessage(AiMessage.from(thought.isEmpty() ? null : thought, requests))
+                    .tokenUsage(response.tokenUsage())
+                    .finishReason(FinishReason.TOOL_EXECUTION)
+                    .build();
+        }
+
         return response;
     }
 
@@ -155,6 +224,13 @@ public class NvidiaMessageSanitizer implements ChatModel {
                 result.add(msg);
             }
         }
+        
+        // sequence guard: if the final message is an assistant message, append a synthetic empty user turn
+        if (!result.isEmpty() && result.get(result.size() - 1) instanceof AiMessage) {
+            log.debugf("NvidiaMessageSanitizer: Sequence ends on an assistant message. Appending a synthetic empty user turn to avoid generation prompt errors.");
+            result.add(UserMessage.from("Please proceed."));
+        }
+        
         return result;
     }
 

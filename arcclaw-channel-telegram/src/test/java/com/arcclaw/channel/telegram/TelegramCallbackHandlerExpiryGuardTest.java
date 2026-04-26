@@ -13,6 +13,7 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.Chat;
@@ -39,6 +40,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
         handler.sender = sender;
         handler.approvalGateway = approvalGateway;
         handler.botToken = "dummy-token"; // To prevent NPE on http client creation logging
+        handler.objectMapper = new ObjectMapper();
 
         // Stub exchange
         Message message = mock(Message.class);
@@ -74,8 +76,10 @@ class TelegramCallbackHandlerExpiryGuardTest {
 
         handler.handleCallback(exchange);
 
-        // Verify user is notified
-        verify(sender).sendRaw(any(ChannelUser.class), eq("⏱ Approval expired"));
+        // Verify keyboard is cleared
+        verify(sender).editMessage(eq("1001"), eq(101), eq(null), eq(null));
+        // Verify no message was sent (A3: uses toast instead)
+        verify(sender, never()).sendRaw(any(ChannelUser.class), anyString());
     }
 
     @Test
@@ -86,10 +90,9 @@ class TelegramCallbackHandlerExpiryGuardTest {
 
         handler.handleCallback(exchange);
 
-        // Verify approve message was sent
-        verify(sender).sendRaw(any(ChannelUser.class), eq("✅ Approved: dummy_tool"));
-
-        // Verify no expiry message was sent
-        verify(sender, never()).sendRaw(any(ChannelUser.class), eq("⏱ Approval expired"));
+        // Verify keyboard is cleared
+        verify(sender).editMessage(eq("1001"), eq(101), eq(null), eq(null));
+        // Verify no message was sent (A3: uses toast instead)
+        verify(sender, never()).sendRaw(any(ChannelUser.class), anyString());
     }
 }

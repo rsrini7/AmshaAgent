@@ -29,14 +29,14 @@ public class AppBootstrap {
 
     private static final Logger log = Logger.getLogger(AppBootstrap.class);
 
-    private static final Pattern ENV_PATTERN = Pattern.compile("^\\\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\\\s*=\\\\s*(.*?)\\\\s*$");
+    private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
     // Keys whose input should be hidden
     private static final Set<String> SENSITIVE_KEYS = Set.of(
         "ARCCLAW_LLM_API_KEY", "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
         "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
         "TELEGRAM_BOT_TOKEN",
-        "ARCCLAW_TOOLS_BRAVE_API_KEY", "ARCCLAW_TOOLS_SERPER_API_KEY", "GITHUB_TOKEN",
+        "ARCCLAW_TOOLS_BRAVE_API_KEY", "ARCCLAW_TOOLS_SERPER_API_KEY", "ARCCLAW_TOOLS_GITHUB_TOKEN",
         "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY",
         "ARCCLAW_LLM_FALLBACK_API_KEY"
     );
@@ -415,7 +415,7 @@ public class AppBootstrap {
                 }
 
                 // Optional: Ask for GitHub token
-                if (spec.key.equals("GITHUB_TOKEN")) {
+                if (spec.key.equals("ARCCLAW_TOOLS_GITHUB_TOKEN")) {
                     System.err.println("  ┌─ GitHub repository access");
                     System.err.println("  │  Would you like to provide a GitHub token for the Coder/Researcher tools?");
                     System.err.println("  │  (Search and edit repositories directly from ArcClaw)");
@@ -774,10 +774,6 @@ public class AppBootstrap {
         // Auto-fix main model and URL based on ARCCLAW_LLM_PROVIDER
         if ("openrouter".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/auto", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(provider)) {
@@ -818,12 +814,11 @@ public class AppBootstrap {
             default         -> "128000";
         };
 
-        String effectiveWindow = contextWindow;
-        // Auto-fix if unset OR if it matches one of our known standard defaults but is wrong for the current provider
-        boolean isDefaultOrKnown = contextWindow == null || contextWindow.isBlank()
-                || Set.of("128000", "8192", "65536", "1000000").contains(contextWindow);
+        String effectiveWindow = (contextWindow == null || contextWindow.isBlank()) ? targetWindow : contextWindow;
+        // Auto-fix if it matches one of our known standard defaults but is wrong for the current provider
+        boolean isKnownDefault = Set.of("128000", "8192", "65536", "1000000").contains(contextWindow);
 
-        if (isDefaultOrKnown && !targetWindow.equals(contextWindow)) {
+        if ((contextWindow == null || contextWindow.isBlank() || isKnownDefault) && !targetWindow.equals(contextWindow)) {
             effectiveWindow = targetWindow;
             System.err.println("[ArcClaw] ℹ️  Setting context window to " + targetWindow + " for provider '" + provider + "'.");
             patchEnvFile(envFile, "ARCCLAW_LLM_CONTEXT_WINDOW", targetWindow);
@@ -832,25 +827,92 @@ public class AppBootstrap {
         System.setProperty("arcclaw.llm.context-window", effectiveWindow);
 
         String compactPromptEnabled = System.getProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", System.getenv("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED"));
-        boolean shouldEnable = "true".equalsIgnoreCase(compactPromptEnabled)
-                || (Integer.parseInt(effectiveWindow) <= 8192);
-
-        String finalCompactValue = shouldEnable ? "true" : "false";
-        System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalCompactValue);
-        System.setProperty("arcclaw.llm.compact-prompt-enabled", finalCompactValue);
+        boolean shouldEnable;
+        
+        if (compactPromptEnabled == null || compactPromptEnabled.isBlank()) {
+            int windowSize = 0;
+            try {
+                windowSize = Integer.parseInt(effectiveWindow);
+            } catch (NumberFormatException ignored) {}
+            
+            shouldEnable = (windowSize > 0 && windowSize <= 8192);
+            String finalValue = shouldEnable ? "true" : "false";
+            System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalValue);
+            System.setProperty("arcclaw.llm.compact-prompt-enabled", finalValue);
+        } else {
+            shouldEnable = "true".equalsIgnoreCase(compactPromptEnabled);
+            String finalValue = shouldEnable ? "true" : "false";
+            System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalValue);
+            System.setProperty("arcclaw.llm.compact-prompt-enabled", finalValue);
+        }
 
         if (shouldEnable) {
             String msg = "[ArcClaw] ℹ️  Compact Prompt Mode ENABLED (window=" + effectiveWindow + ").";
             System.err.println(msg);
             log.debug(msg);
+        } else {
+            String msg = "[ArcClaw] ℹ️  Compact Prompt Mode DISABLED (window=" + (effectiveWindow != null ? effectiveWindow : "unknown") + ").";
+            System.err.println(msg);
+            log.debug(msg);
+        }
+
+        // --- Structured Output Optimization ---
+        // NOTE: System.setProperty() here is safe because @ApplicationScoped producers
+        // are lazy-initialized in Quarkus. These properties will be visible when
+        // ChatModelProducer / SystemPromptBuilder first inject their @ConfigProperty fields.
+        String structuredMode = System.getProperty("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE"));
+
+        if (structuredMode == null || structuredMode.isBlank()) {
+            String activeModel = System.getProperty("ARCCLAW_LLM_MODEL_NAME", System.getenv("ARCCLAW_LLM_MODEL_NAME"));
+            String targetMode = (activeModel != null && activeModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            
+            System.setProperty("ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.llm.structured-output-mode", targetMode);
+        } else {
+            // Publish the explicit user override to the dotted key
+            System.setProperty("arcclaw.llm.structured-output-mode", structuredMode);
+        }
+
+        // --- Fallback Structured Mode ---
+        String fallbackMode = System.getProperty("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE"));
+        if (fallbackMode == null || fallbackMode.isBlank()) {
+            String fbModel = System.getProperty("ARCCLAW_LLM_FALLBACK_MODEL", System.getenv("ARCCLAW_LLM_FALLBACK_MODEL"));
+            String targetMode = (fbModel != null && fbModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            System.setProperty("ARCCLAW_LLM_FALLBACK_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.llm.fallback-structured-output-mode", targetMode);
+        } else {
+            System.setProperty("arcclaw.llm.fallback-structured-output-mode", fallbackMode);
+        }
+
+        // --- Intent Classifier Structured Mode ---
+        String intentMode = System.getProperty("ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE"));
+        if (intentMode == null || intentMode.isBlank()) {
+            String intentModel = System.getProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", System.getenv("ARCCLAW_INTENT_CLASSIFIER_MODEL"));
+            String targetMode = (intentModel != null && intentModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            System.setProperty("ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.routing.intent-classifier.structured-output-mode", targetMode);
+        } else {
+            System.setProperty("arcclaw.routing.intent-classifier.structured-output-mode", intentMode);
+        }
+
+        // --- Compaction Structured Mode ---
+        String compactionMode = System.getProperty("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE", System.getenv("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE"));
+        if (compactionMode == null || compactionMode.isBlank()) {
+            String compactionModel = System.getProperty("ARCCLAW_COMPACTION_MODEL", System.getenv("ARCCLAW_COMPACTION_MODEL"));
+            String targetMode = (compactionModel != null && compactionModel.contains("llama-4-scout")) 
+                    ? "PROMPT_DIRECTIVE" : "NATIVE";
+            System.setProperty("ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE", targetMode);
+            System.setProperty("arcclaw.memory.compaction.structured-output-mode", targetMode);
+        } else {
+            System.setProperty("arcclaw.memory.compaction.structured-output-mode", compactionMode);
         }
 
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
         if ("openrouter".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "google/gemma-3-27b-it:free");
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/auto", "google/gemma-3-27b-it:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(compactionProvider)) {
@@ -880,9 +942,6 @@ public class AppBootstrap {
         // Auto-fix intent classifier based on ARCCLAW_INTENT_CLASSIFIER_PROVIDER
         if ("openrouter".equalsIgnoreCase(intentProvider)) {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/auto", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(intentProvider)) {

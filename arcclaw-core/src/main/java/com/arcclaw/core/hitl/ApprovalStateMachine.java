@@ -115,7 +115,7 @@ public class ApprovalStateMachine implements ApprovalGateway {
 
     @Override
     public String resolveSessionIdPrefix(String prefix) {
-        return agentStore.findLatestAwaitingApprovalByPrefix(prefix)
+        return agentStore.findLatestAwaitingApprovalBySessionContaining(prefix)
                 .map(AgentCheckpoint::getSessionId)
                 .orElse(prefix);
     }

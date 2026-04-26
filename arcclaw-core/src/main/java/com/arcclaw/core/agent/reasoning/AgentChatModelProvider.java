@@ -21,4 +21,12 @@ public interface AgentChatModelProvider {
      * {@code @ApplicationScoped ChatModel} bean used by {@link LangChainReasoningEngine}.
      */
     ChatModel create();
+
+    /**
+     * Returns the structured output compliance mode for this model.
+     * Defaults to NATIVE for modern reliable models.
+     */
+    default StructuredOutputMode structuredOutputMode() {
+        return StructuredOutputMode.NATIVE;
+    }
 }

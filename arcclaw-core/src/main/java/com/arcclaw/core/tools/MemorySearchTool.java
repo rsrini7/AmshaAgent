@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
@@ -35,6 +36,9 @@ public class MemorySearchTool implements AgentTool {
 
     @Inject
     MemoryRetrievalPort memoryPort;
+
+    @Inject
+    IntentClassificationService intentService;
 
     @Override
     public String name() {
@@ -154,7 +158,7 @@ public class MemorySearchTool implements AgentTool {
         if (query == null) return query;
         String lower = query.toLowerCase().strip();
         // Self-referential identity queries
-        if (lower.matches(".*(my name|who am i|user name|user identity).*")) {
+        if (intentService.isIdentityQuery(lower)) {
             return "user name identity";
         }
         // Self-referential work queries

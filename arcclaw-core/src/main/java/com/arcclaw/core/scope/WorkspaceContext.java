@@ -22,6 +22,10 @@ public final class WorkspaceContext {
     public static final ScopedValue<String> CHANNEL_TYPE = ScopedValue.newInstance();
     public static final ScopedValue<String> SUGGESTED_CRON = ScopedValue.newInstance();
     public static final ScopedValue<String> SUGGESTED_NEXT_FIRE_TIME = ScopedValue.newInstance();
+    public static final ScopedValue<String> SUGGESTED_CRON_SOURCE = ScopedValue.newInstance();
+    public static final ScopedValue<Boolean> IS_WRITE_INTENT = ScopedValue.newInstance();
+    public static final ScopedValue<Boolean> IS_COMPACT = ScopedValue.newInstance();
+    public static final ScopedValue<String> RAW_USER_GOAL = ScopedValue.newInstance();
 
 
     private WorkspaceContext() {
@@ -94,10 +98,20 @@ public final class WorkspaceContext {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
     }
 
+    public static <T> T runWithFullAutonomy(String sessionId, String userId,
+            String chatId, String role, String channelType, Callable<T> task) throws Exception {
+        return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
+    }
+
 
     public static void runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, Runnable task) {
         run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
+    }
+
+    public static void runWithFullAutonomy(String sessionId, String userId,
+            String chatId, String role, String channelType, Runnable task) {
+        run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
     }
 
 
@@ -187,5 +201,15 @@ public final class WorkspaceContext {
 
     public static String suggestedNextFireTime() {
         return SUGGESTED_NEXT_FIRE_TIME.isBound() ? SUGGESTED_NEXT_FIRE_TIME.get() : null;
+    }
+
+    /**
+     * Returns {@code "UTC"} when the SUGGESTED_CRON was pre-resolved to UTC by
+     * Java-side arithmetic (CommandDispatchHandler / ChatCommand). This signals
+     * {@code ScheduleTaskTool} to override the LLM-provided timezone to UTC,
+     * preventing double timezone conversion.
+     */
+    public static String suggestedCronSource() {
+        return SUGGESTED_CRON_SOURCE.isBound() ? SUGGESTED_CRON_SOURCE.get() : null;
     }
 }
