@@ -172,6 +172,7 @@ public class CheckpointResumeHandler {
 
             return WorkspaceContext.runWithFullAutonomy(
                 cp.getSessionId(), context.getUser().platformId(), context.getChatId(), cp.getAgentRole(),
+                context.getUser().channel().id(),
                 () -> agentLoop.run(
                     cp.getSessionId(), cp.getAgentRole(), goal,
                     cp.getSystemNote(), reasoningEngine, budget, context));
@@ -285,7 +286,7 @@ public class CheckpointResumeHandler {
                     sessionId, budget, original, used);
 
             return WorkspaceContext.runWithFullAutonomy(
-                sessionId, userId, chatId, agentRole,
+                sessionId, userId, chatId, agentRole, cType.id(),
                 () -> agentLoop.run(
                     sessionId, agentRole, resumeGoal,
                     checkpoint.getSystemNote(),
@@ -341,11 +342,13 @@ public class CheckpointResumeHandler {
             return performDenialCleanup(context, history, checkpoint);
         }
 
+        String resolvedChannelType = resolveChannelType(context, messageContext);
+
         if (checkpoint.isParallelBatch()) {
-            return resumeParallelBatch(context, history, checkpoint);
+            return resumeParallelBatch(context, history, checkpoint, resolvedChannelType);
         }
 
-        return executePendingTool(context, history, checkpoint);
+        return executePendingTool(context, history, checkpoint, resolvedChannelType);
     }
 
     private AgentResult performDenialCleanup(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint) {
@@ -359,7 +362,7 @@ public class CheckpointResumeHandler {
         return AgentResult.finished("❌ Tool execution was denied and the task has been cancelled.", List.copyOf(history));
     }
 
-    private AgentResult executePendingTool(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint) {
+    private AgentResult executePendingTool(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint, String channelType) {
         String toolName = checkpoint.getPendingToolName();
         String paramsJson = checkpoint.getPendingToolParametersJson();
         String sessionId = context.sessionId();
@@ -375,6 +378,7 @@ public class CheckpointResumeHandler {
         try {
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                     sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
+                    channelType,
                     () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
             if (response.isInfraFailure()) return handleInfraFailure(history);
@@ -437,7 +441,8 @@ public class CheckpointResumeHandler {
     private AgentResult resumeParallelBatch(
             AgentExecutionContext context,
             List<ReasoningStep> history,
-            AgentCheckpoint checkpoint) {
+            AgentCheckpoint checkpoint,
+            String channelType) {
 
         String sessionId = context.sessionId();
         log.infof("[PARALLEL-HITL-RESUME] session=%s resuming batch", sessionId);
@@ -457,7 +462,7 @@ public class CheckpointResumeHandler {
                 continue;
             }
 
-            executeBatchCall(call, context, completed, checkpoint);
+            executeBatchCall(call, context, completed, checkpoint, channelType);
         }
 
         return finalizeParallelBatch(checkpoint, history, completed);
@@ -505,16 +510,34 @@ public class CheckpointResumeHandler {
         return false;
     }
 
-    private void executeBatchCall(ParallelToolCall call, AgentExecutionContext ctx, List<ParallelToolCall> completed, AgentCheckpoint cp) {
+    private void executeBatchCall(ParallelToolCall call, AgentExecutionContext ctx, List<ParallelToolCall> completed, AgentCheckpoint cp, String channelType) {
         try {
             String effectiveRole = cp.getPendingToolRole() != null ? cp.getPendingToolRole() : ctx.agentRole();
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                 ctx.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
+                channelType,
                 () -> toolRegistry.invokeTool(call.toolName(), call.paramsJson(), ctx.sessionId()));
             completed.add(call.withResult(response.output(), response.success()));
         } catch (Exception e) {
             completed.add(call.withResult("Tool execution failed on resume: " + AgentErrorMessageUtil.safeMessage(e), false));
         }
+    }
+
+    private String resolveChannelType(AgentExecutionContext context, MessageContext messageContext) {
+        if (messageContext != null
+                && messageContext.getUser() != null
+                && messageContext.getUser().channel() != null
+                && messageContext.getUser().channel().id() != null
+                && !messageContext.getUser().channel().id().isBlank()) {
+            return messageContext.getUser().channel().id();
+        }
+        if (context != null && context.channelType() != null && !context.channelType().isBlank()) {
+            return context.channelType();
+        }
+        return WorkspaceContext.channelType().orElseGet(() -> {
+            log.warn("CheckpointResumeHandler: channelType missing during resume; using 'unknown' fallback");
+            return "unknown";
+        });
     }
 
     private AgentResult finalizeParallelBatch(AgentCheckpoint checkpoint, List<ReasoningStep> history, List<ParallelToolCall> completed) {

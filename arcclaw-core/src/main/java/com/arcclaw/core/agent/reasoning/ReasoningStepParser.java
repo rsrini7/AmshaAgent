@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -25,6 +27,12 @@ import org.jboss.logging.Logger;
 public class ReasoningStepParser {
 
     private static final Logger log = Logger.getLogger(ReasoningStepParser.class);
+    private static final Pattern LANGUAGE_FIELD_PATTERN =
+            Pattern.compile("\"language\"\\s*:\\s*\"([^\"]+)\"");
+    private static final Pattern RELATIVE_SCHEDULE_PATTERN =
+            Pattern.compile("\\b(in\\s+\\d+\\s*(min|mins|minute|minutes|hour|hours)|in\\s+one\\s+(min|minute|hour))\\b");
+    private static final Pattern ABSOLUTE_SCHEDULE_PATTERN =
+            Pattern.compile("\\b(at\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?|every\\s+(day|hour|minute|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b");
 
     private final ObjectMapper objectMapper;
 
@@ -49,7 +57,7 @@ public class ReasoningStepParser {
                 ToolExecutionRequest req = requests.getFirst();
                 log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
 
-                Map<String, Object> actionInput = deserializeParams(sessionId, req.arguments());
+                Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
                 if (actionInput.containsKey("__error")) {
                     return ReasoningStep.schemaError(
                             "System: Your previous response contained invalid JSON. " +
@@ -96,6 +104,31 @@ public class ReasoningStepParser {
                               .collect(Collectors.joining(", ")));
 
                 List<ParallelToolCall> calls = new ArrayList<>();
+                String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound()
+                        ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+
+                if (isSchedulingGoal(rawGoal)) {
+                    ToolExecutionRequest scheduleRequest = requests.stream()
+                            .filter(r -> ToolCapability.SCHEDULE_TASK.toolName().equals(r.name()))
+                            .findFirst()
+                            .orElse(null);
+                    if (scheduleRequest != null) {
+                        log.warnf("[PARALLEL-TOOLS] session=%s scheduling goal emitted mixed parallel tools; " +
+                                  "collapsing to schedule_task only.", sessionId);
+                        Map<String, Object> actionInput = deserializeParams(sessionId, scheduleRequest.name(),
+                                scheduleRequest.arguments());
+                        if (actionInput.containsKey("__error")) {
+                            return ReasoningStep.schemaError(
+                                    "System: Your previous response contained invalid JSON. " +
+                                            "Correct the format and retry. Error: " + actionInput.get("__error"),
+                                    inputTokens, outputTokens
+                            );
+                        }
+                        return ReasoningStep.pending(aiMessage.text(), scheduleRequest.name(),
+                                actionInput, inputTokens, outputTokens);
+                    }
+                }
+
                 for (int i = 0; i < requests.size(); i++) {
                     ToolExecutionRequest req = requests.get(i);
                     // §7.19: callId must be non-null for merge loop correctness.
@@ -103,7 +136,7 @@ public class ReasoningStepParser {
                     String callId = req.id() != null
                         ? req.id()
                         : req.name() + "-" + UUID.randomUUID();
-                    Map<String, Object> params = deserializeParams(sessionId, req.arguments());
+                    Map<String, Object> params = deserializeParams(sessionId, req.name(), req.arguments());
                     String paramsJson = "{}";
                     try {
                         paramsJson = objectMapper.writeValueAsString(params);
@@ -123,7 +156,7 @@ public class ReasoningStepParser {
                     log.warnf("[PARALLEL-TOOLS] Serialization failure — " +
                               "falling back to first tool '%s' only.", requests.getFirst().name());
                     ToolExecutionRequest req = requests.getFirst();
-                    Map<String, Object> actionInput = deserializeParams(sessionId, req.arguments());
+                    Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
                     return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
                 }
 
@@ -141,7 +174,7 @@ public class ReasoningStepParser {
                 inputTokens, outputTokens);
     }
 
-    private Map<String, Object> deserializeParams(String sessionId, String argsJson) {
+    private Map<String, Object> deserializeParams(String sessionId, String toolName, String argsJson) {
         if (argsJson == null || argsJson.isBlank()) return Map.of();
         
         // Phase 1: Try direct parse
@@ -155,6 +188,13 @@ public class ReasoningStepParser {
                 String repaired = sanitizeJson(argsJson);
                 return doDeserialize(repaired);
             } catch (Exception e2) {
+                if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) {
+                    Map<String, Object> recovered = recoverSandboxExecParams(argsJson);
+                    if (!recovered.isEmpty()) {
+                        log.warnf("Recovered malformed sandbox_exec parameters for session %s", sessionId);
+                        return recovered;
+                    }
+                }
                 log.errorf("JSON repair failed for session %s: %s", sessionId, e2.getMessage());
                 return Map.of("__error", e.getMessage(), "parameters", argsJson);
             }
@@ -208,6 +248,49 @@ public class ReasoningStepParser {
         }
         
         return sb.toString();
+    }
+
+    private Map<String, Object> recoverSandboxExecParams(String argsJson) {
+        if (argsJson == null || argsJson.isBlank()) return Map.of();
+
+        int codeKey = argsJson.indexOf("\"code\"");
+        if (codeKey < 0) return Map.of();
+
+        int codeStart = argsJson.indexOf('"', argsJson.indexOf(':', codeKey) + 1);
+        if (codeStart < 0) return Map.of();
+
+        int languageKey = argsJson.lastIndexOf("\"language\"");
+        if (languageKey < 0 || languageKey <= codeStart) return Map.of();
+
+        int codeEnd = argsJson.lastIndexOf("\",", languageKey);
+        if (codeEnd < 0 || codeEnd <= codeStart) return Map.of();
+
+        String rawCode = argsJson.substring(codeStart + 1, codeEnd);
+        String code = rawCode
+                .replace("\\r", "\r")
+                .replace("\\n", "\n")
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\");
+
+        Matcher matcher = LANGUAGE_FIELD_PATTERN.matcher(argsJson);
+        if (!matcher.find()) return Map.of();
+        String language = matcher.group(1);
+
+        if (code.isBlank() || language.isBlank()) return Map.of();
+        return Map.of("code", code, "language", language);
+    }
+
+    private boolean isSchedulingGoal(String rawGoal) {
+        if (rawGoal == null || rawGoal.isBlank()) return false;
+        String lower = rawGoal.toLowerCase();
+        boolean hasScheduleVerb = lower.contains("schedule")
+                || lower.contains("remind")
+                || lower.contains("alarm")
+                || lower.contains("notify me")
+                || lower.contains("set up");
+        return hasScheduleVerb
+                || RELATIVE_SCHEDULE_PATTERN.matcher(lower).find()
+                || ABSOLUTE_SCHEDULE_PATTERN.matcher(lower).find();
     }
 
     private boolean isUnicodeCorrupted(String text) {

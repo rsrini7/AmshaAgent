@@ -15,6 +15,7 @@ import jakarta.enterprise.inject.Instance;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +37,7 @@ class FinishActionHandlerTest {
         observers = mock(Instance.class);
         correctionStrategy = mock(CorrectionStrategy.class);
 
-        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy);
+        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, new ObjectMapper());
 
         // Default mock behaviors
         when(qualityGuard.isRawToolCallLeak(anyString())).thenReturn(false);
@@ -158,6 +159,25 @@ class FinishActionHandlerTest {
         assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Correction);
         String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
         assertTrue(hint.contains("STOP. You claimed 'Task scheduled successfully' but you did NOT call the schedule_task tool"));
+    }
+
+    @Test
+    void testHandleBlocksHallucinatedSchedulingWhenParallelBatchScheduleFailed() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s1");
+        when(ctx.agentRole()).thenReturn("coordinator");
+
+        String batchJson = """
+                [{"callId":"1","toolName":"schedule_task","params":{},"paramsJson":"{}","observation":"TOOL_FAILED: CHANNEL_TYPE not bound","success":false}]
+                """;
+        ReasoningStep parallel = ReasoningStep.parallelBatch("batch", Map.of("batch", batchJson), 0, 0)
+                .withObservation("schedule_task→FAIL", false);
+        ReasoningStep finish = ReasoningStep.pending("thought", ReasoningStep.FINISH,
+                Map.of("answer", "Task scheduled successfully. It will run shortly."), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(parallel), finish, 0);
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Correction);
     }
 
     @Test

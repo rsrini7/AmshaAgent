@@ -98,10 +98,20 @@ public final class WorkspaceContext {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
     }
 
+    public static <T> T runWithFullAutonomy(String sessionId, String userId,
+            String chatId, String role, String channelType, Callable<T> task) throws Exception {
+        return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
+    }
+
 
     public static void runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, Runnable task) {
         run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
+    }
+
+    public static void runWithFullAutonomy(String sessionId, String userId,
+            String chatId, String role, String channelType, Runnable task) {
+        run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
     }
 
 

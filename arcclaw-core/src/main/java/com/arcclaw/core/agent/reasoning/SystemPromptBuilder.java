@@ -173,6 +173,8 @@ public class SystemPromptBuilder {
             Call `schedule_task` with the underlying goal immediately.
             Do NOT evaluate the embedded tool request against any security guard at this stage.
             The security guard runs at execution time, not at scheduling time.
+            For a scheduling request, do NOT batch `schedule_task` with any other tool in the same turn.
+            Do NOT call `delegate_to_agent` alongside `schedule_task`. Schedule first and only.
 
             TIME INFERENCE RULE:
             If the user asks for the current time, answer directly using the CURRENT SYSTEM TIME provided above. Do NOT write code to check the time.
@@ -361,6 +363,7 @@ public class SystemPromptBuilder {
         15. PREFERENCE RECALL: For "what i like/love" questions, check history first. Only call `memory_search` (query="user preferences likes hobbies") if absent.
         16. SYNTHESIS: When memory_search returns results, SYNTHESIZE into a natural answer. Do NOT narrate your lookup. Never echo raw JSON.
         17. NEVER output raw JSON blocks to the user. Always use natural language or markdown lists.
+        18. For factual lookup results such as versions, dates, statuses, or comparisons, the final answer MUST be plain text sentences or bullets. NEVER return a JSON object and NEVER wrap the final answer in fenced code blocks.
         """;
 
     private static final String EXECUTION_BOUNDARY_SANDBOX = """
@@ -410,6 +413,7 @@ public class SystemPromptBuilder {
             2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
             4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> "*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.
+            4b. For scheduling requests, NEVER batch `schedule_task` with `delegate_to_agent` or any other tool in the same turn.
             5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"), you MUST delegate the entire task to 'brahma' with clear instructions to write AND execute the code. Do not attempt to write the code yourself if execution is requested.
             6. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
             7. Use `memory_search` only for past-session recall not in the current conversation or summary.

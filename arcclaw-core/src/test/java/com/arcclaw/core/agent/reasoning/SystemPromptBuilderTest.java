@@ -153,6 +153,22 @@ class SystemPromptBuilderTest {
     }
 
     @Test
+    void testBuildSystemPrompt_compactModeForbidsJsonStyleFactAnswers() {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        builder.contextWindow = 8192;
+
+        String result = builder.build(createCtx("s1"), "researcher", "s1", "lookup latest Spring Boot and Quarkus LTS");
+
+        assertTrue(result.contains("For factual lookup results such as versions, dates, statuses, or comparisons, the final answer MUST be plain text sentences or bullets."),
+                "Compact prompt should forbid JSON-style fact answers that trip the non-coder code-block guard");
+        assertTrue(result.contains("NEVER return a JSON object and NEVER wrap the final answer in fenced code blocks."),
+                "Compact prompt should explicitly ban fenced JSON final answers");
+    }
+
+    @Test
     void testBuildSystemPrompt_piiRedactedIncludesNotice() {
         // Arrange
         Map<String, Object> data = new HashMap<>();

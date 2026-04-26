@@ -74,4 +74,13 @@ class WorkspaceContextTest {
         assertThrows(IllegalStateException.class, WorkspaceContext::requireAutonomy, "AUTONOMY should fail fast if unbound");
         assertThrows(IllegalStateException.class, WorkspaceContext::requireAgentRole, "AGENT_ROLE should fail fast if unbound");
     }
+
+    @Test
+    void testRunWithFullAutonomyBindsChannelType() throws Exception {
+        String channelType = WorkspaceContext.runWithFullAutonomy(
+                "sess-1", "user-1", "chat-1", "coordinator", "telegram",
+                WorkspaceContext::requireChannelType);
+
+        assertEquals("telegram", channelType);
+    }
 }

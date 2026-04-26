@@ -8,12 +8,15 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.TextPatternUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.text.StringEscapeUtils;
 import org.jboss.logging.Logger;
 
@@ -106,18 +109,21 @@ public class FinishActionHandler {
     private final RateLimitTracker rateLimitTracker;
     private final Instance<AgentObserver> observers;
     private final CorrectionStrategy correctionStrategy;
+    private final ObjectMapper objectMapper;
 
     @Inject
     public FinishActionHandler(AnswerGuardStrategy qualityGuard,
                                CodeGenerationPolicy codePolicy,
                                RateLimitTracker rateLimitTracker,
                                Instance<AgentObserver> observers,
-                               CorrectionStrategy correctionStrategy) {
+                               CorrectionStrategy correctionStrategy,
+                               ObjectMapper objectMapper) {
         this.qualityGuard = qualityGuard;
         this.codePolicy = codePolicy;
         this.rateLimitTracker = rateLimitTracker;
         this.observers = observers;
         this.correctionStrategy = correctionStrategy;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -241,8 +247,7 @@ public class FinishActionHandler {
 
     private FinishOutcome checkHallucination(String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
         if (answer != null && answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)) {
-            boolean actuallyScheduled = history.stream().anyMatch(hStep -> 
-                "schedule_task".equals(hStep.action()) && hStep.success());
+            boolean actuallyScheduled = historyContainsSuccessfulSchedule(history);
             
             if (!actuallyScheduled) {
                 log.warnf("FINISH-HANDLER: Hallucinated scheduling success detected for session %s. " +
@@ -257,6 +262,31 @@ public class FinishActionHandler {
             }
         }
         return null;
+    }
+
+    private boolean historyContainsSuccessfulSchedule(List<ReasoningStep> history) {
+        return history.stream().anyMatch(this::stepContainsSuccessfulSchedule);
+    }
+
+    private boolean stepContainsSuccessfulSchedule(ReasoningStep step) {
+        if ("schedule_task".equals(step.action()) && Boolean.TRUE.equals(step.success())) {
+            return true;
+        }
+        if (!step.isParallelBatch() || step.actionInput() == null) {
+            return false;
+        }
+        Object batchRaw = step.actionInput().get("batch");
+        if (!(batchRaw instanceof String batchJson) || batchJson.isBlank()) {
+            return false;
+        }
+        try {
+            List<ParallelToolCall> calls = objectMapper.readValue(batchJson, new TypeReference<List<ParallelToolCall>>() {});
+            return calls.stream().anyMatch(call ->
+                    "schedule_task".equals(call.toolName()) && call.success());
+        } catch (Exception e) {
+            log.debugf("FINISH-HANDLER: failed to parse parallel batch while checking schedule success: %s", e.getMessage());
+            return false;
+        }
     }
 
     private FinishOutcome applyCodePolicy(String sessionId, String agentRole, List<ReasoningStep> history, String answer) {

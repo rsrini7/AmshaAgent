@@ -1,12 +1,14 @@
 package com.arcclaw.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
 import java.util.List;
 
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -198,5 +200,106 @@ class ReasoningStepParserTest {
         String batchJson = (String) step.actionInput().get("batch");
         assertTrue(batchJson.contains("call_abc"));
         assertTrue(batchJson.contains("call_xyz"));
+    }
+
+    @Test
+    void testParse_schedulingGoalCollapsesMixedParallelBatchToScheduleTask() throws Exception {
+        ToolExecutionRequest scheduleReq = ToolExecutionRequest.builder()
+                .id("call_sched")
+                .name("schedule_task")
+                .arguments("{\"goal\":\"Say Hello Buddy\",\"cronExpression\":\"37 10 * * *\",\"timezone\":\"Asia/Kolkata\",\"runOnce\":true}")
+                .build();
+        ToolExecutionRequest delegateReq = ToolExecutionRequest.builder()
+                .id("call_delegate")
+                .name("delegate_to_agent")
+                .arguments("{\"agent\":\"saraswati\",\"goal\":\"Perform a real-time search\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("I'll schedule it", List.of(scheduleReq, delegateReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = WorkspaceContext.runWithFullAutonomy("s1", "user-1", "chat-1", "coordinator", () ->
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "schedule to say Hello Buddy in one min")
+                        .call(() -> parser.parse("s1", "coordinator", response)));
+
+        assertEquals("schedule_task", step.action());
+        assertEquals("Say Hello Buddy", step.actionInput().get("goal"));
+        assertEquals(Boolean.TRUE, step.actionInput().get("runOnce"));
+    }
+
+    @Test
+    void testParse_recoversMalformedSandboxExecArgs() {
+        String malformed = """
+                {"code": "public class StringReverser {
+                    public static String reverseString(String input) {
+                        return input.chars()
+                                .mapToObj(c -> (char) c)
+                                .reduce(\\"\\", (s, c) -> c + s, (s1, s2) -> s2 + s1);
+                    }
+                    public static void main(String[] args) {
+                        System.out.println(\\"Original: \\" + input);
+                    }
+                }", "language":"java"}
+                """;
+        ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
+                .id("call_sandbox")
+                .name("sandbox_exec")
+                .arguments(malformed)
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("execute", List.of(toolReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = parser.parse("s1", "coder", response);
+
+        assertEquals("sandbox_exec", step.action());
+        assertEquals("java", step.actionInput().get("language"));
+        String code = (String) step.actionInput().get("code");
+        assertNotNull(code);
+        assertTrue(code.contains("public class StringReverser"));
+        assertTrue(code.contains("System.out.println(\"Original: \" + input);"));
+        assertFalse(step.actionInput().containsKey("__error"));
+    }
+
+    @Test
+    void testParse_nonSchedulingTomorrowQuestionRemainsParallelBatch() throws Exception {
+        ToolExecutionRequest scheduleReq = ToolExecutionRequest.builder()
+                .id("call_sched")
+                .name("schedule_task")
+                .arguments("{\"goal\":\"bad\",\"cronExpression\":\"37 10 * * *\"}")
+                .build();
+        ToolExecutionRequest delegateReq = ToolExecutionRequest.builder()
+                .id("call_delegate")
+                .name("delegate_to_agent")
+                .arguments("{\"agent\":\"saraswati\",\"goal\":\"weather\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("thinking", List.of(scheduleReq, delegateReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = WorkspaceContext.runWithFullAutonomy("s1", "user-1", "chat-1", "coordinator", () ->
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "What are tomorrow's weather forecasts?")
+                        .call(() -> parser.parse("s1", "coordinator", response)));
+
+        assertEquals(ReasoningStep.PARALLEL_SENTINEL_DUNDER, step.action());
+    }
+
+    @Test
+    void testParse_everyDayRequestCollapsesToScheduleTaskWithoutExplicitVerb() throws Exception {
+        ToolExecutionRequest scheduleReq = ToolExecutionRequest.builder()
+                .id("call_sched")
+                .name("schedule_task")
+                .arguments("{\"goal\":\"send me the news\",\"cronExpression\":\"0 9 * * *\"}")
+                .build();
+        ToolExecutionRequest delegateReq = ToolExecutionRequest.builder()
+                .id("call_delegate")
+                .name("delegate_to_agent")
+                .arguments("{\"agent\":\"saraswati\",\"goal\":\"find the news\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("thinking", List.of(scheduleReq, delegateReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = WorkspaceContext.runWithFullAutonomy("s1", "user-1", "chat-1", "coordinator", () ->
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "every day send me the news")
+                        .call(() -> parser.parse("s1", "coordinator", response)));
+
+        assertEquals("schedule_task", step.action());
     }
 }
