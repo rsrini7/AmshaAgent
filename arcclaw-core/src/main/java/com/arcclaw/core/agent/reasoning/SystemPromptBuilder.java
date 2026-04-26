@@ -133,8 +133,8 @@ public class SystemPromptBuilder {
             If the user only provides a repo name without the owner, ask for the
             full owner/repo path.
             3. When you have gathered enough information from the tools, output the
-            final answer as plain text. NEVER output raw tool-call JSON, placeholders,
-            or tool syntax in your final text answer.
+            final answer as plain text. NEVER output raw tool-call JSON, raw JSON blocks, placeholders,
+            or tool syntax in your final text answer. Always use natural language or markdown.
             4. Do not use external tools to answer questions about your own
             performance, latency, cost, or internal state. Answer such queries
             using internal reasoning only.
@@ -344,6 +344,7 @@ public class SystemPromptBuilder {
         12. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
         13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
         14. IDENTITY RECALL: For "who am I" / "my name" questions, check history and `[CONTEXT FROM PRIOR SESSION]` for self-introductions BEFORE calling memory_search.
+        15. NEVER output raw JSON blocks to the user. Always use natural language or markdown lists.
         """;
 
     private static final String EXECUTION_BOUNDARY_SANDBOX = """
