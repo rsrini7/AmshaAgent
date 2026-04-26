@@ -354,6 +354,20 @@ public class FinishActionHandler {
                 && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {
             
             if (looksLikeJson(cleanThought)) {
+                // The entire answer was a tool call JSON. Instead of failing immediately,
+                // give one more retry with a strong "answer from context" hint.
+                if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
+                    log.warnf("FINISH-HANDLER salvaged thought is still JSON for session %s - retrying with direct-answer hint", sessionId);
+                    ReasoningStep cleanStep = step.withObservation("");
+                    String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
+                    String directHint = "System: Your response was raw JSON, NOT a valid answer. " +
+                            "You are NOT allowed to write tool calls as text. " +
+                            "The information the user asked for IS in the conversation history above. " +
+                            "Read the history carefully and answer DIRECTLY in plain text using FINISH. " +
+                            "Do NOT call any tools. Do NOT output JSON.";
+                    return new FinishOutcome.RetryLeak(cleanStep, directHint, leakedTool);
+                }
+                
                 log.warnf("FINISH-HANDLER salvaged thought is still JSON - not usable, failing turn for session %s", sessionId);
                 AgentResult failed = AgentResult.failed(
                         "I encountered a formatting error (JSON echo) and could not complete your request.",

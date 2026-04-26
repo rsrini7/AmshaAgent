@@ -365,9 +365,11 @@ public class AgentStateMachineRunner {
                                 transientError = correction.correctionHint();
                                 llmSchemaErrorCount++;
                                 break; // exit validation loop to retry engine
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak _) {
+                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
                                 log.warnf("STATE-MACHINE raw tool-call leak detected in session %s - retrying with hint",
                                         context.sessionId());
+                                history.add(rl.correctedStep());
+                                transientError = rl.correctionHint();
                                 llmSchemaErrorCount++;
                                 break; // exit validation loop to retry engine
                             } else if (outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed sf) {
