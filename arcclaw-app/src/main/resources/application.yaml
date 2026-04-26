@@ -486,6 +486,9 @@ arcclaw:
   recovery:
     stalled-threshold-minutes: 15
 
+  resumption:
+    stale-mark-seconds: ${ARCCLAW_RESUMPTION_STALE_MARK_SECONDS:60}
+
   audit:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 

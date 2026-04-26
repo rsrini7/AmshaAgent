@@ -126,17 +126,18 @@ public class CheckpointApprovalService {
      */
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;
-        
+
         String sessionId = cp.getSessionId();
         String agentRole = cp.getAgentRole();
 
-        // §7.29 / §T5-4: Synchronously acquire the distributed resume lock.
-        // This transitions AWAITING_APPROVAL -> RESUMING in the DB immediately,
-        // preventing CheckpointResumeCoordinator from archiving it as stale 
-        // if a new message arrives while the thread-handoff is pending.
-        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
-            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — ignoring duplicate trigger.", sessionId);
-            return;
+        // §7.29 / §T5-4: Synchronously transition AWAITING_APPROVAL -> RESUMING in the DB.
+        // This prevents CheckpointResumeCoordinator from archiving the checkpoint as "stale"
+        // if a new user message arrives in the millisecond gap before the executor
+        // thread picks up the task.
+        boolean claimed = agentStore.claimForResume(sessionId, agentRole);
+        if (!claimed) {
+             log.infof("[RESUME-DB-CLAIM] session=%s already claimed — skipping trigger.", sessionId);
+             return;
         }
 
         try {
@@ -144,7 +145,6 @@ public class CheckpointApprovalService {
             // since we just moved it to RESUMING.
             AgentCheckpoint fresh = agentStore.findLatestNonArchivedCheckpoint(sessionId)
                 .orElse(cp);
-
             String userId = fresh.getChannelPlatformId() != null
                         ? fresh.getChannelPlatformId() : fresh.getSessionId();
             String channelId = fresh.getChannelPlatformId() != null

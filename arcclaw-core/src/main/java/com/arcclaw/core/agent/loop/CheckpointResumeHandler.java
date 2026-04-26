@@ -93,18 +93,27 @@ public class CheckpointResumeHandler {
             return;
         }
 
-        // §7.29: Atomic guard to prevent double-resumption from duplicate events/callbacks.
-        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
-            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming — skipping duplicate trigger.", sessionId);
+        // 1. Load checkpoint synchronously to check if it's parallel
+        AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);
+        if (checkpoint == null) {
+            log.warnf("[RESUME-GUARD] checkpoint null after claim for session=%s — releasing DB state.", sessionId);
+            // agentStore.releaseResumeClaim(sessionId, agentRole); // transition back to AWAITING or FAILED // todo
             return;
+        }
+
+        // §7.29: Atomic guard to prevent double-resumption for parallel batches.
+        // We only use the lock for parallel batches (size > 1) to avoid race conditions.
+        // Single-tool approvals (sequential) don't need the guard and can proceed directly.
+        if (checkpoint.isParallelBatch()) {
+            if (!agentStore.markBatchResuming(sessionId, agentRole)) {
+                log.infof("[BATCH-RESUME-GUARD] parallel batch for session=%s already resuming — skipping duplicate.", sessionId);
+                return;
+            }
         }
 
         executor.execute(() -> {
             MessageContext context = null;
             try {
-                AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);
-                if (checkpoint == null) return;
-     
                 String resumeGoal = resolveResumeGoal(checkpoint);
                 if (isGoalInvalid(resumeGoal, sessionId, agentRole)) return;
      
@@ -119,7 +128,9 @@ public class CheckpointResumeHandler {
             } catch (Exception e) {
                 handleResumeFailure(sessionId, context, e);
             } finally {
-                agentStore.clearBatchResuming(sessionId);
+                if (checkpoint.isParallelBatch()) {
+                    agentStore.clearBatchResuming(sessionId);
+                }
             }
         });
     }
