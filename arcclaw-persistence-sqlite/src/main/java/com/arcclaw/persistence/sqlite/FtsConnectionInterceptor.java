@@ -24,11 +24,11 @@ import org.sqlite.SQLiteConnection;
  * <p><strong>sqlite-vec loading contract:</strong>
  * <ul>
  *   <li>SQLite extensions are per-connection (per sqlite3* handle).</li>
- *   <li>Agroal REUSES physical connections — onConnectionAcquire fires on
+ *   <li>Agroal REUSES physical connections - onConnectionAcquire fires on
  *       every logical borrow, including re-borrows of the same sqlite3* handle.</li>
  *   <li>Calling load_extension twice on the same sqlite3* handle fails with
  *       "error during initialization:" because the module is already registered.</li>
- *   <li>Fix: check pragma_module_list on each connection before loading —
+ *   <li>Fix: check pragma_module_list on each connection before loading -
  *       skip if vec0 is already registered on that specific handle.</li>
  * </ul>
  * 
@@ -88,14 +88,14 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             }
 
             // ----------------------------------------------------------------
-            // Step 2: Load sqlite-vec on this connection — but only if vec0
+            // Step 2: Load sqlite-vec on this connection - but only if vec0
             //         is not already registered on this specific sqlite3* handle.
             //
             //         Agroal reuses physical connections. Calling load_extension
             //         twice on the same sqlite3* handle fails with:
             //         "error during initialization: " (empty msg = already registered).
             //
-            //         pragma_module_list is the per-connection check — it reflects
+            //         pragma_module_list is the per-connection check - it reflects
             //         exactly which modules are registered on THIS handle.
             // ----------------------------------------------------------------
             try {
@@ -116,17 +116,17 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                     }
                 }
 
-                // Log INFO only on first successful load — not on every connection.
+                // Log INFO only on first successful load - not on every connection.
                 if (vectorSearchEnabled.compareAndSet(false, true)) {
                     log.infof("FtsConnectionInterceptor: sqlite-vec loaded successfully" +
                               " from path: %s", vecExtensionPath);
                 }
 
             } catch (Exception e) {
-                // Warn once — repeated failure for the same .so path is not actionable.
+                // Warn once - repeated failure for the same .so path is not actionable.
                 if (warnedUnavailable.compareAndSet(false, true)) {
                     log.warnf("FtsConnectionInterceptor: sqlite-vec unavailable at " +
-                              "path '%s' — vector search degraded to FTS5-only. " +
+                              "path '%s' - vector search degraded to FTS5-only. " +
                               "Ensure the correct platform binary exists under ./lib/",
                               vecExtensionPath);
                 }

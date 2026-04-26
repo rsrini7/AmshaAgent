@@ -5,7 +5,7 @@ import java.util.List;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 
 /**
- * Abstraction over LLM reasoning — produces the next {@link ReasoningStep}
+ * Abstraction over LLM reasoning - produces the next {@link ReasoningStep}
  * given a goal and the current reasoning history.
  * <p>
  * In production, this wraps a {@code ChatModel} call. In tests,

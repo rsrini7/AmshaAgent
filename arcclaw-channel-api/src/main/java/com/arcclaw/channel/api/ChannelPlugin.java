@@ -5,7 +5,7 @@ package com.arcclaw.channel.api;
  * <p>
  * To add a new channel (Discord, Slack, WhatsApp), provide a single CDI bean
  * implementing this interface. No changes to arcclaw-core or arcclaw-app are
- * required — the framework discovers the plugin automatically via CDI.
+ * required - the framework discovers the plugin automatically via CDI.
  *
  * <p><b>Required CDI scope:</b> {@code @ApplicationScoped}
  *

@@ -24,7 +24,7 @@ public sealed interface ReplyNode
                 ReplyNode.ErrorMessage {
 
     // ------------------------------------------------------------------
-    // Permit records — exactly 10, no more, no fewer
+    // Permit records - exactly 10, no more, no fewer
     // ------------------------------------------------------------------
 
     /** Plain text paragraph. */

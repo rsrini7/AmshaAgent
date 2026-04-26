@@ -18,7 +18,7 @@ import org.jboss.logging.Logger;
  * Extracts the correct sqlite-vec native binary for the current OS/arch
  * from JAR resources on first boot, eliminating manual vec0 setup.
  *
- * <p>Fires at priority 50 — before {@code RagSchemaInitializer} (priority 100)
+ * <p>Fires at priority 50 - before {@code RagSchemaInitializer} (priority 100)
  * to ensure vec0 is available before the first SQLite connection is opened.
  */
 @ApplicationScoped
@@ -46,7 +46,7 @@ public class Vec0NativeLibraryInstaller {
 
         Path target = Path.of(configuredVecPath + nativeExtension());
         if (Files.exists(target)) {
-            log.infof("Vec0 binary already present at [%s] — skipping auto-install.", target);
+            log.infof("Vec0 binary already present at [%s] - skipping auto-install.", target);
             return;
         }
 

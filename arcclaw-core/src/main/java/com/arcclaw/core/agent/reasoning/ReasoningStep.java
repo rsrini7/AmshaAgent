@@ -10,7 +10,7 @@ import io.quarkus.qute.TemplateData;
  * One tick of the Thought-Plan-Act-Observe reasoning loop.
  * <p>
  * Each step captures the agent's internal reasoning ({@code thought}),
- * the chosen action ({@code action} — a tool name or {@code "FINISH"}),
+ * the chosen action ({@code action} - a tool name or {@code "FINISH"}),
  * the parameters for that action ({@code actionInput}), and the
  * result observed after execution ({@code observation}).
  *

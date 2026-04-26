@@ -223,7 +223,7 @@ public class ApprovalCheckpointManager {
         // Save checkpoint metadata and reasoning steps in one atomic store write.
         cp = agentStore.saveWithSteps(cp, history);
 
-        log.infof("[STATE-MACHINE] Pausing session %s — HITL tools pending: %d | batch: %s " +
+        log.infof("[STATE-MACHINE] Pausing session %s - HITL tools pending: %d | batch: %s " +
                   "(channel=%s platformId=%s)",
                   sessionId, hitlCalls.size(), compositeName, channelType, channelPlatformId);
 

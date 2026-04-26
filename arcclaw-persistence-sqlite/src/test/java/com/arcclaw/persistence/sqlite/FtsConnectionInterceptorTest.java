@@ -26,12 +26,12 @@ import org.sqlite.core.DB;
  *
  * <p>Covers three distinct behavioural contracts:
  * <ol>
- *   <li><strong>vec0 loading</strong> — load_extension must fire on every fresh
+ *   <li><strong>vec0 loading</strong> - load_extension must fire on every fresh
  *       sqlite3* handle (first borrow) but be skipped on re-borrows of the same
  *       handle (pragma_module_list already contains "vec0").</li>
- *   <li><strong>fts schema attachment</strong> — ATTACH must fire when the fts
+ *   <li><strong>fts schema attachment</strong> - ATTACH must fire when the fts
  *       schema is absent, must be skipped when already attached.</li>
- *   <li><strong>Error / shutdown handling</strong> — WARN fires at most once;
+ *   <li><strong>Error / shutdown handling</strong> - WARN fires at most once;
  *       Arc=null returns immediately without touching the connection.</li>
  * </ol>
  */
@@ -107,7 +107,7 @@ class FtsConnectionInterceptorTest {
 
         // Only stub unwrap when the code will actually reach enable_load_extension.
         // When vec0AlreadyLoaded=true the if(!alreadyLoaded) block is skipped entirely
-        // — these stubs would never be consumed and Mockito strict mode rejects them.
+        // - these stubs would never be consumed and Mockito strict mode rejects them.
         if (!vec0AlreadyLoaded) {
             SQLiteConnection sqliteConn = mock(SQLiteConnection.class);
             DB db = mock(DB.class);
@@ -123,7 +123,7 @@ class FtsConnectionInterceptorTest {
     private ConnBundle buildConnectionWithoutFtsAttached() throws Exception {
         Connection conn = mock(Connection.class);
 
-        // PRAGMA database_list — no "fts" row
+        // PRAGMA database_list - no "fts" row
         Statement pragmaStmt = mock(Statement.class);
         ResultSet dbListRs   = mock(ResultSet.class);
         when(dbListRs.next()).thenReturn(false);
@@ -132,7 +132,7 @@ class FtsConnectionInterceptorTest {
         // ATTACH statement
         Statement attachStmt = mock(Statement.class);
 
-        // pragma_module_list — vec0 not loaded
+        // pragma_module_list - vec0 not loaded
         Statement moduleCheckStmt = mock(Statement.class);
         ResultSet moduleRs        = mock(ResultSet.class);
         when(moduleRs.next()).thenReturn(false);
@@ -161,7 +161,7 @@ class FtsConnectionInterceptorTest {
     // =========================================================================
 
     @Nested
-    @DisplayName("vec0 loading — per-connection via pragma_module_list check")
+    @DisplayName("vec0 loading - per-connection via pragma_module_list check")
     class Vec0Loading {
 
         @Test
@@ -197,7 +197,7 @@ class FtsConnectionInterceptorTest {
             try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
                 arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
 
-                // Three distinct physical connections — none have vec0 yet
+                // Three distinct physical connections - none have vec0 yet
                 ConnBundle b1 = buildConnection(false);
                 ConnBundle b2 = buildConnection(false);
                 ConnBundle b3 = buildConnection(false);
@@ -345,15 +345,15 @@ class FtsConnectionInterceptorTest {
             try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
                 arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
 
-                // Three consecutive failures — WARN must appear only once in logs
+                // Three consecutive failures - WARN must appear only once in logs
                 interceptor.onConnectionAcquire(buildConnection(false, true).conn());
                 interceptor.onConnectionAcquire(buildConnection(false, true).conn());
                 interceptor.onConnectionAcquire(buildConnection(false, true).conn());
 
-                // Verified by asserting flag state — warnedUnavailable flips to true
+                // Verified by asserting flag state - warnedUnavailable flips to true
                 // after the first failure, suppressing subsequent WARNs.
                 assertFalse(interceptor.isVectorSearchEnabled());
-                // No exception thrown — degraded gracefully
+                // No exception thrown - degraded gracefully
             }
         }
 
@@ -394,7 +394,7 @@ class FtsConnectionInterceptorTest {
                 when(conn.unwrap(SQLiteConnection.class)).thenReturn(sqliteConn);
                 when(sqliteConn.getDatabase()).thenReturn(db);
 
-                // Must not throw — ATTACH succeeded, vec failure is caught gracefully
+                // Must not throw - ATTACH succeeded, vec failure is caught gracefully
                 assertDoesNotThrow(() -> interceptor.onConnectionAcquire(conn));
                 verify(attachStmt).execute(contains("ATTACH DATABASE"));
             }

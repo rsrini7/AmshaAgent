@@ -31,7 +31,7 @@ public final class WorkspaceScopeHolder {
     private static final ThreadLocal<String> PROPAGATION_BRIDGE = new ThreadLocal<>();
 
     private WorkspaceScopeHolder() {
-        // utility class — no instantiation
+        // utility class - no instantiation
     }
 
     public static boolean isActive() {

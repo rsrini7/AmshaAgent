@@ -1,11 +1,11 @@
 ### ═══════════════════════════════════════════════════════════════
-### 14 — BUDGET GOVERNANCE & AUTONOMY LEVEL
+### 14 - BUDGET GOVERNANCE & AUTONOMY LEVEL
 ###
 ### ArcClaw enforces a per-session USD budget cap via GovernanceLayer.
 ###
 ### Budget enforcement (post Phase 64-A):
 ###   80% of max → BudgetWarningException (soft signal, logged, NOT thrown to user)
-###   100% of max → BudgetExceededException (hard stop — session cannot run again)
+###   100% of max → BudgetExceededException (hard stop - session cannot run again)
 ###
 ### CRITICAL Phase 64-A fix (A1):
 ###   Hard limit is checked BEFORE soft warning.
@@ -14,9 +14,9 @@
 ###   and the session ran one call over budget with no hard enforcement.
 ###
 ### Autonomy levels (post Phase 64-A fix A2):
-###   SUPERVISED (default) — tools with NETWORK_OUTBOUND require manual approval
-###   FULL                 — tools execute without approval
-###   READONLY             — all tool calls are blocked, only read/think allowed
+###   SUPERVISED (default) - tools with NETWORK_OUTBOUND require manual approval
+###   FULL                 - tools execute without approval
+###   READONLY             - all tool calls are blocked, only read/think allowed
 ###
 ### CRITICAL Phase 64-A fix (A2):
 ###   Sessions created via REST with FULL autonomy were previously silently
@@ -46,7 +46,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # The default max budget is typically $0.10 per session.
 # Run several complex tasks to approach the 80% ($0.08) threshold.
 # Observe logs for: "Budget warning: 80% of session limit reached"
-# After this fires once, warningSent is permanently true — the warning
+# After this fires once, warningSent is permanently true - the warning
 # will NOT fire again for this session (AtomicBoolean CAS, Nuance #28).
 POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -59,11 +59,11 @@ X-ArcClaw-API-Key: {{validKey}}
 }
 
 # ─────────────────────────────────────────────────────────────────
-# /STATUS — checkpoint state + budget
+# /STATUS - checkpoint state + budget
 # StatusReflex queries StatefulAgentStore, GovernanceLayer, CompactionSummaryRepository.
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-1] /status on fresh session — no checkpoint yet
+### [REFLEX-1] /status on fresh session - no checkpoint yet
 # Expect 200: "No active session found" or budget=$0.00
 POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -77,7 +77,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [BUDGET-3] Check status — confirm cost is accumulating
+### [BUDGET-3] Check status - confirm cost is accumulating
 # Inspect usdCost field in the response or call /status reflex
 POST {{baseUrl}}/api/v1/sessions/{{budgetWarnSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -105,7 +105,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# FLOW B: BUDGET HARD LIMIT — POST PHASE 64-A FIX
+# FLOW B: BUDGET HARD LIMIT - POST PHASE 64-A FIX
 #
 # IMPORTANT: Hard limit must fire ON THE CALL that exceeds it, not the next one.
 # Before Phase 64-A fix: a single call past both thresholds fired only
@@ -141,7 +141,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [BUDGET-7] Attempt another run after budget exhausted
 # Expect: answer contains budget exceeded message
 # GovernanceLayer.assertWithinBudget() is called before any LLM invocation.
-# The session is blocked — no tokens consumed by this call.
+# The session is blocked - no tokens consumed by this call.
 POST {{baseUrl}}/api/v1/sessions/{{budgetHardSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -155,7 +155,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [BUDGET-8] Audit: confirm LOOP_BUDGET_EXCEEDED event is present (mandatory audit event)
-# The LOOP_BUDGET_EXCEEDED audit event is mandatory — agent halts if write fails.
+# The LOOP_BUDGET_EXCEEDED audit event is mandatory - agent halts if write fails.
 # Expect: eventType=LOOP_BUDGET_EXCEEDED in the audit list
 GET {{baseUrl}}/api/v1/audit/session/{{budgetHardSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
@@ -163,7 +163,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [BUDGET-9] Verify HMAC chain is intact despite budget exception
-# BudgetExceededException is a hard stop — but all prior audit events
+# BudgetExceededException is a hard stop - but all prior audit events
 # must still form an unbroken HMAC chain.
 # Expect: {"valid": true, "brokenAtId": null, "totalRows": N}
 GET {{baseUrl}}/api/v1/audit/{{budgetHardSession.response.body.sessionId}}/verify
@@ -178,7 +178,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# FLOW C: AUTONOMY LEVEL — SUPERVISED (DEFAULT)
+# FLOW C: AUTONOMY LEVEL - SUPERVISED (DEFAULT)
 # This is the default for all sessions. Tool calls requiring
 # NETWORK_OUTBOUND operation (GithubTool) pause for approval.
 # ─────────────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUTO-2] Run GitHub task — must pause for approval
+### [AUTO-2] Run GitHub task - must pause for approval
 # ToolInvocationGuard checks: AutonomyLevel.SUPERVISED + NETWORK_OUTBOUND
 # → throws RequiresApprovalException → 202 AWAITING_APPROVAL
 POST {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/run-async
@@ -213,7 +213,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUTO-4] Cancel — deny the tool call
+### [AUTO-4] Cancel - deny the tool call
 POST {{baseUrl}}/api/v1/sessions/{{supervisedSession.response.body.sessionId}}/deny?agentRole=coordinator
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -227,7 +227,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# FLOW D: AUTONOMY LEVEL — FULL
+# FLOW D: AUTONOMY LEVEL - FULL
 #
 # CRITICAL Phase 64-A fix (A2):
 # Sessions created with FULL autonomy must NOT be downgraded to SUPERVISED
@@ -251,7 +251,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUTO-6] Run GitHub task — must execute WITHOUT approval prompt
+### [AUTO-6] Run GitHub task - must execute WITHOUT approval prompt
 # FULL autonomy bypasses ToolInvocationGuard's approval check.
 # ToolOperation=NETWORK_OUTBOUND is permitted without human intervention.
 # Expect: 200 Finished (NOT 202 AWAITING_APPROVAL)
@@ -269,7 +269,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [AUTO-7] Verify status is COMPLETED (not AWAITING_APPROVAL)
-# If this returns AWAITING_APPROVAL, Phase 64-A fix A2 was not applied —
+# If this returns AWAITING_APPROVAL, Phase 64-A fix A2 was not applied -
 # the autonomy level was silently downgraded to SUPERVISED.
 # Expect: status = COMPLETED
 GET {{baseUrl}}/api/v1/sessions/{{fullAutoSession.response.body.sessionId}}/status/coordinator
@@ -284,7 +284,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# FLOW E: AUTONOMY LEVEL — READONLY
+# FLOW E: AUTONOMY LEVEL - READONLY
 # All tool invocations are blocked. Agent can only think and respond.
 # ─────────────────────────────────────────────────────────────────
 
@@ -300,10 +300,10 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUTO-9] Run task that requires a tool — must be blocked by guard
+### [AUTO-9] Run task that requires a tool - must be blocked by guard
 # ToolInvocationGuard blocks ALL tool calls for READONLY sessions.
-# No approval prompt — just an error/explanation in the response.
-# Expect: 200 Finished — with agent explaining it cannot execute tools
+# No approval prompt - just an error/explanation in the response.
+# Expect: 200 Finished - with agent explaining it cannot execute tools
 POST {{baseUrl}}/api/v1/sessions/{{readonlySession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -316,7 +316,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUTO-10] Verify tool was NOT invoked — no TOOL_INVOKED in audit
+### [AUTO-10] Verify tool was NOT invoked - no TOOL_INVOKED in audit
 # Expect: audit list does NOT contain eventType=TOOL_INVOKED
 GET {{baseUrl}}/api/v1/audit/session/{{readonlySession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}

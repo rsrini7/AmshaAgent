@@ -1,9 +1,9 @@
-# ArcClaw — mise Task Runner Guide
+# ArcClaw - mise Task Runner Guide
 
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite · Podman (rootless) · Groq Cloud
 >
 > **This guide** covers `mise` as the unified task runner for **Windows (pwsh)**, **macOS**, **WSL2 (Ubuntu)**, and **Linux**.
-> One config file — `mise.toml` — runs on all platforms via PowerShell (pwsh), which mise installs automatically.
+> One config file - `mise.toml` - runs on all platforms via PowerShell (pwsh), which mise installs automatically.
 
 ***
 
@@ -14,7 +14,7 @@
 3. [First-Time Bootstrap](#3-first-time-bootstrap)
 4. [Trust the Config File](#4-trust-the-config-file)
 5. [Repository Layout](#5-repository-layout)
-6. [JDK Management — Temurin vs GraalVM](#6-jdk-management--temurin-vs-graalvm)
+6. [JDK Management - Temurin vs GraalVM](#6-jdk-management--temurin-vs-graalvm)
 7. [All Tasks at a Glance](#7-all-tasks-at-a-glance)
 8. [Build Tasks](#8-build-tasks)
 9. [Dev Mode Tasks (hot reload)](#9-dev-mode-tasks-hot-reload)
@@ -45,17 +45,17 @@ mise run dev
 
 `mise` also:
 
-- **One config, all platforms** — `mise.toml` runs identically on Windows, macOS, Linux, WSL2 via PowerShell.
-- **Pins JDK 25 (Temurin) per-project** — consistent `java -version` everywhere.
-- **Manages both JDKs** — Temurin 25 (dev/build) and GraalVM Community 25.0.2 (native) side-by-side.
+- **One config, all platforms** - `mise.toml` runs identically on Windows, macOS, Linux, WSL2 via PowerShell.
+- **Pins JDK 25 (Temurin) per-project** - consistent `java -version` everywhere.
+- **Manages both JDKs** - Temurin 25 (dev/build) and GraalVM Community 25.0.2 (native) side-by-side.
 - **Auto-loads `.env`** into every task and your shell when you `cd` into the project.
-- **Tab completion** — `mise run <TAB>` lists and filters all task names. Powered by the `usage` tool, installed automatically.
+- **Tab completion** - `mise run <TAB>` lists and filters all task names. Powered by the `usage` tool, installed automatically.
 
 ***
 
 ## 2. Install mise
 
-### Windows — Scoop ✅ Recommended
+### Windows - Scoop ✅ Recommended
 
 ```powershell
 # Install Scoop (if not already installed)
@@ -66,7 +66,7 @@ Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 scoop install mise
 ```
 
-Wire to your PowerShell profile — add to `$PROFILE`:
+Wire to your PowerShell profile - add to `$PROFILE`:
 
 ```powershell
 (&mise activate pwsh) | Out-String | Invoke-Expression
@@ -74,15 +74,15 @@ Wire to your PowerShell profile — add to `$PROFILE`:
 
 Reload: `. $PROFILE`
 
-### Windows — winget ⚠️ Caution
+### Windows - winget ⚠️ Caution
 
 ```powershell
 winget install jdx.mise
 ```
 
-> ⚠️ **PATH length limit** — Windows caps `%PATH%` at ~2048 characters. Prefer Scoop.
+> ⚠️ **PATH length limit** - Windows caps `%PATH%` at ~2048 characters. Prefer Scoop.
 
-### Windows — Native build prerequisite (GraalVM)
+### Windows - Native build prerequisite (GraalVM)
 
 ```powershell
 winget install -e --id Microsoft.VisualStudio.2022.BuildTools `
@@ -123,7 +123,7 @@ mise trust --all
 # 3. Install all tools (pwsh + java + maven + usage)
 mise install
 
-# 4. Write shell profile — activate + tab completion (one-time, idempotent)
+# 4. Write shell profile - activate + tab completion (one-time, idempotent)
 mise run setup:profile
 # Windows:       . $PROFILE
 # Linux/macOS:   source ~/.bashrc  (or ~/.zshrc)
@@ -134,7 +134,7 @@ mise run setup
 # 6. Validate .env
 mise run setup:env-check
 
-# 7. WSL2 only — fix CRLF if cloned on Windows
+# 7. WSL2 only - fix CRLF if cloned on Windows
 mise run setup:wsl-crlf
 
 # 8. Verify JDKs
@@ -143,7 +143,7 @@ mise run jdk:status
 # 9. Build (uses Temurin 25)
 mise run build-app
 
-# 10. macOS only — init Podman VM
+# 10. macOS only - init Podman VM
 mise run podman:init
 mise run sandbox:check
 
@@ -155,7 +155,7 @@ mise run dev              # hot reload on :8080
 
 | Tool | Version | Purpose |
 |---|---|---|
-| `powershell` | latest | All task scripts — runs identically on all platforms |
+| `powershell` | latest | All task scripts - runs identically on all platforms |
 | `java` | temurin-25 | Default JDK for all dev, build, jar, native-run tasks |
 | `java` | graalvm-community-25.0.2 | Native image compilation only |
 | `maven` | 3.9 | Build tool |
@@ -163,7 +163,7 @@ mise run dev              # hot reload on :8080
 
 ### What `mise run setup:profile` does
 
-Writes two lines to your shell profile (each with independent idempotency — safe to re-run):
+Writes two lines to your shell profile (each with independent idempotency - safe to re-run):
 
 ```
 # Windows ($PROFILE):
@@ -199,7 +199,7 @@ After cloning, mise shows this on first use:
 mise ERROR Config files in ~/Ws/ArcClaw/mise.toml are not trusted.
 ```
 
-This is **expected** — supply-chain protection. Trust once:
+This is **expected** - supply-chain protection. Trust once:
 
 ```bash
 mise trust --all
@@ -223,7 +223,7 @@ trust_all = true
 
 ```
 ArcClaw/
-├── mise.toml            ← single unified config — all tasks, all platforms (pwsh)
+├── mise.toml            ← single unified config - all tasks, all platforms (pwsh)
 ├── mvnw / mvnw.cmd
 ├── lib/
 │   ├── vec0.dll         ← Windows  (Auto-installed on first boot)
@@ -237,7 +237,7 @@ ArcClaw/
         └── arcclaw-app-1.0.0-SNAPSHOT-runner.exe  ← Windows native
 ```
 
-> `mise.bash.toml`, `mise.pwsh.toml`, `scripts/windows/`, and `mise-tasks/` are **no longer needed** — safe to delete.
+> `mise.bash.toml`, `mise.pwsh.toml`, `scripts/windows/`, and `mise-tasks/` are **no longer needed** - safe to delete.
 
 > **JDK default**: `temurin-25` is active for everything except `build:native`, `build:native-local`, and `build:native-lowmem`, which auto-switch to `graalvm-community-25.0.2` and back.
 
@@ -245,7 +245,7 @@ ArcClaw/
 
 ***
 
-## 6. JDK Management — Temurin vs GraalVM
+## 6. JDK Management - Temurin vs GraalVM
 
 ArcClaw uses **two JDKs** managed entirely by mise:
 
@@ -264,7 +264,7 @@ mise run jdk:temurin      # switch back
 mise run jdk:install      # install both JDKs (idempotent)
 ```
 
-> All `mise use` calls in tasks specify `--path mise.toml` — changes stay in `mise.toml` only.
+> All `mise use` calls in tasks specify `--path mise.toml` - changes stay in `mise.toml` only.
 
 ***
 
@@ -276,7 +276,7 @@ mise run help    # or: mise tasks
 
 | Task | What it does |
 |---|---|
-| `mise run start` | Bootstrap guide — works before `mise install` |
+| `mise run start` | Bootstrap guide - works before `mise install` |
 | **`mise run setup:profile`** | Write mise activate + completion to shell profile (idempotent) |
 | **`mise run setup`** | `.env`, chmod +x mvnw, install JDKs |
 | `mise run setup:wsl-crlf` | Fix CRLF in mvnw (WSL2 after Windows clone) |
@@ -285,28 +285,28 @@ mise run help    # or: mise tasks
 | `mise run jdk:graalvm` | Switch to GraalVM Community 25.0.2 |
 | `mise run jdk:temurin` | Switch back to Temurin 25 |
 | `mise run jdk:install` | Install both JDKs (idempotent) |
-| **`mise run build-app`** | JVM build, skip tests — fast daily driver |
+| **`mise run build-app`** | JVM build, skip tests - fast daily driver |
 | `mise run build:full` | Clean install all modules, skip tests |
 | `mise run build:test` | Build and run all tests |
-| `mise run build:native` | Native binary — auto-detects Podman or local GraalVM |
-| `mise run build:native-local` | Native binary — always local GraalVM, no container |
-| `mise run build:native-lowmem` | Native binary — local GraalVM, 6 GB heap cap |
+| `mise run build:native` | Native binary - auto-detects Podman or local GraalVM |
+| `mise run build:native-local` | Native binary - always local GraalVM, no container |
+| `mise run build:native-lowmem` | Native binary - local GraalVM, 6 GB heap cap |
 | `mise run clean` | `mvnw clean` |
 | **`mise run dev`** | Hot-reload serve on :8080 (strategy: NONE) |
-| `mise run dev:chat` | Hot-reload — interactive REPL |
-| `mise run dev:attach` | Hot-reload — Telegram daemon |
-| `mise run dev:ask` | Hot-reload — one-shot task (`$env:GOAL="..."`) |
-| `mise run dev:no-ui` | Hot-reload — Dev UI + console disabled |
+| `mise run dev:chat` | Hot-reload - interactive REPL |
+| `mise run dev:attach` | Hot-reload - Telegram daemon |
+| `mise run dev:ask` | Hot-reload - one-shot task (`$env:GOAL="..."`) |
+| `mise run dev:no-ui` | Hot-reload - Dev UI + console disabled |
 | `mise run dev:kill` | Kill any lingering Quarkus background processes |
-| **`mise run jar:serve`** | Packaged jar — REST daemon on :8080 |
-| `mise run jar:chat` | Packaged jar — interactive REPL |
-| `mise run jar:attach` | Packaged jar — Telegram daemon |
-| `mise run jar:ask` | Packaged jar — one-shot task (`$env:GOAL="..."`) |
+| **`mise run jar:serve`** | Packaged jar - REST daemon on :8080 |
+| `mise run jar:chat` | Packaged jar - interactive REPL |
+| `mise run jar:attach` | Packaged jar - Telegram daemon |
+| `mise run jar:ask` | Packaged jar - one-shot task (`$env:GOAL="..."`) |
 | `mise run jar:run-dev-profile` | Packaged jar with `%dev` profile |
-| **`mise run native:serve`** | Native binary — REST daemon on :8080 |
-| `mise run native:chat` | Native binary — interactive REPL |
-| `mise run native:attach` | Native binary — Telegram daemon |
-| `mise run native:ask` | Native binary — one-shot task (`$env:GOAL="..."`) |
+| **`mise run native:serve`** | Native binary - REST daemon on :8080 |
+| `mise run native:chat` | Native binary - interactive REPL |
+| `mise run native:attach` | Native binary - Telegram daemon |
+| `mise run native:ask` | Native binary - one-shot task (`$env:GOAL="..."`) |
 | **`mise run dist`** | Assemble `dist/` folder: binary + vec0 + launchers |
 | `mise run dist:pack` | Create OS-specific release archives |
 | `mise run compose:up` | Full observability stack up |
@@ -337,9 +337,9 @@ mise run build:test             # with tests
 mise run clean
 ```
 
-### .env shielding — secrets stay out of the binary
+### .env shielding - secrets stay out of the binary
 
-All three `build:native*` tasks auto-shield `.env` before building and restore it in the `finally` block — even if the build fails:
+All three `build:native*` tasks auto-shield `.env` before building and restore it in the `finally` block - even if the build fails:
 
 ```
 build:native
@@ -374,12 +374,12 @@ mise run build:native
 
 ## 9. Dev Mode Tasks (hot reload)
 
-All `dev*` tasks use Temurin 25 and pass paths `../lib/vec0` / `../data` (because `quarkus:dev` forks Maven inside `arcclaw-app/`). No Podman needed — sandbox strategy is `NONE`.
+All `dev*` tasks use Temurin 25 and pass paths `../lib/vec0` / `../data` (because `quarkus:dev` forks Maven inside `arcclaw-app/`). No Podman needed - sandbox strategy is `NONE`.
 
 ```bash
 mise run dev           # serve on :8080 · hot reload · Dev UI at /q/dev-ui
 mise run dev:chat      # interactive REPL
-mise run dev:no-ui     # serve — Dev UI + console disabled
+mise run dev:no-ui     # serve - Dev UI + console disabled
 mise run dev:attach    # Telegram daemon (TELEGRAM_BOT_TOKEN required in .env)
 mise run dev:kill      # kill any lingering Quarkus processes
 
@@ -400,7 +400,7 @@ All jar tasks invoke `java` directly with paths `./lib/vec0` / `./data`.
 mise run jar:serve                # REST daemon on :8080 (CLI profile)
 mise run jar:chat                 # interactive REPL
 mise run jar:attach               # Telegram daemon
-mise run jar:run-dev-profile      # %dev profile — usage: mise run jar:run-dev-profile -- serve|chat|attach|ask
+mise run jar:run-dev-profile      # %dev profile - usage: mise run jar:run-dev-profile -- serve|chat|attach|ask
 
 # One-shot ask
 $env:GOAL = "List all active cron jobs"; mise run jar:ask
@@ -437,7 +437,7 @@ dist/
 
 ### Using the launchers
 
-Both `arcclaw.exe` and `arcclaw` handle first-run `.env` setup automatically — generating secret keys, prompting for API keys, and configuring Telegram if needed.
+Both `arcclaw.exe` and `arcclaw` handle first-run `.env` setup automatically - generating secret keys, prompting for API keys, and configuring Telegram if needed.
 
 ```bash
 # Linux/macOS
@@ -447,7 +447,7 @@ cd dist && ./arcclaw serve
 cd dist; ./arcclaw.exe serve
 ```
 
-### sqlite-vec (vec0) — auto-install
+### sqlite-vec (vec0) - auto-install
 
 ArcClaw **auto-installs** the correct `vec0` native extension for your platform (Linux, macOS, Windows) from internal resources on first boot. The binary is extracted to `./lib/vec0` (configurable via `ARCCLAW_RAG_VEC_PATH`).
 
@@ -519,7 +519,7 @@ mise run podman:status
 
 ```bash
 mise run podman:socket
-# Prints DOCKER_HOST export line — add to ~/.bashrc or ~/.zshrc
+# Prints DOCKER_HOST export line - add to ~/.bashrc or ~/.zshrc
 ```
 
 ### Windows
@@ -553,7 +553,7 @@ mise run db:vec-check   # verify lib/vec0 extension for your platform
 | `TELEGRAM_BOT_TOKEN` | `.env` | Only for `attach` mode |
 | `GOAL` | shell env | Goal string for `jar:ask`, `dev:ask`, `native:ask` |
 | `ROLE` | shell env | Optional role override for `ask` tasks |
-| `ARCCLAW_NATIVE_BUILD` | shell env / `.env` | `local` or `container` — overrides `build:native` auto-detection |
+| `ARCCLAW_NATIVE_BUILD` | shell env / `.env` | `local` or `container` - overrides `build:native` auto-detection |
 
 > **`ARCCLAW_VEC_EXT`** and **`ARCCLAW_DATA_DIR`** are not set as global env vars.
 > `dev*` tasks pass `../lib/vec0` and `../data`; all other tasks pass `./lib/vec0` and `./data`.
@@ -572,7 +572,7 @@ mise trust --all
 
 ### `mise.toml` keeps getting a `[tools]` block written to it
 
-`mise use java@...` without `--path` writes to the nearest `mise.toml`. All `mise use` calls in tasks already specify `--path mise.toml` — if you see this, check that no task was edited to remove the flag.
+`mise use java@...` without `--path` writes to the nearest `mise.toml`. All `mise use` calls in tasks already specify `--path mise.toml` - if you see this, check that no task was edited to remove the flag.
 
 ### `Error: usage CLI not found` (tab completion broken)
 
@@ -603,7 +603,7 @@ mise run setup:wsl-crlf
 
 ### `Unable to parse command line options: Unrecognized option: --add-opens`
 
-You have `JDK_JAVA_OPTIONS` set globally. Remove it — each task sets `MAVEN_OPTS` internally.
+You have `JDK_JAVA_OPTIONS` set globally. Remove it - each task sets `MAVEN_OPTS` internally.
 
 ### `sandboxStrategy=NONE` when you expect `PODMAN`
 
@@ -651,7 +651,7 @@ mise run setup:env-check
 1. Check logs for "Vec0 binary installed to [...]" or "Vec0 binary already present".
 2. If failed, manually place the extension: `lib/vec0.so` (Linux), `lib/vec0.dylib` (macOS), `lib/vec0.dll` (Windows).
 3. Verify FTS5 is available: `mise run db:fts-check`.
-4. Then restart ArcClaw — vec0 is loaded at boot, not lazily.
+4. Then restart ArcClaw - vec0 is loaded at boot, not lazily.
 
 ### Native exe exits immediately (Windows)
 
@@ -663,7 +663,7 @@ mise run native:serve    # or: native:chat / native:attach
 
 ### `.env` `source` fails with syntax error near `<`
 
-The `.env` file has placeholder values like `key-<random>`. The `arcclaw` launcher uses a safe line-by-line loader that never shell-evaluates values — this error only occurs if you `source .env` manually. Use the launcher instead.
+The `.env` file has placeholder values like `key-<random>`. The `arcclaw` launcher uses a safe line-by-line loader that never shell-evaluates values - this error only occurs if you `source .env` manually. Use the launcher instead.
 
 ***
 

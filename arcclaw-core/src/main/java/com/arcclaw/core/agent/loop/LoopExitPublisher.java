@@ -24,7 +24,7 @@ import org.jboss.logging.Logger;
  *   <li>{@link AgentStateMachineRunner} MUST NOT fire {@link AgentStateChangedEvent} directly.</li>
  *   <li>All status-string mapping lives exclusively in this class.</li>
  *   <li>Delegate sub-sessions ({@link AgentSentinels#DELEGATE_SESSION_SENTINEL}) are
- *       never published — they have no UI observer.</li>
+ *       never published - they have no UI observer.</li>
  *   <li>{@link AgentResult.AwaitingApproval} is never forwarded to the CLI bridge
  *       (approval pauses are handled by the HITL path).</li>
  * </ul>
@@ -57,7 +57,7 @@ public class LoopExitPublisher {
      * Called by {@link AgentStateMachineRunner} at every {@code return} that carries a final result.
      *
      * @param context the execution context for the current loop run
-     * @param result  the final {@link AgentResult} — must not be {@code null}
+     * @param result  the final {@link AgentResult} - must not be {@code null}
      */
     public void publish(AgentExecutionContext context, AgentResult result) {
         fireStateEvent(context.sessionId(), context.agentRole(), context.goal(), result);
@@ -71,7 +71,7 @@ public class LoopExitPublisher {
 
     private void fireStateEvent(String sessionId, String agentRole,
                                  String goal, AgentResult result) {
-        // Delegate sub-sessions have no UI observer — skip silently.
+        // Delegate sub-sessions have no UI observer - skip silently.
         if (sessionId != null
                 && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
             return;
@@ -83,7 +83,7 @@ public class LoopExitPublisher {
                     new AgentStateChangedEvent(sessionId, agentRole, status, goal));
         } catch (Exception e) {
             // CDI observer failures must never corrupt the result pipeline.
-            log.warnf("LoopExitPublisher: stateChangedEvent fire failed for session %s — %s",
+            log.warnf("LoopExitPublisher: stateChangedEvent fire failed for session %s - %s",
                     sessionId, e.getMessage());
         }
     }

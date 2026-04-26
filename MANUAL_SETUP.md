@@ -1,8 +1,8 @@
-# ArcClaw — Manual Setup Guide
+# ArcClaw - Manual Setup Guide
 
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
-> This guide covers **manual setup without mise** on **macOS**, **WSL2 (Ubuntu)**, and **Windows**. All commands are direct — no wrapper scripts.
+> This guide covers **manual setup without mise** on **macOS**, **WSL2 (Ubuntu)**, and **Windows**. All commands are direct - no wrapper scripts.
 > If you prefer automated setup, see [`MISE_README.md`](./MISE_README.md).
 
 ---
@@ -23,7 +23,7 @@
 8. [Dev Mode (Hot Reload)](#8-dev-mode-hot-reload)
 9. [JAR Run Modes](#9-jar-run-modes)
 10. [Native Binary Build & Run](#10-native-binary-build--run)
-11. [Dist — Assemble Release Folder](#11-dist--assemble-release-folder)
+11. [Dist - Assemble Release Folder](#11-dist--assemble-release-folder)
 12. [Docker Compose Stack](#12-docker-compose-stack)
 13. [JDK Management](#13-jdk-management)
 14. [Database Helpers](#14-database-helpers)
@@ -37,10 +37,10 @@
 | Tool | Version | macOS | WSL2 | Windows | Notes |
 |---|---|---|---|---|---|
 | JDK 25 | 25+ | ✅ | ✅ | ✅ | Temurin recommended. |
-| Maven | 3.9+ | ✅ | ✅ | ✅ | `./mvnw` wrapper included — no separate install. |
+| Maven | 3.9+ | ✅ | ✅ | ✅ | `./mvnw` wrapper included - no separate install. |
 | Podman | Latest | ✅ | ✅ | Optional | Rootless. Required for Tier 1 sandbox in prod. |
 | Docker CLI | Any | Optional | Optional | Optional | Can be wired to Podman socket. Used for `docker compose`. |
-| GraalVM | jdk-25 | Optional | Optional | — | Only needed for local native build (no container). |
+| GraalVM | jdk-25 | Optional | Optional | - | Only needed for local native build (no container). |
 | `sqlite3` CLI | Any | Optional | Optional | Optional | Useful for DB inspection. |
 
 ---
@@ -86,10 +86,10 @@ podman machine start
 podman ps
 ```
 
-Wire Docker CLI to Podman (optional — needed for `docker compose`):
+Wire Docker CLI to Podman (optional - needed for `docker compose`):
 
 ```bash
-# Add to ~/.zshrc — exact path varies, confirm with:
+# Add to ~/.zshrc - exact path varies, confirm with:
 # podman machine inspect | grep -i sock
 export DOCKER_HOST="unix://${HOME}/.local/share/containers/podman/machine/qemu/podman.sock"
 ```
@@ -148,7 +148,7 @@ sudo apt install podman -y
 ```bash
 systemctl --user enable --now podman.socket
 
-# Confirm socket exists (replace 1000 with your UID if different — check with: id -u)
+# Confirm socket exists (replace 1000 with your UID if different - check with: id -u)
 ls -l /run/user/1000/podman/podman.sock
 ```
 
@@ -177,7 +177,7 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o 
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 sudo apt update
-sudo apt install docker-ce-cli -y   # CLI only — do NOT install the full daemon
+sudo apt install docker-ce-cli -y   # CLI only - do NOT install the full daemon
 ```
 
 ---
@@ -216,7 +216,7 @@ $env:DOCKER_HOST = "npipe:////./pipe/podman-machine-default"
 
 ### 4.3 Mark mvnw Executable
 
-Not needed on Windows — use `mvnw.cmd` instead of `./mvnw`.
+Not needed on Windows - use `mvnw.cmd` instead of `./mvnw`.
 
 ---
 
@@ -241,7 +241,7 @@ Copy-Item .env.example .env
 
 ### 5.3 Generate Required Secret Keys
 
-These three keys **must be stable after first boot** — never change them once the app has started.
+These three keys **must be stable after first boot** - never change them once the app has started.
 
 ```bash
 # macOS / Linux / WSL2
@@ -257,8 +257,8 @@ openssl rand -base64 32   # run 3 times: VAULT_PEPPER, AUDIT_HMAC_KEY, API_KEY_I
 Set in `.env`:
 
 ```env
-ARCCLAW_VAULT_PEPPER=<generated>        # immutable — do not change after first boot
-ARCCLAW_AUDIT_HMAC_KEY=<generated>      # immutable — do not change after first boot
+ARCCLAW_VAULT_PEPPER=<generated>        # immutable - do not change after first boot
+ARCCLAW_AUDIT_HMAC_KEY=<generated>      # immutable - do not change after first boot
 ARCCLAW_API_KEYS_INTERNAL=<generated>
 ARCCLAW_API_KEYS_CI=<generated>          # optional, for CI smoke tests
 ```
@@ -268,15 +268,15 @@ ARCCLAW_API_KEYS_CI=<generated>          # optional, for CI smoke tests
 Edit `.env`:
 
 ```env
-# LLM — required
+# LLM - required
 ARCCLAW_LLM_API_KEY=gsk_your_key_here          # get from console.groq.com
 
-# Embedding — required (Jina free tier: 1M tokens/month)
+# Embedding - required (Jina free tier: 1M tokens/month)
 ARCCLAW_EMBED_API_KEY=jina_your_key     # get from jina.ai
 ARCCLAW_EMBED_PROVIDER=jina
 ARCCLAW_EMBED_DIMENSIONS=768
 
-# GitHub — optional, needed for researcher role GitHub tool
+# GitHub - optional, needed for researcher role GitHub tool
 GITHUB_TOKEN=ghp_your_token
 
 # Auto-seed vault from .env on boot
@@ -292,11 +292,11 @@ ARCCLAW_TELEGRAM_ALLOWED_USER_IDS=123456789          # numeric IDs from @userinf
 ARCCLAW_TELEGRAM_ALLOWED_USERS=yourusername          # without @
 ```
 
-If not using Telegram, comment these out or set `ARCCLAW_TELEGRAM_ENABLED=false` — leaving placeholder values causes Quarkus to fail on startup (it tries to parse `<telegram-user-id>` as a long).
+If not using Telegram, comment these out or set `ARCCLAW_TELEGRAM_ENABLED=false` - leaving placeholder values causes Quarkus to fail on startup (it tries to parse `<telegram-user-id>` as a long).
 
 ### 5.6 Validate .env
 
-Quick sanity check — no placeholders remaining:
+Quick sanity check - no placeholders remaining:
 
 ```bash
 # macOS / WSL2
@@ -342,9 +342,9 @@ podman images | grep arcclaw-tool-runner
 
 | Tier | Condition | Isolation |
 |---|---|---|
-| **1 — Podman Rootless** | prod + Podman socket up + image present | Full container isolation, no network, memory/CPU capped |
-| **2 — Linux Namespaces** | Podman circuit breaker opened (3 consecutive failures) | `unshare` pid + net + mount |
-| **3 — Direct Execution** | dev mode, or Windows OS detected | None — host PATH ProcessBuilder |
+| **1 - Podman Rootless** | prod + Podman socket up + image present | Full container isolation, no network, memory/CPU capped |
+| **2 - Linux Namespaces** | Podman circuit breaker opened (3 consecutive failures) | `unshare` pid + net + mount |
+| **3 - Direct Execution** | dev mode, or Windows OS detected | None - host PATH ProcessBuilder |
 
 > In `quarkus:dev`, strategy is always `NONE`. To test full isolation, run the packaged jar with `QUARKUS_PROFILE=prod`.
 
@@ -360,7 +360,7 @@ You can manually override this by placing your own build in `lib/`:
 | macOS (M1/M2) | `lib/vec0.dylib` | `sqlite-vec-0.1.6-loadable-macos-aarch64.tar.gz` |
 | Windows | `lib/vec0.dll` | `sqlite-vec-0.1.6-loadable-windows-x86_64.tar.gz` |
 
-SQLite appends the platform suffix automatically — always pass the path **without** extension:
+SQLite appends the platform suffix automatically - always pass the path **without** extension:
 `ARCCLAW_RAG_VEC_PATH=./lib/vec0`
 
 If the extension is missing from resources and the filesystem, ArcClaw degrades gracefully to FTS5-only search.
@@ -388,7 +388,7 @@ export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED \
 $env:MAVEN_OPTS = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true"
 ```
 
-### 7.1 Standard JVM Build (Fast — Recommended for Development)
+### 7.1 Standard JVM Build (Fast - Recommended for Development)
 
 ```bash
 # macOS / WSL2 / Linux
@@ -400,7 +400,7 @@ $env:MAVEN_OPTS = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
 
 Output: `arcclaw-app/target/quarkus-app/quarkus-run.jar`
 
-### 7.2 Full Build — All Modules
+### 7.2 Full Build - All Modules
 
 ```bash
 # macOS / WSL2 / Linux
@@ -552,7 +552,7 @@ These apply to all `java -jar` commands below:
 -Darcclaw.data-dir=./data
 ```
 
-### 9.1 serve — HTTP + MCP Daemon on :8080
+### 9.1 serve - HTTP + MCP Daemon on :8080
 
 ```bash
 # macOS / WSL2 / Linux
@@ -592,15 +592,15 @@ $jvmArgs = @(
 & java @jvmArgs -jar $jar serve
 ```
 
-### 9.2 chat — Interactive REPL
+### 9.2 chat - Interactive REPL
 
 Same as serve but replace `serve` with `chat` at the end. Remove `-Dquarkus.mcp.server.stdio.enabled=true` and `-Darcclaw.telegram.enabled=true`.
 
-### 9.3 attach — Telegram Daemon
+### 9.3 attach - Telegram Daemon
 
 Same as serve but replace `serve` with `attach`. Requires `TELEGRAM_BOT_TOKEN` in `.env`.
 
-### 9.4 ask — One-Shot Task
+### 9.4 ask - One-Shot Task
 
 ```bash
 # macOS / WSL2 / Linux
@@ -629,7 +629,7 @@ java \
 Useful for running the packaged jar with `%dev` settings (no Podman sandbox required):
 
 ```bash
-# macOS / WSL2 / Linux — replace -Dquarkus.profile=cli with:
+# macOS / WSL2 / Linux - replace -Dquarkus.profile=cli with:
 -Dquarkus.profile=dev
 ```
 
@@ -639,12 +639,12 @@ Useful for running the packaged jar with `%dev` settings (no Podman sandbox requ
 
 > Native builds require significant RAM (8 GB free minimum) and take 5–15 minutes.
 
-### 10.1 Build — Container (Recommended on Linux/macOS/WSL2)
+### 10.1 Build - Container (Recommended on Linux/macOS/WSL2)
 
 Uses the Mandrel builder image inside Podman. Produces a portable Linux binary.
 
 ```bash
-# Shield .env — secrets must not be baked into the binary
+# Shield .env - secrets must not be baked into the binary
 mv .env .env.build-backup
 
 # macOS / WSL2 / Linux
@@ -663,7 +663,7 @@ mv .env.build-backup .env
 
 Output: `arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner`
 
-### 10.2 Build — Local GraalVM (No Container)
+### 10.2 Build - Local GraalVM (No Container)
 
 Switch to GraalVM first (see [Section 13](#13-jdk-management)), then:
 
@@ -679,7 +679,7 @@ Switch to GraalVM first (see [Section 13](#13-jdk-management)), then:
 
 Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 
-### 10.3 Build — Low Memory (6 GB Heap Cap)
+### 10.3 Build - Low Memory (6 GB Heap Cap)
 
 ```bash
 ./mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests \
@@ -691,7 +691,7 @@ Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 
 #### Linux / WSL2
 
-`LD_PRELOAD` is required — it ensures `libm` is loaded before `vec0.so` opens (resolves the `sqrtf` symbol in GraalVM native images):
+`LD_PRELOAD` is required - it ensures `libm` is loaded before `vec0.so` opens (resolves the `sqrtf` symbol in GraalVM native images):
 
 ```bash
 export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
@@ -728,7 +728,7 @@ $env:ARCCLAW_DATA_DIR = './data'
 
 ---
 
-## 11. Dist — Assemble Release Folder
+## 11. Dist - Assemble Release Folder
 
 Manually assemble a `dist/` folder containing the binary, launchers, and vec0 extension:
 
@@ -742,7 +742,7 @@ cp arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner dist/
 # Copy .env.example
 cp .env.example dist/.env.example
 
-# Copy vec0 extension(s) — copy all that exist
+# Copy vec0 extension(s) - copy all that exist
 [ -f lib/vec0.so    ] && cp lib/vec0.so    dist/lib/
 [ -f lib/vec0.dylib ] && cp lib/vec0.dylib dist/lib/
 [ -f lib/vec0.dll   ] && cp lib/vec0.dll   dist/lib/
@@ -801,7 +801,7 @@ docker compose up -d
 ```bash
 docker compose down
 
-# Also remove volumes (deletes all data — irreversible):
+# Also remove volumes (deletes all data - irreversible):
 docker compose down -v
 ```
 
@@ -825,7 +825,7 @@ ArcClaw uses two JDKs: **Temurin 25** for all dev/build/jar tasks, and **GraalVM
 
 ### 13.1 Switch to GraalVM (for native builds)
 
-**macOS — with jEnv:**
+**macOS - with jEnv:**
 
 ```bash
 jenv add /Library/Java/JavaVirtualMachines/graalvm-community-25/Contents/Home
@@ -833,7 +833,7 @@ jenv local graalvm-community-25
 java -version
 ```
 
-**WSL2 / Linux — with SDKMAN!:**
+**WSL2 / Linux - with SDKMAN!:**
 
 ```bash
 sdk install java 25-graalce
@@ -917,22 +917,22 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `ARCCLAW_LLM_API_KEY` | ✅ | — | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
-| `ARCCLAW_VAULT_PEPPER` | ✅ | — | Min 32 bytes. **Immutable after first boot.** |
-| `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | — | Min 32 bytes. **Immutable after first boot.** |
-| `ARCCLAW_API_KEYS_INTERNAL` | ✅ | — | Bearer token for REST API (`Authorization: Bearer`). |
-| `ARCCLAW_API_KEYS_CI` | Optional | — | CI/CD read-only API key. |
-| `ARCCLAW_EMBED_API_KEY` | ✅ | — | Jina AI key (default provider). Starts with `jina_`. |
+| `ARCCLAW_LLM_API_KEY` | ✅ | - | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
+| `ARCCLAW_VAULT_PEPPER` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
+| `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
+| `ARCCLAW_API_KEYS_INTERNAL` | ✅ | - | Bearer token for REST API (`Authorization: Bearer`). |
+| `ARCCLAW_API_KEYS_CI` | Optional | - | CI/CD read-only API key. |
+| `ARCCLAW_EMBED_API_KEY` | ✅ | - | Jina AI key (default provider). Starts with `jina_`. |
 | `ARCCLAW_EMBED_PROVIDER` | Optional | `jina` | `jina` \| `openai` \| `ollama` |
 | `ARCCLAW_EMBED_DIMENSIONS` | Optional | `768` | Must match model. Jina nano = 768. |
 | `ARCCLAW_AUTO_SEED_SECRETS` | Optional | `false` | Set `true` to seed vault from env on boot. |
-| `GITHUB_TOKEN` | Optional | — | Required for GitHub tool (researcher role). |
+| `GITHUB_TOKEN` | Optional | - | Required for GitHub tool (researcher role). |
 | `ARCCLAW_DATA_DIR` | Optional | `./data` | Path to SQLite databases and workspaces. |
 | `ARCCLAW_CORS_ORIGINS` | Optional | `http://localhost:3000` | Comma-separated CORS origins. |
 | `ARCCLAW_TELEGRAM_ENABLED` | Optional | `true` | Set `false` if not using Telegram. |
-| `TELEGRAM_BOT_TOKEN` | attach only | — | From @BotFather. |
-| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | attach only | — | Comma-separated numeric IDs. |
-| `ARCCLAW_TELEGRAM_ALLOWED_USERS` | attach only | — | Comma-separated usernames (no @). |
+| `TELEGRAM_BOT_TOKEN` | attach only | - | From @BotFather. |
+| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | attach only | - | Comma-separated numeric IDs. |
+| `ARCCLAW_TELEGRAM_ALLOWED_USERS` | attach only | - | Comma-separated usernames (no @). |
 | `QUARKUS_PROFILE` | Optional | `prod` | `dev` \| `test` \| `prod` \| `cli` |
 | `ARCCLAW_RAG_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Optional | `http://localhost:4317` | OTLP trace endpoint. |
@@ -940,7 +940,7 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `ARCCLAW_SANDBOX_ENABLED` | Optional | `true` | Enable Podman sandbox. |
 | `ARCCLAW_SANDBOX_STRATEGY` | Optional | `PODMAN` | `PODMAN` \| `NONE` |
 
-> **Security rules**: Never commit `.env`. `VAULT_PEPPER` and `AUDIT_HMAC_KEY` must never change after first boot — doing so corrupts the vault and audit chain.
+> **Security rules**: Never commit `.env`. `VAULT_PEPPER` and `AUDIT_HMAC_KEY` must never change after first boot - doing so corrupts the vault and audit chain.
 
 ---
 
@@ -986,7 +986,7 @@ $c = $c -replace '(?m)^ARCCLAW_TELEGRAM_ALLOWED_USERS=.*',    '# ARCCLAW_TELEGRA
 
 ### `.env` Source Fails with `syntax error near unexpected token 'newline'`
 
-Never `source .env` directly in bash — placeholder values like `key-<random>` are treated as redirects. Use a safe loader:
+Never `source .env` directly in bash - placeholder values like `key-<random>` are treated as redirects. Use a safe loader:
 
 ```bash
 while IFS= read -r line || [[ -n "$line" ]]; do
@@ -1036,8 +1036,8 @@ Or enable Docker API compatibility in Podman Desktop → Settings → General.
 ### Sandbox Strategy is `NONE` When You Expect `PODMAN`
 
 1. `quarkus:dev` always uses `NONE`. Package the jar and run with `QUARKUS_PROFILE=prod`.
-2. Was Podman running when ArcClaw started? The circuit breaker evaluates at boot — restart ArcClaw after starting Podman.
-3. On Windows, the OS check bypasses Linux namespaces — run inside WSL2.
+2. Was Podman running when ArcClaw started? The circuit breaker evaluates at boot - restart ArcClaw after starting Podman.
+3. On Windows, the OS check bypasses Linux namespaces - run inside WSL2.
 
 ### `InaccessibleObjectException` / Unsafe Memory Warnings
 
@@ -1071,7 +1071,7 @@ export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 2. Pass path **without suffix**: `-Darcclaw.rag.vec-extension-path=./lib/vec0` (not `./lib/vec0.so`).
 3. On Linux native: ensure `LD_PRELOAD` is set (see above).
 
-ArcClaw degrades to FTS5-only search — no crash, just a `WARN` in logs.
+ArcClaw degrades to FTS5-only search - no crash, just a `WARN` in logs.
 
 ### FTS5 Not Available
 

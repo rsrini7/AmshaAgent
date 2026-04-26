@@ -39,7 +39,7 @@ public class TmpfsSecretTransport implements SecretTransport {
         if (os.contains("linux")) {
             return "/run/arcclaw/secrets";
         }
-        // macOS / Windows fall through silently — no WARN
+        // macOS / Windows fall through silently - no WARN
         return System.getProperty("java.io.tmpdir");
     }
 
@@ -164,7 +164,7 @@ public class TmpfsSecretTransport implements SecretTransport {
 
     void sweepStaleTmpFiles(Path shmDir) {
         if (!Files.exists(shmDir)) {
-            log.debugf("TmpfsSecretTransport: %s not present — skipping stale file sweep (non-Linux?)", shmDir);
+            log.debugf("TmpfsSecretTransport: %s not present - skipping stale file sweep (non-Linux?)", shmDir);
             return;
         }
         try (var stream = Files.list(shmDir)) {

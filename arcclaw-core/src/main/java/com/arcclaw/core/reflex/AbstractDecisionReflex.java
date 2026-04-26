@@ -140,10 +140,10 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     private String handleAmbiguityDetection(Optional<AgentCheckpoint> latestPending, List<AgentCronEntity> pendingCrons) {
         if (latestPending.isPresent() && !pendingCrons.isEmpty()) {
             StringBuilder sb = new StringBuilder("⚠️ ").append(getAmbiguityTitle()).append(". You have multiple tasks waiting:\n\n");
-            sb.append("• `/%s` — (This Chat) ".formatted(getActionName().toLowerCase()))
+            sb.append("• `/%s` - (This Chat) ".formatted(getActionName().toLowerCase()))
               .append(latestPending.get().getOriginalGoal()).append("\n");
             for (AgentCronEntity c : pendingCrons) {
-                sb.append("• `/%s %s` — (Background) ".formatted(getActionName().toLowerCase(), c.id))
+                sb.append("• `/%s %s` - (Background) ".formatted(getActionName().toLowerCase(), c.id))
                   .append(c.goal).append("\n");
             }
             sb.append("\nPlease reply with the specific command.");
@@ -180,7 +180,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         if (failedRetryMsg != null) {
             Optional<AgentCheckpoint> lastCp = statefulAgentStore.findLatestCheckpoint(sessionId);
             if (lastCp.isPresent() && lastCp.get().getStatus() == CheckpointStatus.FAILED) {
-                log.debugf("%sReflex: last checkpoint is FAILED for session %s — guiding user to retry", 
+                log.debugf("%sReflex: last checkpoint is FAILED for session %s - guiding user to retry", 
                         getActionName(), sessionId);
                 return failedRetryMsg;
             }
@@ -193,7 +193,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             return getSingleCronFallbackMessage(pendingCrons.getFirst());
         }
         String list = pendingCrons.stream()
-                .map(c -> "• `/%s %s` — %s".formatted(getActionName().toLowerCase(), c.id, c.goal))
+                .map(c -> "• `/%s %s` - %s".formatted(getActionName().toLowerCase(), c.id, c.goal))
                 .collect(Collectors.joining("\n"));
         return getMultipleCronFallbackMessage(list);
     }

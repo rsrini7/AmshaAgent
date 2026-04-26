@@ -31,7 +31,7 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
     @Override
     public void notifyJobCompleted(String recipient, String renderedMessage, String sessionId) {
         if (recipient == null || !recipient.matches("-?\\d+")) {
-            log.warnf("CRON-NOTIFY skipped — chatId '%s' is not a valid Telegram ID", recipient);
+            log.warnf("CRON-NOTIFY skipped - chatId '%s' is not a valid Telegram ID", recipient);
             return;
         }
 
@@ -46,7 +46,7 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
     @Override
     public void notifyApprovalTimeout(String recipient, String sessionId, String pendingToolName, long timeoutMinutes) {
         if (recipient == null || recipient.isBlank()) {
-            log.debugf("No recipient for session=%s — skipping timeout notification", sessionId);
+            log.debugf("No recipient for session=%s - skipping timeout notification", sessionId);
             return;
         }
 

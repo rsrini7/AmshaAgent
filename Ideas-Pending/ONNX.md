@@ -1,4 +1,4 @@
-Here is the complete picture — what ONNX is, all relevant ArcClaw use cases, and exactly how to integrate it.
+Here is the complete picture - what ONNX is, all relevant ArcClaw use cases, and exactly how to integrate it.
 
 ***
 
@@ -15,19 +15,19 @@ Export to .onnx via Optimum CLI         Run inference via ORT Java API
 ```
 
 Key properties relevant to ArcClaw: [the-main-thread](https://www.the-main-thread.com/p/quarkus-onnx-pgvector-image-search-tutorial)
-- Pure JVM inference — no Python runtime at all in production
+- Pure JVM inference - no Python runtime at all in production
 - CPU inference works out of the box, GPU optional via execution providers
 - Native image compatible (ships native `.so` bundled in the JAR, loaded via JNI)
 - ~20–50ms inference latency for small transformer models
-- **Important**: only FP32 models work with the Java binding — quantized INT8 models require platform execution providers not included in the default JAR [the-main-thread](https://www.the-main-thread.com/p/quarkus-onnx-pgvector-image-search-tutorial)
+- **Important**: only FP32 models work with the Java binding - quantized INT8 models require platform execution providers not included in the default JAR [the-main-thread](https://www.the-main-thread.com/p/quarkus-onnx-pgvector-image-search-tutorial)
 
 ***
 
 ## ArcClaw-Specific Use Cases
 
-### Use Case 1 — Local Intent Classification (replaces LLM call)
+### Use Case 1 - Local Intent Classification (replaces LLM call)
 
-Your `IntentClassificationHandler` currently calls an LLM to classify short messages like "do the same in java" → `coder`. This is wasteful — a 30MB ONNX classifier does it in ~5ms locally. [infoq](https://www.infoq.com/articles/onnx-ai-inference-with-java/)
+Your `IntentClassificationHandler` currently calls an LLM to classify short messages like "do the same in java" → `coder`. This is wasteful - a 30MB ONNX classifier does it in ~5ms locally. [infoq](https://www.infoq.com/articles/onnx-ai-inference-with-java/)
 
 ```
 Current:  message → LLM API call (~800ms, costs tokens) → role
@@ -39,9 +39,9 @@ Export: `all-MiniLM-L6-v2` fine-tuned on your own intent labels (`coder`, `coord
 
 ***
 
-### Use Case 2 — Local Embeddings for RAG (replaces remote embedding API)
+### Use Case 2 - Local Embeddings for RAG (replaces remote embedding API)
 
-ArcClaw uses SQLite for memory storage. Embeddings currently go through Jina's embedding API — every `memory_search` or `ingest_document` call costs a remote round trip. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
+ArcClaw uses SQLite for memory storage. Embeddings currently go through Jina's embedding API - every `memory_search` or `ingest_document` call costs a remote round trip. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
 
 ```
 With ONNX: sentence-transformers/all-MiniLM-L6-v2 → .onnx
@@ -65,12 +65,12 @@ text → LocalEmbeddingModel (ONNX) → 384-dim vector
 
 ## One Thing to Verify Before Swapping
 
-Jina v2 produces **768-dim** vectors. `all-MiniLM-L6-v2` produces **384-dim**. If your SQLite vector store already has embeddings stored from Jina, they're **incompatible** — you'd need to re-embed all existing documents after switching.
+Jina v2 produces **768-dim** vectors. `all-MiniLM-L6-v2` produces **384-dim**. If your SQLite vector store already has embeddings stored from Jina, they're **incompatible** - you'd need to re-embed all existing documents after switching.
 
 Options:
-- **Clean swap** — re-embed everything, use ONNX going forward
-- **Parallel run** — keep Jina for existing data, use ONNX for new ingestions, migrate gradually
-- **Use a 768-dim ONNX model** — `sentence-transformers/all-mpnet-base-v2` produces 768-dim, matching Jina's output dimension (though not the same vector space — still needs re-embedding)
+- **Clean swap** - re-embed everything, use ONNX going forward
+- **Parallel run** - keep Jina for existing data, use ONNX for new ingestions, migrate gradually
+- **Use a 768-dim ONNX model** - `sentence-transformers/all-mpnet-base-v2` produces 768-dim, matching Jina's output dimension (though not the same vector space - still needs re-embedding)
 
 ## ONNX Model Closest to Jina v2 Quality
 
@@ -82,17 +82,17 @@ optimum-cli export onnx \
   ./models/embeddings/
 ```
 
-This is 384-dim but multilingual — if ArcClaw only handles English, `all-MiniLM-L6-v2` is faster and sufficient. Everything else in Step 3 of the integration stays exactly the same.
+This is 384-dim but multilingual - if ArcClaw only handles English, `all-MiniLM-L6-v2` is faster and sufficient. Everything else in Step 3 of the integration stays exactly the same.
 
 ***
 
-### Use Case 3 — Destructive Vocabulary / Toxic Content Filter
+### Use Case 3 - Destructive Vocabulary / Toxic Content Filter
 
-Your `DestructiveVocabularyFilter` in the pipeline is likely keyword-based today. A small ONNX text classifier (`distilbert-base-uncased-finetuned-sst`) can detect hostile, manipulative, or jailbreak-style inputs with semantic understanding — not just keyword matching. [infoq](https://www.infoq.com/articles/onnx-ai-inference-with-java/)
+Your `DestructiveVocabularyFilter` in the pipeline is likely keyword-based today. A small ONNX text classifier (`distilbert-base-uncased-finetuned-sst`) can detect hostile, manipulative, or jailbreak-style inputs with semantic understanding - not just keyword matching. [infoq](https://www.infoq.com/articles/onnx-ai-inference-with-java/)
 
 ***
 
-### Use Case 4 — Response Quality Scoring before Delivery
+### Use Case 4 - Response Quality Scoring before Delivery
 
 Before ArcClaw sends an answer to Telegram, an ONNX sentiment/confidence classifier can flag responses that are:
 - Suspiciously short/vague (augmenting your existing `SUSPICIOUSLY_SHORT` pattern)
@@ -103,7 +103,7 @@ Before ArcClaw sends an answer to Telegram, an ONNX sentiment/confidence classif
 
 ## Integration Steps
 
-### Step 1 — Export model to ONNX (Python, one time)
+### Step 1 - Export model to ONNX (Python, one time)
 
 ```bash
 pip install optimum sentence-transformers
@@ -125,7 +125,7 @@ Place resulting `.onnx` and `tokenizer.json` files in `src/main/resources/models
 
 ***
 
-### Step 2 — Add Maven dependency
+### Step 2 - Add Maven dependency
 
 ```xml
 <dependency>
@@ -143,7 +143,7 @@ Place resulting `.onnx` and `tokenizer.json` files in `src/main/resources/models
 
 ***
 
-### Step 3 — CDI Bean for Embeddings
+### Step 3 - CDI Bean for Embeddings
 
 ```java
 @ApplicationScoped
@@ -157,7 +157,7 @@ public class LocalEmbeddingModel implements EmbeddingModel {  // LangChain4J int
     void init() throws Exception {
         env = OrtEnvironment.getEnvironment();
         var opts = new OrtSession.SessionOptions();
-        // CPU only — add GPU execution provider here if needed
+        // CPU only - add GPU execution provider here if needed
         String modelPath = getClass()
             .getResource("/models/embeddings/model.onnx").getPath();
         session = env.createSession(modelPath, opts);
@@ -206,7 +206,7 @@ public class LocalEmbeddingModel implements EmbeddingModel {  // LangChain4J int
 
 ***
 
-### Step 4 — CDI Bean for Intent Classification
+### Step 4 - CDI Bean for Intent Classification
 
 ```java
 @ApplicationScoped
@@ -238,11 +238,11 @@ public class OnnxIntentDetector {
 }
 ```
 
-Wire this into `IntentClassificationHandler` as a fast-path before calling the LLM classifier — fall back to LLM only if ONNX confidence score is below a threshold (e.g., `softmax[0] < 0.85`).
+Wire this into `IntentClassificationHandler` as a fast-path before calling the LLM classifier - fall back to LLM only if ONNX confidence score is below a threshold (e.g., `softmax[0] < 0.85`).
 
 ***
 
-### Step 5 — Native Image Registration
+### Step 5 - Native Image Registration
 
 ```java
 // Register ONNX model files and native libs for native image
@@ -257,7 +257,7 @@ Wire this into `IntentClassificationHandler` as a fast-path before calling the L
 }
 ```
 
-The `onnxruntime` JAR bundles platform native libs (`.so`/`.dylib`/`.dll`) which are extracted at runtime to a temp dir — this works in Quarkus native image as long as the resource config includes the model files. [github](https://github.com/microsoft/onnxruntime/issues/5172)
+The `onnxruntime` JAR bundles platform native libs (`.so`/`.dylib`/`.dll`) which are extracted at runtime to a temp dir - this works in Quarkus native image as long as the resource config includes the model files. [github](https://github.com/microsoft/onnxruntime/issues/5172)
 
 ***
 
@@ -274,7 +274,7 @@ The `onnxruntime` JAR bundles platform native libs (`.so`/`.dylib`/`.dll`) which
 ---
 
 
-Perfect — clean swap it is then.
+Perfect - clean swap it is then.
 
 ## Confirmed Approach
 
@@ -291,7 +291,7 @@ optimum-cli export onnx \
   ./models/embeddings/
 ```
 
-`all-mpnet-base-v2` is the standard recommendation for 768-dim free embeddings — consistently outperforms Jina v2 base on most MTEB benchmarks and is ~420MB on disk. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
+`all-mpnet-base-v2` is the standard recommendation for 768-dim free embeddings - consistently outperforms Jina v2 base on most MTEB benchmarks and is ~420MB on disk. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
 
 ## Swap Checklist for ArcClaw
 
@@ -312,22 +312,22 @@ src/main/resources/models/embeddings/
 └── tokenizer_config.json
 ```
 
-**3. In `application.yaml` — disable Jina:**
+**3. In `application.yaml` - disable Jina:**
 ```properties
 # Remove or comment out:
 # quarkus.langchain4j.jina.api-key=...
 # quarkus.langchain4j.jina.embedding-model.model-name=...
 ```
 
-**4. Wire `LocalEmbeddingModel` bean** — exactly as shown in Step 3 from the previous message. Since it implements LangChain4J's `EmbeddingModel` interface, your `IngestDocumentTool` and memory search inject it with zero pipeline changes.
+**4. Wire `LocalEmbeddingModel` bean** - exactly as shown in Step 3 from the previous message. Since it implements LangChain4J's `EmbeddingModel` interface, your `IngestDocumentTool` and memory search inject it with zero pipeline changes.
 
-**5. Delete data folder, restart** — fresh embeddings from first use.
+**5. Delete data folder, restart** - fresh embeddings from first use.
 
-That's the complete swap — no API key, no network call, no cost, same 768-dim vector space throughout.
+That's the complete swap - no API key, no network call, no cost, same 768-dim vector space throughout.
 
 ---
 
-Clean design — use Quarkus CDI with a config-driven selector. Here's the complete pattern:
+Clean design - use Quarkus CDI with a config-driven selector. Here's the complete pattern:
 
 ## `application.properties` Toggle
 
@@ -340,7 +340,7 @@ arcclaw.embedding.provider=onnx
 
 ## Interface + Two Implementations
 
-LangChain4J's `EmbeddingModel` is already the common interface — both implementations just need a CDI qualifier to disambiguate.
+LangChain4J's `EmbeddingModel` is already the common interface - both implementations just need a CDI qualifier to disambiguate.
 
 **Qualifier annotation:**
 ```java
@@ -357,7 +357,7 @@ public @interface EmbeddingProvider {
 @ApplicationScoped
 @EmbeddingProvider("jina")
 public class JinaEmbeddingModel implements EmbeddingModel {
-    // your existing Jina wiring — unchanged
+    // your existing Jina wiring - unchanged
 }
 ```
 
@@ -366,13 +366,13 @@ public class JinaEmbeddingModel implements EmbeddingModel {
 @ApplicationScoped
 @EmbeddingProvider("onnx")
 public class OnnxEmbeddingModel implements EmbeddingModel {
-    // Step 3 bean from previous message — unchanged
+    // Step 3 bean from previous message - unchanged
 }
 ```
 
 ***
 
-## Selector Bean — Single Inject Point
+## Selector Bean - Single Inject Point
 
 ```java
 @ApplicationScoped
@@ -411,7 +411,7 @@ Anywhere that currently injects `EmbeddingModel` directly, swap to the selector:
 // After:
 @Inject EmbeddingModelSelector embeddingSelector;
 
-// Usage — identical call site:
+// Usage - identical call site:
 embeddingSelector.get().embed(segment);
 ```
 
@@ -419,7 +419,7 @@ embeddingSelector.get().embed(segment);
 
 ## Native Image Safety
 
-One caveat — in native image, **both beans get compiled in** regardless of which provider is configured. That means:
+One caveat - in native image, **both beans get compiled in** regardless of which provider is configured. That means:
 
 - ONNX model file must always be present in `src/main/resources/models/` even if Jina is selected
 - Jina API key config must exist (can be a blank placeholder) even if ONNX is selected
@@ -433,4 +433,4 @@ If binary size is a concern later, you can use `@IfBuildProperty` to conditional
 public class OnnxEmbeddingModel implements EmbeddingModel { ... }
 ```
 
-But for development this is unnecessary — the simple selector bean above is sufficient and gives you instant runtime switching by changing one property.
+But for development this is unnecessary - the simple selector bean above is sufficient and gives you instant runtime switching by changing one property.

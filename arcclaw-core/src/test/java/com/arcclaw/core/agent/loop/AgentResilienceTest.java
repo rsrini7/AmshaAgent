@@ -82,7 +82,7 @@ class AgentResilienceTest {
     }
 
     /**
-     * Test 2: LLM gets stuck in an infinite loop — never emits FINISH.
+     * Test 2: LLM gets stuck in an infinite loop - never emits FINISH.
      * The maxIterations guard should terminate the loop.
      */
     @Test
@@ -119,7 +119,7 @@ class AgentResilienceTest {
     }
 
     /**
-     * Test 3: LLM emits FINISH — normal termination.
+     * Test 3: LLM emits FINISH - normal termination.
      */
     @Test
     void testFinishActionReturnsCorrectResult() {
@@ -149,7 +149,7 @@ class AgentResilienceTest {
     }
 
     /**
-     * Test 4: Engine returns null step — handled gracefully.
+     * Test 4: Engine returns null step - handled gracefully.
      */
     @Test
     void testNullStepTerminatesGracefully() {
@@ -176,7 +176,7 @@ class AgentResilienceTest {
     }
 
     /**
-     * Test 5: Engine throws exception — loop should catch and return error result.
+     * Test 5: Engine throws exception - loop should catch and return error result.
      */
     @Test
     void testEngineExceptionHandled() {

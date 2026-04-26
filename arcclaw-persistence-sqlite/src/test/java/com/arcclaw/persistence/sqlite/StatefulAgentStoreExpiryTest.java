@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests for checkpoint expiry logic.
  * <p>
- * No @BeforeEach cleanup — each test uses a unique UUID session ID for
+ * No @BeforeEach cleanup - each test uses a unique UUID session ID for
  * complete isolation. This avoids the SQLite cross-transaction visibility
  * issues caused by DELETE/TRUNCATE operations.
  */

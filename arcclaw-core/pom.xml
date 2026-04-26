@@ -105,7 +105,7 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- LangChain4J (Quarkiverse extensions — they manage langchain4j core transitively) -->
+    <!-- LangChain4J (Quarkiverse extensions - they manage langchain4j core transitively) -->
     <dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-core</artifactId>
@@ -152,7 +152,7 @@
       </exclusions>
     </dependency>
 
-    <!-- BouncyCastle — Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
+    <!-- BouncyCastle - Argon2id + AES-GCM-SIV (use ONLY bcprov-jdk18on) -->
     <dependency>
       <groupId>org.bouncycastle</groupId>
       <artifactId>bcprov-jdk18on</artifactId>

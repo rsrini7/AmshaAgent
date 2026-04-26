@@ -131,7 +131,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
 
         if (!requests.isEmpty()) {
             String thought = text.substring(0, firstMatchIdx).strip();
-            log.infof("[NvidiaSanitizer] Normalized %d chained Mistral tool calls — routing through approval gate", requests.size());
+            log.infof("[NvidiaSanitizer] Normalized %d chained Mistral tool calls - routing through approval gate", requests.size());
             return ChatResponse.builder()
                     .aiMessage(AiMessage.from(thought.isEmpty() ? null : thought, requests))
                     .tokenUsage(response.tokenUsage())
@@ -158,7 +158,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
             if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
                 for (ToolExecutionRequest req : ai.toolExecutionRequests()) {
                     String id = req.id();
-                    // §7.32: Role-switching guard — drop calls for tools no longer in schema
+                    // §7.32: Role-switching guard - drop calls for tools no longer in schema
                     if (allowedTools != null && !allowedTools.isEmpty() && !allowedTools.contains(req.name())) {
                         continue;
                     }

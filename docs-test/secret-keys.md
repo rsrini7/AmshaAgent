@@ -1,6 +1,6 @@
 ### Regarding `build.env`
 
-You don't need to worry about `build.env`—it is an optional feature built into the `mise.toml` tasks, not a requirement. 
+You don't need to worry about `build.env`-it is an optional feature built into the `mise.toml` tasks, not a requirement. 
 
 Here is why that logic exists in the build scripts:
 1. **The Problem:** The native compiler (GraalVM) embeds any active environment variables it sees at compile time directly into the binary's memory. This is highly dangerous because your `.env` contains your API keys (`ARCCLAW_LLM_API_KEY`, etc.), meaning your secrets would get permanently baked into the executable and leaked to anyone you share the binary with.
@@ -28,7 +28,7 @@ Here is exactly how the configuration and secret architecture works in ArcClaw. 
 ### 1. Why the Native Binary Uses `.env` (and why it works in `prod`)
 The **`.env` file is loaded in ALL profiles** (`dev`, `test`, `prod`), not just `dev`. 
 
-When you run the native binary (`prod`), the very first thing that executes—even before Quarkus boots up—is **`AppBootstrap.loadDotEnv()`**. 
+When you run the native binary (`prod`), the very first thing that executes-even before Quarkus boots up-is **`AppBootstrap.loadDotEnv()`**. 
 * It reads your `.env` file.
 * It injects every value directly into Java's `System.setProperty()`.
 * When Quarkus (and LangChain4j) finally boots up a microsecond later, it natively reads from `System.getProperty()`. 
@@ -144,7 +144,7 @@ This is a great security question. Let me give you the complete picture with cle
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  TIER 1 — Bootstrap Secrets (.env, MUST stay)           │
+│  TIER 1 - Bootstrap Secrets (.env, MUST stay)           │
 │  Read by AppBootstrap BEFORE Quarkus/DB exists          │
 │                                                         │
 │  ARCCLAW_VAULT_PEPPER   ← master key for vault itself   │
@@ -155,7 +155,7 @@ This is a great security question. Let me give you the complete picture with cle
 └─────────────────────────────────────────────────────────┘
                         ↓ Quarkus boots, DB online
 ┌─────────────────────────────────────────────────────────┐
-│  TIER 2 — Tool Secrets (SecretVault DB, CAN migrate)    │
+│  TIER 2 - Tool Secrets (SecretVault DB, CAN migrate)    │
 │  Read by agents AFTER full boot, via SecretVaultImpl    │
 │                                                         │
 │  GITHUB_TOKEN           ← coder agent                  │
@@ -166,7 +166,7 @@ This is a great security question. Let me give you the complete picture with cle
 
 ***
 
-## Your Idea — Yes, Tier 2 Can Be Removed From `.env` After First Boot
+## Your Idea - Yes, Tier 2 Can Be Removed From `.env` After First Boot
 
 `DevSecretSeeder` is **already designed for exactly this**. The flow is:
 
@@ -184,7 +184,7 @@ Boot 2+ (ongoing):
 
 ***
 
-## What Can NEVER Leave `.env` — The Vault Pepper Problem
+## What Can NEVER Leave `.env` - The Vault Pepper Problem
 
 `ARCCLAW_VAULT_PEPPER` has a **fundamental circular dependency** that makes it impossible to store in the vault:
 
@@ -194,25 +194,25 @@ To STORE VAULT_PEPPER → need vault to already be readable
                               ↑ impossible
 ```
 
-This is the same reason a safe manufacturer can't lock the safe's combination inside itself. `ARCCLAW_VAULT_PEPPER` must always live outside the vault — in `.env`, an HSM, or a cloud secret manager.
+This is the same reason a safe manufacturer can't lock the safe's combination inside itself. `ARCCLAW_VAULT_PEPPER` must always live outside the vault - in `.env`, an HSM, or a cloud secret manager.
 
 ***
 
 ## What `SecretVaultImpl` Actually Does (Full Picture)
 
 ```java
-// Per-session key derivation (Argon2id — intentionally slow)
+// Per-session key derivation (Argon2id - intentionally slow)
 VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
 // ↑ Each user's secrets are encrypted with THEIR session-derived key
 // (VAULT_PEPPER + sessionId) → unique per user, no cross-contamination
 
 // Encryption: AES-GCM-SIV (nonce-misuse resistant)
 AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
-// ↑ keyName is AAD — prevents ciphertext being moved between key slots
+// ↑ keyName is AAD - prevents ciphertext being moved between key slots
 
 // System keys bypass WorkspaceScope (safe at startup)
 VaultKey systemKey = getSystemMasterKey(); // uses SYSTEM_SESSION_ID
-// ↑ this is what DevSecretSeeder uses — no active session needed
+// ↑ this is what DevSecretSeeder uses - no active session needed
 ```
 
 ***
@@ -253,7 +253,7 @@ ARCCLAW_VAULT_PEPPER must exist outside the vault.
 Mathematical fact. Cannot be solved in software alone.
 ```
 
-This is not a design choice — it's a **cryptographic bootstrap paradox**:
+This is not a design choice - it's a **cryptographic bootstrap paradox**:
 
 ```
 To decrypt vault  → need VAULT_PEPPER
@@ -272,7 +272,7 @@ Every secure system in existence has this same problem. The solutions are:
 | HSM/TPM | YubiKey, TPM chip | ❌ not implemented |
 | Password at startup | Enter passphrase on boot | ❌ not implemented |
 
-`.env` is just the **simplest implementation** of "something outside the vault". It could be replaced with OS Keychain — but the external anchor requirement never goes away.
+`.env` is just the **simplest implementation** of "something outside the vault". It could be replaced with OS Keychain - but the external anchor requirement never goes away.
 
 ***
 
@@ -285,7 +285,7 @@ ARCCLAW_AUDIT_HMAC_KEY ← already half-solved by DevSecretSeeder
 
 **Why LLM key is in `.env` today:** LangChain4J reads config at Quarkus boot time via `@ConfigProperty`. At that moment, the vault is not online yet. So it reads from system properties → which come from `.env`.
 
-**Could it be moved to vault?** Yes — but it requires:
+**Could it be moved to vault?** Yes - but it requires:
 ```java
 // Instead of @ConfigProperty (eager, boot-time):
 @ConfigProperty(name = "arcclaw.llm.api-key")
@@ -302,7 +302,7 @@ String getApiKey() {
 // ↑ only called when first LLM request fires, vault is fully online
 ```
 
-This is an architectural refactor — not a hard impossibility.
+This is an architectural refactor - not a hard impossibility.
 
 ***
 
@@ -311,7 +311,7 @@ This is an architectural refactor — not a hard impossibility.
 If you implemented OS Keychain for `VAULT_PEPPER` and lazy vault loading for LLM key:
 
 ```bash
-# .env — theoretical minimum (non-secrets only)
+# .env - theoretical minimum (non-secrets only)
 QUARKUS_PROFILE=prod
 ARCCLAW_DATA_DIR=./data
 
@@ -322,7 +322,7 @@ ARCCLAW_DATA_DIR=./data
 # GITHUB_TOKEN      → SecretVault (DevSecretSeeder already does this)
 ```
 
-`DATA_DIR` and `QUARKUS_PROFILE` are **not secrets** — they're just config, no harm in them being in a file.
+`DATA_DIR` and `QUARKUS_PROFILE` are **not secrets** - they're just config, no harm in them being in a file.
 
 ***
 
@@ -330,7 +330,7 @@ ARCCLAW_DATA_DIR=./data
 
 | Secret | Can leave `.env`? | Blocker |
 |---|---|---|
-| `VAULT_PEPPER` | Only with OS Keychain/KMS | Hard constraint — external anchor always required |
+| `VAULT_PEPPER` | Only with OS Keychain/KMS | Hard constraint - external anchor always required |
 | `LLM_API_KEY` | Yes | Needs lazy vault loading refactor |
 | `AUDIT_HMAC_KEY` | Yes | DevSecretSeeder already handles it |
 | `GITHUB_TOKEN` etc. | Yes ✅ | Already works today |
@@ -343,15 +343,15 @@ ARCCLAW_DATA_DIR=./data
 
 The audit HMAC key signs every audit log entry to prove it hasn't been tampered with. The **stability requirement** is completely different between dev and prod:
 
-### Dev/Test — `seedAuditHmacKey()` (random ephemeral)
+### Dev/Test - `seedAuditHmacKey()` (random ephemeral)
 ```java
 byte[] hmacKeyBytes = new byte[32];
 new SecureRandom().nextBytes(hmacKeyBytes);  // random every boot
 secretVault.storeSystemKey(keyName, hmacKeyBytes);
 ```
-**Why random?** In dev you wipe the DB constantly. If you used a fixed key from `.env`, every DB wipe would leave orphaned audit entries signed with the old key. A fresh random key per boot matches the fresh DB — consistency within a session is all that matters.
+**Why random?** In dev you wipe the DB constantly. If you used a fixed key from `.env`, every DB wipe would leave orphaned audit entries signed with the old key. A fresh random key per boot matches the fresh DB - consistency within a session is all that matters.
 
-### Prod — `seedAuditHmacKeyFromEnv()` (stable from `.env`)
+### Prod - `seedAuditHmacKeyFromEnv()` (stable from `.env`)
 ```java
 String envValue = ConfigProvider.getConfig()
     .getOptionalValue("ARCCLAW_AUDIT_HMAC_KEY", String.class)...

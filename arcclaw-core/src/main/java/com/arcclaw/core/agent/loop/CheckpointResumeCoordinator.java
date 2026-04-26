@@ -27,12 +27,12 @@ import org.jboss.logging.Logger;
  * <p>Extracted from {@code AgentLoop.runWithRole} as part of Phase 2
  * God-class decomposition. Owns three of the seven original responsibilities:
  * <ul>
- *   <li><strong>Checkpoint load logic</strong> — retrieves the latest
+ *   <li><strong>Checkpoint load logic</strong> - retrieves the latest
  *       checkpoint for the (session, role) key from the store.</li>
- *   <li><strong>Resume decision branching</strong> — evaluates whether to
+ *   <li><strong>Resume decision branching</strong> - evaluates whether to
  *       resume an {@code IN_PROGRESS} run, continue an approved
  *       {@code AWAITING_APPROVAL} turn, or discard stale approvals.</li>
- *   <li><strong>Stale approval archiving</strong> — atomically archives
+ *   <li><strong>Stale approval archiving</strong> - atomically archives
  *       checkpoints that were abandoned by the user in favor of a new goal,
  *       preventing history contamination.</li>
  * </ul>
@@ -41,14 +41,14 @@ import org.jboss.logging.Logger;
  * <p>No method in this class may carry {@code @Transactional} or
  * {@code @Transactional(REQUIRED)}. The stale discard path calls
  * {@code agentStore.save(checkpoint)} which internally uses
- * {@code REQUIRES_NEW} in the SQLite adapter — that is safe. An outer
+ * {@code REQUIRES_NEW} in the SQLite adapter - that is safe. An outer
  * {@code @Transactional(REQUIRED)} here would reintroduce the P84
  * SQLITE_BUSY cascade.
  *
  * <h3>🚨 Double-resume guard (§3.4)</h3>
  * <p>The {@code finally} block that calls
  * {@code agentStore.clearBatchResuming(sessionId)} remains in
- * {@link CheckpointResumeHandler} — it is NOT moved here. This coordinator
+ * {@link CheckpointResumeHandler} - it is NOT moved here. This coordinator
  * is only for the pre-loop checkpoint load/branch logic.
  *
  * <h3>🚨 Denial path (§3.4)</h3>
@@ -228,7 +228,7 @@ public class CheckpointResumeCoordinator {
 
         auditService.record(sessionId, capturedUserId, checkpoint.getAgentRole(),
                 SecurityEventType.CHECKPOINT_FAILED,
-                "Stale AWAITING_APPROVAL discarded — new message received. tool=" + staleTool);
+                "Stale AWAITING_APPROVAL discarded - new message received. tool=" + staleTool);
     }
 
     private void notifyStaleApprovalDiscarded(String sessionId,

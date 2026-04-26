@@ -75,7 +75,7 @@ public class CronTimeResolver {
     public static ZonedDateTime resolveTargetTime(String msg, ZonedDateTime nowUtc, ZoneId userZone) {
         if (msg == null) return null;
 
-        // Invariant 4.11 — Bail immediately on negation
+        // Invariant 4.11 - Bail immediately on negation
         if (NEGATION_GUARD.matcher(msg).find()) {
             return null; // caller must handle null → do not schedule
         }

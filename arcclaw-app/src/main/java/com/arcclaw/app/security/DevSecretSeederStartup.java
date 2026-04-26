@@ -13,7 +13,7 @@ import io.quarkus.runtime.StartupEvent;
  * Automatically seeds development secrets when the application starts
  * ONLY in the "dev" build profile.
  * <p>
- * This is a security gate — @IfBuildProfile ensures this bean (and its call
+ * This is a security gate - @IfBuildProfile ensures this bean (and its call
  * to DevSecretSeeder) is completely absent from production, staging, and
  * test builds, even if the runtime configuration flag is set.
  */

@@ -59,7 +59,7 @@ class TelemetryAuditServiceTest {
     void testRecordSwallowsExceptions() {
         doThrow(new RuntimeException("[TEST-EXPECTED] mock telemetry failure")).when(persistenceEngine).submitTelemetry(any());
 
-        // Must not throw — caller must not be affected by TELEMETRY failures
+        // Must not throw - caller must not be affected by TELEMETRY failures
         assertDoesNotThrow(() ->
                 telemetryAuditService.record("ses-5", "u1", "debugger",
                         SecurityEventType.CONTEXT_COMPACTED, "compacted"));

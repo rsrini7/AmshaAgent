@@ -59,13 +59,13 @@ public class CronResultHandler {
             handleApprovalPause(job, cronSessionId, executionId, a);
         } else if (result instanceof AgentResult.AwaitingRetry) {
             log.infof("CronResultHandler: Session kept alive for cron=%s AWAITING_RETRY (rate limit).", cronSessionId);
-            // No-op termination — let the RateLimitRetryScheduler pick it up
+            // No-op termination - let the RateLimitRetryScheduler pick it up
         } else {
             handleNormalCompletion(job, cronSessionId, executionId, result);
         }
     }
 
-    // Handles Finished, Failed, LoopExceeded — always terminates session
+    // Handles Finished, Failed, LoopExceeded - always terminates session
     private void handleNormalCompletion(AgentCronEntity job, String cronSessionId, String executionId, AgentResult result) {
         String answer = AgentResultFormatter.format(result);
         String finalAnswer = answer.trim().isEmpty()
@@ -74,12 +74,12 @@ public class CronResultHandler {
 
         handleFinalResult(job, cronSessionId, result);
 
-        // Fire delivery event BEFORE session teardown — observer needs session context
+        // Fire delivery event BEFORE session teardown - observer needs session context
         fireCompletionEvent(job, executionId, finalAnswer, null);
         workspaceManager.terminateSession(cronSessionId);
     }
 
-    // Handles AwaitingApproval — session must stay alive for ApproveReflex
+    // Handles AwaitingApproval - session must stay alive for ApproveReflex
     private void handleApprovalPause(AgentCronEntity job, String cronSessionId, String executionId, AgentResult.AwaitingApproval result) {
         cronRepository.markAwaitingApproval(job.id);
         log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
@@ -93,10 +93,10 @@ public class CronResultHandler {
 
         String displayGoal = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "") : "";
         String answer = AgentResultFormatter.formatCronHitl(job.id, displayGoal, result.toolName());
-        // Fire delivery event — session intentionally kept alive for approval
+        // Fire delivery event - session intentionally kept alive for approval
         fireCompletionEvent(job, executionId, answer, null);
 
-        log.infof("[CronResultHandler] Session kept alive for cron=%s — AWAITING_APPROVAL. (Notification handled here)", cronSessionId);
+        log.infof("[CronResultHandler] Session kept alive for cron=%s - AWAITING_APPROVAL. (Notification handled here)", cronSessionId);
     }
 
     public void handleFailure(AgentCronEntity job, String cronSessionId, String executionId, Throwable t) {
@@ -152,11 +152,11 @@ public class CronResultHandler {
         Optional<ChannelType> resolvedType = ChannelType.fromString(job.channelType);
         if (resolvedType.isEmpty()) {
             log.warnf("CRON-NOTIFY cronId=%d has null/unknown channelType='%s'. " +
-                       "Cannot notify — see Architecture_Invariants.md §1.4. " +
+                       "Cannot notify - see Architecture_Invariants.md §1.4. " +
                        "Run migration: UPDATE agent_cron SET channel_type='TELEGRAM' " +
                        "WHERE channel_type IS NULL;",
                        job.id, job.channelType);
-            // Use a deterministic sessionId for audit — cronId is always available
+            // Use a deterministic sessionId for audit - cronId is always available
             String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.id;
             auditService.record(cronSessionId, job.userId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),

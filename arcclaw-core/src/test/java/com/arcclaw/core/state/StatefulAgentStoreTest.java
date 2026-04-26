@@ -21,7 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Integration tests for the stateful agent store — checkpoint persistence,
+ * Integration tests for the stateful agent store - checkpoint persistence,
  * deserialization, and lifecycle transitions.
  */
 @QuarkusTest
@@ -129,7 +129,7 @@ class StatefulAgentStoreTest {
     }
 
     /**
-     * Verify upsert behavior — saving twice to same session+role updates, not
+     * Verify upsert behavior - saving twice to same session+role updates, not
      * duplicates.
      */
     @Test

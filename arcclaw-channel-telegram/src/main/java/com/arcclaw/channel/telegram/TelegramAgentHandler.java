@@ -59,7 +59,7 @@ public class TelegramAgentHandler {
         }
 
         if (msg.getText() == null) {
-            log.warnf("Received non-text message from chat %s — notifying user", chatId);
+            log.warnf("Received non-text message from chat %s - notifying user", chatId);
             String userId = msg.getFrom() != null ? String.valueOf(msg.getFrom().getId()) : "unknown";
             ChannelUser fallbackUser = new ChannelUser(userId, chatId, null, ChannelType.TELEGRAM);
             sender.sendRaw(fallbackUser, "⚠️ I can only process text messages.");
@@ -106,7 +106,7 @@ public class TelegramAgentHandler {
             });
     }
 
-    /** For tests only — checks if a chat is currently being processed. */
+    /** For tests only - checks if a chat is currently being processed. */
     boolean isProcessing(String chatId) {
         AtomicBoolean flag = processingFlags.getIfPresent(chatId);
         return flag != null && flag.get();

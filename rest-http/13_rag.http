@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 13 — RAG (RETRIEVAL-AUGMENTED GENERATION)
+### 13 - RAG (RETRIEVAL-AUGMENTED GENERATION)
 ###
 ### ArcClaw provides dual-tier semantic retrieval:
 ###
@@ -11,27 +11,27 @@
 ### Phase 64-C3 change:
 ###   RAG chunks are now stored in rag_chunk table (not "rag:" prefix in
 ###   compaction_summary). IngestDocumentTool writes to rag_chunk.
-###   MemorySearchTool queries rag_chunk + compaction_summary_fts — no
+###   MemorySearchTool queries rag_chunk + compaction_summary_fts - no
 ###   cross-contamination between ingested docs and session summaries.
 ###
 ### IngestDocumentTool:
 ###   Available to: coordinator (requires approval in SUPERVISED mode)
 ###   Input: {text: "<content to ingest>", source: "<optional label>"}
 ###   Stores: rag_chunk row + embedding in vec_global (if vec0 loaded)
-###   Approval required: Yes (ToolOperation=DESTRUCTIVE — modifies DB)
+###   Approval required: Yes (ToolOperation=DESTRUCTIVE - modifies DB)
 ###
 ### MemorySearchTool (memory_search):
 ###   Available to: coordinator, researcher, architect, synthesizer
 ###   Input: {query: "<search terms>"}
 ###   Returns: top-N RRF-merged results from FTS5 + vector search
-###   Scoped: by userId — tenant-isolated
+###   Scoped: by userId - tenant-isolated
 ###
 ### Verification:
 ###   After ingestion, the rag_chunk table must have the new row.
 ###   After Phase 64-C3, compaction_summary must NOT have "rag:" prefixed rows.
 ###
 ### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set
-###   sqlite-vec (vec0) binary optional — FTS5 works without it
+###   sqlite-vec (vec0) binary optional - FTS5 works without it
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
@@ -51,7 +51,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [RAG-1] Ask agent to ingest a document — triggers IngestDocumentTool
+### [RAG-1] Ask agent to ingest a document - triggers IngestDocumentTool
 # IngestDocumentTool has ToolOperation=DESTRUCTIVE, requires approval in SUPERVISED mode.
 # Expect: 202 AWAITING_APPROVAL with toolName=ingest_document
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run-async
@@ -66,7 +66,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [RAG-2] Poll status — should be AWAITING_APPROVAL
+### [RAG-2] Poll status - should be AWAITING_APPROVAL
 # Run immediately after RAG-1.
 # Expect: status = AWAITING_APPROVAL, toolName = ingest_document
 GET {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/status/coordinator
@@ -84,7 +84,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [RAG-4] Poll status after approval — should be COMPLETED
+### [RAG-4] Poll status after approval - should be COMPLETED
 # Expect: status = COMPLETED
 GET {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
@@ -131,7 +131,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# FLOW B: INGEST MULTIPLE DOCUMENTS — RRF MERGE TEST
+# FLOW B: INGEST MULTIPLE DOCUMENTS - RRF MERGE TEST
 # Ingest two documents on different topics, then search for content
 # from both. Confirms RRF merges results from both tiers correctly.
 # ─────────────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # FLOW C: RAG CROSS-SESSION ISOLATION
-# MemorySearchTool is scoped by userId — documents ingested in one
+# MemorySearchTool is scoped by userId - documents ingested in one
 # user's session must NOT appear in another user's search.
 # ─────────────────────────────────────────────────────────────────
 
@@ -207,8 +207,8 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [RAG-14] Search from session 1 — must NOT return session 2's unique marker
-# MemorySearchTool uses userId scope — not sessionId scope.
+### [RAG-14] Search from session 1 - must NOT return session 2's unique marker
+# MemorySearchTool uses userId scope - not sessionId scope.
 # Both sessions share the same user, so cross-session search IS expected to work
 # (this is a feature, not a bug). The isolation being tested here is cross-USER.
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
@@ -253,8 +253,8 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [RAG-VEC-1] Confirm FTS5-only mode (only if vec0 binary is absent)
 # Start ArcClaw WITHOUT the vec0 library. Watch logs for:
-#   "sqlite-vec extension not found — vector search disabled, FTS5 only"
-# Then run a memory search — it must still return results via FTS5.
+#   "sqlite-vec extension not found - vector search disabled, FTS5 only"
+# Then run a memory search - it must still return results via FTS5.
 # Expect: agent returns FTS5 results with no error or exception.
 POST {{baseUrl}}/api/v1/sessions/{{ragSession.response.body.sessionId}}/run
 Content-Type: application/json

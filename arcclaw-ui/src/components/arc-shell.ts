@@ -228,7 +228,7 @@ export class ArcShell extends LitElement {
         ];
       }
     } else {
-      // APPROVED, DENIED, RESUMED — remove from pending list
+      // APPROVED, DENIED, RESUMED - remove from pending list
       this._pendingApprovals = this._pendingApprovals.filter(
         (a) =>
           !(
@@ -248,13 +248,13 @@ export class ArcShell extends LitElement {
       updated[idx] = { ...updated[idx], status: event.status } as AgentStatusDto;
       this._agents = updated;
     } else {
-      // Unknown agent — re-fetch full list
+      // Unknown agent - re-fetch full list
       this._fetchAgents();
     }
   }
 
   private _onApprovalAction(_e: CustomEvent<{ taskId: string; action: string }>) {
-    // Re-fetch after user acts — SSE will also push update but this is a safety net
+    // Re-fetch after user acts - SSE will also push update but this is a safety net
     this._fetchApprovals();
   }
 

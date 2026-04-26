@@ -18,12 +18,12 @@ public class VaultKeyCache {
     private volatile VaultKey cachedKey;
 
     // ReentrantLock is instantiated on the BEAN INSTANCE, not on the proxy.
-    // synchronized(this) would lock the proxy — this does not.
+    // synchronized(this) would lock the proxy - this does not.
     private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * Returns the cached key for this session, deriving it on first access.
-     * Fast path — volatile read, no lock acquisition.
+     * Fast path - volatile read, no lock acquisition.
      */
     public VaultKey getOrDerive(String sessionId, Argon2idKeyDerivation derivation) {
         VaultKey current = cachedKey;
@@ -33,7 +33,7 @@ public class VaultKeyCache {
 
         lock.lock();
         try {
-            // Re-check inside lock — another thread may have derived while we waited
+            // Re-check inside lock - another thread may have derived while we waited
             current = cachedKey;
             if (current == null || current.isDestroyed()) {
                 cachedKey = derivation.deriveSessionKey(sessionId);
@@ -50,7 +50,7 @@ public class VaultKeyCache {
         lock.lock();
         try {
             if (cachedKey != null) {
-                cachedKey.close(); // VaultKey implements AutoCloseable — zeroes key bytes
+                cachedKey.close(); // VaultKey implements AutoCloseable - zeroes key bytes
                 cachedKey = null;
             }
         } finally {

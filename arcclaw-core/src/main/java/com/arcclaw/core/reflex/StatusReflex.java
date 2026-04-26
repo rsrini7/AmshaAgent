@@ -34,7 +34,7 @@ public class StatusReflex implements AgentReflex {
 
         List<AgentCheckpoint> checkpoints = new ArrayList<>();
 
-        // Use AgentRoleEnum.values() — includes ALL built-in roles (ARCHITECT,
+        // Use AgentRoleEnum.values() - includes ALL built-in roles (ARCHITECT,
         // SYNTHESIZER, etc). A hardcoded list would silently miss new roles.
         for (AgentRoleEnum role : AgentRoleEnum.values()) {
             statefulAgentStore.load(sessionId, role.toScopedName())
@@ -54,7 +54,7 @@ public class StatusReflex implements AgentReflex {
             .findLatestBySessionId(sessionId)
             .map(s -> String.format("Compacted (msgs summarized: %d) | Active window running",
                 s.messagesCompacted()))
-            .orElse("Not compacted — session within active window");
+            .orElse("Not compacted - session within active window");
 
         String shortId = sessionId.length() > 8
             ? sessionId.substring(sessionId.length() - 8) : sessionId;
@@ -70,11 +70,11 @@ public class StatusReflex implements AgentReflex {
     /**
      * Priority-ordered status resolution:
      *
-     * 1. COMPROMISED  — security violation; surfaces immediately regardless of sort
-     * 2. AWAITING_APPROVAL — human in the loop; must not be hidden
-     * 3. IN_PROGRESS  — active execution
+     * 1. COMPROMISED  - security violation; surfaces immediately regardless of sort
+     * 2. AWAITING_APPROVAL - human in the loop; must not be hidden
+     * 3. IN_PROGRESS  - active execution
      * 4. Newest-updated checkpoint status (fallback sort)
-     * 5. NOT_STARTED  — no checkpoints exist for this session
+     * 5. NOT_STARTED  - no checkpoints exist for this session
      *
      * NOT_STARTED is used (not a magic "NO_ACTIVE_STATE" string) to stay
      * consistent with AgentSessionService.getStatus() REST endpoint which
@@ -85,14 +85,14 @@ public class StatusReflex implements AgentReflex {
             return CheckpointStatus.NOT_STARTED.name();
         }
 
-        // Priority 1 — security violation must always win
+        // Priority 1 - security violation must always win
         for (AgentCheckpoint cp : checkpoints) {
             if (cp.getStatus() == CheckpointStatus.COMPROMISED) {
                 return CheckpointStatus.COMPROMISED.name();
             }
         }
 
-        // Priority 2 & 3 — active states trump terminal states
+        // Priority 2 & 3 - active states trump terminal states
         for (AgentCheckpoint cp : checkpoints) {
             CheckpointStatus s = cp.getStatus();
             if (s == CheckpointStatus.AWAITING_APPROVAL || s == CheckpointStatus.IN_PROGRESS) {
@@ -100,7 +100,7 @@ public class StatusReflex implements AgentReflex {
             }
         }
 
-        // Priority 4 — most recently updated terminal checkpoint
+        // Priority 4 - most recently updated terminal checkpoint
         checkpoints.sort((c1, c2) -> {
             if (c1.getUpdatedAt() == null) return 1;
             if (c2.getUpdatedAt() == null) return -1;

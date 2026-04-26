@@ -43,17 +43,17 @@ import org.jboss.logging.Logger;
  *   <li>Tenant context must be bound (fail-closed on missing userId/chatId)</li>
  *   <li>Naked pronoun guard rejects vague goals with unresolved references</li>
  *   <li>Goal is prefixed with "CRON: " to enable fork bomb structural exclusion</li>
- *   <li>runOnce=true normalizes dom/month to wildcards — server always enforces single-fire</li>
+ *   <li>runOnce=true normalizes dom/month to wildcards - server always enforces single-fire</li>
  * </ul>
  *
  * FIX §1: parseTimezone() normalizes blank/null/invalid timezone to UTC.
- *         OpenRouter free-tier models frequently emit "timezone": "" — ZoneId.of("")
+ *         OpenRouter free-tier models frequently emit "timezone": "" - ZoneId.of("")
  *         throws DateTimeException: "Invalid ID for ZoneOffset, invalid format: "
  *         which the old code propagated directly to the user as a terminal failure.
  *
  * FIX §2: parametersSchema() now uses JsonBooleanSchema for 'runOnce'.
  *         The old schema declared it as JsonStringSchema with description
- *         'use exactly the string "true" or "false"' — this caused LLMs to emit
+ *         'use exactly the string "true" or "false"' - this caused LLMs to emit
  *         "runOnce": "true" (quoted string) consistently. While execute() handled
  *         both forms via the switch, the schema mismatch wasted an iteration on
  *         schema parse correction. Boolean schema makes LLMs emit the JSON literal.
@@ -64,7 +64,7 @@ public class ScheduleTaskTool implements AgentTool {
     public static final String NAME = ToolCapability.SCHEDULE_TASK.toolName();
 
     /**
-     * Rejects vague goals with unresolved references (zero LLM cost — pure regex).
+     * Rejects vague goals with unresolved references (zero LLM cost - pure regex).
      */
     private static final Pattern NAKED_PRONOUN = Pattern.compile(
             "\\b(this|that|the code|the file|the thing|the result)\\b",
@@ -86,7 +86,7 @@ public class ScheduleTaskTool implements AgentTool {
 
                "1. 'goal' - Fully self-contained instructions. Must describe ONLY the final action. " +
                        "Do NOT include time references or re-scheduling instructions in the goal. " +
-                       "NEVER use pronouns — replace 'it/this/that' with the explicit noun. " +
+                       "NEVER use pronouns - replace 'it/this/that' with the explicit noun. " +
 
                "2. 'cronExpression' - Required for recurring tasks (runOnce=false). " +
                        "Provide a valid 5-field UNIX cron expression. " +
@@ -95,7 +95,7 @@ public class ScheduleTaskTool implements AgentTool {
                        "Omit only for one-time tasks (runOnce=true). " +
 
                "3. 'timezone' - Optional IANA timezone (e.g. 'Asia/Kolkata'). Defaults to 'UTC'. " +
-                       "Leave unset or pass 'UTC' if unsure — do NOT pass an empty string. " +
+                       "Leave unset or pass 'UTC' if unsure - do NOT pass an empty string. " +
 
                "4. 'runOnce' - JSON boolean literal true or false (NOT a string). " +
                        "true for one-time tasks, false for recurring. " +
@@ -130,7 +130,7 @@ public class ScheduleTaskTool implements AgentTool {
                 .addProperty("timezone", JsonStringSchema.builder()
                         .description("IANA timezone for cron interpretation (default: UTC). " +
                                 "Example: 'Asia/Kolkata', 'America/New_York'. " +
-                                "Omit or use 'UTC' if unknown — do NOT pass an empty string.")
+                                "Omit or use 'UTC' if unknown - do NOT pass an empty string.")
                         .build())
                 .addProperty("runOnce", JsonBooleanSchema.builder()
                         .description("true for a one-time task, false for recurring. " +
@@ -154,7 +154,7 @@ public class ScheduleTaskTool implements AgentTool {
         String sessionId;
 
         try {
-            // Step 1 — Extract and validate tenant context
+            // Step 1 - Extract and validate tenant context
             // NS2: Fail fast on missing context
             userId    = WorkspaceContext.requireUserId();
             chatId    = WorkspaceContext.requireChatIdOrUserId(); // REST/CLI fallback 
@@ -169,7 +169,7 @@ public class ScheduleTaskTool implements AgentTool {
 
         String goal           = (String) params.get("goal");
 
-        //  §1: parseTimezone() — normalize blank/null/invalid to UTC.
+        //  §1: parseTimezone() - normalize blank/null/invalid to UTC.
         // ZoneId.of("") throws DateTimeException: "Invalid ID for ZoneOffset, invalid format: "
         // OpenRouter free-tier models frequently emit "timezone": "" when they don't know
         // the timezone. The old code passed the raw value directly to ZoneId.of() and the
@@ -190,7 +190,7 @@ public class ScheduleTaskTool implements AgentTool {
             executionRole = AgentRoleEnum.RESEARCHER.toScopedName();
         }
 
-        // Step 1 — Validate cronExpression or absolute time trigger
+        // Step 1 - Validate cronExpression or absolute time trigger
         String cronExpression = (String) params.get("cronExpression");
         // Also accept 'cron' as an alias (the compact prompt uses cron= syntax)
         if (cronExpression == null || cronExpression.isBlank()) {
@@ -231,7 +231,7 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "goal is required.");
         }
 
-        // Step 2 — Naked pronoun guard
+        // Step 2 - Naked pronoun guard
         boolean hasNakedIt = goal.split("\\s+").length < 6
                 && goal.toLowerCase().matches(".*\\bit\\b.*");
         boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
@@ -243,9 +243,9 @@ public class ScheduleTaskTool implements AgentTool {
                     "to production via gh workflow run deploy.yml'.");
         }
 
-        // Step 3 — RunOnce normalization: strip dom/month pinning.
+        // Step 3 - RunOnce normalization: strip dom/month pinning.
         // LLM sometimes generates "54 15 3 3 *" for one-shot tasks.
-        // runOnce=true already guarantees single-fire — dom/month are always redundant
+        // runOnce=true already guarantees single-fire - dom/month are always redundant
         // and dangerous (task silently never fires if the cron tick crosses midnight).
         if (runOnce && cronExpression != null) {
             String[] fields = cronExpression.trim().split("\\s+");
@@ -254,14 +254,14 @@ public class ScheduleTaskTool implements AgentTool {
             }
         }
 
-        // Step 4 — Validate and compute nextFireTime via cron-utils
+        // Step 4 - Validate and compute nextFireTime via cron-utils
         Instant nextFireTime;
         if (runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank()) {
             try {
                 nextFireTime = Instant.parse(suggestedNextFireTime);
                 Logger.getLogger(ScheduleTaskTool.class).infof("[ScheduleTaskTool] Using absolute one-shot trigger: %s", nextFireTime);
             } catch (Exception e) {
-                Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Failed to parse suggestedNextFireTime '%s' — falling back to cron", suggestedNextFireTime);
+                Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Failed to parse suggestedNextFireTime '%s' - falling back to cron", suggestedNextFireTime);
                 nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
             }
         } else {
@@ -272,7 +272,7 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "Could not determine next fire time for '" + cronExpression + "'. Use 5-field UNIX format.");
         }
 
-        // Step 5 — Build and persist entity
+        // Step 5 - Build and persist entity
         AgentCronEntity entity = new AgentCronEntity();
         entity.id             = UUID.randomUUID().toString();
         entity.sessionId      = sessionId;
@@ -290,7 +290,7 @@ public class ScheduleTaskTool implements AgentTool {
 
         cronRepository.persist(entity);
 
-        // Step 6 — Audit (The actor role is COORDINATOR, the creator of the task).
+        // Step 6 - Audit (The actor role is COORDINATOR, the creator of the task).
         auditService.record(sessionId, userId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.CRONCREATED,
@@ -330,10 +330,10 @@ public class ScheduleTaskTool implements AgentTool {
         try {
             return ZoneId.of(raw);
         } catch (DateTimeException e) {
-            // Unrecognized timezone — warn and fall back rather than propagating
+            // Unrecognized timezone - warn and fall back rather than propagating
             // a 400 error that would be incorrectly fast-pathed as a terminal answer.
             Logger.getLogger(ScheduleTaskTool.class)
-                .warnf("[ScheduleTaskTool] Unrecognized timezone '%s' — defaulting to UTC", raw);
+                .warnf("[ScheduleTaskTool] Unrecognized timezone '%s' - defaulting to UTC", raw);
             return ZoneId.of("UTC");
         }
     }

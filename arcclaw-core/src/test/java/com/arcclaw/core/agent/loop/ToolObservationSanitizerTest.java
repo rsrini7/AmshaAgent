@@ -60,8 +60,8 @@ class ToolObservationSanitizerTest {
 
         String sanitized = sanitizer.sanitize("test-tool", largeInput);
 
-        assertTrue(sanitized.endsWith("\n[OBSERVATION TRUNCATED — exceeds 16 KiB limit]"));
-        int expectedLength = limit + "\n[OBSERVATION TRUNCATED — exceeds 16 KiB limit]".length();
+        assertTrue(sanitized.endsWith("\n[OBSERVATION TRUNCATED - exceeds 16 KiB limit]"));
+        int expectedLength = limit + "\n[OBSERVATION TRUNCATED - exceeds 16 KiB limit]".length();
         assertEquals(expectedLength, sanitized.length());
         assertTrue(sanitized.substring(0, limit).matches("A+"));
     }

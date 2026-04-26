@@ -1,10 +1,10 @@
-Yes — I think adding **Scheduler** and **Audit** to your existing ArcClaw UI is the right move, and it is a better next step than introducing JobRunr or migrating to JBeret. You already persist the core data in DB, and Quarkus itself recommends Quartz only for more advanced persistent/clustering scenarios, while the default scheduler is lightweight and programmatic jobs are already supported through the Scheduler API. [quarkus](https://quarkus.io/guides/scheduler-reference)
+Yes - I think adding **Scheduler** and **Audit** to your existing ArcClaw UI is the right move, and it is a better next step than introducing JobRunr or migrating to JBeret. You already persist the core data in DB, and Quarkus itself recommends Quartz only for more advanced persistent/clustering scenarios, while the default scheduler is lightweight and programmatic jobs are already supported through the Scheduler API. [quarkus](https://quarkus.io/guides/scheduler-reference)
 
 ## Recommendation
 
-You should keep your current DB-backed scheduler and extend the UI with two new first-class sections: **Scheduler** and **Audit**. That aligns with your existing architecture — Agents, Approvals, Chat, and Settings already expose operational state, and Scheduler/Audit would complete the admin surface for background work and traceability.
+You should keep your current DB-backed scheduler and extend the UI with two new first-class sections: **Scheduler** and **Audit**. That aligns with your existing architecture - Agents, Approvals, Chat, and Settings already expose operational state, and Scheduler/Audit would complete the admin surface for background work and traceability.
 
-This gives you most of the useful JobRunr experience without taking on another runtime model: scheduled jobs table, run history, retry state, approval-required state, and audit timelines — all from your own DB and semantics. JobRunr’s main value is durable job state and retries, not the UI itself, so if your persistence model is already solid, your own UI is enough. [jobrunr](https://www.jobrunr.io/en/documentation/)
+This gives you most of the useful JobRunr experience without taking on another runtime model: scheduled jobs table, run history, retry state, approval-required state, and audit timelines - all from your own DB and semantics. JobRunr’s main value is durable job state and retries, not the UI itself, so if your persistence model is already solid, your own UI is enough. [jobrunr](https://www.jobrunr.io/en/documentation/)
 
 ## Minimum features
 

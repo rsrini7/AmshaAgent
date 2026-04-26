@@ -37,7 +37,7 @@ import org.jboss.logging.Logger;
 /**
  * Orchestrates scheduled session cleanup and zombie recovery.
  * <p>
- * Transaction pattern — mirrors AgentCronRepository WAL-safe split:
+ * Transaction pattern - mirrors AgentCronRepository WAL-safe split:
  * - Reads use NOT_SUPPORTED (no write lock acquired)
  * - Writes use REQUIRED (atomic micro-short transactions per row)
  * - Scheduled entry points have NO @Transactional (delegate to split methods)
@@ -81,7 +81,7 @@ public class SessionReaper {
      * On application startup, find any IN_PROGRESS or AWAITING_APPROVAL
      * checkpoints from a previous JVM crash and mark them as FAILED.
      *
-     * NO @Transactional annotation — actual transactional boundaries and 
+     * NO @Transactional annotation - actual transactional boundaries and 
      * SQLite retry loops are handled by the delegated methods within 
      * CheckpointStorePort to prevent nested REQUIRES_NEW overhead.
      */
@@ -102,7 +102,7 @@ public class SessionReaper {
         
         // Step 1: Mark IN_PROGRESS zombies FAILED
         List<CheckpointDto> failed = checkpointStore.recoverInProgressZombies(
-            inProgressCutoff, "JVM crash recovery — orphaned at startup");
+            inProgressCutoff, "JVM crash recovery - orphaned at startup");
         if (!failed.isEmpty()) {
             log.warnf("Zombie recovery: found and failed %d orphaned IN_PROGRESS checkpoint(s).",
                 failed.size());
@@ -112,11 +112,11 @@ public class SessionReaper {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
 
-        // Step 2: Replay ALL surviving AWAITING_APPROVAL — never orphan at startup
+        // Step 2: Replay ALL surviving AWAITING_APPROVAL - never orphan at startup
         List<CheckpointDto> pendingApprovals =
             checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
         if (!pendingApprovals.isEmpty()) {
-            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) — "
+            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) - "
                 + "leaving alive, queuing SSE replay.", pendingApprovals.size());
             for (var dto : pendingApprovals) {
                 log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
@@ -129,12 +129,12 @@ public class SessionReaper {
         }
     }
 
-    // GC SWEEP — terminates expired sessions
+    // GC SWEEP - terminates expired sessions
     
     /**
-     * Scheduled GC sweep — terminates sessions whose heartbeat exceeds the TTL.
+     * Scheduled GC sweep - terminates sessions whose heartbeat exceeds the TTL.
      * Skips sessions that are AWAITING_APPROVAL (handled by sweepTimedOutApprovals).
-     * NO @Transactional — delegates to split read/write methods.
+     * NO @Transactional - delegates to split read/write methods.
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}", delayed = "PT90S")
     public void gcSweep() {
@@ -174,12 +174,12 @@ public class SessionReaper {
                 .collect(Collectors.toSet());
     }
 
-    // APPROVAL TIMEOUT SWEEP — terminates stale AWAITING_APPROVAL sessions
+    // APPROVAL TIMEOUT SWEEP - terminates stale AWAITING_APPROVAL sessions
     
     /**
      * Terminate sessions that have been AWAITING_APPROVAL for too long.
      * Marks checkpoint FAILED and notifies user via their channel.
-     * NO @Transactional — delegates to split read/write methods.
+     * NO @Transactional - delegates to split read/write methods.
      */
     @Scheduled(every = "${arcclaw.workspace.gc-interval:5m}")
     public void sweepTimedOutApprovals() {
@@ -190,7 +190,7 @@ public class SessionReaper {
         if (stale.isEmpty()) return;
 
         for (AgentCheckpoint cp : stale) {
-            log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh — auto-denying.",
+            log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
                     cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
             meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
                     "role", cp.getAgentRole()).increment();
@@ -228,7 +228,7 @@ public class SessionReaper {
         auditSequencer.releaseStaleSession(cp.getSessionId());
     }
 
-    // CHAT HISTORY RETENTION SWEEP — purges ChatMemoryEntity rows for old sessions
+    // CHAT HISTORY RETENTION SWEEP - purges ChatMemoryEntity rows for old sessions
     
     /**
      * Purge ChatMemoryEntity rows where sessionId has no active/recent checkpoint.

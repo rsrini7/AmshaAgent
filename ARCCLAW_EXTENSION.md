@@ -1,8 +1,8 @@
 # ArcClaw Extension Guide
 
-ArcClaw is designed as a modular kernel. Every major subsystem exposes a clean CDI interface that you can implement once and have it discovered automatically via Quarkus Arc — no wiring code, no registry modifications, no restart required beyond a standard redeploy.
+ArcClaw is designed as a modular kernel. Every major subsystem exposes a clean CDI interface that you can implement once and have it discovered automatically via Quarkus Arc - no wiring code, no registry modifications, no restart required beyond a standard redeploy.
 
-> **Before extending ArcClaw**, read [`Architecture_Invariants.md`](./Architecture_Invariants.md). The invariants there are not suggestions — violations can cause silent misbehaviour, security regressions, or broken native image builds.
+> **Before extending ArcClaw**, read [`Architecture_Invariants.md`](./Architecture_Invariants.md). The invariants there are not suggestions - violations can cause silent misbehaviour, security regressions, or broken native image builds.
 
 ---
 
@@ -44,7 +44,7 @@ public class MyTool implements AgentTool {
 
 ### Sandboxed tool with secret injection (Podman + tmpfs)
 
-For tools that must make network calls or run untrusted binaries, enable sandbox isolation and declare the secrets your command needs. The `ToolRegistry` resolves them from `SecretVault` and injects them via a RAM-backed tmpfs env-file — they never appear in process arguments.
+For tools that must make network calls or run untrusted binaries, enable sandbox isolation and declare the secrets your command needs. The `ToolRegistry` resolves them from `SecretVault` and injects them via a RAM-backed tmpfs env-file - they never appear in process arguments.
 
 ```java
 @ApplicationScoped
@@ -74,7 +74,7 @@ public class MyNetworkTool implements AgentTool {
 Tool schema is filtered per role via `RoleDefinition.capabilities()`. Add the corresponding `ToolCapability` entry to the role's definition in `AgentRoleEnum`:
 
 ```java
-// In AgentRoleEnum — add to the role's RoleDefinition
+// In AgentRoleEnum - add to the role's RoleDefinition
 COORDINATOR(new RoleDefinition(
     Set.of(
         ToolCapability.GITHUB,
@@ -101,7 +101,7 @@ If your tool does not map to an existing `ToolCapability` value, add a new entry
 
 ## 2. Define a New Agent Persona
 
-### Step 1 — Create the Agent class
+### Step 1 - Create the Agent class
 
 Implement `Agent`, annotate with `@AgentRole("your_role")` and `@ApplicationScoped`. The persona is registered automatically by `AgentPersonaRegistry`.
 
@@ -122,7 +122,7 @@ public class AnalystAgent implements Agent {
 }
 ```
 
-### Step 2 — Add the role to `AgentRoleEnum`
+### Step 2 - Add the role to `AgentRoleEnum`
 
 Define the role with its `RoleDefinition`, specifying `maxIterations`, `canUseTools`, and the `Set<ToolCapability>` the role is permitted to use:
 
@@ -135,9 +135,9 @@ ANALYST("analyst", new RoleDefinition(
 ))
 ```
 
-Add a case to every exhaustive switch over `AgentRoleEnum` in the codebase — the compiler will flag missing cases.
+Add a case to every exhaustive switch over `AgentRoleEnum` in the codebase - the compiler will flag missing cases.
 
-### Step 3 — Add a Qute system prompt template
+### Step 3 - Add a Qute system prompt template
 
 Create `arcclaw-core/src/main/resources/templates/prompts/role-analyst.txt`:
 
@@ -164,7 +164,7 @@ Template analystTemplate;
 case ANALYST -> analystTemplate.data(...)...render();
 ```
 
-### Step 4 — Register the role in `application.yaml`
+### Step 4 - Register the role in `application.yaml`
 
 ```yaml
 arcclaw:
@@ -175,7 +175,7 @@ arcclaw:
         description: "Data analysis persona"
 ```
 
-### Step 5 — Register for native image reflection (if applicable)
+### Step 5 - Register for native image reflection (if applicable)
 
 If the new agent class uses any reflection-sensitive patterns, add it to `AppReflectionConfig` in `arcclaw-app`.
 
@@ -183,7 +183,7 @@ If the new agent class uses any reflection-sensitive patterns, add it to `AppRef
 
 ## 3. Register a New Reflex
 
-Implement `AgentReflex`, mark it `@ApplicationScoped`, and return `true` from `matches()` for your trigger pattern. The `ReflexRegistry` discovers it automatically via CDI — no manual registration required. It is added to the CDI-discovered pass (Pass 2) automatically.
+Implement `AgentReflex`, mark it `@ApplicationScoped`, and return `true` from `matches()` for your trigger pattern. The `ReflexRegistry` discovers it automatically via CDI - no manual registration required. It is added to the CDI-discovered pass (Pass 2) automatically.
 
 ```java
 @ApplicationScoped
@@ -211,7 +211,7 @@ public class CustomSanitizerReflex implements AgentReflex {
 
     @Override
     public boolean matches(String input) {
-        return false; // never short-circuits — sanitize() runs regardless
+        return false; // never short-circuits - sanitize() runs regardless
     }
 
     @Override
@@ -228,7 +228,7 @@ public class CustomSanitizerReflex implements AgentReflex {
 ```
 
 > [!IMPORTANT]
-> Keep `matches()` **cheap** — it is called on the hot path for every inbound message before any LLM call. Avoid I/O, database queries, or heavy computation here.
+> Keep `matches()` **cheap** - it is called on the hot path for every inbound message before any LLM call. Avoid I/O, database queries, or heavy computation here.
 >
 > The `ReflexRegistry` has a two-pass chain (Architecture Invariant §4.6): Pass 1 handles built-in command prefixes (`/approve`, `/deny`, `/halt`, etc.); Pass 2 discovers CDI `AgentReflex` beans. New reflexes always go to Pass 2.
 
@@ -236,7 +236,7 @@ public class CustomSanitizerReflex implements AgentReflex {
 
 ## 4. Add a New Channel Adapter
 
-Adding a new channel (e.g., Discord, Slack, SMS, WhatsApp) requires implementing the **6-interface Channel SPI contract** and registering it as `@ApplicationScoped` CDI beans. The entire reflex system, skill routing, intent classification, session routing, and agent execution are channel-agnostic — your new adapter gets all of these for free.
+Adding a new channel (e.g., Discord, Slack, SMS, WhatsApp) requires implementing the **6-interface Channel SPI contract** and registering it as `@ApplicationScoped` CDI beans. The entire reflex system, skill routing, intent classification, session routing, and agent execution are channel-agnostic - your new adapter gets all of these for free.
 
 See [`CHANNEL_SPI.md`](./CHANNEL_SPI.md) for the complete step-by-step guide with a Discord example, including:
 
@@ -246,7 +246,7 @@ See [`CHANNEL_SPI.md`](./CHANNEL_SPI.md) for the complete step-by-step guide wit
 - The Telegram implementation as a reference (`arcclaw-channel-telegram/`)
 
 > [!NOTE]
-> `ChannelType` is a record — switched on `channelType.id()` (a string), not on enum ordinals. New channel types require a new `ChannelType` record instance (e.g., `ChannelType.DISCORD`). Do not add one-off channel branches into core flow when an SPI extension point exists (Architecture Invariant §4.5).
+> `ChannelType` is a record - switched on `channelType.id()` (a string), not on enum ordinals. New channel types require a new `ChannelType` record instance (e.g., `ChannelType.DISCORD`). Do not add one-off channel branches into core flow when an SPI extension point exists (Architecture Invariant §4.5).
 
 ---
 
@@ -291,20 +291,20 @@ curl -X POST http://localhost:8080/api/v1/skills \
 
 | Field | Constraint |
 |---|---|
-| `name` | Required. Must be unique — database skills override classpath skills on name conflict. |
+| `name` | Required. Must be unique - database skills override classpath skills on name conflict. |
 | `trigger-patterns` | Java regexes, matched case-insensitively. Empty list = skill never auto-routes (must be invoked explicitly). |
 | `tool-capabilities` | Must be valid `ToolCapability` enum names. Invalid entries are silently ignored. |
 | `max-iterations` | Positive integer. Default 5. |
-| `maxBudgetUsd` | **Forbidden** — budget governance is a runtime session concern, not a per-skill config. See Architecture Invariant §4.7. |
+| `maxBudgetUsd` | **Forbidden** - budget governance is a runtime session concern, not a per-skill config. See Architecture Invariant §4.7. |
 
 > [!IMPORTANT]
-> Dynamic skills are rendered via the pre-compiled Qute wrapper `SkillSystemPrompt.html`. Do not attempt to build skill prompts via ad hoc string concatenation — this bypasses injection-safety sanitization and native-image Qute compilation checks (Architecture Invariant §4.8).
+> Dynamic skills are rendered via the pre-compiled Qute wrapper `SkillSystemPrompt.html`. Do not attempt to build skill prompts via ad hoc string concatenation - this bypasses injection-safety sanitization and native-image Qute compilation checks (Architecture Invariant §4.8).
 
 ---
 
 ## 6. Add a New LLM Provider
 
-ArcClaw has **two** LLM provider SPIs — one for agent reasoning, one for intent classification and compaction. Both must be implemented if you want to use a new provider end-to-end.
+ArcClaw has **two** LLM provider SPIs - one for agent reasoning, one for intent classification and compaction. Both must be implemented if you want to use a new provider end-to-end.
 
 ### 6a. Agent reasoning provider (`AgentChatModelProvider`)
 
@@ -430,13 +430,13 @@ public class MyObservationTransformer implements ObservationTransformer {
 `ToolObservationSanitizer` discovers all `ObservationTransformer` beans via CDI `Instance<ObservationTransformer>`, sorts by `priority()` ascending, and runs them in order. Lower priority number = runs earlier.
 
 > [!IMPORTANT]
-> `ObservationTransformer` implementations **must never throw**. The sanitizer chain does not wrap individual transformers — an unchecked exception will propagate out of `ToolInvoker` and terminate the agent loop iteration. Handle all exceptions internally and return a fallback value.
+> `ObservationTransformer` implementations **must never throw**. The sanitizer chain does not wrap individual transformers - an unchecked exception will propagate out of `ToolInvoker` and terminate the agent loop iteration. Handle all exceptions internally and return a fallback value.
 
 ---
 
 ## 8. Add a ToolGuardInterceptor
 
-`ToolInvocationGuard` runs before every tool invocation and decides whether to allow, block, deduplicate, or pause for approval. You can plug in custom governance rules via the `ToolGuardInterceptor` SPI — for example, to enforce domain-specific constraints, rate limits per tool, or custom block patterns.
+`ToolInvocationGuard` runs before every tool invocation and decides whether to allow, block, deduplicate, or pause for approval. You can plug in custom governance rules via the `ToolGuardInterceptor` SPI - for example, to enforce domain-specific constraints, rate limits per tool, or custom block patterns.
 
 ### Implementing a custom interceptor
 

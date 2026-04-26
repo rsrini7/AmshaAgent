@@ -20,7 +20,7 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 /**
- * CLI one-shot mode — runs the agent reasoning loop for a single goal
+ * CLI one-shot mode - runs the agent reasoning loop for a single goal
  * and exits.
  * <p>
  * Usage: {@code arcclaw ask "Summarize the project" --role coordinator}
@@ -57,8 +57,8 @@ public class AskCommand implements Runnable {
         try {
             WorkspaceScopeHolder.run(sessionId, () -> {
                 ScopedValue.where(CliAgentObserver.ENABLED, true).run(() -> {
-                    // Dev DX: seed host OS tokens into vault (no-op in prod — bean absent)
-                    // Dev seeding handled by DevSecretSeederStartup (@IfBuildProfile("dev") — compile-time excluded from prod builds).
+                    // Dev DX: seed host OS tokens into vault (no-op in prod - bean absent)
+                    // Dev seeding handled by DevSecretSeederStartup (@IfBuildProfile("dev") - compile-time excluded from prod builds).
 
                     MessageContext context = createCliContext(sessionId, goal);
                     AgentResult result = agentLoop.run(sessionId, role, goal,

@@ -867,7 +867,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         entity.setFailReason(dto.failReason());
         entity.setPendingToolName(dto.pendingToolName());
         
-        // A16 — Stale Join Guard: merge batch decisions to prevent overwriting active decisions
+        // A16 - Stale Join Guard: merge batch decisions to prevent overwriting active decisions
         if (CheckpointStatus.AWAITING_APPROVAL.toString().equals(dto.status()) 
                 && oldStatus == CheckpointStatus.AWAITING_APPROVAL) {
             mergeBatchDecisions(entity, dto);

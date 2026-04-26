@@ -18,7 +18,7 @@ import org.jboss.logging.Logger;
  * <p>
  * Also owns the per-session CountDownLatch map used by PersistentChatMemoryStore
  * to block getMessages() reads until any in-flight compaction for that session
- * has fully committed — preventing the TOCTOU race where the LLM prompt builder
+ * has fully committed - preventing the TOCTOU race where the LLM prompt builder
  * reads a thin post-compaction context mid-turn and produces "Done." in 1 token.
  * <p>
  * Self-deadlock prevention: the compaction thread itself must NOT block on its own
@@ -70,7 +70,7 @@ public class CompactionEventBridge {
     public void registerLatch(String sessionId) {
         CountDownLatch prev = inFlightLatches.put(sessionId, new CountDownLatch(1));
         if (prev != null) {
-            log.warnf("CompactionEventBridge: overwrote existing latch for session %s — " +
+            log.warnf("CompactionEventBridge: overwrote existing latch for session %s - " +
                       "possible duplicate compaction registration; releasing old waiters",
                       sessionId);
             prev.countDown();
@@ -84,8 +84,8 @@ public class CompactionEventBridge {
      * <p>
      * Fast-paths:
      * <ol>
-     *   <li>No latch registered — no compaction in progress, returns instantly.</li>
-     *   <li>Caller IS the compaction thread for this session — returns instantly to
+     *   <li>No latch registered - no compaction in progress, returns instantly.</li>
+     *   <li>Caller IS the compaction thread for this session - returns instantly to
      *       prevent self-deadlock (compaction reads chat history via getMessages()
      *       which would otherwise block on its own latch indefinitely).</li>
      * </ol>
@@ -95,7 +95,7 @@ public class CompactionEventBridge {
     public void awaitIfInFlight(String sessionId) {
         // Self-deadlock guard: the compaction thread must never wait on its own latch.
         // Without this, compactionService.compact() calls getMessages() internally,
-        // which calls awaitIfInFlight(), which blocks on a latch the caller owns —
+        // which calls awaitIfInFlight(), which blocks on a latch the caller owns -
         // resulting in a 30-second timeout stall on every compaction that reads history.
         Long ownerThreadId = compactionThreadIds.get(sessionId);
         if (ownerThreadId != null && ownerThreadId == Thread.currentThread().threadId()) {
@@ -111,7 +111,7 @@ public class CompactionEventBridge {
             boolean completed = latch.await(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!completed) {
                 log.warnf("CompactionEventBridge: timed out waiting for compaction " +
-                          "of session %s — proceeding with potentially stale state", sessionId);
+                          "of session %s - proceeding with potentially stale state", sessionId);
                 // Remove the stale entry so future calls for this session fast-path
                 // correctly. Two-arg remove: only removes if value still matches
                 // (safe against a concurrent registerLatch replacing it with a fresh one).

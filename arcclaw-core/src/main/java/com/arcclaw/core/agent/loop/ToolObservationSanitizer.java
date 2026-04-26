@@ -18,7 +18,7 @@ public class ToolObservationSanitizer {
      * Sanitizes a raw tool observation before it is appended to agent history.
      * Delegates to an ordered chain of {@link ObservationTransformer} implementations.
      *
-     * This method NEVER blocks the agent loop — it transforms and returns.
+     * This method NEVER blocks the agent loop - it transforms and returns.
      *
      * @param toolName       the tool that produced the observation (for logging)
      * @param rawObservation the raw string returned by the tool

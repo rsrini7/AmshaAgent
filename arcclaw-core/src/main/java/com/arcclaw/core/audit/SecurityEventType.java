@@ -53,7 +53,7 @@ public enum SecurityEventType {
     CRONFAILED,            // AgentCronScheduler caught exception
     CRONDELETED,           // Reflex or tool deleted a cron row
 
-    // Skills lifecycle (Phase 60) — telemetry tier
+    // Skills lifecycle (Phase 60) - telemetry tier
     SKILL_LOADED,       // SkillLoader completed a full load cycle
     SKILL_REFRESHED,    // Manual refresh via GET /api/v1/skills/refresh
     MCP_TOOL_INVOKED,   // External call to an internal tool via MCP server

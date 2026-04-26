@@ -12,7 +12,7 @@ public class DynamicToolLookupImpl implements DynamicToolLookup {
     @Override
     public boolean isDynamicToolAllowed(String toolName) {
         // Registry presence IS the authorization for dynamic tools.
-        // McpToolAllowlist is NOT consulted here — it governs outbound
+        // McpToolAllowlist is NOT consulted here - it governs outbound
         // exposure, not inbound invocation authorization.
         return registry.isRegistered(toolName);
     }

@@ -35,7 +35,7 @@ public final class WorkspaceContext {
 
     public static <T> T run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, Callable<T> task) throws Exception {
-        // WorkspaceScopeHolder.call() binds WORKSPACE_ID first — required for
+        // WorkspaceScopeHolder.call() binds WORKSPACE_ID first - required for
         // WorkspaceScopeContext.isActive() to return true, which enables
         // @WorkspaceScoped CDI beans (e.g. SessionKnowledgeBase) to resolve.
         return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
@@ -190,7 +190,7 @@ public final class WorkspaceContext {
     public static String requireChannelType() {
         return channelType().orElseThrow(() ->
             new IllegalStateException(
-                "CHANNEL_TYPE not bound — violates Architecture_Invariants.md §1.4. " +
+                "CHANNEL_TYPE not bound - violates Architecture_Invariants.md §1.4. " +
                 "Ensure all channel entry points bind ChannelType via " +
                 "WorkspaceContext.run(..., channelType, ...)."));
     }

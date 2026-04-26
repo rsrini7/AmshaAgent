@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 08 — IMMUTABLE AUDIT LOG (WORM + HMAC CHAIN)
+### 08 - IMMUTABLE AUDIT LOG (WORM + HMAC CHAIN)
 ###
 ### ArcClaw maintains a tamper-evident, append-only audit log for
 ### every session. Each row:
@@ -36,13 +36,13 @@
 ###   MCP_TOOL_INVOKED, SKILL_LOADED, SKILL_REFRESHED,
 ###   STRUCTURED_OUTPUT_RETRY  (Phase 62+)
 ###
-### Mandatory events (agent halts if write fails — fail-closed):
+### Mandatory events (agent halts if write fails - fail-closed):
 ###   VAULT_ACCESS, TOOL_INVOKED, BUDGET_EXCEEDED,
 ###   PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
 ###   CRONFIRED, CRONFAILED
 ###
 ### Tamper test SQLite path: ./data/arcclaw-meta.db
-###   (NOT .data/ — the directory is ./data/)
+###   (NOT .data/ - the directory is ./data/)
 ###
 ### Prerequisites: ArcClaw serve mode
 ### ═══════════════════════════════════════════════════════════════
@@ -114,7 +114,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-SETUP-5] GitHub tool → emits TOOL_INVOKED (mandatory) — optional GITHUB_TOKEN
+### [AUDIT-SETUP-5] GitHub tool → emits TOOL_INVOKED (mandatory) - optional GITHUB_TOKEN
 # Only runs the tool if GITHUB_TOKEN is in the vault and user approves.
 # Uses run-async so the test continues without blocking on approval.
 POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run-async
@@ -174,7 +174,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [AUDIT-4] Verify chain integrity
 # Expect 200: {"valid":true,"brokenAtId":null,"totalRows":N}
-# After Phase 64-B1: concurrent writes serialized — no TOCTOU duplicates.
+# After Phase 64-B1: concurrent writes serialized - no TOCTOU duplicates.
 GET {{baseUrl}}/api/v1/audit/{{auditSession.response.body.sessionId}}/verify
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -187,7 +187,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUDIT-6] Add more events then re-verify — totalRows grows, chain stays valid
+### [AUDIT-6] Add more events then re-verify - totalRows grows, chain stays valid
 POST {{baseUrl}}/api/v1/sessions/{{auditSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -466,7 +466,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # TAMPER DETECTION
 # This test requires manual SQLite intervention. Follow steps below.
 #
-# NOTE: Database path is ./data/arcclaw-meta.db (NOT .data/ — no leading dot)
+# NOTE: Database path is ./data/arcclaw-meta.db (NOT .data/ - no leading dot)
 #
 # Step 1: Note auditSession ID.
 # Step 2: In terminal:
@@ -476,7 +476,7 @@ X-ArcClaw-API-Key: {{validKey}}
 #     AND session_id='<paste auditSession sessionId here>';
 #   .quit
 # Step 3: Restart ArcClaw (AuditSchemaEnforcer reinstalls triggers on startup).
-# Step 4: Run AUDIT-TAMPER below — expect valid:false.
+# Step 4: Run AUDIT-TAMPER below - expect valid:false.
 # ─────────────────────────────────────────────────────────────────
 
 ### [AUDIT-TAMPER] Verify chain after manual SQLite tamper

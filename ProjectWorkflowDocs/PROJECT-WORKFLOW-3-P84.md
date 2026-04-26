@@ -1,10 +1,10 @@
-# ArcClaw P84 — Complete End-to-End Workflow
+# ArcClaw P84 - Complete End-to-End Workflow
 
 ---
 
 ### Phase 1: Startup Sequence
 `ArcClawCli.main()` runs **before** CDI. The sequence is strictly ordered:
-1. `CliUtils.validateRequiredEnvVars()` — hard exits if any required env var is missing; Quarkus never starts dirty
+1. `CliUtils.validateRequiredEnvVars()` - hard exits if any required env var is missing; Quarkus never starts dirty
 2. `ARCCLAW_DATA_DIR` pinned to an absolute path via `System.setProperty` before any YAML `${expr}` is evaluated
 3. `Vec0NativeLibraryInstaller` (Priority 10) extracts the platform `.so/.dylib/.dll` from JAR before any JDBC connection opens
 4. `Quarkus.run(...)` boots the CDI container, Hibernate, and Agroal
@@ -22,9 +22,9 @@ Four picocli leaf commands converge on the same `AgentLoop.run()`:
 | `arcclaw chat` | Scanner on stdin → `ReflexRegistry.processIfReflex()` first (approve/deny/reset/status/history); non-reflex lines go to `AgentLoop.run()` |
 | `arcclaw attach <channel>` | Discovers `ChannelDaemon` CDI bean by ID → `daemon.start()` (blocking) |
 
-### Phase 3: Inbound Message Pipeline — Three Paths
+### Phase 3: Inbound Message Pipeline - Three Paths
 
-**Path A — REST API:**
+**Path A - REST API:**
 ```
 POST /api/v1/sessions/{id}/run
   → ApiKeyAuthFilter (HMAC-SHA256 vs stored digest; raw key never stored)
@@ -35,21 +35,21 @@ POST /api/v1/sessions/{id}/run
   → AgentLoop.run(sessionId, agentRole, goal, engine, maxIterations, context)
 ```
 
-**Path B — Telegram:**
+**Path B - Telegram:**
 ```
 Telegram Bot API → Apache Camel (camel-quarkus-telegram)
   → TelegramAgentHandler.handleExchange(Exchange)
   → TelegramAllowlistGuard (numeric userId check)
   → ChannelServices.processAsync(ChannelMessage)
   → SessionRegistry.resolveOrCreate(channelType, channelId, userId)
-  → SkillAwareIntentDetector.classify(text) [compiled Pattern[] from SkillRegistry — LLM bypassed on match]
+  → SkillAwareIntentDetector.classify(text) [compiled Pattern[] from SkillRegistry - LLM bypassed on match]
        ↓ (miss) → IntentDetectorService.classify(text) [LLM-backed classification]
   → AgentDispatchHandler → AgentLoop.run(...)
 ```
 
-`SkillAwareIntentDetector` iterates `static final Pattern[]` from compiled `CompiledSkillEntry` objects. If any matches, it returns `skill:{name}` as the role — zero LLM tokens spent on routing.
+`SkillAwareIntentDetector` iterates `static final Pattern[]` from compiled `CompiledSkillEntry` objects. If any matches, it returns `skill:{name}` as the role - zero LLM tokens spent on routing.
 
-**Path C — Cron Scheduler:**
+**Path C - Cron Scheduler:**
 ```
 @Scheduled(every = "${arcclaw.cron.poll-interval:30s}", SKIP concurrent execution)
 @Transactional(NOT_SUPPORTED)                          ← §5.12 compliant
@@ -80,24 +80,24 @@ Telegram Bot API → Apache Camel (camel-quarkus-telegram)
 | Terminal (`COMPLETED`/`FAILED`/`ARCHIVED`/`COMPROMISED`) | Archive row, start fresh |
 
 5. `CheckpointResumeHandler.handle()`: denial → `FAILED`; single-tool approval → `runWithFullAutonomy()` → `toolRegistry.invokeTool()`; parallel batch → `resumeParallelBatch()` reads `batchToolDecisions`, restores pre-executed results, re-invokes APPROVED, fills DENIED with "User denied"
-6. **Fast-path for `delegate_to_agent` resume**: `tryDelegateFinishFastPath()` — if last history step is a clean `delegate_to_agent` result (not starting with ⏳/⚠️/❌), skip coordinator wrap-up LLM call (~9,800 tokens saved)
+6. **Fast-path for `delegate_to_agent` resume**: `tryDelegateFinishFastPath()` - if last history step is a clean `delegate_to_agent` result (not starting with ⏳/⚠️/❌), skip coordinator wrap-up LLM call (~9,800 tokens saved)
 7. `AgentStateMachineRunner.run(agentExecutionContext, engine, resumedHistory)`
 
 ### Phase 5: Thought-Plan-Act-Observe Loop
 
 Each iteration under its own OTel iteration span:
 
-**Step A — EngineStepHandler (LLM call):**
+**Step A - EngineStepHandler (LLM call):**
 `ReasoningEngine.nextStep(sessionId, role, goal, history)` → `ChatHistoryAssembler` reconstructs message list from in-memory `ReasoningStep[]` (SQLite not read mid-run) → `ChatModel.generate(systemPrompt, messages, toolSpecs)` → `ReasoningStepParser` normalizes response into `ReasoningStep` (single or parallel batch, list-first, `getFirst()` fallback permanently removed)
 
 Exception classification tree:
 - HTTP 400 `model_not_found` / `invalid_api_key` → terminal FAILED
-- HTTP 400 `not in request.tools` → terminal FINISHED (tool not in role schema — LLM told so)
+- HTTP 400 `not in request.tools` → terminal FINISHED (tool not in role schema - LLM told so)
 - HTTP 400 schema error → retry with correction prompt (max 2)
 - HTTP 429 rate-limit ≤15s → sleep + retry; >15s → surface last observation as FINISH
 - Network errors → terminal FAILED
 
-**Step B — ToolStepHandler:**
+**Step B - ToolStepHandler:**
 ```
 ReasoningStep.isParallelBatch()
   → YES: ParallelToolStepExecutor.execute()
@@ -112,7 +112,7 @@ ReasoningStep.isParallelBatch()
            → ToolObservationSanitizer.sanitize() (truncation, PII redaction, injection guard)
 ```
 
-**Step C — HITL Pause (`PauseForApproval`):**
+**Step C - HITL Pause (`PauseForApproval`):**
 ```
 ApprovalCheckpointManager.persistSingleTool() or persistBatch()
   → agentStore.save(sessionId, role, steps) [REQUIRES_NEW]
@@ -123,7 +123,7 @@ ApprovalCheckpointManager.persistSingleTool() or persistBatch()
   → AgentResult.awaitingApproval(toolName, paramsJson)  ← loop exits
 ```
 
-**Step D — Approval flow (Telegram callback button press):**
+**Step D - Approval flow (Telegram callback button press):**
 ```
 TelegramCallbackHandler.handleCallback(Exchange)
   → §7.35 expiry guard: agentStore.isCheckpointExpired(sessionId, timeoutHours)
@@ -148,7 +148,7 @@ All writes are `@Transactional(REQUIRES_NEW)` via CDI self-inject, called from `
 ### Phase 7: Multi-Agent Delegation
 ```
 coordinator → DelegateToAgentTool.execute(agent="coder", goal="...")
-  → capability subset check (§4.10) — rejects transitive escalation
+  → capability subset check (§4.10) - rejects transitive escalation
   → scheduling tools EXEMPT from HITL (ToolInvocationGuard §4.10)
   → new WorkspaceContext.run(subSessionId, userId, chatId, agentRole, ...)
   → AgentLoop.run(subGoal, subRole)
@@ -165,7 +165,7 @@ Every event: `AuditEventRepository.record()` → `HMAC-SHA256(id + sessionId + e
 `WorkspaceManager.terminateSession()`:
 1. Remove heartbeat from `SessionHeartbeatTracker`
 2. Clear budget memory (`GovernanceLayer.clearSession()`)
-3. `markCheckpointsFailed()` — excludes COMPLETED/FAILED/ARCHIVED/COMPROMISED (§5.18 fix)
+3. `markCheckpointsFailed()` - excludes COMPLETED/FAILED/ARCHIVED/COMPROMISED (§5.18 fix)
 4. Wipe workspace directory
 5. Clear in-memory + persistent `ChatMemory`
 6. Destroy CDI `@WorkspaceScoped` context

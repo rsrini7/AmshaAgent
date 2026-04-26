@@ -94,8 +94,8 @@ public class AuditHashUtil {
             byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (Exception e) {
-            // SHA-256 must be available for audit chaining — failure means the JVM is broken
-            throw new IllegalStateException("SHA-256 unavailable — JVM is broken", e);
+            // SHA-256 must be available for audit chaining - failure means the JVM is broken
+            throw new IllegalStateException("SHA-256 unavailable - JVM is broken", e);
         }
     }
 

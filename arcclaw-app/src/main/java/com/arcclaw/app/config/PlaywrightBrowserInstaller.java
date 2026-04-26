@@ -88,7 +88,7 @@ public class PlaywrightBrowserInstaller {
         System.err.println();
 
         try {
-            // FIRST: use extracted driver — guarantees version match with driver-bundle
+            // FIRST: use extracted driver - guarantees version match with driver-bundle
             // binaryDir is parent of .playwright-browsers
             Path binaryDir = browsersPath.getParent();
             Path driverDir = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION).resolve(detectPlatform());
@@ -113,13 +113,13 @@ public class PlaywrightBrowserInstaller {
                         System.err.println("  ✓ Playwright Chromium installed successfully.");
                         System.err.println();
                         System.err.println("  ─────────────────────────────────────────────────────");
-                        System.err.println("  ✓ Browser ready — starting ArcClaw...");
+                        System.err.println("  ✓ Browser ready - starting ArcClaw...");
                         System.err.println("  ─────────────────────────────────────────────────────");
                         System.err.println();
                         return;
                     }
                 } catch (Exception e) {
-                    log.warnf("Driver-based install failed (%s) — falling back...", safeMessage(e));
+                    log.warnf("Driver-based install failed (%s) - falling back...", safeMessage(e));
                 }
             }
 
@@ -184,7 +184,7 @@ public class PlaywrightBrowserInstaller {
         // In promptPlaywrightSetupIfNeeded(), after installChromium() call:
         System.err.println();
         System.err.println("  ─────────────────────────────────────────────────────");
-        System.err.println("  ✓ Browser ready — starting ArcClaw...");
+        System.err.println("  ✓ Browser ready - starting ArcClaw...");
         System.err.println("  ─────────────────────────────────────────────────────");
         System.err.println();
     }
@@ -192,7 +192,7 @@ public class PlaywrightBrowserInstaller {
     private static void runBinaryInstaller(Path browsersPath) throws Exception {
         StringBuilder attempts = new StringBuilder();
 
-        // Classpath installer — naturally skipped on native image because
+        // Classpath installer - naturally skipped on native image because
         // java.class.path is blank/unavailable, causing an immediate exception
         // that falls through to the next installer.
         try {
@@ -218,10 +218,10 @@ public class PlaywrightBrowserInstaller {
             attempts.append("npx playwright CLI: ").append(safeMessage(e));
         }
 
-        // In-process installer — works on native image only when native binary was built
+        // In-process installer - works on native image only when native binary was built
         // with com/microsoft/playwright/impl/driver/jar/** in native.resources.includes.
         // Without that, DriverJar.getDriverResourceURI() returns null (NPE). The exception
-        // is caught below and reported as a failed attempt — no crash.
+        // is caught below and reported as a failed attempt - no crash.
         try {
             runInProcessInstaller(browsersPath);
             return;
@@ -368,7 +368,7 @@ public class PlaywrightBrowserInstaller {
      * Extracts the platform-specific Playwright Node.js CLI driver from driver-bundle.jar
      * to a stable directory alongside the binary. Sets playwright.cli.dir automatically.
      *
-     * Called from AppBootstrap before Quarkus starts — transparent to users.
+     * Called from AppBootstrap before Quarkus starts - transparent to users.
      * Re-extracts automatically when playwright version changes (version tracked in marker file).
      */
     public static void extractDriverIfNeeded(Path binaryDir) {
@@ -400,7 +400,7 @@ public class PlaywrightBrowserInstaller {
         // Find driver-bundle JAR
         Path bundleJar = findDriverBundleJar(currentVersion);
         if (bundleJar == null) {
-            log.warnf("driver-bundle-%s.jar not found — Playwright may fail to initialize in native mode.", currentVersion);
+            log.warnf("driver-bundle-%s.jar not found - Playwright may fail to initialize in native mode.", currentVersion);
             return;
         }
 
@@ -420,7 +420,7 @@ public class PlaywrightBrowserInstaller {
             log.infof("Playwright CLI driver ready at %s", driverDir);
 
         } catch (Exception e) {
-            log.warnf("Failed to extract Playwright driver: %s — will fall back to DriverJar", e.getMessage());
+            log.warnf("Failed to extract Playwright driver: %s - will fall back to DriverJar", e.getMessage());
         }
     }
 
@@ -429,7 +429,7 @@ public class PlaywrightBrowserInstaller {
         String arch = System.getProperty("os.arch", "").toLowerCase();
         if (os.contains("win"))   return "win32_x64";
         if (os.contains("mac"))   return arch.contains("aarch64") ? "mac-arm64" : "mac";
-        return "linux";  // linux / linux-arm64 — extend if needed
+        return "linux";  // linux / linux-arm64 - extend if needed
     }
 
     private static String detectPlaywrightVersion() {
@@ -468,7 +468,7 @@ public class PlaywrightBrowserInstaller {
             "driver-bundle-" + version + ".jar");
         if (Files.exists(m2Jar)) return m2Jar;
 
-        // 2. Classpath scan (JVM mode — finds it inside fat JAR or classpath entry)
+        // 2. Classpath scan (JVM mode - finds it inside fat JAR or classpath entry)
         String cp = System.getProperty("java.class.path", "");
         for (String entry : cp.split(File.pathSeparator)) {
             if (entry.contains("driver-bundle") && entry.endsWith(".jar")) {

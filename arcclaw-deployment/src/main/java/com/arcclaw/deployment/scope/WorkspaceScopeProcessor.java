@@ -16,12 +16,12 @@ import org.jboss.jandex.DotName;
  * <p>
  * Three build steps:
  * <ol>
- * <li>{@link #customScope} — declares the annotation as a custom scope so
+ * <li>{@link #customScope} - declares the annotation as a custom scope so
  * Arc generates client proxies for beans annotated with it.</li>
- * <li>{@link #registerContext} — binds the scope annotation to its
+ * <li>{@link #registerContext} - binds the scope annotation to its
  * {@link WorkspaceScopeContext} implementation via
  * {@code ContextConfigurator.contextClass()}.</li>
- * <li>{@link #unremovableBeans} — prevents Arc from removing the context
+ * <li>{@link #unremovableBeans} - prevents Arc from removing the context
  * class during dead-code elimination (it's only referenced reflectively
  * by the Arc runtime).</li>
  * </ol>
@@ -44,7 +44,7 @@ public class WorkspaceScopeProcessor {
      * for the {@link WorkspaceScoped} scope.
      * <p>
      * Uses {@code contextClass()} which tells Arc to instantiate the context
-     * class directly at runtime — no recorder indirection needed.
+     * class directly at runtime - no recorder indirection needed.
      */
     @BuildStep
     ContextConfiguratorBuildItem registerContext(ContextRegistrationPhaseBuildItem phase) {
@@ -59,7 +59,7 @@ public class WorkspaceScopeProcessor {
      * Mark the {@link WorkspaceScopeContext} bean as unremovable.
      * <p>
      * Arc's dead-code elimination would otherwise remove the context class
-     * because no injection points reference it directly — it's only
+     * because no injection points reference it directly - it's only
      * instantiated reflectively by the Arc runtime.
      */
     @BuildStep

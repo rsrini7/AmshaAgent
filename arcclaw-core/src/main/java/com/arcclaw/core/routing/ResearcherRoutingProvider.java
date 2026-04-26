@@ -11,7 +11,7 @@ import com.arcclaw.core.util.FuzzyMatcher;
 
 /**
  * Fast-path routing for research and information retrieval requests.
- * Priority 15 — runs after delegation (5) and scheduling (10)
+ * Priority 15 - runs after delegation (5) and scheduling (10)
  * but before coder (20), ingest (30), and default (1000).
  *
  * Handles: GitHub repo/gist fetch, describe, lookup, research queries.
@@ -61,11 +61,11 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
     public List<String> promptDirectives() {
         return List.of(
             "If the user wants to FETCH, DESCRIBE, LOOKUP, or VIEW existing GitHub " +
-            "repos, gists, or any online resource — route to 'researcher'. " +
+            "repos, gists, or any online resource - route to 'researcher'. " +
             "Patterns like 'owner/repo', 'fetch X desc', 'describe repo' " +
             "are always researcher, never coder.",
             "If the user message contains a GitHub owner/repo path (e.g. 'rsrini7/mermaid2gif') " +
-            "and asks to view or describe it — route to 'researcher'."
+            "and asks to view or describe it - route to 'researcher'."
         );
     }
 

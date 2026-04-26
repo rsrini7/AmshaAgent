@@ -55,8 +55,8 @@ public enum ToolCapability {
         "Compiled (java): needs a complete class with main(). Filename = class name. " +
         "Go: needs complete program with 'package main' and 'func main()'. " +
         "ALWAYS pass flat JSON. Examples: " +
-        "{\"code\":\"System.out.println(\\\"Hello\\\");\",\"language\":\"java\"} — WRONG (no class). " +
-        "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} — CORRECT. " +
+        "{\"code\":\"System.out.println(\\\"Hello\\\");\",\"language\":\"java\"} - WRONG (no class). " +
+        "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} - CORRECT. " +
         "CRITICAL: Keep your JSON payload under 2000 characters to prevent max_tokens truncation. For short snippets, use a compact single-line form without newlines."),
 
     /**

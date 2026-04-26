@@ -11,7 +11,7 @@ import com.arcclaw.channel.api.ChannelDaemon;
 import picocli.CommandLine;
 
 /**
- * Attach command — keeps ArcClaw running as a background daemon for a specific channel.
+ * Attach command - keeps ArcClaw running as a background daemon for a specific channel.
  * <p>
  * Telegram route lifecycle is now managed by TelegramChannelRoute.onStart()
  * which self-registers the route via the Quarkus StartupEvent observer.

@@ -16,7 +16,7 @@ import org.jboss.logging.Logger;
  * their FINISH answers. All other roles receive a polite refusal message that
  * redirects the user to the CODER role.
  *
- * <p><strong>§4.10:</strong> This policy is purely declarative — it reads the
+ * <p><strong>§4.10:</strong> This policy is purely declarative - it reads the
  * role capability flag and never alters tool routing or skill-classification
  * order. It must not be confused with {@code SkillAwareIntentDetector}'s
  * skill-first guard (§4.3).
@@ -32,7 +32,7 @@ public class CodeGenerationPolicy {
      * Detects whether the answer is a generated code block (fenced ``` with
      * optional language tag).
      *
-     * <p><strong>§9.1:</strong> {@code static final} — never compiled per-call.
+     * <p><strong>§9.1:</strong> {@code static final} - never compiled per-call.
      */
     static final Pattern PROSE_CODE_PATTERN =
             Pattern.compile("```[\\w]*\\n[\\s\\S]*?```", Pattern.MULTILINE);
@@ -117,7 +117,7 @@ public class CodeGenerationPolicy {
             return AgentRoleEnum.fromString(agentRole).definition().canGenerateCode();
         } catch (Exception e) {
             // Unknown/custom roles are treated as non-coders by default
-            log.debugf("CodeGenerationPolicy: unknown role '%s' — treating as no-code", agentRole);
+            log.debugf("CodeGenerationPolicy: unknown role '%s' - treating as no-code", agentRole);
             return false;
         }
     }

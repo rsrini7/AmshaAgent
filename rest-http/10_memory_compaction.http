@@ -1,17 +1,17 @@
 ### ═══════════════════════════════════════════════════════════════
-### 10 — MEMORY, COMPACTION & LONG-TERM CONTEXT SEARCH
+### 10 - MEMORY, COMPACTION & LONG-TERM CONTEXT SEARCH
 ###
 ### ArcClaw uses a dual-SQLite memory system:
 ###
 ###   arcclaw-meta.db (primary WAL)
-###     └─ chat_memory            — rolling LangChain4J chat window (max 20 msgs)
-###     └─ compaction_summary     — summaries from ContextCompactionService runs
-###     └─ agent_checkpoint       — per-session ReAct state
-###     └─ rag_chunk              — RAG document chunks (Phase 64-C3+)
-###     └─ session_registry       — (channelType, channelId, userId) → sessionId (Phase 64-B3+)
+###     └─ chat_memory            - rolling LangChain4J chat window (max 20 msgs)
+###     └─ compaction_summary     - summaries from ContextCompactionService runs
+###     └─ agent_checkpoint       - per-session ReAct state
+###     └─ rag_chunk              - RAG document chunks (Phase 64-C3+)
+###     └─ session_registry       - (channelType, channelId, userId) → sessionId (Phase 64-B3+)
 ###
 ###   arcclaw-fts.db (FTS5)
-###     └─ compaction_summary_fts — full-text indexed summaries, queryable via MemorySearchTool
+###     └─ compaction_summary_fts - full-text indexed summaries, queryable via MemorySearchTool
 ###
 ### SystemMessage objects are NEVER stored in chat_memory (Nuance #1).
 ### Only UserMessage and AiMessage entries are persisted.
@@ -30,7 +30,7 @@
 ###   Phase 64-D1: Compaction summary truncation is now codepoint-safe (emoji/CJK safe).
 ###
 ### MemorySearchTool (tool name: "memory_search"):
-###   Queries FTS5 using userId scope — tenant-isolated.
+###   Queries FTS5 using userId scope - tenant-isolated.
 ###   Available to: coordinator, researcher, architect, synthesizer.
 ###   Input: {query: "<search terms>"}
 ###   Returns: top-N matching compaction summaries (after Phase 64-C3: RAG not mixed in)
@@ -59,9 +59,9 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [MEM-1] First message — establish a fact
+### [MEM-1] First message - establish a fact
 # NOTE: ArcClaw is on Quarkus 3.27.2 (Phase 60.1 migration).
-# Do NOT use 3.23.0 here — that is the pre-migration version.
+# Do NOT use 3.23.0 here - that is the pre-migration version.
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -74,7 +74,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [MEM-2] Second message — recall from chat memory (no tools needed)
+### [MEM-2] Second message - recall from chat memory (no tools needed)
 # The LLM sees the prior turn in its rolling window (PersistentChatMemoryStore).
 # Expect: agent replies with "ArcClaw" and "Quarkus 3.27.2"
 POST {{baseUrl}}/api/v1/sessions/{{memSession.response.body.sessionId}}/run
@@ -110,7 +110,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [MEM-3] Third turn — build on the context
+### [MEM-3] Third turn - build on the context
 # ArcClaw uses Quarkus 3.27.2 (LTS, released 2025).
 # Quarkus 3.27.2 requires JDK 17+ (or 21+ for Virtual Threads) minimum;
 # ArcClaw itself uses JDK 25 (as per mise.toml: java = "temurin-25").
@@ -134,7 +134,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# SOFT RESET — CHAT MEMORY PRESERVED
+# SOFT RESET - CHAT MEMORY PRESERVED
 # /reset clears ReAct checkpoint state, NOT the chat window.
 # ─────────────────────────────────────────────────────────────────
 
@@ -159,7 +159,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Soft reset — wipes checkpoint, preserves chat memory
+### Soft reset - wipes checkpoint, preserves chat memory
 POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -172,7 +172,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Recall after reset — must still know the fact
+### Recall after reset - must still know the fact
 # Expect: agent responds with "Kotlin" (from the preserved chat window)
 POST {{baseUrl}}/api/v1/sessions/{{resetMemSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -364,7 +364,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Msg 12 — Compaction may trigger here (15 - 5 keep-recent = 10 messages eligible)
+### Msg 12 - Compaction may trigger here (15 - 5 keep-recent = 10 messages eligible)
 ### Watch logs for: "Compaction triggered for session ..."
 ### Phase 64-A A6 fix: compactionInFlight is released after any observer failure.
 ### Audit event: CONTEXT_COMPACTED
@@ -488,7 +488,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Msg 22 — Rolling window is now beyond 20. Oldest messages pruned.
+### Msg 22 - Rolling window is now beyond 20. Oldest messages pruned.
 ### Watch logs for: "pruned N messages session=..."
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -502,7 +502,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [MEM-5] Verify pruning happened — oldest messages no longer in window
+### [MEM-5] Verify pruning happened - oldest messages no longer in window
 # Expect: agent does NOT recall Msg 1 (virtual threading) from its active window.
 # But if compaction has run, the summary may still be retrievable via memory_search.
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
@@ -530,7 +530,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# CONTEXT COMPACTION — VERIFICATION
+# CONTEXT COMPACTION - VERIFICATION
 # After compaction runs, the summary is searchable via MemorySearchTool
 # ─────────────────────────────────────────────────────────────────
 
@@ -543,7 +543,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [COMPACT-1] Search memory after compaction has run in pruneSession
-# MemorySearchTool is scoped to userId — it searches across all sessions for this user.
+# MemorySearchTool is scoped to userId - it searches across all sessions for this user.
 # Expect: results referencing topics from the pruned messages above (if same user).
 POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -607,7 +607,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [COMPACT-3] Codepoint-safe truncation (Phase 64-D1)
 # After Phase 64-D1, summaries with emoji or supplementary Unicode chars
-# are truncated at codepoint boundaries — no mid-surrogate-pair slicing.
+# are truncated at codepoint boundaries - no mid-surrogate-pair slicing.
 # Send content with emoji that would be in a long compaction summary.
 POST {{baseUrl}}/api/v1/sessions/{{compactSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -633,7 +633,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # A different user must not see another user's memory.
 # ─────────────────────────────────────────────────────────────────
 
-### [ISOLATION-1] Session A — establish unique fact
+### [ISOLATION-1] Session A - establish unique fact
 # @name isoSessionA
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -653,7 +653,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ISOLATION-2] Session B — try to retrieve Session A's fact
+### [ISOLATION-2] Session B - try to retrieve Session A's fact
 # @name isoSessionB
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -662,7 +662,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### Session B must NOT see Session A's secret code.
-### MemorySearchTool is userId-scoped — returns only the caller's compaction summaries.
+### MemorySearchTool is userId-scoped - returns only the caller's compaction summaries.
 POST {{baseUrl}}/api/v1/sessions/{{isoSessionB.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}

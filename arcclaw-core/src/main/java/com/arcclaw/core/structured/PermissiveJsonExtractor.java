@@ -51,7 +51,7 @@ public class PermissiveJsonExtractor {
      * @throws JsonExtractionException If parsing fails despite leniency
      */
     public <T> T extract(String rawResponse, Class<T> targetType) {
-        // Pre-parse validations — before any ObjectMapper construction
+        // Pre-parse validations - before any ObjectMapper construction
         if (rawResponse == null || rawResponse.isBlank()) {
             throw new JsonExtractionException("LLM returned null or blank response");
         }
@@ -63,7 +63,7 @@ public class PermissiveJsonExtractor {
         }
 
         ObjectMapper mapper = buildPermissiveMapper();
-        // Add duplicate key detection — duplicate keys in LLM output = schema confusion
+        // Add duplicate key detection - duplicate keys in LLM output = schema confusion
         mapper.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
 
         String cleaned = stripFences(rawResponse);
@@ -97,7 +97,7 @@ public class PermissiveJsonExtractor {
                 return mapper.writeValueAsString(root.get("properties"));
             }
         } catch (Exception ignored) {
-            // Not a schema envelope — return original
+            // Not a schema envelope - return original
         }
         return json;
     }

@@ -131,7 +131,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
         String userId = WorkspaceContext.resolveUserId();
         if (isNew) {
-            // Single-shot agents create the checkpoint here — emit CREATED once.
+            // Single-shot agents create the checkpoint here - emit CREATED once.
             transitionService.emitCreated(sessionId, agentRole, userId,
                     WorkspaceContext.requireAutonomyOrSupervised(), saved.id(), saved.createdAt());
         }
@@ -178,7 +178,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         return storeAdapter.claimForResume(sessionId, agentRole);
     }
 
-    // ── Resume guard (§3.4 / §7.29 — all delegated, public API stays here) ───
+    // ── Resume guard (§3.4 / §7.29 - all delegated, public API stays here) ───
 
     /**
      * Delegates to {@link CheckpointStorePort#claimForResume} for distributed safety.

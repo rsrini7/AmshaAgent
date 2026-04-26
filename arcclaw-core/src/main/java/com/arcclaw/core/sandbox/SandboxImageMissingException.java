@@ -5,7 +5,7 @@ package com.arcclaw.core.sandbox;
  * image is absent from local Podman storage.
  * <p>
  * Caught by {@link ProcessIsolationExecutor} and converted to
- * {@link SandboxResult#infraFailure(String)} — never propagates to callers
+ * {@link SandboxResult#infraFailure(String)} - never propagates to callers
  * above the sandbox layer.
  */
 public class SandboxImageMissingException extends RuntimeException {

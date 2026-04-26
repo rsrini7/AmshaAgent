@@ -44,7 +44,7 @@ public class MetricsAgentObserver implements AgentObserver {
                     "role", role != null ? role : "unknown").increment();
         }
 
-        // Track finish steps separately — measures task completion rate
+        // Track finish steps separately - measures task completion rate
         if (ReasoningStep.FINISH.equals(step.action())) {
             registry.counter("arcclaw.agent.completions",
                     "role", role != null ? role : "unknown").increment();

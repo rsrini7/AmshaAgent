@@ -37,7 +37,7 @@ public final class AgentErrorMessageUtil {
         if (raw == null) return TASK_FAILED;
 
         // Guard: if the raw message looks like a JVM internal crash message,
-        // return a safe fallback immediately — never show stack-trace internals to users.
+        // return a safe fallback immediately - never show stack-trace internals to users.
         if (JVM_INTERNALS_PATTERN.matcher(raw.trim()).find()) {
             return AI_UNEXPECTED_RESPONSE;
         }
@@ -170,7 +170,7 @@ public final class AgentErrorMessageUtil {
                 return "a few moments";
             }
         } else {
-            // Unrecognised format — safe fallback, never crash
+            // Unrecognised format - safe fallback, never crash
             return "a few moments";
         }
 

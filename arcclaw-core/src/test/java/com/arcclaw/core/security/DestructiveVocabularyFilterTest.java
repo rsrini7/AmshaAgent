@@ -13,12 +13,12 @@ public class DestructiveVocabularyFilterTest {
 
     @Test
     void testCoderExemptBySandboxOnlyCapabilities() {
-        // Coder has exactly SANDBOX_EXEC — still exempt (sandbox is controlled execution)
+        // Coder has exactly SANDBOX_EXEC - still exempt (sandbox is controlled execution)
         assertTrue(filter.isSandboxOnlyRole(AgentRoleEnum.CODER),
-            "Coder must be exempt from destructive vocabulary filter — sandbox-only role");
-        // Coordinator has broad tools — must NOT be exempt
+            "Coder must be exempt from destructive vocabulary filter - sandbox-only role");
+        // Coordinator has broad tools - must NOT be exempt
         assertFalse(filter.isSandboxOnlyRole(AgentRoleEnum.COORDINATOR),
-            "Coordinator must not be exempt — has network/schedule capabilities");
+            "Coordinator must not be exempt - has network/schedule capabilities");
     }
 
     @Test

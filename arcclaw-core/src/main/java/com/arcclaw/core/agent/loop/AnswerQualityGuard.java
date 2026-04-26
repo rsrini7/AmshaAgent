@@ -24,7 +24,7 @@ import org.jboss.logging.Logger;
  *   <li>Raw tool-call leak detection (4 patterns + NVIDIA strip)</li>
  *   <li>Suspiciously-short / punctuation-only answer detection</li>
  *   <li>Compaction context-echo stripping (delegates pattern reference to
- *       {@link AgentSentinels} — patterns are NOT duplicated here)</li>
+ *       {@link AgentSentinels} - patterns are NOT duplicated here)</li>
  *   <li>System-prompt echo detection (delegates to AgentSentinels)</li>
  *   <li>{@code stripRawToolJson()} utility used by both the leak-retry path and
  *       the salvage path</li>
@@ -62,7 +62,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     }
 
     // -------------------------------------------------------------------------
-    // §9.1 — ALL patterns MUST be static final (no inline Pattern.compile)
+    // §9.1 - ALL patterns MUST be static final (no inline Pattern.compile)
     // -------------------------------------------------------------------------
 
     /** Detects standard JSON tool-call envelope: {"type":"function", ...} */
@@ -88,21 +88,21 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     /**
      * Extracts the tool name from a standard JSON leak so the correction hint
      * can name the tool explicitly.
-     * Previously compiled inline inside the FINISH handler — §9.1 violation fixed.
+     * Previously compiled inline inside the FINISH handler - §9.1 violation fixed.
      */
     static final Pattern LEAKED_TOOL_NAME_PATTERN =
             Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"");
 
     /**
      * Extracts the tool name from an NVIDIA-style TOOLCALLS leak.
-     * Previously compiled inline inside the FINISH handler — §9.1 violation fixed.
+     * Previously compiled inline inside the FINISH handler - §9.1 violation fixed.
      */
     static final Pattern NVIDIA_TOOL_NAME_PATTERN =
             Pattern.compile("TOOLCALLS\\s+(\\S+)");
 
     /**
      * Strips everything from the first TOOLCALLS token onwards (inclusive).
-     * Previously compiled inline inside {@code stripRawToolJson()} — the
+     * Previously compiled inline inside {@code stripRawToolJson()} - the
      * highest-frequency §9.1 violation because that method is called on every
      * FINISH answer.
      */
@@ -183,15 +183,27 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     public String stripRawToolJson(String answer) {
         if (answer == null) return "";
         String stripped = answer;
-        // Remove JSON tool-call blocks: {...} or ```json {...}
+        // Remove JSON tool-call blocks: ```json {...}```
         stripped = stripped.replaceAll("(?s)```json\\s*\\{.*?}\\s*```", "");
+        // Remove {"type": "function", ...} - greedy to handle nested objects
         stripped = stripped.replaceAll("(?s)\\{[^{}]*\"type\"\\s*:\\s*\"function\"[^{}]*}", "");
-        stripped = stripped.replaceAll("(?s)\\{[^{}]*\"name\"[^{}]*\"parameters\"[^{}]*}", "");
-        // §9.1 fix: was compiled inline — now uses static final NVIDIA_STRIP_PATTERN
+        // Remove {"name": ..., "parameters": ...} - use greedy dotall to handle nested JSON
+        stripped = stripped.replaceAll("(?s)\\{\\s*\"name\"\\s*:.*?\"parameters\"\\s*:.*}", "");
+        // §9.1 fix: was compiled inline - now uses static final NVIDIA_STRIP_PATTERN
         stripped = NVIDIA_STRIP_PATTERN.matcher(stripped).replaceAll("");
         stripped = MISTRAL_STRIP_PATTERN.matcher(stripped).replaceAll("");
         if (nakedFunctionCallPattern != null) {
             stripped = nakedFunctionCallPattern.matcher(stripped).replaceAll("");
+        }
+        // Final catch-all: if the entire remaining text is a single JSON object, remove it
+        String trimmed = stripped.strip();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            // Check if it contains tool-related keys
+            if (trimmed.contains("\"name\"") || trimmed.contains("\"action\"") 
+                    || trimmed.contains("\"tool\"") || trimmed.contains("\"function\"")
+                    || trimmed.contains("\"query\"") || trimmed.contains("\"parameters\"")) {
+                stripped = "";
+            }
         }
         return stripped.strip();
     }
@@ -267,7 +279,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
      */
     public String guardFinalAnswer(String answer, int outputTokens, String sessionId) {
         if (answer == null || answer.isBlank()) {
-            log.warnf("ANSWER-GUARD null/blank answer for session %s — returning retry prompt", sessionId);
+            log.warnf("ANSWER-GUARD null/blank answer for session %s - returning retry prompt", sessionId);
             return "I wasn't able to generate a response. Please try again.";
         }
 
@@ -275,7 +287,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         // Guard 1: suspiciously short non-answer
         if (SUSPICIOUSLY_SHORT.matcher(stripped).matches()) {
-            log.warnf("ANSWER-GUARD suspiciously short answer '%s' (tokens=%d) for session %s — retry prompt",
+            log.warnf("ANSWER-GUARD suspiciously short answer '%s' (tokens=%d) for session %s - retry prompt",
                     stripped, outputTokens, sessionId);
             return "I wasn't able to generate a meaningful response. Please try again.";
         }
@@ -283,14 +295,14 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         // Guard 2: punctuation-only garbage (Bug-1 fix)
         long alphaCount = stripped.chars().filter(Character::isLetterOrDigit).count();
         if (stripped.length() < MIN_ANSWER_ALPHA_LENGTH && alphaCount == 0) {
-            log.warnf("ANSWER-GUARD punctuation-only answer '%s' (tokens=%d) for session %s — retry prompt",
+            log.warnf("ANSWER-GUARD punctuation-only answer '%s' (tokens=%d) for session %s - retry prompt",
                     stripped, outputTokens, sessionId);
             return "I wasn't able to generate a meaningful response. Please try again.";
         }
 
         // Guard 3: compaction RAG-echo (delegates pattern ref to AgentSentinels)
         if (AgentSentinels.CONTEXT_RAG_ECHO_PATTERN.matcher(stripped).find()) {
-            log.warnf("ANSWER-GUARD detected RAG echo in answer for session %s — stripping header", sessionId);
+            log.warnf("ANSWER-GUARD detected RAG echo in answer for session %s - stripping header", sessionId);
             stripped = stripContextHeader(stripped, AgentSentinels.CONTEXT_RAG_ECHO_PATTERN);
             if (stripped.isBlank()) {
                 return "I wasn't able to generate a clean response. Please try again.";
@@ -299,7 +311,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         // Guard 4: compaction "Retrieved Context" echo
         if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
-            log.warnf("ANSWER-GUARD detected Retrieved Context echo in answer for session %s — stripping header", sessionId);
+            log.warnf("ANSWER-GUARD detected Retrieved Context echo in answer for session %s - stripping header", sessionId);
             stripped = stripContextHeader(stripped, AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN);
             if (stripped.isBlank()) {
                 return "I wasn't able to generate a clean response. Please try again.";
@@ -308,7 +320,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         // Guard 5: system-prompt echo (delegates pattern ref to AgentSentinels)
         if (AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(stripped).find()) {
-            log.warnf("ANSWER-GUARD detected system prompt echo in answer for session %s — stripping internal context", sessionId);
+            log.warnf("ANSWER-GUARD detected system prompt echo in answer for session %s - stripping internal context", sessionId);
             int echoStart = findEchoStart(stripped, AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN);
             if (echoStart > 0) {
                 String salvaged = stripped.substring(0, echoStart).strip();

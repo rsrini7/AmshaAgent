@@ -48,7 +48,7 @@ public class NotificationRetryService {
                 var maybeSender = registry.find(channelId).map(ChannelPlugin::sender);
                 if (maybeSender.isPresent()) {
                     maybeSender.get().sendRaw(recipient, text);
-                    return; // Success — exit method
+                    return; // Success - exit method
                 } else {
                     log.warnf("No sender found for channel %s", channelId);
                     return; // No point in retrying if sender is missing

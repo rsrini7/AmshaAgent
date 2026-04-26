@@ -35,7 +35,7 @@ import org.jboss.logging.Logger;
  * This collapses 2–3 wasted iterations (OpenRouter ignores hints) to 1.
  *
  * <p>FIX §2: delegate_to_agent rewrite params use key "agent" (not "role").
- * DelegateToAgentTool.execute() calls params.get("agent") — using "role"
+ * DelegateToAgentTool.execute() calls params.get("agent") - using "role"
  * caused "Parameter 'agent' is required." to be sent to the user on every
  * cron HITL resume.
  *
@@ -186,16 +186,16 @@ public class ToolStepHandler {
             List<ReasoningStep> history, ReasoningStep step,
             int consecutiveFailures, List<CompiledSkillEntry> skillSnapshot) {
 
-        // Parallel batch — delegate to ParallelToolStepExecutor
+        // Parallel batch - delegate to ParallelToolStepExecutor
         if (step.isParallelBatch()) {
             return parallelExecutor.execute(context, history, step, consecutiveFailures);
         }
 
-        // Phase 1 — Guard
+        // Phase 1 - Guard
         StepDecision guardDecision = evaluateGuard(context, history, step, skillSnapshot);
         if (guardDecision != null) return guardDecision;
 
-        // Phase 2 — Invoke
+        // Phase 2 - Invoke
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
         ToolResponse response;
@@ -216,7 +216,7 @@ public class ToolStepHandler {
                     List.copyOf(history)));
         }
 
-        // Phase 3 — Observe
+        // Phase 3 - Observe
         String observation = buildObservation(response);
         final ReasoningStep completedStep = step.withObservation(observation, response != null ? response.success() : false);
         history.add(completedStep);
@@ -232,7 +232,7 @@ public class ToolStepHandler {
                 observation.length() > 200
                     ? observation.substring(0, 200) + "..." : observation);
 
-        // Phase 4 — Resolve
+        // Phase 4 - Resolve
         return resolveOutcome(context, toolName, params, response, observation,
                 completedStep, history, consecutiveFailures);
     }
@@ -242,7 +242,7 @@ public class ToolStepHandler {
             List<CompiledSkillEntry> skillSnapshot) {
 
         if (context.autonomyLevel() == AutonomyLevel.READONLY) {
-            log.infof("[ToolStepHandler] READONLY session %s — blocking tool '%s' inline",
+            log.infof("[ToolStepHandler] READONLY session %s - blocking tool '%s' inline",
                     context.sessionId(), step.action());
             final ReasoningStep blockedStep = step.withObservation(
                     "Tool execution is not permitted in READONLY mode. " +
@@ -278,7 +278,7 @@ public class ToolStepHandler {
                     && context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)
                     && ToolCapability.GITHUB.toolName().equals(step.action())) {
                 log.infof("[TOOL-GUARD] Inner session %s: github blocked " +
-                          "— fast-pathing to FINISH", context.sessionId());
+                          "- fast-pathing to FINISH", context.sessionId());
                 return StepDecision.terminal(
                     AgentResult.finished(b.observation(), List.copyOf(history)));
             }
@@ -425,7 +425,7 @@ public class ToolStepHandler {
         if (res != null && !res.success()) {
             String url = String.valueOf(params.getOrDefault("url", ""));
             if (!url.isBlank()) {
-                log.infof("[TOOL-STEP] browser_navigate failed for %s — triggering fallback to serper_web_search", url);
+                log.infof("[TOOL-STEP] browser_navigate failed for %s - triggering fallback to serper_web_search", url);
                 
                 String fallbackGoal = "The browser was unable to visit " + url + " directly. " +
                         "Please use serper_web_search to find information about this page or its content.";

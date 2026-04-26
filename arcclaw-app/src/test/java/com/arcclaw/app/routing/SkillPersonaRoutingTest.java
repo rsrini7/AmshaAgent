@@ -78,7 +78,7 @@ class SkillPersonaRoutingTest {
 
     @Test
     void testMessageFallsBackWhenNoSkillMatch() {
-        // No match in registry — falls back to LLM classifier (which might be mocked or real, 
+        // No match in registry - falls back to LLM classifier (which might be mocked or real, 
         // but it certainly won't return skill:code-reviewer for a greeting)
         String role = detector.classify("Hello there");
         assertNotEquals("skill:code-reviewer", role);

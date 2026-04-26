@@ -57,8 +57,8 @@ public class GithubTool implements AgentTool {
     public String description() {
         return "Interact with GitHub using the gh CLI. Read-only access only. " +
                 "Parameters: " +
-                "1. 'action': ONLY 'repo' or 'gist' — no other values are valid. " +
-                "2. 'command': ONLY 'view' or 'list' — NEVER use 'delete', 'create', 'remove', or any other value. " +
+                "1. 'action': ONLY 'repo' or 'gist' - no other values are valid. " +
+                "2. 'command': ONLY 'view' or 'list' - NEVER use 'delete', 'create', 'remove', or any other value. " +
                 "3. 'target': (Optional) The target owner or owner/repo path. " +
                 "4. 'ref': (Optional) Branch, tag, or commit SHA for README fetch. OMIT if not needed.";
     }
@@ -141,7 +141,7 @@ public class GithubTool implements AgentTool {
             );
         }
 
-        // ── Case 3: repo view — use --json to get a compact summary instead of full README ──
+        // ── Case 3: repo view - use --json to get a compact summary instead of full README ──
         if ("repo".equals(action) && "view".equals(command)) {
             return List.of(
                     "gh", "repo", "view", target,
@@ -149,10 +149,10 @@ public class GithubTool implements AgentTool {
             );
         }
 
-        // ── Case 4: gist list — allow querying other users' gists via API ──
+        // ── Case 4: gist list - allow querying other users' gists via API ──
         if ("gist".equals(action) && "list".equals(command)) {
             if (target != null && !target.isBlank() && !target.equals("@me")) {
-                // gh CLI can't list another user's gists — use API directly
+                // gh CLI can't list another user's gists - use API directly
                 return List.of("gh", "api", "users/" + target + "/gists", "--jq",
                     "[.[:5] | .[] | {id, description, public, created_at, files: (.files | keys)}]");
             }
@@ -220,7 +220,7 @@ public class GithubTool implements AgentTool {
                         "Command to run. Use 'view' to get description and README " +
                                 "(supply 'ref' to target a specific branch, tag, or commit). " +
                                 "Use 'list' to enumerate items. " +
-                                "NEVER use 'delete', 'create', 'remove', 'destroy', or any other value — " +
+                                "NEVER use 'delete', 'create', 'remove', 'destroy', or any other value - " +
                                 "ONLY 'view' and 'list' are valid.")
                 .addStringProperty("target",
                         "For 'repo view', use 'owner/repo'. " +

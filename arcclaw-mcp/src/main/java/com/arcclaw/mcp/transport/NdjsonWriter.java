@@ -12,7 +12,7 @@ import java.util.Objects;
  * Every outbound message MUST be terminated with '\n' and the stream flushed.
  * Failure to frame causes the remote MCP server to hang indefinitely.
  *
- * This class enforces the contract at the type level — callers cannot
+ * This class enforces the contract at the type level - callers cannot
  * write a message without also appending '\n' and flushing.
  *
  * @see Architecture Nuance #20
@@ -25,7 +25,7 @@ public final class NdjsonWriter {
 
     /**
      * Writes a single JSON-RPC message as one NDJSON line.
-     * Appends '\n' and flushes the stream — both are mandatory per protocol.
+     * Appends '\n' and flushes the stream - both are mandatory per protocol.
      *
      * @param out  the process OutputStream (never null)
      * @param json the serialized JSON string (never null, never contains embedded newlines)

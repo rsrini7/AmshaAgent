@@ -89,14 +89,14 @@ public class CheckpointResumeHandler {
             String channelType) {
 
         if (AgentGuards.isShuttingDown()) {
-            log.warnf("Container shutting down — cannot resume session %s", sessionId);
+            log.warnf("Container shutting down - cannot resume session %s", sessionId);
             return;
         }
 
         // 1. Load checkpoint synchronously to check if it's parallel
         AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);
         if (checkpoint == null) {
-            log.warnf("[RESUME-GUARD] checkpoint null after claim for session=%s — releasing DB state.", sessionId);
+            log.warnf("[RESUME-GUARD] checkpoint null after claim for session=%s - releasing DB state.", sessionId);
             agentStore.releaseResumeClaim(sessionId, agentRole); 
             return;
         }
@@ -106,7 +106,7 @@ public class CheckpointResumeHandler {
         // Single-tool approvals (sequential) don't need the guard and can proceed directly.
         if (checkpoint.isParallelBatch()) {
             if (!agentStore.markBatchResuming(sessionId, agentRole, checkpoint.hasBrowserTool())) {
-                log.infof("[BATCH-RESUME-GUARD] parallel batch for session=%s already resuming — skipping duplicate.", sessionId);
+                log.infof("[BATCH-RESUME-GUARD] parallel batch for session=%s already resuming - skipping duplicate.", sessionId);
                 return;
             }
         }
@@ -193,7 +193,7 @@ public class CheckpointResumeHandler {
     private void handleResumeFailure(String sessionId, MessageContext context, Exception e) {
         log.errorf(e, "Failed to resume session %s", sessionId);
         if (context == null || context.getUser() == null) {
-            log.warnf("handleResumeFailure: context is null for session %s — no channel notification sent", sessionId);
+            log.warnf("handleResumeFailure: context is null for session %s - no channel notification sent", sessionId);
             return;
         }
         channelPluginRegistry.find(context.getUser().channel().id())

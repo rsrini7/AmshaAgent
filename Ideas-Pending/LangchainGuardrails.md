@@ -6,11 +6,11 @@ https://github.dev/LizeRaes/langchain4j-examples/tree/main/agentic-tutorial
 https://freedium-mirror.cfd/https://levelup.gitconnected.com/secure-your-java-rag-applications-by-implementing-guardrail-patterns-prompt-injection-and-secret-4373d1d6db75
 https://freedium-mirror.cfd/https://medium.com/helidon/langchain4j-guardrails-and-metrics-in-helidon-6c26385623d3
 
-Yes — and the layering works beautifully because they operate at **different points in the pipeline** and never conflict. Here's the exact architecture:
+Yes - and the layering works beautifully because they operate at **different points in the pipeline** and never conflict. Here's the exact architecture:
 
 ## How the Two Systems Fit Together
 
-LangChain4j's guardrails run **inside the AI Service**, at the LLM call boundary — before the LLM is called (input) and after it responds (output) . ArcClaw's guardrails run **outside the AI Service** — at the orchestrator, session, and tool-invocation level. They are complementary layers, not redundant ones. 
+LangChain4j's guardrails run **inside the AI Service**, at the LLM call boundary - before the LLM is called (input) and after it responds (output) . ArcClaw's guardrails run **outside the AI Service** - at the orchestrator, session, and tool-invocation level. They are complementary layers, not redundant ones. 
 
 ```
 User message
@@ -34,9 +34,9 @@ User message
 ⑤ ArcClaw ToolInvocationGuard (autonomy/approval, @RequiresSecret) ← Tool boundary, only ArcClaw owns this
 ```
 
-## Recommended Ordering — ArcClaw First for Input
+## Recommended Ordering - ArcClaw First for Input
 
-Put ArcClaw's input guard **before** LangChain4j's `MessageModeratorInputGuardrail` . Your PII stripping and pattern-based prompt injection checks are zero-cost and instant — they should discard bad input before you spend moderation API tokens. 
+Put ArcClaw's input guard **before** LangChain4j's `MessageModeratorInputGuardrail` . Your PII stripping and pattern-based prompt injection checks are zero-cost and instant - they should discard bad input before you spend moderation API tokens. 
 
 ```java
 // In your AiService declaration
@@ -54,14 +54,14 @@ String chat(String message);
 
 ## Key Integration Notes
 
-- **LangChain4j guardrails must be CDI beans** — use `@ApplicationScoped` just like your existing ArcClaw beans, and they'll be picked up automatically in Quarkus .
+- **LangChain4j guardrails must be CDI beans** - use `@ApplicationScoped` just like your existing ArcClaw beans, and they'll be picked up automatically in Quarkus .
 - **The Quarkus-specific guardrail package is deprecated.** You must import from `dev.langchain4j.guardrail` (not `io.quarkiverse.langchain4j.guardrails`) going forward .
-- **`MessageModeratorInputGuardrail`** is the only out-of-the-box input guardrail LC4J ships — it wraps a `ModerationModel` (OpenAI moderation endpoint) and fatally blocks flagged content .
-- **`JsonExtractorOutputGuardrail`** is the built-in output guard — it uses Jackson to validate the response matches your expected type and fires a **reprompt** on failure . This replaces your current `JsonExtractionException` retry loop in `LangChainReasoningEngine`. 
+- **`MessageModeratorInputGuardrail`** is the only out-of-the-box input guardrail LC4J ships - it wraps a `ModerationModel` (OpenAI moderation endpoint) and fatally blocks flagged content .
+- **`JsonExtractorOutputGuardrail`** is the built-in output guard - it uses Jackson to validate the response matches your expected type and fires a **reprompt** on failure . This replaces your current `JsonExtractionException` retry loop in `LangChainReasoningEngine`. 
 
 ## What ArcClaw Owns Exclusively
 
-LangChain4j guardrails have **no equivalent** for these — keep them 100% in ArcClaw:
+LangChain4j guardrails have **no equivalent** for these - keep them 100% in ArcClaw:
 
 | Layer | ArcClaw-only | Why |
 |---|---|---|
@@ -72,7 +72,7 @@ LangChain4j guardrails have **no equivalent** for these — keep them 100% in Ar
 
 ## Practical Upgrade for `JsonExtractorOutputGuardrail`
 
-Your current retry logic in `LangChainReasoningEngine` manually catches `JsonExtractionException` and retries once. You can replace that with LC4J's `JsonExtractorOutputGuardrail` and configure `maxRetries` via the annotation — it handles the reprompt loop natively and re-runs the full guardrail chain on success : 
+Your current retry logic in `LangChainReasoningEngine` manually catches `JsonExtractionException` and retries once. You can replace that with LC4J's `JsonExtractorOutputGuardrail` and configure `maxRetries` via the annotation - it handles the reprompt loop natively and re-runs the full guardrail chain on success : 
 
 ```java
 @OutputGuardrails(value = JsonExtractorOutputGuardrail.class, maxRetries = 2)

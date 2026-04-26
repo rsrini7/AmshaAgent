@@ -203,13 +203,13 @@ public class PodmanMcpTransport {
 
     @PreDestroy
     void cleanup() {
-        log.info("PodmanMcpTransport shutting down — terminating active MCP processes");
+        log.info("PodmanMcpTransport shutting down - terminating active MCP processes");
         activeProcesses.forEach((sessionId, process) -> {
             log.infof("Destroying MCP process for session: %s", sessionId);
             process.destroy();
             try {
                 if (!process.waitFor(3, TimeUnit.SECONDS)) {
-                    log.warnf("Process for session %s did not exit in 3s — forcibly killing", sessionId);
+                    log.warnf("Process for session %s did not exit in 3s - forcibly killing", sessionId);
                     process.destroyForcibly();
                 }
             } catch (InterruptedException e) {

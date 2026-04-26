@@ -106,7 +106,7 @@ public class AsyncPersistenceEngine {
         }
 
         if (!criticalQueue.offer(event)) {
-            log.warn("Critical audit queue at capacity — persisting synchronously to avoid data loss");
+            log.warn("Critical audit queue at capacity - persisting synchronously to avoid data loss");
             registry.counter("arcclaw.audit.queue.overflow", "tier", "critical").increment();
             try {
                 processEvent(event);
@@ -133,7 +133,7 @@ public class AsyncPersistenceEngine {
         }
 
         if (!telemetryQueue.offer(event)) {
-            log.debug("Telemetry audit queue at capacity — dropping event (acceptable)");
+            log.debug("Telemetry audit queue at capacity - dropping event (acceptable)");
             registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").increment();
         } else {
             inFlightTelemetry.incrementAndGet();
@@ -166,7 +166,7 @@ public class AsyncPersistenceEngine {
                 || processingTelemetry.get())) {
             sleepQuietly(10);
             if (System.currentTimeMillis() - start > 10000) {
-                log.warn("waitForIdle timed out after 10s — possible deadlock or hung drain thread");
+                log.warn("waitForIdle timed out after 10s - possible deadlock or hung drain thread");
                 break;
             }
         }
@@ -206,7 +206,7 @@ public class AsyncPersistenceEngine {
 
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                log.warn("AsyncPersistenceEngine Critical drain interrupted — shutting down.");
+                log.warn("AsyncPersistenceEngine Critical drain interrupted - shutting down.");
             } catch (Exception e) {
                 if (running.get()) {
                     log.errorf("Unexpected error in critical drain: %s", e.getMessage());
@@ -235,7 +235,7 @@ public class AsyncPersistenceEngine {
 
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                log.warn("AsyncPersistenceEngine Telemetry drain interrupted — shutting down.");
+                log.warn("AsyncPersistenceEngine Telemetry drain interrupted - shutting down.");
             } catch (Exception e) {
                 // telemetry errors are logged and swallowed
                 if (running.get()) {

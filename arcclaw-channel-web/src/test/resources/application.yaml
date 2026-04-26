@@ -1,5 +1,5 @@
 # =============================================================================
-# arcclaw-channel-web — Test Configuration
+# arcclaw-channel-web - Test Configuration
 # =============================================================================
 quarkus:
   application:

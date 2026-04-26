@@ -8,7 +8,7 @@ import org.jboss.logging.Logger;
 import picocli.CommandLine.Command;
 
 /**
- * Daemon / REST API mode — starts Quarkus HTTP server and blocks until
+ * Daemon / REST API mode - starts Quarkus HTTP server and blocks until
  * shutdown signal.
  * <p>
  * Usage: {@code arcclaw serve}

@@ -20,7 +20,7 @@ import com.arcclaw.mcp.transport.McpClientService;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
- * Component A4 — McpSelfRegisterTool.
+ * Component A4 - McpSelfRegisterTool.
  * Allows agents to dynamically register new MCP servers.
  *
  * This tool requires manual approval (HITL) as it can grant the agent

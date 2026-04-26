@@ -56,7 +56,7 @@ public class ChatCommand implements Runnable {
     /**
      * Guard flag: set to true when either the virtual HITL waiter thread OR the
      * /approve reflex has already printed the approval result, so the other path
-     * suppresses its own print. Volatile is sufficient — only one CLI session runs
+     * suppresses its own print. Volatile is sufficient - only one CLI session runs
      * at a time on the main thread.
      */
     private volatile boolean hitlResultPrinted = false;
@@ -100,7 +100,7 @@ public class ChatCommand implements Runnable {
     }
 
     /**
-     * Prioritized shutdown observer — cleans up session AND cancels any
+     * Prioritized shutdown observer - cleans up session AND cancels any
      * in-flight HITL virtual thread BEFORE Hibernate/connection pools close.
      */
     @ActivateRequestContext
@@ -160,7 +160,7 @@ public class ChatCommand implements Runnable {
             if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
                 if (statefulAgentStore.findLatestAwaitingApproval(sessionId).isPresent()) {
                     cliResultBridge.register(sessionId);
-                    System.out.println("\n▶ ArcClaw> ⏸ Approval pending — type /approve or /deny before sending new messages.");
+                    System.out.println("\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
                     continue;
                 }
             }
@@ -178,7 +178,7 @@ public class ChatCommand implements Runnable {
                 String response = reflexResult.commandResponse().get();
                 if (!response.isBlank()) {
                     // Set flag BEFORE printing so the HITL virtual thread (if racing)
-                    // sees it and suppresses its own print — avoids double-print when
+                    // sees it and suppresses its own print - avoids double-print when
                     // user types /approve while a virtual waiter thread is also active.
                     hitlResultPrinted = true;
                     System.out.println("\n▶ ArcClaw> " + response);
@@ -196,7 +196,7 @@ public class ChatCommand implements Runnable {
 
             // Register BEFORE agentLoop.run() so the future exists even if
             // complete() fires on a REST thread before we reach the switch below.
-            // The virtual thread holds this reference directly — no second register() needed.
+            // The virtual thread holds this reference directly - no second register() needed.
             CompletableFuture<AgentResult> resultFuture = cliResultBridge.register(sessionId);
 
             hitlResultPrinted = false; // reset for this dispatch cycle
@@ -219,7 +219,7 @@ public class ChatCommand implements Runnable {
 
                     System.out.println("\n▶ ArcClaw> ⏸ Approval needed for tool: " + a.toolName() +
                             "\n   Params: " + truncatedParams +
-                            "\n   Type /approve or /deny (or approve via REST/UI — result will appear automatically)");
+                            "\n   Type /approve or /deny (or approve via REST/UI - result will appear automatically)");
 
                     // Spawn a virtual thread that holds the pre-registered future directly.
                     // This is race-safe: even if complete() fires before get() is called,
@@ -260,7 +260,7 @@ public class ChatCommand implements Runnable {
             };
 
             // Cancel bridge state for all terminal results.
-            // For AwaitingApproval we intentionally skip — the virtual thread owns cleanup.
+            // For AwaitingApproval we intentionally skip - the virtual thread owns cleanup.
             if (!(result instanceof AgentResult.AwaitingApproval)) {
                 cliResultBridge.cancel(sessionId);
             }

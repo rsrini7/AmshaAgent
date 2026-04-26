@@ -18,7 +18,7 @@ import org.jboss.logging.Logger;
  * Retry template for SQLite BUSY handling.
  * 
  * Encapsulated inside arcclaw-persistence-sqlite adapter module.
- * NOT exposed as a port interface to core — retry is adapter-internal.
+ * NOT exposed as a port interface to core - retry is adapter-internal.
  * 
  * Rationale (Architecture Invariants §5.14.1):
  * Retry-on-BUSY is a SQLite-specific infrastructure concern. Postgres uses MVCC
@@ -55,7 +55,7 @@ public class SqliteRetryTemplate {
         // 0. Shutdown Guard: skip ONLY if the CDI container is actively stopping.
         // Allow execution if container is null (unit tests) or running.
         if (AgentGuards.isShuttingDown()) {
-            log.debugf("CDI container shutting down — aborting persistence operation [%s]", operationName);
+            log.debugf("CDI container shutting down - aborting persistence operation [%s]", operationName);
             return null;
         }
 
@@ -85,7 +85,7 @@ public class SqliteRetryTemplate {
                         .map(t -> t.getClass().getSimpleName() + ": " + t.getMessage())
                         .collect(Collectors.joining("\n  -> "));
                 
-                log.warnf("SQLite BUSY on [%s], attempt %d/%d — retrying in %dms.\nCause Chain:\n%s",
+                log.warnf("SQLite BUSY on [%s], attempt %d/%d - retrying in %dms.\nCause Chain:\n%s",
                           operationName, attempt, limit, delay, compactTrace);
                 
                 if (attempt < limit) {

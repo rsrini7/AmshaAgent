@@ -40,10 +40,10 @@ public class CompactionHandler implements MessageHandler {
         if (compactionService.shouldCompact(sessionId)) {
 
             // ── Skip compaction if provider is currently throttled.
-            // Compaction calls the LLM for its summary — firing it while
+            // Compaction calls the LLM for its summary - firing it while
             // rate-limited causes a double-Groq-hit that produces Done. in 1 token.
             if (rateLimitTracker.isAnyBackingOff()) {
-                log.debugf("CompactionHandler: skipping compaction for session %s — " +
+                log.debugf("CompactionHandler: skipping compaction for session %s - " +
                         "LLM provider is backing off after rate-limit", sessionId);
                 return HandleResult.CONTINUE;
             }

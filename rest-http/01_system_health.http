@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 01 — SYSTEM HEALTH & STARTUP VERIFICATION
+### 01 - SYSTEM HEALTH & STARTUP VERIFICATION
 ###
 ### Run these FIRST before any other test file.
 ### They verify the application is fully up, all subsystems are
@@ -24,7 +24,7 @@
 ###   INFO  [AuditSchemaEnforcer] FTS5 memory index and triggers verified.
 ###   (ONE of):
 ###   INFO  [FtsConnectionInterceptor] sqlite-vec extension loaded successfully
-###   WARN  [FtsConnectionInterceptor] sqlite-vec not found — FTS5 only
+###   WARN  [FtsConnectionInterceptor] sqlite-vec not found - FTS5 only
 ###   (attach telegram mode only):
 ###   INFO  [TelegramChannelRoute] routeStatus=Started
 ###
@@ -38,24 +38,24 @@
 # COMBINED HEALTH (no auth required)
 # ─────────────────────────────────────────────────────────────────
 
-### [HEALTH-1] Full health check — liveness + readiness combined
+### [HEALTH-1] Full health check - liveness + readiness combined
 # Expect 200: {"status":"UP","checks":[...all UP...]}
 # status:"DOWN" at top level = at least one check failed (still HTTP 200).
 GET {{baseUrl}}/q/health
 
 ###
 
-### [HEALTH-2] Liveness probe — JVM alive, no deadlock
+### [HEALTH-2] Liveness probe - JVM alive, no deadlock
 # Expect 200: {"status":"UP","checks":[{"name":"liveness","status":"UP"}]}
 GET {{baseUrl}}/q/health/live
 
 ###
 
-### [HEALTH-3] Readiness probe — all dependencies healthy
+### [HEALTH-3] Readiness probe - all dependencies healthy
 # Expect 200: {"status":"UP","checks":[...]}
 # Each subsystem registers: database, Podman Health, Podman Image.
 # sqlite-vec absent → its check shows DOWN but overall readiness remains UP
-# (graceful degradation — FTS5-only mode still serves requests).
+# (graceful degradation - FTS5-only mode still serves requests).
 GET {{baseUrl}}/q/health/ready
 
 ###
@@ -64,7 +64,7 @@ GET {{baseUrl}}/q/health/ready
 # APPLICATION INFO (no auth required)
 # ─────────────────────────────────────────────────────────────────
 
-### [HEALTH-4] Application info — version, profile, build metadata
+### [HEALTH-4] Application info - version, profile, build metadata
 # Expect 200: {"name":"arcclaw","version":"...","profile":"dev|prod",...}
 # ApiKeyAuthFilter explicitly bypasses paths starting with /api/v1/info.
 GET {{baseUrl}}/api/v1/info
@@ -107,7 +107,7 @@ X-ArcClaw-API-Key: {{validKey}}
 GET {{baseUrl}}/api/v1/agents
 X-ArcClaw-API-Key: {{validKey}}
 
-### Step 1 — List pending approvals
+### Step 1 - List pending approvals
 # @name hitlPending
 GET {{baseUrl}}/api/v1/hitl
 X-ArcClaw-API-Key: {{validKey}}
@@ -146,7 +146,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HEALTH-8] Run trivial task — full pipeline smoke
+### [HEALTH-8] Run trivial task - full pipeline smoke
 # Expect 200: {"answer":"4",...}
 # Exercises: SessionRegistry (Phase 64-B3), AgentLoop, GovernanceLayer,
 # LLM API (Groq), AuditService, HMAC chain.
@@ -187,7 +187,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# OBSERVABILITY STACK (external — requires: mise run compose:up)
+# OBSERVABILITY STACK (external - requires: mise run compose:up)
 # ─────────────────────────────────────────────────────────────────
 
 ### [HEALTH-12] Jaeger UI reachable
@@ -197,20 +197,20 @@ GET http://localhost:16686
 ###
 
 ### [HEALTH-13] Prometheus targets page
-# Expect 200: HTML. Open http://localhost:9090/targets — "arcclaw" must be UP.
+# Expect 200: HTML. Open http://localhost:9090/targets - "arcclaw" must be UP.
 GET http://localhost:9090/targets
 
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# STARTUP LOG ASSERTIONS (manual — verify in terminal output)
+# STARTUP LOG ASSERTIONS (manual - verify in terminal output)
 #
 #  MUST appear (any mode):
 #  ✅ INFO  [AuditSchemaEnforcer] WORM triggers installed on audit_event
 #  ✅ INFO  [AuditSchemaEnforcer] FTS5 memory index and triggers verified.
 #  ✅ ONE of:
 #       INFO  [FtsConnectionInterceptor] sqlite-vec extension loaded successfully
-#       WARN  [FtsConnectionInterceptor] sqlite-vec not found — FTS5 only
+#       WARN  [FtsConnectionInterceptor] sqlite-vec not found - FTS5 only
 #
 #  In ATTACH TELEGRAM mode additionally:
 #  ✅ INFO  [TelegramChannelRoute] routeStatus=Started

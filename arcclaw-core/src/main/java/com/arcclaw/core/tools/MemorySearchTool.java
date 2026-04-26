@@ -50,7 +50,7 @@ public class MemorySearchTool implements AgentTool {
         return """
             Search the user's long-term memory (past session summaries) and the RAG knowledge
             base (ingested documents) for specific keywords, topics, or historical context.
-            IMPORTANT: Use concrete factual keywords that would appear in stored data —
+            IMPORTANT: Use concrete factual keywords that would appear in stored data -
             e.g. for 'who am I' use query='user name identity', NOT 'your name' or 'my name'.
             For 'what did I work on' use query='project task work'.
             Use noun phrases and keywords, never pronouns or self-referential phrases.

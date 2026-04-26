@@ -32,7 +32,7 @@ import org.jboss.logging.Logger;
  *   <li>Return an {@link AgentResult} to the caller</li>
  * </ul>
  *
- * <p><strong>§7.14 (INVARIANT — MUST NOT):</strong> This handler MUST NOT call
+ * <p><strong>§7.14 (INVARIANT - MUST NOT):</strong> This handler MUST NOT call
  * {@code agentStore.save()} for {@link ReasoningStep} history. It returns an
  * {@link AgentResult} only. {@link AgentLoop} owns all persistence triggered by
  * that result.
@@ -52,7 +52,7 @@ public class FinishActionHandler {
     private static final Logger log = Logger.getLogger(FinishActionHandler.class);
 
     // -------------------------------------------------------------------------
-    // Salvage constants — named, not inline literals (§ analysis recommendation)
+    // Salvage constants - named, not inline literals (§ analysis recommendation)
     // -------------------------------------------------------------------------
 
     /** Minimum character length for a salvaged answer to be accepted. */
@@ -60,12 +60,12 @@ public class FinishActionHandler {
 
     /**
      * Phrase that indicates the stripped answer is a generic "task completed"
-     * placeholder — not real user-facing content — and must be rejected.
+     * placeholder - not real user-facing content - and must be rejected.
      */
     static final String SALVAGE_REJECT_PHRASE = "completed the task";
 
     /**
-     * Matches exception name in thrown form only — ExceptionType: message.
+     * Matches exception name in thrown form only - ExceptionType: message.
      * Prevents internal JVM exception messages from leaking, while allowing
      * analytical prose (e.g. "The NullPointerException occurs because...")
      * for debugger roles (§ analysis protection).
@@ -134,7 +134,7 @@ public class FinishActionHandler {
             permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.Correction, FinishOutcome.SalvageFailed {
 
         /**
-         * The answer passed all guards — return it as the session result.
+         * The answer passed all guards - return it as the session result.
          */
         record Completed(AgentResult result, String answer) implements FinishOutcome {}
 
@@ -341,7 +341,7 @@ public class FinishActionHandler {
         boolean isLeak = qualityGuard.isRawToolCallLeak(candidateAnswer);
 
         if (isLeak && rateLimitTracker.isBackingOff("primary")) {
-            log.warnf("FINISH-HANDLER rate-limited — stripping leak instead of retrying for session %s", sessionId);
+            log.warnf("FINISH-HANDLER rate-limited - stripping leak instead of retrying for session %s", sessionId);
             String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
             AgentResult result = AgentResult.finished(stripped, List.copyOf(history));
             return new FinishOutcome.Completed(result, stripped);
@@ -354,7 +354,7 @@ public class FinishActionHandler {
                 && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {
             
             if (looksLikeJson(cleanThought)) {
-                log.warnf("FINISH-HANDLER salvaged thought is still JSON — not usable, failing turn for session %s", sessionId);
+                log.warnf("FINISH-HANDLER salvaged thought is still JSON - not usable, failing turn for session %s", sessionId);
                 AgentResult failed = AgentResult.failed(
                         "I encountered a formatting error (JSON echo) and could not complete your request.",
                         AgentResult.FailureCategory.SCHEMA_ERROR,
@@ -362,14 +362,14 @@ public class FinishActionHandler {
                 return new FinishOutcome.SalvageFailed(failed);
             }
 
-            log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s — clean thought is usable",   
+            log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s - clean thought is usable",   
                     llmSchemaErrorCount, sessionId);
             return new FinishOutcome.Completed(
                     AgentResult.finished(cleanThought, List.copyOf(history)), cleanThought);
         }
 
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
-            log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON — retrying (attempt %d)",
+            log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON - retrying (attempt %d)",
                     sessionId, llmSchemaErrorCount + 1);
 
             ReasoningStep cleanStep = step.withObservation(cleanThought);
@@ -377,7 +377,7 @@ public class FinishActionHandler {
             String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
             String correctionHint = "System: Your last response was a raw tool call JSON or TOOLCALLS format "  
                     + "written as plain text, not a valid FINISH answer. You MUST invoke tools through the tool "
-                    + "mechanism — NEVER write TOOLCALLS or raw JSON in your answer text. Retry now: call "     
+                    + "mechanism - NEVER write TOOLCALLS or raw JSON in your answer text. Retry now: call "     
                     + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer."; 
 
             return new FinishOutcome.RetryLeak(cleanStep, correctionHint, leakedTool);
@@ -396,7 +396,7 @@ public class FinishActionHandler {
                 && !salvaged.contains(SALVAGE_REJECT_PHRASE)) {
 
             if (looksLikeJson(salvaged)) {
-                log.errorf("STATE-MACHINE session %s exceeded schema limit. Salvaged thought is still JSON — failing turn.", sessionId);
+                log.errorf("STATE-MACHINE session %s exceeded schema limit. Salvaged thought is still JSON - failing turn.", sessionId);
                 AgentResult failed = AgentResult.failed(
                         "I encountered a formatting error (JSON echo) and could not complete your request.",
                         AgentResult.FailureCategory.SCHEMA_ERROR,

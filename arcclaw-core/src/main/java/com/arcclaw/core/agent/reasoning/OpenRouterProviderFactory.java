@@ -75,7 +75,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                 .timeout(timeout)
                 .maxRetries(maxRetries)
                 .temperature(temperature)
-                // Required by OpenRouter — identifies your app, avoids anonymous rate limits
+                // Required by OpenRouter - identifies your app, avoids anonymous rate limits
                 .customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName))
                 .logRequests(logHttp)
                 .logResponses(logHttp)

@@ -69,7 +69,7 @@ public class McpToolBridge {
                     buildInputSchema(cap)
                 ))
                 .orElseGet(() -> {
-                    log.warnf("McpToolAllowlist entry '%s' has no matching ToolCapability.toolName() — skipped", toolNameStr);
+                    log.warnf("McpToolAllowlist entry '%s' has no matching ToolCapability.toolName() - skipped", toolNameStr);
                     return null;
                 }))
             .filter(Objects::nonNull)

@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 05 — HUMAN-IN-THE-LOOP (HITL) GOVERNANCE & APPROVAL FLOW
+### 05 - HUMAN-IN-THE-LOOP (HITL) GOVERNANCE & APPROVAL FLOW
 ###
 ### When an agent invokes a tool with operation = NETWORK_OUTBOUND
 ### and the session autonomy level is SUPERVISED (default), the
@@ -43,7 +43,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HITL-2] Run async — ask coordinator to use GitHub tool
+### [HITL-2] Run async - ask coordinator to use GitHub tool
 # GithubTool has ToolOperation=NETWORK_OUTBOUND + session autonomy=SUPERVISED (default).
 # ToolInvocationGuard throws RequiresApprovalException.
 # AgentLoop saves AWAITING_APPROVAL checkpoint and returns 202.
@@ -60,7 +60,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HITL-3] Poll status — should show AWAITING_APPROVAL
+### [HITL-3] Poll status - should show AWAITING_APPROVAL
 # Run immediately after HITL-2, before approving.
 # Expect: {"sessionId":"...","status":"AWAITING_APPROVAL","steps":[...],"failReason":null}
 GET {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/status/coordinator
@@ -71,7 +71,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [HITL-4] APPROVE via dedicated REST endpoint
 # agentRole query param must match the role in the saved checkpoint.
 # The agent resumes from the checkpoint with AutonomyLevel.FULL for this one invocation.
-# Audit event APPROVAL_GRANTED is mandatory — agent halts if write fails.
+# Audit event APPROVAL_GRANTED is mandatory - agent halts if write fails.
 # Expect: 200 {"answer":"...","totalInputTokens":N,"totalOutputTokens":N}
 POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
@@ -79,7 +79,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HITL-5] Poll status after approve — should now be COMPLETED
+### [HITL-5] Poll status after approve - should now be COMPLETED
 # Expect: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
 GET {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
@@ -107,7 +107,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HITL-7] Run async — trigger AWAITING_APPROVAL
+### [HITL-7] Run async - trigger AWAITING_APPROVAL
 # Expect: 202 (agent paused pending approval)
 POST {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/run-async
 Content-Type: application/json
@@ -139,7 +139,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HITL-9] Status after deny — should be FAILED
+### [HITL-9] Status after deny - should be FAILED
 # Expect: {"sessionId":"...","status":"FAILED","failReason":"Human denied via REST"}
 GET {{baseUrl}}/api/v1/sessions/{{denySession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
@@ -232,7 +232,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HITL-11a] Poll status — confirm AWAITING_APPROVAL before approving
+### [HITL-11a] Poll status - confirm AWAITING_APPROVAL before approving
 GET {{baseUrl}}/api/v1/sessions/{{goalApproveSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -273,7 +273,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # After Phase 64-C2: ChannelApprovalTimeoutDispatcher routes to correct channel.
 # ─────────────────────────────────────────────────────────────────
 
-### [HITL-13] Create session and trigger approval — then wait for timeout
+### [HITL-13] Create session and trigger approval - then wait for timeout
 # @name timeoutSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -294,8 +294,8 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### Wait 5+ minutes (or reduce approval-timeout-seconds in application.yaml for testing).
-### Then poll status — must be FAILED.
-### Log to watch: "ApprovalTimeout fired for session ... — marking FAILED"
+### Then poll status - must be FAILED.
+### Log to watch: "ApprovalTimeout fired for session ... - marking FAILED"
 ### Audit event: CHECKPOINT_FAILED with reason "Approval timeout"
 
 GET {{baseUrl}}/api/v1/sessions/{{timeoutSession.response.body.sessionId}}/status/coordinator
@@ -322,7 +322,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [HITL-15] Approve on already-COMPLETED session → expect 409 CONFLICT
-# No pending approval checkpoint — approve has nothing to resume.
+# No pending approval checkpoint - approve has nothing to resume.
 POST {{baseUrl}}/api/v1/sessions/{{approveSession.response.body.sessionId}}/approve?agentRole=coordinator
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -348,7 +348,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [HITL-19] Rate limit probe — this endpoint always returns 200 with valid key
+### [HITL-19] Rate limit probe - this endpoint always returns 200 with valid key
 # Useful for confirming the rate limiter does not block valid repeated requests
 GET {{baseUrl}}/api/v1/sessions
 X-ArcClaw-API-Key: {{validKey}}

@@ -92,7 +92,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         long effectiveOutput = zeroReport ? minTokensFloor : outputTokens;
 
         if (zeroReport) {
-            log.debugf("GOVERNANCE prose-extraction step for session %s — applying token floor %d", sessionId, minTokensFloor);
+            log.debugf("GOVERNANCE prose-extraction step for session %s - applying token floor %d", sessionId, minTokensFloor);
         }
 
         double incrementalCost = (effectiveInput / 1000.0) * pricePer1kInput + (effectiveOutput / 1000.0) * pricePer1kOutput;

@@ -9,7 +9,7 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * {@link AgentChatModelProvider} for the Groq inference API (SPI 1 — agent reasoning engine).
+ * {@link AgentChatModelProvider} for the Groq inference API (SPI 1 - agent reasoning engine).
  * Groq uses the OpenAI API protocol, pointed at api.groq.com.
  */
 @ApplicationScoped

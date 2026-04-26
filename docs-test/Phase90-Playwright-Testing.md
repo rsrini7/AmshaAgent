@@ -1,11 +1,11 @@
 ## ArcClaw Playwright Testing Guide
 
-### 1. Prerequisites — Browser Binary Setup
+### 1. Prerequisites - Browser Binary Setup
 
 Before any integration test runs, Chromium must be installed. Do this once per machine: [playwright](https://playwright.dev/java/docs/browsers)
 
 ```bash
-# Chromium only (recommended — ~200 MB vs ~600 MB for all browsers)
+# Chromium only (recommended - ~200 MB vs ~600 MB for all browsers)
 ./mvnw exec:java -e \
   -Dexec.mainClass=com.microsoft.playwright.CLI \
   -Dexec.args="install --with-deps chromium"
@@ -22,7 +22,7 @@ Verify the install worked:
 
 ***
 
-### 2. Unit Tests — No Browser Required
+### 2. Unit Tests - No Browser Required
 
 These run in normal CI with zero setup. The browser never starts.
 
@@ -56,7 +56,7 @@ Run a single test method:
 
 ***
 
-### 3. Integration Tests — Real Browser
+### 3. Integration Tests - Real Browser
 
 ```bash
 # Run all integration tests
@@ -70,13 +70,13 @@ ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true \
   -Dtest=PlaywrightPageRunnerIntegrationTest#navigate_http404_throwsPlaywrightException
 ```
 
-Without the env var, `@BeforeAll assumeTrue` skips the entire suite cleanly — no failure in CI. [playwright](https://playwright.dev/java/docs/running-tests)
+Without the env var, `@BeforeAll assumeTrue` skips the entire suite cleanly - no failure in CI. [playwright](https://playwright.dev/java/docs/running-tests)
 
 ***
 
 ### 4. Debugging a Failing Integration Test
 
-**Step 1 — Switch to headed mode** to watch the browser live: [currents](https://currents.dev/posts/when-tests-should-run-headless-vs-headed-in-playwright)
+**Step 1 - Switch to headed mode** to watch the browser live: [currents](https://currents.dev/posts/when-tests-should-run-headless-vs-headed-in-playwright)
 
 ```java
 // Temporarily in PlaywrightPageRunner.run() for debugging
@@ -87,20 +87,20 @@ Browser browser = playwright.chromium().launch(
 );
 ```
 
-Then run the specific failing test — the browser window opens and you can watch exactly what happens.
+Then run the specific failing test - the browser window opens and you can watch exactly what happens.
 
-**Step 2 — Add `page.pause()`** to freeze execution at a specific point and inspect the DOM interactively: [youtube](https://www.youtube.com/watch?v=rhzrFiKfWwY)
+**Step 2 - Add `page.pause()`** to freeze execution at a specific point and inspect the DOM interactively: [youtube](https://www.youtube.com/watch?v=rhzrFiKfWwY)
 
 ```java
 Response response = page.navigate(url);
-page.pause();   // browser freezes here — open DevTools, inspect selectors
+page.pause();   // browser freezes here - open DevTools, inspect selectors
 ```
 
-**Step 3 — Capture a screenshot on failure** to see exactly what the page looked like:
+**Step 3 - Capture a screenshot on failure** to see exactly what the page looked like:
 
 ```java
 } catch (TimeoutError e) {
-    // debug only — remove before committing
+    // debug only - remove before committing
     page.screenshot(new Page.ScreenshotOptions()
         .setPath(Paths.get("target/debug-" + System.currentTimeMillis() + ".png")));
     page.waitForLoadState(LoadState.LOAD);
@@ -114,7 +114,7 @@ page.pause();   // browser freezes here — open DevTools, inspect selectors
 | Symptom | Cause | Fix |
 |---|---|---|
 | `Executable doesn't exist at ~/.cache/ms-playwright/...` | Browser binary not installed | Run `install --with-deps chromium` |
-| `TimeoutError` on `NETWORKIDLE` | Site has persistent polling/WebSocket | Already handled — degrades to `LOAD` |
+| `TimeoutError` on `NETWORKIDLE` | Site has persistent polling/WebSocket | Already handled - degrades to `LOAD` |
 | `page.locator().innerText()` returns empty string | Selector not found or content is in an iframe | Try `"body"` as fallback selector; check for frames |
 | `Navigation returned HTTP 403` wraps as `502` to agent | Site blocks headless UA | Add `setUserAgent()` to `BrowserContext.newContext()` if needed |
 | `normalizeWhitespace` not collapsing newlines | The `\\\\n` bug (fixed in Phase 90) | Confirm regex is `"\\n{3,}"` not `"\\\\n{3,}"` |
@@ -145,10 +145,10 @@ DEBUG=pw:api
 # One-time binary setup
 ./mvnw exec:java -pl arcclaw-tool-playwright -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps chromium"
 
-# Unit tests (CI — no browser)
+# Unit tests (CI - no browser)
 ./mvnw clean test -pl arcclaw-tool-playwright
 
-# Integration tests (local — real browser)
+# Integration tests (local - real browser)
 ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true ./mvnw test -pl arcclaw-tool-playwright -Dgroups=integration
 
 # Full project (confirm nothing broken)
@@ -182,7 +182,7 @@ ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true
 
 ## Sending Test Commands via Telegram
 
-Open your ArcClaw bot in Telegram and send natural language — the agent decides to invoke `browser_navigate` automatically:
+Open your ArcClaw bot in Telegram and send natural language - the agent decides to invoke `browser_navigate` automatically:
 
 ```
 # Basic page read
@@ -208,8 +208,8 @@ Take a screenshot of https://example.com
 ```
 
 You should see in order:
-1. `TOOL_EXECUTED` audit log — confirms `AuditService.record()` fired
-2. No `PlaywrightPageRunner` content in logs — confirms page content is never logged
+1. `TOOL_EXECUTED` audit log - confirms `AuditService.record()` fired
+2. No `PlaywrightPageRunner` content in logs - confirms page content is never logged
 3. Response sent back to Telegram chat
 
 ***
@@ -222,7 +222,7 @@ Send this to the bot to list all active tools:
 What tools do you have available?
 ```
 
-`browser_navigate` should appear **only** when `ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true`. With it false, the tool is invisible to the agent entirely — confirms `isEnabled()` gates correctly.
+`browser_navigate` should appear **only** when `ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true`. With it false, the tool is invisible to the agent entirely - confirms `isEnabled()` gates correctly.
 
 ***
 
@@ -232,12 +232,12 @@ What tools do you have available?
 |---|---|
 | `Visit ftp://somehost/file` | Agent gets 400, tells user unsupported scheme |
 | `Open https://httpstat.us/404` | Agent gets 502 wrapping the 404, graceful error message |
-| Disable tool, send any browse request | Agent doesn't even attempt — tool not in registry |
+| Disable tool, send any browse request | Agent doesn't even attempt - tool not in registry |
 | `Read https://example.com` with `headless=false` (dev only) | Browser window opens on your desktop |
 
 ***
 
-## Dev Tip — Headed Mode for Telegram-Triggered Requests
+## Dev Tip - Headed Mode for Telegram-Triggered Requests
 
 When a specific Telegram request is misbehaving, temporarily flip headless off in `application.yaml`:
 

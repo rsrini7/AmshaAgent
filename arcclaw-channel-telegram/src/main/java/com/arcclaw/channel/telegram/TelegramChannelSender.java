@@ -44,7 +44,7 @@ public class TelegramChannelSender implements ChannelSender {
     @Override
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
         if (recipient == null || recipient.channelId() == null) {
-            log.warn("TELEGRAM-SEND: recipient or channelId is null — dropping");
+            log.warn("TELEGRAM-SEND: recipient or channelId is null - dropping");
             return;
         }
         String chatId = recipient.channelId();  // ← was platformId()
@@ -58,7 +58,7 @@ public class TelegramChannelSender implements ChannelSender {
             return;
         }
 
-        // Component 73-A4 — Intercept ApprovalPrompt to add Telegram inline keyboard
+        // Component 73-A4 - Intercept ApprovalPrompt to add Telegram inline keyboard
         Optional<ReplyNode.ApprovalPrompt> promptOpt = nodes.stream()
             .filter(n -> n instanceof ReplyNode.ApprovalPrompt)
             .map(n -> (ReplyNode.ApprovalPrompt) n)
@@ -88,7 +88,7 @@ public class TelegramChannelSender implements ChannelSender {
         log.infof("TELEGRAM-SEND to=%s text=[%s]", recipient.channelId(), text.length() > 100 ? text.substring(0, 100) + "..." : text);
 
         if (recipient == null || recipient.channelId() == null) {
-            log.warn("TELEGRAM-SENDRAW: recipient or channelId is null — dropping");
+            log.warn("TELEGRAM-SENDRAW: recipient or channelId is null - dropping");
             return;
         }
         sendRawToChatId(recipient.channelId(), text);  // ← was platformId()
@@ -104,14 +104,14 @@ public class TelegramChannelSender implements ChannelSender {
             return;
         }
         if (recipient == null || recipient.channelId() == null) {
-            log.warn("TELEGRAM-SEND: recipient or channelId is null — dropping");
+            log.warn("TELEGRAM-SEND: recipient or channelId is null - dropping");
             return;
         }
         String chatId = recipient.channelId();
 
         OutgoingTextMessage msg = new OutgoingTextMessage();
         // §7.28: Text is assumed pre-escaped by caller. sendWithKeyboard() is
-        // deliberately dumb — it sets ParseMode and sends, nothing else.
+        // deliberately dumb - it sets ParseMode and sends, nothing else.
         msg.setText(text);
         msg.setParseMode("MarkdownV2");
         msg.setReplyMarkup(markup);
@@ -156,7 +156,7 @@ public class TelegramChannelSender implements ChannelSender {
      */
     private void sendRawToChatId(String chatId, String text) {
         if (text == null || text.isBlank()) {
-            log.warn("Attempted to send empty message to " + chatId + " — skipping");
+            log.warn("Attempted to send empty message to " + chatId + " - skipping");
             return;
         }
         if (text.length() <= TELEGRAM_MAX_LENGTH) {

@@ -58,7 +58,7 @@ public class ReflexRegistry {
     public ReflexResult processIfReflex(String sessionId, String userId, String chatId,
                                         String input, MessageContext context) {
 
-        // PASS 1 — find first matching reflex and dispatch
+        // PASS 1 - find first matching reflex and dispatch
         for (AgentReflex reflex : sortedReflexes) {
             if (!reflex.matches(input)) continue;
             try {
@@ -78,7 +78,7 @@ public class ReflexRegistry {
             }
         }
 
-        // PASS 2 — no reflex matched; run sanitization chain
+        // PASS 2 - no reflex matched; run sanitization chain
         String sanitized = input;
         for (AgentReflex reflex : sortedReflexes) {
             try {

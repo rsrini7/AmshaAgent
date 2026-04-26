@@ -24,7 +24,7 @@ import org.jboss.logging.Logger;
  * triplet gets exactly one stable UUID v4 session ID, created on first contact
  * and thereafter always returned unchanged.
  *
- * <p><b>Nuance #17:</b> Uses raw {@code EntityManager} — no Panache.
+ * <p><b>Nuance #17:</b> Uses raw {@code EntityManager} - no Panache.
  * <p><b>Nuance #29:</b> Writes use {@code TxType.REQUIRES_NEW} to avoid
  * enlisting Narayana XA in a read that SQLite has already auto-committed.
  */

@@ -33,7 +33,7 @@
       <scope>compile</scope>
     </dependency>
     
-    <!-- CRITICAL: deployment deps must be "provided" — build-time only, NOT in runtime fat-jar -->
+    <!-- CRITICAL: deployment deps must be "provided" - build-time only, NOT in runtime fat-jar -->
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-arc-deployment</artifactId>

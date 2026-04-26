@@ -166,11 +166,11 @@ public class IntentDetectorService implements IntentDetector {
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
         if (elapsedMs > slaWarnMs) {
-            log.warnf("IntentDetector SLA exceeded: %dms — verify Groq endpoint latency", elapsedMs);
+            log.warnf("IntentDetector SLA exceeded: %dms - verify Groq endpoint latency", elapsedMs);
         }
 
         if (raw == null || raw.isBlank()) {
-            log.warnf("IntentDetector SLA exceeded or null response — raw was null"); 
+            log.warnf("IntentDetector SLA exceeded or null response - raw was null"); 
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
@@ -185,7 +185,7 @@ public class IntentDetectorService implements IntentDetector {
             // Match canonical name (e.g. "debugger")
             if (lowerRaw.contains(role.toScopedName())) return role.toScopedName();
             
-            // Match deity name from displayName — extract first word before " ("
+            // Match deity name from displayName - extract first word before " ("
             // e.g. "Brahaspati" from "Brahaspati (Architect)"
             String displayName = role.definition().displayName();
             String deityName = displayName.contains("(")

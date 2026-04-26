@@ -6,7 +6,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.observability.AgentObserver;
 
 /**
- * CLI-only observer — prints step-level events to stdout during
+ * CLI-only observer - prints step-level events to stdout during
  * {@link AskCommand} execution.
  * <p>
  * <strong>Daemon-safe:</strong> The {@code enabled} flag is toggled
@@ -17,7 +17,7 @@ import com.arcclaw.core.observability.AgentObserver;
 public class CliAgentObserver implements AgentObserver {
 
     /**
-     * Guard flag — only {@code true} while AskCommand is executing.
+     * Guard flag - only {@code true} while AskCommand is executing.
      * Use ScopedValue to prevent leakage across concurrent REST requests.
      */
     public static final ScopedValue<Boolean> ENABLED = ScopedValue.newInstance();

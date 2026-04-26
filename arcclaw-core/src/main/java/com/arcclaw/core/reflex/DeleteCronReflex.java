@@ -16,9 +16,9 @@ import com.arcclaw.core.state.AgentCronRepository;
 /**
  * Fast-path reflex for deleting a specific cron job by ID.
  * Handles three input forms:
- *   - "deletecron <id>"       — REST reflex / direct
- *   - "/deletecron <id>"      — slash form
- *   - "/cron delete <id>"     — Telegram command dispatch form
+ *   - "deletecron <id>"       - REST reflex / direct
+ *   - "/deletecron <id>"      - slash form
+ *   - "/cron delete <id>"     - Telegram command dispatch form
  */
 @ApplicationScoped
 @ReflexPriority(500)
@@ -50,7 +50,7 @@ public class DeleteCronReflex implements AgentReflex {
 
         String uid = WorkspaceScopeHolder.USER_ID.get();
 
-        // Normalize prefix — extract cronId regardless of which command form was used
+        // Normalize prefix - extract cronId regardless of which command form was used
         String normalized = input.trim();
         String lower = normalized.toLowerCase();
         int prefixLen;
@@ -65,14 +65,14 @@ public class DeleteCronReflex implements AgentReflex {
                     USAGE_DELETE_CRON, context);
         }
 
-        // UUID format guard — prevents DB roundtrip for garbage input
+        // UUID format guard - prevents DB roundtrip for garbage input
         if (!cronId.matches(
                 "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
             return ReflexResult.respond(
                     UserMessages.cronInvalid(cronId), context);
         }
 
-        // Tenant-isolated delete — user B cannot delete user A's job
+        // Tenant-isolated delete - user B cannot delete user A's job
         int deleted = cronRepository.deleteByIdAndUserId(cronId, uid);
         if (deleted == 0) {
             return ReflexResult.respond(

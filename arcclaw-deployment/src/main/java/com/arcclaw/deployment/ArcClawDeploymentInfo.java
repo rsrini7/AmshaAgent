@@ -1,7 +1,7 @@
 package com.arcclaw.deployment;
 
 /**
- * ArcClaw Deployment Module — Quarkus build-time processing.
+ * ArcClaw Deployment Module - Quarkus build-time processing.
  * <p>
  * Contains {@code @BuildStep} processors for registering the
  * {@code @WorkspaceScoped} custom CDI scope and related build-time artifacts.

@@ -17,18 +17,18 @@ import org.jboss.logging.Logger;
  * Pure serialization/deserialization service for {@link ReasoningStep} objects.
  *
  * <p>Owns the Jackson {@link ObjectMapper} configuration for all checkpoint
- * state JSON. No database access, no transactions, no side effects — any
+ * state JSON. No database access, no transactions, no side effects - any
  * caller may use it without transaction concerns.
  *
  * <p><strong>§9.1 (MUST):</strong> The {@code STEPS_TYPE} TypeReference is a
- * single static field — never constructed per call.
+ * single static field - never constructed per call.
  */
 @ApplicationScoped
 public class CheckpointSerializer {
 
     private static final Logger log = Logger.getLogger(CheckpointSerializer.class);
 
-    /** Static field — never re-constructed per call (§9.1). */
+    /** Static field - never re-constructed per call (§9.1). */
     private static final TypeReference<List<ReasoningStep>> STEPS_TYPE =
             new TypeReference<>() {};
 
@@ -48,7 +48,7 @@ public class CheckpointSerializer {
     /**
      * Deserializes {@code stateJson} from a checkpoint back to reasoning steps.
      *
-     * <p>Returns an empty list on null/blank JSON or parse failure — never throws.
+     * <p>Returns an empty list on null/blank JSON or parse failure - never throws.
      */
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
         if (checkpoint == null
@@ -109,7 +109,7 @@ public class CheckpointSerializer {
 
     /**
      * Serializes any object to JSON.
-     * Throws {@link IllegalStateException} on failure — callers have no recovery
+     * Throws {@link IllegalStateException} on failure - callers have no recovery
      * path if their data cannot be serialized.
      */
     public String serialize(Object obj) {

@@ -38,14 +38,14 @@ public class ToolGovernanceGuard {
         if (agentRole == null) return;
 
         if (!AgentRoleEnum.isKnownRole(agentRole)) {
-            log.warnf("SECURITY: Unknown agentRole=%s — blocking tool=%s", agentRole, toolName);
+            log.warnf("SECURITY: Unknown agentRole=%s - blocking tool=%s", agentRole, toolName);
             throw new SecurityException("Unknown agent role: " + agentRole);
         }
 
         AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
         Set<String> allowedTools = roleRegistry.permittedTools(role);
         if (!allowedTools.contains(toolName)) {
-            log.warnf("SECURITY: role=%s attempted tool=%s — not in capability set. Blocked.",
+            log.warnf("SECURITY: role=%s attempted tool=%s - not in capability set. Blocked.",
                     agentRole, toolName);
             auditService.record(
                     WorkspaceContext.requireSessionId(), resolveUserId(), agentRole,

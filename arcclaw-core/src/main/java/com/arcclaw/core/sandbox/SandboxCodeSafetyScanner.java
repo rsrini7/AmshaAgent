@@ -6,26 +6,26 @@ import java.util.regex.Pattern;
 
 /**
  * Scans sandbox code for destructive or dangerous patterns before execution.
- * Applied regardless of isolation strategy — direct execution is especially vulnerable.
+ * Applied regardless of isolation strategy - direct execution is especially vulnerable.
  *
  * Architecture Invariants §8.5: Sandbox tools must default to isolated execution.
  * When isolation is opted out (DIRECT mode), this scanner is the last safety line.
  *
  * Pattern structure:
  *  - UNIVERSAL_PATTERNS : fire for ALL languages regardless of lang parameter.
- *  - LANG_PATTERNS      : fire only when lang matches — prevents cross-language false positives.
+ *  - LANG_PATTERNS      : fire only when lang matches - prevents cross-language false positives.
  */
 public final class SandboxCodeSafetyScanner {
 
     private SandboxCodeSafetyScanner() {}
 
     // -------------------------------------------------------------------------
-    // Universal — dangerous in every language context
+    // Universal - dangerous in every language context
     // -------------------------------------------------------------------------
 
     private static final List<Pattern> UNIVERSAL_PATTERNS = List.of(
 
-        // Filesystem destruction — shell
+        // Filesystem destruction - shell
         pattern("rm\\s+(-[^ ]*r[^ ]*|-r)"),         // rm -rf, rm -r, rm -Rf etc.
         pattern("rmdir\\s+/[sS]"),                   // Windows rmdir /s
         pattern("rd\\s+/[sS]"),                      // Windows rd /s
@@ -56,7 +56,7 @@ public final class SandboxCodeSafetyScanner {
     );
 
     // -------------------------------------------------------------------------
-    // Language-scoped — only fire when lang matches to avoid false positives
+    // Language-scoped - only fire when lang matches to avoid false positives
     // e.g. exec.Command must not block node's child_process.exec
     // -------------------------------------------------------------------------
 

@@ -36,7 +36,7 @@ public class SqliteWalConfigurer {
     String dataDir;
 
     /**
-     * Boot-time configuration — fires BEFORE RagSchemaInitializer.
+     * Boot-time configuration - fires BEFORE RagSchemaInitializer.
      */
     @Priority(10)
     void onStartup(@Observes @Priority(10) StartupEvent event) {

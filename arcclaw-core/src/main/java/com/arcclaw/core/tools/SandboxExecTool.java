@@ -26,32 +26,32 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
- * SandboxExecTool — executes user-submitted code inside an isolated Podman container.
+ * SandboxExecTool - executes user-submitted code inside an isolated Podman container.
  *
  * ┌─────────────────────────────────────────────────────────────────────┐
  * │  Java execution architecture (WHY we compile on host, run in JRE)  │
  * │                                                                     │
- * │  Option A — java --source 21 inside container (REJECTED):          │
+ * │  Option A - java --source 21 inside container (REJECTED):          │
  * │    Requires JDK inside the container image. JEP 330 (--source) is  │
  * │    a "source launcher" that internally calls javax.tools.JavaCompiler│
  * │    before running. Even though no .class files land on disk, the   │
- * │    compiler API must be present — it ships only with the JDK, not  │
+ * │    compiler API must be present - it ships only with the JDK, not  │
  * │    the JRE. Using openjdk21-jdk adds ~200MB to the sandbox image   │
  * │    with no security or runtime benefit.                             │
  * │                                                                     │
- * │  Option B — compile on host, run .class in JRE (CHOSEN):           │
+ * │  Option B - compile on host, run .class in JRE (CHOSEN):           │
  * │    ArcClaw always runs on a full JDK (Quarkus requires it).        │
  * │    We use the host's javac (from java.home) to compile .java →     │
  * │    .class into the workspace dir. The container mounts that dir     │
  * │    read-only and runs: java -cp /workspace ClassName               │
- * │    The JRE is sufficient for this — no compiler needed in image.   │
+ * │    The JRE is sufficient for this - no compiler needed in image.   │
  * │    Compiler errors surface immediately as tool failures with the    │
  * │    real javac output, not a cryptic container error.                │
  * │                                                                     │
  * │  WHY NOT openjdk25 in Dockerfile:                                  │
  * │    JDK 25 is not yet packaged for Alpine stable (3.21). It is only │
  * │    available on Alpine edge, which is the rolling-release branch   │
- * │    — too unstable for a security-sensitive sandbox image. JDK 21   │
+ * │    - too unstable for a security-sensitive sandbox image. JDK 21   │
  * │    is the current LTS and the correct choice.                       │
  * └─────────────────────────────────────────────────────────────────────┘
  */
@@ -69,14 +69,14 @@ public class SandboxExecTool implements AgentTool {
 
     // ── Sentinel returned when executeSandboxed() gives null/empty output.
     // LangChain4J throws "text cannot be null or blank" if ToolExecutionResultMessage
-    // receives an empty string — this sentinel prevents that crash.
+    // receives an empty string - this sentinel prevents that crash.
     private static final String NO_OUTPUT_SENTINEL = "[execution produced no output]";
 
     // ── Single source of truth for the infra-failure user message.
-    // Never copy-paste this string — always reference this constant.
+    // Never copy-paste this string - always reference this constant.
     // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
     private static final String SANDBOX_OFFLINE_MSG =
-        "SANDBOX_OFFLINE: System Error — Podman sandbox execution failed. " +
+        "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed. " +
         "The code was NOT run. Inform the user gracefully that the execution " +
         "environment is currently offline, or set " +
         "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
@@ -92,7 +92,7 @@ public class SandboxExecTool implements AgentTool {
 
     // Colons are illegal in Windows path components (drive-letter separator).
     // Inner session IDs contain colons (the ':delegate:' sentinel).
-    // Sanitize for filesystem use only — sessionId itself is never modified.
+    // Sanitize for filesystem use only - sessionId itself is never modified.
     private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
 
     @Inject ProcessIsolationExecutor isolationExecutor;
@@ -116,11 +116,11 @@ public class SandboxExecTool implements AgentTool {
     public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // sandboxCommand() — returns the command that runs INSIDE the Podman container.
+    // sandboxCommand() - returns the command that runs INSIDE the Podman container.
     //
     // Java path: prepareWorkspace() already compiled .java → .class on the host.
     //            The container just runs:  java -cp /workspace ClassName
-    //            This only needs the JRE — no compiler required inside the image.
+    //            This only needs the JRE - no compiler required inside the image.
     //            See class-level Javadoc for why we chose this over java --source.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
@@ -142,7 +142,7 @@ public class SandboxExecTool implements AgentTool {
             case "java" -> {
                 // .class files were written to workspaceRoot by prepareWorkspace().
                 // Container mounts that dir as /workspace (read-only).
-                // java -cp runs the compiled bytecode — JRE-only, no javac needed.
+                // java -cp runs the compiled bytecode - JRE-only, no javac needed.
                 String className = extractJavaClassName(code);
                 yield List.of("java", "-cp", CONTAINER_WORKSPACE, className);
             }
@@ -155,10 +155,10 @@ public class SandboxExecTool implements AgentTool {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // prepareWorkspace() — runs on the HOST before the container is launched.
+    // prepareWorkspace() - runs on the HOST before the container is launched.
     //
     // Java: write .java file, then compile it to .class using the host JDK's
-    //       javac (resolved from java.home — always present since Quarkus needs JDK).
+    //       javac (resolved from java.home - always present since Quarkus needs JDK).
     //       If compilation fails, throws IOException with the full javac error output
     //       so ToolRegistry surfaces it as a proper tool failure to the LLM.
     // ─────────────────────────────────────────────────────────────────────────
@@ -177,13 +177,13 @@ public class SandboxExecTool implements AgentTool {
             String className = extractJavaClassName(code);
             Path javaFile = workspaceRoot.resolve(className + ".java");
             Files.writeString(javaFile, code, StandardCharsets.UTF_8);
-            // Compile on host — .class lands in same workspaceRoot dir.
+            // Compile on host - .class lands in same workspaceRoot dir.
             // Container mounts workspaceRoot as /workspace (read-only),
             // so java -cp /workspace finds the .class file at runtime.
             compileJavaOnHost(javaFile, workspaceRoot);
 
         } else if ("python".equals(lang) || "python3".equals(lang)) {
-            // Write to file — avoids shell quote-stripping of f-strings, 
+            // Write to file - avoids shell quote-stripping of f-strings, 
             // double quotes, and special chars when passed via -c to Podman.
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("script.py"), code, StandardCharsets.UTF_8);
@@ -216,7 +216,7 @@ public class SandboxExecTool implements AgentTool {
             // We only warn if NOT in native mode, as it suggests a missing host JDK.
             boolean isNative = System.getProperty("org.graalvm.nativeimage.imagecode") != null;
             if (!isNative) {
-                log.warnf("[SandboxExecTool] javac not found at java.home — skipping host compilation. " +
+                log.warnf("[SandboxExecTool] javac not found at java.home - skipping host compilation. " +
                           "The sandbox container will likely fail. Verify the host has a full JDK.");
             }
             return;
@@ -243,7 +243,7 @@ public class SandboxExecTool implements AgentTool {
         }
 
         if (exitCode != 0) {
-            // Surface the real compiler error — LLM should fix the code, not hallucinate output.
+            // Surface the real compiler error - LLM should fix the code, not hallucinate output.
             throw new IOException("Java compilation failed (exit " + exitCode + "):\n" + compilerOutput);
         }
         log.debugf("[SandboxExecTool] javac compiled %s → %s (exit 0)",
@@ -253,7 +253,7 @@ public class SandboxExecTool implements AgentTool {
     /**
      * Finds javac from the running JVM's java.home.
      * The host always runs on a JDK when running Quarkus (dev or native build mode).
-     * Returns null only if somehow on a JRE-only host — should never happen.
+     * Returns null only if somehow on a JRE-only host - should never happen.
      */
     private Path resolveHostJavac() {
         String javaHome = System.getProperty("java.home");
@@ -268,7 +268,7 @@ public class SandboxExecTool implements AgentTool {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // execute() — host-side fallback when Podman is unavailable.
+    // execute() - host-side fallback when Podman is unavailable.
     // Only called when requiresSandbox() is false or via insecure-fallback.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
@@ -302,7 +302,7 @@ public class SandboxExecTool implements AgentTool {
             // securely via SandboxSecretResolver + tmpfs transport.
             // DirectExecutor has no secure secret injection mechanism.
             if (params.containsKey("secrets")) {
-                log.warnf("[SandboxExecTool] 'secrets' parameter ignored on direct host fallback — " +
+                log.warnf("[SandboxExecTool] 'secrets' parameter ignored on direct host fallback - " +
                           "Podman unavailable. session=%s", sessionId);
             }
             Map<String, String> requiredSecrets = Map.of();
@@ -327,8 +327,8 @@ public class SandboxExecTool implements AgentTool {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // executeJavaFallback() — host-only path when Podman is offline.
-    // Compile on host with javac, then run .class directly — same flow as
+    // executeJavaFallback() - host-only path when Podman is offline.
+    // Compile on host with javac, then run .class directly - same flow as
     // the Podman path but without container isolation.
     // ─────────────────────────────────────────────────────────────────────────
     private ToolResponse executeJavaFallback(String sessionId, Path workspaceRoot,
@@ -342,7 +342,7 @@ public class SandboxExecTool implements AgentTool {
         try {
             compileJavaOnHost(javaFile, workspaceRoot);
         } catch (IOException compileError) {
-            // Compilation failed — return the javac error so the LLM can fix the code.
+            // Compilation failed - return the javac error so the LLM can fix the code.
             return ToolResponse.failure(1, compileError.getMessage());
         }
 
@@ -419,7 +419,7 @@ public class SandboxExecTool implements AgentTool {
         return switch (lang) {
             // Python, node, and bash are now file-based via prepareWorkspace + sandboxCommand.
             // -c / -e is kept ONLY for the interpreted host-fallback path (execute() → executeInterpreted())
-            // where ProcessBuilder performs a direct OS exec() — no shell intermediary, quotes preserved.
+            // where ProcessBuilder performs a direct OS exec() - no shell intermediary, quotes preserved.
             case "python", "python3" -> List.of(resolvePythonExecutable(), "-c", code);
             case "bash"              -> List.of("bash", "-c", code);
             case "node"              -> List.of("node", "-e", code);

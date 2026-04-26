@@ -22,7 +22,7 @@ quarkus:
 
   arc:
     exclude-types:
-      # Exclude channel impl beans — their test suites run separately
+      # Exclude channel impl beans - their test suites run separately
       - com.arcclaw.channel.telegram.*
       - com.arcclaw.channel.web.*
       # Exclude the template-based producers that need Qute templates on classpath

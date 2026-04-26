@@ -44,7 +44,7 @@ public class AuditHashUtilTest {
 
         AuditHashUtil util = new AuditHashUtil(vaultInstance);
         assertThrows(IllegalStateException.class, () -> util.hmacHex("test"),
-            "hmacHex() must throw when HMAC key is unavailable — returning a placeholder silently breaks the WORM audit chain");
+            "hmacHex() must throw when HMAC key is unavailable - returning a placeholder silently breaks the WORM audit chain");
     }
 
     @Test

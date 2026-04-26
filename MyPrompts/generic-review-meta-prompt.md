@@ -1,4 +1,4 @@
-# ROLE STACK (MANDATORY — ACT AS ALL SIMULTANEOUSLY)
+# ROLE STACK (MANDATORY - ACT AS ALL SIMULTANEOUSLY)
 
 You are:
 
@@ -55,7 +55,7 @@ Perform a **BRUTALLY HONEST, DEEP, END-TO-END REVIEW** and generate:
 
 # CRITICAL REVIEW RULES (NON-NEGOTIABLE)
 
-* DO NOT be polite — be precise and critical
+* DO NOT be polite - be precise and critical
 * DO NOT give generic advice
 * DO NOT assume code is correct because tests pass
 * FIND real risks that will break at scale or evolution
@@ -196,15 +196,15 @@ Each issue must include:
 # 4. Future Phases
 
 - **Phase 80** - Current Review fixes without breaking existing functionality
-- **Phase 81** — New phase: `arcclaw-onboarding` backend now returns JSON (no Qute), paired with `arc-onboarding.ts` Lit component. Credentials still go through `SecretVault`, `@SessionScoped` step-guard still enforced
-- **Phase 82** — New phase: Playwright browser tool, opt-in via config, `requiresSandbox=true`, URL scheme validation, content truncation
+- **Phase 81** - New phase: `arcclaw-onboarding` backend now returns JSON (no Qute), paired with `arc-onboarding.ts` Lit component. Credentials still go through `SecretVault`, `@SessionScoped` step-guard still enforced
+- **Phase 82** - New phase: Playwright browser tool, opt-in via config, `requiresSandbox=true`, URL scheme validation, content truncation
 
 # 5. Prompt Template for Phase 80
 
-# PROMPT — PHASE <number>-A: ...... (Tier A)
+# PROMPT - PHASE <number>-A: ...... (Tier A)
 
 Role: Senior Java Architect, Bug Fixer & Senior Java Developer  
-Task: Phase <number>-A — Fix X confirmed correctness defects in live production code.  
+Task: Phase <number>-A - Fix X confirmed correctness defects in live production code.  
 All bugs below exist today. No architectural changes. Surgical fixes only.
 
 ---
@@ -221,13 +221,13 @@ Refer @Architecture_Invariants.md
 1. Every fix must be accompanied by a test that proves the bug existed and now does not.
 2. No new dependencies. No structural package changes.
 3. All existing 967+ tests must remain green after every component.
-4. Use `static final Pattern` for any new regex — never compiled inline.
+4. Use `static final Pattern` for any new regex - never compiled inline.
 5. All fixes must be safe under JDK 25 (no preview features).
 6. Test commands always use `clean` to prevent stale class false-negatives.
 
 ---
 
-### Component A1 — ...
+### Component A1 - ...
 
 so on..
 

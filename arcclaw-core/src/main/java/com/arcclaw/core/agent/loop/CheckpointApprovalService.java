@@ -31,7 +31,7 @@ public class CheckpointApprovalService {
     // its own connection. An outer REQUIRED tx on Connection-1 holds a reserved
     // SQLite write lock (XA BEGIN IMMEDIATE) that blocks the inner COMMIT.
     // Reads (findLatestAwaitingApproval, isAllBatchToolsDecided) work fine
-    // without an outer tx — SQLite auto-commits SELECT statements.
+    // without an outer tx - SQLite auto-commits SELECT statements.
     public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
         AgentCheckpoint cp = resolveAwaitingCheckpoint(sessionId);
         String actualSid = cp.getSessionId();
@@ -136,7 +136,7 @@ public class CheckpointApprovalService {
         // thread picks up the task.
         boolean claimed = agentStore.claimForResume(sessionId, agentRole);
         if (!claimed) {
-             log.infof("[RESUME-DB-CLAIM] session=%s already claimed — skipping trigger.", sessionId);
+             log.infof("[RESUME-DB-CLAIM] session=%s already claimed - skipping trigger.", sessionId);
              return;
         }
 

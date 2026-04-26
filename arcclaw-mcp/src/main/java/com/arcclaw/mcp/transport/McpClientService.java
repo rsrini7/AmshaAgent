@@ -321,7 +321,7 @@ public class McpClientService {
             } catch (IOException e) {
                 // F19 Dead Process Guard: cleanup on any transport failure
                 // next retry loop will call connectStdio via invoke() fallback
-                log.warnf("MCP STDIO transport error for %s: %s — tearing down process state", serverName, e.getMessage());
+                log.warnf("MCP STDIO transport error for %s: %s - tearing down process state", serverName, e.getMessage());
                 cleanupStdio(serverName);
                 throw e;
             }
@@ -361,7 +361,7 @@ public class McpClientService {
 
     @PreDestroy
     void cleanup() {
-        log.info("McpClientService shutting down — terminating local MCP processes");
+        log.info("McpClientService shutting down - terminating local MCP processes");
         processes.forEach((name, process) -> {
             process.destroy();
             try {

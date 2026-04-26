@@ -24,7 +24,7 @@
       <artifactId>arcclaw-mcp</artifactId>
     </dependency>
 
-    <!-- Runtime module only — NOT deployment -->
+    <!-- Runtime module only - NOT deployment -->
     <dependency>
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-core</artifactId>

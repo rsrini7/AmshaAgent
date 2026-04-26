@@ -61,7 +61,7 @@ public class MessagePipeline {
                         .map(ChannelPlugin::sender)
                         .ifPresentOrElse(
                             s -> s.sendRaw(context.getUser(), UserMessages.INTERNAL_ERROR),
-                            () -> log.warnf("MessagePipeline: no sender for type %s — error notification dropped", context.getChannelType())
+                            () -> log.warnf("MessagePipeline: no sender for type %s - error notification dropped", context.getChannelType())
                         );
                 } catch (Exception notifyEx) {
                     log.warnf("Failed to send pipeline error notification to chat %s: %s",

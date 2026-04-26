@@ -9,7 +9,7 @@ class SecurityEventTypeTest {
 
     @Test
     void testMandatoryFlagOnSecurityEventTypes() {
-        // Mandatory — fail-closed
+        // Mandatory - fail-closed
         assertTrue(SecurityEventType.VAULT_ACCESS.isMandatory());
         assertTrue(SecurityEventType.TOOL_INVOKED.isMandatory());
         assertTrue(SecurityEventType.BUDGET_EXCEEDED.isMandatory());
@@ -17,7 +17,7 @@ class SecurityEventTypeTest {
         assertTrue(SecurityEventType.APPROVAL_GRANTED.isMandatory());
         assertTrue(SecurityEventType.APPROVAL_DENIED.isMandatory());
 
-        // Non-mandatory — fire-and-forget
+        // Non-mandatory - fire-and-forget
         assertFalse(SecurityEventType.REFLEX_COMMAND.isMandatory());
         assertFalse(SecurityEventType.CONTEXT_COMPACTED.isMandatory());
         assertFalse(SecurityEventType.LOOP_FINISH.isMandatory());

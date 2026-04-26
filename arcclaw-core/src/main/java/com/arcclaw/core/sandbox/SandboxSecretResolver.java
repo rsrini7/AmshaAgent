@@ -35,7 +35,7 @@ public class SandboxSecretResolver {
      * <p>
      * Fail-closed contract:
      * - null map     → IllegalArgumentException (programming error in caller)
-     * - empty map    → empty result (valid — tool requires no secrets)
+     * - empty map    → empty result (valid - tool requires no secrets)
      * - missing key  → SecurityException (vault must be the sole source of truth)
      * <p>
      * The returned byte arrays are owned by this method's callers and MUST be
@@ -44,7 +44,7 @@ public class SandboxSecretResolver {
     public Map<String, byte[]> resolveSecrets(Map<String, String> requiredSecrets) {
         if (requiredSecrets == null) {
             throw new IllegalArgumentException(
-                    "requiredSecrets must not be null — check ToolRegistry.extractRequiredSecrets()");
+                    "requiredSecrets must not be null - check ToolRegistry.extractRequiredSecrets()");
         }
         if (requiredSecrets.isEmpty()) {
             return new LinkedHashMap<>();
@@ -64,7 +64,7 @@ public class SandboxSecretResolver {
                     log.debugf("SandboxSecretResolver: resolved %s from session vault", vaultKeyName);
                 }
             } catch (Exception e) {
-                // Session vault unavailable (e.g. no active WorkspaceScope) — fall through
+                // Session vault unavailable (e.g. no active WorkspaceScope) - fall through
                 log.debugf("SandboxSecretResolver: session vault unavailable for %s (%s), " +
                            "trying system vault", vaultKeyName, e.getMessage());
             }
@@ -78,13 +78,13 @@ public class SandboxSecretResolver {
                 }
             }
 
-            // 3. Fail-closed — no hardcoded substitutions, no System.getenv() fallback
+            // 3. Fail-closed - no hardcoded substitutions, no System.getenv() fallback
             if (resolvedKey == null) {
                 throw new SecurityException("Required secret not in vault: " + vaultKeyName);
             }
 
             try (VaultKey key = resolvedKey) {
-                // SECURE TRANSFER: direct byte array copy — no String materialization.
+                // SECURE TRANSFER: direct byte array copy - no String materialization.
                 // The VaultKey source bytes are zeroed on close() above.
                 byte[] src = key.get();
                 byte[] copy = new byte[src.length];

@@ -30,15 +30,15 @@ public class TelegramChannelRoute extends RouteBuilder {
     public void configure() throws Exception {
         log.infof("Telegram Route configuring (enabled=%b, tokenPresent=%b)", enabled, botToken != null && !botToken.isBlank());
         if (!enabled) {
-            log.info("Telegram channel disabled — skipping route");
+            log.info("Telegram channel disabled - skipping route");
             return;
         }
 
-        // Fail fast if token is clearly a placeholder — don't let Camel hang
+        // Fail fast if token is clearly a placeholder - don't let Camel hang
         if (botToken == null || botToken.isBlank()
                 || botToken.startsWith("mock")
                 || botToken.equals("mock-telegram-token")) {
-            log.warn("Telegram bot token is a placeholder — skipping route registration.");
+            log.warn("Telegram bot token is a placeholder - skipping route registration.");
             return;
         }
 
@@ -81,7 +81,7 @@ public class TelegramChannelRoute extends RouteBuilder {
 
             if (camelContext.getRoute("telegram-bot") == null) {
                 log.info("Registering Telegram route...");
-                // ← DO NOT wrap in Thread/VirtualThread/lambda — must run on this CDI thread
+                // ← DO NOT wrap in Thread/VirtualThread/lambda - must run on this CDI thread
                 camelContext.addRoutes(this);
                 camelContext.getRouteController().startRoute("telegram-bot");
                 log.infof("Telegram route started. Status=%s",

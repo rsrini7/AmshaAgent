@@ -46,7 +46,7 @@ public class RagSchemaInitializer {
         }
 
         if (!ftsInterceptor.isVectorSearchEnabled()) {
-            log.warn("RagSchemaInitializer: vec0 not loaded — skipping vec_global DDL. " +
+            log.warn("RagSchemaInitializer: vec0 not loaded - skipping vec_global DDL. " +
                 "Ensure the native binary exists at arcclaw.rag.vec-extension-path " +
                 "(default: ./lib/vec0). Download vec0.so/.dll/.dylib from: " +
                 "https://github.com/asg017/sqlite-vec/releases/tag/v0.1.6");

@@ -36,14 +36,14 @@ public class ApprovalStateMachine implements ApprovalGateway {
     @ConfigProperty(name = "arcclaw.hitl.timeout-hours", defaultValue = "24")
     long hitlTimeoutHours;
 
-    // ✅ Split the write and the resume — write inside NOT_SUPPORTED,
+    // ✅ Split the write and the resume - write inside NOT_SUPPORTED,
     // resume after the write is committed
     @Override
     @Transactional(TxType.NOT_SUPPORTED)   // was @Transactional
     public ApprovalResult decide(String sessionId, String toolName,
                                  ApprovalDecision decision, String reason) {
         
-        // 1. Load checkpoint — return NOT_FOUND if absent
+        // 1. Load checkpoint - return NOT_FOUND if absent
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) {
             return new ApprovalResult(ApprovalOutcome.NOT_FOUND, sessionId, toolName, 0);

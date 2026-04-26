@@ -61,7 +61,7 @@ public class SessionResolutionHandler implements MessageHandler {
         context.setSessionId(sessionId);
         log.debugf("Resolved session %s for [%s/%s/%s]", sessionId, channelType, channelId, userId);
 
-        // Load stored autonomy level — three-tier resolution:
+        // Load stored autonomy level - three-tier resolution:
         // 1. In-memory heartbeat (fastest, lost on restart)
         // 2. Latest checkpoint in DB (survives restarts, set by AgentLoop per turn)
         // 3. Default SUPERVISED (first-ever Telegram message or post-restart cold start)

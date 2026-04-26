@@ -21,12 +21,12 @@ public class DestructiveVocabularyFilter {
 
     private static final Logger Log = Logger.getLogger(DestructiveVocabularyFilter.class);
 
-    // Single-word destructive tokens — word boundary anchoring is reliable here
+    // Single-word destructive tokens - word boundary anchoring is reliable here
     private static final Pattern DESTRUCTIVE_WORDS = Pattern.compile(
             "(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
     );
 
-    // rm -rf variants — word boundary unreliable for multi-word tokens
+    // rm -rf variants - word boundary unreliable for multi-word tokens
     // Match: rm-rf, rm -rf, rm  -rf, rm\t-rf, rmrf (no separator)
     private static final Pattern RM_RF_PATTERN = Pattern.compile(
             "(?i)\\brm\\s*-?\\s*rf\\b"
@@ -57,7 +57,7 @@ public class DestructiveVocabularyFilter {
         try {
             resolvedRole = AgentRoleEnum.fromString(role);
         } catch (IllegalArgumentException _) {
-            // Fallback for unknown roles — cannot safely determine capability
+            // Fallback for unknown roles - cannot safely determine capability
             return role;
         }
 

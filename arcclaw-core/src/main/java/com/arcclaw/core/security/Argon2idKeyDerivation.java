@@ -81,10 +81,10 @@ public class Argon2idKeyDerivation {
             // Return wrapped key (caller is responsible for closing)
             return new VaultKey(resultKey);
         } finally {
-            // Zero ALL intermediate arrays immediately after use — not only in @PreDestroy
+            // Zero ALL intermediate arrays immediately after use - not only in @PreDestroy
             Arrays.fill(passwordBytes, (byte) 0);
             Arrays.fill(pepperChars, '\0');
-            // Also zero the ByteBuffer backing array — encode() allocates an internal buffer
+            // Also zero the ByteBuffer backing array - encode() allocates an internal buffer
             // that may retain pepper bytes after bb.get() completes
             if (bb.hasArray()) {
                 Arrays.fill(bb.array(), (byte) 0);

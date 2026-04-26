@@ -26,7 +26,7 @@ class StartupSecurityValidatorUnknownProfileTest {
     public static class Profile implements QuarkusTestProfile {
         @Override
         public Map<String, String> getConfigOverrides() {
-            // Boot safely — validator passes during Quarkus startup
+            // Boot safely - validator passes during Quarkus startup
             return Map.of(
                 "arcclaw.auto-seed-secrets", "false",
                 "quarkus.profile",                           "test",
@@ -50,7 +50,7 @@ class StartupSecurityValidatorUnknownProfileTest {
         StartupSecurityValidator real =
             ClientProxy.unwrap(validator);
 
-        real.profile    = "production";  // typo — not in denylist
+        real.profile    = "production";  // typo - not in denylist
         real.pepper     = "dev-pepper-insecure";
         real.allowedUserIds = Optional.of(List.of(123L));
         real.allowedUsers   = Optional.empty();

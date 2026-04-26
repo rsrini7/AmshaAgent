@@ -69,7 +69,7 @@ public final class TextPatternUtils {
         if (text == null) return false;
         String trimmed = text.strip();
         
-        // Only flag single-block JSON — multi-line prose ending with } is valid.
+        // Only flag single-block JSON - multi-line prose ending with } is valid.
         // 20 lines covers all realistic tool-call JSON echoes.
         long lineCount = trimmed.lines().count();
         if (lineCount > JSON_SALVAGE_MAX_LINES) return false;

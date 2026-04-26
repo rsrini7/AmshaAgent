@@ -56,7 +56,7 @@ public class SelfCorrectionRetryManager implements CorrectionStrategy {
                 + newCount + "/" + MAX_SCHEMA_CORRECTION_RETRIES + "): "
                 + failureReason
                 + ". Please respond with a fully valid, schema-compliant JSON output. "
-                + "Do not include any prose or markdown — only the JSON object.";
+                + "Do not include any prose or markdown - only the JSON object.";
     }
 
 }

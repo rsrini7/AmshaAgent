@@ -123,7 +123,7 @@ public class ToolInvocationGuard {
 
         if (!isInternalTool && !isDynamicAllowed) {
             log.warnf(
-                "GUARD Unknown tool call attempt '%s' in session '%s' — " +
+                "GUARD Unknown tool call attempt '%s' in session '%s' - " +
                 "not in ToolRegistry and not allowed by DynamicToolLookup.",
                 toolName, sessionId);
             return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");

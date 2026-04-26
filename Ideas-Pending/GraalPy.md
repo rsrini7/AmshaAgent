@@ -6,7 +6,7 @@ GraalPy is an implementation of Python for the JVM, compatible with Python 3.12,
 
 ## Key Capabilities
 
-- **Embed Python in Java**: Load and run Python packages directly from Java code using the GraalVM Polyglot API — you create a `PolyglotContext` and call `eval("python", ...)` [jdriven](https://jdriven.com/blog/2025/03/Tabs-and-Brackets-Mixing-Java-and-Python-using-GraalPy)
+- **Embed Python in Java**: Load and run Python packages directly from Java code using the GraalVM Polyglot API - you create a `PolyglotContext` and call `eval("python", ...)` [jdriven](https://jdriven.com/blog/2025/03/Tabs-and-Brackets-Mixing-Java-and-Python-using-GraalPy)
 - **Script Java with Python**: Python scripts can directly interact with Java objects, enabling powerful hybrid workflows [graalvm](https://www.graalvm.org/python/)
 - **Native Binary Packaging**: Compile a Python app (with all its dependencies) into a single standalone native binary using GraalVM Native Image [docs.oracle](https://docs.oracle.com/en/graalvm/jdk/22/docs/reference-manual/python/Python-Runtime/)
 - **Jython Migration Path**: GraalPy is the modern upgrade path for teams still using Jython [graalvm](https://www.graalvm.org/python/)
@@ -14,7 +14,7 @@ GraalPy is an implementation of Python for the JVM, compatible with Python 3.12,
 
 ## Performance
 
-GraalPy uses GraalVM's state-of-the-art JIT compiler to significantly boost execution speed. When JIT-compiled, pure Python code runs roughly **~4x faster than CPython** on official benchmarks. Some benchmarks put it even higher — around **17x faster than CPython and ~2x faster than PyPy**. However, without the JIT (e.g., on very short-lived scripts), it can be ~4x *slower* than CPython, so it shines best in long-running server processes — exactly the kind of workloads common in Quarkus/microservice architectures. [graalvm](https://www.graalvm.org/python/docs/)
+GraalPy uses GraalVM's state-of-the-art JIT compiler to significantly boost execution speed. When JIT-compiled, pure Python code runs roughly **~4x faster than CPython** on official benchmarks. Some benchmarks put it even higher - around **17x faster than CPython and ~2x faster than PyPy**. However, without the JIT (e.g., on very short-lived scripts), it can be ~4x *slower* than CPython, so it shines best in long-running server processes - exactly the kind of workloads common in Quarkus/microservice architectures. [graalvm](https://www.graalvm.org/python/docs/)
 
 ## Distribution Modes
 
@@ -54,7 +54,7 @@ Given ArcClaw is a Java-based AI agent system built on Quarkus with LangChain4J,
 
 ## 1. Python Agent Frameworks Alongside LangChain4J
 
-The most powerful use case: Oracle has already published a sample showing **LangGraph + GraalPy embedded into a Java microservice**. Since ArcClaw already uses LangChain4J, GraalPy would let you run Python-native LangGraph agent graphs directly inside the same JVM process — no separate Python microservice, no gRPC, no HTTP overhead. This is especially useful for multi-agent coordination patterns that LangGraph handles well but LangChain4J hasn't fully implemented. [javapro](https://javapro.io/2026/03/10/bridging-java-and-python-for-ai-ml-in-production-the-case-for-graalpy-on-graalvm/)
+The most powerful use case: Oracle has already published a sample showing **LangGraph + GraalPy embedded into a Java microservice**. Since ArcClaw already uses LangChain4J, GraalPy would let you run Python-native LangGraph agent graphs directly inside the same JVM process - no separate Python microservice, no gRPC, no HTTP overhead. This is especially useful for multi-agent coordination patterns that LangGraph handles well but LangChain4J hasn't fully implemented. [javapro](https://javapro.io/2026/03/10/bridging-java-and-python-for-ai-ml-in-production-the-case-for-graalpy-on-graalvm/)
 
 ***
 
@@ -76,7 +76,7 @@ ArcClaw's RAG pipeline likely ingests documents before storing embeddings in SQL
 
 - **PyMuPDF / pdfplumber** for rich PDF parsing
 - **unstructured.io** for multi-format document chunking
-- **Docling** (IBM's new open-source document parser) — no Java equivalent exists
+- **Docling** (IBM's new open-source document parser) - no Java equivalent exists
 
 The pattern: Java hands off the raw document bytes → GraalPy runs the Python parser → structured chunks return to Java for embedding via Gemini. [ateam-oracle](https://www.ateam-oracle.com/want-to-use-llm-python-frameworks-in-your-java-application-try-graalpy)
 
@@ -84,7 +84,7 @@ The pattern: Java hands off the raw document bytes → GraalPy runs the Python p
 
 ## 4. Hot-Loadable Python Tool Definitions
 
-ArcClaw's tool/action system could let operators define new agent tools in Python files at runtime, loaded via GraalPy's `polyglot.export_value` mechanism. This is a major DX win — writing a new agent capability becomes a Python script drop, not a Java compile-deploy cycle. The pattern: [jdriven](https://jdriven.com/blog/2025/03/Tabs-and-Brackets-Mixing-Java-and-Python-using-GraalPy)
+ArcClaw's tool/action system could let operators define new agent tools in Python files at runtime, loaded via GraalPy's `polyglot.export_value` mechanism. This is a major DX win - writing a new agent capability becomes a Python script drop, not a Java compile-deploy cycle. The pattern: [jdriven](https://jdriven.com/blog/2025/03/Tabs-and-Brackets-Mixing-Java-and-Python-using-GraalPy)
 
 ```java
 // Load a Python tool at runtime
@@ -98,7 +98,7 @@ Value result = toolFn.execute(inputJson);
 
 ## 5. Hybrid Model Inference
 
-For any steps in ArcClaw that need local model inference (rather than calling Gemini via API), GraalPy unlocks HuggingFace Transformers, sentence-transformers for embeddings, or lightweight classifiers — all running in-process. The architecture is clean: [ateam-oracle](https://www.ateam-oracle.com/want-to-use-llm-python-frameworks-in-your-java-application-try-graalpy)
+For any steps in ArcClaw that need local model inference (rather than calling Gemini via API), GraalPy unlocks HuggingFace Transformers, sentence-transformers for embeddings, or lightweight classifiers - all running in-process. The architecture is clean: [ateam-oracle](https://www.ateam-oracle.com/want-to-use-llm-python-frameworks-in-your-java-application-try-graalpy)
 
 | Stage | Language | Responsibility |
 |---|---|---|
@@ -111,21 +111,21 @@ For any steps in ArcClaw that need local model inference (rather than calling Ge
 
 ## Recommended Starting Point
 
-The lowest-friction entry is **NLP enrichment at input/output boundaries** — embed a single Python function (e.g., SpaCy entity extractor) via GraalPy in one Quarkus service bean, validate the type-marshalling overhead, and expand from there. The `PolyglotContext` can be initialized as a `@ApplicationScoped` CDI bean in Quarkus for efficient reuse across requests, avoiding the cold-start cost of context creation per call. [developersummit](https://developersummit.com/session/practical-python-ai-in-java-with-graalpy)
+The lowest-friction entry is **NLP enrichment at input/output boundaries** - embed a single Python function (e.g., SpaCy entity extractor) via GraalPy in one Quarkus service bean, validate the type-marshalling overhead, and expand from there. The `PolyglotContext` can be initialized as a `@ApplicationScoped` CDI bean in Quarkus for efficient reuse across requests, avoiding the cold-start cost of context creation per call. [developersummit](https://developersummit.com/session/practical-python-ai-in-java-with-graalpy)
 
 ---
 
-Gemini's answer reads well but has **several critical omissions that directly affect ArcClaw** — especially one that's a dealbreaker depending on your build targets.
+Gemini's answer reads well but has **several critical omissions that directly affect ArcClaw** - especially one that's a dealbreaker depending on your build targets.
 
 ***
 
-## The Critical Gap Gemini Missed — Native Image Incompatibility
+## The Critical Gap Gemini Missed - Native Image Incompatibility
 
 This is the most important thing for you specifically:
 
 > **GraalPy does NOT work with GraalVM Native Image.**
 
-The `PolyglotContext` that runs Python requires the full JVM JIT compiler to perform at all. Without it, GraalPy runs pure Python ~4x **slower** than CPython. Your ArcClaw native builds via `quarkus build --native` would be completely unusable with any GraalPy integration — you'd have to ship JVM mode only for any service that embeds Python. [graalvm](https://www.graalvm.org/python/docs/)
+The `PolyglotContext` that runs Python requires the full JVM JIT compiler to perform at all. Without it, GraalPy runs pure Python ~4x **slower** than CPython. Your ArcClaw native builds via `quarkus build --native` would be completely unusable with any GraalPy integration - you'd have to ship JVM mode only for any service that embeds Python. [graalvm](https://www.graalvm.org/python/docs/)
 
 ```
 ArcClaw + GraalPy = JVM mode only
@@ -140,15 +140,15 @@ If you use native image anywhere in your deployment pipeline, this is a hard arc
 
 ### ✅ Actually compelling for ArcClaw
 
-**Hot-loadable Python tools (Point 4)** is the most relevant one for your architecture. Your current `ToolCapability` enum requires a compile-deploy cycle for every new tool. GraalPy's `polyglot.eval` lets operators drop a `.py` file and have it available immediately — fitting naturally into your existing `ToolRegistry`. [jdriven](https://jdriven.com/blog/2025/03/Tabs-and-Brackets-Mixing-Java-and-Python-using-GraalPy)
+**Hot-loadable Python tools (Point 4)** is the most relevant one for your architecture. Your current `ToolCapability` enum requires a compile-deploy cycle for every new tool. GraalPy's `polyglot.eval` lets operators drop a `.py` file and have it available immediately - fitting naturally into your existing `ToolRegistry`. [jdriven](https://jdriven.com/blog/2025/03/Tabs-and-Brackets-Mixing-Java-and-Python-using-GraalPy)
 
 **NLP enrichment at pipeline boundaries (Point 2)** is low-risk and high-value. A single `@ApplicationScoped` `PolyglotContext` bean injected into `IntentClassificationHandler` could replace your LLM-based intent classifier with a faster local SpaCy model for high-confidence cases. [javapro](https://javapro.io/2026/03/10/bridging-java-and-python-for-ai-ml-in-production-the-case-for-graalpy-on-graalvm/)
 
 ### ⚠️ Oversold by Gemini
 
-**LangGraph inside JVM (Point 1)** — LangGraph has deep asyncio and Pydantic dependencies. Getting it running stably inside GraalPy inside a Quarkus thread model is a significant undertaking. The Oracle sample Gemini references is a toy demo, not production-validated. For ArcClaw's multi-agent coordination, your existing Java state machine is already doing what LangGraph would do.
+**LangGraph inside JVM (Point 1)** - LangGraph has deep asyncio and Pydantic dependencies. Getting it running stably inside GraalPy inside a Quarkus thread model is a significant undertaking. The Oracle sample Gemini references is a toy demo, not production-validated. For ArcClaw's multi-agent coordination, your existing Java state machine is already doing what LangGraph would do.
 
-**HuggingFace Transformers (Point 5)** — Most HuggingFace packages use C extensions (native `.so` files). GraalPy's support for C extension packages is still **experimental and incomplete**. `sentence-transformers` specifically would be very difficult to run reliably. [graalvm](https://www.graalvm.org/python/docs/)
+**HuggingFace Transformers (Point 5)** - Most HuggingFace packages use C extensions (native `.so` files). GraalPy's support for C extension packages is still **experimental and incomplete**. `sentence-transformers` specifically would be very difficult to run reliably. [graalvm](https://www.graalvm.org/python/docs/)
 
 ***
 
@@ -183,7 +183,7 @@ public class GraalPyRuntime {
 }
 ```
 
-**One important note:** `Context` is **not thread-safe** — a single `@ApplicationScoped` bean needs `synchronized` methods or a pool pattern, since Quarkus handles requests on multiple threads. Gemini did not mention this.
+**One important note:** `Context` is **not thread-safe** - a single `@ApplicationScoped` bean needs `synchronized` methods or a pool pattern, since Quarkus handles requests on multiple threads. Gemini did not mention this.
 
 ***
 
@@ -192,16 +192,16 @@ public class GraalPyRuntime {
 | Gemini Point | Verdict |
 |---|---|
 | LangGraph inside JVM | Technically possible, practically risky |
-| NLP enrichment | ✅ Best starting point — valid |
+| NLP enrichment | ✅ Best starting point - valid |
 | RAG document parsing | ✅ Valid, Python tooling is genuinely better here |
 | Hot-loadable Python tools | ✅ Very relevant to ArcClaw's ToolRegistry pattern |
 | HuggingFace Transformers | ⚠️ C extensions not reliably supported |
-| Native Image compatibility | ❌ Not mentioned — critical omission for your setup |
-| Thread safety of Context | ❌ Not mentioned — will cause bugs in Quarkus |
+| Native Image compatibility | ❌ Not mentioned - critical omission for your setup |
+| Thread safety of Context | ❌ Not mentioned - will cause bugs in Quarkus |
 
 ---
 
-First, I owe you a correction from my earlier message — I was **wrong** about GraalPy and Native Image.
+First, I owe you a correction from my earlier message - I was **wrong** about GraalPy and Native Image.
 
 ***
 
@@ -209,24 +209,24 @@ First, I owe you a correction from my earlier message — I was **wrong** about 
 
 > ~~"GraalPy does NOT work with GraalVM Native Image"~~
 
-GraalPy **does** support Native Image via `mvn -Pnative package`. I gave you incorrect information earlier — apologies. It uses the Truffle framework which has AOT support built in. [graalvm](https://www.graalvm.org/jdk23/reference-manual/python/native-applications/index.html)
+GraalPy **does** support Native Image via `mvn -Pnative package`. I gave you incorrect information earlier - apologies. It uses the Truffle framework which has AOT support built in. [graalvm](https://www.graalvm.org/jdk23/reference-manual/python/native-applications/index.html)
 
 ***
 
-## But Here's the Real Concern — Binary Size
+## But Here's the Real Concern - Binary Size
 
 GraalPy native image support comes with a **significant cost** that does matter for ArcClaw: [graalvm](https://www.graalvm.org/jdk23/reference-manual/python/native-applications/index.html)
 
 - Including GraalPy bundles the **entire Python standard library** into the binary by default
 - Even with all the pruning flags (`WithoutSSL`, `WithoutDigest`, `WithoutCompressionLibraries`, etc.), size only reduces **~20-50%**
 - A typical Quarkus native binary is ~50-80MB. GraalPy adds a substantial chunk on top
-- C extension packages (SpaCy, NumPy, HuggingFace) still **do not work** in native image — only pure Python
+- C extension packages (SpaCy, NumPy, HuggingFace) still **do not work** in native image - only pure Python
 
 So **single binary is possible**, but bloated and limited to pure-Python only.
 
 ***
 
-## Verdict for ArcClaw — Stop Here
+## Verdict for ArcClaw - Stop Here
 
 Given ArcClaw's priorities:
 
@@ -235,16 +235,16 @@ Given ArcClaw's priorities:
 | Single binary goal | Possible but binary grows significantly |
 | SpaCy / HuggingFace | ❌ C extensions blocked in native image |
 | Hot-loadable tools | ❌ Python files must be bundled at build time, not dropped at runtime |
-| LangGraph | ❌ asyncio + C deps — won't work in native |
+| LangGraph | ❌ asyncio + C deps - won't work in native |
 | Simplicity | ❌ Complex build configuration for marginal gain |
 
-The two use cases that made GraalPy interesting for ArcClaw were **hot-loadable Python tools** and **NLP via SpaCy** — both break in native image exactly where you need them.
+The two use cases that made GraalPy interesting for ArcClaw were **hot-loadable Python tools** and **NLP via SpaCy** - both break in native image exactly where you need them.
 
 ***
 
 ## Native-Image-Compatible Alternative
 
-**ONNX Runtime for Java** is the clean answer. Python is used **once** to export a model to `.onnx` — then it runs entirely in Java with zero Python runtime, zero binary size penalty, and full native image compatibility. [the-main-thread](https://www.the-main-thread.com/p/quarkus-onnx-pgvector-image-search-tutorial)
+**ONNX Runtime for Java** is the clean answer. Python is used **once** to export a model to `.onnx` - then it runs entirely in Java with zero Python runtime, zero binary size penalty, and full native image compatibility. [the-main-thread](https://www.the-main-thread.com/p/quarkus-onnx-pgvector-image-search-tutorial)
 
 ```
 Python (dev time only)          Java/Quarkus (production)

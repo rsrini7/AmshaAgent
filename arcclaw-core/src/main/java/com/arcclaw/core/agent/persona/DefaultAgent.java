@@ -65,7 +65,7 @@ public class DefaultAgent implements Agent {
         instance.data("USER_TZ_OFFSET", zoneId.getRules().getOffset(Instant.now()).toString() + " " + zoneId.getId());
         instance.data("CURRENT_LOCAL_TIME", localNow.format(DateTimeFormatter.ofPattern("HH:mm z")));
 
-        // Seed scheduling keys as null — Qute {#if} treats null as false
+        // Seed scheduling keys as null - Qute {#if} treats null as false
         // CommandDispatchHandler overwrites these if real values are passed in context.data()
         instance.data("SUGGESTED_CRON",     null);
         instance.data("TARGET_UTC_HOUR",    null);

@@ -206,7 +206,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
  
         List<ChatMessage> historyToInclude = filteredAssembled;
         if (finalIsSimpleChitchat || context.isForceFinishRetry()) {
-            log.debugf("[LangChainReasoningEngine] %s detected for session %s — scrubbing tool history to prevent pattern mimicry",
+            log.debugf("[LangChainReasoningEngine] %s detected for session %s - scrubbing tool history to prevent pattern mimicry",
                     finalIsSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
             
             historyToInclude = filteredAssembled.stream()
@@ -238,7 +238,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 messages.add(UserMessage.userMessage(
                     "Your previous response contained raw JSON or tool-call syntax. " +
                     "Answer in plain prose only. All tools have already returned their results " +
-                    "— do NOT call any more tools. Summarize the findings and call FINISH."
+                    "- do NOT call any more tools. Summarize the findings and call FINISH."
                 ));
             }
         }
@@ -268,7 +268,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
  
         List<ToolSpecification> toolSpecifications;
         if (finalIsSimpleChitchat || context.isForceFinishRetry()) {
-            log.debugf("[LangChainReasoningEngine] %s detected for session %s — stripping all tools from request",
+            log.debugf("[LangChainReasoningEngine] %s detected for session %s - stripping all tools from request",
                     finalIsSimpleChitchat ? "Simple chitchat" : "Force finish retry", sessionId);
             toolSpecifications = List.of();
         } else {
@@ -303,7 +303,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             Throwable effective = (e.getClass() == Exception.class && e.getCause() != null) ? e.getCause() : e;
             
             if (effective instanceof LlmMalformedResponseException ex) {
-                log.warnf("[LangChainReasoningEngine] Schema validation error — " +
+                log.warnf("[LangChainReasoningEngine] Schema validation error - " +
                         "re-throwing to state machine for retry handling: %s", ex.getMessage());
                 throw ex;
             }
@@ -367,7 +367,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     // via sandbox_exec so the approval flow is preserved.
                     if (extractedProse != null && looksLikeTruncatedOrPartialCode(extractedProse)) {
                         log.warnf("[LangChainReasoningEngine] Truncated/partial code detected in " +
-                                "failed_generation for session %s — injecting size-constraint retry",
+                                "failed_generation for session %s - injecting size-constraint retry",
                                 sessionId);
                         context.incrementTruncationRetry();
                         return ReasoningStep.pending(
@@ -384,10 +384,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                     if (extractedProse != null && !extractedProse.isBlank()) {
 
-                        // prose contains embedded sandbox_exec JSON — don't FINISH, inject correction
+                        // prose contains embedded sandbox_exec JSON - don't FINISH, inject correction
                         if (containsEmbeddedSandboxToolCall(extractedProse)) {
                             log.warnf("[LangChainReasoningEngine] Failed generation has prose + embedded " +
-                                    "sandbox_exec call for session %s — injecting direct-tool correction", sessionId);
+                                    "sandbox_exec call for session %s - injecting direct-tool correction", sessionId);
                             return ReasoningStep.pending(
                                     "LLM wrapped sandbox_exec tool call inside prose instead of calling directly",
                                     "OBSERVE", Map.of(), 0, 0
@@ -402,7 +402,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         // Force back to tool calling and quote any prior error from history.
                         if (TextPatternUtils.goalRequestsExecution(goal)) {
                             log.warnf("[LangChainReasoningEngine] Goal='%s' requests execution but LLM " +
-                                            "returned prose for session %s — injecting correction",
+                                            "returned prose for session %s - injecting correction",
                                     goal, sessionId);
 
                             // 🟢 Bug-3 Fix: Quote the compiler error from history to guide the LLM.
@@ -412,7 +412,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                                     .reduce((_, second) -> second)
                                     .orElse(null);
 
-                            String hint = "STOP. The user asked you to EXECUTE the code — not explain it. " +
+                            String hint = "STOP. The user asked you to EXECUTE the code - not explain it. " +
                                     "Do NOT output markdown, steps, or code blocks. " +
                                     "Call sandbox_exec RIGHT NOW with the complete code as your ONLY response.";
                             
@@ -430,7 +430,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         // intercept write intents before FINISH (only if not already done)
                         if (goalIsWriteIntent(goal) && !historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {
                             log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced prose " +
-                                            "instead of tool call for session %s — injecting correction",
+                                            "instead of tool call for session %s - injecting correction",
                                     goal, sessionId);
                             return ReasoningStep.pending(
                                     "LLM wrote prose for a write-intent goal instead of calling ingest_document",
@@ -438,30 +438,30 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             ).withObservation(
                                     "CORRECTION: The user wants to STORE data. You MUST call ingest_document RIGHT NOW. " +
                                             "Do NOT explain. Do NOT write steps. " +
-                                            "The text parameter may contain [REDACTED-*] placeholders — pass them as-is. " +
+                                            "The text parameter may contain [REDACTED-*] placeholders - pass them as-is. " +
                                             "Call ingest_document immediately with the sanitized text."
                             );
                         }
 
-                        // §7.31: Coordinator fast-path — if model returns prose instead of tool call,
+                        // §7.31: Coordinator fast-path - if model returns prose instead of tool call,
                         // and it's NOT a write-intent, extract it as a valid answer.
                         if (AgentRoleEnum.COORDINATOR.id().equals(agentRole)) {
                             log.infof("[LangChainReasoningEngine] Coordinator prose-answer pattern detected " +
-                                    "(no tools, no code fences) for session %s — finishing", sessionId);
+                                    "(no tools, no code fences) for session %s - finishing", sessionId);
                             return ReasoningStep.pending(
-                                    "LLM generated valid prose — extracted from failed_generation",
+                                    "LLM generated valid prose - extracted from failed_generation",
                                     "FINISH",
                                     Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, extractedProse),
                                     0, 0
                             );
                         }
 
-                        // §7.40: Coder hard-correction — if model returns prose for an execution goal,
+                        // §7.40: Coder hard-correction - if model returns prose for an execution goal,
                         // force it back into tool-calling mode immediately.
                         if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(goal)
                                 && proseIsUnexecutedCodePlan(extractedProse)) {
                             log.warnf("[LangChainReasoningEngine] Coder produced prose for execution goal '%s' " +
-                                    "in session %s — injecting hard-tool correction", goal, sessionId);
+                                    "in session %s - injecting hard-tool correction", goal, sessionId);
                             return ReasoningStep.systemMessage(
                                     "STOP. You must EXECUTE code to fulfill this request. " +
                                     "Do NOT write text. Do NOT explain. Do NOT use markdown. " +
@@ -470,9 +470,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         }
                     }
 
-                    // Extraction failed — fallback: inject correction context
+                    // Extraction failed - fallback: inject correction context
                     log.warnf("[LangChainReasoningEngine] Prose detected but extraction failed " +
-                            "— falling back to correction");
+                            "- falling back to correction");
                     return ReasoningStep.pending(
                             "Generated raw text instead of structured FINISH call",
                             "OBSERVE", Map.of(), 0, 0
@@ -482,7 +482,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     );
                 }
 
-                log.warnf("[LangChainReasoningEngine] LLM called unavailable tool — " +
+                log.warnf("[LangChainReasoningEngine] LLM called unavailable tool - " +
                         "injecting inline correction: %s", msg);
                 return ReasoningStep.pending(
                         "Attempted to call a tool not available in this context",
@@ -497,7 +497,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
 
             if (e instanceof LlmRateLimitException) {
-                log.warnf("[LangChainReasoningEngine] Rate limit — root cause: %s", 
+                log.warnf("[LangChainReasoningEngine] Rate limit - root cause: %s", 
                     AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage()));
                 meterRegistry.counter("arcclaw.llm.rate_limit.hit").increment();
                 rateLimitTracker.recordHit("primary");
@@ -517,11 +517,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             String answer = (String) parsedStep.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
             if (answer != null && !answer.isBlank()) {
                 log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced a FINISH step " +
-                        "instead of tool call for session %s — injecting correction", goal, sessionId);
+                        "instead of tool call for session %s - injecting correction", goal, sessionId);
                 return ReasoningStep.systemMessage(
                         "CORRECTION: The user wants to STORE data. You MUST call ingest_document RIGHT NOW. " +
                         "Do NOT explain. Do NOT write steps. Do NOT call FINISH. " +
-                        "The text parameter may contain [REDACTED-*] placeholders — pass them as-is. " +
+                        "The text parameter may contain [REDACTED-*] placeholders - pass them as-is. " +
                         "Call ingest_document immediately with the sanitized text as your ONLY action."
                 );
             }
@@ -544,13 +544,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         .filter(s -> ReasoningStep.OBSERVE.equals(s.action()))
                         .count();
                 if (observeCorrectionsThisTurn >= 2) {
-                    log.warnf("[LangChainReasoningEngine] session %s: execution correction budget exhausted (%d) — allowing FINISH", 
+                    log.warnf("[LangChainReasoningEngine] session %s: execution correction budget exhausted (%d) - allowing FINISH", 
                             sessionId, observeCorrectionsThisTurn);
                     return parsedStep;
                 }
 
                 log.warnf("[LangChainReasoningEngine] Execution-intent goal '%s' produced a FINISH step " +
-                        "instead of sandbox_exec for session %s — injecting correction", context.goal(), sessionId);
+                        "instead of sandbox_exec for session %s - injecting correction", context.goal(), sessionId);
                 
                 return ReasoningStep.systemMessage(
                         "STOP. You must EXECUTE code to fulfill this request. " +
@@ -629,7 +629,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
      * Returns true when failed_generation prose contains an embedded sandbox_exec
      * tool call JSON that the LLM wrapped in markdown instead of calling directly.
      * Pattern: LLM writes explanation + [{"name":"sandbox_exec","parameters":{...}}]
-     * This must NOT be returned as FINISH — it needs a correction inject to force
+     * This must NOT be returned as FINISH - it needs a correction inject to force
      * the LLM to call the tool directly on the next iteration.
      */
     private boolean containsEmbeddedSandboxToolCall(String prose) {
@@ -672,22 +672,22 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     /**
      * Detects when failed_generation content is partial/truncated code rather than
      * legitimate prose. This happens when Groq truncates a large sandbox_exec tool
-     * call mid-JSON — the code content spills into failed_generation without fences
+     * call mid-JSON - the code content spills into failed_generation without fences
      * or structure.
      *
      * Returning true causes the caller to inject a "shorten your code" OBSERVE step
-     * instead of sending the raw fragments as a prose answer — preserving the approval
+     * instead of sending the raw fragments as a prose answer - preserving the approval
      * flow and preventing garbled output like "int i low - 1 for int j u003c high".
      */
     private boolean looksLikeTruncatedOrPartialCode(String prose) {
         if (prose == null || prose.isBlank()) return false;
 
-        // Unescaped unicode: u003c is < — a clear sign of JSON-escaped code in failed_generation
+        // Unescaped unicode: u003c is < - a clear sign of JSON-escaped code in failed_generation
         if (prose.contains("u003c") || prose.contains("u003e") || prose.contains("u0026")) return true;
 
         // Mid-statement fragments with no markdown fences
         boolean noFences = !prose.contains("```");
-        if (!noFences) return false;   // has proper fences — legitimate formatted prose
+        if (!noFences) return false;   // has proper fences - legitimate formatted prose
 
         // Java/Go/Python/Bash code identifiers without markdown wrapper
         String lower = prose.toLowerCase();
@@ -740,7 +740,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             throw e;
         } catch (LlmProviderException e) {
             if (e instanceof LlmRateLimitException) {
-                log.warnf("[LangChainReasoningEngine] Rate limit in structured output — %s", e.getMessage());
+                log.warnf("[LangChainReasoningEngine] Rate limit in structured output - %s", e.getMessage());
                 String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
                 throw new RuntimeException("Structured output LLM call failed: " + clean, e);
             }

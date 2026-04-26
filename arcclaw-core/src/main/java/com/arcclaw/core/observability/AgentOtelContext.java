@@ -114,7 +114,7 @@ public class AgentOtelContext implements AgentObserver {
     public Span startIterationSpan(String sessionId, int iteration, String agentRole) {
         Span parent = rootSpans.get(sessionId);
         if (parent == null) {
-            log.debugf("No root span for session %s — returning no-op span", sessionId);
+            log.debugf("No root span for session %s - returning no-op span", sessionId);
             return Span.getInvalid();
         }
         Context parentContext = Context.current().with(parent);
@@ -136,7 +136,7 @@ public class AgentOtelContext implements AgentObserver {
     public Span startToolSpan(String sessionId, String toolName, String toolOperation) {
         Span parent = rootSpans.get(sessionId);
         if (parent == null) {
-            log.debugf("No root span for session %s — returning no-op span", sessionId);
+            log.debugf("No root span for session %s - returning no-op span", sessionId);
             return Span.getInvalid();
         }
         Context parentContext = Context.current().with(parent);

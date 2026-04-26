@@ -51,10 +51,10 @@ public class DelegationRoutingProvider implements IntentRoutingProvider {
         return List.of(
             "If the user message asks a named specialist agent (shiva, brahma, saraswati, " +
             "brihaspati, dattatreya, or role equivalents: debugger, coder, researcher, " +
-            "architect, synthesizer) to perform a task — route to 'coordinator'. " +
+            "architect, synthesizer) to perform a task - route to 'coordinator'. " +
             "The coordinator will delegate to the specialist. Do NOT route directly.",
             "If the user says 'delegate to', 'ask X to', 'have X', 'tell X to' where X is " +
-            "any agent name — route to 'coordinator' always."
+            "any agent name - route to 'coordinator' always."
         );
     }
 }

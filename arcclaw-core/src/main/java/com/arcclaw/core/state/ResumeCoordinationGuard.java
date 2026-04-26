@@ -18,14 +18,14 @@ import org.jboss.logging.Logger;
  * this guard does NOT protect against two pods racing to resume the same session.
  * See invariant XB1 for the distributed lock upgrade path when that becomes needed.
  *
- * <p><strong>Lifecycle contract (§3.4 / §7.29 — MUST):</strong>
+ * <p><strong>Lifecycle contract (§3.4 / §7.29 - MUST):</strong>
  * <ul>
  *   <li>{@link #markResuming(String)} is called at the entry of the resume path.</li>
  *   <li>{@link #clearResuming(String)} MUST be called in the {@code finally} block
  *       of the resume path AND by {@code WorkspaceManager.terminateSession()}.</li>
  * </ul>
  *
- * <p><strong>Public API contract (§3.4 / §7.29 — MUST):</strong>
+ * <p><strong>Public API contract (§3.4 / §7.29 - MUST):</strong>
  * External callers MUST NOT inject this class directly. They must always call
  * through {@link StatefulAgentStore#markBatchResuming(String)},
  * {@link StatefulAgentStore#isBatchResuming(String)}, and
@@ -60,8 +60,8 @@ public class ResumeCoordinationGuard {
     /**
      * Atomically marks the session as RESUMING.
      *
-     * @return {@code true} if this caller is the first to mark it — safe to resume;
-     *         {@code false} if another thread/caller already marked it — skip,
+     * @return {@code true} if this caller is the first to mark it - safe to resume;
+     *         {@code false} if another thread/caller already marked it - skip,
      *         already resuming.
      */
     public boolean markResuming(String sessionId) {

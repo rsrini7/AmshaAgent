@@ -81,7 +81,7 @@ public class ManageScheduleTool implements AgentTool {
         String sessionId;
 
         try {
-            // Step 1 — Extract and validate tenant context — NS2: Fail fast
+            // Step 1 - Extract and validate tenant context - NS2: Fail fast
             userId    = WorkspaceContext.requireUserId();
             sessionId = WorkspaceContext.requireSessionId();
         } catch (IllegalStateException e) {

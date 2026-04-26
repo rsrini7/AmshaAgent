@@ -30,7 +30,7 @@ import picocli.CommandLine.Command;
  * <strong>Config validation lifecycle:</strong> {@link CliUtils#validateRequiredEnvVars}
  * also runs before {@code Quarkus.run()} so the user sees one clear actionable
  * message instead of a Quarkus stack trace when required env vars are absent.
- * We do NOT load .env here — Quarkus owns config loading via its SmallRye
+ * We do NOT load .env here - Quarkus owns config loading via its SmallRye
  * config system. We only check whether required vars are present.
  */
 @QuarkusMain
@@ -45,7 +45,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
     @Inject
     CommandLine.IFactory factory;
 
-    // Static bootstrap — runs BEFORE Quarkus CDI container starts
+    // Static bootstrap - runs BEFORE Quarkus CDI container starts
 
     public static void main(String... args) {
 
@@ -53,7 +53,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         //    Must run first so that validation and Quarkus pick up correct paths.
         AppBootstrap.bootstrap(args);
 
-        // 2. Validate required env vars early — before Quarkus boots.
+        // 2. Validate required env vars early - before Quarkus boots.
         CliUtils.validateRequiredEnvVars(args);
 
         // 3. If no command provided, show USAGE and exit (fast-path, no Quarkus boot needed)
@@ -62,7 +62,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
             return;
         }
 
-        // 4. Boot Quarkus — config system, CDI, and all extensions start here.
+        // 4. Boot Quarkus - config system, CDI, and all extensions start here.
         Quarkus.run(ArcClawCli.class, args);
     }
 
@@ -87,7 +87,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         System.out.println();
     }
 
-    // QuarkusApplication — runs AFTER CDI container is ready
+    // QuarkusApplication - runs AFTER CDI container is ready
 
     @Override
     public int run(String... args) {
@@ -95,7 +95,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
         return exitCode;
     }
 
-    // Default action (no subcommand) — print help
+    // Default action (no subcommand) - print help
 
     @Override
     public void run() {

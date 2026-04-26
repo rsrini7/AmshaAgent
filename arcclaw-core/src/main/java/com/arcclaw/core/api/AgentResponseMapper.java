@@ -73,7 +73,7 @@ public class AgentResponseMapper {
     }
 
     /**
-     * Strips hallucinated cron confirmations — LLM sometimes fabricates
+     * Strips hallucinated cron confirmations - LLM sometimes fabricates
      * "Task scheduled successfully. ID: <uuid>" without actually calling the tool.
      * Verified by checking for a real CRONCREATED audit event in the current session.
      */
@@ -110,18 +110,18 @@ public class AgentResponseMapper {
         String sessionId = WorkspaceContext.SESSION_ID.isBound()
                 ? WorkspaceContext.SESSION_ID.get() : null;
 
-        if (sessionId == null) return answer; // can't verify — pass through
+        if (sessionId == null) return answer; // can't verify - pass through
 
         boolean realCronExists = auditService.hasEventInSession(
                 sessionId, SecurityEventType.CRONCREATED);
 
         if (!realCronExists) {
-            log.warnf("LLM hallucinated cron confirmation for session=%s — stripping", sessionId);
+            log.warnf("LLM hallucinated cron confirmation for session=%s - stripping", sessionId);
             return "I was unable to schedule the task. "
                     + "Please provide a specific, self-contained goal.";
         }
 
-        return answer; // real CRONCREATED exists — answer is legitimate
+        return answer; // real CRONCREATED exists - answer is legitimate
     }
 
     private Response mapFailedResponse(AgentResult.Failed f) {

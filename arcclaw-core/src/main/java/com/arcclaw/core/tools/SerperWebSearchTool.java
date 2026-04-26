@@ -27,7 +27,7 @@ import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * Component A6 — SerperWebSearchTool.
+ * Component A6 - SerperWebSearchTool.
  * Allows agents to search the web using the Serper (Google Search) API.
  */
 @ApplicationScoped
@@ -128,7 +128,7 @@ public class SerperWebSearchTool implements AgentTool {
         String agentRole;
 
         try {
-            // Step 1 — Extract and validate tenant context
+            // Step 1 - Extract and validate tenant context
             // NS2: Fail fast on missing context
             userId    = WorkspaceContext.requireUserId();
             sessionId = WorkspaceContext.requireSessionId();
@@ -193,7 +193,7 @@ public class SerperWebSearchTool implements AgentTool {
                  return ToolResponse.failure(response.statusCode(), "Serper Search API failed: " + response.body());
             }
 
-            // Audit successful search — NS2: Fail fast on missing role
+            // Audit successful search - NS2: Fail fast on missing role
             auditService.record(sessionId, userId, agentRole, 
                 SecurityEventType.TOOL_EXECUTED, "Serper search: " + query);
 

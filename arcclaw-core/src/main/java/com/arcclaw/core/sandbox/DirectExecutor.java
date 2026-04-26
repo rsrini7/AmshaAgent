@@ -24,7 +24,7 @@ public class DirectExecutor {
         File workspaceDir = workspaceRoot.toFile();
         if (!workspaceDir.exists()) {
             workspaceDir.mkdirs();
-            System.err.println("PIE Workspace dir missing — recreated: " + workspaceDir.getAbsolutePath());
+            System.err.println("PIE Workspace dir missing - recreated: " + workspaceDir.getAbsolutePath());
         }
         pb.directory(workspaceDir);
         pb.redirectErrorStream(true);

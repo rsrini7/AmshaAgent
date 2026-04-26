@@ -6,7 +6,7 @@ Adding a new channel (Discord, Slack, WhatsApp) to ArcClaw requires zero changes
 
 | Interface | Module | Responsibility | Required |
 |---|---|---|---|
-| `ChannelPlugin` | `arcclaw-app/channel` | Composite registration bean — wires all 5 below | Yes |
+| `ChannelPlugin` | `arcclaw-app/channel` | Composite registration bean - wires all 5 below | Yes |
 | `ChannelSender` | `arcclaw-channel-api` | Sends `List<ReplyNode>` to the channel | Yes |
 | `ReplyRenderer` | `arcclaw-channel-api` | Converts `ReplyNode` tree to channel-native format | Yes |
 | `ChannelAllowlist` | `arcclaw-channel-api` | Determines if a `ChannelUser` is authorized | Yes |

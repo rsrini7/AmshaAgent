@@ -149,7 +149,7 @@ public class DelegateToAgentTool implements AgentTool {
 
         // NOTE: Inner sessions bypass SessionRegistry intentionally.
         // StatefulAgentStore.save() must not require a session_registry entry.
-        // Verified: save() is keyed only on (sessionId, agentRole) — no FK constraint.
+        // Verified: save() is keyed only on (sessionId, agentRole) - no FK constraint.
         String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + agentName + ":" + System.currentTimeMillis();
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",
@@ -164,15 +164,15 @@ public class DelegateToAgentTool implements AgentTool {
 
         // CRITICAL: Rebind WorkspaceContext with resolved level for inner loop.
         // ToolInvocationGuard.evaluate() line 120 reads WorkspaceContext.autonomy()
-        // — if SUPERVISED, all inner tool calls pause for HITL approval, creating
+        // - if SUPERVISED, all inner tool calls pause for HITL approval, creating
         // unresumable checkpoint corruption. FULL permits all operations.
         //
         // NOTE ON COMPACTION:
         // The inner loop does NOT go through the MessagePipeline (AgentDispatchHandler,
-        // CompactionHandler, etc.) — it enters AgentLoop.runWithRole() directly.
+        // CompactionHandler, etc.) - it enters AgentLoop.runWithRole() directly.
         // Compaction is NOT triggered because the inner history bypasses the pipeline.
         // The inner loop DOES persist a checkpoint to DB under (innerSessionId, role).
-        // This is intentional — it enables crash recovery if delegation is interrupted.
+        // This is intentional - it enables crash recovery if delegation is interrupted.
         // Do NOT "fix" this by routing through the pipeline.
         AgentResult result;
         try {

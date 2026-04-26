@@ -25,7 +25,7 @@ public sealed interface ChannelCommand
                 ChannelCommand.Start,
                 ChannelCommand.Unknown {
 
-    // Single compiled Pattern — avoids repeated compilation per message.
+    // Single compiled Pattern - avoids repeated compilation per message.
     // Group 1: command
     // Group 2: first token (id or toolName)
     // Group 3: rest of the line (optional reason)
@@ -58,7 +58,7 @@ public sealed interface ChannelCommand
             return new Unknown(text == null ? "" : text);
         }
         
-        // Strip surrounding backticks — Telegram MarkdownV2 inline code formatting
+        // Strip surrounding backticks - Telegram MarkdownV2 inline code formatting
         // causes copy-pasted commands to arrive as `/approve <id>` with backticks
         String trimmed = text.trim();
         if (trimmed.startsWith("`") && trimmed.endsWith("`") && trimmed.length() > 2) {
@@ -156,7 +156,7 @@ public sealed interface ChannelCommand
     ) implements ChannelCommand {}
 
      /**
-     * Telegram lifecycle command — sent automatically when a user opens a fresh
+     * Telegram lifecycle command - sent automatically when a user opens a fresh
      * chat or clicks the "Start" button. {@code payload} carries any deep-link
      * parameter Telegram appends after /start (may be empty).
      */

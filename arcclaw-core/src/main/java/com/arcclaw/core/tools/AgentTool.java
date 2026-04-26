@@ -15,10 +15,10 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
  * Implementations are discovered via CDI {@code Instance<AgentTool>} in
  * {@link ToolRegistry}. Each tool declares:
  * <ul>
- * <li>{@link #name()} — unique identifier used for invocation lookup.</li>
- * <li>{@link #description()} — human-readable purpose (surfaced to LLM
+ * <li>{@link #name()} - unique identifier used for invocation lookup.</li>
+ * <li>{@link #description()} - human-readable purpose (surfaced to LLM
  * agents).</li>
- * <li>{@link #requiredOperation()} — the {@link ToolOperation} category for
+ * <li>{@link #requiredOperation()} - the {@link ToolOperation} category for
  * governance checks against the session's {@code AutonomyLevel}.</li>
  * </ul>
  * <p>
@@ -50,7 +50,7 @@ public interface AgentTool {
 
     /**
      * Whether this tool's execution should be wrapped by ProcessIsolationExecutor.
-     * Defaults to {@code true} — opt-OUT is the exception, not the rule.
+     * Defaults to {@code true} - opt-OUT is the exception, not the rule.
      * <p>
      * Set to {@code false} only for trusted in-memory tools that do not
      * require OS-level isolation (e.g., pure computation or local read-only

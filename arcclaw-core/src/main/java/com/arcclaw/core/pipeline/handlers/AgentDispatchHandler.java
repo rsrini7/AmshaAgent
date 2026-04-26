@@ -109,7 +109,7 @@ public class AgentDispatchHandler implements MessageHandler {
                     .orElse(null);
 
             if (restoredGoal != null && !restoredGoal.isBlank()) {
-                log.infof("[AgentDispatch] Continuity detected for session %s — restoring original goal: %s", 
+                log.infof("[AgentDispatch] Continuity detected for session %s - restoring original goal: %s", 
                         sessionId, restoredGoal);
                 goal = normalizeGoal(restoredGoal);
             } else {
@@ -140,11 +140,11 @@ public class AgentDispatchHandler implements MessageHandler {
         final int resolvedMaxIterations = maxIterations;
         final AutonomyLevel finalLevel = session.autonomyLevel();
 
-        // getChatId() can be null on some Telegram paths — fall back to channelId
+        // getChatId() can be null on some Telegram paths - fall back to channelId
         String chatId = context.getChatId();
         if (chatId == null || chatId.isBlank()) {
             chatId = context.getUser().channelId();
-            log.debugf("[AgentDispatch] getChatId() was null — falling back to channelId=%s", chatId);
+            log.debugf("[AgentDispatch] getChatId() was null - falling back to channelId=%s", chatId);
         }
         final String resolvedChatId = chatId;
 
@@ -155,7 +155,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 log.warnf("[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.", sessionId);
                 channelPluginRegistry.find(context.getChannelType())
                     .map(ChannelPlugin::sender)
-                    .ifPresent(s -> s.sendRaw(context.getUser(), "⚠️ I'm currently processing another request. Your message was not queued — please resend it once I finish."));
+                    .ifPresent(s -> s.sendRaw(context.getUser(), "⚠️ I'm currently processing another request. Your message was not queued - please resend it once I finish."));
                 return HandleResult.STOP;
             }
 
@@ -182,7 +182,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 agentStore.clearResuming(sessionId);
             }
         } catch (BudgetExceededException | BudgetWarningException e) {
-            throw e;   // propagate typed — caller maps to 429
+            throw e;   // propagate typed - caller maps to 429
         } catch (Exception e) {
             log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());
             log.debug("Full agent dispatch failure stack trace:", e);
@@ -191,9 +191,9 @@ public class AgentDispatchHandler implements MessageHandler {
                 .map(ChannelPlugin::sender)
                 .ifPresentOrElse(
                     s -> s.sendRaw(context.getUser(), "❌ An internal error occurred. Please try again."),
-                    () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s — error reply dropped", context.getChannelType())
+                    () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s - error reply dropped", context.getChannelType())
                 );
-            return HandleResult.STOP;  // stop pipeline gracefully — do not throw
+            return HandleResult.STOP;  // stop pipeline gracefully - do not throw
         }
 
         String output = AgentResultFormatter.format(result);
@@ -211,7 +211,7 @@ public class AgentDispatchHandler implements MessageHandler {
                         s.sendRaw(context.getUser(), output);
                     }
                 },
-                () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s — result reply dropped", context.getChannelType())
+                () -> log.warnf("AgentDispatchHandler: no ChannelPlugin for type %s - result reply dropped", context.getChannelType())
             );
 
         return HandleResult.STOP;
