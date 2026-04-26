@@ -73,18 +73,23 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
         String sessionId = context.sessionId();
 
+        // 🟢 FIX: Fast-path execution from history (§7.46)
+        // If the user asks to "execute" or "run" code that was just written in a prior turn,
+        // bypass the LLM and issue the sandbox_exec tool call directly using the code
+        // block found in history. This prevents model-side truncation errors.
         if (AgentRoleEnum.CODER.id().equals(agentRole)
                 && TextPatternUtils.goalRequestsExecution(goal)
                 && !historyAlreadyContainsSuccessful(history, ToolCapability.SANDBOX_EXEC.toolName())) {
+            
             CodeBlock priorCode = extractLatestCodeBlock(history);
             if (priorCode != null) {
-                log.infof("[LangChainReasoningEngine] Reusing prior %s code block for execution goal in session %s",
+                log.infof("[LangChainReasoningEngine] Fast-path: Reusing prior %s code block for execution goal in session %s",
                         priorCode.language(), sessionId);
-                return ReasoningStep.pending(
-                        "Executing the previously generated code block.",
+                
+                return ReasoningStep.fastPath(
+                        "Fast-path execution from history.",
                         ToolCapability.SANDBOX_EXEC.toolName(),
-                        Map.of("code", priorCode.code(), "language", priorCode.language()),
-                        0, 0
+                        Map.of("code", priorCode.code(), "language", priorCode.language())
                 );
             }
         }

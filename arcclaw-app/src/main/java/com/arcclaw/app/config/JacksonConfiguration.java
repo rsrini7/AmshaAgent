@@ -22,6 +22,11 @@ public class JacksonConfiguration {
             // This prevents failures when LLM providers (like Gemini) add new 
             // finish reasons or status codes not yet in the LangChain4j library.
             mapper.configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL, true);
+
+            // § Resilience: Do not fail if a JSON payload contains properties that 
+            // are not present in the Java class/record. 
+            // Essential for safe backward-compatible record evolution.
+            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         };
     }
 }
