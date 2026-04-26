@@ -584,7 +584,7 @@ class LangChainReasoningEngineTest {
     }
 
     @Test
-    void testCoderExecutionFollowUpReusesPriorCodeBlockAfterFailedSandboxExec() {
+    void testCoderExecutionFollowUpDoesNotReusePriorCodeBlockAfterFailedSandboxExec() {
         String codeAnswer = """
                 ```java
                 public class StringReverser {
@@ -609,15 +609,20 @@ class LangChainReasoningEngineTest {
                 0, 0
         ).withObservation("Compilation failed", false);
 
+        ChatResponse mockResponse = ChatResponse.builder().aiMessage(AiMessage.aiMessage("LLM response")).build();
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("LLM response", "write_code", Map.of(), 100, 100));
+
         ReasoningStep step = reasoningEngine.nextStep(
                 createCtx("test-session"),
                 "coder",
                 "fix and run again",
                 List.of(priorCode, failedExec));
 
-        assertEquals("sandbox_exec", step.action());
-        assertEquals("java", step.actionInput().get("language"));
-        assertTrue(((String) step.actionInput().get("code")).contains("public class StringReverser"));
+        assertEquals("write_code", step.action());
+        Mockito.verify(llmProviderPort).nextStep(any(ChatRequest.class));
     }
 
     @InjectMock
