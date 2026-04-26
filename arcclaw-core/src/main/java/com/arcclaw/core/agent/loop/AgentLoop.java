@@ -28,6 +28,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.ClassUtils;
 import com.arcclaw.core.util.MdcManaged;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
@@ -181,7 +182,7 @@ public class AgentLoop {
         } catch (BudgetExceededException e) {
             meterRegistry.counter("arcclaw.agent.loop.failure",
                     "role", canonicalRole != null ? canonicalRole : "unknown",
-                    "exception", e.getClass().getSimpleName()).increment();
+                    "exception", ClassUtils.getCleanName(e)).increment();
             throw e;
  
         } catch (BudgetWarningException e) {
@@ -194,7 +195,7 @@ public class AgentLoop {
         } catch (Exception e) {
             meterRegistry.counter("arcclaw.agent.loop.failure",
                     "role", canonicalRole != null ? canonicalRole : "unknown",
-                    "exception", e.getClass().getSimpleName()).increment();
+                    "exception", ClassUtils.getCleanName(e)).increment();
             result = handleSystemError(sessionId, canonicalRole, e);
             return result;
 
@@ -262,7 +263,7 @@ public class AgentLoop {
         try {
             agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
                 agentStore.markFailed(cp.getId(), "COMPLIANCE_VIOLATION: " + msg,
-                    "COMPLIANCE_VIOLATION", traceId, cve.getClass().getSimpleName())
+                    "COMPLIANCE_VIOLATION", traceId, ClassUtils.getCleanName(cve))
             );
         } catch (Exception ignored) {}
         return result;
@@ -277,7 +278,7 @@ public class AgentLoop {
         try {
             agentStore.load(sessionId, canonicalRole).ifPresent(cp ->
                 agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg,
-                    "SYSTEM_ERROR", traceId, e.getClass().getSimpleName())
+                    "SYSTEM_ERROR", traceId, ClassUtils.getCleanName(e))
             );
         } catch (Exception ignored) {}
         return result;

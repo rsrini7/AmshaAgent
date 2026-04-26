@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.core.util.ClassUtils;
 import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 
@@ -40,7 +41,7 @@ public class ChannelPluginRegistry {
                     previous.getClass().getName() + " vs " + plugin.getClass().getName());
             }
             log.infof("ChannelPluginRegistry: registered channel [%s] via %s",
-                key, plugin.getClass().getSimpleName());
+                key, ClassUtils.getCleanName(plugin));
         }
         log.infof("ChannelPluginRegistry: %d channel(s) registered: %s",
             registry.size(), String.join(", ", registry.keySet()));

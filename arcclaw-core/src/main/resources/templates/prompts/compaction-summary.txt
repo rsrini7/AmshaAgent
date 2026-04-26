@@ -1,4 +1,5 @@
 {#if compactionSummary}
-[CONTEXT FROM PRIOR SESSION - FOR REFERENCE ONLY]
+[CONTEXT FROM PRIOR SESSION]
 {compactionSummary}
+The above is a summary of earlier messages. Use it as factual context for initial requests or historical recall.
 {/if}

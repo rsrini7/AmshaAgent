@@ -29,12 +29,14 @@ public class CodeGenerationPolicy {
 
     /**
      * Detects whether the answer is a generated code block (fenced ``` with
-     * optional language tag, or an indented code block of 4+ spaces).
+     * optional language tag).
      *
      * <p><strong>§9.1:</strong> {@code static final} — never compiled per-call.
+     * <p><strong>Refinement:</strong> Removed 4-space indentation detection to avoid
+     * false positives for bulleted or numbered lists in non-coder roles.
      */
     static final Pattern PROSE_CODE_PATTERN =
-            Pattern.compile("```[\\w]*\\n[\\s\\S]*?```|^( {4}|\\t).+", Pattern.MULTILINE);
+            Pattern.compile("```[\\w]*\\n[\\s\\S]*?```", Pattern.MULTILINE);
 
     /**
      * Returns {@code true} if the answer contains a generated code block.

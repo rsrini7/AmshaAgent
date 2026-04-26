@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.util.FuzzyMatcher;
 
 /**
  * Fast-path routing for research and information retrieval requests.
@@ -46,6 +47,14 @@ public class ResearcherRoutingProvider implements IntentRoutingProvider {
     @Override
     public List<Pattern> fastPathTriggers() {
         return List.of(RESEARCHER_PATTERN);
+    }
+
+    @Override
+    public boolean matchesFuzzy(String userMessage) {
+        return FuzzyMatcher.containsFuzzy(userMessage, "fetch")
+                || FuzzyMatcher.containsFuzzy(userMessage, "search")
+                || FuzzyMatcher.containsFuzzy(userMessage, "browse")
+                || FuzzyMatcher.containsFuzzy(userMessage, "navigate");
     }
 
     @Override

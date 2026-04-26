@@ -7,16 +7,14 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.util.FuzzyMatcher;
 
 @ApplicationScoped
 public class SchedulingRoutingProvider implements IntentRoutingProvider {
 
-    // NEGATION SAFETY §4.11: This pattern is non-anchored to allow natural phrasing 
-    // (e.g. "please remind me"), but "schedule" is removed because it's too broad.
     // Time signals like "tomorrow" or "in 30 min" are specific enough.
-    // Broader negations (e.g. "do not schedule") are filtered via shouldSkip().
     private static final Pattern SCHEDULING_GUARD_PATTERN = Pattern.compile(
-        "(?i)\\b(after\\s+\\d|in\\s+\\d+\\s+(min|hour|day|sec|week)[a-z]*|tomorrow|" +
+        "(?i)\\b(after\\s+\\d|in\\s+(one|two|three|four|five|ten|\\d+)\\s+(min|hour|day|sec|week)[a-z]*|tomorrow|" +
         "at\\s+\\d{1,2}[:.\\d]*\\s*(am|pm)?|remind(\\s+me)?|" +
         "every\\s+(day|week|hour)[a-z]*|once\\s+a\\s+(day|week)|later)\\b",
         Pattern.CASE_INSENSITIVE
@@ -33,19 +31,19 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
 
     // FAST-PATH for listing tasks — still anchored as these are command-like
     private static final Pattern LIST_TASKS_PATTERN = Pattern.compile(
-        "(?i)^\\s*(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?)\\b"
+        "(?i)^\\s*(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?|reminders?)\\b"
     );
     private static final Pattern MY_TASKS_PATTERN = Pattern.compile(
-        "(?i)^\\s*my\\s+(tasks?|crons?|jobs?|scheduled\\s+tasks?)\\b"
+        "(?i)^\\s*my\\s+(tasks?|crons?|jobs?|scheduled\\s+tasks?|reminders?)\\b"
     );
 
     private static final Pattern STANDALONE_CRON_PATTERN = Pattern.compile(
-        "(?i)^/?crons?$"
+        "(?i)^/?(crons?|schedules?|tasks?|reminders?)$"
     );
 
     // FAST-PATH for hybrid intents (e.g. "remind me to fetch") §7.36
     private static final Pattern SCHEDULE_RESEARCH_ACTION_PATTERN = Pattern.compile(
-        "(?i)^(remind me|schedule to)\\s+(fetch|get|search|find|check)\\b.*"
+        "(?i)^(remind me|schedule to|remind me to|schedule for)\\s+(fetch|get|search|find|check|view|describe|lookup)\\b.*"
     );
 
     @Override
@@ -62,6 +60,13 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
     @Override
     public boolean shouldSkip(String userMessage) {
         return SCHEDULING_NEGATION_PATTERN.matcher(userMessage).find();
+    }
+
+    @Override
+    public boolean matchesFuzzy(String userMessage) {
+        // Handle common variations of 'schedule' and numbers like 'one'
+        return FuzzyMatcher.containsFuzzy(userMessage, "schedule")
+                || FuzzyMatcher.containsFuzzy(userMessage, "one");
     }
 
     @Override

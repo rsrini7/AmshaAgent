@@ -5,6 +5,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
@@ -17,6 +19,7 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
@@ -37,6 +40,9 @@ public class TelegramCallbackHandler {
 
     @Inject
     ApprovalGateway approvalGateway;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @ConfigProperty(name = "arcclaw.channel.telegram.bot-token")
     String botToken;
@@ -89,27 +95,23 @@ public class TelegramCallbackHandler {
 
             ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");
 
+            String popupText = null;
             switch (result.outcome()) {
-                case APPROVED, PARTIAL_STILL_PENDING -> sender.sendRaw(user, "✅ Approved: " + toolName);
-                case REJECTED -> sender.sendRaw(user, "❌ Rejected: " + toolName);
-                case EXPIRED -> sender.sendRaw(user, "⏱ Approval expired");
-                case NOT_FOUND -> sender.sendRaw(user, "⚠️ Session not found");
-                case ALREADY_DECIDED -> {
-                    // Answer callback silently, no visible message
-                }
+                case APPROVED, PARTIAL_STILL_PENDING -> popupText = "✅ Approved: " + toolName;
+                case REJECTED -> popupText = "❌ Rejected: " + toolName;
+                case EXPIRED -> popupText = "⏱ Approval expired";
+                case NOT_FOUND -> popupText = "⚠️ Session not found";
+                case ALREADY_DECIDED -> popupText = "Already decided";
             }
 
             // If completely done, we can remove the keyboard entirely
-            if (result.outcome() == ApprovalOutcome.APPROVED ||
-                result.outcome() == ApprovalOutcome.REJECTED ||
-                result.outcome() == ApprovalOutcome.EXPIRED ||
-                // Wait, if it's already decided, we shouldn't necessarily remove it unless it's done. 
-                // A better check is if remainingPendingTools == 0 and outcome != ALREADY_DECIDED (since ALREADY_DECIDED is a no-op)
-                (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0)) {
-                sender.editMessage(chatId, messageId, "Approval process completed.", null);
+            if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
+                // Clear the keyboard by editing the message, but keep the original text
+                String originalText = query.getMessage().getText();
+                sender.editMessage(chatId, messageId, originalText, null);
             }
 
-            answerCallback(query.getId());
+            answerCallback(query.getId(), popupText);
         } catch (Exception e) {
             log.error("Failed to process callback", e);
             sender.sendRaw(user, "❌ Failed to process callback");
@@ -117,22 +119,36 @@ public class TelegramCallbackHandler {
         }
     }
 
+    private void answerCallback(String callbackQueryId, String text) {
+        log.debugf("Answering callback %s with text: %s", callbackQueryId, text);
+        try {
+            Map<String, String> payload = new HashMap<>();
+            payload.put("callback_query_id", callbackQueryId);
+            if (text != null) {
+                payload.put("text", text);
+            }
+            String body = objectMapper.writeValueAsString(payload);
+
+            httpClient.sendAsync(
+                HttpRequest.newBuilder()
+                    .uri(URI.create(
+                        "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build(),
+                HttpResponse.BodyHandlers.discarding())
+            .exceptionally(ex -> {
+                log.warnf("Failed to answer Telegram callback %s: %s",
+                    callbackQueryId, ex.getMessage());
+                return null;
+            });
+        } catch (Exception e) {
+            log.warnf("Failed to serialize Telegram callback answer: %s", e.getMessage());
+        }
+    }
+
     private void answerCallback(String callbackQueryId) {
-        log.debugf("Answering callback %s", callbackQueryId);
-        String body = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
-        httpClient.sendAsync(
-            HttpRequest.newBuilder()
-                .uri(URI.create(
-                    "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
-                .timeout(Duration.ofSeconds(5))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(),
-            HttpResponse.BodyHandlers.discarding())
-        .exceptionally(ex -> {
-            log.warnf("Failed to answer Telegram callback %s: %s",
-                callbackQueryId, ex.getMessage());
-            return null;
-        });
+        answerCallback(callbackQueryId, null);
     }
 }

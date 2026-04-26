@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 import com.arcclaw.app.util.CliUtils;
 import com.arcclaw.core.sandbox.SandboxStrategy;
+import org.jboss.logging.Logger;
 
 /**
  * Bootstraps the application by resolving the binary directory, loading .env files,
@@ -26,7 +27,9 @@ import com.arcclaw.core.sandbox.SandboxStrategy;
  */
 public class AppBootstrap {
 
-    private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
+    private static final Logger log = Logger.getLogger(AppBootstrap.class);
+
+    private static final Pattern ENV_PATTERN = Pattern.compile("^\\\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\\\s*=\\\\s*(.*?)\\\\s*$");
 
     // Keys whose input should be hidden
     private static final Set<String> SENSITIVE_KEYS = Set.of(
@@ -211,14 +214,16 @@ public class AppBootstrap {
             System.err.println("  │  4. Ollama - local only (no API key required)");
             System.err.println("  │  5. NVIDIA - high performance NIMs");
             System.err.println("  │  6. Gemini - Google AI (free tier available)");
+            System.err.println("  │  7. Cerebras - Ultra-fast LPU inference");
             System.err.println("  │");
-            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-6, Default: 1]: ");
+            String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-7, Default: 1]: ");
             String provider = switch (choice != null ? choice.trim() : "") {
                 case "2" -> "openrouter";
                 case "3" -> "openai";
                 case "4" -> "ollama";
                 case "5" -> "nvidia";
                 case "6" -> "gemini";
+                case "7" -> "cerebras";
                 default  -> "groq";
             };
             System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
@@ -229,6 +234,7 @@ public class AppBootstrap {
                 case "ollama"     -> "http://localhost:11434";
                 case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
                 case "gemini"     -> "https://generativelanguage.googleapis.com/v1beta/openai/";
+                case "cerebras"   -> "https://api.cerebras.ai/v1";
                 default           -> "https://api.groq.com/openai/v1";
             };
             System.setProperty("ARCCLAW_LLM_BASE_URL", baseUrl);
@@ -236,7 +242,8 @@ public class AppBootstrap {
             String modelName = switch (provider) {
                 case "openrouter" -> "openai/gpt-oss-20b:free";
                 case "nvidia"     -> "mistralai/devstral-2-123b-instruct-2512";
-                case "gemini"     -> "gemini-flash-latest";
+                case "gemini"     -> "gemini-2.5-flash-lite";
+                case "cerebras"   -> "qwen-3-235b-a22b-instruct-2507";
                 default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
             };
             System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
@@ -244,7 +251,8 @@ public class AppBootstrap {
             String compactionModel = switch (provider) {
                 case "openrouter" -> "google/gemma-3-27b-it:free";
                 case "nvidia"     -> "mistralai/mistral-7b-instruct-v0.3";
-                case "gemini"     -> "gemini-1.5-flash";
+                case "gemini"     -> "gemini-2.5-flash-lite";
+                case "cerebras"   -> "qwen-3-235b-a22b-instruct-2507";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_COMPACTION_MODEL", compactionModel);
@@ -252,7 +260,8 @@ public class AppBootstrap {
             String intentModel = switch (provider) {
                 case "openrouter" -> "openai/gpt-oss-20b:free";
                 case "nvidia"     -> "mistralai/mistral-7b-instruct-v0.3";
-                case "gemini"     -> "gemini-1.5-flash";
+                case "gemini"     -> "gemini-2.5-flash-lite";
+                case "cerebras"   -> "qwen-3-235b-a22b-instruct-2507";
                 default           -> "llama-3.1-8b-instant";
             };
             System.setProperty("ARCCLAW_INTENT_CLASSIFIER_MODEL", intentModel);
@@ -762,23 +771,78 @@ public class AppBootstrap {
         String intentProvider = System.getProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER", System.getenv("ARCCLAW_INTENT_CLASSIFIER_PROVIDER"));
         if (intentProvider == null || intentProvider.isBlank()) intentProvider = provider;
 
-        // Auto-fix main model based on ARCCLAW_LLM_PROVIDER
+        // Auto-fix main model and URL based on ARCCLAW_LLM_PROVIDER
         if ("openrouter".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/auto", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openrouter/auto", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "google/gemma-3-27b-it:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openai/gpt-oss-20b:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free", "meta-llama/llama-4-scout-17b-16e-instruct");
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "mistralai/devstral-2-123b-instruct-2512", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "llama3.1-8b", "meta-llama/llama-4-scout-17b-16e-instruct");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
         } else if ("nvidia".equalsIgnoreCase(provider)) {
             fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "mistralai/devstral-2-123b-instruct-2512");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://integrate.api.nvidia.com/v1");
         } else if ("gemini".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "gemini-flash-latest");
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "gemini-2.5-flash-lite");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+        } else if ("cerebras".equalsIgnoreCase(provider)) {
+            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "llama3.1-8b");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
+            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
+        }
+
+        // --- Context Window Optimization ---
+        // Compute the effective window once, persist it when using the provider default,
+        // and always publish the resolved value to both env-style and dotted config keys.
+        String contextWindow = System.getProperty("ARCCLAW_LLM_CONTEXT_WINDOW", System.getenv("ARCCLAW_LLM_CONTEXT_WINDOW"));
+        String targetWindow = switch (provider.toLowerCase()) {
+            case "gemini"   -> "1000000";
+            case "cerebras" -> {
+                String model = System.getProperty("ARCCLAW_LLM_MODEL_NAME", System.getenv("ARCCLAW_LLM_MODEL_NAME"));
+                yield (model != null && model.contains("qwen")) ? "65536" : "8192";
+            }
+            case "ollama"   -> "8192";
+            default         -> "128000";
+        };
+
+        String effectiveWindow = contextWindow;
+        // Auto-fix if unset OR if it matches one of our known standard defaults but is wrong for the current provider
+        boolean isDefaultOrKnown = contextWindow == null || contextWindow.isBlank()
+                || Set.of("128000", "8192", "65536", "1000000").contains(contextWindow);
+
+        if (isDefaultOrKnown && !targetWindow.equals(contextWindow)) {
+            effectiveWindow = targetWindow;
+            System.err.println("[ArcClaw] ℹ️  Setting context window to " + targetWindow + " for provider '" + provider + "'.");
+            patchEnvFile(envFile, "ARCCLAW_LLM_CONTEXT_WINDOW", targetWindow);
+        }
+        System.setProperty("ARCCLAW_LLM_CONTEXT_WINDOW", effectiveWindow);
+        System.setProperty("arcclaw.llm.context-window", effectiveWindow);
+
+        String compactPromptEnabled = System.getProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", System.getenv("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED"));
+        boolean shouldEnable = "true".equalsIgnoreCase(compactPromptEnabled)
+                || (Integer.parseInt(effectiveWindow) <= 8192);
+
+        String finalCompactValue = shouldEnable ? "true" : "false";
+        System.setProperty("ARCCLAW_LLM_COMPACT_PROMPT_ENABLED", finalCompactValue);
+        System.setProperty("arcclaw.llm.compact-prompt-enabled", finalCompactValue);
+
+        if (shouldEnable) {
+            String msg = "[ArcClaw] ℹ️  Compact Prompt Mode ENABLED (window=" + effectiveWindow + ").";
+            System.err.println(msg);
+            log.debug(msg);
         }
 
         // Auto-fix compaction based on ARCCLAW_COMPACTION_PROVIDER
@@ -788,19 +852,29 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "google/gemma-3-27b-it:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openrouter/auto", "google/gemma-3-27b-it:free");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "mistralai/mistral-7b-instruct-v0.3", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "qwen-3-235b-a22b-instruct-2507", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://integrate.api.nvidia.com/v1", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
         } else if ("nvidia".equalsIgnoreCase(compactionProvider)) {
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct-v0.3");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://integrate.api.nvidia.com/v1");
         } else if ("gemini".equalsIgnoreCase(compactionProvider)) {
-            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "gemini-1.5-flash");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "gemini-2.5-flash-lite");
             fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+        } else if ("cerebras".equalsIgnoreCase(compactionProvider)) {
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_MODEL", "llama-3.1-8b-instant", "qwen-3-235b-a22b-instruct-2507");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
+            fixIfMatches(envFile, "ARCCLAW_COMPACTION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
 
         // Auto-fix intent classifier based on ARCCLAW_INTENT_CLASSIFIER_PROVIDER
@@ -810,19 +884,29 @@ public class AppBootstrap {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openrouter/auto", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-20b:free");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://openrouter.ai/api/v1");
         } else if ("groq".equalsIgnoreCase(intentProvider)) {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "google/gemma-3-27b-it:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "openai/gpt-oss-20b:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct:free", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "mistralai/mistral-7b-instruct-v0.3", "llama-3.1-8b-instant");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "qwen-3-235b-a22b-instruct-2507", "llama-3.1-8b-instant");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://integrate.api.nvidia.com/v1", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.groq.com/openai/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.cerebras.ai/v1", "https://api.groq.com/openai/v1");
         } else if ("nvidia".equalsIgnoreCase(intentProvider)) {
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "mistralai/mistral-7b-instruct-v0.3");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://integrate.api.nvidia.com/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://integrate.api.nvidia.com/v1");
         } else if ("gemini".equalsIgnoreCase(intentProvider)) {
-            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "gemini-1.5-flash");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "gemini-2.5-flash-lite");
             fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.cerebras.ai/v1", "https://generativelanguage.googleapis.com/v1beta/openai/");
+        } else if ("cerebras".equalsIgnoreCase(intentProvider)) {
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_MODEL", "llama-3.1-8b-instant", "qwen-3-235b-a22b-instruct-2507");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://api.groq.com/openai/v1", "https://api.cerebras.ai/v1");
+            fixIfMatches(envFile, "ARCCLAW_INTENT_CLASSIFIER_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://api.cerebras.ai/v1");
         }
     }
 

@@ -47,12 +47,7 @@ public class VaultStoreReflex implements AgentReflex {
         if (trimmed.equalsIgnoreCase("vault") || trimmed.equalsIgnoreCase("/vault")) {
             return true;
         }
-        Matcher m = VAULT_STORE_PATTERN.matcher(trimmed);
-        if (m.find()) {
-            String keyName = m.group(1).toUpperCase();
-            return VaultConstants.KNOWN_TOOL_SECRET_NAMES.contains(keyName);
-        }
-        return false;
+        return VAULT_STORE_PATTERN.matcher(trimmed).find();
     }
 
     @Override
@@ -75,6 +70,13 @@ public class VaultStoreReflex implements AgentReflex {
         String keyName = m.group(1).toUpperCase();
         String value = m.group(2).trim();
         boolean force = m.group(3) != null;
+
+        if (!VaultConstants.KNOWN_TOOL_SECRET_NAMES.contains(keyName)) {
+            String knownKeys = String.join(", ", VaultConstants.KNOWN_TOOL_SECRET_NAMES);
+            return ReflexResult.respond("⚠️ Unknown vault key: `" + keyName + "`.\n\n" +
+                    "Valid system keys are: " + knownKeys + "\n\n" +
+                    "Check for typos (e.g., use `ARCCLAW_TOOLS_BRAVE_API_KEY` instead of `ARCCLAW_BRAVE_API_KEY`).", context);
+        }
 
         log.infof("VaultStoreReflex: intercepting secret store for '%s' (session=%s, force=%s)", keyName, sessionId, force);
 

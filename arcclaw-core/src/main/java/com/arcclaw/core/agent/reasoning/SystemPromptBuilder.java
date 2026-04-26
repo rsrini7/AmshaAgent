@@ -1,7 +1,10 @@
 package com.arcclaw.core.agent.reasoning;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -16,6 +19,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.ToolRegistry;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -35,6 +39,12 @@ import org.jboss.logging.Logger;
 public class SystemPromptBuilder {
 
     private static final Logger log = Logger.getLogger(SystemPromptBuilder.class);
+
+    @ConfigProperty(name = "arcclaw.llm.context-window", defaultValue = "128000")
+    int contextWindow;
+
+    @ConfigProperty(name = "arcclaw.llm.compact-prompt-enabled", defaultValue = "false")
+    boolean compactPromptEnabled;
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -81,6 +91,17 @@ public class SystemPromptBuilder {
             context. If present, confirm: "Yes, earlier conversation was compacted
             at [timestamp] covering [N] messages."
             If absent, say: "Not yet — session is within active window."
+
+            RECALL PRIORITIZATION:
+            When the user asks about the beginning of the conversation or "initial" topics,
+            ALWAYS check the `[CONTEXT FROM PRIOR SESSION]` block (the compacted summary)
+            before the active window. Information in the summary is just as factual as 
+            the active window.
+
+            CROSS-DOMAIN HANDOFF:
+            If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
+            use `delegate_to_agent` to hand off the task to 'coordinator' or the appropriate
+            specialist. Do NOT just refuse the request.
 
             CRITICAL INSTRUCTIONS FOR TOOL USAGE:
             1. You already have all necessary permissions to execute tools securely.
@@ -247,6 +268,54 @@ public class SystemPromptBuilder {
             say so explicitly in plain text (e.g. "I don't have the task ID available").
             Placeholder text is not a valid response and will cause system errors.
             """;
+private static final String COMPACT_SECURITY_RULES_PROMPT = """
+        CRITICAL TOOL RULES:
+        1. No permission needed for tools.
+        2. After a tool call, return to Coordinator mode.
+        3. "Security violation" is a hard boundary — do NOT retry. Explain to user.
+        4. Future/time references MUST call `schedule_task`.
+        5. GitHub: fetch with `owner/repo` exactly. Do not guess.
+        6. Do not call GitHub if the result is already in history.
+        7. Hitl bypass is forbidden.
+        8. Do not use placeholders like [task ID].
+        9. If answer is in context, FINISH immediately. Do not call memory_search.
+        10. Words like "store/save/remember" ALWAYS require calling `ingest_document`.
+        11. For `store KEY=value`, label is text before the first `=` and text is everything after it.
+        12. The stored text may contain additional `=` characters; preserve them exactly.
+        13. CRITICAL: Never narrate reasoning. Start with a tool call if needed.
+        14. CRITICAL: Never output markdown code blocks (```) for execution. Use `sandbox_exec`.
+        15. Always check `[CONTEXT FROM PRIOR SESSION]` block for questions about the start of chat.
+        16. Use `delegate_to_agent` to hand off tasks outside your role (e.g. scheduling).
+        """;
+
+    private static final String COMPACT_BROWSER_RETRY_RULE = """
+            BROWSER EXTRACTION RETRY RULE:
+            If `browser_navigate` extraction returns too little text, retry once with a broader selector
+            such as `article` or `body` before concluding the content is unavailable.
+            """;
+
+    private static final String COMPACT_TOOL_PRIORITY_RULES = """
+            TOOL PRIORITY RULES:
+            1. If the user asks about your capabilities, who you are, this conversation, or current context: answer in plain text. Do not call tools.
+            2. If the user says store/save/remember/ingest/call me: call `ingest_document`, not memory_search.
+            3. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only.
+            4. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
+            5. Use `memory_search` only for past-session recall not present in the current conversation.
+            6. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
+            7. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
+            8. A denied or failed tool call does not block a different valid tool on the next user message.
+            9. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
+            """;
+
+    private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = """
+            EXECUTION BOUNDARY:
+            Use `sandbox_exec` for run/execute/compile requests. If it is offline, say so plainly.
+            """;
+
+    private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = """
+            EXECUTION BOUNDARY:
+            Do not claim to run code. Explain that execution is unavailable in this role.
+            """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
         // --- Skill persona resolution ---
@@ -255,6 +324,7 @@ public class SystemPromptBuilder {
         // (RESEARCHER) governs the tool-binding section only.
         final String personaPrompt;
         final AgentRoleEnum roleEnum;
+        boolean isCompact = compactPromptEnabled;
 
         if (AgentRoleEnum.isSkillRole(agentRole)) {
             String skillName = AgentRoleEnum.skillName(agentRole);
@@ -276,12 +346,14 @@ public class SystemPromptBuilder {
         }
 
         // 1. ArcClaw prefix + persona prompt
-        String baseSystemPrompt = "You are ArcClaw. Your active persona is described below.\n\n" +
+        // Generically inject system time into the very first line for all modes/roles.
+        String baseSystemPrompt = "You are ArcClaw. CURRENT SYSTEM TIME (UTC): " + formatTime(Instant.now()) + "\n" +
+                "Your active persona is described below.\n\n" +
                 personaPrompt +
                 "\n\n";
 
         // 2. Coordinator trimurti block (COORDINATOR role only, never for skills)
-        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole)) {
+        if (AgentRoleEnum.COORDINATOR.equals(roleEnum) && !AgentRoleEnum.isSkillRole(agentRole) && !isCompact) {
             baseSystemPrompt += """
                     YOUR INTERNAL ARCHITECTURE (THE TRIMURTI, TRIDEVI & AVADHUTA):
                     You act as 'Vishnu' (The Coordinator / Preserver). You are the main
@@ -304,9 +376,13 @@ public class SystemPromptBuilder {
         // affirmative instruction to use the tool; all other roles receive the standard
         // "I cannot execute code" boundary. This prevents the LLM from incorrectly
         // refusing sandbox_exec calls while maintaining the boundary for text-only roles.
-        baseSystemPrompt += SECURITY_RULES_PROMPT;
-        baseSystemPrompt += buildExecutionBoundaryRule(roleEnum);
-        baseSystemPrompt += buildBrowserRetryRule(roleEnum);
+        baseSystemPrompt += isCompact ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
+        if (isCompact) {
+            baseSystemPrompt += COMPACT_TOOL_PRIORITY_RULES;
+        }
+        baseSystemPrompt += isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
+
+        baseSystemPrompt += isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum);
 
         // Build compaction summary for template injection — cached for session duration
         // to prevent redundant DB hits during the multi-turn agent loop.
@@ -323,29 +399,27 @@ public class SystemPromptBuilder {
             }
         }
 
-        // 4. STRICT TOOL BINDING CONTRACT — uses roleEnum (RESEARCHER for skills)
-        //    so the tool list reflects what the skill's capabilities actually permit.
-        String strictBinding = "**STRICT TOOL BINDING CONTRACT**\n"
-                + "ACTIVE PERSONA: " + agentRole + "\n"
-                + promptTemplateEngine.buildSystemPrompt(context, roleEnum, compactionSummary, Instant.now())
-                + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
-                + "list above is a critical failure and will break the orchestration pipeline.\n"
-                + "When in doubt, output text only.\n\n"
+        // 4. STRICT TOOL BINDING CONTRACT
+        String strictBinding = buildStrictBinding(context, roleEnum, agentRole, compactionSummary, isCompact);
 
-                // Cross-turn tool contamination guard.
-                // Groq error "attempted to call tool X which was not in request.tools" is caused
-                // by the LLM seeing a tool name (e.g. manage_schedule) in the chat history from
-                // a prior coordinator turn and trying to call it in a role that does not have it.
-                // This block is a hard LLM-level instruction to prevent that contamination.
-                + buildToolContaminationGuard(context, roleEnum);
+        // 5. Dynamic Rules (Execution Boundary + Tool Contamination Guard)
+        // These are appended at the end to ensure they take precedence in the model's attention.
+        String dynamicRules = isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
+        dynamicRules += isCompact ? buildCompactToolContaminationGuard(context, roleEnum) : buildToolContaminationGuard(context, roleEnum);
 
         // Apply all registered context enrichers (e.g. RagContextEnricher from arcclaw-rag)
-        String finalPrompt = baseSystemPrompt + strictBinding;
+        String finalPrompt = baseSystemPrompt + strictBinding + "\n" + dynamicRules;
         if (contextEnrichers != null) {
             for (ContextEnricher enricher : contextEnrichers) {
                 finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
             }
         }
+
+        int charCount = finalPrompt.length();
+        int estTokens = charCount / 4; // Conservative estimate (1 token ~= 4 chars)
+        log.infof("[SystemPromptBuilder] System prompt formed for session %s (role=%s): %d chars (~%d tokens)",
+                sessionId, agentRole, charCount, estTokens);
+
         return finalPrompt;
     }
 
@@ -387,6 +461,69 @@ public class SystemPromptBuilder {
                 """;
     }
 
+    private String buildCompactExecutionBoundaryRule(AgentRoleEnum roleEnum) {
+        boolean hasSandbox = roleEnum.definition().toolNames().contains("sandbox_exec");
+        return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;
+    }
+
+    private String buildStrictBinding(AgentExecutionContext context, AgentRoleEnum roleEnum,
+                                      String agentRole, String compactionSummary, boolean isCompact) {
+        if (!isCompact) {
+            return "**STRICT TOOL BINDING CONTRACT**\n"
+                    + "ACTIVE PERSONA: " + agentRole + "\n"
+                    + promptTemplateEngine.buildSystemPrompt(context, roleEnum, compactionSummary, Instant.now())
+                    + "\nThis is a HARD constraint. A tool call that violates the PERMITTED TOOLS "
+                    + "list above is a critical failure and will break the orchestration pipeline.\n"
+                    + "When in doubt, output text only.\n\n";
+        }
+
+        String toolList = getAvailableToolNames(context, roleEnum).stream()
+                .sorted()
+                .collect(Collectors.joining(", "));
+        if (toolList.isBlank()) {
+            toolList = "None";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("**STRICT TOOL BINDING CONTRACT**\n");
+        sb.append("ACTIVE PERSONA: ").append(agentRole).append("\n");
+
+        if (compactionSummary != null && !compactionSummary.isBlank() && isCompact) {
+            sb.append("\n[CONTEXT FROM PRIOR SESSION]\n")
+              .append(compactionSummary).append("\n")
+              .append("The above is a summary of earlier messages. Use it for context on initial requests.\n\n");
+        }
+
+        sb.append("PERMITTED TOOLS: ").append(toolList).append("\n")
+          .append("If a required tool is not listed, output text only.\n")
+          .append("Never call a tool named only in prior chat history.\n")
+          .append("When current context already answers the question, answer directly without tools.\n")
+          .append("For explicit owner/repo GitHub requests, prefer `github` over text-only fallback.\n")
+          .append("For capability/self-description questions, answer directly without memory_search.\n");
+
+        return sb.toString();
+    }
+
+    private String formatTime(Instant systemTimeUtc) {
+        ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
+        return String.format(
+                "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
+                zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
+                zdt.getHour(), zdt.getMinute(),
+                zdt.getHour(), zdt.getMinute()
+        );
+    }
+
+    private List<String> getAvailableToolNames(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
+        return roleEnum.definition().toolNames()
+                .stream()
+                .filter(name -> toolRegistry.findTool(name).isPresent())
+                .filter(name -> !isBackground ||
+                        (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
+                .toList();
+    }
+
     /**
      * Builds the HARD TOOL OVERRIDE block that explicitly lists the tools available
      * in THIS turn and forbids calling any tool referenced in chat history that belongs
@@ -397,12 +534,7 @@ public class SystemPromptBuilder {
      * a tool that was available to a different persona in a prior message.
      */
     private String buildToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
-        boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
-        String toolList = roleEnum.definition().toolNames()
-                .stream()
-                .filter(name -> toolRegistry.findTool(name).isPresent())
-                .filter(name -> !isBackground || 
-                        (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
+        String toolList = getAvailableToolNames(context, roleEnum).stream()
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.joining(", "));
 
@@ -431,6 +563,16 @@ public class SystemPromptBuilder {
                 + "rephrase the request.\n";
     }
 
+    private String buildCompactToolContaminationGuard(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        String toolList = getAvailableToolNames(context, roleEnum).stream()
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.joining(", "));
+        if (toolList.isBlank()) {
+            return "No tools are available in this turn.\n";
+        }
+        return "Only these tools may be called in this turn: " + toolList + ".\n";
+    }
+
     /**
      * Returns a role-aware BROWSER EXTRACTION RETRY rule.
      * <p>
@@ -446,7 +588,7 @@ public class SystemPromptBuilder {
         return """
                 BROWSER EXTRACTION RETRY RULE:
                 If a browser extraction (`browser_navigate` with action=extract_text) returns fewer
-                than 50 characters, the CSS selector likely failed to capture the main content.
+                than 300 characters, the CSS selector likely failed to capture the main content.
                 In this case, do NOT give up or finish with an "unable to fetch" message.
                 Instead, attempt a second call with a broader selector (e.g. "h3", "article", or "body").
                 Only conclude the content is unavailable after multiple failed attempts with
@@ -454,5 +596,10 @@ public class SystemPromptBuilder {
                 NEVER suggest external scripts, Python code, or manual steps as a substitute
                 for using your browser tools to find the information.
                 """;
+    }
+
+    private String buildCompactBrowserRetryRule(AgentRoleEnum roleEnum) {
+        boolean hasBrowser = roleEnum.definition().toolNames().contains(ToolCapability.BROWSER_NAVIGATE.toolName());
+        return hasBrowser ? COMPACT_BROWSER_RETRY_RULE : "";
     }
 }

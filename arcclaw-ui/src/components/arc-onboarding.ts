@@ -35,6 +35,8 @@ export class ArcOnboarding extends LitElement {
     'claude-code': 'claude-sonnet-4-5',
     openrouter: 'openai/gpt-oss-20b:free',
     nvidia: 'mistralai/devstral-2-123b-instruct-2512',
+    cerebras: 'qwen-3-235b-a22b-instruct-2507',
+    gemini: 'gemini-2.5-flash-lite',
   };
 
   static styles = css`
@@ -768,6 +770,8 @@ export class ArcOnboarding extends LitElement {
       { id:'claude-code', name:'Claude Code',  tag:'CLI tool',        icon:'C',  color:'#8b5cf6' },
       { id:'openrouter',  name:'OpenRouter',   tag:'Unified API',     icon:'R',  color:'#6561f5' },
       { id:'nvidia',      name:'NVIDIA',       tag:'NIM models',      icon:'N',  color:'#76b900' },
+      { id:'cerebras',    name:'Cerebras',     tag:'Ultra-fast LPU',  icon:'Cb', color:'#11e400' },
+      { id:'gemini',      name:'Gemini',       tag:'Google AI',       icon:'Ge', color:'#4285f4' },
     ];
     return html`
       <span class="field-label">Provider</span>

@@ -310,19 +310,27 @@ public class PlaywrightPageRunner {
 
         // 2. Greedy Semantic Fallback
         String[] fallbacks = {
-            "main", "article", "[class*='blog'] .post, .post, .card",
+            "article", "main", "[role='main']", ".content", 
+            "[class*='blog'] .post, .post, .card",
             "[class*='blog'] h2, [class*='post'] h2, article h2",
             "body"
         };
         String best = "";
         for (String sel : fallbacks) {
             try {
+                // If it's the same as the already-failed llmSelector, skip
+                if (sel.equalsIgnoreCase(llmSelector)) continue;
+
                 page.waitForSelector(sel, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.VISIBLE).setTimeout(selectorWaitMs));
                 String current = page.locator(sel).allInnerTexts().stream()
                     .map(t -> normalizeWhitespace(t.trim()))
                     .filter(s -> s.length() > minFilterChars)
                     .collect(Collectors.joining("\n\n---\n\n"));
-                if (current.length() > best.length()) best = current;
+                
+                if (current.length() > best.length()) {
+                    best = current;
+                    log.debugf("[Playwright] Found %d chars using fallback selector '%s'", best.length(), sel);
+                }
                 if (best.length() > 3000) break; // found a good large chunk
             } catch (Exception ignored) {}
         }

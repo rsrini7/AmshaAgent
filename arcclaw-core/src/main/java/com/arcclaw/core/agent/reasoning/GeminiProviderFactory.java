@@ -20,8 +20,8 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "arcclaw.llm.gemini.api-key")
     String apiKey;
 
-    @ConfigProperty(name = "arcclaw.llm.gemini.model-name",
-                    defaultValue = "gemini-flash-latest")
+    @ConfigProperty(name = "arcclaw.llm.model-name",
+                    defaultValue = "gemini-2.5-flash-lite")
     String modelName;
 
     @ConfigProperty(name = "arcclaw.llm.max-output-tokens",

@@ -5,8 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,15 +14,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -41,6 +32,15 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class AgentDispatchHandlerTest {
@@ -143,8 +143,8 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(AutonomyLevel.FULL);
         context.setGoal("browse https://spring.io/blog top 3 titles");
 
-        ChannelSender sender = org.mockito.Mockito.mock(ChannelSender.class);
-        ChannelPlugin plugin = org.mockito.Mockito.mock(ChannelPlugin.class);
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
         when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
         when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any(MessageContext.class)))

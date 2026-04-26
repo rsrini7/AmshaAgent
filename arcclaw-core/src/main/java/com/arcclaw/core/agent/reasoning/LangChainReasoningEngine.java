@@ -78,6 +78,20 @@ public class LangChainReasoningEngine implements ReasoningEngine {
  
         messages.addAll(assembled);
 
+        if (log.isDebugEnabled()) {
+            long totalContentChars = messages.stream()
+                    .mapToLong(m -> m.toString().length())
+                    .sum();
+            log.debugf("[LangChainReasoningEngine] Assembled %d messages for turn (system=%d, history=%d). " +
+                       "System prompt: %d chars. Total messages content: %d chars (~%d tokens)",
+                    messages.size(),
+                    messages.stream().filter(m -> m instanceof SystemMessage).count(),
+                    assembled.size(),
+                    systemPrompt.length(),
+                    totalContentChars,
+                    totalContentChars / 4);
+        }
+
         Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
  
         // ── CAPABILITY CEILING ──

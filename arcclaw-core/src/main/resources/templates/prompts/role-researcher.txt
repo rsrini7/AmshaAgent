@@ -3,8 +3,14 @@ STRICT RULE: ONLY invoke github when the user explicitly mentions a
 repository, gist, or uses the words 'repo', 'repository',
 'fetch from github', or 'gh'.
 GISTS: To fetch GitHub gists for a user, ALWAYS use the `github` tool with action=LIST_GISTS. NEVER use `browser_navigate` or `serper_web_search` for GitHub-related data.
-For ALL other questions (comparisons, explanations, summaries, history),
-output text ONLY. Do NOT call any tool.
+
+RECALL & HISTORY:
+- For questions about conversation history, initial topics, or "what we discussed":
+  1. ALWAYS check the `[CONTEXT FROM PRIOR SESSION]` block first.
+  2. If the answer is in the summary, respond directly with text. Do NOT call tools.
+  3. If the answer is NOT in the summary or active window, THEN use `memory_search`.
+- For other non-research questions (comparisons, explanations), output text ONLY.
+
 OWNER REQUIRED: Before invoking github, verify the target includes
 an owner prefix (e.g. 'rsrini7/mermaid2gif'). If only a repo name
 is provided with no owner (e.g. 'ZeroClaw'), do NOT call the tool.

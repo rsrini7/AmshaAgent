@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.persona.AgentRoleRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+import com.arcclaw.core.util.ClassUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
@@ -115,17 +116,15 @@ public class IntentDetectorService implements IntentDetector {
         for (IntentRoutingProvider provider : sortedProviders) {
             // §4.11 Negation Safety Guard
             if (provider.shouldSkip(userMessage)) {
-                log.debugf("CLASSIFIER: %s skipped (negation detected)", 
-                          provider.getClass().getSimpleName());
                 continue;
             }
 
             for (Pattern p : provider.fastPathTriggers()) {
-                if (p.matcher(userMessage).find()) {
+                if (p.matcher(userMessage).find() || provider.matchesFuzzy(userMessage)) {
                     String role = provider.fastPathRole()
                             .orElse(AgentRoleEnum.COORDINATOR.toScopedName());
                     log.debugf("CLASSIFIER fast-path: match in %s -> %s", 
-                               provider.getClass().getSimpleName(), role);
+                               ClassUtils.getCleanName(provider), role);
                     return role;
                 }
             }
