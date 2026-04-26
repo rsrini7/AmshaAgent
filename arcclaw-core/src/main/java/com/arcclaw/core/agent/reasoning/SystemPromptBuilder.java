@@ -108,17 +108,23 @@ public class SystemPromptBuilder {
             at [timestamp] covering [N] messages."
             If absent, say: "Not yet — session is within active window."
 
-            RECALL PRIORITIZATION:
-            When the user asks about the beginning of the conversation or "initial" topics,
-            ALWAYS check the `[CONTEXT FROM PRIOR SESSION]` block (the compacted summary)
-            before the active window. Information in the summary is just as factual as 
-            the active window.
+            RECALL PRIORITY (non-negotiable order):
+            1. Check the ACTIVE WINDOW (current messages) for any self-introduction or statements of user preferences (e.g. "I like/love/enjoy X").
+            2. Check the [CONTEXT FROM PRIOR SESSION] (compacted summary) for the same.
+            3. ONLY call memory_search if the information is genuinely absent from BOTH the active window and the summary.
+            Never call memory_search when the answer is visible in the current conversation.
 
-            IDENTITY RECALL RULE:
-            If the user asks "who am I", "what is my name", or similar identity questions,
-            FIRST check the current conversation and compacted summary for any self-introduction
-            (e.g. "I am X", "my name is X", "call me X"). Only call memory_search if the name
-            is genuinely absent from both. When calling memory_search, set the query parameter to "user name identity".
+            IDENTITY RECALL: If the name is absent from both active window and summary,
+            call memory_search with the query parameter set to "user name identity".
+
+            PREFERENCE RECALL: If user preferences are absent from both,
+            call memory_search with the query parameter set to "user preferences likes hobbies".
+
+            IDENTITY & PREFERENCE SYNTHESIS:
+            When memory_search returns results, you MUST SYNTHESIZE them into a natural, conversational response.
+            Never echo raw stored document strings verbatim.
+            WRONG: "The user's name is Alice. The user prefers to be called X."
+            RIGHT: "You are Alice, and I'll call you X as you requested."
 
             CROSS-DOMAIN HANDOFF:
             If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
@@ -296,8 +302,8 @@ public class SystemPromptBuilder {
             - The label is the identifier before the '=' character.
             - The text is everything after the first '=' character.
             - If the text contains '=' characters, preserve them exactly.
-            Example for "store USER_NAME=Srini":
-            Call ingest_document with text set to "USER_NAME=Srini".
+            Example for "store USER_NAME=Alice":
+            Call ingest_document with text set to "USER_NAME=Alice".
             Example for "store JWT=abc=def":
             Call ingest_document with text set to "JWT=abc=def".
 
@@ -340,11 +346,11 @@ public class SystemPromptBuilder {
         7. If a tool fails with "Security violation", do NOT retry. Explain to user.
         8. For time-delay phrases ("tomorrow", "in 5 min"): call `schedule_task` ONLY.
         9. STORAGE rule: call `ingest_document`. Output JSON tool-call ONLY. NO thought or text answer before tool result.
-        10. STORAGE format: "label=value" (e.g. "USER_NAME=Srini"). Preserve the "=" exactly.
+        10. STORAGE format: "label=value" (e.g. "USER_NAME=Alice"). Preserve the "=" exactly.
         11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
         12. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
-        13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
-        14. IDENTITY RECALL: For "who am I" / "my name" questions, check history and `[CONTEXT FROM PRIOR SESSION]` for self-introductions BEFORE calling memory_search.
+        13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks. Set the agent parameter to the persona name.
+        14. IDENTITY RECALL: For "who am I" / "my name" questions, check history and `[CONTEXT FROM PRIOR SESSION]` first. Only call `memory_search` with query set to "user name identity" if absent.
         15. NEVER output raw JSON blocks to the user. Always use natural language or markdown lists.
         """;
 

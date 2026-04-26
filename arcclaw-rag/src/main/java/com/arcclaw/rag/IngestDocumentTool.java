@@ -59,7 +59,7 @@ public class IngestDocumentTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
             .addStringProperty("text",
-                "The full factual statement or document text to store, e.g. 'The user's name is Srini'. " +
+                "The full factual statement or document text to store, e.g. 'The user's name is Alice'. " +
                 "Do NOT store just an entity name — store the complete fact as a standalone sentence.")
             .addStringProperty("label",
                 "A descriptive short label or key for this information (e.g. 'user_name', 'project_overview').")

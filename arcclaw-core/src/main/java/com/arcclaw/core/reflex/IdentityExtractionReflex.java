@@ -23,21 +23,35 @@ public class IdentityExtractionReflex implements AgentReflex {
     
     @Inject ManagedExecutor managedExecutor;
 
-    private static final Pattern NAME_PATTERN = Pattern.compile("(?i)(?:my name is|i am|i'm)\\s+([a-zA-Z\\s]+)");
-    private static final Pattern ALIAS_PATTERN = Pattern.compile("(?i)(?:call me)\\s+([a-zA-Z\\s]+)");
-    private static final Pattern HOBBY_PATTERN = Pattern.compile("(?i)(?:i love|i enjoy|my hobby is)\\s+(.+)");
-    private static final Pattern PREF_PATTERN = Pattern.compile("(?i)(?:i prefer)\\s+(.+)");
-    private static final Pattern EMPLOYER_PATTERN = Pattern.compile("(?i)(?:i work at|i work for)\\s+(.+)");
-    private static final Pattern LOCATION_PATTERN = Pattern.compile("(?i)(?:i am based in|i live in|i'm based in)\\s+(.+)");
+    private static final Pattern NAME_PATTERN = Pattern.compile("(?i)\\b(?:my name is|i am|i'm)\\s+([a-zA-Z\\s]+)");
+    private static final Pattern ALIAS_PATTERN = Pattern.compile("(?i)\\b(?:call me)\\s+([a-zA-Z\\s]+)");
+    private static final Pattern HOBBY_PATTERN = Pattern.compile("(?i)\\b(?:my hobby is|i enjoy doing)\\s+(.+)");
+    private static final Pattern PREF_PATTERN = Pattern.compile("(?i)\\b(?:i prefer)\\s+(.+)");
+    private static final Pattern LIKE_PATTERN = Pattern.compile("(?i)\\b(?:i like|i love|i enjoy)\\s+(.+)");
+    private static final Pattern EMPLOYER_PATTERN = Pattern.compile("(?i)\\b(?:i work at|i work for)\\s+(.+)");
+    private static final Pattern LOCATION_PATTERN = Pattern.compile("(?i)\\b(?:i am based in|i live in|i'm based in)\\s+(.+)");
 
     @Override
     public boolean matches(String input) {
-        if (input == null) return false;
-        String lower = input.toLowerCase();
+        if (input == null || input.isBlank()) return false;
+        String trimmed = input.trim();
+        
+        // 1. Guard: If it ends with a question mark, it's a query, not a fact to ingest.
+        if (trimmed.endsWith("?")) return false;
+
+        String lower = trimmed.toLowerCase();
+        
+        // 2. Guard: Common question starters
+        if (lower.startsWith("what ") || lower.startsWith("who ") || lower.startsWith("how ") || 
+            lower.startsWith("do you ") || lower.startsWith("can you ")) {
+            return false;
+        }
+
         return NAME_PATTERN.matcher(lower).find() ||
                ALIAS_PATTERN.matcher(lower).find() ||
                HOBBY_PATTERN.matcher(lower).find() ||
                PREF_PATTERN.matcher(lower).find() ||
+               LIKE_PATTERN.matcher(lower).find() ||
                EMPLOYER_PATTERN.matcher(lower).find() ||
                LOCATION_PATTERN.matcher(lower).find();
     }
@@ -48,6 +62,7 @@ public class IdentityExtractionReflex implements AgentReflex {
         extractAndIngest(input, ALIAS_PATTERN, IdentityLabel.USER_ALIAS);
         extractAndIngest(input, HOBBY_PATTERN, IdentityLabel.USER_HOBBY);
         extractAndIngest(input, PREF_PATTERN, IdentityLabel.USER_PREF);
+        extractAndIngest(input, LIKE_PATTERN, IdentityLabel.USER_LIKE);
         extractAndIngest(input, EMPLOYER_PATTERN, IdentityLabel.USER_EMPLOYER);
         extractAndIngest(input, LOCATION_PATTERN, IdentityLabel.USER_LOCATION);
 
@@ -82,8 +97,9 @@ public class IdentityExtractionReflex implements AgentReflex {
         return switch (label) {
             case USER_NAME -> "The user's name is " + value + ".";
             case USER_ALIAS -> "The user prefers to be called " + value + ".";
-            case USER_HOBBY -> "The user loves " + value + ".";
+            case USER_HOBBY -> "The user's hobby is " + value + ".";
             case USER_PREF -> "The user prefers " + value + ".";
+            case USER_LIKE -> "The user enjoys " + value + ".";
             case USER_EMPLOYER -> "The user works at " + value + ".";
             case USER_LOCATION -> "The user is based in " + value + ".";
             default -> "User identity fact: " + value;
