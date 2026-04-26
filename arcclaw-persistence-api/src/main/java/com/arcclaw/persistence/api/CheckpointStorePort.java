@@ -65,6 +65,25 @@ public interface CheckpointStorePort {
     void transitionStatus(Long id, String newStatus);
 
     /**
+     * Atomically transitions a checkpoint from one status to another.
+     * Used for distributed locking and race prevention (§T5-6).
+     *
+     * @param id the checkpoint ID
+     * @param expectedStatus the current status that must match
+     * @param newStatus the target status
+     * @return true if the transition was successful
+     */
+    boolean atomicTransition(Long id, String expectedStatus, String newStatus);
+
+    /**
+     * Atomically transitions the latest checkpoint for a session/role to RESUMING
+     * if it is currently AWAITING_APPROVAL (§T5-4).
+     *
+     * @return true if successfully claimed for resume
+     */
+    boolean claimForResume(String sessionId, String agentRole);
+
+    /**
      * Finds checkpoints that are stale and awaiting approval.
      * 
      * @param cutoff the cutoff time - checkpoints updated before this time are considered stale
@@ -141,14 +160,14 @@ public interface CheckpointStorePort {
      * Restores TOCTOU safety (§FIX 1).
      */
     CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
-        String stateJson, String autonomy, int iterationsUsed);
+        String stateJson, String autonomy, int iterationsUsed, String originalGoal);
 
     /**
      * Atomically upserts a checkpoint and finalizes its status to prevent TOCTOU races
      * with background schedulers.
      */
     CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, 
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps);
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal);
 
     List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason);
 

@@ -7,6 +7,10 @@ import dev.langchain4j.exception.InvalidRequestException;
 public class LlmExceptionClassifier {
 
     public static LlmProviderException classify(Throwable throwable) {
+        if (throwable instanceof LlmProviderException lpe) {
+            return lpe;
+        }
+
         Throwable t = throwable;
         
         while (t != null) {
@@ -47,7 +51,7 @@ public class LlmExceptionClassifier {
             
             if (t instanceof NullPointerException) {
                 String msg = t.getMessage();
-                if (msg != null && msg.contains("\"parts\" is null")) {
+                if (msg != null && (msg.contains("parts") || msg.contains("Part"))) {
                     return new LlmContentFilterException("Gemini returned an empty response or was blocked by safety filters. " +
                             "Try rephrasing your request or adjusting safety settings.", throwable);
                 }

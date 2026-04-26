@@ -47,7 +47,8 @@ public class CheckpointStatusTest {
             CheckpointStatus.DENIED,
             CheckpointStatus.COMPROMISED,
             CheckpointStatus.ARCHIVED,
-            CheckpointStatus.ORPHANED
+            CheckpointStatus.ORPHANED,
+            CheckpointStatus.RESUMING
         );
 
         assertEquals(expectedTerminal, terminalStatuses,

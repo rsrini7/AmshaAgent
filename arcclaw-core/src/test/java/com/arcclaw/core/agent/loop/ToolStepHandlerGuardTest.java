@@ -2,6 +2,10 @@ package com.arcclaw.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -11,10 +15,12 @@ import java.util.Optional;
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +35,11 @@ class ToolStepHandlerGuardTest {
     @Mock ToolRegistry toolRegistry;
     @Mock ToolInvocationGuard guard;
     @Mock Instance<AgentObserver> observers;
+    @Mock ToolInvoker invoker;
+    @Mock ChatMemoryWriter writer;
+    @Mock Instance<com.arcclaw.core.tool.DynamicToolLookup> dynamicToolLookup;
+    @Mock ApprovalCheckpointManager checkpointManager;
+    @Mock ParallelToolStepExecutor parallelExecutor;
     @InjectMocks ToolStepHandler handler;
 
     private AgentExecutionContext createCtx(String role, String goal) {
@@ -92,5 +103,27 @@ class ToolStepHandlerGuardTest {
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
         assertEquals(DecisionType.PROCEED, decision.type());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void invokeToolAndObserve_pauseForApproval_persistsPendingStepInHistory() {
+        AgentExecutionContext ctx = createCtx("researcher", "list gists");
+        ReasoningStep step = ReasoningStep.pending("thought", "github", Map.of("target", "rsrini7"));
+
+        when(guard.evaluate(anyString(), anyString(), anyString(), any(), anyList(), anyString(), anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
+                        "github", "{\"target\":\"rsrini7\"}"));
+        when(checkpointManager.persist(any(), anyString(), anyString(), anyList(), any(), any()))
+                .thenReturn(AgentResult.awaitingApproval("github", "{\"target\":\"rsrini7\"}", "sess1", List.of()));
+
+        StepDecision decision = handler.invokeToolAndObserve(ctx, List.of(), step, 0, List.of());
+
+        assertEquals(DecisionType.TERMINAL, decision.type());
+
+        ArgumentCaptor<List<ReasoningStep>> historyCaptor = ArgumentCaptor.forClass(List.class);
+        verify(checkpointManager).persist(any(), anyString(), anyString(), historyCaptor.capture(), any(), any());
+        assertEquals(1, historyCaptor.getValue().size());
+        assertEquals("github", historyCaptor.getValue().getFirst().action());
     }
 }

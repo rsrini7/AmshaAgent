@@ -49,6 +49,10 @@ public class FallbackChatModel implements ChatModel {
 
     private boolean isRetriableOnFallback(Throwable e) {
         if (e == null) return false;
+
+        if (e.getClass().getSimpleName().contains("ContentFilter")) {
+            return true;
+        }
         
         // 1. Explicit rate limit check
         String className = e.getClass().getSimpleName();
@@ -67,7 +71,13 @@ public class FallbackChatModel implements ChatModel {
                 lower.contains("rpm limit")) {
                 return true;
             }
-            
+
+            if (lower.contains("blocked by safety filters")
+                    || lower.contains("empty response")
+                    || lower.contains("content filter")) {
+                return true;
+            }
+             
             // 3. retriable 5xx errors (service unavailable/overloaded)
             if (lower.contains("502") || lower.contains("503") || lower.contains("504") ||
                 lower.contains("service unavailable") || lower.contains("bad gateway") ||

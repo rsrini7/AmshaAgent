@@ -34,6 +34,11 @@ public final class AgentSentinels {
         return goal != null && goal.toUpperCase().startsWith(CRON_PREFIX);
     }
 
+    public static String stripCronPrefix(String goal) {
+        if (!isCronGoal(goal)) return goal;
+        return goal.substring(CRON_PREFIX.length()).trim();
+    }
+
     public static final Pattern CONTEXT_RAG_ECHO_PATTERN = Pattern.compile(
          "^<rag_memory>[\\s\\S]*?</rag_memory>\\s*",
         Pattern.CASE_INSENSITIVE

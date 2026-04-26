@@ -22,9 +22,10 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param sessionId The workspace session ID.
      * @param agentRole The agent role identifier.
      * @param steps     The current reasoning history to serialize.
+     * @param goal      The original user goal for continuity tracking.
      * @return The persisted checkpoint.
      */
-    AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps);
+    AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal);
 
     /**
      * Update an existing checkpoint directly.
@@ -50,6 +51,16 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @return The list of reasoning steps.
      */
     List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint);
+
+    /**
+     * Persists granular reasoning steps for a specific checkpoint.
+     */
+    void saveSteps(Long checkpointId, List<ReasoningStep> steps);
+
+    /**
+     * Saves a checkpoint and its granular reasoning steps atomically.
+     */
+    AgentCheckpoint saveWithSteps(AgentCheckpoint checkpoint, List<ReasoningStep> steps);
 
     /**
      * Mark a checkpoint as failed with a reason.
@@ -99,11 +110,13 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @param agentRole   The agent role identifier.
      * @param steps       The final reasoning history to persist.
      * @param finalStatus The final status (COMPLETED or FAILED).
+     * @param goal        The original user goal for continuity tracking.
      * @return The finalized checkpoint.
      */
     AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
                                     List<ReasoningStep> steps,
-                                    CheckpointStatus finalStatus);
+                                    CheckpointStatus finalStatus,
+                                    String goal);
 
     /**
      * Load reasoning steps for a specific checkpoint from the granular
@@ -163,9 +176,9 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * Atomically marks the session as RESUMING.
      * @return true if this caller is the first to mark it (safe to resume)
      *         false if another thread already marked it (skip — already resuming)
-     * §7.29
+     * §7.29, §T5-4
      */
-    boolean markBatchResuming(String sessionId);
+    boolean markBatchResuming(String sessionId, String agentRole);
 
     /**
      * Atomically claims a checkpoint for retry by transitioning its status
@@ -200,6 +213,11 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * Retrieves the absolute latest checkpoint for this session, regardless of status or role.
      */
     Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId);
+
+    /**
+     * Retrieves the latest non-archived checkpoint for this session.
+     */
+    Optional<AgentCheckpoint> findLatestNonArchivedCheckpoint(String sessionId);
 
     /**
      * Returns the agentRole of the most recent non-archived checkpoint for this session.

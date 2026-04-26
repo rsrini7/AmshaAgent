@@ -71,3 +71,54 @@ All modules (`arcclaw-core`, `arcclaw-persistence-sqlite`, `arcclaw-rag`, `arccl
 *   **Context Accuracy**: Refined `WorkspaceScopeHolder` to default unrecognized channel types to `UNKNOWN` instead of `TELEGRAM`, ensuring more accurate diagnostic metadata for non-bot sessions.
 *   **Thread-Safe Auditing**: Hardened `TelemetryAuditService` by moving `AuditEvent` construction inside the persistence lambda, ensuring effectively-final data capture for asynchronous writes.
 *   **Schema Strategy**: Documented the removal of Hibernate-specific `@ColumnDefault` in favor of explicit SQL migrations (Flyway) to maintain core module purity from ORM engine annotations.
+
+---
+
+## 7. Approval Resume and Cron Delivery Fixes (April 21, 2026)
+
+This pass closed the remaining approval-resume regressions in the cron HITL flow.
+
+### Fixes Applied
+
+1.  **Atomic Pause Persistence (`AWAITING_APPROVAL`)**
+    *   Added `StatefulAgentStore.saveWithSteps(...)` and routed `ApprovalCheckpointManager` through the existing adapter-level `saveCheckpointWithSteps(...)` path.
+    *   This removed the split write pattern where checkpoint metadata and granular reasoning steps were persisted in separate calls during the approval pause.
+    *   Result: the pause snapshot is now committed atomically instead of relying on a follow-up `saveSteps(...)` call.
+
+2.  **Resume Handler Accepts `RESUMING`**
+    *   Fixed `CheckpointResumeHandler.handle(...)` to treat `CheckpointStatus.RESUMING` as a valid resume state alongside `AWAITING_APPROVAL`.
+    *   Before this fix, the handler rejected the correctly claimed checkpoint, returned `null`, and let `AgentLoop` fall through into a fresh state-machine run.
+    *   Result: `/approve` now resumes the paused tool execution path instead of re-planning from scratch.
+
+3.  **Paused Step Snapshot Was Incomplete**
+    *   Root cause of `restored 0 steps`: the HITL pause path was persisting `history` before the current pending tool step was added.
+    *   Fixed both single-tool and parallel HITL pause paths to persist `history + pending step`:
+        *   `ToolStepHandler` now snapshots the current pending tool step before calling `checkpointManager.persist(...)`.
+        *   `ParallelToolStepExecutor` now snapshots the current batch step before calling `persistBatch(...)` / `persistBatchWithPreExecuted(...)`.
+    *   Result: resumed checkpoints now restore the actual pending tool call instead of an empty history.
+
+4.  **Duplicate Final Telegram Send on Cron Approval**
+    *   Root cause: `ApproveReflex.handleCronApproval(...)` both fired `jobCompletedEvent` and returned the same formatted final answer to `CommandDispatchHandler`, which sent it a second time.
+    *   Fixed by keeping event-driven delivery as the single owner for cron completion notifications and returning an empty command response from the cron approval path.
+    *   Result: one Telegram completion message instead of two.
+
+### Files Touched
+
+*   `arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ApprovalCheckpointManager.java`
+*   `arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/CheckpointResumeHandler.java`
+*   `arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ToolStepHandler.java`
+*   `arcclaw-core/src/main/java/com/arcclaw/core/agent/loop/ParallelToolStepExecutor.java`
+*   `arcclaw-core/src/main/java/com/arcclaw/core/reflex/ApproveReflex.java`
+*   `arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStore.java`
+*   `arcclaw-core/src/main/java/com/arcclaw/core/state/StatefulAgentStoreImpl.java`
+
+### Verification
+
+*   Verified targeted core tests:
+    *   `CheckpointResumeHandlerTest`
+    *   `ApproveReflexTest`
+    *   `ToolStepHandlerGuardTest`
+*   Verified live cron behavior after patch:
+    *   approval prompt delivered once
+    *   resumed tool execution succeeded
+    *   final cron answer delivered once

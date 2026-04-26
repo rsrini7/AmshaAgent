@@ -33,79 +33,90 @@ public class CheckpointApprovalService {
     // Reads (findLatestAwaitingApproval, isAllBatchToolsDecided) work fine
     // without an outer tx — SQLite auto-commits SELECT statements.
     public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty())
-            throw new CheckpointResolutionException(
-                "No pending checkpoint found for session " + sessionId, 404);
-        AgentCheckpoint cp = cpOpt.get();
-        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, ToolDecision.APPROVED.name());
-        log.infof("Approved tool %s for session %s reason %s", toolName, sessionId, reason);
-        agentSseService.publish(sessionId,
-            new AgentSseService.HitlEvent(sessionId, HitlEventType.APPROVED.wireValue(), toolName, null, reason, Instant.now()));
-        boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
+        AgentCheckpoint cp = resolveAwaitingCheckpoint(sessionId);
+        String actualSid = cp.getSessionId();
+        
+        agentStore.updateBatchToolDecision(actualSid, cp.getAgentRole(), toolName, ToolDecision.APPROVED.name());
+        log.infof("Approved tool %s for session %s reason %s", toolName, actualSid, reason);
+        agentSseService.publish(actualSid,
+            new AgentSseService.HitlEvent(actualSid, HitlEventType.APPROVED.wireValue(), toolName, null, reason, Instant.now()));
+        
+        boolean allDecided = agentStore.isAllBatchToolsDecided(actualSid, cp.getAgentRole());
         return allDecided ? cp : null;
     }
 
     public AgentCheckpoint denyTool(String sessionId, String toolName, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty())
-            throw new CheckpointResolutionException(
-                "No pending checkpoint found for session " + sessionId, 404);
-        AgentCheckpoint cp = cpOpt.get();
-        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), toolName, ToolDecision.DENIED.name());
-        log.infof("Denied tool %s for session %s reason %s", toolName, sessionId, reason);
-        agentSseService.publish(sessionId,
-            new AgentSseService.HitlEvent(sessionId, HitlEventType.DENIED.wireValue(), toolName, null, reason, Instant.now()));
-        boolean allDecided = agentStore.isAllBatchToolsDecided(sessionId, cp.getAgentRole());
+        AgentCheckpoint cp = resolveAwaitingCheckpoint(sessionId);
+        String actualSid = cp.getSessionId();
+
+        agentStore.updateBatchToolDecision(actualSid, cp.getAgentRole(), toolName, ToolDecision.DENIED.name());
+        log.infof("Denied tool %s for session %s reason %s", toolName, actualSid, reason);
+        agentSseService.publish(actualSid,
+            new AgentSseService.HitlEvent(actualSid, HitlEventType.DENIED.wireValue(), toolName, null, reason, Instant.now()));
+        
+        boolean allDecided = agentStore.isAllBatchToolsDecided(actualSid, cp.getAgentRole());
         return allDecided ? cp : null;
     }
 
     public AgentCheckpoint approveAll(String sessionId, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty())
-            throw new CheckpointResolutionException(
-                "No pending checkpoint found for session " + sessionId, 404);
-        AgentCheckpoint cp = cpOpt.get();
+        AgentCheckpoint cp = resolveAwaitingCheckpoint(sessionId);
+        String actualSid = cp.getSessionId();
+
         if (cp.getBatchToolDecisions() == null) {
-            log.warnf("No batch tool decisions found for session %s, cannot approveAll", sessionId);
+            log.warnf("No batch tool decisions found for session %s, cannot approveAll", actualSid);
             return null;
         }
         List<String> pendingTools = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
         if (pendingTools != null) {
             for (String pending : pendingTools) {
                 if (pending != null) {
-                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, ToolDecision.APPROVED.name()); 
-                    agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                        sessionId, HitlEventType.APPROVED.wireValue(), pending, null, reason, Instant.now()));
+                    agentStore.updateBatchToolDecision(actualSid, cp.getAgentRole(), pending, ToolDecision.APPROVED.name()); 
+                    agentSseService.publish(actualSid, new AgentSseService.HitlEvent(
+                        actualSid, HitlEventType.APPROVED.wireValue(), pending, null, reason, Instant.now()));
                 }
             }
         }
-        log.infof("Approved ALL tools for session %s reason %s", sessionId, reason);
+        log.infof("Approved ALL tools for session %s reason %s", actualSid, reason);
         return cp;
     }
 
     public AgentCheckpoint denyAll(String sessionId, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty())
-            throw new CheckpointResolutionException(
-                "No pending checkpoint found for session " + sessionId, 404);
-        AgentCheckpoint cp = cpOpt.get();
+        AgentCheckpoint cp = resolveAwaitingCheckpoint(sessionId);
+        String actualSid = cp.getSessionId();
+
         if (cp.getBatchToolDecisions() == null) {
-            log.warnf("No batch tool decisions found for session %s, cannot denyAll", sessionId);
+            log.warnf("No batch tool decisions found for session %s, cannot denyAll", actualSid);
             return null;
         }
         List<String> pendingTools = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
         if (pendingTools != null) {
             for (String pending : pendingTools) {
                 if (pending != null) {
-                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, ToolDecision.DENIED.name());
-                    agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-                        sessionId, HitlEventType.DENIED.wireValue(), pending, null, reason, Instant.now()));
+                    agentStore.updateBatchToolDecision(actualSid, cp.getAgentRole(), pending, ToolDecision.DENIED.name());
+                    agentSseService.publish(actualSid, new AgentSseService.HitlEvent(
+                        actualSid, HitlEventType.DENIED.wireValue(), pending, null, reason, Instant.now()));
                 }
             }
         }
-        log.infof("Denied ALL tools for session %s reason %s", sessionId, reason);
+        log.infof("Denied ALL tools for session %s reason %s", actualSid, reason);
         return cp;
+    }
+
+    /**
+     * Resolves the correct AWAITING_APPROVAL checkpoint. 
+     * Handles both direct sessionId and cronId aliases.
+     */
+    private AgentCheckpoint resolveAwaitingCheckpoint(String idOrSid) {
+        // 1. Try direct sessionId lookup
+        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(idOrSid);
+        if (cpOpt.isPresent()) return cpOpt.get();
+
+        // 2. Try cronId alias lookup
+        cpOpt = agentStore.findLatestAwaitingApprovalForCron(idOrSid);
+        if (cpOpt.isPresent()) return cpOpt.get();
+
+        throw new CheckpointResolutionException(
+            "No pending checkpoint found for session or task " + idOrSid, 404);
     }
 
     /**

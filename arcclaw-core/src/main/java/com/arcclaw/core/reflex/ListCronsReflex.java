@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -12,6 +14,8 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.CronStatus;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Fast-path reflex for listing a user's scheduled cron tasks.
@@ -23,6 +27,9 @@ public class ListCronsReflex implements AgentReflex {
 
     @Inject
     AgentCronRepository cronRepository;
+
+    @ConfigProperty(name = "arcclaw.cron.list-retention-hours", defaultValue = "24")
+    int retentionHours;
 
     private static final Set<String> EXACT_MATCHES = Set.of(
         "/cron", "/crons", "/list crons", "list crons",
@@ -51,9 +58,25 @@ public class ListCronsReflex implements AgentReflex {
         if (jobs.isEmpty()) {
             return ReflexResult.respond(UserMessages.NO_SCHEDULE_FOUND, context);
         }
-        String output = jobs.stream()
+
+        Instant threshold = Instant.now().minus(retentionHours, ChronoUnit.HOURS);
+        
+        List<AgentCronEntity> filtered = jobs.stream()
+                .filter(j -> j.status == CronStatus.ACTIVE 
+                          || j.status == CronStatus.AWAITING_APPROVAL
+                          || j.status == CronStatus.RUNNING
+                          || (j.updatedAt != null && j.updatedAt.isAfter(threshold)))
+                .toList();
+
+        String output = filtered.stream()
                 .map(AgentCronEntity::toDisplayString)
                 .collect(Collectors.joining("\n---\n"));
+
+        int hidden = jobs.size() - filtered.size();
+        if (hidden > 0) {
+            output += String.format("\n\n_(%d older terminal tasks hidden)_", hidden);
+        }
+        
         return ReflexResult.respond(output, context);
     }
 

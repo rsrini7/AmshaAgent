@@ -11,13 +11,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
@@ -28,7 +29,6 @@ import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.scope.WorkspaceExecutors;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -41,6 +41,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -63,9 +64,28 @@ public class ParallelToolStepExecutor {
     @Inject RateLimitTracker rateLimitTracker;
     @Inject MeterRegistry meterRegistry;
 
+    @Inject
+    Instance<ManagedExecutor> managedExecutors;
+
+    private ManagedExecutor getInternalExecutor() {
+        return managedExecutors.select(NamedLiteral.of("internal-tool-executor"))
+                .stream().findFirst()
+                .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
+    }
+
+    private ManagedExecutor getExternalExecutor() {
+        return managedExecutors.select(NamedLiteral.of("external-tool-executor"))
+                .stream().findFirst()
+                .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
+    }
+
     @ConfigProperty(name = "arcclaw.hitl.pre-executable-tools",
                     defaultValue = "")
     Optional<List<String>> preExecutableTools;
+
+    @ConfigProperty(name = "arcclaw.tools.external-tools",
+                    defaultValue = "playwright_navigate,playwright_click,playwright_type,playwright_press,playwright_select,playwright_scroll,playwright_screenshot,playwright_content,web_search")
+    List<String> externalTools;
 
 
     @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60")
@@ -188,33 +208,31 @@ public class ParallelToolStepExecutor {
 
         List<ParallelToolCall> allowedCompleted = new ArrayList<>();
         
-        // §7.12: ExecutorService MUST be closed after batch completes.
-        // WorkspaceExecutors.newVirtualThreadPerTaskExecutor() returns
-        // ContextAwareExecutorService which implements AutoCloseable via
-        // ExecutorService (Java 19+ close() calls shutdown() + awaitTermination).
-        try (ExecutorService executor =
-                WorkspaceExecutors.newVirtualThreadPerTaskExecutor()) {
+        // §7.12: Executor pools are managed and persistent (§T5-2).
+        try {
 
             List<CompletableFuture<ParallelToolCall>> futures = allowedCalls.stream()
-                .map(call -> CompletableFuture.supplyAsync(() -> {
-                    // Restore OTel context in this virtual thread
-                    try (Scope _ = otelContext.makeCurrent()) {
-                        try {
-                            ToolResponse response = toolInvoker.invoke(
-                                 call.toolName(), call.params(), context.sessionId());
-                            if (response.success()) {
-                                guard.recordToolCall(context.sessionId(), call.toolName(), call.params(), response.output());
+                .map(call -> {
+                    ManagedExecutor executor = isExternalTool(call.toolName()) ? getExternalExecutor() : getInternalExecutor();
+                    return CompletableFuture.supplyAsync(() -> {
+                        // Restore OTel context in this thread
+                        try (Scope _ = otelContext.makeCurrent()) {
+                            try {
+                                ToolResponse response = toolInvoker.invoke(
+                                     call.toolName(), call.params(), context.sessionId());
+                                if (response.success()) {
+                                    guard.recordToolCall(context.sessionId(), call.toolName(), call.params(), response.output());
+                                }
+                                return call.withResult(response.output(), response.success());
+                            } catch (Exception e) {
+                                log.warnf("[PARALLEL-EXEC] session=%s tool=%s failed: %s",
+                                          context.sessionId(), call.toolName(), e.getMessage());
+                                return call.withResult(
+                                    "Tool execution failed: " + e.getMessage(), false);
                             }
-                            return call.withResult(response.output(), response.success());
-                        } catch (Exception e) {
-                            log.warnf("[PARALLEL-EXEC] session=%s tool=%s failed: %s",
-                                      context.sessionId(), call.toolName(), e.getMessage());
-                            return call.withResult(
-                                "Tool execution failed: " + e.getMessage(), false);
                         }
-                    }
-                    // otelScope.close() restores the previous context automatically
-                }, executor))
+                    }, executor);
+                })
                 .toList();
 
             for (int i = 0; i < futures.size(); i++) {
@@ -229,7 +247,7 @@ public class ParallelToolStepExecutor {
                         List.copyOf(history)));
                 } catch (TimeoutException e) {
                     // §7.16: timeout — tool slot gets a FAIL result, batch continues
-                    future.cancel(true); // attempt interrupt; virtual thread may not honour it
+                    future.cancel(true);
                     ParallelToolCall timedOut = allowedCalls.get(i);
                     log.warnf("[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",
                               context.sessionId(), timedOut.toolName(), toolTimeoutSeconds);
@@ -359,9 +377,10 @@ public class ParallelToolStepExecutor {
 
         // If nothing is pre-executable, persist normally §7.31
         if (split.preExecutable().isEmpty()) {
+            List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
             return StepDecision.terminal(
                 checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, history,
+                    context, compositeName, originalBatchJson, calls, historyAtPause,
                     context.channelType(), context.channelPlatformId()));
         }
 
@@ -399,20 +418,35 @@ public class ParallelToolStepExecutor {
             preResultsJson = objectMapper.writeValueAsString(preResults);
         } catch (Exception e) {
             log.errorf("Failed to serialize pre-executed results: %s", e.getMessage());
+            List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
             return StepDecision.terminal(checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, history,
+                    context, compositeName, originalBatchJson, calls, historyAtPause,
                     context.channelType(), context.channelPlatformId()));
         }
 
+        List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
         return StepDecision.terminal(
             checkpointManager.persistBatchWithPreExecuted(
                 context, hitlCompositeName, originalBatchJson,
-                split.hitlPending(), preResultsJson, history,
+                split.hitlPending(), preResultsJson, historyAtPause,
                 context.channelType(), context.channelPlatformId()));
     }
 
     private ToolResponse invokeTool(ParallelToolCall call, String sessionId) {
         return toolInvoker.invoke(call.toolName(), call.params(), sessionId);
+    }
+
+    private boolean isExternalTool(String toolName) {
+        if (toolName == null) return false;
+        // Strip provider prefix if present (e.g. "github:read" -> "read")
+        String baseName = toolName.contains(":") ? toolName.split(":")[1] : toolName;
+        return externalTools.contains(toolName) || externalTools.contains(baseName);
+    }
+
+    private List<ReasoningStep> appendPendingBatchStep(List<ReasoningStep> history, ReasoningStep batchStep) {
+        List<ReasoningStep> snapshot = new ArrayList<>(history);
+        snapshot.add(batchStep);
+        return List.copyOf(snapshot);
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {

@@ -45,6 +45,13 @@ public class AgentCronRepository {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(TxType.REQUIRED)
+    public List<AgentCronEntity> findAllAwaitingApproval() {
+        return cronStore.findAllAwaitingApproval().stream()
+                .map(this::toEntity)
+                .collect(Collectors.toList());
+    }
+
     @Transactional(TxType.NOT_SUPPORTED)
     public AgentCronEntity findById(String id) {
         return cronStore.findById(id).map(this::toEntity).orElse(null);

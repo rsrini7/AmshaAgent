@@ -16,9 +16,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
+import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
@@ -101,7 +103,10 @@ public class EngineStepHandler {
         ReasoningStep step;
         try {
             String goal = context.goal();
-            String currentGoal = goal;
+            // §7.45: Strip 'CRON ' prefix so models don't confuse background execution
+            // with a new scheduling request (causes task refusal in weak models).
+            String currentGoal = AgentSentinels.stripCronPrefix(goal);
+            
             if (!context.systemNote().isBlank()) {
                 currentGoal = currentGoal + "\n\n" + context.systemNote();
             }
@@ -130,6 +135,21 @@ public class EngineStepHandler {
                         "Please retry now with your full thought process and a complete FINISH answer.",
                         llmSchemaErrorCount);
                     // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
+                }
+
+                // 🟢 FIX: Detect if the model output raw JSON that looks like tool arguments instead of a tool call.
+                // This happens when a model 'collapses' after a prior tool_use_failed error.
+                if (ReasoningStep.FINISH.equals(step.action())) {
+                    String answer = step.actionInput() != null ? String.valueOf(step.actionInput().get("answer")) : "";
+                    if (looksLikeRawToolJson(answer)) {
+                        log.warnf("[STATE-MACHINE] session %s: detected raw JSON in prose answer — injecting recovery hint", context.sessionId());
+                        return StepDecision.retryEngine(
+                            "System: Your previous response contained raw JSON parameters in the prose answer field. " +
+                            "STRICT RULE: You MUST NOT output JSON in the 'answer' field. " +
+                            "If you want to perform an action, you MUST use a real structured tool call (e.g. schedule_task). " +
+                            "Please retry now using a proper tool call.",
+                            llmSchemaErrorCount);
+                    }
                 }
 
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
@@ -326,6 +346,13 @@ public class EngineStepHandler {
             return StepDecision.terminal(AgentResult.awaitingRetry(sessionId, retryMs, List.copyOf(history)));  
         }
 
+        if (classified instanceof LlmContentFilterException) {
+            log.warnf("[STATE-MACHINE] session %s: content filter triggered: %s",
+                    sessionId, classified.getMessage());
+            return StepDecision.terminal(AgentResult.failed(classified.getMessage(),
+                    AgentResult.FailureCategory.SECURITY_POLICY, List.copyOf(history)));
+        }
+
         if (isNetworkError(e)) {
             log.errorf("ReasoningEngine network failure at iteration %d: %s", iteration, ExceptionUtils.getRootCauseMessage(e));
             return StepDecision.terminal(AgentResult.failed(
@@ -398,6 +425,22 @@ public class EngineStepHandler {
             log.debugf("extractFinishAnswer parse failed: %s", e.getMessage());
         }
         return null;
+    }
+
+    private boolean looksLikeRawToolJson(String text) {
+        if (text == null || text.isBlank()) return false;
+        String trimmed = text.strip();
+        // Must look structurally like JSON first (§7.46)
+        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
+        
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        // Look for common tool argument keys that should never be in a prose answer
+        return lower.contains("\"cronexpression\"") 
+            || lower.contains("\"cron_expression\"")
+            || (lower.contains("\"goal\"") && lower.contains("\"runonce\""))
+            || lower.contains("\"task_payload\"")
+            || lower.contains("\"task_name\"")
+            || (lower.contains("\"agent\"") && lower.contains("\"goal\""));
     }
 
     private boolean looksLikeNaturalLanguage(String text) {

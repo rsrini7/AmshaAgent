@@ -1,6 +1,17 @@
 package com.arcclaw.core.reflex;
 
-import static com.arcclaw.core.message.UserMessages.*;
+import static com.arcclaw.core.message.UserMessages.ALREADY_PROCESSING_APPROVAL;
+import static com.arcclaw.core.message.UserMessages.APPROVAL_ERROR;
+import static com.arcclaw.core.message.UserMessages.COULD_NOT_RESUME;
+import static com.arcclaw.core.message.UserMessages.CRON_MULTIPLE_AWAITING;
+import static com.arcclaw.core.message.UserMessages.CRON_NOT_FOUND;
+import static com.arcclaw.core.message.UserMessages.CRON_SINGLE_AWAITING_GUIDE;
+import static com.arcclaw.core.message.UserMessages.NOT_AUTHORIZED_DELEGATION;
+import static com.arcclaw.core.message.UserMessages.NO_BATCH_AWAITING;
+import static com.arcclaw.core.message.UserMessages.NO_PENDING_ANYWHERE;
+import static com.arcclaw.core.message.UserMessages.NO_PENDING_APPROVAL;
+import static com.arcclaw.core.message.UserMessages.RESUMING_TASK;
+import static com.arcclaw.core.message.UserMessages.TARGET_SESSION_NOT_AWAITING;
 
 import java.time.Instant;
 import java.util.List;
@@ -34,7 +45,6 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.AgentResultFormatter;
@@ -146,11 +156,6 @@ public class ApproveReflex implements AgentReflex {
                 }
 
                 // 3. Session checkpoint — interactive approval.
-                // replaced enum loop with findLatestAwaitingApproval() to avoid
-                // stale-row ambiguity. When multiple rows exist for the same
-                // (sessionId, agentRole), the old loop called load() which returned
-                // the first (oldest = COMPLETED) row, never finding the newer
-                // AWAITING_APPROVAL checkpoint.
                 Optional<AgentCheckpoint> latestPending =
                     statefulAgentStore.findLatestAwaitingApproval(sessionId);
                 String activeRole = latestPending
@@ -166,6 +171,7 @@ public class ApproveReflex implements AgentReflex {
                         } else {
                             cp = checkpointApprovalService.approveAll(sessionId, "CLI approve");
                         }
+                        
                         if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
                             // Register interest first to avoid race with concurrent REST resume
                             cliResultBridge.register(sessionId);
@@ -302,31 +308,22 @@ public class ApproveReflex implements AgentReflex {
         String cronId, String userId, String chatId,
         MessageContext context) throws Exception {
 
-        AgentCronEntity cron = cronRepository.findByUserId(userId).stream()
-                .filter(c -> c.id.equals(cronId))
-                .findFirst()
-                .orElse(null);
+        // 1. Resolve and Approve via service (handles cronId alias correctly)
+        // This ensures ToolDecision.APPROVED is set in DB and SSE events are fired.
+        AgentCheckpoint pendingCheckpoint = checkpointApprovalService.approveAll(cronId, "CLI approve");
+
+        String cronSessionId = pendingCheckpoint.getSessionId();
+        String cronRole = pendingCheckpoint.getAgentRole();
+
+        // 2. Fetch job entity for post-processing logic
+        // Look up by jobId directly instead of filtering by userId to allow for admin-level approvals §7.33
+        AgentCronEntity cron = cronRepository.findById(cronId);
 
         if (cron == null) {
             return CRON_NOT_FOUND;
         }
 
-        if (!CronStatus.AWAITING_APPROVAL.equals(cron.status)) {
-            return String.format(CRON_NOT_AWAITING, cron.status);
-        }
-
-        var pendingCheckpoint = statefulAgentStore
-                .findLatestAwaitingApprovalForCron(cronId)
-                .orElse(null);
-
-        if (pendingCheckpoint == null) {
-            return CRON_NO_CHECKPOINT;
-        }
-
-        String cronSessionId = pendingCheckpoint.getSessionId();
-        String cronRole = pendingCheckpoint.getAgentRole();
-
-        if (!statefulAgentStore.markBatchResuming(cronSessionId)) {
+        if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) {
             log.infof("[BATCH-RESUME-GUARD] cronSession=%s already resuming — " +
                     "ignoring duplicate trigger.", cronSessionId);
             return ALREADY_PROCESSING_APPROVAL;
@@ -388,15 +385,18 @@ public class ApproveReflex implements AgentReflex {
             // so the F12 guard in terminateSession no longer needs to protect us.
             statefulAgentStore.clearBatchResuming(cronSessionId);
 
-            try {
-                workspaceManager.terminateSession(cronSessionId);
-            } catch (Exception e) {
-                log.warnf("Failed to terminate cron session %s after approval: %s",
-                        cronSessionId,
-                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            if (result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished 
+                || result instanceof AgentResult.Failed || result instanceof AgentResult.LoopExceeded) {
+                try {
+                    workspaceManager.terminateSession(cronSessionId);
+                } catch (Exception e) {
+                    log.warnf("Failed to terminate cron session %s after approval: %s",
+                            cronSessionId,
+                            e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                }
             }
 
-            return AgentResultFormatter.format(result);
+            return "";
         } finally {
             // Defensive: ensure lock is always released even on exceptions.
             statefulAgentStore.clearBatchResuming(cronSessionId);

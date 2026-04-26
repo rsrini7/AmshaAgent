@@ -56,7 +56,7 @@ class WorkspaceManagerTest {
     void testZombieRecoveryMarksInProgressAsFailed() {
         String sessionId = "zombie-" + UUID.randomUUID();
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var cp = agentStore.save(sessionId, "coordinator", List.of());
+            var cp = agentStore.save(sessionId, "coordinator", List.of(), "test goal");
             QuarkusTransaction.requiringNew().run(() -> {
                 em.createQuery("UPDATE AgentCheckpoint c SET c.updatedAt = :backdate WHERE c.id = :id")
                   .setParameter("backdate", Instant.now().minus(20, ChronoUnit.MINUTES))
@@ -78,7 +78,7 @@ class WorkspaceManagerTest {
     void testTerminateSession_removesHeartbeatAndMarksCheckpointFailed() {
         String sessionId = "terminate-" + UUID.randomUUID();
         WorkspaceScopeHolder.run(sessionId, () -> {
-            agentStore.save(sessionId, "debugger", List.of());
+            agentStore.save(sessionId, "debugger", List.of(), "test goal");
         });
         heartbeatTracker.recordHeartbeat(sessionId);
 
@@ -96,8 +96,8 @@ class WorkspaceManagerTest {
     void testTerminationMarksAllCheckpointsFailed() {
         String sessionId = "term-all-" + UUID.randomUUID();
         WorkspaceScopeHolder.run(sessionId, () -> {
-            agentStore.save(sessionId, "coordinator", List.of());
-            agentStore.save(sessionId, "debugger", List.of());
+            agentStore.save(sessionId, "coordinator", List.of(), "test goal");
+            agentStore.save(sessionId, "debugger", List.of(), "test goal");
         });
 
         workspaceManager.terminateSession(sessionId);
@@ -112,7 +112,7 @@ class WorkspaceManagerTest {
     void testTerminationSkipsCompletedCheckpoints() {
         String sessionId = "skip-comp-" + UUID.randomUUID();
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var cp = agentStore.save(sessionId, "researcher", List.of());
+            var cp = agentStore.save(sessionId, "researcher", List.of(), "test goal");
             agentStore.markCompleted(cp.getId());
         });
 
@@ -127,7 +127,7 @@ class WorkspaceManagerTest {
     void testZombieRecoverySurvivesAwaitingApproval() {
         String sessionId = "survive-appr-" + UUID.randomUUID();
         WorkspaceScopeHolder.run(sessionId, () -> {
-            var cp = agentStore.save(sessionId, "coordinator", List.of());
+            var cp = agentStore.save(sessionId, "coordinator", List.of(), "test goal");
             QuarkusTransaction.requiringNew().run(() -> {
                 AgentCheckpoint entity = em.find(AgentCheckpoint.class, cp.getId());
                 entity.setStatus(CheckpointStatus.AWAITING_APPROVAL);

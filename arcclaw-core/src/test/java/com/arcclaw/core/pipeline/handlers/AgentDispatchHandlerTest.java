@@ -2,17 +2,34 @@ package com.arcclaw.core.pipeline.handlers;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.arcclaw.channel.api.ChannelMessage;
+import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -23,14 +40,7 @@ import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
+import com.arcclaw.core.state.StatefulAgentStore;
 
 @ExtendWith(MockitoExtension.class)
 class AgentDispatchHandlerTest {
@@ -47,6 +57,12 @@ class AgentDispatchHandlerTest {
     @Mock
     ChannelPluginRegistry channelPluginRegistry;
 
+    @Mock
+    StatefulAgentStore agentStore;
+
+    @Mock
+    IntentClassificationService intentClassifier;
+
     @InjectMocks
     AgentDispatchHandler handler;
 
@@ -55,6 +71,8 @@ class AgentDispatchHandlerTest {
     @BeforeEach
     void setup() {
         mockedContext = mockStatic(WorkspaceContext.class);
+        when(intentClassifier.isContinuityCommand(anyString())).thenReturn(false);
+        lenient().when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.empty());
     }
 
     @AfterEach
@@ -117,6 +135,34 @@ class AgentDispatchHandlerTest {
                 .thenThrow(new BudgetExceededException("Budget exceeded for sess123"));
 
         assertThrows(BudgetExceededException.class, () -> handler.handle(context));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testMarkdownLinksAreNormalizedBeforeDispatch() throws Exception {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        context.setGoal("browse https://spring.io/blog top 3 titles");
+
+        ChannelSender sender = org.mockito.Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = org.mockito.Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any(MessageContext.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
+
+        mockedContext.when(() -> WorkspaceContext.run(
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
+
+        handler.handle(context);
+
+        verify(agentLoop).run(
+                eq("sess123"),
+                eq("coordinator"),
+                eq("browse https://spring.io/blog top 3 titles"),
+                eq(reasoningEngine),
+                eq(5),
+                eq(context));
     }
 
     private MessageContext createTestContext(AutonomyLevel level) {

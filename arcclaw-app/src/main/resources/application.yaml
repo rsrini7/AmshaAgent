@@ -315,6 +315,9 @@ arcclaw:
     gemini:
       api-key: ${ARCCLAW_LLM_API_KEY}
       model-name: ${ARCCLAW_LLM_MODEL_NAME:gemini-flash-latest}
+    openrouter:
+      app-name: "${ARCCLAW_OPENROUTER_APP_NAME:https://github.com/rsrini7/arcclaw}"
+      site-url: "${ARCCLAW_OPENROUTER_SITE_URL:https://github.com/rsrini7/arcclaw}"
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
   rag:
@@ -408,6 +411,7 @@ arcclaw:
     max-concurrent: 10
     max-iterations: 3
     max-lookback-window: PT5M
+    list-retention-hours: 24
 
   channel:
     telegram:
@@ -722,6 +726,24 @@ mp:
 
     recovery:
       stalled-threshold-minutes: 15
+
+    # ---------------------------------------------------------------------------
+    # TIER 5 — RESILIENCE PATTERNS (§Tire5.md)
+    # ---------------------------------------------------------------------------
+    tools:
+      # Slow tools that should be isolated to the 'external-tool-executor' bulkhead (§T5-2)
+      external-tools: "playwright_navigate,playwright_click,playwright_type,playwright_press,playwright_select,playwright_scroll,playwright_screenshot,playwright_content,web_search"
+    parallel:
+      # Timeout for individual tool executions within a parallel batch (§7.16)
+      tool-timeout-seconds: 60
+    notification:
+      retry:
+        # Channel delivery retry configuration with exponential backoff (§T5-5)
+        attempts: 3
+        initial-delay-ms: 1000
+    compaction:
+      # Token-based summary bounds enforcement (§T5-8)
+      max-tokens: 1000
 
 "%staging":
   quarkus:

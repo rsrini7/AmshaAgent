@@ -95,16 +95,22 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        updateStateJson(cp, history);
+        // Save checkpoint metadata and reasoning steps in one atomic store write.
+        cp = agentStore.saveWithSteps(cp, history);
 
-        agentStore.save(cp);
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s " +
                   "(channel=%s platformId=%s)",
                   sessionId, toolName, channelType, channelPlatformId);
 
+        // SSE HitlEvent is always sent for UI/Web tracking
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
             sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), toolName, paramsJson, null, Instant.now()   
         ));
+        
+        // Notification logic: 
+        // 1. Cron sessions: CronResultHandler handles Telegram notification (formatted with cron details).
+        // 2. Interactive sessions: MessagePipeline/AgentDispatchHandler handles the notification.
+        // ApprovalCheckpointManager should NOT trigger additional channel notifications.
         return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
     }
 
@@ -153,9 +159,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        updateStateJson(cp, history);
-
-        agentStore.save(cp);
+        // Save checkpoint metadata and reasoning steps in one atomic store write.
+        cp = agentStore.saveWithSteps(cp, history);
 
         log.infof("[STATE-MACHINE] Pausing session %s for parallel HITL: %s " +
                   "(channel=%s platformId=%s)",
@@ -215,9 +220,8 @@ public class ApprovalCheckpointManager {
             cp.setChannelPlatformId(context.channelPlatformId());
         }
         
-        updateStateJson(cp, history);
-
-        agentStore.save(cp);
+        // Save checkpoint metadata and reasoning steps in one atomic store write.
+        cp = agentStore.saveWithSteps(cp, history);
 
         log.infof("[STATE-MACHINE] Pausing session %s — HITL tools pending: %d | batch: %s " +
                   "(channel=%s platformId=%s)",
@@ -229,14 +233,5 @@ public class ApprovalCheckpointManager {
         return AgentResult.awaitingApproval(
             compositeName, originalBatchJson, sessionId,
             List.copyOf(history));
-    }
-
-    private void updateStateJson(AgentCheckpoint cp, List<ReasoningStep> history) {
-        try {
-            cp.setStateJson(objectMapper.writeValueAsString(history));
-        } catch (Exception e) {
-            log.warnf("Failed to serialize history for session %s: %s",
-                      cp.getSessionId(), e.getMessage());
-        }
     }
 }

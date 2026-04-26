@@ -82,7 +82,7 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) {
 
-        if (!agentStore.markBatchResuming(sessionId)) {
+        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
             log.infof("BATCH-RESUME-GUARD: session %s already resuming", sessionId);
             return;
         }
@@ -180,6 +180,13 @@ public class CheckpointResumeHandler {
     }
 
     private void dispatchResumeResult(MessageContext context, AgentResult result, ChannelType cType, ChannelUser user, String sessionId) {
+        // Interactive /approve paths depend on the resume handler to deliver the final result.
+        // CLI uses the synchronous resume path and must not receive an extra async notification.
+        if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
+            log.debugf("CheckpointResumeHandler: skipping async CLI notification for session %s", sessionId);
+            return;
+        }
+
         String output = AgentResultFormatter.format(result);
         channelPluginRegistry.find(cType.id())
             .map(ChannelPlugin::sender)
@@ -206,11 +213,6 @@ public class CheckpointResumeHandler {
         }
     }
 
-    /**
-     * Synchronous version of resumeAfterBatchDecision.
-     * Returns the AgentResult directly instead of sending it to a channel.
-     * Used by the interactive CLI to avoid async delivery drops.
-     */
     public AgentResult resumeAfterBatchDecisionSync(
             String sessionId,
             String agentRole,
@@ -218,7 +220,7 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) throws Exception {
 
-        if (!agentStore.markBatchResuming(sessionId)) {
+        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
             log.infof("BATCH-RESUME-SYNC-GUARD: session %s already resuming", sessionId);
             return null;
         }
@@ -304,7 +306,8 @@ public class CheckpointResumeHandler {
         var checkpoint = agentStore.load(context.sessionId(), context.agentRole()).orElse(null);
         if (checkpoint == null) return null;
 
-        if (checkpoint.getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
+        if (checkpoint.getStatus() != CheckpointStatus.AWAITING_APPROVAL
+                && checkpoint.getStatus() != CheckpointStatus.RESUMING) {
             log.warnf("[AgentLoop] Attempted to resume session %s but status is %s.",
                     context.sessionId(), checkpoint.getStatus());
             return null;

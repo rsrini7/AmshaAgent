@@ -2,6 +2,10 @@ ARCCLAW_LLM_API_KEY: "dummy-test-key"
 ARCCLAW_LLM_BASE_URL: "http://localhost:9999"
  
 arcclaw:
+  llm:
+    gemini:
+      api-key: "dummy-gemini-key"
+      model-name: "gemini-1.5-flash"
   data-dir: "./target"
   workspace:
     root-dir: "./target/workspaces"

@@ -34,11 +34,11 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                     defaultValue = "PT60S")
     Duration timeout;
 
-    @ConfigProperty(name = "arcclaw.openrouter.site-url",
+    @ConfigProperty(name = "arcclaw.llm.openrouter.site-url",
                     defaultValue = "https://github.com/rsrini7/arcclaw")
     String siteUrl;
 
-    @ConfigProperty(name = "arcclaw.openrouter.app-name", defaultValue = "ArcClaw")
+    @ConfigProperty(name = "arcclaw.llm.openrouter.app-name", defaultValue = "ArcClaw")
     String appName;
 
     @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")

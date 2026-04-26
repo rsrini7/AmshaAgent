@@ -181,12 +181,12 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
-    public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, String stateJson, String autonomy, int iterationsUsed) {
+    public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, String stateJson, String autonomy, int iterationsUsed, String originalGoal) {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         if (existing.isPresent()) {
             CheckpointDto e = existing.get();
             CheckpointDto updated = new CheckpointDto(e.id(), e.sessionId(), e.agentRole(), e.status(), autonomy, stateJson,
-                    e.channelPlatformId(), e.channelType(), e.originalGoal(), e.failedAt(), e.completedAt(),
+                    e.channelPlatformId(), e.channelType(), e.originalGoal() != null ? e.originalGoal() : originalGoal, e.failedAt(), e.completedAt(),
                     e.failReason(), e.pendingToolName(), e.batchToolDecisions(), e.pendingToolParametersJson(),
                     e.preExecutedResults(), e.maxIterations(), iterationsUsed, e.retryAfterMs(), e.systemNote(),
                     e.errorCode(), e.traceId(), e.rootCauseClass(), e.createdAt(), Instant.now());
@@ -194,14 +194,14 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
             return new CheckpointUpsertResult(updated, false);
         } else {
             CheckpointDto created = save(new CheckpointDto(null, sessionId, agentRole, "IN_PROGRESS", autonomy, stateJson,
-                    null, null, null, null, null, null, null, null, null, null, null, iterationsUsed, null, null, null, null, null, Instant.now(), Instant.now()));
+                    null, null, originalGoal, null, null, null, null, null, null, null, null, iterationsUsed, null, null, null, null, null, Instant.now(), Instant.now()));
             return new CheckpointUpsertResult(created, true);
         }
     }
 
     @Override
-    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
-        CheckpointUpsertResult result = upsertWithSteps(sessionId, agentRole, stateJson, "SUPERVISED", 0);
+    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal) {
+        CheckpointUpsertResult result = upsertWithSteps(sessionId, agentRole, stateJson, "SUPERVISED", 0, originalGoal);
         
         // Finalize state and timestamps
         CheckpointDto existing = result.checkpoint();
@@ -210,7 +210,7 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
         
         CheckpointDto updated = new CheckpointDto(existing.id(), existing.sessionId(), existing.agentRole(),
                 finalStatus, existing.autonomyLevel(), existing.stateJson(), existing.channelPlatformId(),
-                existing.channelType(), existing.originalGoal(), failedAt, completedAt,
+                existing.channelType(), existing.originalGoal() != null ? existing.originalGoal() : originalGoal, failedAt, completedAt,
                 existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
                 existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
                 existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.errorCode(),
@@ -271,6 +271,26 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     existing.systemNote(), existing.errorCode(),
                     existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
             store.put(id, updated);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
+        CheckpointDto existing = store.get(id);
+        if (existing != null && existing.status().equals(expectedStatus)) {
+            transitionStatus(id, newStatus);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean claimForResume(String sessionId, String agentRole) {
+        Optional<CheckpointDto> latest = findLatestAwaitingApproval(sessionId);
+        if (latest.isPresent() && latest.get().agentRole().equals(agentRole)) {
+            transitionStatus(latest.get().id(), "RESUMING");
             return true;
         }
         return false;

@@ -5,8 +5,8 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
 import org.jboss.logging.Logger;
 
 /**
@@ -53,17 +54,13 @@ public class AsyncPersistenceEngine {
     private final AtomicBoolean running          = new AtomicBoolean(true);
     private final AtomicBoolean processingCritical  = new AtomicBoolean(false);
     private final AtomicBoolean processingTelemetry = new AtomicBoolean(false);
+    private final AtomicInteger inFlightCritical  = new AtomicInteger(0);
+    private final AtomicInteger inFlightTelemetry = new AtomicInteger(0);
 
     private Thread criticalDrainThread;
     private Thread telemetryDrainThread;
 
-    @PostConstruct
-    void startDrainThreads() {
-        if (Arc.container() == null || !Arc.container().isRunning()) {
-            log.warn("CDI container not ready — delaying drain thread start");
-            return;
-        }
-
+    void startDrainThreads(@Observes StartupEvent ev) {
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
 
         criticalDrainThread = Thread.ofVirtual()
@@ -119,6 +116,8 @@ public class AsyncPersistenceEngine {
             return;
         }
 
+        inFlightCritical.incrementAndGet();
+
         try {
             event.getFuture().join();
         } catch (CompletionException ce) {
@@ -136,6 +135,8 @@ public class AsyncPersistenceEngine {
         if (!telemetryQueue.offer(event)) {
             log.debug("Telemetry audit queue at capacity — dropping event (acceptable)");
             registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").increment();
+        } else {
+            inFlightTelemetry.incrementAndGet();
         }
     }
 
@@ -144,12 +145,24 @@ public class AsyncPersistenceEngine {
      * <strong>For use in tests only.</strong>
      */
     public void waitForIdle() {
+        if (criticalDrainThread == null || !criticalDrainThread.isAlive()
+                || telemetryDrainThread == null || !telemetryDrainThread.isAlive()) {
+            return;
+        }
+
         sleepQuietly(10);
-        while (!criticalQueue.isEmpty()
+        long start = System.currentTimeMillis();
+        while (running.get() && (inFlightCritical.get() > 0
+                || inFlightTelemetry.get() > 0
+                || !criticalQueue.isEmpty()
                 || !telemetryQueue.isEmpty()
                 || processingCritical.get()
-                || processingTelemetry.get()) {
+                || processingTelemetry.get())) {
             sleepQuietly(10);
+            if (System.currentTimeMillis() - start > 10000) {
+                log.warn("waitForIdle timed out after 10s — possible deadlock or hung drain thread");
+                break;
+            }
         }
     }
 
@@ -173,8 +186,8 @@ public class AsyncPersistenceEngine {
                 event = criticalQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (event == null) continue;
 
-                processingCritical.set(true);
                 try {
+                    processingCritical.set(true);
                     processEvent(event);
                 } catch (ComplianceViolationException e) {
                     if (event.getFuture() != null && !event.getFuture().isDone()) {
@@ -182,6 +195,7 @@ public class AsyncPersistenceEngine {
                     }
                 } finally {
                     processingCritical.set(false);
+                    inFlightCritical.decrementAndGet();
                 }
 
             } catch (InterruptedException ie) {
@@ -205,11 +219,12 @@ public class AsyncPersistenceEngine {
                 event = telemetryQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (event == null) continue;
 
-                processingTelemetry.set(true);
                 try {
+                    processingTelemetry.set(true);
                     processEvent(event);
                 } finally {
                     processingTelemetry.set(false);
+                    inFlightTelemetry.decrementAndGet();
                 }
 
             } catch (InterruptedException ie) {

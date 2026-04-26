@@ -21,6 +21,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.mcp.tool.DynamicToolCapability;
@@ -29,6 +31,7 @@ import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.eclipse.microprofile.faulttolerance.Retry;
@@ -45,7 +48,13 @@ public class McpClientService {
     @Inject DynamicToolCapabilityRegistry registry;
     @Inject ObjectMapper objectMapper;
 
-    @Inject ManagedExecutor executor;
+    @Inject Instance<ManagedExecutor> managedExecutors;
+
+    private ManagedExecutor getExecutor() {
+        return managedExecutors.select(Identifier.Literal.of("external-tool-executor"))
+                .stream().findFirst()
+                .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
+    }
 
     private final ConcurrentHashMap<String, StdioConfig> stdioConfigs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> serverUrls = new ConcurrentHashMap<>();
@@ -62,7 +71,7 @@ public class McpClientService {
     @PostConstruct
     void init() {
         this.httpClient = HttpClient.newBuilder()
-            .executor(executor)
+            .executor(getExecutor())
             .connectTimeout(Duration.ofSeconds(5))
             .build();
     }

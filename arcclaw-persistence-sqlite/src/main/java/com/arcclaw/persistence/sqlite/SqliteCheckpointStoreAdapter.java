@@ -20,6 +20,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ReasoningStepEntity;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
@@ -65,13 +66,13 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
-        String stateJson, String autonomy, int iterationsUsed) {
-        return withRetry(() -> self.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed), "upsert-with-steps");
+        String stateJson, String autonomy, int iterationsUsed, String originalGoal) {
+        return withRetry(() -> self.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed, originalGoal), "upsert-steps");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
-        String stateJson, String autonomy, int iterationsUsed) {
+            String stateJson, String autonomy, int iterationsUsed, String originalGoal) {
         
         em.clear();
         List<AgentCheckpoint> existing = em.createQuery(
@@ -99,13 +100,23 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity = existing.get(0);
         }
 
-        entity.setStatus(CheckpointStatus.IN_PROGRESS);
+        // §Retry-Fix: Only set status to IN_PROGRESS if not currently AWAITING_APPROVAL or RESUMING.
+        // This prevents intermediate saves from overwriting a HITL pause or resume.
+        if (entity.getStatus() != CheckpointStatus.AWAITING_APPROVAL && entity.getStatus() != CheckpointStatus.RESUMING) {
+            entity.setStatus(CheckpointStatus.IN_PROGRESS);
+        }
+        
         entity.setStateJson(stateJson);
         if (autonomy != null) {
             entity.setAutonomyLevel(AutonomyLevel.valueOf(autonomy));
         }
         entity.setIterationsUsed(iterationsUsed);
         entity.setUpdatedAt(Instant.now());
+
+        // §Retry-Fix: Only set originalGoal if not already present or if new checkpoint
+        if (originalGoal != null && (entity.getOriginalGoal() == null || entity.getOriginalGoal().isBlank())) {
+            entity.setOriginalGoal(originalGoal);
+        }
 
         if (created) {
             em.persist(entity);
@@ -119,13 +130,13 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, 
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
-        return withRetry(() -> self.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps), "upsert-and-finalize");
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal) {
+        return withRetry(() -> self.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps, originalGoal), "upsert-and-finalize");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal) {
         
         em.clear();
         List<AgentCheckpoint> existing = em.createQuery(
@@ -163,6 +174,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity.setCompletedAt(Instant.now());
         } else if (status == CheckpointStatus.FAILED) {
             entity.setFailedAt(Instant.now());
+        }
+
+        // §Retry-Fix: Ensure originalGoal is preserved even on finalization
+        if (originalGoal != null && (entity.getOriginalGoal() == null || entity.getOriginalGoal().isBlank())) {
+            entity.setOriginalGoal(originalGoal);
         }
 
         if (created) {
@@ -284,6 +300,46 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity.setStatus(CheckpointStatus.valueOf(newStatus));
             entity.setUpdatedAt(Instant.now());
         }
+    }
+
+    @Override
+    public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
+        return withRetry(() -> self.doAtomicTransition(id, expectedStatus, newStatus), "atomic-transition");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doAtomicTransition(Long id, String expectedStatus, String newStatus) {
+        int updated = em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = :new, updated_at = :now " +
+                "WHERE checkpoint_id = :id AND status = :expected"
+        ).setParameter("new", newStatus)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
+         .setParameter("id", id)
+         .setParameter("expected", expectedStatus)
+         .executeUpdate();
+        return updated == 1;
+    }
+
+    @Override
+    public boolean claimForResume(String sessionId, String agentRole) {
+        return withRetry(() -> self.doClaimForResume(sessionId, agentRole), "claim-for-resume");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doClaimForResume(String sessionId, String agentRole) {
+        // Atomic transition of the latest checkpoint to RESUMING
+        // We need to find the latest ID first in a subquery or native SQL
+        int updated = em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'RESUMING', updated_at = :now " +
+                "WHERE checkpoint_id = (SELECT checkpoint_id FROM agent_checkpoint " +
+                "            WHERE session_id = :sid AND agent_role = :role " +
+                "            ORDER BY checkpoint_id DESC LIMIT 1) " +
+                "  AND status = 'AWAITING_APPROVAL'"
+        ).setParameter("sid", sessionId)
+         .setParameter("role", agentRole)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
+         .executeUpdate();
+        return updated == 1;
     }
 
     @Override

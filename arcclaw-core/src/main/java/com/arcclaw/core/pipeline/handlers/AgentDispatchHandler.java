@@ -2,12 +2,14 @@ package com.arcclaw.core.pipeline.handlers;
 
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -23,6 +25,8 @@ import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import org.jboss.logging.Logger;
 
@@ -37,6 +41,7 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class AgentDispatchHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AgentDispatchHandler.class);
+    private static final Pattern MARKDOWN_LINK_PATTERN = Pattern.compile("\\[([^\\]]+)]\\(([^)]+)\\)");
 
     private static final int DEFAULT_MAX_ITERATIONS = 5;
 
@@ -51,6 +56,12 @@ public class AgentDispatchHandler implements MessageHandler {
 
     @Inject
     ChannelPluginRegistry channelPluginRegistry;
+
+    @Inject
+    StatefulAgentStore agentStore;
+
+    @Inject
+    IntentClassificationService intentClassifier;
 
     @Override
     public int priority() {
@@ -71,9 +82,33 @@ public class AgentDispatchHandler implements MessageHandler {
 
         // Prioritize the sanitized goal from reflexes (StoreReflex, PII redact) 
         // over the raw message text.
-        String goal = (context.getGoal() != null && !context.getGoal().isBlank())
+        String rawGoal = (context.getGoal() != null && !context.getGoal().isBlank())
                 ? context.getGoal()
                 : (context.getMessage() != null ? context.getMessage().text() : "");
+
+        // §Retry-Fix: Restore originalGoal from latest checkpoint for continuity commands (e.g. "try again")
+        String goal = normalizeGoal(rawGoal);
+        String rawMessageText = context.getMessage() != null ? context.getMessage().text() : "";
+        String restoredGoal = null;
+        boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText);
+
+        if (isContinuity) {
+            // We search for the most recent non-archived checkpoint that has a MEANINGFUL originalGoal.
+            restoredGoal = agentStore.findLatestNonArchivedCheckpoint(sessionId)
+                    .map(AgentCheckpoint::getOriginalGoal)
+                    .filter(g -> g != null && !g.isBlank() && !intentClassifier.isContinuityCommand(g)) 
+                    .orElse(null);
+
+            if (restoredGoal != null && !restoredGoal.isBlank()) {
+                log.infof("[AgentDispatch] Continuity detected for session %s — restoring original goal: %s", 
+                        sessionId, restoredGoal);
+                goal = normalizeGoal(restoredGoal);
+            } else {
+                log.warnf("[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.", sessionId);
+            }
+        }
+        log.infof("[AgentDispatch] Goal Resolution: rawGoal='%s' rawMessage='%s' isContinuity=%b restoredGoal='%s' finalGoal='%s'",
+                rawGoal, rawMessageText, isContinuity, restoredGoal, goal);
 
         // Resolve maxIterations...
         int maxIterations = DEFAULT_MAX_ITERATIONS;
@@ -99,13 +134,14 @@ public class AgentDispatchHandler implements MessageHandler {
         }
         final String resolvedChatId = chatId;
 
+        final String resolvedGoal = goal;
         AgentResult result;
         try {
             String channel = context.getChannelType().name();
             Callable<AgentResult> op = () -> agentLoop.run(
                     sessionId,
                     role,
-                    goal,
+                    resolvedGoal,
                     reasoningEngine,
                     resolvedMaxIterations,
                     context
@@ -153,5 +189,10 @@ public class AgentDispatchHandler implements MessageHandler {
             );
 
         return HandleResult.STOP;
+    }
+
+    static String normalizeGoal(String goal) {
+        if (goal == null || goal.isBlank()) return goal;
+        return MARKDOWN_LINK_PATTERN.matcher(goal).replaceAll("$2");
     }
 }

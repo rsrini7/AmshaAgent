@@ -56,11 +56,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     // ── Save / Load ───────────────────────────────────────────────────────────
 
     @Override
-    public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps) {
+    public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal) {
         String json = serializer.serializeSteps(steps);
         AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
         CheckpointUpsertResult result = storeAdapter.upsertWithSteps(
-                sessionId, agentRole, json, autonomy.toString(), steps.size());
+                sessionId, agentRole, json, autonomy.toString(), steps.size(), goal);
         if (result.created()) {
             transitionService.emitCreated(
                     sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy);
@@ -83,19 +83,48 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
+        if (checkpoint == null) return List.of();
+        
+        // 1. Try granular rows (new way)
+        if (checkpoint.getId() != null) {
+            List<ReasoningStep> granular = loadSteps(checkpoint.getId());
+            if (!granular.isEmpty()) return granular;
+        }
+
+        // 2. Fallback to stateJson (old way)
         return serializer.deserializeSteps(checkpoint);
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    public void saveSteps(Long checkpointId, List<ReasoningStep> steps) {
+        if (checkpointId == null || steps == null) return;
+        List<ReasoningStepDto> dtos = steps.stream()
+                .map(serializer::toDto)
+                .toList();
+        storeAdapter.saveSteps(checkpointId, dtos);
+    }
+
+    @Override
+    public AgentCheckpoint saveWithSteps(AgentCheckpoint checkpoint, List<ReasoningStep> steps) {
+        List<ReasoningStepDto> dtos = steps == null ? List.of() : steps.stream()
+                .map(serializer::toDto)
+                .toList();
+        CheckpointDto saved = storeAdapter.saveCheckpointWithSteps(CheckpointMapper.toDto(checkpoint), dtos);
+        return CheckpointMapper.toEntity(saved);
     }
 
     @Override
     public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
                                            List<ReasoningStep> steps,
-                                           CheckpointStatus finalStatus) {
+                                           CheckpointStatus finalStatus,
+                                           String goal) {
         String json = serializer.serializeSteps(steps);
         List<ReasoningStepDto> stepDtos = 
             steps.stream().map(serializer::toDto).toList();
 
         CheckpointUpsertResult result = storeAdapter.upsertAndFinalize(
-                sessionId, agentRole, json, finalStatus.name(), stepDtos);
+                sessionId, agentRole, json, finalStatus.name(), stepDtos, goal);
 
         CheckpointDto saved = result.checkpoint();
         boolean isNew = result.created();
@@ -144,16 +173,31 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     // ── Resume guard (§3.4 / §7.29 — all delegated, public API stays here) ───
 
     /**
-     * §3.4 / §7.29: Atomically marks the session as RESUMING.
-     * Delegates to {@link ResumeCoordinationGuard} — implementation detail hidden.
+     * §3.4 / §7.29 / §T5-4: Atomically marks the session as RESUMING.
+     * Delegates to {@link CheckpointStorePort#claimForResume} for distributed safety.
+     * Also maintains an in-memory mark in {@link ResumeCoordinationGuard} for
+     * instance-local backpressure.
      */
+    @Override
+    public boolean markBatchResuming(String sessionId, String agentRole) {
+        // 1. Instance-local check (fast path)
+        if (resumeGuard.isResuming(sessionId)) {
+            return false;
+        }
+
+        // 2. Distributed DB-backed lock (§T5-4)
+        // Transition AWAITING_APPROVAL -> RESUMING in SQLite
+        boolean claimed = storeAdapter.claimForResume(sessionId, agentRole);
+        if (claimed) {
+            resumeGuard.markResuming(sessionId);
+        }
+        return claimed;
+    }
+
     @Override
     public boolean claimForRetry(Long id) {
         return storeAdapter.claimForRetry(id);
     }
-
-    @Override
-    public boolean markBatchResuming(String sessionId) { return resumeGuard.markResuming(sessionId); }
 
     /**
      * §7.29: Returns true if the session is currently RESUMING (JVM-local).
@@ -196,12 +240,15 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         { return storeAdapter.findLatestAwaitingApprovalWithPrefix(prefix).map(CheckpointMapper::toEntity); }
 
     @Override public Optional<AgentCheckpoint> findLatestAwaitingApprovalForCron(String cronId) {
-        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId + "-";
+        String sessionPrefix = AgentSentinels.CRON_SESSION_PREFIX + cronId;
         return storeAdapter.findLatestAwaitingApprovalWithPrefix(sessionPrefix).map(CheckpointMapper::toEntity);
     }
 
     @Override public Optional<AgentCheckpoint> findLatestCheckpoint(String sessionId)
         { return storeAdapter.findLatestBySession(sessionId).map(CheckpointMapper::toEntity); }
+
+    @Override public Optional<AgentCheckpoint> findLatestNonArchivedCheckpoint(String sessionId)
+        { return storeAdapter.findLatestNonArchivedBySession(sessionId).map(CheckpointMapper::toEntity); }
 
     @Override public Optional<String> findLatestRole(String sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");

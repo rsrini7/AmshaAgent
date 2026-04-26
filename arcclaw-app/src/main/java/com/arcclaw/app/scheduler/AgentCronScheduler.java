@@ -29,6 +29,8 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.CronScheduleUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
+import com.arcclaw.persistence.api.AdvisoryLockPort;
+import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -43,6 +45,7 @@ import org.jboss.logging.MDC;
  * <ul>
  * <li>ManagedExecutor for CDI context propagation + GraalVM AOT safety</li>
  * <li>Semaphore for concurrency limiting with Throwable safety</li>
+ * <li>Leader election via {@link AdvisoryLockPort} (§T5-3)</li>
  * </ul>
  */
 @ApplicationScoped
@@ -59,6 +62,12 @@ public class AgentCronScheduler {
     @Inject
     ManagedExecutor vThreads;
 
+    @Inject
+    Instance<AdvisoryLockPort> advisoryLock;
+
+    @Inject
+    Instance<AgentCronScheduler> selfProxy;
+
     @ConfigProperty(name = "arcclaw.cron.max-concurrent", defaultValue = "10")
     int maxConcurrent;
 
@@ -69,15 +78,63 @@ public class AgentCronScheduler {
 
     Semaphore concurrencyLimiter;
 
+
+
+
+
     @PostConstruct
     void init() {
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
+        
+        // Confirm resolution of the optional advisory lock port
+        if (advisoryLock.isUnsatisfied()) {
+            log.error("CRITICAL: AdvisoryLockPort implementation not found. Leader election will be disabled (§T5-3).");
+        } else {
+            log.infof("AdvisoryLockPort resolved successfully: %s", advisoryLock.get().getClass().getSimpleName());
+        }
+
         // Precise scheduler for one-shot jobs that are due soon.
         this.preciseScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "precise-cron-scheduler");
             t.setDaemon(true);
             return t;
         });
+    }
+
+    /**
+     * One-time sweep on startup to fail any jobs that were stuck AWAITING_APPROVAL
+     * but whose sessions are now dead (as all sessions are non-persistent §5.17).
+     */
+    void onStartup(@Observes StartupEvent ev) {
+        vThreads.execute(() -> {
+            try {
+                // Wait briefly for persistence adapters to stabilize
+                Thread.sleep(5000);
+                sweepOrphanedApprovalJobs();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    private void sweepOrphanedApprovalJobs() {
+        log.info("AgentCronScheduler: starting orphan sweep for AWAITING_APPROVAL jobs...");
+        try {
+            List<AgentCronEntity> orphaned = cronRepository.findAllAwaitingApproval();
+            if (orphaned.isEmpty()) {
+                log.info("AgentCronScheduler: no orphaned approval jobs found.");
+                return;
+            }
+
+            for (AgentCronEntity job : orphaned) {
+                log.warnf("AgentCronScheduler: failing orphaned approval job id=%s goal='%s'",
+                        job.id, job.goal);
+                cronRepository.markFailed(job.id, "Orphaned — session expired before approval (server restart).");
+            }
+            log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
+        } catch (Exception e) {
+            log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
+        }
     }
 
     @PreDestroy
@@ -95,13 +152,8 @@ public class AgentCronScheduler {
         }
     }
 
-    @Inject
-    Instance<AgentCronScheduler> selfProxy;
-
     /**
      * Schedules a one-shot job to fire exactly at its nextFireTime if it is due soon.
-     * <p>
-     * NOTE: must be called from a thread with an active CDI request context (e.g. tool execution thread)
      */
     public void scheduleSoon(String jobId) {
         AgentCronEntity job = cronRepository.findById(jobId);
@@ -109,8 +161,6 @@ public class AgentCronScheduler {
         
         long delayMillis = Duration.between(Instant.now(), job.nextFireTime).toMillis();
         
-        // If it's already past due or due within 2 minutes, use the precise scheduler.
-        // We only do this for runOnce (one-shot) jobs. Recurring jobs still rely on the poll.
         if (delayMillis < 120_000) {
             log.infof("CRON-PRECISE-SCHEDULE id=%s, firing in %dms", job.id, Math.max(0, delayMillis));
             preciseScheduler.schedule(() -> {
@@ -123,11 +173,6 @@ public class AgentCronScheduler {
         }
     }
 
-    /**
-     * Internal precise fire handler. Wrapped in @ActivateRequestContext to ensure
-     * CDI context is available in the background thread. 
-     * Must be public and called via selfProxy to trigger interceptors.
-     */
     @ActivateRequestContext
     public void executeSoonInternal(String jobId) {
         AgentCronEntity job = cronRepository.findById(jobId);
@@ -135,9 +180,20 @@ public class AgentCronScheduler {
 
         MDC.put(MdcKeys.USER_ID, job.userId);
         try {
-            // Atomic claim check happens inside claimForFire
             if (cronRepository.claimForFire(job.id)) {
-                 jobRunner.execute(job);
+                 log.infof("CRON-PRECISE-FIRE id=%s", job.id);
+                 
+                 final String capturedUserId = (String) MDC.get(MdcKeys.USER_ID);
+                 vThreads.execute(() -> {
+                     if (capturedUserId != null) MDC.put(MdcKeys.USER_ID, capturedUserId);
+                     try {
+                         jobRunner.execute(job);
+                     } catch (Exception e) {
+                         log.errorf(e, "CRON-EXEC-FAIL id=%s", job.id);
+                     } finally {
+                         MdcCleaner.clearAll();
+                     }
+                 });
             }
         } finally {
             MdcCleaner.clearAll();
@@ -145,8 +201,7 @@ public class AgentCronScheduler {
     }
 
     /**
-     * Resets the concurrency limit to a specific number of permits.
-     * // @VisibleForTesting — mutates live semaphore state, do not call from production code
+     * Resets the concurrency limit.
      */
     void resetConcurrencyLimit(int permits) {
         log.warnf("CRON-RESET-LIMIT permits=%d", permits);
@@ -168,7 +223,8 @@ public class AgentCronScheduler {
     /**
      * Polls for due cron jobs and dispatches them to managed virtual threads.
      * <p>
-     * Step 0: Crash recovery (reclaim RUNNING rows stuck > 5 minutes)
+     * Step 0: Leader election (§T5-3)
+     * Step 0.1: Crash recovery (reclaim RUNNING rows stuck > 5 minutes)
      * Step 1: Query due rows (read-only — no write lock)
      * Step 2: Claim → throttle check → dispatch via JobRunner
      */
@@ -177,18 +233,22 @@ public class AgentCronScheduler {
     @ActivateRequestContext
     @Transactional(TxType.NOT_SUPPORTED)
     void pollAndDispatch() {
+        // Step 0 — Leader election (§T5-3)
+        if (!advisoryLock.isUnsatisfied() && !advisoryLock.get().tryLock("cron-leader", 30)) {
+            return; // Not the leader this cycle
+        }
+
         try {
-            // Step 0 — Crash recovery
+            // Step 0.1 — Crash recovery
             cronRepository.reclaimStaleCrons(
                     Instant.now().minus(5, ChronoUnit.MINUTES));
         } catch (Exception e) {
-                // Isolate: a broken connection/Narayana state must not abort the whole poll cycle
                 log.warnf("Cron zombie recovery failed (skipping this cycle): %s",
                         e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 return;
         }
         
-        // Step 1 — Query due rows (read-only transaction)
+        // Step 1 — Query due rows
         List<AgentCronEntity> due = cronRepository.findDueCrons();
         if (due.isEmpty()) return;
 
@@ -205,7 +265,7 @@ public class AgentCronScheduler {
                 if (job.cronExpression != null && !job.cronExpression.isBlank()) {
                     job.nextFireTime = CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
                 } else {
-                    job.nextFireTime = null; // One-shot trigger with no repeat
+                    job.nextFireTime = null;
                 }
                 skippedJobs.add(job);
                 iter.remove();
@@ -222,17 +282,14 @@ public class AgentCronScheduler {
 
         // Step 2 — Dispatch loop
         for (AgentCronEntity job : due) {
-            // Atomic claim — if another thread beat us, skip
             if (!cronRepository.claimForFire(job.id)) continue;
 
-            // Throttle check — release claim for next poll, don't kill the job
             if (!concurrencyLimiter.tryAcquire()) {
                 log.warnf("CRON-THROTTLED cronId=%s, releasing claim", job.id);
                 cronRepository.releaseClaimToActive(job.id);
                 continue;
             }
 
-            // Dispatch to managed virtual thread
             try {
                 vThreads.execute(() -> {
                     MDC.put(MdcKeys.USER_ID, job.userId);
@@ -247,7 +304,6 @@ public class AgentCronScheduler {
                 log.errorf("Failed to dispatch cron job %s: %s",
                         job.id, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 concurrencyLimiter.release();
-                // Release claim so it can be picked up later
                 cronRepository.releaseClaimToActive(job.id);
             }
         }
