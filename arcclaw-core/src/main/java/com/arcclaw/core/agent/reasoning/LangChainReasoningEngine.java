@@ -32,6 +32,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -73,7 +74,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         String sessionId = context.sessionId();
 
         if (AgentRoleEnum.CODER.id().equals(agentRole)
-                && goalRequestsExecution(goal)
+                && TextPatternUtils.goalRequestsExecution(goal)
                 && !historyAlreadyContainsSuccessful(history, ToolCapability.SANDBOX_EXEC.toolName())) {
             CodeBlock priorCode = extractLatestCodeBlock(history);
             if (priorCode != null) {
@@ -295,7 +296,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                         // LLM wrote code explanation (```...```) instead of executing 
                         // This is the most common failure: goal says "execute" but LLM sends a plan
-                        if (goalRequestsExecution(goal) && proseIsUnexecutedCodePlan(extractedProse)) {
+                        if (TextPatternUtils.goalRequestsExecution(goal) && proseIsUnexecutedCodePlan(extractedProse)) {
                             log.warnf("[LangChainReasoningEngine] Goal='%s' requests execution but LLM " +
                                             "returned code plan (has ``` fences) for session %s — injecting correction",
                                     goal, sessionId);
@@ -340,7 +341,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                         // §7.40: Coder hard-correction — if model returns prose for an execution goal,
                         // force it back into tool-calling mode immediately.
-                        if (AgentRoleEnum.CODER.id().equals(agentRole) && goalRequestsExecution(goal)) {
+                        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(goal)) {
                             log.warnf("[LangChainReasoningEngine] Coder produced prose for execution goal '%s' " +
                                     "in session %s — injecting hard-tool correction", goal, sessionId);
                             return ReasoningStep.pending(
@@ -496,29 +497,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
     private boolean goalIsWriteIntent(String goal) {
         return intentClassifier.isWriteIntent(goal);
-    }
-
-    /**
-     * Returns true if the original goal requested execution.
-     */
-    private boolean goalRequestsExecution(String goal) {
-        if (goal == null) return false;
-        String lower = goal.toLowerCase();
-        return lower.contains("execute")
-                || lower.contains("must execute")
-                || lower.contains("and execute")
-                || lower.contains("fix and run")
-                || lower.contains("run again")
-                || lower.contains("do again")
-                || lower.contains("try again")
-                || lower.contains("once again")
-                || lower.contains("run it")
-                || lower.contains("run the")
-                || lower.contains("share result")
-                || lower.contains("share the result")
-                || lower.contains("share generated")
-                || lower.contains("try same")
-                || lower.contains("do same");
     }
 
     /**

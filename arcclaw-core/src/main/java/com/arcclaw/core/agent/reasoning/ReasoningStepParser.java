@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -57,6 +58,23 @@ public class ReasoningStepParser {
                 ToolExecutionRequest req = requests.getFirst();
                 log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
 
+                String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
+                        ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+
+                // ── Execution-Follow-Up Interception (§Bug-Fix-1) ──
+                // If the tool is sandbox_exec, but the user DID NOT ask to execute or run code,
+                // convert this call into a FINISH step with the code from params.
+                if (ToolCapability.SANDBOX_EXEC.toolName().equals(req.name()) && !TextPatternUtils.goalRequestsExecution(rawGoal)) {
+                    String code = recoverCodeForDisplay(req.arguments());
+                    if (code != null && !code.isBlank()) {
+                        log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
+                        String language = inferLanguage(code);
+                        String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
+                        return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, 
+                                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
+                    }
+                }
+
                 Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
                 if (actionInput.containsKey("__error")) {
                     return ReasoningStep.schemaError(
@@ -72,13 +90,13 @@ public class ReasoningStepParser {
                     
                     // §Issue 7: Fallback to raw user goal if query looks garbled or empty
                     if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
-                        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
+                        String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
                                 ? WorkspaceContext.RAW_USER_GOAL.get() : null;
                         
-                        if (rawGoal != null && !rawGoal.isBlank()) {
+                        if (rawGoalUpdated != null && !rawGoalUpdated.isBlank()) {
                             log.infof("Issue 7: Replacing garbled memory_search query '%s' with raw user goal", query);
-                            actionInput.put("query", rawGoal);
-                            query = rawGoal;
+                            actionInput.put("query", rawGoalUpdated);
+                            query = rawGoalUpdated;
                         }
                     }
 
@@ -259,25 +277,59 @@ public class ReasoningStepParser {
         int codeStart = argsJson.indexOf('"', argsJson.indexOf(':', codeKey) + 1);
         if (codeStart < 0) return Map.of();
 
+        String rawCode;
+        String language = null;
+
         int languageKey = argsJson.lastIndexOf("\"language\"");
-        if (languageKey < 0 || languageKey <= codeStart) return Map.of();
+        if (languageKey >= 0 && languageKey > codeStart) {
+            int codeEnd = argsJson.lastIndexOf("\",", languageKey);
+            if (codeEnd >= 0 && codeEnd > codeStart) {
+                rawCode = argsJson.substring(codeStart + 1, codeEnd);
+                Matcher matcher = LANGUAGE_FIELD_PATTERN.matcher(argsJson);
+                if (matcher.find()) {
+                    language = matcher.group(1);
+                }
+            } else {
+                // language field exists but code field is truncated or messed up
+                rawCode = argsJson.substring(codeStart + 1);
+            }
+        } else {
+            // No language field — assume truncated
+            rawCode = argsJson.substring(codeStart + 1);
+        }
 
-        int codeEnd = argsJson.lastIndexOf("\",", languageKey);
-        if (codeEnd < 0 || codeEnd <= codeStart) return Map.of();
-
-        String rawCode = argsJson.substring(codeStart + 1, codeEnd);
         String code = rawCode
                 .replace("\\r", "\r")
                 .replace("\\n", "\n")
                 .replace("\\\"", "\"")
                 .replace("\\\\", "\\");
+        
+        // Clean up trailing garbage from truncation (quotes and commas only)
+        // DO NOT strip '}' as it might be a valid block end.
+        if (code.endsWith("\"") || code.endsWith(",")) {
+             code = code.substring(0, code.length() - 1);
+        }
 
-        Matcher matcher = LANGUAGE_FIELD_PATTERN.matcher(argsJson);
-        if (!matcher.find()) return Map.of();
-        String language = matcher.group(1);
+        if (language == null || language.isBlank()) {
+            language = inferLanguage(code);
+        }
 
-        if (code.isBlank() || language.isBlank()) return Map.of();
+        if (code.isBlank() || language == null || language.isBlank()) return Map.of();
         return Map.of("code", code, "language", language);
+    }
+
+    private String recoverCodeForDisplay(String argsJson) {
+        Map<String, Object> recovered = recoverSandboxExecParams(argsJson);
+        return (String) recovered.get("code");
+    }
+
+    private String inferLanguage(String code) {
+        if (code == null) return null;
+        if (code.contains("public class") || code.contains("import java")) return "java";
+        if (code.contains("def ") || code.contains("#!/usr/bin/env python")) return "python";
+        if (code.contains("func ") && code.contains("package ")) return "go";
+        if (code.contains("function ") || code.contains("const ")) return "node";
+        return null;
     }
 
     private boolean isSchedulingGoal(String rawGoal) {

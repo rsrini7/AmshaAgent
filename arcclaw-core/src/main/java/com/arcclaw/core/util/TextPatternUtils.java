@@ -10,6 +10,30 @@ public final class TextPatternUtils {
     private TextPatternUtils() {}
 
     /**
+     * Returns true if the original goal requested execution.
+     */
+    public static boolean goalRequestsExecution(String goal) {
+        if (goal == null) return false;
+        String lower = goal.toLowerCase();
+        return lower.contains("execute")
+                || lower.contains("must execute")
+                || lower.contains("and execute")
+                || lower.contains("fix and run")
+                || lower.contains("run again")
+                || lower.contains("do again")
+                || lower.contains("try again")
+                || lower.contains("once again")
+                || lower.contains("run it")
+                || lower.contains("run the")
+                || lower.contains("share result")
+                || lower.contains("share the result")
+                || lower.contains("share generated")
+                || lower.contains("try same")
+                || lower.contains("do same")
+                || lower.contains("just do it");
+    }
+
+    /**
      * Returns true if the text appears to be a raw JSON object or array.
      * Includes a line-count guard to avoid false positives on multi-line prose
      * that happens to end with a closing brace.
