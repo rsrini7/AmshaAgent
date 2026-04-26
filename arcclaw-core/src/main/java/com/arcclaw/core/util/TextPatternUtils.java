@@ -20,17 +20,13 @@ public final class TextPatternUtils {
                 || lower.contains("and execute")
                 || lower.contains("fix and run")
                 || lower.contains("run again")
-                || lower.contains("do again")
-                || lower.contains("try again")
-                || lower.contains("once again")
                 || lower.contains("run it")
                 || lower.contains("run the")
                 || lower.contains("share result")
                 || lower.contains("share the result")
                 || lower.contains("share generated")
-                || lower.contains("try same")
-                || lower.contains("do same")
-                || lower.contains("just do it");
+                || lower.contains("run same")
+                || lower.contains("execute again");
     }
 
     /**
