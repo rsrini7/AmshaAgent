@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
+import com.arcclaw.core.util.AgentGuards;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
@@ -51,6 +52,13 @@ public class SqliteRetryTemplate {
     public <T> T execute(String operationName, int maxAttempts, long initialBackoffMs,
                          Callable<T> action) throws Exception {
         
+        // 0. Shutdown Guard: skip if the CDI container is stopping or gone
+        if (!AgentGuards.isContainerAvailable()) {
+            log.debugf("CDI container shutting down — aborting persistence operation [%s]", operationName);
+            // Return null or empty result to allow the thread to unwind cleanly
+            return null;
+        }
+
         int limit = maxAttempts > 0 ? Math.min(maxAttempts, DEFAULT_MAX_ATTEMPTS) : DEFAULT_MAX_ATTEMPTS;
         long baseDelay = initialBackoffMs > 0 ? initialBackoffMs : MIN_DELAY_MS;
         
