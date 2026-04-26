@@ -123,7 +123,19 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         boolean isTruncationRecovery = context.getTruncationRetryCount() > 0;
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal, isTruncationRecovery);
 
-        List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, cappedHistory);
+        String finalGoal = goal;
+        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(context.goal()) && !context.isForceFinishRetry()) {
+             // Only nudge if we haven't already nudged via an OBSERVE correction this turn
+             long observeCount = cappedHistory == null ? 0 : cappedHistory.stream()
+                     .skip(context.getCheckpointRestoreOffset())
+                     .filter(s -> ReasoningStep.OBSERVE.equals(s.action()))
+                     .count();
+             if (observeCount == 0) {
+                 finalGoal = goal + "\n\nSTRICT: You MUST execute code via sandbox_exec to fulfill this request. Do NOT just write prose.";
+             }
+        }
+
+        List<ChatMessage> assembled = historyAssembler.assemble(sessionId, finalGoal, cappedHistory);
 
         // §Bug-3 fix: Enforce a message-count cap to prevent fallback model trigger.
         // 12-15 messages is enough for turn-to-turn context while staying within 
@@ -450,10 +462,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                                 && proseIsUnexecutedCodePlan(extractedProse)) {
                             log.warnf("[LangChainReasoningEngine] Coder produced prose for execution goal '%s' " +
                                     "in session %s — injecting hard-tool correction", goal, sessionId);
-                            return ReasoningStep.pending(
-                                    "Coder returned text instead of calling sandbox_exec",
-                                    "OBSERVE", Map.of(), 0, 0
-                            ).withObservation(
+                            return ReasoningStep.systemMessage(
                                     "STOP. You must EXECUTE code to fulfill this request. " +
                                     "Do NOT write text. Do NOT explain. Do NOT use markdown. " +
                                     "Call sandbox_exec RIGHT NOW as your ONLY output."
@@ -509,10 +518,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             if (answer != null && !answer.isBlank()) {
                 log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced a FINISH step " +
                         "instead of tool call for session %s — injecting correction", goal, sessionId);
-                return ReasoningStep.pending(
-                        "LLM tried to FINISH with prose for a write-intent goal instead of calling ingest_document",
-                        "OBSERVE", Map.of(), 0, 0
-                ).withObservation(
+                return ReasoningStep.systemMessage(
                         "CORRECTION: The user wants to STORE data. You MUST call ingest_document RIGHT NOW. " +
                         "Do NOT explain. Do NOT write steps. Do NOT call FINISH. " +
                         "The text parameter may contain [REDACTED-*] placeholders — pass them as-is. " +
@@ -545,10 +551,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                 log.warnf("[LangChainReasoningEngine] Execution-intent goal '%s' produced a FINISH step " +
                         "instead of sandbox_exec for session %s — injecting correction", context.goal(), sessionId);
-                return ReasoningStep.pending(
-                        "LLM tried to FINISH with prose for an execution-intent goal instead of calling sandbox_exec",
-                        "OBSERVE", Map.of(), 0, 0
-                ).withObservation(
+                
+                return ReasoningStep.systemMessage(
                         "STOP. You must EXECUTE code to fulfill this request. " +
                         "Do NOT provide the answer from memory or previous turns. " +
                         "You MUST write the code and call sandbox_exec RIGHT NOW as your ONLY action."

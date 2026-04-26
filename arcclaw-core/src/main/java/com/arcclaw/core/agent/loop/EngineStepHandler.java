@@ -170,8 +170,18 @@ public class EngineStepHandler {
                 }
 
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
-                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
+                    boolean isLogicalCorrection = Boolean.TRUE.equals(step.success());
                     
+                    if (isLogicalCorrection) {
+                        // Logical corrections (execution-intent nudge, write-intent nudge) are NOT
+                        // schema errors. They bypass the error budget entirely to avoid premature
+                        // "repeated formatting errors" failures when the LLM repeatedly returns
+                        // prose instead of a tool call.
+                        log.infof("[STATE-MACHINE] session %s: logical correction (non-schema) — retrying without budget penalty", context.sessionId());
+                        return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
+                    }
+                    
+                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
                     if (!step.isTruncationRecovery()) {
                         llmSchemaErrorCount++;
                     } else {
