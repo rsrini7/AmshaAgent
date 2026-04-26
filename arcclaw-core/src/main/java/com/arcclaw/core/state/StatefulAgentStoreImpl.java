@@ -173,6 +173,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public void archive(Long checkpointId)
         { storeAdapter.archive(checkpointId); }
 
+    @Override
+    public boolean claimForResume(String sessionId, String agentRole) {
+        return storeAdapter.claimForResume(sessionId, agentRole);
+    }
+
     // ── Resume guard (§3.4 / §7.29 — all delegated, public API stays here) ───
 
     /**

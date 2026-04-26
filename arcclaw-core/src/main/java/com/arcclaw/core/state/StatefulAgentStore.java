@@ -168,6 +168,14 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     List<AgentCheckpoint> findByStatus(CheckpointStatus status);
 
     /**
+     * Atomically transitions the latest checkpoint for a session/role to RESUMING
+     * if it is currently AWAITING_APPROVAL (§T5-4).
+     *
+     * @return true if successfully claimed for resume
+     */
+    boolean claimForResume(String sessionId, String agentRole);
+
+    /**
      * Atomically marks the session as RESUMING.
      * @return true if this caller is the first to mark it (safe to resume)
      *         false if another thread already marked it (skip — already resuming)
