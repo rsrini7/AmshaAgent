@@ -87,10 +87,14 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // bypass the LLM and issue the sandbox_exec tool call directly using the code
         // block found in history. This prevents model-side truncation errors.
         // Scoped by language (§Bug-1 fix) to allow Go execution after successful Java run.
+        String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
+        boolean hasRecentExecution = history != null && history.stream().anyMatch(s ->
+                ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
+                        && Boolean.TRUE.equals(s.success()));
+
         if (AgentRoleEnum.CODER.id().equals(agentRole) 
-                && TextPatternUtils.goalRequestsExecution(goal)
+                && (TextPatternUtils.goalRequestsExecution(goal) || (hasRecentExecution && targetLanguage != null))
                 && !context.isForceFinishRetry()) {
-            String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
             CodeBlock priorCode = extractLatestCodeBlock(cappedHistory);
 
             // §Bug: Narrow generic "execute it" check to the latest block's language
@@ -313,7 +317,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                         if (partialCode != null && !partialCode.isBlank()) {
                             String lang = TextPatternUtils.inferLanguage(partialCode);
-                            String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
 
                             // 🟢 Bug-2 Fix: Check if the recovered code matches the requested language.
                             // This prevents surfacing old Java error text when the user asked for Go.
@@ -513,6 +516,29 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         "Do NOT explain. Do NOT write steps. Do NOT call FINISH. " +
                         "The text parameter may contain [REDACTED-*] placeholders — pass them as-is. " +
                         "Call ingest_document immediately with the sanitized text as your ONLY action."
+                );
+            }
+        }
+
+        // ── Fix 3: Force sandbox_exec for execution intents even on successful parse ──
+        // If the LLM successfully returned a FINISH step, but the user's goal was an 
+        // "execution intent", and we haven't executed it for this language yet, intercept.
+        if (ReasoningStep.FINISH.equals(parsedStep.action()) 
+                && AgentRoleEnum.CODER.id().equals(agentRole)
+                && TextPatternUtils.goalRequestsExecution(goal)
+                && targetLanguage != null
+                && !context.isForceFinishRetry()) {
+            
+            if (!historyAlreadyContainsAttemptForLanguage(history, ToolCapability.SANDBOX_EXEC.toolName(), targetLanguage, sessionId)) {
+                log.warnf("[LangChainReasoningEngine] Execution-intent goal '%s' produced a FINISH step " +
+                        "instead of sandbox_exec for session %s — injecting correction", goal, sessionId);
+                return ReasoningStep.pending(
+                        "LLM tried to FINISH with prose for an execution-intent goal instead of calling sandbox_exec",
+                        "OBSERVE", Map.of(), 0, 0
+                ).withObservation(
+                        "STOP. You must EXECUTE code to fulfill this request. " +
+                        "Do NOT provide the answer from memory or previous turns. " +
+                        "You MUST write the code and call sandbox_exec RIGHT NOW as your ONLY action."
                 );
             }
         }
@@ -720,7 +746,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             if (!toolName.equals(step.action()) || step.observation() == null || step.observation().isBlank()) {
                 return false;
             }
-            if (language == null) return true; // Generic check requested
+            if (language == null) return false; // null language = no constraint, never block
             
             Object langParam = step.actionInput() != null ? step.actionInput().get("language") : null;
             return language.equalsIgnoreCase(String.valueOf(langParam));

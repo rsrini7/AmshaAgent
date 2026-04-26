@@ -119,7 +119,8 @@ public class AgentStateMachineRunner {
      */
     public AgentResult runFinishPass(AgentExecutionContext context,
                                      ReasoningEngine engine,
-                                     List<ReasoningStep> history) {
+                                     List<ReasoningStep> history,
+                                     int checkpointRestoreOffset) {
         log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
         
         // 1. Mark as force-finish to guide the engine
@@ -134,7 +135,13 @@ public class AgentStateMachineRunner {
                 .reduce((_, second) -> second) // take last
                 .orElse(null);
 
-        if (lastToolStep != null) {
+        // 🟢 Root Cause 2 Fix: Only inject ground truth if a sandbox attempt was made in the CURRENT turn.
+        // This prevents injecting Python results as ground truth for Go/Java turns.
+        boolean currentTurnHasSandboxAttempt = history.stream()
+                .skip(checkpointRestoreOffset)
+                .anyMatch(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action()));
+
+        if (lastToolStep != null && currentTurnHasSandboxAttempt) {
             history.add(ReasoningStep.systemMessage(
                     "The sandbox_exec tool returned the following output. Report it EXACTLY:\n" +
                     "OUTPUT: " + lastToolStep.observation() + "\n" +

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -134,7 +135,7 @@ class CheckpointResumeHandlerTest {
                 .thenReturn(ToolResponse.success("tool done"));
             
             AgentResult mockResult = AgentResult.finished("done", new ArrayList<>());
-            when(stateMachineRunner.runFinishPass(any(), any(), any())).thenReturn(mockResult);
+            when(stateMachineRunner.runFinishPass(any(), any(), any(), anyInt())).thenReturn(mockResult);
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
@@ -148,7 +149,7 @@ class CheckpointResumeHandlerTest {
             assertNull(checkpoint.getPendingToolName());
             assertNull(checkpoint.getPendingToolParametersJson());
             verify(agentStore).save(checkpoint);
-            verify(stateMachineRunner).runFinishPass(any(), any(), eq(history));
+            verify(stateMachineRunner).runFinishPass(any(), any(), eq(history), anyInt());
         });
     }
 
@@ -167,7 +168,7 @@ class CheckpointResumeHandlerTest {
                 .thenReturn(ToolResponse.success("tool done"));
             
             AgentResult mockResult = AgentResult.finished("done", new ArrayList<>());
-            when(stateMachineRunner.runFinishPass(any(), any(), any())).thenReturn(mockResult);
+            when(stateMachineRunner.runFinishPass(any(), any(), any(), anyInt())).thenReturn(mockResult);
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
@@ -181,6 +182,7 @@ class CheckpointResumeHandlerTest {
             assertNull(checkpoint.getPendingToolName());
             assertNull(checkpoint.getPendingToolParametersJson());
             verify(agentStore).save(checkpoint);
+            verify(stateMachineRunner).runFinishPass(any(), any(), eq(history), anyInt());
         });
     }
 

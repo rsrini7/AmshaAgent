@@ -26,6 +26,7 @@ public final class TextPatternUtils {
                 || lower.contains("share the result")
                 || lower.contains("share generated")
                 || lower.contains("run same")
+                || lower.contains("do same")
                 || lower.contains("execute again");
     }
 

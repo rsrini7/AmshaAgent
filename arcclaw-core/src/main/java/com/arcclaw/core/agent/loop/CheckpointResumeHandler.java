@@ -364,6 +364,7 @@ public class CheckpointResumeHandler {
     }
 
     private AgentResult executePendingTool(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint, String channelType, AgentStateMachineRunner stateMachineRunner) {
+        int checkpointRestoreOffset = history.size();
         String toolName = checkpoint.getPendingToolName();
         String paramsJson = checkpoint.getPendingToolParametersJson();
         String sessionId = context.sessionId();
@@ -398,7 +399,7 @@ public class CheckpointResumeHandler {
             // §Bug-2 Fix: Perform a direct terminal synthesis pass instead of re-entering 
             // the full state machine loop. This ensures we produce a FINISH step with 
             // the observation result without accidentally re-triggering the fast path.
-            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+            return stateMachineRunner.runFinishPass(context, reasoningEngine, history, checkpointRestoreOffset);
         } catch (Exception e) {
             return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
         }
