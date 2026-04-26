@@ -552,6 +552,74 @@ class LangChainReasoningEngineTest {
         assertTrue(step.observation().contains("Call sandbox_exec RIGHT NOW"));
     }
 
+    @Test
+    void testCoderExecutionFollowUpReusesPriorCodeBlock() {
+        String codeAnswer = """
+                ```java
+                public class StringReverser {
+                    public static String reverse(String input) {
+                        return input.chars()
+                                .mapToObj(c -> (char) c)
+                                .reduce("", (s, c) -> c + s, (s1, s2) -> s2 + s1);
+                    }
+                }
+                ```
+                """;
+
+        ReasoningStep prior = ReasoningStep.pending(
+                "Here is the code",
+                ReasoningStep.FINISH,
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, codeAnswer),
+                0, 0);
+
+        ReasoningStep step = reasoningEngine.nextStep(
+                createCtx("test-session"),
+                "coder",
+                "ok execute and share results",
+                List.of(prior));
+
+        assertEquals("sandbox_exec", step.action());
+        assertEquals("java", step.actionInput().get("language"));
+        assertTrue(((String) step.actionInput().get("code")).contains("public class StringReverser"));
+    }
+
+    @Test
+    void testCoderExecutionFollowUpReusesPriorCodeBlockAfterFailedSandboxExec() {
+        String codeAnswer = """
+                ```java
+                public class StringReverser {
+                    public static String reverse(String input) {
+                        return input.chars()
+                                .mapToObj(c -> (char) c)
+                                .reduce("", (s, c) -> c + s, (s1, s2) -> s2 + s1);
+                    }
+                }
+                ```
+                """;
+
+        ReasoningStep priorCode = ReasoningStep.pending(
+                "Here is the code",
+                ReasoningStep.FINISH,
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, codeAnswer),
+                0, 0);
+        ReasoningStep failedExec = ReasoningStep.pending(
+                "Executing code",
+                "sandbox_exec",
+                Map.of("language", "java", "code", "broken"),
+                0, 0
+        ).withObservation("Compilation failed", false);
+
+        ReasoningStep step = reasoningEngine.nextStep(
+                createCtx("test-session"),
+                "coder",
+                "fix and run again",
+                List.of(priorCode, failedExec));
+
+        assertEquals("sandbox_exec", step.action());
+        assertEquals("java", step.actionInput().get("language"));
+        assertTrue(((String) step.actionInput().get("code")).contains("public class StringReverser"));
+    }
+
     @InjectMock
     GovernanceStrategy governanceLayer;
 

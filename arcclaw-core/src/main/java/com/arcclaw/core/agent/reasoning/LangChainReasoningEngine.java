@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -49,6 +51,8 @@ import org.jboss.logging.Logger;
 public class LangChainReasoningEngine implements ReasoningEngine {
 
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
+    private static final Pattern FENCED_CODE_BLOCK_PATTERN =
+            Pattern.compile("(?s)```([\\w+#-]*)\\R(.*?)```");
 
 
     @Inject LlmProviderPort llmProviderPort;
@@ -67,6 +71,23 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
         String sessionId = context.sessionId();
+
+        if (AgentRoleEnum.CODER.id().equals(agentRole)
+                && goalRequestsExecution(goal)
+                && !historyAlreadyContainsSuccessful(history, ToolCapability.SANDBOX_EXEC.toolName())) {
+            CodeBlock priorCode = extractLatestCodeBlock(history);
+            if (priorCode != null) {
+                log.infof("[LangChainReasoningEngine] Reusing prior %s code block for execution goal in session %s",
+                        priorCode.language(), sessionId);
+                return ReasoningStep.pending(
+                        "Executing the previously generated code block.",
+                        ToolCapability.SANDBOX_EXEC.toolName(),
+                        Map.of("code", priorCode.code(), "language", priorCode.language()),
+                        0, 0
+                );
+            }
+        }
+
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
 
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
@@ -397,6 +418,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     private static final String FAILED_GEN_KEY = "\"failed_generation\":\"";
+    private record CodeBlock(String language, String code) {}
 
     private boolean isProseGenerationFailure(String message) {
         if (message == null) return false;
@@ -485,12 +507,18 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         return lower.contains("execute")
                 || lower.contains("must execute")
                 || lower.contains("and execute")
+                || lower.contains("fix and run")
+                || lower.contains("run again")
+                || lower.contains("do again")
+                || lower.contains("try again")
+                || lower.contains("once again")
                 || lower.contains("run it")
                 || lower.contains("run the")
                 || lower.contains("share result")
                 || lower.contains("share the result")
                 || lower.contains("share generated")
-                || lower.contains("try same");
+                || lower.contains("try same")
+                || lower.contains("do same");
     }
 
     /**
@@ -589,6 +617,66 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (history == null) return false;
         return history.stream().anyMatch(step ->
                 toolName.equals(step.action()) && step.observation() != null && !step.observation().isBlank()
+        );
+    }
+
+    private CodeBlock extractLatestCodeBlock(List<ReasoningStep> history) {
+        if (history == null || history.isEmpty()) return null;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ReasoningStep step = history.get(i);
+            CodeBlock block = extractCodeBlockFromText(extractCandidateText(step));
+            if (block != null) return block;
+        }
+        return null;
+    }
+
+    private String extractCandidateText(ReasoningStep step) {
+        if (step == null) return null;
+        if (step.actionInput() != null) {
+            Object answer = step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
+            if (answer instanceof String s && !s.isBlank()) {
+                return s;
+            }
+        }
+        if (step.thought() != null && !step.thought().isBlank()) {
+            return step.thought();
+        }
+        return step.observation();
+    }
+
+    private CodeBlock extractCodeBlockFromText(String text) {
+        if (text == null || text.isBlank()) return null;
+        Matcher matcher = FENCED_CODE_BLOCK_PATTERN.matcher(text);
+        CodeBlock last = null;
+        while (matcher.find()) {
+            String language = normalizeExecutionLanguage(matcher.group(1));
+            String code = matcher.group(2) != null ? matcher.group(2).trim() : "";
+            if (language != null && !code.isBlank()) {
+                last = new CodeBlock(language, code);
+            }
+        }
+        return last;
+    }
+
+    private String normalizeExecutionLanguage(String rawLanguage) {
+        if (rawLanguage == null) return null;
+        String language = rawLanguage.trim().toLowerCase();
+        return switch (language) {
+            case "python3" -> "python";
+            case "sh" -> "bash";
+            case "javascript", "js" -> "node";
+            case "java", "python", "bash", "node", "go" -> language;
+            default -> null;
+        };
+    }
+
+    private boolean historyAlreadyContainsSuccessful(List<ReasoningStep> history, String toolName) {
+        if (history == null) return false;
+        return history.stream().anyMatch(step ->
+                toolName.equals(step.action())
+                        && Boolean.TRUE.equals(step.success())
+                        && step.observation() != null
+                        && !step.observation().isBlank()
         );
     }
 }
