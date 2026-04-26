@@ -293,6 +293,33 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 if (isProseGenerationFailure(msg)) {
                     String extractedProse = extractProseFromFailedGeneration(msg);
 
+                    // 🟢 FIX: Implement a truncation counter to force a FINISH exit after repeated failures.
+                    // This prevents exhausting the budget on redundant retries of oversized code.
+                    int truncationRetryCount = countTruncationAttempts(history);
+
+                    // If the truncated generation contains a sandbox_exec call, 
+                    // OR if we've already tried and failed twice, extract whatever we have and FINISH.
+                    if (extractedProse != null && (containsEmbeddedSandboxToolCall(extractedProse) || truncationRetryCount >= 2)) {
+                        String partialCode = extractPartialCodeFromTruncatedJson(extractedProse);
+                        // Fallback for raw source code (not JSON wrapped)
+                        if (partialCode == null && truncationRetryCount >= 2) {
+                            partialCode = extractedProse.strip();
+                        }
+
+                        if (partialCode != null && !partialCode.isBlank()) {
+                            log.infof("[LangChainReasoningEngine] Recovered partial code from truncation (attempt %d) for session %s", 
+                                    truncationRetryCount + 1, sessionId);
+                            String lang = TextPatternUtils.inferLanguage(partialCode);
+                            String markdown = String.format("```%s\n%s\n```", lang != null ? lang : "", partialCode);
+                            return ReasoningStep.pending(
+                                    "Extracted code after repeated truncation attempts.",
+                                    ReasoningStep.FINISH,
+                                    Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown),
+                                    0, 0
+                            );
+                        }
+                    }
+
                     // Guard: if failed_generation contains code fragments (partial/truncated
                     // tool-call or raw code without markdown fences), do NOT send it as prose.
                     // Instead, inject an OBSERVE step telling the LLM to shorten and retry
@@ -306,8 +333,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                                 "OBSERVE", Map.of(), 0, 0
                         ).withObservation(
                                 "Your previous response was cut off because the code was too large. " +
-                                "Please write a SHORTER, SIMPLER version (max 30 lines). " +
-                                "Then call sandbox_exec to execute it so the user can approve."
+                                "STOP. Do NOT attempt to call sandbox_exec directly with this code. " +
+                                "Instead, provide the code using a FINISH answer first, " +
+                                "then wait for the user to request execution."
                         );
                     }
 
@@ -533,6 +561,28 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     }
 
     /**
+     * Extracts partial code from a truncated JSON string where "code" was mid-generation.
+     * Searches for the start of the "code" value and grabs everything up to the current end.
+     */
+    private String extractPartialCodeFromTruncatedJson(String json) {
+        if (json == null) return null;
+        int codeIdx = json.indexOf("\"code\"");
+        if (codeIdx == -1) return null;
+        
+        int startQuote = json.indexOf("\"", json.indexOf(":", codeIdx) + 1);
+        if (startQuote == -1) return null;
+        
+        String partial = json.substring(startQuote + 1).strip();
+        
+        // 🟢 FIX: Correct unescaping order (\\ first) to preserve sequences like \n
+        return partial
+                .replace("\\\\", "\\")
+                .replace("\\\"", "\"")
+                .replace("\\n", "\n")
+                .replace("\\t", "\t");
+    }
+
+    /**
      * Returns true if the prose contains markdown code fences.
      */
     private boolean proseIsUnexecutedCodePlan(String prose) {
@@ -642,6 +692,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         return history.stream().anyMatch(step ->
                 toolName.equals(step.action()) && step.observation() != null && !step.observation().isBlank()
         );
+    }
+
+    private int countTruncationAttempts(List<ReasoningStep> history) {
+        if (history == null) return 0;
+        return (int) history.stream()
+                .filter(step -> ReasoningStep.OBSERVE.equals(step.action())
+                        && step.observation() != null
+                        && step.observation().contains("was cut off because the code was too large"))
+                .count();
     }
 
     private CodeBlock extractLatestCodeBlock(List<ReasoningStep> history) {
