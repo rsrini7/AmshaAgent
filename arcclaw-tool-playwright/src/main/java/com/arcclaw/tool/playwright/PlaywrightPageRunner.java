@@ -429,6 +429,7 @@ public class PlaywrightPageRunner {
         String msg = safeMessage(t).toLowerCase();
         return msg.contains("stream closed")
             || msg.contains("pipe closed")
+            || msg.contains("pipe is being closed")
             || msg.contains("target page, context or browser has been closed");
     }
 

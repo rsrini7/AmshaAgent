@@ -37,6 +37,9 @@ public class CodeGenerationPolicy {
     static final Pattern PROSE_CODE_PATTERN =
             Pattern.compile("```[\\w]*\\n[\\s\\S]*?```", Pattern.MULTILINE);
 
+    static final Pattern FENCE_HEADER_PATTERN =
+            Pattern.compile("^```([\\w-]*)\\R");
+
     /**
      * Keywords that strongly suggest the block is actual source code,
      * not just formatted data or version numbers.
@@ -68,6 +71,9 @@ public class CodeGenerationPolicy {
             Matcher m = PROSE_CODE_PATTERN.matcher(stripped);
             while (m.find()) {
                 String block = m.group();
+                if (looksLikeStructuredDataBlock(block)) {
+                    continue;
+                }
                 // If it's a long block or looks like source code, block it
                 if (block.lines().count() > 10 || SOURCE_CODE_INDICATOR.matcher(block).find()) {
                     return true;
@@ -75,6 +81,26 @@ public class CodeGenerationPolicy {
             }
             return false;
         }
+    }
+
+    private boolean looksLikeStructuredDataBlock(String block) {
+        if (block == null || block.isBlank()) return false;
+
+        Matcher headerMatcher = FENCE_HEADER_PATTERN.matcher(block);
+        String language = headerMatcher.find() ? headerMatcher.group(1).toLowerCase() : "";
+        String body = block
+                .replaceFirst("^```[\\w-]*\\R", "")
+                .replaceFirst("\\R```\\s*$", "")
+                .trim();
+
+        if ("json".equals(language) || "yaml".equals(language) || "yml".equals(language)
+                || "text".equals(language) || "markdown".equals(language) || "md".equals(language)) {
+            return true;
+        }
+
+        boolean jsonLike = (body.startsWith("{") && body.endsWith("}"))
+                || (body.startsWith("[") && body.endsWith("]"));
+        return jsonLike && !SOURCE_CODE_INDICATOR.matcher(body).find();
     }
 
     /**
