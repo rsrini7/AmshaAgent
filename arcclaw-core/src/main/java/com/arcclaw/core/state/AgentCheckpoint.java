@@ -127,6 +127,14 @@ public class AgentCheckpoint {
     @Nullable
     private String pendingToolName;
 
+    /**
+     * The specialist role (e.g. "coder") that requested the pending tool.
+     * Used on resume to ensure correct capability checks. §7.31
+     */
+    @Column(name = "pending_tool_role", length = 64)
+    @Nullable
+    private String pendingToolRole;
+
     @Column(name = "batch_tool_decisions", columnDefinition = "TEXT")
     @Nullable
     private String batchToolDecisions; // JSON: {"github":"PENDING","manage_schedule":"PENDING"}
@@ -302,6 +310,14 @@ public class AgentCheckpoint {
 
     public void setPendingToolName(String pendingToolName) {
         this.pendingToolName = pendingToolName;
+    }
+
+    public String getPendingToolRole() {
+        return pendingToolRole;
+    }
+
+    public void setPendingToolRole(String pendingToolRole) {
+        this.pendingToolRole = pendingToolRole;
     }
 
     public String getBatchToolDecisions() {

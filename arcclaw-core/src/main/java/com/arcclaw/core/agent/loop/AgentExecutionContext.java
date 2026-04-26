@@ -26,6 +26,7 @@ public final class AgentExecutionContext {
     private final String goal;
     private final AutonomyLevel autonomyLevel;
     private final int maxIterations;
+    private final int startingIteration;
     private final String channelType;
     private final String channelPlatformId;
     private final String systemNote;
@@ -43,6 +44,7 @@ public final class AgentExecutionContext {
             String goal,
             AutonomyLevel autonomyLevel,
             int maxIterations,
+            int startingIteration,
             String channelType,
             String channelPlatformId,
             String systemNote,
@@ -57,6 +59,7 @@ public final class AgentExecutionContext {
         if (maxIterations <= 0)
             throw new IllegalArgumentException("maxIterations must be > 0, got: " + maxIterations);
         this.maxIterations = maxIterations;
+        this.startingIteration = startingIteration;
         this.channelType = channelType;
         this.channelPlatformId = channelPlatformId;
         this.systemNote = systemNote;
@@ -71,6 +74,7 @@ public final class AgentExecutionContext {
     public String systemNote() { return systemNote != null ? systemNote : ""; }
     public AutonomyLevel autonomyLevel() { return autonomyLevel; }
     public int maxIterations() { return maxIterations; }
+    public int startingIteration() { return startingIteration; }
     public String channelType() { return channelType; }
     public String channelPlatformId() { return channelPlatformId; }
     public Map<String, Object> data() { return data; }
@@ -106,6 +110,7 @@ public final class AgentExecutionContext {
                 req.goal(),
                 autonomyLevel,
                 max,
+                0,
                 null,
                 null,
                 null,

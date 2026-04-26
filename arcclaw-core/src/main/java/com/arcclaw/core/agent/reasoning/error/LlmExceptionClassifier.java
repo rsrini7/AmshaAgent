@@ -21,7 +21,8 @@ public class LlmExceptionClassifier {
                     return new LlmToolCallException(msg, throwable);
                 }
                 
-                if (msg != null && (msg.contains("model_not_found") || msg.contains("does not exist") || msg.contains("invalid_api_key"))) {
+                if (msg != null && (msg.contains("model_not_found") || msg.contains("does not exist") 
+                        || msg.contains("invalid_api_key") || msg.contains("API_KEY_INVALID"))) {
                     return new LlmAuthenticationException(msg, throwable);
                 }
 
@@ -41,6 +42,22 @@ public class LlmExceptionClassifier {
                 }
                 if (status >= 500) {
                     return new LlmServiceUnavailableException(msg != null ? msg : "Service unavailable", throwable);
+                }
+            }
+            
+            if (t instanceof NullPointerException) {
+                String msg = t.getMessage();
+                if (msg != null && msg.contains("\"parts\" is null")) {
+                    return new LlmContentFilterException("Gemini returned an empty response or was blocked by safety filters. " +
+                            "Try rephrasing your request or adjusting safety settings.", throwable);
+                }
+            }
+
+            if (t instanceof IllegalArgumentException) {
+                String msg = t.getMessage();
+                if (msg != null && (msg.contains("Invalid REST Client URL") || msg.contains("chat/completions"))) {
+                    return new LlmServiceUnavailableException("Malformed LLM Base URL. " +
+                            "Check if ARCCLAW_LLM_BASE_URL is correct for this provider: " + msg, throwable);
                 }
             }
             

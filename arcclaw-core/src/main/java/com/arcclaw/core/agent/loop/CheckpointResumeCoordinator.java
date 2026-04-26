@@ -76,7 +76,7 @@ public class CheckpointResumeCoordinator {
         record FreshStart() implements ResumeDecision {}
 
         /** Resume with existing history. */
-        record ResumedHistory(List<ReasoningStep> history) implements ResumeDecision {}
+        record ResumedHistory(List<ReasoningStep> history, int iterationsUsed) implements ResumeDecision {}
 
         /** Stale approval was active but discarded; starting fresh. */
         record AbortedStale() implements ResumeDecision {}
@@ -120,7 +120,9 @@ public class CheckpointResumeCoordinator {
             List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
             log.infof("CheckpointResumeCoordinator: restored %d steps from IN_PROGRESS for session=%s",
                     loadedSteps != null ? loadedSteps.size() : 0, sessionId);
-            return new ResumeDecision.ResumedHistory(loadedSteps != null ? loadedSteps : new ArrayList<>());
+            return new ResumeDecision.ResumedHistory(
+                    loadedSteps != null ? loadedSteps : new ArrayList<>(),
+                    checkpoint.getIterationsUsed());
         }
 
         if (status == CheckpointStatus.AWAITING_APPROVAL) {
@@ -129,7 +131,9 @@ public class CheckpointResumeCoordinator {
                 List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
                 log.infof("CheckpointResumeCoordinator: restored %d steps from AWAITING_APPROVAL (resume signal) for session=%s",
                         loadedSteps != null ? loadedSteps.size() : 0, sessionId);
-                return new ResumeDecision.ResumedHistory(loadedSteps != null ? loadedSteps : new ArrayList<>());
+                return new ResumeDecision.ResumedHistory(
+                        loadedSteps != null ? loadedSteps : new ArrayList<>(),
+                        checkpoint.getIterationsUsed());
             } else {
                 // Stale approval discard path (§3.4)
                 archiveStaleApproval(sessionId, canonicalRole, capturedUserId, checkpoint, context);

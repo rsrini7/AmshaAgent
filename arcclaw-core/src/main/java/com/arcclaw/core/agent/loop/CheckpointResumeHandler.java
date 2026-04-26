@@ -336,18 +336,28 @@ public class CheckpointResumeHandler {
         String toolName = checkpoint.getPendingToolName();
         String paramsJson = checkpoint.getPendingToolParametersJson();
         String sessionId = context.sessionId();
+        
+        // Ensure we use the role that originally called the tool §7.31
+        String effectiveRole = checkpoint.getPendingToolRole() != null 
+                ? checkpoint.getPendingToolRole() 
+                : context.agentRole();
 
-        log.infof("[AgentLoop] Resuming session %s executing pending tool %s", sessionId, toolName);
+        log.infof("[AgentLoop] Resuming session %s executing pending tool %s as role %s", 
+                sessionId, toolName, effectiveRole);
 
         try {
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                    sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), context.agentRole(),
+                    sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
                     () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
             if (response.isInfraFailure()) return handleInfraFailure(history);
 
             recordReasoningStep(toolName, paramsJson, response.output(), history, sessionId);
             completeInProgressCheckpoint(checkpoint);
+
+            // §7.32: Return null to allow the StateMachine to continue for one final synthesis turn.
+            // Hardening in AgentStateMachineRunner ensures it respects context.startingIteration()
+            // to avoid infinite loops.
             return null;
         } catch (Exception e) {
             return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
@@ -412,7 +422,7 @@ public class CheckpointResumeHandler {
                 continue;
             }
 
-            executeBatchCall(call, context, completed);
+            executeBatchCall(call, context, completed, checkpoint);
         }
 
         return finalizeParallelBatch(checkpoint, history, completed);
@@ -460,10 +470,11 @@ public class CheckpointResumeHandler {
         return false;
     }
 
-    private void executeBatchCall(ParallelToolCall call, AgentExecutionContext ctx, List<ParallelToolCall> completed) {
+    private void executeBatchCall(ParallelToolCall call, AgentExecutionContext ctx, List<ParallelToolCall> completed, AgentCheckpoint cp) {
         try {
+            String effectiveRole = cp.getPendingToolRole() != null ? cp.getPendingToolRole() : ctx.agentRole();
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                ctx.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), ctx.agentRole(),
+                ctx.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
                 () -> toolRegistry.invokeTool(call.toolName(), call.paramsJson(), ctx.sessionId()));
             completed.add(call.withResult(response.output(), response.success()));
         } catch (Exception e) {
@@ -477,6 +488,8 @@ public class CheckpointResumeHandler {
             String summary = completed.stream().map(c -> c.toolName() + "→" + (c.success() ? "OK" : "FAIL")).collect(Collectors.joining(", "));
             history.add(ReasoningStep.parallelBatch("Human Approved (batch)", Map.of("batch", completedJson), 0, 0).withObservation(summary));
             completeInProgressCheckpoint(checkpoint);
+
+            // §7.32: Return null to allow the StateMachine to continue for one final synthesis turn.
             return null;
         } catch (Exception e) {
             return handleCorruptBatch(checkpoint, history);

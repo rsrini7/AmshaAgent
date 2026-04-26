@@ -27,6 +27,9 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
                 defaultValue = "8192")
     int maxTokens;
 
+    @ConfigProperty(name = "arcclaw.llm.temperature", defaultValue = "0.1")
+    double temperature;
+
     @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT60S")
     Duration timeout;
 
@@ -50,7 +53,7 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
                 .maxTokens(maxTokens)
                 .timeout(timeout)
                 .maxRetries(maxRetries)
-                .temperature(0.0)
+                .temperature(temperature)
                 .logRequests(logHttp)
                 .logResponses(logHttp)
                 .build();

@@ -34,3 +34,9 @@ Resolve the `InstantToTextConverter` dependency hazard.
 ### 2.4 A16 Guard Consolidation
 De-duplicate the batch tool decision merging logic (Architecture Nuance #16). 
 *   **Rationale**: The logic for merging incoming decisions into the JSON map is currently duplicated between `StatefulAgentStoreImpl` and `SqliteCheckpointStoreAdapter`. It should be consolidated into a single atomic utility in the persistence layer.
+
+### 2.5 RRF Score Calibration (RAG)
+Calibrate `arcclaw.rag.min-score` for RRF fusion.
+*   **Context**: The current default is `-1.0` to disable filtering because RRF scores (keyword + vector fusion) produce small positive values (e.g. 0.016) that were blocked by the original 0.55 threshold.
+*   **Task**: Once the system has 50+ ingested documents, measure false-positive injection rates for unrelated queries.
+*   **Goal**: Establish a sensible floor (e.g. `0.01`) to filter out noise while still allowing valid RRF matches to reach the agent.

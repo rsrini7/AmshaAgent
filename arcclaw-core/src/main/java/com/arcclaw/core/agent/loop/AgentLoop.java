@@ -142,6 +142,7 @@ public class AgentLoop {
                     goal,
                     WorkspaceContext.requireAutonomyOrSupervised(),
                     maxIterations,
+                    decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
                     context != null && context.getUser() != null ? context.getUser().channel().name() : null,
                     context != null && context.getUser() != null ? context.getUser().platformId() : null,
                     systemNote,

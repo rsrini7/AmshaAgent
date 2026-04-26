@@ -12,8 +12,8 @@ function Clear-EnvLine($file, $key) {
     [System.IO.File]::WriteAllText($file, $c)
 }
 
-$provider = Read-Host "  ARCCLAW_LLM_PROVIDER (groq, openrouter, openai, ollama) [Default: openrouter]"
-if (-not $provider) { $provider = 'openrouter' }
+$provider = Read-Host "  ARCCLAW_LLM_PROVIDER (groq, openrouter, gemini, nvidia, openai, ollama) [Default: groq]"
+if (-not $provider) { $provider = 'groq' }
 Set-EnvLine $envPath 'ARCCLAW_LLM_PROVIDER' $provider
 
 if ($provider -eq 'groq') {
@@ -23,6 +23,16 @@ if ($provider -eq 'groq') {
     } while (-not $key.StartsWith('gsk_'))
     Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
     Clear-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL'
+} elseif ($provider -eq 'gemini') {
+    $key = Read-Host "  GEMINI API KEY (starts with AIza)"
+    Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+    Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://generativelanguage.googleapis.com/v1beta/openai/'
+    Set-EnvLine $envPath 'ARCCLAW_LLM_MODEL_NAME' 'gemini-flash-latest'
+} elseif ($provider -eq 'nvidia') {
+    $key = Read-Host "  NVIDIA API KEY (starts with nvapi-)"
+    Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
+    Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://integrate.api.nvidia.com/v1'
+    Set-EnvLine $envPath 'ARCCLAW_LLM_MODEL_NAME' 'mistralai/devstral-2-123b-instruct-2512'
 } elseif ($provider -eq 'openrouter') {
     do {
         $key = Read-Host "  OPENROUTER API KEY (starts with sk-or-)"

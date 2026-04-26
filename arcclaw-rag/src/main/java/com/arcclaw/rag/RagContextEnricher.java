@@ -29,9 +29,12 @@ public class RagContextEnricher implements ContextEnricher {
     int contextChunks;
 
     // Tune this value relative to what TwoTierMemoryService returns:
-    //   vec0 cosine similarity → [0.0, 1.0]  → 0.55 is a good floor
-    //   FTS5 BM25 rank         → negative    → set arcclaw.rag.min-score=-1.0 to disable
-    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "0.55")
+    //   vec0 cosine similarity → [0.0, 1.0]
+    //   FTS5 BM25 rank         → negative
+    //   RRF Fusion             → small positive (e.g. 0.016)
+    //
+    // Set to -1.0 to disable filtering and trust the top-K ranking.
+    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "-1.0")
     double minScore;
 
     // ── Fix Bug A: write-intent goals must never be enriched with past RAG data.
