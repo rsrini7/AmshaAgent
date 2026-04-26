@@ -39,6 +39,7 @@ public final class AgentExecutionContext {
     private boolean statusDirty = true;
     private boolean forceFinishRetry = false;
     private int truncationRetryCount = 0;
+    private int checkpointRestoreOffset = 0;
 
     public AgentExecutionContext(
             String sessionId,
@@ -100,6 +101,9 @@ public final class AgentExecutionContext {
 
     public int getTruncationRetryCount() { return truncationRetryCount; }
     public void incrementTruncationRetry() { this.truncationRetryCount++; }
+
+    public int getCheckpointRestoreOffset() { return checkpointRestoreOffset; }
+    public void setCheckpointRestoreOffset(int offset) { this.checkpointRestoreOffset = offset; }
 
     /** Convenience: true when full channel stamping info is available. */
     public boolean hasChannelInfo() {

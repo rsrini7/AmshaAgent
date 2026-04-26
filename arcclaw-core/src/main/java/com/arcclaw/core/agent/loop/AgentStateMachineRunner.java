@@ -119,8 +119,7 @@ public class AgentStateMachineRunner {
      */
     public AgentResult runFinishPass(AgentExecutionContext context,
                                      ReasoningEngine engine,
-                                     List<ReasoningStep> history,
-                                     int checkpointRestoreOffset) {
+                                     List<ReasoningStep> history) {
         log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
         
         // 1. Mark as force-finish to guide the engine
@@ -128,17 +127,19 @@ public class AgentStateMachineRunner {
         
         // 🟢 §Bug-1 Fix: Ground the synthesis in the actual tool output.
         // Inject a system directive with the raw observation as the unoverridable truth.
+        // 🟢 Root Cause 2 Fix: Only inject ground truth if a sandbox attempt was made in the CURRENT turn.
+        // This prevents injecting Python results as ground truth for Go/Java turns.
+        int offset = context.getCheckpointRestoreOffset();
         ReasoningStep lastToolStep = history.stream()
+                .skip(offset) // current turn only
                 .filter(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
                         && s.observation() != null
                         && !s.observation().isBlank())
                 .reduce((_, second) -> second) // take last
                 .orElse(null);
 
-        // 🟢 Root Cause 2 Fix: Only inject ground truth if a sandbox attempt was made in the CURRENT turn.
-        // This prevents injecting Python results as ground truth for Go/Java turns.
         boolean currentTurnHasSandboxAttempt = history.stream()
-                .skip(checkpointRestoreOffset)
+                .skip(offset)
                 .anyMatch(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action()));
 
         if (lastToolStep != null && currentTurnHasSandboxAttempt) {
@@ -219,7 +220,7 @@ public class AgentStateMachineRunner {
     public AgentResult run(AgentExecutionContext context,
                            ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
-
+        context.setCheckpointRestoreOffset(resumedHistory.size());
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
 
         // Loop-scoped variables — must NOT be delegated to collaborators

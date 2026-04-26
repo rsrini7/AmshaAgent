@@ -75,15 +75,23 @@ class LangChainReasoningEngineTest {
     @InjectMock
     ToolRegistry toolRegistry;
 
+    @InjectMock
+    CompactionSummaryCache summaryCache;
+
     @BeforeEach
     void setUp() {
         // Default behavior for mocks
         when(roleRegistry.permittedTools(any())).thenReturn(Collections.emptySet());
         when(toolRegistry.listTools()).thenReturn(Collections.emptyList());
+        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
     }
 
     private AgentExecutionContext createCtx(String sessionId) {
-        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
+        return createCtx(sessionId, "goal");
+    }
+
+    private AgentExecutionContext createCtx(String sessionId, String goal) {
+        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", goal, AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
     }
 
     @Test
@@ -574,7 +582,7 @@ class LangChainReasoningEngineTest {
                 0, 0);
 
         ReasoningStep step = reasoningEngine.nextStep(
-                createCtx("test-session"),
+                createCtx("test-session", "ok execute and share results"),
                 "coder",
                 "ok execute and share results",
                 List.of(prior));
@@ -617,7 +625,7 @@ class LangChainReasoningEngineTest {
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("LLM response", "write_code", Map.of(), 100, 100));
 
         ReasoningStep step = reasoningEngine.nextStep(
-                createCtx("test-session"),
+                createCtx("test-session", "fix and run again"),
                 "coder",
                 "fix and run again",
                 List.of(priorCode, failedExec));

@@ -87,13 +87,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // bypass the LLM and issue the sandbox_exec tool call directly using the code
         // block found in history. This prevents model-side truncation errors.
         // Scoped by language (§Bug-1 fix) to allow Go execution after successful Java run.
-        String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
+        String targetLanguage = TextPatternUtils.goalMentionsLanguage(context.goal());
         boolean hasRecentExecution = history != null && history.stream().anyMatch(s ->
                 ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
                         && Boolean.TRUE.equals(s.success()));
 
         if (AgentRoleEnum.CODER.id().equals(agentRole) 
-                && (TextPatternUtils.goalRequestsExecution(goal) || (hasRecentExecution && targetLanguage != null))
+                && (TextPatternUtils.goalRequestsExecution(context.goal()) || (hasRecentExecution && targetLanguage != null))
                 && !context.isForceFinishRetry()) {
             CodeBlock priorCode = extractLatestCodeBlock(cappedHistory);
 
@@ -525,13 +525,25 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // "execution intent", and we haven't executed it for this language yet, intercept.
         if (ReasoningStep.FINISH.equals(parsedStep.action()) 
                 && AgentRoleEnum.CODER.id().equals(agentRole)
-                && TextPatternUtils.goalRequestsExecution(goal)
+                && TextPatternUtils.goalRequestsExecution(context.goal())
                 && targetLanguage != null
                 && !context.isForceFinishRetry()) {
             
             if (!historyAlreadyContainsAttemptForLanguage(history, ToolCapability.SANDBOX_EXEC.toolName(), targetLanguage, sessionId)) {
+                
+                // 🟢 Bug 2 Fix: Escape infinite correction loops (§Correction-Escape)
+                long observeCorrectionsThisTurn = history.stream()
+                        .skip(context.getCheckpointRestoreOffset())
+                        .filter(s -> ReasoningStep.OBSERVE.equals(s.action()))
+                        .count();
+                if (observeCorrectionsThisTurn >= 2) {
+                    log.warnf("[LangChainReasoningEngine] session %s: execution correction budget exhausted (%d) — allowing FINISH", 
+                            sessionId, observeCorrectionsThisTurn);
+                    return parsedStep;
+                }
+
                 log.warnf("[LangChainReasoningEngine] Execution-intent goal '%s' produced a FINISH step " +
-                        "instead of sandbox_exec for session %s — injecting correction", goal, sessionId);
+                        "instead of sandbox_exec for session %s — injecting correction", context.goal(), sessionId);
                 return ReasoningStep.pending(
                         "LLM tried to FINISH with prose for an execution-intent goal instead of calling sandbox_exec",
                         "OBSERVE", Map.of(), 0, 0
