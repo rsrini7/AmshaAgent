@@ -356,7 +356,7 @@ public class SystemPromptBuilder {
         8. For time-delay phrases ("tomorrow", "in 5 min"): call `schedule_task` ONLY.
         9. STORAGE rule: call `ingest_document`. Output JSON tool-call ONLY. NO thought or text answer before tool result.
         10. STORAGE format: "label=value" (e.g. "USER_NAME=Alice"). Preserve the "=" exactly.
-        11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
+        11. PII/REDACTION: If you see [REDACTED-*] placeholders in a store request, call `ingest_document` with the exact placeholder text. The system will resolve it.
         12. RECALL PRIORITY: 1. Active Window, 2. Summary. If info was mentioned in THIS conversation, you MUST NOT call tools. Answer directly.
         13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks. Set the agent parameter to the persona name.
         14. IDENTITY RECALL: For "who am I" questions, check history first. Only call `memory_search` (query="user name identity") if absent.
@@ -374,9 +374,6 @@ public class SystemPromptBuilder {
             with the appropriate `language` parameter.
             Supported languages: python, python3, bash, node, java, go.
             Do NOT tell the user "I cannot execute code" — you can, via the sandbox tool.
-            CRITICAL: When passing the `code` parameter in the tool call, you MUST
-            manually escape all newlines as `\\n` and all double-quotes as `\\"` 
-            to ensure valid JSON. Failure to escape will cause a system error.
             If sandbox_exec returns SANDBOX_OFFLINE, inform the user the sandbox is
             temporarily unavailable and ask them to try again later. Do NOT answer
             from memory or training data as a substitute for execution output.
@@ -393,7 +390,7 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = """
             EXECUTION BOUNDARY:
-            Use `sandbox_exec` for run/execute/compile. CRITICAL: Escape newlines as `\\n` and quotes as `\\"` in the `code` JSON field.
+            Use `sandbox_exec` for run/execute/compile.
             """;
 
     private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = """
@@ -414,14 +411,16 @@ public class SystemPromptBuilder {
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
             4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> "*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.
             4b. For scheduling requests, NEVER batch `schedule_task` with `delegate_to_agent` or any other tool in the same turn.
-            5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"), you MUST delegate the entire task to 'brahma' with clear instructions to write AND execute the code. Do not attempt to write the code yourself if execution is requested.
+            5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"):
+               - If you have `sandbox_exec`, use it DIRECTLY. 
+               - If you LACK `sandbox_exec`, delegate to 'brahma'.
             6. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
             7. Use `memory_search` only for past-session recall not in the current conversation or summary.
             8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
             9. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
             10. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.
             11. A denied or failed tool call does not block a different valid tool on the next user message.
-            12. If you encounter a request you cannot fulfill (e.g. scheduling), use `delegate_to_agent` to handoff to the appropriate specialist or 'coordinator'.
+            12. If you encounter a request you cannot fulfill, use `delegate_to_agent` (set agent to persona name) to handoff.
             """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
