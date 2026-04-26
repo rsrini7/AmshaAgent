@@ -179,6 +179,12 @@ public class AgentLoop {
                         AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context);
                         if (resumeResult != null) {
                             return resumeResult;
+                        } else if (context != null && context.isResumeSignal() && hasApprovedToolPending(sessionId, canonicalRole)) {
+                            // §Bug-2 Fix: If we are resuming and there's already an approved tool, 
+                            // DO NOT call nextStep/fastPath again. Procedural resumption is 
+                            // handled by stateMachineRunner or already handled by checkpointResumeHandler.
+                            // However, we need to ensure the state machine starts at the correct point.
+                            return stateMachineRunner.run(finalCtx, engine, finalHistory);
                         } else {
                             return tryDelegateFinishFastPath(sessionId, finalHistory)
                                     .orElseGet(() -> stateMachineRunner.run(
@@ -373,6 +379,13 @@ public class AgentLoop {
             log.warnf("Failed to stamp channel info for session %s — Cause: %s",
                       sessionId, AgentErrorMessageUtil.safeMessage(e));
         }
+    }
+
+    private boolean hasApprovedToolPending(String sessionId, String role) {
+        return agentStore.load(sessionId, role)
+                .map(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL 
+                        || cp.getStatus() == CheckpointStatus.RESUMING)
+                .orElse(false);
     }
 
     @ActivateRequestContext

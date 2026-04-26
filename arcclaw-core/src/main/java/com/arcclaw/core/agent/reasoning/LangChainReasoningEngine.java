@@ -73,30 +73,44 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
         String sessionId = context.sessionId();
 
-        // 🟢 FIX: Fast-path execution from history (§7.46)
+        // §7.46: Prune history to prevent unbounded growth across turns and retries.
+        // 10 steps is enough to capture prior code and recent context.
+        int MAX_CARRY_STEPS = 10;
+        List<ReasoningStep> cappedHistory = (history != null && history.size() > MAX_CARRY_STEPS)
+                ? history.subList(history.size() - MAX_CARRY_STEPS, history.size())
+                : history;
+
+        // 🟢 FIX 1: Fast-path execution from history (§7.46)
         // If the user asks to "execute" or "run" code that was just written in a prior turn,
         // bypass the LLM and issue the sandbox_exec tool call directly using the code
         // block found in history. This prevents model-side truncation errors.
+        // Scoped by language (§Bug-1 fix) to allow Go execution after successful Java run.
+        String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
         if (AgentRoleEnum.CODER.id().equals(agentRole)
                 && TextPatternUtils.goalRequestsExecution(goal)
-                && !historyAlreadyContainsSuccessful(history, ToolCapability.SANDBOX_EXEC.toolName())) {
+                && !historyAlreadyContainsSuccessfulForLanguage(cappedHistory, ToolCapability.SANDBOX_EXEC.toolName(), targetLanguage)) {
             
-            CodeBlock priorCode = extractLatestCodeBlock(history);
+            CodeBlock priorCode = extractLatestCodeBlock(cappedHistory);
             if (priorCode != null) {
-                log.infof("[LangChainReasoningEngine] Fast-path: Reusing prior %s code block for execution goal in session %s",
-                        priorCode.language(), sessionId);
-                
-                return ReasoningStep.fastPath(
-                        "Fast-path execution from history.",
-                        ToolCapability.SANDBOX_EXEC.toolName(),
-                        Map.of("code", priorCode.code(), "language", priorCode.language())
-                );
+                // If target language is specified, we must match it. If not, we take the latest.
+                boolean languageMatches = targetLanguage == null || targetLanguage.equalsIgnoreCase(priorCode.language());
+
+                if (languageMatches) {
+                    log.infof("[LangChainReasoningEngine] Fast-path: Reusing prior %s code block for execution goal in session %s",
+                            priorCode.language(), sessionId);
+                    
+                    return ReasoningStep.fastPath(
+                            "Fast-path execution from history.",
+                            ToolCapability.SANDBOX_EXEC.toolName(),
+                            Map.of("code", priorCode.code(), "language", priorCode.language())
+                    );
+                }
             }
         }
 
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
 
-        List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
+        List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, cappedHistory);
 
         // § Resilience: Extract the compacted summary from history to merge into the main SystemPrompt.
         // This ensures only ONE SystemMessage is sent (for adapter compatibility) and that
@@ -596,6 +610,19 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
     }
 
+    private boolean historyAlreadyContainsSuccessfulForLanguage(List<ReasoningStep> history, String toolName, String language) {
+        if (history == null) return false;
+        return history.stream().anyMatch(step -> {
+            if (!toolName.equals(step.action()) || !Boolean.TRUE.equals(step.success()) || step.observation() == null || step.observation().isBlank()) {
+                return false;
+            }
+            if (language == null) return true; // Generic check requested
+            
+            Object langParam = step.actionInput() != null ? step.actionInput().get("language") : null;
+            return language.equalsIgnoreCase(String.valueOf(langParam));
+        });
+    }
+
     private boolean historyAlreadyContains(List<ReasoningStep> history, String toolName) {
         if (history == null) return false;
         return history.stream().anyMatch(step ->
@@ -632,8 +659,17 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         Matcher matcher = FENCED_CODE_BLOCK_PATTERN.matcher(text);
         CodeBlock last = null;
         while (matcher.find()) {
-            String language = normalizeExecutionLanguage(matcher.group(1));
+            String rawSpecifier = matcher.group(1);
+            String language = normalizeExecutionLanguage(rawSpecifier);
             String code = matcher.group(2) != null ? matcher.group(2).trim() : "";
+            
+            // §7.46: Only infer language if the specifier was genuinely absent or blank.
+            // If a specifier was present but unrecognized (e.g. ```rust), we keep it null
+            // to avoid mis-detecting it as another language via content scanning.
+            if (language == null && (rawSpecifier == null || rawSpecifier.isBlank()) && !code.isBlank()) {
+                language = TextPatternUtils.inferLanguage(code);
+            }
+
             if (language != null && !code.isBlank()) {
                 last = new CodeBlock(language, code);
             }
@@ -651,15 +687,5 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             case "java", "python", "bash", "node", "go" -> language;
             default -> null;
         };
-    }
-
-    private boolean historyAlreadyContainsSuccessful(List<ReasoningStep> history, String toolName) {
-        if (history == null) return false;
-        return history.stream().anyMatch(step ->
-                toolName.equals(step.action())
-                        && Boolean.TRUE.equals(step.success())
-                        && step.observation() != null
-                        && !step.observation().isBlank()
-        );
     }
 }

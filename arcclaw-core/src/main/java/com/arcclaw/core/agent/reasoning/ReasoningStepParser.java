@@ -68,7 +68,7 @@ public class ReasoningStepParser {
                     String code = recoverCodeForDisplay(req.arguments());
                     if (code != null && !code.isBlank()) {
                         log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
-                        String language = inferLanguage(code);
+                        String language = TextPatternUtils.inferLanguage(code);
                         String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
                         return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, 
                                 Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
@@ -311,7 +311,7 @@ public class ReasoningStepParser {
         }
 
         if (language == null || language.isBlank()) {
-            language = inferLanguage(code);
+            language = TextPatternUtils.inferLanguage(code);
         }
 
         if (code.isBlank() || language == null || language.isBlank()) return Map.of();
@@ -321,15 +321,6 @@ public class ReasoningStepParser {
     private String recoverCodeForDisplay(String argsJson) {
         Map<String, Object> recovered = recoverSandboxExecParams(argsJson);
         return (String) recovered.get("code");
-    }
-
-    private String inferLanguage(String code) {
-        if (code == null) return null;
-        if (code.contains("public class") || code.contains("import java")) return "java";
-        if (code.contains("def ") || code.contains("#!/usr/bin/env python")) return "python";
-        if (code.contains("func ") && code.contains("package ")) return "go";
-        if (code.contains("function ") || code.contains("const ")) return "node";
-        return null;
     }
 
     private boolean isSchedulingGoal(String rawGoal) {

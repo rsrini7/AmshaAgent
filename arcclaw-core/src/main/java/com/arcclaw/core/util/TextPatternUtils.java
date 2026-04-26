@@ -30,6 +30,35 @@ public final class TextPatternUtils {
     }
 
     /**
+     * Extracts a normalized language name if mentioned in the goal.
+     * Uses word boundaries to avoid false positives (e.g. "government" matching "go").
+     */
+    public static String goalMentionsLanguage(String goal) {
+        if (goal == null) return null;
+        String lower = " " + goal.toLowerCase().replaceAll("[^a-z0-9]", " ") + " ";
+        
+        if (lower.contains(" java ")) return "java";
+        if (lower.contains(" python ") || lower.contains(" py ")) return "python";
+        if (lower.contains(" go ") || lower.contains(" golang ") || lower.contains(" go lang ")) return "go";
+        if (lower.contains(" bash ") || lower.contains(" shell ")) return "bash";
+        if (lower.contains(" node ") || lower.contains(" javascript ") || lower.contains(" js ")) return "node";
+        return null;
+    }
+
+    /**
+     * Infers the programming language from a code snippet if a specifier is missing.
+     */
+    public static String inferLanguage(String code) {
+        if (code == null) return null;
+        if (code.contains("public class") || code.contains("import java")) return "java";
+        if (code.contains("def ") || code.contains("#!/usr/bin/env python")) return "python";
+        if (code.contains("func ") && code.contains("package ")) return "go";
+        if (code.contains("function ") || code.contains("const ") || code.contains("let ")) return "node";
+        if (code.contains("#!/bin/bash") || code.contains("#!/bin/sh")) return "bash";
+        return null;
+    }
+
+    /**
      * Returns true if the text appears to be a raw JSON object or array.
      * Includes a line-count guard to avoid false positives on multi-line prose
      * that happens to end with a closing brace.
