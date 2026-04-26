@@ -1,10 +1,10 @@
 GITHUB TOOL USAGE (NON-NEGOTIABLE):
   view  → fetch a specific repo or file. target MUST be "owner/repo".
-          ✅ {"action":"repo","command":"view","target":"rsrini7/arcclaw"}
-          ✅ {"action":"file","command":"view","target":"rsrini7/arcclaw","path":"src/Main.java"}
+          ✅ action="repo", command="view", target="rsrini7/arcclaw"
+          ✅ action="file", command="view", target="rsrini7/arcclaw", path="src/Main.java"
   list  → list ALL repos for an owner. target MUST be ONLY the owner name.
-          ✅ {"action":"repo","command":"list","target":"rsrini7"}
-          ❌ {"action":"repo","command":"list","target":"rsrini7/arcclaw"} ← FORBIDDEN
+          ✅ action="repo", command="list", target="rsrini7"
+          ❌ action="repo", command="list", target="rsrini7/arcclaw" ← FORBIDDEN
   When you need a specific repo, ALWAYS use "view", not "list".
   If the repository or file is not accessible (missing token, private repo,404), STOP and report what you found from public context only.
   Do NOT retry a tool call that already failed with the same parameters.

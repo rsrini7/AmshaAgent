@@ -315,7 +315,17 @@ public class FinishActionHandler {
         if (llmSchemaErrorCount >= 1
                 && !cleanThought.isBlank()
                 && cleanThought.length() > SALVAGE_MIN_LENGTH
-                && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {      
+                && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {
+            
+            if (looksLikeJson(cleanThought)) {
+                log.warnf("FINISH-HANDLER salvaged thought is still JSON — not usable, failing turn for session %s", sessionId);
+                AgentResult failed = AgentResult.failed(
+                        "I encountered a formatting error (JSON echo) and could not complete your request.",
+                        AgentResult.FailureCategory.SCHEMA_ERROR,
+                        List.copyOf(history));
+                return new FinishOutcome.SalvageFailed(failed);
+            }
+
             log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s — clean thought is usable",   
                     llmSchemaErrorCount, sessionId);
             return new FinishOutcome.Completed(
@@ -348,6 +358,16 @@ public class FinishActionHandler {
         if (!salvaged.isBlank()
                 && salvaged.length() > SALVAGE_MIN_LENGTH
                 && !salvaged.contains(SALVAGE_REJECT_PHRASE)) {
+
+            if (looksLikeJson(salvaged)) {
+                log.errorf("STATE-MACHINE session %s exceeded schema limit. Salvaged thought is still JSON — failing turn.", sessionId);
+                AgentResult failed = AgentResult.failed(
+                        "I encountered a formatting error (JSON echo) and could not complete your request.",
+                        AgentResult.FailureCategory.SCHEMA_ERROR,
+                        List.copyOf(history));
+                return new FinishOutcome.SalvageFailed(failed);
+            }
+
             log.errorf("STATE-MACHINE session %s exceeded schema self-correction limit after raw tool call leak. "
                     + "Salvaging partially clean answer.", sessionId);
             AgentResult result = AgentResult.finished(salvaged, List.copyOf(history));
@@ -361,5 +381,18 @@ public class FinishActionHandler {
                 AgentResult.FailureCategory.SCHEMA_ERROR,
                 List.copyOf(history));
         return new FinishOutcome.SalvageFailed(failed);
+    }
+
+    private boolean looksLikeJson(String text) {
+        if (text == null) return false;
+        String trimmed = text.strip();
+        
+        // Only flag single-block JSON — multi-line prose ending with } is valid.
+        // 20 lines covers all realistic tool-call JSON echoes.
+        long lineCount = trimmed.lines().count();
+        if (lineCount > 20) return false;
+
+        return (trimmed.startsWith("{") && trimmed.endsWith("}"))
+                || (trimmed.startsWith("[") && trimmed.endsWith("]"));
     }
 }

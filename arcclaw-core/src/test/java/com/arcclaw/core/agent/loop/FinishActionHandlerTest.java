@@ -159,4 +159,24 @@ class FinishActionHandlerTest {
         String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
         assertTrue(hint.contains("STOP. You claimed 'Task scheduled successfully' but you did NOT call the schedule_task tool"));
     }
+
+    @Test
+    void testHandleRejectsJsonSalvage() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s1");
+        
+        // Mock a tool call leak that the model repeats
+        String leakedJson = "{\"tool\":\"github\",\"parameters\":{}}";
+        when(qualityGuard.isRawToolCallLeak(leakedJson)).thenReturn(true);
+        when(qualityGuard.stripRawToolJson(leakedJson)).thenReturn(leakedJson);
+        
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH, 
+                Map.of("answer", leakedJson), 0, 0);
+
+        // Turn 2: llmSchemaErrorCount = 1 (already leaked once)
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 1);
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed, 
+                "Should fail salvage if the 'clean' thought is still JSON");
+    }
 }

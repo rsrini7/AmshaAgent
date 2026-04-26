@@ -64,8 +64,8 @@ SCHEDULING RULES:
    a timezone, convert to UTC first, then write the converted UTC cron
    expression. Never pass timezone as a parameter.
 
-   WRONG: {"cronExpression":"16 1 * * *","runOnce":"true","timezone":"UTC","goal":"..."}
-   RIGHT: {"cronExpression":"16 1 * * *","runOnce":true,"goal":"..."}
+   WRONG: cronExpression="16 1 * * *", runOnce="true", timezone="UTC", goal="..."
+   RIGHT: cronExpression="16 1 * * *", runOnce=true, goal="..."
 
 2. ONE-SHOT vs RECURRING:
    - One-time tasks ("remind me once", "in X minutes", "tomorrow"):
@@ -146,7 +146,7 @@ SCHEDULING RULES:
    You MUST immediately use the FINISH action with that text as your answer.
    NEVER re-emit the list as a JSON object or array in your response.
    NEVER call another tool after a list result.
-   WRONG: Returning {"ID":"...","Cron":"...",...} as your answer text.
+   WRONG: Returning JSON like ID="...", Cron="...", etc. as your answer text.
    RIGHT: FINISH with the formatted plain-text list you received.
 
 9. BACKGROUND AUTONOMY LIMIT — during CRON: execution:
