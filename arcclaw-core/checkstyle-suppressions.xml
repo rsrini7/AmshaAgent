@@ -21,6 +21,8 @@
     <suppress checks="FileLength|MethodLength" files="ParallelToolStepExecutor\.java"/>
     <suppress checks="MethodLength" files="ToolInvocationGuard\.java"/>
     <suppress checks="FileLength" files="ToolStepHandler\.java"/>
+    <suppress checks="FileLength" files="FinishActionHandler\.java"/>
+        
 
     <!-- ═══════════════════════════════════════════════════════════
          agent/reasoning — scheduled for reasoning-layer refactor

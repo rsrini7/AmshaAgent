@@ -72,6 +72,7 @@ class AgentStateMachineRunnerTest {
     private InputSanitizer piiScanReflex;
     private AgentOtelContext agentOtelContext;
     private IntentClassificationService intentDetector;
+    private ObjectMapper objectMapper;
 
     @SuppressWarnings("unchecked")
     private Instance<DynamicToolLookup> dynamicToolLookup = mock(Instance.class);
@@ -108,8 +109,9 @@ class AgentStateMachineRunnerTest {
         qualityGuard          = mock(AnswerGuardStrategy.class);
         codePolicy            = mock(CodeGenerationPolicy.class);
         correctionStrategy    = mock(CorrectionStrategy.class);
+        objectMapper = mock(ObjectMapper.class);
 
-        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy);
+        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper);
 
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager(agentStore, agentSseService, new ObjectMapper());
 
