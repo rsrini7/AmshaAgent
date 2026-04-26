@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 
 /**
  * SPI for providing intent routing rules (fast-path triggers and system prompt directives)
- * without modifying the core IntentClassifierService.
+ * without modifying the core IntentDetectorService.
  */
 public interface IntentRoutingProvider {
     /**

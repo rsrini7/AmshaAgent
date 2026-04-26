@@ -27,7 +27,7 @@ quarkus:
       # Exclude LLM model factories that need provider-specific config
       - com.arcclaw.core.agent.reasoning.ChatModelProducer
       - com.arcclaw.core.agent.reasoning.LangChainReasoningEngine
-      - com.arcclaw.core.routing.IntentClassifierModelProducer
+      - com.arcclaw.core.routing.IntentDetectorModelProducer
       - com.arcclaw.core.routing.LlmModelFactory
 
   index-dependency:

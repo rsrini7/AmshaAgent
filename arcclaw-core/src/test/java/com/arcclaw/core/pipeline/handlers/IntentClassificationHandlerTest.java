@@ -1,6 +1,6 @@
 package com.arcclaw.core.pipeline.handlers;
 
-import static com.arcclaw.core.message.UserMessages.*;
+import static com.arcclaw.core.message.UserMessages.CLASSIFICATION_RATE_LIMITED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,40 +12,41 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.IntentClassifier;
-import com.arcclaw.core.agent.IntentClassificationService;
+import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
+
 import dev.langchain4j.exception.HttpException;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 class IntentClassificationHandlerTest {
 
     private IntentClassificationHandler handler;
-    private IntentClassifier classifier;
+    private IntentDetector classifier;
     private ChannelSender sender;
     private ChannelPluginRegistry registry;
     private AgentRoleCache roleCache;
-    private IntentClassificationService intentClassifier;
+    private com.arcclaw.core.agent.IntentClassificationService intentDetector;
 
     @BeforeEach
     void setUp() {
         handler = new IntentClassificationHandler();
-        classifier = mock(IntentClassifier.class);
+        classifier = mock(IntentDetector.class);
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
         roleCache = mock(AgentRoleCache.class);
-        intentClassifier = mock(IntentClassificationService.class);
+        intentDetector = mock(com.arcclaw.core.agent.IntentClassificationService.class);
 
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
@@ -54,7 +55,9 @@ class IntentClassificationHandlerTest {
         handler.classifier = classifier;
         handler.channelPluginRegistry = registry;
         handler.roleCache = roleCache;
-        handler.intentClassifier = intentClassifier;
+        handler.intentDetector = intentDetector;
+
+        when(intentDetector.isFollowUpHeuristic(anyString())).thenReturn(false);
 
         var destructiveFilter = mock(DestructiveVocabularyFilter.class);
         when(destructiveFilter.isDestructive(anyString())).thenReturn(false);

@@ -7,9 +7,9 @@ package com.arcclaw.channel.api;
  * Implementations use an LLM-backed classification model. On failure the
  * implementation must default to {@code "coordinator"} and never throw.
  *
- * @see com.arcclaw.app.channel.telegram.IntentClassifierService
+ * @see com.arcclaw.app.channel.telegram.IntentDetectorService
  */
-public interface IntentClassifier {
+public interface IntentDetector {
 
     /**
      * Classifies {@code userMessage} and returns a canonical agent role name

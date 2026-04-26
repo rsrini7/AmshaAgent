@@ -4,10 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
-import jakarta.transaction.Transactional.TxType;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.agent.sse.HitlEventType;
@@ -16,7 +13,9 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jboss.logging.Logger;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class CheckpointApprovalService {
@@ -28,14 +27,12 @@ public class CheckpointApprovalService {
     @Inject ObjectMapper objectMapper;
     @Inject AgentSseService agentSseService;
 
-    // ✅ NOT_SUPPORTED instead of @Transactional (REQUIRED)
+    // ✅ ArchitectureBoundaryTest: No @Transactional in .agent.loop package
     // doUpdateBatchToolDecision is @Transactional(REQUIRES_NEW) and manages
     // its own connection. An outer REQUIRED tx on Connection-1 holds a reserved
     // SQLite write lock (XA BEGIN IMMEDIATE) that blocks the inner COMMIT.
-    // NOT_SUPPORTED ensures no outer XA transaction is active during the write.
     // Reads (findLatestAwaitingApproval, isAllBatchToolsDecided) work fine
     // without an outer tx — SQLite auto-commits SELECT statements.
-    @Transactional(TxType.NOT_SUPPORTED)   // was @Transactional
     public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty())
@@ -50,7 +47,6 @@ public class CheckpointApprovalService {
         return allDecided ? cp : null;
     }
 
-    @Transactional(TxType.NOT_SUPPORTED)   // was @Transactional
     public AgentCheckpoint denyTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty())
@@ -65,7 +61,6 @@ public class CheckpointApprovalService {
         return allDecided ? cp : null;
     }
 
-    @Transactional(TxType.NOT_SUPPORTED)   // was @Transactional
     public AgentCheckpoint approveAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty())
@@ -80,7 +75,7 @@ public class CheckpointApprovalService {
         if (pendingTools != null) {
             for (String pending : pendingTools) {
                 if (pending != null) {
-                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, ToolDecision.APPROVED.name());
+                    agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, ToolDecision.APPROVED.name()); 
                     agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
                         sessionId, HitlEventType.APPROVED.wireValue(), pending, null, reason, Instant.now()));
                 }
@@ -90,7 +85,6 @@ public class CheckpointApprovalService {
         return cp;
     }
 
-    @Transactional(TxType.NOT_SUPPORTED)   // was @Transactional
     public AgentCheckpoint denyAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty())

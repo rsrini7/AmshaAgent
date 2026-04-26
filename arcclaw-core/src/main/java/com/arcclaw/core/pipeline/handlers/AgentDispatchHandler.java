@@ -1,6 +1,7 @@
 package com.arcclaw.core.pipeline.handlers;
 
 import java.util.List;
+import java.util.concurrent.Callable;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -100,21 +101,23 @@ public class AgentDispatchHandler implements MessageHandler {
 
         AgentResult result;
         try {
-            result = WorkspaceContext.run(
-                sessionId,
-                context.getUser().platformId(),
-                resolvedChatId,
-                finalLevel,
-                role,
-                context.getChannelType(),
-                () -> agentLoop.run(
+            String channel = context.getChannelType().name();
+            Callable<AgentResult> op = () -> agentLoop.run(
                     sessionId,
                     role,
                     goal,
                     reasoningEngine,
                     resolvedMaxIterations,
                     context
-                )
+                );
+            result = WorkspaceContext.<AgentResult>run(
+                sessionId,
+                context.getUser().platformId(),
+                resolvedChatId,
+                finalLevel,
+                role,
+                channel,
+                op
             );
         } catch (BudgetExceededException | BudgetWarningException e) {
             throw e;   // propagate typed — caller maps to 429

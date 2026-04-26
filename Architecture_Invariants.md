@@ -32,6 +32,7 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 ### 1.2 Core module
 - `arcclaw-core` owns agent runtime, workspace/session lifecycle, governance, persistence, skills, structured output, reflexes, audit, sandbox contracts, and generic pipeline behavior.
 - `arcclaw-core` MUST NOT depend on Telegram-specific behavior or any single channel assumption.
+- **P95 Storage Extraction:** `arcclaw-core` MUST NOT contain direct JPA `EntityManager` or JPQL queries. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`.
 
 ### 1.3 App module
 - `arcclaw-app` owns application wiring, REST resources, startup bootstrap, config producers, and current adapter registration.
@@ -169,7 +170,7 @@ warning is forever suppressed. The ordering is: check → log → CAS, never CAS
 - Do not compare external tool names against enum constant names.
 
 ### 4.3 Skill-first routing
-- `SkillAwareIntentClassifier` MUST check `SkillRegistry` before LLM fallback.
+- `SkillAwareIntentDetector` MUST check `SkillRegistry` before LLM fallback.
 - Do not invert that order.
 
 ### 4.4 Role naming
@@ -244,8 +245,9 @@ inline — use static final Pattern per §9.1.
 - Do not introduce ad hoc migration scripts for normal table changes unless the architecture policy is explicitly changed repository-wide.
 
 ### 5.3 Repository style
-- Core repositories use `EntityManager`.
-- Do not introduce Panache repository/entity patterns into cross-module persistence paths.
+- Core repositories MUST NOT use `EntityManager` directly (§1.2).
+- All database operations in `arcclaw-core` MUST flow through Port interfaces defined in `arcclaw-persistence-api`.
+- Implementations (Adapters) reside in specialized modules (e.g. `arcclaw-persistence-sqlite`).
 
 ### 5.4 ORM 7 transaction behavior
 - Be careful with `QuarkusTransaction.requiringNew().run(...)` lambda boundaries.
@@ -572,7 +574,7 @@ from the `FAILED` overwrite query. The exclusion set is:
 transaction has not fully flushed to disk before the `terminateSession` query runs
 (possible under concurrent load with Agroal pool pressure), the checkpoint may still
 appear as `IN_PROGRESS` in the EntityManager's first-level cache. Without the exclusion,
-it gets incorrectly overwritten to `FAILED`, corrupting the audit trail and
+it gets incorrectly overwritten to `FAILED`, corruption the audit trail and
 triggering spurious failure notifications.
 
 MUST NOT add new terminal statuses to `CheckpointStatus` without updating this query.
@@ -1044,7 +1046,7 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ### 16.5 Core Mocking in Tests
 - Tests that trigger bean-scanning of core handlers MUST satisfy their dependencies via `@ApplicationScoped` mocks in `src/test/java`:
-  - `IntentClassifier` (satisfies `IntentClassificationHandler`)
+  - `IntentDetector` (satisfies `IntentClassificationHandler`)
   - `AgentChatModelProvider` (satisfies `ChatModel` injections)
   - `ChatModel` with `@Identifier("compaction")` (satisfies `CompactionService`)
 
@@ -1132,9 +1134,9 @@ Run this checklist mentally before every major refactor touching persistence, ap
 ## 20. Routing and Classification Consolidation
 
 ### 20.1 Implementation Proximity
-- Interface implementations for core SPIs (e.g. IntentClassifier) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in arcclaw-core).
+- Interface implementations for core SPIs (e.g. IntentDetector) SHOULD reside in the same module as their primary injection points (e.g. IntentClassificationHandler in arcclaw-core).
 - **Rationale:** Placing the only implementation of a required core bean in a downstream module (like arcclaw-app) frequently triggers jakarta.enterprise.inject.UnsatisfiedResolutionException during the validation phase of the upstream module's build, especially in native-image compilation.
-- Consolidated IntentClassifierService, SkillAwareIntentClassifier, and their associated LlmModelFactory into arcclaw-core to ensure reliable CDI resolution and build stability.
+- Consolidated IntentDetectorModelProducer, SkillAwareIntentDetector, and their associated LlmModelFactory into arcclaw-core to ensure reliable CDI resolution and build stability.
 
 ### 20.2 LLM Provider Dependencies
 - When moving routing logic into arcclaw-core, all required LLM provider extensions (e.g. quarkus-langchain4j-anthropic) MUST also be added to arcclaw-core.
@@ -1173,7 +1175,7 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - Do NOT commit the `dist/` folder to version control.
 
 ### 21.7 Accessibility (a11y)
-- UI components MUST follow WAI-ARIA standards (labels, roles, current-page markers). 
+- UI components MUST FF WAI-ARIA standards (labels, roles, current-page markers). 
 - Interactive elements (buttons, inputs) MUST have descriptive `aria-label` attributes if they do not contain text.
 
 ### 21.8 Resource Lifecycle

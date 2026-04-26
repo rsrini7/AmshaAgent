@@ -96,7 +96,7 @@ public class SecretVaultImplTest {
             auditService.waitForIdle();
 
             // 2. Tamper: Direct DB access to flip a bit in ciphertext
-            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
             assertNotNull(entity);
 
             // Flip the last bit of the ciphertext
@@ -125,7 +125,7 @@ public class SecretVaultImplTest {
             auditService.waitForIdle();
 
             // 2. Steal ciphertext/nonce
-            EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+            EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
 
             // 3. Inject into GITHUB_TOKEN slot
             insertForgedSecret(TEST_SESSION_ID, targetKeyName, sorceEntity.ciphertext, sorceEntity.nonce);
@@ -162,7 +162,7 @@ public class SecretVaultImplTest {
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
             // 2. Assert versions
-            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME);
+            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
             assertNotNull(entity);
             assertEquals(1, entity.getEncryptionKeyVersion(), "Application key version must be 1");
             assertTrue(entity.getOrmVersion() >= 0, "ORM version must be managed by Hibernate (>= 0)");
@@ -222,7 +222,7 @@ public class SecretVaultImplTest {
         assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should finish");
         
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
-            assertNotNull(repository.findByKey(TEST_SESSION_ID, key));
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, key).orElse(null));
         });
     }
 
@@ -260,7 +260,7 @@ public class SecretVaultImplTest {
         });
         
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
-            assertNotNull(repository.findByKey(TEST_SESSION_ID, API_KEY_NAME));
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null));
         });
     }
 
@@ -289,7 +289,7 @@ public class SecretVaultImplTest {
         assertTrue(latch.await(15, TimeUnit.SECONDS), "All threads should finish without deadlock");
         
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
-            assertNotNull(repository.findByKey(TEST_SESSION_ID, key));
+            assertNotNull(repository.findByKey(TEST_SESSION_ID, key).orElse(null));
         });
     }
     @Test

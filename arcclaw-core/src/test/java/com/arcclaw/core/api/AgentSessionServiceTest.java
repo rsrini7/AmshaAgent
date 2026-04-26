@@ -18,7 +18,6 @@ import java.util.concurrent.ExecutorService;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.Response;
 
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
@@ -26,6 +25,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.reflex.ReflexRegistry;
@@ -39,9 +39,11 @@ import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -95,14 +97,27 @@ class AgentSessionServiceTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
-        service = new AgentSessionService(log, agentLoop, reasoningEngine, agentStore, workspaceManager,
-                heartbeatTracker, responseMapper, reflexRegistry, checkpointResumeHandler, checkpointApprovalService, auditService, vThreads, 5);
+        service = new AgentSessionService(
+                log,
+                agentLoop,
+                reasoningEngine,
+                agentStore,
+                workspaceManager,
+                heartbeatTracker,
+                responseMapper,
+                reflexRegistry,
+                checkpointResumeHandler,
+                checkpointApprovalService,
+                auditService,
+                vThreads,
+                5
+        );
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedContext = mockStatic(WorkspaceContext.class);
 
         // Default behavior: just execute the lambda
-        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(ChannelType.class), any(Callable.class)))
+        mockedContext.when(() -> WorkspaceContext.run(anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)))
                 .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
         
         mockedContext.when(WorkspaceContext::resolveUserId)
@@ -272,5 +287,22 @@ class AgentSessionServiceTest {
         Response response = service.terminateSession("sess1");
         assertEquals(204, response.getStatus());
         verify(workspaceManager).terminateSession("sess1");
+    }
+
+    @Test
+    void validateSession_crossKeyAccess_firesUnauthorizedAuditAndReturns401() {
+        when(heartbeatTracker.exists("sess-1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("sess-1")).thenReturn(Optional.of("key-A"));
+        
+        // WorkspaceContext.resolveUserId() returns "key-B"
+        mockedContext.when(WorkspaceContext::resolveUserId).thenReturn("key-B");
+        
+        Optional<Response> result = service.validateSession("sess-1");
+        
+        Assertions.assertTrue(result.isPresent());
+        assertEquals(401, result.get().getStatus());
+        verify(auditService).recordMandatory(
+            ArgumentMatchers.eq("sess-1"), ArgumentMatchers.eq("key-B"), any(),
+            ArgumentMatchers.eq(SecurityEventType.UNAUTHORIZED_ACCESS), any());
     }
 }

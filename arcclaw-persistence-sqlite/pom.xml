@@ -99,7 +99,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Channel API (IntentClassifier, ChannelServices interfaces) -->
+        <!-- Channel API (IntentDetector, ChannelServices interfaces) -->
         <dependency>
             <groupId>com.arcclaw</groupId>
             <artifactId>arcclaw-channel-api</artifactId>
@@ -137,6 +137,19 @@
     </dependencies>
     <build>
         <plugins>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>

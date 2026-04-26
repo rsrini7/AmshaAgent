@@ -40,7 +40,7 @@ There are four distinct entry points, all funneling into the same core pipeline:
 
 **`SessionResolutionHandler` (priority 20)** — looks up or creates a `SessionRegistry` entry keyed by `(channelType, channelId, userId)`. It activates the `WorkspaceContext` custom CDI scope for the session, making all `@WorkspaceScoped` beans like `CompactionSummaryCache` live for the duration.
 
-**`IntentClassificationHandler` (priority 30)** — first runs `ReflexRegistry.processIfReflex()` to check for slash commands (see Phase 4). If no reflex matches, it calls `SkillAwareIntentClassifier` to match the input against skill trigger patterns. If a skill matches, the session's role is overridden to the skill's persona. If nothing matches, the input falls through to the coordinator role.
+**`IntentClassificationHandler` (priority 30)** — first runs `ReflexRegistry.processIfReflex()` to check for slash commands (see Phase 4). If no reflex matches, it calls `SkillAwareIntentDetector` to match the input against skill trigger patterns. If a skill matches, the session's role is overridden to the skill's persona. If nothing matches, the input falls through to the coordinator role.
 
 **`CompactionHandler` (priority 60)** — if the session's token count or message count exceeds the configured compaction threshold, it calls `CompactionService.compact()`, which uses a separate, lighter LLM (`CompactionModelProducer` — default `llama-3.1-8b-instant` on Groq) to summarize the old conversation turns and write the summary to `CompactionSummaryEntity` in SQLite. `CompactionEventBridge` uses a `CountDownLatch` to prevent the subsequent agent loop from reading a stale null summary.
 
@@ -113,7 +113,7 @@ max-iterations: 5
 You are a meticulous code reviewer...
 ```
 
-`SkillDefinitionParser` splits on `---` delimiters to extract the YAML frontmatter and the prompt body. `CompiledSkillEntry` pre-compiles the trigger regex patterns for fast matching at message routing time. `SkillRegistry` merges both tiers (classpath priority 100, database priority 10) so database skills can override classpath skills by name. `SkillAwareIntentClassifier` also invokes the optional `IntentClassifier` LLM call for semantic routing when regex patterns are ambiguous. `SkillResource` (REST) provides CRUD on database skills with live reload.
+`SkillDefinitionParser` splits on `---` delimiters to extract the YAML frontmatter and the prompt body. `CompiledSkillEntry` pre-compiles the trigger regex patterns for fast matching at message routing time. `SkillRegistry` merges both tiers (classpath priority 100, database priority 10) so database skills can override classpath skills by name. `SkillAwareIntentDetector` also invokes the optional `IntentDetector` LLM call for semantic routing when regex patterns are ambiguous. `SkillResource` (REST) provides CRUD on database skills with live reload.
 
 ---
 
@@ -158,7 +158,7 @@ User input
   ↓  (WebSocket / Telegram / CLI / REST)
 AllowlistHandler → SessionResolutionHandler → IntentClassificationHandler
   ↓  (reflex? short-circuit reply)    ↓  (no reflex)
-  ←─────── reply ─────────────        SkillAwareIntentClassifier → role selection
+  ←─────── reply ─────────────        SkillAwareIntentDetector → role selection
                                         ↓
                                     CompactionHandler (if needed)
                                         ↓

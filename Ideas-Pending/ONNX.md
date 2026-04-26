@@ -210,7 +210,7 @@ public class LocalEmbeddingModel implements EmbeddingModel {  // LangChain4J int
 
 ```java
 @ApplicationScoped
-public class OnnxIntentClassifier {
+public class OnnxIntentDetector {
 
     private static final List<String> LABELS =
         List.of("coder", "coordinator", "researcher", "debugger", "architect");

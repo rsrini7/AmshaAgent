@@ -40,7 +40,7 @@ public class ComplianceAuditService {
                                 SecurityEventType type, String detail) {
         log.infof("[AUDIT-MANDATORY] type=%s session=%s", type, sessionId);
         AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
-        PersistenceEvent pe = PersistenceEvent.critical(sessionId, type, em -> {
+        PersistenceEvent pe = PersistenceEvent.critical(sessionId, type, ctx -> {
             auditEventRepository.record(event);
         });
         // Blocks — throws ComplianceViolationException if write fails

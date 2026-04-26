@@ -64,7 +64,7 @@ class AgentStateMachineRunnerTest {
     private SkillRegistry skillRegistry;
     private PiiScanReflex piiScanReflex;
     private AgentOtelContext agentOtelContext;
-    private IntentClassificationService intentClassifier;
+    private IntentClassificationService intentDetector;
 
 
     @SuppressWarnings("unchecked")
@@ -101,7 +101,7 @@ class AgentStateMachineRunnerTest {
         skillRegistry    = mock(SkillRegistry.class);
         piiScanReflex    = mock(PiiScanReflex.class);
         agentOtelContext = mock(AgentOtelContext.class);
-        intentClassifier = mock(IntentClassificationService.class);
+        intentDetector = mock(IntentClassificationService.class);
 
         // Core extraction collaborators
         qualityGuard          = mock(AnswerGuardStrategy.class);
@@ -150,7 +150,7 @@ class AgentStateMachineRunnerTest {
         runner.skillRegistry    = skillRegistry;
         runner.piiScanReflex    = piiScanReflex;
         runner.agentOtelContext = agentOtelContext;
-        runner.intentClassifier = intentClassifier;
+        runner.intentDetector = intentDetector;
         runner.loopExitPublisher = loopExitPublisher;
         runner.finishActionHandler = finishActionHandler;
         runner.qualityGuard = qualityGuard;

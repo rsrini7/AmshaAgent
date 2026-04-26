@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.quarkus.arc.Unremovable;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
@@ -24,6 +25,7 @@ import org.jboss.logging.Logger;
  * backend adapter to participate in an architecture that's irrelevant to them.
  */
 @ApplicationScoped
+@Unremovable
 public class SqliteRetryTemplate {
 
     private static final Logger log = Logger.getLogger(SqliteRetryTemplate.class);

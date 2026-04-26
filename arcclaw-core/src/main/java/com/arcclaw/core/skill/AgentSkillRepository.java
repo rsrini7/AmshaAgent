@@ -1,55 +1,74 @@
 package com.arcclaw.core.skill;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.persistence.api.SkillDto;
+import com.arcclaw.persistence.api.SkillStorePort;
+import io.quarkus.arc.Unremovable;
+
 /**
- * Repository for {@link AgentSkillEntity} interacting with the underlying SQLite database.
- * Uses direct EntityManager injection for cross-module compatibility.
+ * Repository for {@link AgentSkillEntity} refactored to delegate to {@link SkillStorePort}.
+ * §1.2: Zero EntityManager imports, zero JPQL.
  */
 @ApplicationScoped
+@Unremovable
 public class AgentSkillRepository {
 
     @Inject
-    EntityManager em;
+    SkillStorePort skillStore;
 
     @Transactional
     public void saveOrUpdate(AgentSkillEntity entity) {
-        em.merge(entity);
+        skillStore.save(toDto(entity));
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<AgentSkillEntity> findAllSkills() {
-        return em.createQuery("SELECT s FROM AgentSkillEntity s", AgentSkillEntity.class).getResultList();
+        return skillStore.findAll().stream()
+                .map(this::toEntity)
+                .collect(Collectors.toList());
     }
 
     @Transactional
     public boolean deleteSkillById(String id) {
-        AgentSkillEntity entity = em.find(AgentSkillEntity.class, id);
-        if (entity != null) {
-            em.remove(entity);
-            return true;
-        }
-        return false;
+        return skillStore.deleteById(id);
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentSkillEntity> findByName(String name) {
-        return em.createQuery("SELECT s FROM AgentSkillEntity s WHERE s.name = :name", AgentSkillEntity.class)
-                .setParameter("name", name)
-                .getResultStream()
-                .filter(Objects::nonNull)
-                .findFirst();
+        return skillStore.findByName(name).map(this::toEntity);
     }
 
     @Transactional
     public long deleteAll() {
-        return em.createQuery("DELETE FROM AgentSkillEntity").executeUpdate();
+        return skillStore.deleteAll();
+    }
+
+    private AgentSkillEntity toEntity(SkillDto dto) {
+        if (dto == null) return null;
+        return new AgentSkillEntity(
+            dto.id(),
+            dto.name(),
+            dto.definitionYaml(),
+            dto.createdAt(),
+            dto.updatedAt()
+        );
+    }
+
+    private SkillDto toDto(AgentSkillEntity entity) {
+        if (entity == null) return null;
+        return new SkillDto(
+            entity.getId(),
+            entity.getName(),
+            entity.getDefinitionYaml(),
+            entity.getCreatedAt(),
+            entity.getUpdatedAt()
+        );
     }
 }

@@ -21,6 +21,9 @@ import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import dev.langchain4j.data.message.AiMessage;
@@ -28,6 +31,7 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -39,6 +43,7 @@ class LangChainReasoningEnginePersonaTest {
     private SystemPromptBuilder mockPromptBuilder;
     private ChatHistoryAssembler mockHistoryAssembler;
     private ReasoningStepParser mockStepParser;
+    private IntentClassificationService mockIntentDetector;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -51,14 +56,19 @@ class LangChainReasoningEnginePersonaTest {
         mockPromptBuilder = mock(SystemPromptBuilder.class);
         mockHistoryAssembler = mock(ChatHistoryAssembler.class);
         mockStepParser = mock(ReasoningStepParser.class);
+        mockIntentDetector = mock(IntentClassificationService.class);
+        GovernanceStrategy mockGovernanceLayer = mock(GovernanceStrategy.class);
+        RateLimitTracker mockRateLimitTracker = mock(RateLimitTracker.class);
+        AgentOtelContext mockOtelContext = mock(AgentOtelContext.class);
+        MeterRegistry mockMeterRegistry = mock(MeterRegistry.class);
 
         // 2. Set up basic mock behavior to avoid NPEs
         when(mockRoleRegistry.permittedTools(any())).thenReturn(Set.of());
         when(mockToolRegistry.listTools()).thenReturn(Collections.emptyList());
         when(mockHistoryAssembler.assemble(any(), any(), any())).thenReturn(Collections.emptyList());
+        when(mockIntentDetector.isWriteIntent(anyString())).thenReturn(false);
 
         ChatResponse mockResponse = mock(ChatResponse.class);
-        // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
         when(mockResponse.aiMessage()).thenReturn(AiMessage.aiMessage("mock response"));
         when(mockLlmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
 
@@ -72,6 +82,11 @@ class LangChainReasoningEnginePersonaTest {
         injectField(engine, "promptBuilder", mockPromptBuilder);
         injectField(engine, "historyAssembler", mockHistoryAssembler);
         injectField(engine, "stepParser", mockStepParser);
+        injectField(engine, "intentDetector", mockIntentDetector);
+        injectField(engine, "governanceLayer", mockGovernanceLayer);
+        injectField(engine, "rateLimitTracker", mockRateLimitTracker);
+        injectField(engine, "otelContext", mockOtelContext);
+        injectField(engine, "meterRegistry", mockMeterRegistry);
     }
 
     private void injectField(Object target, String fieldName, Object value) throws Exception {

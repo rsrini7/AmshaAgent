@@ -7,7 +7,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
-import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -29,11 +29,11 @@ public class IntentClassificationHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(IntentClassificationHandler.class);
     
 
-    @Inject IntentClassifier classifier;
+    @Inject IntentDetector classifier;
     @Inject DestructiveVocabularyFilter destructiveVocabularyFilter;
     @Inject ChannelPluginRegistry channelPluginRegistry;
     @Inject AgentRoleCache roleCache;
-    @Inject IntentClassificationService intentClassifier;
+    @Inject IntentClassificationService intentDetector;
 
     @Override
     public int priority() {
@@ -72,7 +72,7 @@ public class IntentClassificationHandler implements MessageHandler {
             String previousRole = roleCache.findLatestRole(sid).orElse(null);
 
             // Bug 2 Fix: Short follow-up heuristics for sticky roles
-            boolean isFollowUpHeuristic = intentClassifier.isFollowUpHeuristic(message.text());
+            boolean isFollowUpHeuristic = intentDetector.isFollowUpHeuristic(message.text());
 
             if (isFollowUpHeuristic && previousRole != null && 
                (AgentRoleEnum.CODER.toScopedName().equals(previousRole) || 
@@ -96,7 +96,7 @@ public class IntentClassificationHandler implements MessageHandler {
             // §78-fix-3: null guard — openrouter/auto occasionally returns null
             // causing NPE in downstream .trim() calls
             if (role == null || role.isBlank()) {
-                log.warnf("IntentClassifier returned null/blank for chat %s — defaulting to coordinator",
+                log.warnf("IntentDetector returned null/blank for chat %s — defaulting to coordinator",
                     context.getChatId());
                 context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
                 return HandleResult.CONTINUE;

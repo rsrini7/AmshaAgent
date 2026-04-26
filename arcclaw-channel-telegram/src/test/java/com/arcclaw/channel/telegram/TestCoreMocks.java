@@ -1,19 +1,20 @@
 package com.arcclaw.channel.telegram;
 
-import jakarta.annotation.Priority;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Alternative;
-import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Named;
+import org.mockito.Mockito;
 
-import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.channel.api.IntentDetector;
+
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.qute.Template;
 import io.smallrye.common.annotation.Identifier;
-import org.mockito.Mockito;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Named;
 
 /**
  * Centralised mock producers for all @QuarkusTest tests in
@@ -36,8 +37,8 @@ public class TestCoreMocks {
     @Alternative
     @Priority(1000)
     @ApplicationScoped
-    public IntentClassifier intentClassifier() {
-        return Mockito.mock(IntentClassifier.class);
+    public IntentDetector IntentDetector() {
+        return Mockito.mock(IntentDetector.class);
     }
 
     @Produces

@@ -196,7 +196,7 @@ Your Claude instance caught a **genuine and critical discrepancy**. It is 100% c
 
 Reading `Architecture_Invariants.md` directly, §20.1 and §20.2 say the **opposite** of what P97's T1-2 plan assumed: 
 
-> **§20.1:** *"Interface implementations for core SPIs SHOULD reside in the same module as their primary injection points... Consolidated IntentClassifierService, SkillAwareIntentClassifier, and their associated **LlmModelFactory into arcclaw-core**"*
+> **§20.1:** *"Interface implementations for core SPIs SHOULD reside in the same module as their primary injection points... Consolidated IntentDetectorService, SkillAwareIntentDetector, and their associated **LlmModelFactory into arcclaw-core**"*
 
 > **§20.2:** *"When moving routing logic into arcclaw-core, **all required LLM provider extensions MUST also be added to arcclaw-core**"*
 
@@ -877,7 +877,7 @@ noClasses().that().resideInPackage("com.arcclaw.core..")
     .check(importedClasses);
 ```
 
-Also, per §20.1, the `SkillAwareIntentClassifier` / `IntentClassificationService` implementations must stay in `arcclaw-core`, not downstream — add a rule verifying `IntentClassifier` implementations reside in `com.arcclaw.core.agent..` not in `com.arcclaw.app..`.
+Also, per §20.1, the `SkillAwareIntentDetector` / `IntentClassificationService` implementations must stay in `arcclaw-core`, not downstream — add a rule verifying `IntentDetector` implementations reside in `com.arcclaw.core.agent..` not in `com.arcclaw.app..`.
 
 ***
 
@@ -985,7 +985,7 @@ Write ArchUnit tests covering ALL of the following:
    (§5.14.1 — no SqliteRetryTemplate in core)
 3. Channel modules do NOT import com.arcclaw.core.* directly (§1.4 SPI)
 4. com.arcclaw.core does NOT import com.arcclaw.app (§16.1)
-5. IntentClassifier implementations reside in com.arcclaw.core.agent..*
+5. IntentDetector implementations reside in com.arcclaw.core.agent..*
    NOT in com.arcclaw.app..* (§20.1)
 6. No class in com.arcclaw.core.agent.loop..* is annotated with
    @Transactional(REQUIRED) or plain @Transactional (§5.9 transaction-free
@@ -1113,7 +1113,7 @@ Implemented Micrometer metrics across critical failure paths to enable proactive
 Established a robust ArchUnit test suite to prevent dependency drift and enforce architectural invariants:
 - **Module Isolation**: Verified that `core` does not depend on `channel` or `persistence.sqlite` implementations.
 - **Transaction Safety**: Enforced that the transaction-free zone (`com.arcclaw.core.agent.loop`) contains no `@Transactional` annotations, preventing deadlock risks in long-running agent loops.
-- **Component Localization**: Verified that all `IntentClassifier` implementations reside strictly within the `core.agent` package.
+- **Component Localization**: Verified that all `IntentDetector` implementations reside strictly within the `core.agent` package.
 
 ### 3. Orchestration Strategy Extraction (T2-4)
 Decoupled the agent loop logic by extracting interfaces for core guard and correction behaviors:
@@ -1366,3 +1366,6 @@ This resolves relative to the **project base directory** on a local Maven run bu
 ```xml
 <suppressionsLocation>${project.basedir}/checkstyle-suppressions.xml</suppressionsLocation>
 ```
+
+---
+

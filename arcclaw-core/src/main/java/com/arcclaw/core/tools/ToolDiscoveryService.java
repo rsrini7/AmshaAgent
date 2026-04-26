@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.Capability;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
 /**
@@ -21,6 +22,7 @@ import org.jboss.logging.Logger;
  * capability registration.
  */
 @ApplicationScoped
+@Unremovable
 public class ToolDiscoveryService {
 
     private static final Logger log = Logger.getLogger(ToolDiscoveryService.class);

@@ -159,7 +159,7 @@ public final class WorkspaceScopeHolder {
 
         return () -> {
             if (channelType != null) {
-                WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, ChannelType.fromString(channelType).orElseThrow(), runnable);
+                WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, runnable);
             } else if (autonomy != null && agentRole != null) {
                 WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, runnable);
             } else {
@@ -189,7 +189,15 @@ public final class WorkspaceScopeHolder {
 
         return () -> {
             if (channelType != null) {
-                return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, ChannelType.fromString(channelType).orElseThrow(), callable);
+                // M1 Fix: Validate channel type before running, but don't throw to avoid crashing ongoing sessions
+                // Instead, default to TELEGRAM and log a warning if unrecognized
+                String validatedChannel = ChannelType.fromString(channelType)
+                        .map(ChannelType::name)
+                        .orElseGet(() -> {
+                            Logger.getLogger(WorkspaceScopeHolder.class).warnf("Unrecognized channel type '%s' requested for session %s, defaulting to TELEGRAM", channelType, sessionId);
+                            return ChannelType.TELEGRAM.name();
+                        });
+                return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, validatedChannel, callable);
             } else if (autonomy != null && agentRole != null) {
                 return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, callable);
             } else {

@@ -7,7 +7,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.security.AutonomyLevel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +38,7 @@ public class ContextAwareExecutorScopedValuePropagationTest {
         String cid = "c1";
         AutonomyLevel auto = AutonomyLevel.FULL;
         String role = "coordinator";
-        ChannelType channel = ChannelType.TELEGRAM;
+        String channel = "TELEGRAM";
 
         Callable<Boolean> task = () -> {
             // Assert all 6 are non-null and match the caller's values.
@@ -48,7 +47,7 @@ public class ContextAwareExecutorScopedValuePropagationTest {
             assertEquals(cid, WorkspaceContext.requireChatId());
             assertEquals(auto, WorkspaceContext.requireAutonomyOrSupervised());
             assertEquals(role, WorkspaceContext.requireAgentRole());
-            assertEquals(channel.name(), WorkspaceContext.channelType().orElse(""));
+            assertEquals(channel, WorkspaceContext.channelType().orElse(""));
             return true;
         };
 

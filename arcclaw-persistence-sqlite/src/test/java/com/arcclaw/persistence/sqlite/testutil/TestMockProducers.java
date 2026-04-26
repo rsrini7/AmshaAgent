@@ -32,6 +32,12 @@ import io.smallrye.common.annotation.Identifier;
 public class TestMockProducers {
 
     @Produces
+    @ApplicationScoped
+    public ChatModel defaultChatModel() {
+        return mock(ChatModel.class);
+    }
+
+    @Produces
     @Identifier("compaction")
     @ApplicationScoped
     public ChatModel compactionModel() {
@@ -43,7 +49,7 @@ public class TestMockProducers {
     @Produces
     @Identifier("intent-classifier")
     @ApplicationScoped
-    public ChatModel intentClassifierModel() {
+    public ChatModel intentDetectorModel() {
         ChatModel m = mock(ChatModel.class);
         when(m.chat(anyString())).thenReturn("mock-intent-result");
         return m;

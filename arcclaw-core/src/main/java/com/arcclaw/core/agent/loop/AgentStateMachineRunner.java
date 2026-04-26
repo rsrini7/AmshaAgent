@@ -89,7 +89,7 @@ public class AgentStateMachineRunner {
     @Inject PiiRedactionTransformer piiTransformer;
     @Inject AgentOtelContext agentOtelContext;
     @Inject CliResultBridge cliResultBridge;
-    @Inject IntentClassificationService intentClassifier;
+    @Inject IntentClassificationService intentDetector;
     @Inject LoopExitPublisher loopExitPublisher;
 
     // Phase 3 extracted collaborators — switched to interfaces for T2-4
@@ -151,7 +151,7 @@ public class AgentStateMachineRunner {
                 log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
 
                 // --- Write-intent hint injection (iteration 1 only) ---
-                if (iteration == 1 && intentClassifier.isWriteIntent(context.goal())) {
+                if (iteration == 1 && intentDetector.isWriteIntent(context.goal())) {
                     transientError = "The user wants to store data. Call ingest_document immediately. "
                             + "Pass REDACTED-* placeholders as-is. No explanation needed.";
                 }

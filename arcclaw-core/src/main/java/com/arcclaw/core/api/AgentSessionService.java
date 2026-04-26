@@ -5,12 +5,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.ws.rs.container.AsyncResponse;
-import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -18,7 +17,6 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CheckpointApprovalService;
-import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -29,7 +27,6 @@ import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
-import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -42,12 +39,13 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
-import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.core.util.MdcManaged;
+
 import io.quarkus.virtual.threads.VirtualThreads;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.core.Response;
 
 @ApplicationScoped
 @MdcManaged
@@ -67,11 +65,6 @@ public class AgentSessionService {
     private final ExecutorService vThreads;
     private final int maxResumeIterations;
 
-    /**
-     * Non-slash reflex prefixes that must bypass the agent loop and route
-     * directly to the reflex pipeline. Add new prefixes here as reflexes
-     * are introduced — keeps the routing logic in one place.
-     */
     private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of(
             "deletecron"
     );
@@ -132,7 +125,6 @@ public class AgentSessionService {
         log.infof("Creating new session: %s (autonomy=%s)", sessionId, level);
         heartbeatTracker.recordHeartbeat(sessionId, level);
 
-        // Bind the requesting API key identity as owner — used for per-key isolation
         String requestingKey = WorkspaceContext.resolveUserId();
         if (requestingKey != null && !requestingKey.isBlank()) {
             heartbeatTracker.tryBindOwner(sessionId, requestingKey);
@@ -142,32 +134,22 @@ public class AgentSessionService {
 
     public Map<String, Instant> listSessions() {
         String requestingKey = WorkspaceContext.resolveUserId();
-
         if (requestingKey == null || requestingKey.isBlank()) {
-            return Map.of(); // Anonymous/System can't list active sessions via REST
+            return Map.of();
         }
-
         return heartbeatTracker.activeSessionsByOwner(requestingKey);
     }
 
     public Response runSync(String sessionId, RunAgentRequest request) {
-        log.infof("Running agent sync for session:  %s, role:  %s, goal:  %s", sessionId, request.agentRole(),
-                request.goal());
-
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) return sessionError.get();
 
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) return roleError.get();
 
-        // Fork-bomb guard: CRON: prefix is reserved for AgentCronScheduler internally.
-        // Legitimate cron sessions have sessionId starting with "cron-", not a REST UUID.
         if (request.goal() != null && request.goal().startsWith("CRON:")) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of(
-                        "error", "Goals prefixed with 'CRON:' are reserved for the internal scheduler.",
-                        "code",  "FORK_BOMB_REJECTED"
-                    ))
+                    .entity(Map.of("error", "Reserved goal prefix", "code", "FORK_BOMB_REJECTED"))
                     .build();
         }
 
@@ -175,14 +157,10 @@ public class AgentSessionService {
         if (commandResponse.isPresent()) return commandResponse.get();
 
         String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+        int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-        try {
-            agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
-                if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                    throw new AwaitingApprovalException(sessionId);
-                }
-            });
-        } catch (AwaitingApprovalException e) {
+        Optional<AgentCheckpoint> cpOpt = agentStore.load(sessionId, canonicalRole);
+        if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
             return Response.status(Response.Status.CONFLICT)
                     .entity(Map.of(
                         "error",  "Session is awaiting human approval",
@@ -192,202 +170,97 @@ public class AgentSessionService {
                     .build();
         }
 
-        int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
-
         try {
-            return WorkspaceScopeHolder.call(sessionId, () -> {
+            Callable<Response> op = () -> {
                 AutonomyLevel level = getOrDefaultAutonomy(sessionId);
-
-                return WorkspaceContext.run(
-                        sessionId, REST_USER_ID, sessionId, level, canonicalRole, ChannelType.REST_API, () -> {
-                            MessageContext context = createRestContext(sessionId, request.goal());
-                            context.setAutonomyLevel(level);
-                            AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                            return responseMapper.mapResult(result, false);
-                        }
-                );
-            });
+                String channel = ChannelType.REST_API.name();
+                
+                return WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, level, canonicalRole, channel, () -> {
+                    MessageContext context = createRestContext(sessionId, request.goal());
+                    context.setAutonomyLevel(level);
+                    AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
+                    return responseMapper.mapResult(result, false);
+                });
+            };
+            return WorkspaceScopeHolder.call(sessionId, op);
         } catch (BudgetExceededException e) {
             return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
-        } catch (BudgetWarningException e) {
-            return Response.ok().entity(Map.of("warning", e.getMessage())).build();
         } catch (Exception e) {
-            log.errorf("Sync agent run threw exception for session %s: %s", sessionId, e.getMessage());
-            log.debug("Full sync agent failure stack trace:", e);
-            return Response.serverError()
-                    .entity(e.getMessage() != null ? e.getMessage() : "Unknown technical fault")
-                    .build();
+            log.errorf("Sync agent run failed: %s", e.getMessage());
+            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
 
     public void runAsync(String sessionId, RunAgentRequest request, AsyncResponse response) {
-        log.infof("Submitting async agent run to VirtualThreads executor, session %s", sessionId);
-
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) { response.resume(sessionError.get()); return; }
 
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) { response.resume(roleError.get()); return; }
 
-        // Fork-bomb guard: CRON prefix is reserved for AgentCronScheduler internally.
-        if (request.goal() != null && request.goal().startsWith("CRON")) {
-            response.resume(Response.status(Response.Status.BAD_REQUEST)
-                .entity(Map.of(
-                    "error", "Goals prefixed with CRON are reserved for the internal scheduler.",
-                    "code", "FORK_BOMB_REJECTED"))
-                .build());
-            return;
-        }
-
-        var commandResponse = handleSlashCommand(sessionId, request);
-        if (commandResponse.isPresent()) { response.resume(commandResponse.get()); return; }
-
-        int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
-
         vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
-                boolean isApproval = "approve".equalsIgnoreCase(request.goal());
-                boolean isDeny     = "deny".equalsIgnoreCase(request.goal());
-
-                // ── FIX F16: deny path — route through CheckpointApprovalService ──────
-                if (isDeny) {
-                    try {
-                        // denyAll() is @Transactional(NOTSUPPORTED): writes each tool
-                        // decision to DENIED via updateBatchToolDecision (REQUIRES_NEW),
-                        // fires HitlEvent(DENIED) per tool via SSE, returns the checkpoint.
-                        // triggerResume() must be called OUTSIDE any tx (after denyAll commits)
-                        // so that resumeAfterBatchDecision's own REQUIRES_NEW writes don't
-                        // contend with a lingering outer connection (invariant 5.14).
-                        AgentCheckpoint cp = checkpointApprovalService.denyAll(
-                            sessionId, "Human denied via REST");
-                        // Fires resumeAfterBatchDecision → agentLoop.run → result delivered
-                        // via SSE/channel. HTTP caller gets an acknowledgement only.
-                        checkpointApprovalService.triggerResume(cp);
-                        response.resume(Response.ok(
-                            Map.of("status", ToolDecision.DENIED.name(),
-                                "message", "Tool execution denied. Result will be delivered via session channel."))
-                            .build());
-                    } catch (CheckpointResolutionException e) {
-                        response.resume(Response.status(Response.Status.CONFLICT)
-                            .entity(Map.of("error", "No pending approval for this session",
-                                        "code", "NO_PENDING_APPROVAL"))
-                            .build());
-                    }
+                if ("approve".equalsIgnoreCase(request.goal())) {
+                    AgentCheckpoint cp = checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
+                    checkpointApprovalService.triggerResume(cp);
+                    response.resume(Response.accepted(Map.of("status", "APPROVED")).build());
+                    return;
+                }
+                if ("deny".equalsIgnoreCase(request.goal())) {
+                    AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
+                    checkpointApprovalService.triggerResume(cp);
+                    response.resume(Response.ok(Map.of("status", "DENIED")).build());
                     return;
                 }
 
-                // ── FIX F17: approve path — route through CheckpointApprovalService ───
-                if (isApproval) {
-                    try {
-                        // approveAll() is @Transactional(NOTSUPPORTED): writes each pending
-                        // tool decision to APPROVED via updateBatchToolDecision (REQUIRES_NEW).
-                        // This is the missing step that was causing resumeParallelBatch to
-                        // find all tools still PENDING and execute them all unconditionally,
-                        // ignoring any per-tool DENIED decisions already recorded via HitlService.
-                        AgentCheckpoint cp = checkpointApprovalService.approveAll(
-                            sessionId, "Human approved via REST");
-                        // triggerResume → resumeAfterBatchDecision → agentLoop.run.
-                        // The agent loop calls resumeParallelBatch which now reads the correct
-                        // APPROVED/DENIED decisions map from batchToolDecisions.
-                        checkpointApprovalService.triggerResume(cp);
-                        response.resume(Response.accepted(
-                            Map.of("status", ToolDecision.APPROVED.name(),
-                                "message", "Tool execution approved. Results will be delivered via session channel."))
-                            .build());
-                    } catch (CheckpointResolutionException e) {
-                        response.resume(Response.status(Response.Status.CONFLICT)
-                            .entity(Map.of("error", "No pending approval for this session",
-                                        "code", "NO_PENDING_APPROVAL"))
-                            .build());
-                    }
-                    return;
-                }
-
-                // ── Normal goal execution path (unchanged) ────────────────────────────
                 AutonomyLevel sessionLevel = getOrDefaultAutonomy(sessionId);
                 String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+                String channel = ChannelType.REST_API.name();
+                int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-                WorkspaceContext.run(sessionId, REST_USER_ID, sessionId, sessionLevel,
-                                    canonicalRole, ChannelType.REST_API, () -> {
+                WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, sessionLevel, canonicalRole, channel, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
                     context.setAutonomyLevel(sessionLevel);
-                    AgentResult result = agentLoop.run(
-                        sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                    response.resume(responseMapper.mapResult(result, true));
+                    AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
+                    Response res = responseMapper.mapResult(result, true);
+                    response.resume(res);
+                    return res;
                 });
-
-            } catch (BudgetExceededException e) {
-                response.resume(Response.status(429)
-                    .entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build());
-            } catch (BudgetWarningException e) {
-                response.resume(Response.ok()
-                    .entity(Map.of("warning", e.getMessage())).build());
             } catch (Exception e) {
-                log.errorf("Async agent run threw exception for session %s %s",
-                    sessionId, e.getMessage());
-                log.debug("Full async agent failure stack trace", e);
-                response.resume(Response.serverError()
-                    .entity(Map.of(
-                        "status", "ERROR",
-                        "message", e.getMessage() != null ? e.getMessage() : "Unknown technical fault"))
-                    .build());
+                log.errorf("Async agent run failed: %s", e.getMessage());
+                response.resume(Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build());
             }
         }));
     }
 
     public Response approve(String sessionId, String agentRole) {
-        log.infof("REST approve for session %s role %s", sessionId, agentRole);
-
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) return sessionError.get();
 
-        var roleError = validateRole(agentRole);
-        if (roleError.isPresent()) return roleError.get();
-
         try {
-            return WorkspaceScopeHolder.call(sessionId, () -> {
+            Callable<Response> op = () -> {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
                 var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return Response.status(Response.Status.CONFLICT)
-                            .entity(Map.of("error", "No pending approval for this session"))
-                            .build();
+                    return Response.status(Response.Status.CONFLICT).entity(Map.of("error", "No pending approval")).build();
                 }
 
-                MDC.put(MdcKeys.USER_ID, REST_USER_ID);
-
-                // ✅ FIX F17: write all batch decisions BEFORE agentLoop reads them
-                // Without this, resumeParallelBatch finds all tools still PENDING
-                // and executes them unconditionally, ignoring per-tool deny decisions.
                 checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
+                String channel = ChannelType.REST_API.name();
 
-                return WorkspaceContext.run(
-                    sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL,
-                    canonicalRole, ChannelType.REST_API, () -> {
-                        String resumeGoal = checkpointResumeHandler
-                            .resolveResumeGoal(sessionId, canonicalRole);
-                        int resumeIterations = checkpoint.get().getMaxIterations() != null
-                            ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations)
-                            : maxResumeIterations;
-                        MessageContext context = createRestContext(sessionId, resumeGoal);
-                        context.setResumeSignal(true);
-                        AgentResult result = agentLoop.run(
-                            sessionId, agentRole, resumeGoal,
-                            reasoningEngine, resumeIterations, context);
-                        return responseMapper.mapResult(result, false);
-                    });
-            });
-        } catch (CheckpointResolutionException e) {
-            return Response.status(Response.Status.CONFLICT)
-                .entity(Map.of("error", "No pending approval", "code", "NO_PENDING_APPROVAL")).build();
-        } catch (BudgetExceededException e) {
-            return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
-        } catch (BudgetWarningException e) {
-            return Response.ok().entity(Map.of("warning", e.getMessage())).build();
+                return WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                    String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
+                    int resumeIterations = checkpoint.get().getMaxIterations() != null ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations) : maxResumeIterations;
+                    MessageContext context = createRestContext(sessionId, resumeGoal);
+                    context.setResumeSignal(true);
+                    AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
+                    return responseMapper.mapResult(result, false);
+                });
+            };
+            return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            log.errorf("Failed to approve session %s: %s", sessionId, e.getMessage());
-            log.debug("Full approval failure stack trace:", e);
-            return Response.serverError().entity(e.getMessage()).build();
+            log.errorf("Approve failed: %s", e.getMessage());
+            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
 
@@ -395,28 +268,21 @@ public class AgentSessionService {
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) return sessionError.get();
 
-        var roleError = validateRole(agentRole);
-        if (roleError.isPresent()) return roleError.get();
-
         try {
-            return WorkspaceScopeHolder.call(sessionId, () -> {
+            Callable<Response> op = () -> {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
                 var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return Response.status(Response.Status.CONFLICT)
-                            .entity(Map.of("error", "No pending approval for this session"))
-                            .build();
+                    return Response.status(Response.Status.CONFLICT).entity(Map.of("error", "No pending approval")).build();
                 }
-
-                MDC.put(MdcKeys.USER_ID, REST_USER_ID);
                 AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                 checkpointApprovalService.triggerResume(cp);
                 return Response.ok(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId)).build();
-            });
+            };
+            return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            log.errorf("Failed to deny session %s: %s", sessionId, e.getMessage());
-            log.debug("Full denial failure stack trace:", e);
-            return Response.serverError().entity(e.getMessage()).build();
+            log.errorf("Deny failed: %s", e.getMessage());
+            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
 
@@ -430,30 +296,19 @@ public class AgentSessionService {
                     .map(cp -> {
                         try {
                             List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
-                            return Response.ok(new SessionStatusResponse(
-                                    sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
+                            return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                         } catch (Exception e) {
-                            log.errorf("Failed to load steps for session %s: %s", sessionId, e.getMessage());
-                            log.debug("Full load steps failure stack trace:", e);
-                            return Response.serverError().entity(e.getMessage()).build();
+                            log.errorf("Failed to load steps: %s", e.getMessage());
+                            return Response.serverError().entity(Map.of("error", e.getMessage())).build();
                         }
                     })
-                    .orElseGet(() -> Response.ok(Map.of(
-                            "sessionId", sessionId,
-                            "role", canonicalRole,
-                            "status", CheckpointStatus.NOT_STARTED.name(),
-                            "steps", List.of()
-                    )).build());
-        } catch (IllegalArgumentException e) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                .entity(Map.of("error", e.getMessage(), "code", "INVALID_ROLE"))
-                .build();
+                    .orElseGet(() -> Response.ok(Map.of("sessionId", sessionId, "status", "NOT_STARTED")).build());
+        } catch (Exception e) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", e.getMessage())).build();
         }
     }
 
     public Response terminateSession(String sessionId) {
-        log.infof("Terminating session: %s", sessionId);
-
         var sessionError = validateSession(sessionId);
         if (sessionError.isPresent()) return sessionError.get();
 
@@ -469,27 +324,17 @@ public class AgentSessionService {
 
     private Optional<Response> validateRole(String role) {
         if (!AgentRoleEnum.isKnownRole(role)) {
-            return Optional.of(Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "Unknown agent role: " + role, "code", "INVALID_ROLE"))
-                    .build());
+            return Optional.of(Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "Unknown role: " + role)).build());
         }
         return Optional.empty();
     }
 
     public Optional<Response> validateSession(String sessionId) {
-        // Guard 1: session existence (unchanged)
         if (!heartbeatTracker.exists(sessionId)) {
-            return Optional.of(Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of(
-                        "error", "Session not found: " + sessionId,
-                        "code",  "SESSION_NOT_FOUND"
-                    ))
-                    .build());
+            return Optional.of(Response.status(Response.Status.NOT_FOUND).entity(Map.of("error", "Session not found: " + sessionId)).build());
         }
 
         // Guard 2: per-key session ownership
-        // Only REST-created sessions have a bound owner.
-        // CLI and Telegram sessions have null owner → open access (correct).
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
             String requestingKey = WorkspaceContext.resolveUserId();
@@ -516,64 +361,28 @@ public class AgentSessionService {
         return Optional.empty();
     }
 
-    /**
-     * Routes slash commands AND non-slash reflex prefixes (e.g. "deletecron")
-     * directly to the reflex pipeline, bypassing the agent loop entirely.
-     *
-     * Previously only slash-prefixed goals were checked here, causing reflexes
-     * like DeleteCronReflex (which match "deletecron <id>" without a slash) to
-     * be silently skipped and handed to the LLM instead.
-     */
     private Optional<Response> handleSlashCommand(String sessionId, RunAgentRequest request) {
         String goal = request.goal();
-        if (goal == null) return Optional.empty();
-
-        String lower = goal.trim().toLowerCase();
-        boolean isSlash = lower.startsWith("/");
-        boolean isNonSlashReflex = NON_SLASH_REFLEX_PREFIXES.stream()
-                .anyMatch(lower::startsWith);
-
-        if (!isSlash && !isNonSlashReflex) return Optional.empty();
-
-        MessageContext context = createRestContext(sessionId, goal);
+        if (goal == null || (!goal.startsWith("/") && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith))) return Optional.empty();
 
         try {
-            String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
-
-            ReflexResult result = WorkspaceContext.run(
-                sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL,
-                canonicalRole, ChannelType.REST_API,
-                () -> reflexRegistry.processIfReflex(
-                    sessionId, REST_USER_ID, sessionId, goal, context)
-            );
-
-            return result.commandResponse()
-                    .map(response -> Response.ok(Map.of(
-                        "status", "OK",
-                        "message", response
-                    )).build());
-
+            Callable<Response> op = () -> {
+                String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
+                String channel = ChannelType.REST_API.name();
+                return WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                    MessageContext context = createRestContext(sessionId, goal);
+                    ReflexResult result = reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
+                    return result.commandResponse().map(r -> Response.ok(Map.of("status", "OK", "message", r)).build()).orElse(null);
+                });
+            };
+            return Optional.ofNullable(WorkspaceScopeHolder.call(sessionId, op));
         } catch (Exception e) {
-            log.errorf("Slash command failed for session %s: %s", sessionId, e.getMessage());
-            log.debug("Full slash command failure stack trace:", e);
-            return Optional.empty(); // fall through to agent loop
+            return Optional.empty();
         }
     }
 
     private AutonomyLevel getOrDefaultAutonomy(String sessionId) {
         AutonomyLevel level = heartbeatTracker.getAutonomyLevel(sessionId);
-        if (level != null) return level;
-
-        return agentStore.loadLatestAutonomyForSession(sessionId)
-                .orElseGet(() -> {
-                    log.warnf("No stored autonomy found for session %s, defaulting to SUPERVISED", sessionId);
-                    return AutonomyLevel.SUPERVISED;
-                });
-    }
-
-    private static class AwaitingApprovalException extends RuntimeException {
-        AwaitingApprovalException(String sessionId) {
-            super("Session awaiting approval: " + sessionId);
-        }
+        return (level != null) ? level : AutonomyLevel.SUPERVISED;
     }
 }

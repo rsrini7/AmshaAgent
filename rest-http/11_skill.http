@@ -6,10 +6,10 @@
 ###
 ### How skills intercept requests:
 ###   1. User sends a message.
-###   2. SkillAwareIntentClassifier checks SkillRegistry FIRST.
+###   2. SkillAwareIntentDetector checks SkillRegistry FIRST.
 ###   3. If a trigger-pattern matches → inject skill's system prompt,
 ###      set tool capabilities, run agent — zero Groq classification tokens.
-###   4. If no match → fall through to LLM-based IntentClassifierService.
+###   4. If no match → fall through to LLM-based IntentDetectorService.
 ###   (Nuance #11: SkillRegistry ALWAYS checked before LLM classifier.)
 ###
 ### Skill YAML frontmatter fields:

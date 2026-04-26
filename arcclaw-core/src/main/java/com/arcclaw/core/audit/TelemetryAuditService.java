@@ -55,7 +55,7 @@ public class TelemetryAuditService {
             AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
             event.appVersion = registry.getAppVersion();
             event.idempotencyKey = idempotencyKey;
-            PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, type, em -> {
+            PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, type, ctx -> {
                 auditEventRepository.record(event);
             });
             persistenceEngine.submitTelemetry(pe);
@@ -88,7 +88,7 @@ public class TelemetryAuditService {
             AuditEvent event = AuditEvent.of(sessionId, userId, agentRole, goalHash, outcome, eventType,
                                              inputTokens, outputTokens, usdCost, result.steps().size(), detail);
             event.appVersion = registry.getAppVersion();
-            PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, eventType, em -> {
+            PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, eventType, ctx -> {
                 auditEventRepository.record(event);
             });
             persistenceEngine.submitTelemetry(pe);

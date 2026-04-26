@@ -16,9 +16,8 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.tools.ToolSchemaProvider;
 import com.arcclaw.mcp.config.McpToolAllowlist;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpServerRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,17 +31,17 @@ class McpToolBridgeTest {
     private McpToolBridge bridge;
     private ToolRegistry mockRegistry;
     private McpToolAllowlist mockAllowlist;
-    private ObjectMapper mockObjectMapper;
+    private ToolSchemaProvider mockSchemaProvider;
 
     @BeforeEach
     void setUp() {
         bridge = new McpToolBridge();
         mockRegistry = mock(ToolRegistry.class);
         mockAllowlist = mock(McpToolAllowlist.class);
-        mockObjectMapper = mock(ObjectMapper.class);
+        mockSchemaProvider = mock(ToolSchemaProvider.class);
         bridge.toolRegistry = mockRegistry;
         bridge.allowlist = mockAllowlist;
-        bridge.objectMapper = mockObjectMapper;
+        bridge.schemaProvider = mockSchemaProvider;
         bridge.auditService = mock(AuditService.class);
         bridge.clearCache();
     }
@@ -52,7 +51,7 @@ class McpToolBridgeTest {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("github", "memory_search"));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
-        when(mockObjectMapper.writeValueAsString(ArgumentMatchers.any())).thenReturn("{}");
+        when(mockSchemaProvider.getJsonSchema(ArgumentMatchers.any())).thenReturn("{}");
         
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(2, tools.size());
@@ -64,24 +63,24 @@ class McpToolBridgeTest {
     void testGetExposedToolsSchemaDerivation() throws Exception {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("github"));
         AgentTool mockTool = mock(AgentTool.class);
-        JsonObjectSchema schema = JsonObjectSchema.builder().build();
-        when(mockTool.parametersSchema()).thenReturn(schema);
         when(mockRegistry.findTool("github")).thenReturn(Optional.of(mockTool));
-        when(mockObjectMapper.writeValueAsString(schema)).thenReturn("{\"schema\":\"v1\"}");
+        when(mockSchemaProvider.getJsonSchema(mockTool)).thenReturn("{\"schema\":\"v1\"}");
 
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
         assertEquals("{\"schema\":\"v1\"}", tools.get(0).inputSchema());
 
-        // Verify cache: second call does not hit registry/mapper again
+        // Verify cache: second call does not hit registry/provider again
         bridge.getExposedTools();
         Mockito.verify(mockRegistry, Mockito.times(1)).findTool("github");
-        Mockito.verify(mockObjectMapper, Mockito.times(1)).writeValueAsString(schema);
+        Mockito.verify(mockSchemaProvider, Mockito.times(1)).getJsonSchema(mockTool);
     }
 
     @Test
     void testMatchingUsesToolNameNotEnumName() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("memory_search"));
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
         assertEquals("memory_search", tools.get(0).name()); // must NOT be "MEMORY_SEARCH"
@@ -90,6 +89,8 @@ class McpToolBridgeTest {
     @Test
     void testEntryWithNoMatchingToolName() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("invalid_tool", "github"));
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());

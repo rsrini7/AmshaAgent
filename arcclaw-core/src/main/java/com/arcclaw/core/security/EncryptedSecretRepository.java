@@ -1,39 +1,79 @@
 package com.arcclaw.core.security;
 
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+
+import com.arcclaw.persistence.api.SecretDto;
+import com.arcclaw.persistence.api.SecretStorePort;
+import io.quarkus.arc.Unremovable;
 
 /**
- * Plain JPA Repository for EncryptedSecret.
- * Bypasses Panache complexity to ensure reliability in multi-module build/test
- * environments.
+ * Repository for {@link EncryptedSecret} refactored to delegate to {@link SecretStorePort}.
+ * §1.2: Zero EntityManager imports, zero JPQL.
  */
 @ApplicationScoped
+@Unremovable
 public class EncryptedSecretRepository {
 
     @Inject
-    EntityManager em;
+    SecretStorePort secretStore;
 
-    public void persist(EncryptedSecret entity) {
-        em.persist(entity);
+    @Transactional
+    public void save(EncryptedSecret secret) {
+        secretStore.save(toDto(secret));
     }
 
-    public EncryptedSecret findByKey(String sessionId, String keyName) {
-        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
-        return em.find(EncryptedSecret.class, id);
+    @Transactional
+    public void persist(EncryptedSecret secret) {
+        save(secret);
     }
 
-    public void deleteBySessionId(String sessionId) {
-        em.createQuery("DELETE FROM EncryptedSecret s WHERE s.id.sessionId = :sessionId")
-                .setParameter("sessionId", sessionId)
-                .executeUpdate();
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public Optional<EncryptedSecret> find(String sessionId, String keyName) {
+        return secretStore.find(sessionId, keyName).map(this::toEntity);
     }
 
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public Optional<EncryptedSecret> findByKey(String sessionId, String keyName) {
+        return find(sessionId, keyName);
+    }
+
+    @Transactional
+    public void delete(String sessionId, String keyName) {
+        secretStore.delete(sessionId, keyName);
+    }
+
+    @Transactional
     public void deleteByKey(String sessionId, String keyName) {
-        EncryptedSecret entity = findByKey(sessionId, keyName);
-        if (entity != null) {
-            em.remove(entity);
-        }
+        delete(sessionId, keyName);
+    }
+
+    @Transactional
+    public void deleteBySessionId(String sessionId) {
+        secretStore.deleteBySessionId(sessionId);
+    }
+
+    private EncryptedSecret toEntity(SecretDto dto) {
+        if (dto == null) return null;
+        EncryptedSecret entity = new EncryptedSecret();
+        entity.id = new EncryptedSecret.EncryptedSecretId(dto.sessionId(), dto.keyName());
+        entity.setEncryptionKeyVersion(dto.encryptionKeyVersion());
+        entity.ciphertext = dto.ciphertext();
+        entity.nonce = dto.nonce();
+        return entity;
+    }
+
+    private SecretDto toDto(EncryptedSecret entity) {
+        if (entity == null) return null;
+        return new SecretDto(
+            entity.id.sessionId,
+            entity.id.keyName,
+            entity.getEncryptionKeyVersion(),
+            entity.ciphertext,
+            entity.nonce
+        );
     }
 }

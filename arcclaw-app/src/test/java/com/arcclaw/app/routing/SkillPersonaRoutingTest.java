@@ -9,9 +9,9 @@ import java.time.Instant;
 import jakarta.inject.Inject;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
-import com.arcclaw.channel.api.IntentClassifier;
+import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.audit.TelemetryAuditService;
-import com.arcclaw.core.routing.IntentClassifierService;
+import com.arcclaw.core.routing.IntentDetectorService;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;
@@ -29,10 +29,10 @@ class SkillPersonaRoutingTest {
     AgentSkillRepository repository;
 
     @Inject
-    IntentClassifier classifier;
+    IntentDetector detector;
 
     @InjectMock
-    IntentClassifierService intentClassifierService;
+    IntentDetectorService intentDetectorService;
 
     @InjectMock
     TelemetryAuditService telemetryAuditService;
@@ -60,7 +60,7 @@ class SkillPersonaRoutingTest {
         repository.saveOrUpdate(entity);
 
         // Mock the LLM fallback to avoid log noise and real network calls
-        Mockito.when(intentClassifierService.classify(ArgumentMatchers.anyString()))
+        Mockito.when(intentDetectorService.classify(ArgumentMatchers.anyString()))
             .thenReturn("coordinator");
 
         // Force reload so the registry sees the new DB skill
@@ -72,7 +72,7 @@ class SkillPersonaRoutingTest {
     @Test
     void testMessageTriggersSkillRouting() {
         // Fast-path match
-        String role = classifier.classify("Can you review my code please?");
+        String role = detector.classify("Can you review my code please?");
         assertEquals("skill:code-reviewer", role);
     }
 
@@ -80,7 +80,7 @@ class SkillPersonaRoutingTest {
     void testMessageFallsBackWhenNoSkillMatch() {
         // No match in registry — falls back to LLM classifier (which might be mocked or real, 
         // but it certainly won't return skill:code-reviewer for a greeting)
-        String role = classifier.classify("Hello there");
+        String role = detector.classify("Hello there");
         assertNotEquals("skill:code-reviewer", role);
     }
 }

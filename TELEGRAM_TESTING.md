@@ -1022,7 +1022,7 @@ review this code: public void foo() { System.out.println("test"); }
 
 **Log:** `INFO  [SkillReflex] matched skill:code-reviewer for session <uuid>`
 
-**What to confirm:** `SkillAwareIntentClassifier` checked the `SkillRegistry` first, before the LLM
+**What to confirm:** `SkillAwareIntentDetector` checked the `SkillRegistry` first, before the LLM
 intent classifier ran.
 
 ---

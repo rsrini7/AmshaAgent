@@ -10,6 +10,7 @@ import jakarta.interceptor.Interceptor;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.persistence.api.AuditSchemaPort;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -21,7 +22,7 @@ import org.jboss.logging.Logger;
  * Runs after Hibernate schema generation (@Priority APPLICATION + 100).
  */
 @ApplicationScoped
-public class AuditSchemaEnforcer {
+public class AuditSchemaEnforcer implements AuditSchemaPort {
 
     @Inject
     EntityManager em;
@@ -32,10 +33,15 @@ public class AuditSchemaEnforcer {
     @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
     String dataDir;
 
+    @Override
     @Transactional
-    public void onStart(
-        @Observes @Priority(Interceptor.Priority.APPLICATION + 100)
-        StartupEvent event) {
+    public void enforceWormConstraints() {
+        // Postgres equivalent (implement in PostgresAuditSchemaEnforcer when arcclaw-persistence-postgres is created):
+        //   REVOKE UPDATE, DELETE ON audit_event FROM application_role;
+        //   -- OR --
+        //   CREATE RULE no_update AS ON UPDATE TO audit_event DO INSTEAD NOTHING;
+        //   CREATE RULE no_delete AS ON DELETE TO audit_event DO INSTEAD NOTHING;
+        // Both approaches satisfy §5.23 DDL isolation — choose per deployment policy.
 
         // WORM triggers — already present
         em.createNativeQuery("""
@@ -53,6 +59,14 @@ public class AuditSchemaEnforcer {
                 SELECT RAISE(ABORT, 'audit_event rows are immutable');
             END
             """).executeUpdate();
+    }
+
+    @Transactional
+    public void onStart(
+        @Observes @Priority(Interceptor.Priority.APPLICATION + 100)
+        StartupEvent event) {
+
+        enforceWormConstraints();
 
         // indexes with IF NOT EXISTS — idempotent on every restart
         em.createNativeQuery(

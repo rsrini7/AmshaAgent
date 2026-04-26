@@ -29,7 +29,7 @@
 
 The reactor enforces strict architectural separation that prevents accidental dependency creep. The six modules are:
 
-- **`arcclaw-channel-api`** — pure interfaces (`ChannelSender`, `IntentClassifier`, `ChannelAllowlist`, structured output types) with no implementation. This allows `arcclaw-core` to reference channel concepts without coupling to Telegram or any specific adapter.
+- **`arcclaw-channel-api`** — pure interfaces (`ChannelSender`, `IntentDetector`, `ChannelAllowlist`, structured output types) with no implementation. This allows `arcclaw-core` to reference channel concepts without coupling to Telegram or any specific adapter.
 - **`arcclaw-core`** — domain logic and CDI interfaces. Has zero awareness of REST, Telegram, or CLI. This is the "kernel" that could theoretically be embedded in any JVM runtime.
 - **`arcclaw-mcp`** — MCP server/client logic. Exposes `DynamicToolLookupImpl` behind the `DynamicToolLookup` interface defined in `arcclaw-core`. Keeping it separate means the kernel has no compile-time dependency on MCP transport code.
 - **`arcclaw-rag`** — Two-tier RAG memory (sqlite-vec). The `vec0.so` native extension has platform-specific native image metadata. Isolating it prevents this from polluting the core module.
@@ -173,7 +173,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 | `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
 
-The `IntentClassifierService` uses `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
+The `IntentDetectorService` uses `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
 ---
 

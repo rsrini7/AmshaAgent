@@ -232,7 +232,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # SECTION C — DelegationRoutingProvider FAST-PATH INTENT ROUTING
 # Natural language phrases like "ask shiva to...", "tell brahma to..."
 # must route to COORDINATOR (not directly to the specialist) via
-# DelegationRoutingProvider at priority 5 in IntentClassifierService.
+# DelegationRoutingProvider at priority 5 in IntentDetectorService.
 # The coordinator then uses delegate_to_agent internally.
 # agentRole is omitted so the intent classifier decides the route.
 # ─────────────────────────────────────────────────────────────────

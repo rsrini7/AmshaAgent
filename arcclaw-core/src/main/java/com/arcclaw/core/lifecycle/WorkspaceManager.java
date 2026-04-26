@@ -9,7 +9,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
@@ -39,7 +38,6 @@ public class WorkspaceManager {
 
     private static final Logger log = Logger.getLogger(WorkspaceManager.class);
 
-    @Inject EntityManager em;
     @Inject WorkspaceManager self;
     @Inject GovernanceStrategy governanceLayer;
     @Inject ChatMemoryStore chatMemoryStore;

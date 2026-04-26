@@ -9,7 +9,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import com.arcclaw.core.util.TemporalUtils;
-import org.hibernate.annotations.ColumnDefault;
 
 /**
  * Persistent cron job entity backed by the {@code agentcron} SQLite table.
@@ -45,9 +44,11 @@ public class AgentCronEntity {
 
     /**
      * Explicit default value for GraalVM native safety.
+     * Note: @ColumnDefault("0") was removed to maintain core-persistence boundary.
+     * Schema generation is managed via external tools (Flyway/Liquibase) where the
+     * DEFAULT 0 clause must be explicitly defined for the runonce column.
      */
     @Column(name = "runonce", nullable = false)
-    @ColumnDefault("0")   // SQLite stores boolean as INTEGER; 'false' (string) would be wrong
     public boolean runOnce = false;
 
     public String goal;

@@ -17,7 +17,7 @@ import org.jboss.logging.Logger;
  *
  * <p><strong>§4.10:</strong> This policy is purely declarative — it reads the
  * role capability flag and never alters tool routing or skill-classification
- * order. It must not be confused with {@code SkillAwareIntentClassifier}'s
+ * order. It must not be confused with {@code SkillAwareIntentDetector}'s
  * skill-first guard (§4.3).
  *
  * <p>No persistence, no transactions, no CDI state.

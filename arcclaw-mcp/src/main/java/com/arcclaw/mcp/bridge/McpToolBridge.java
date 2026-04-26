@@ -19,6 +19,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.tools.ToolSchemaProvider;
 import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -30,6 +31,7 @@ public class McpToolBridge {
     @Inject ToolRegistry toolRegistry;
     @Inject McpToolAllowlist allowlist;
     @Inject ObjectMapper objectMapper;
+    @Inject ToolSchemaProvider schemaProvider;
 
     private final Map<String, String> schemaCache = new ConcurrentHashMap<>();
  
@@ -42,11 +44,9 @@ public class McpToolBridge {
                     "McpToolBridge: exposed tool '" + name +
                     "' is not registered in ToolRegistry (§4.1)"));
             try {
-                schemaCache.put(name,
-                    objectMapper.writeValueAsString(tool.parametersSchema()));
+                schemaCache.put(name, schemaProvider.getJsonSchema(tool));
             } catch (Exception e) {
-                throw new IllegalStateException(
-                    "Failed to cache MCP schema for tool: " + name, e);
+                log.errorf("Failed to cache MCP schema for tool '%s': %s", name, e.getMessage());
             }
         });
     }
@@ -133,7 +133,7 @@ public class McpToolBridge {
             AgentTool tool = toolRegistry.findTool(name)
                 .orElseThrow(() -> new IllegalStateException("Tool not found in registry: " + name));
             try {
-                return objectMapper.writeValueAsString(tool.parametersSchema());
+                return schemaProvider.getJsonSchema(tool);
             } catch (Exception e) {
                 log.errorf("Failed to serialize schema for tool '%s': %s", name, e.getMessage());
                 return "{\"type\":\"object\"}";
