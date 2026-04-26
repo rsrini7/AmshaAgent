@@ -82,10 +82,10 @@ public class SandboxExecTool implements AgentTool {
         "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
 
     private static final Pattern PUBLIC_TYPE_PATTERN =
-            Pattern.compile("(?:^|\\n)\\s*public\\s+(?:class|record|interface|enum)\\s+(\\w+)", Pattern.MULTILINE);
+            Pattern.compile("(?:^|\\n)\\s*public\\s+(?:class|record|@?interface|enum)\\s+(\\w+)", Pattern.MULTILINE);
 
     private static final Pattern ANY_TYPE_PATTERN =
-            Pattern.compile("(?:public\\s+)?(?:class|record|interface|enum)\\s+(\\w+)", Pattern.MULTILINE);
+            Pattern.compile("(?:public\\s+)?(?:class|record|@?interface|enum)\\s+(\\w+)", Pattern.MULTILINE);
 
     static final boolean IS_WINDOWS =
             System.getProperty("os.name", "").toLowerCase().contains("win");
@@ -170,6 +170,9 @@ public class SandboxExecTool implements AgentTool {
         lang = lang.toLowerCase();
 
         if ("java".equals(lang)) {
+            if (!ANY_TYPE_PATTERN.matcher(code).find()) {
+                throw new IllegalArgumentException("Java execution failed: Code must contain a class declaration. Bare methods are not supported.");
+            }
             Files.createDirectories(workspaceRoot);
             String className = extractJavaClassName(code);
             Path javaFile = workspaceRoot.resolve(className + ".java");
@@ -289,6 +292,10 @@ public class SandboxExecTool implements AgentTool {
 
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
             if (violation != null) return ToolResponse.failure(1, "🚫 Execution blocked: " + violation);
+
+            if ("java".equals(lang) && !ANY_TYPE_PATTERN.matcher(code).find()) {
+                return ToolResponse.failure(1, "Java execution failed: Code must contain a class declaration. Bare methods are not supported.");
+            }
 
             // Secrets are intentionally empty on the direct-execution fallback path.
             // The sandboxCommand() → PodmanContainerExecutor path injects secrets

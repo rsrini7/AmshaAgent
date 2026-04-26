@@ -165,6 +165,11 @@ public class FinishActionHandler {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
 
+        if (!ReasoningStep.FINISH.equals(step.action())) {
+            ReasoningStep cleanStep = step.withObservation("System: Action must be FINISH");
+            return new FinishOutcome.Correction(cleanStep, "System: You must invoke the FINISH action.");
+        }
+
         // --- Extract and strip candidate answer ---
         String candidateAnswer = extractCandidateAnswer(step);
 

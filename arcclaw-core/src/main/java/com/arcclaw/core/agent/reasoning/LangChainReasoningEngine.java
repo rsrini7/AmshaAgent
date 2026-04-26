@@ -85,7 +85,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // bypass the LLM and issue the sandbox_exec tool call directly using the code
         // block found in history. This prevents model-side truncation errors.
         // Scoped by language (§Bug-1 fix) to allow Go execution after successful Java run.
-        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(goal)) {
+        if (AgentRoleEnum.CODER.id().equals(agentRole) 
+                && TextPatternUtils.goalRequestsExecution(goal)
+                && !context.isForceFinishRetry()) {
             String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
             CodeBlock priorCode = extractLatestCodeBlock(cappedHistory);
 
@@ -93,7 +95,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             String languageForSuccessCheck = (targetLanguage == null && priorCode != null) 
                     ? priorCode.language() : targetLanguage;
 
-            if (!historyAlreadyContainsSuccessfulForLanguage(cappedHistory, ToolCapability.SANDBOX_EXEC.toolName(), languageForSuccessCheck)) {
+            if (!historyAlreadyContainsAttemptForLanguage(history, ToolCapability.SANDBOX_EXEC.toolName(), languageForSuccessCheck)) {
                 if (priorCode != null) {
                     // If target language is specified, we must match it. If not, we take the latest.
                     boolean languageMatches = targetLanguage == null || targetLanguage.equalsIgnoreCase(priorCode.language());
@@ -674,10 +676,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
     }
 
-    private boolean historyAlreadyContainsSuccessfulForLanguage(List<ReasoningStep> history, String toolName, String language) {
+    private boolean historyAlreadyContainsAttemptForLanguage(List<ReasoningStep> history, String toolName, String language) {
         if (history == null) return false;
         return history.stream().anyMatch(step -> {
-            if (!toolName.equals(step.action()) || !Boolean.TRUE.equals(step.success()) || step.observation() == null || step.observation().isBlank()) {
+            if (!toolName.equals(step.action()) || step.observation() == null || step.observation().isBlank()) {
                 return false;
             }
             if (language == null) return true; // Generic check requested
