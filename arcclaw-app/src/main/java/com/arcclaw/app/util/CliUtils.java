@@ -215,14 +215,14 @@ public class CliUtils {
             if (!isSet(spec.key)) missing.add(spec);
         }
 
-        if (!isSet("GITHUB_TOKEN") && !isExplicitOptOut("GITHUB_TOKEN")) {
+        if (!isSet("ARCCLAW_TOOLS_GITHUB_TOKEN") && !isExplicitOptOut("ARCCLAW_TOOLS_GITHUB_TOKEN")) {
             missing.add(new VarSpec(
-                "GITHUB_TOKEN",
+                "ARCCLAW_TOOLS_GITHUB_TOKEN",
                 "Optional GitHub Personal Access Token (classic or fine-grained).",
                 "Recommended for searching and managing code in GitHub repositories.",
                 "1. Go to https://github.com/settings/tokens",
                 "2. Create a token with 'repo' and 'workflow' scopes (or relevant fine-grained scopes)",
-                "3. Add:  GITHUB_TOKEN=ghp_your_key_here"
+                "3. Add:  ARCCLAW_TOOLS_GITHUB_TOKEN=ghp_your_key_here"
             ));
         }
 

@@ -80,7 +80,7 @@ public class GithubTool implements AgentTool {
 
 
     @Override
-    @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "GITHUB_TOKEN")
+    @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "ARCCLAW_TOOLS_GITHUB_TOKEN")
     public List<String> sandboxCommand(Map<String, Object> params) {
         String action  = (String) params.getOrDefault("action", "repo");
         String command = (String) params.getOrDefault("command", "view");

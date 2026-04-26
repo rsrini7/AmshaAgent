@@ -36,7 +36,7 @@ public class AppBootstrap {
         "ARCCLAW_LLM_API_KEY", "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
         "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
         "TELEGRAM_BOT_TOKEN",
-        "ARCCLAW_TOOLS_BRAVE_API_KEY", "ARCCLAW_TOOLS_SERPER_API_KEY", "GITHUB_TOKEN",
+        "ARCCLAW_TOOLS_BRAVE_API_KEY", "ARCCLAW_TOOLS_SERPER_API_KEY", "ARCCLAW_TOOLS_GITHUB_TOKEN",
         "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY",
         "ARCCLAW_LLM_FALLBACK_API_KEY"
     );
@@ -415,7 +415,7 @@ public class AppBootstrap {
                 }
 
                 // Optional: Ask for GitHub token
-                if (spec.key.equals("GITHUB_TOKEN")) {
+                if (spec.key.equals("ARCCLAW_TOOLS_GITHUB_TOKEN")) {
                     System.err.println("  ┌─ GitHub repository access");
                     System.err.println("  │  Would you like to provide a GitHub token for the Coder/Researcher tools?");
                     System.err.println("  │  (Search and edit repositories directly from ArcClaw)");
