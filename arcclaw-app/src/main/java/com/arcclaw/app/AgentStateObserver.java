@@ -23,8 +23,8 @@ public class AgentStateObserver implements AgentObserver {
     @Override
     public void onLoopComplete(String sessionId, String userId,
             String agentRole, String goalHash, AgentResult result) {
-        if (!AgentGuards.isContainerAvailable()) {
-            log.debugf("Container shut down — skipping onLoopComplete for session %s", sessionId);
+        if (AgentGuards.isShuttingDown()) {
+            log.debugf("Container shutting down — skipping onLoopComplete for session %s", sessionId);
             return;
         }
 

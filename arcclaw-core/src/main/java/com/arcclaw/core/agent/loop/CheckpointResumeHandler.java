@@ -88,8 +88,8 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) {
 
-        if (!AgentGuards.isContainerAvailable()) {
-            log.warnf("Container shut down — cannot resume session %s", sessionId);
+        if (AgentGuards.isShuttingDown()) {
+            log.warnf("Container shutting down — cannot resume session %s", sessionId);
             return;
         }
 
