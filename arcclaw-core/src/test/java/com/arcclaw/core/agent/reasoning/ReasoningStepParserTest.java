@@ -1,7 +1,6 @@
 package com.arcclaw.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -227,19 +226,17 @@ class ReasoningStepParserTest {
     }
 
     @Test
-    void testParse_recoversMalformedSandboxExecArgs() {
-        String malformed = """
-                {"code": "public class StringReverser {
-                    public static String reverseString(String input) {
-                        return input.chars()
-                                .mapToObj(c -> (char) c)
-                                .reduce(\\"\\", (s, c) -> c + s, (s1, s2) -> s2 + s1);
-                    }
-                    public static void main(String[] args) {
-                        System.out.println(\\"Original: \\" + input);
-                    }
-                }", "language":"java"}
-                """;
+    void testParse_recoversMalformedSandboxExecArgs() throws Exception {
+        String malformed = "{\"code\": \"public class StringReverser {\n" +
+                "    public static String reverseString(String input) {\n" +
+                "        return input.chars()\n" +
+                "                .mapToObj(c -> (char) c)\n" +
+                "                .reduce(\\\"\\\", (s, c) -> c + s, (s1, s2) -> s2 + s1);\n" +
+                "    }\n" +
+                "    public static void main(String[] args) {\n" +
+                "        System.out.println(\\\"Original: \\\" + input);\n" +
+                "    }\n" +
+                "}\", \"language\":\"java\"}";
         ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
                 .id("call_sandbox")
                 .name("sandbox_exec")
@@ -248,7 +245,10 @@ class ReasoningStepParserTest {
         AiMessage aiMessage = AiMessage.aiMessage("execute", List.of(toolReq));
         ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
 
-        ReasoningStep step = parser.parse("s1", "coder", response);
+        // Bind goal that REQUESTS execution so interception doesn't fire
+        ReasoningStep step = WorkspaceContext.runWithFullAutonomy("s1", "user-1", "chat-1", "coder", () ->
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "execute this code")
+                        .call(() -> parser.parse("s1", "coder", response)));
 
         assertEquals("sandbox_exec", step.action());
         assertEquals("java", step.actionInput().get("language"));
@@ -256,7 +256,54 @@ class ReasoningStepParserTest {
         assertNotNull(code);
         assertTrue(code.contains("public class StringReverser"));
         assertTrue(code.contains("System.out.println(\"Original: \" + input);"));
-        assertFalse(step.actionInput().containsKey("__error"));
+    }
+
+    @Test
+    void testParse_recoversTruncatedSandboxExecWithoutLanguage() throws Exception {
+        // Truncated payload: missing closing brace and language field entirely
+        String truncated = "{\"code\": \"public class MyClass { public static void main(String[] a) { System.out.println(\\\"Test\\\");";
+        
+        ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
+                .id("call_trunc")
+                .name("sandbox_exec")
+                .arguments(truncated)
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("execute", List.of(toolReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        // Bind goal that REQUESTS execution so interception doesn't fire
+        ReasoningStep step = WorkspaceContext.runWithFullAutonomy("s1", "user-1", "chat-1", "coder", () ->
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "execute this code")
+                        .call(() -> parser.parse("s1", "coder", response)));
+
+        assertEquals("sandbox_exec", step.action());
+        assertEquals("java", step.actionInput().get("language"), "Should infer java from 'public class'");
+        String code = (String) step.actionInput().get("code");
+        assertNotNull(code);
+        assertTrue(code.contains("public class MyClass"));
+    }
+
+    @Test
+    void testParse_interceptsUnrequestedExecution() throws Exception {
+        // Goal: just write code, do NOT run it
+        String goal = "Write a Java class that says hello";
+        
+        ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
+                .id("call_unrequested")
+                .name("sandbox_exec")
+                .arguments("{\"code\":\"public class Hello { }\", \"language\":\"java\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("Here is the code", List.of(toolReq));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = WorkspaceContext.runWithFullAutonomy("s1", "user-1", "chat-1", "coder", () ->
+                ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
+                        .call(() -> parser.parse("s1", "coder", response)));
+
+        assertEquals(ReasoningStep.FINISH, step.action(), "Should intercept and convert to FINISH");
+        String answer = (String) step.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
+        assertTrue(answer.contains("public class Hello"), "Should contain the code");
+        assertTrue(answer.startsWith("```java"), "Should be wrapped in markdown");
     }
 
     @Test

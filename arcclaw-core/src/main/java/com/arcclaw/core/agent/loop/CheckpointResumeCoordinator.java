@@ -166,8 +166,34 @@ public class CheckpointResumeCoordinator {
             }
         }
 
-        // Terminal status path: Archive to keep the "latest" query clean for future runs
-        log.debugf("CheckpointResumeCoordinator: ignoring terminal checkpoint (status=%s). Archiving.", status);
+        // §7.31/§7.46: If a checkpoint is COMPLETED, we still want to restore its history
+        // so the NEXT turn in the same session knows what happened (e.g. Coder seeing 
+        // the code it just wrote). We archive the status but keep the steps.
+        if (status == CheckpointStatus.COMPLETED && roleMatches) {
+            List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
+            log.infof("CheckpointResumeCoordinator: restored %d steps from COMPLETED turn for session=%s",
+                    loadedSteps != null ? loadedSteps.size() : 0, sessionId);
+            
+            // Archive it now so it's not "latest" for the next poll
+            checkpoint.setStatus(CheckpointStatus.ARCHIVED);
+            agentStore.save(checkpoint);
+
+            // §7.46: Prune history to prevent unbounded growth across many turns.
+            // 10 steps is enough to capture the prior code block and basic reasoning.
+            int MAX_CARRY_STEPS = 10;
+            List<ReasoningStep> pruned = (loadedSteps != null && loadedSteps.size() > MAX_CARRY_STEPS)
+                    ? loadedSteps.subList(loadedSteps.size() - MAX_CARRY_STEPS, loadedSteps.size())
+                    : (loadedSteps != null ? loadedSteps : new ArrayList<>());
+
+            return new ResumeDecision.ResumedHistory(
+                    pruned,
+                    0, // Reset iterations for the new goal
+                    checkpoint.getAgentRole());
+        }
+
+        // Other terminal statuses or role mismatches: Archive and start fresh
+        log.debugf("CheckpointResumeCoordinator: ignoring terminal checkpoint (status=%s, roleMatch=%b). Archiving.", 
+                status, roleMatches);
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
         agentStore.save(checkpoint);
         return new ResumeDecision.FreshStart();
