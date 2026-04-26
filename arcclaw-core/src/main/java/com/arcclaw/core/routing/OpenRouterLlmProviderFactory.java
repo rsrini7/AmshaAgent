@@ -29,7 +29,7 @@ public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {
                 .baseUrl(config.baseUrl())
                 .apiKey(config.apiKey()
                         .orElseThrow(() -> new IllegalStateException(
-                                "OpenRouter requires apiKey — set ARCCLAW_LLM_API_KEY=sk-or-v1-...")))
+                                "OpenRouter requires apiKey - set ARCCLAW_LLM_API_KEY=sk-or-v1-...")))
                 .modelName(config.modelName())
                 .maxTokens(config.maxTokens().orElse(null))
                 .timeout(config.timeout().orElse(null))

@@ -31,19 +31,19 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 
 - **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, or local Ollama models
 - **Six specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
-- **Agent delegation** — the Coordinator (Vishnu) can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`
-- **Parallel tool execution** — the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
-- **Reflex system** — deterministic zero-token fast-path for commands, safety guards, and PII redaction before the LLM sees any input
+- **Agent delegation** - the Coordinator (Vishnu) can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`
+- **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
+- **Reflex system** - deterministic zero-token fast-path for commands, safety guards, and PII redaction before the LLM sees any input
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation
-- **AES-256-GCM-SIV secret vault** with Argon2id key derivation — secrets are never stored in plaintext
-- **Tamper-evident HMAC audit chain** — every agent action is logged as an append-only, verifiable record
-- **Autonomous cron scheduler** — agents can schedule future tasks using a 5-field UNIX cron expression
-- **Context compaction + FTS5 + vector long-term memory** — rolling chat window with LLM-summarised history searchable via two-tier RAG (FTS5 keyword + sqlite-vec embeddings merged via Reciprocal Rank Fusion)
-- **Batch HITL with inline Telegram keyboard** — parallel tool requests generate one-row-per-tool inline keyboards; individual tools can be approved or denied, or all approved/denied at once
-- **MCP integration** — serves as both an inbound MCP server (JSON-RPC over HTTP-SSE) and an outbound MCP client that connects to external MCP servers and exposes their tools natively
-- **Custom Skills system** — zero-LLM-token skill routing; skills defined as YAML-frontmatter Markdown documents, stored in SQLite, matched by trigger patterns before intent classification
-- **Structured Output engine** — typed LLM extraction with retry loops and lenient JSON parsing
-- **Multi-channel** — REST API, interactive CLI REPL, Telegram bot (via Apache Camel), one-shot `ask` mode for CI/CD
+- **AES-256-GCM-SIV secret vault** with Argon2id key derivation - secrets are never stored in plaintext
+- **Tamper-evident HMAC audit chain** - every agent action is logged as an append-only, verifiable record
+- **Autonomous cron scheduler** - agents can schedule future tasks using a 5-field UNIX cron expression
+- **Context compaction + FTS5 + vector long-term memory** - rolling chat window with LLM-summarised history searchable via two-tier RAG (FTS5 keyword + sqlite-vec embeddings merged via Reciprocal Rank Fusion)
+- **Batch HITL with inline Telegram keyboard** - parallel tool requests generate one-row-per-tool inline keyboards; individual tools can be approved or denied, or all approved/denied at once
+- **MCP integration** - serves as both an inbound MCP server (JSON-RPC over HTTP-SSE) and an outbound MCP client that connects to external MCP servers and exposes their tools natively
+- **Custom Skills system** - zero-LLM-token skill routing; skills defined as YAML-frontmatter Markdown documents, stored in SQLite, matched by trigger patterns before intent classification
+- **Structured Output engine** - typed LLM extraction with retry loops and lenient JSON parsing
+- **Multi-channel** - REST API, interactive CLI REPL, Telegram bot (via Apache Camel), one-shot `ask` mode for CI/CD
 
 ---
 
@@ -65,7 +65,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
 | **Delegation** | Coordinator delegates to specialists via `delegate_to_agent` tool + `DelegationRoutingProvider` |
 
-- **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files — never as process arguments.
+- **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files - never as process arguments.
 - **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
   - **Operational Key-Rotation Policy:** ArcClaw currently does *not* support automatic or manual vault key rotation (deferred to Phase 64). In the event of a suspected compromise, the official operational policy requires a complete wipe of the `EncryptedSecret` table and out-of-band re-provisioning of all tenant secrets. No rotation APIs are exposed by the system contract at runtime.
 - **🧵 Virtual Thread Mastery:** Fully non-blocking. Leverages JDK 25 `ScopedValue` (not `ThreadLocal`) alongside a bespoke CDI `@WorkspaceScoped` isolation mechanism to safely manage per-session state across thousands of lightweight virtual threads.
@@ -92,7 +92,7 @@ flowchart TD
         P6["⑥ Dispatch"]:::handler
     end
 
-    subgraph REFLEXES["⚡ REFLEXES — 0 LLM tokens"]
+    subgraph REFLEXES["⚡ REFLEXES - 0 LLM tokens"]
         direction LR
         R1["/approve · /deny · /halt"]:::reflexOut
         R2["/status · /history · /crons"]:::reflexOut
@@ -102,14 +102,14 @@ flowchart TD
         R6["/skills → list skills"]:::reflexOut
     end
 
-    subgraph SKILLS["🎯 SKILLS — 0 intent-classification tokens"]
+    subgraph SKILLS["🎯 SKILLS - 0 intent-classification tokens"]
         direction LR
         S1["SkillRegistry.findMatch()"]:::skillOut
         S2["Skill system prompt injected"]:::skillOut
         S3["Agent runs with skill persona"]:::skillOut
     end
 
-    subgraph REACT["🔁 ReAct AGENT LOOP — LangChain4J"]
+    subgraph REACT["🔁 ReAct AGENT LOOP - LangChain4J"]
         direction LR
         L1["🧠 LLM<br/>Reason"]:::loop
         L2{"Tool<br/>call?"}:::decision
@@ -152,7 +152,7 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 1. **REST API:** The edge layer (`AgentResource`) intercepts the request on a Virtual Thread and provisions a session.
 2. **Message Pipeline:** Incoming channel messages pass through an ordered `MessagePipeline` of handlers: `AllowlistHandler` → `SessionResolutionHandler` → `CommandDispatchHandler` (reflexes) → `IntentClassificationHandler` (skill routing + LLM classification) → `CompactionHandler` → `AgentDispatchHandler`.
 3. **Reflex System:** Before the LLM is ever invoked, the `ReflexRegistry` scans the input for deterministic fast-path commands. If a reflex matches, it executes without consuming any LLM tokens and short-circuits the pipeline.
-4. **Skill System:** Inside `IntentClassificationHandler`, `SkillAwareIntentDetector` checks `SkillRegistry.findMatch()` first. If matched, the skill's system prompt is injected and the agent runs directly — bypassing LLM intent classification entirely (zero additional classification tokens).
+4. **Skill System:** Inside `IntentClassificationHandler`, `SkillAwareIntentDetector` checks `SkillRegistry.findMatch()` first. If matched, the skill's system prompt is injected and the agent runs directly - bypassing LLM intent classification entirely (zero additional classification tokens).
 5. **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 6. **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or budget-exceeded).
 7. **Parallel Tool Execution:** When the LLM requests multiple tools in one step, `ParallelToolStepExecutor` executes them concurrently. Pre-executable tools (FULL autonomy or configured safe list) run immediately; remaining tools are held for batch HITL approval with Telegram inline keyboard.
@@ -163,9 +163,9 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 
 > [!NOTE]
 > **Sandbox Degradation Details**: The `ProcessIsolationExecutor` operates in three tiers:
-> - **All profiles except `%test`** (`%dev`, `%prod`): `strategy: PODMAN` — attempts full Podman rootless container isolation with a circuit breaker (3-failure trip to fallback). This applies to **both dev and prod**.
+> - **All profiles except `%test`** (`%dev`, `%prod`): `strategy: PODMAN` - attempts full Podman rootless container isolation with a circuit breaker (3-failure trip to fallback). This applies to **both dev and prod**.
 > - **Namespace fallback**: If the Podman circuit opens (Podman unavailable or 3 consecutive failures), Linux `unshare` namespaces for pid, net, and mount isolation are used automatically.
-> - **Direct execution** (`%test` profile only, or Windows OS detected): `strategy: NONE` — direct host `ProcessBuilder` execution. Requires `gh` CLI on the host `PATH`. No container isolation.
+> - **Direct execution** (`%test` profile only, or Windows OS detected): `strategy: NONE` - direct host `ProcessBuilder` execution. Requires `gh` CLI on the host `PATH`. No container isolation.
 
 <details>
 <summary>Detailed Architecture Flow Diagram</summary>
@@ -185,12 +185,12 @@ graph TD
     MCP --> Pipeline
 
     subgraph Message Pipeline
-        Pipeline --> ALH[AllowlistHandler<br/>priority 10 — user allowlist check]
-        ALH --> SRH[SessionResolutionHandler<br/>priority 15 — session binding]
-        SRH --> CDH[CommandDispatchHandler<br/>priority 30 — Reflex fast-path]
-        CDH --> ICH[IntentClassificationHandler<br/>priority 50 — SkillAwareIntentDetector first<br/>then llama-3.1-8b-instant]
-        ICH --> CH[CompactionHandler<br/>priority 60 — async CDI event if threshold exceeded]
-        CH --> ADH[AgentDispatchHandler<br/>priority 70 — Agent run]
+        Pipeline --> ALH[AllowlistHandler<br/>priority 10 - user allowlist check]
+        ALH --> SRH[SessionResolutionHandler<br/>priority 15 - session binding]
+        SRH --> CDH[CommandDispatchHandler<br/>priority 30 - Reflex fast-path]
+        CDH --> ICH[IntentClassificationHandler<br/>priority 50 - SkillAwareIntentDetector first<br/>then llama-3.1-8b-instant]
+        ICH --> CH[CompactionHandler<br/>priority 60 - async CDI event if threshold exceeded]
+        CH --> ADH[AgentDispatchHandler<br/>priority 70 - Agent run]
     end
 
     subgraph Reflex System - No LLM Tokens Consumed
@@ -311,7 +311,7 @@ sequenceDiagram
         end
         PP->>AL: run(sessionId, role, goal)
 
-        loop maxIterations — Thought → Plan → Act → Observe
+        loop maxIterations - Thought → Plan → Act → Observe
             AL->>LLM: nextStep(agentRole, goal, history)
             Note over LLM: Role-filtered tool schema injected<br/>coder → empty schema<br/>coordinator → all tools + delegate_to_agent<br/>researcher / architect → github + memory_search
             LLM-->>AL: Action (ToolName + Args OR parallel batch) OR FINISH
@@ -321,7 +321,7 @@ sequenceDiagram
                 TR->>TR: ToolInvocationGuard.evaluate()
 
                 alt SUPERVISED + NETWORK_OUTBOUND
-                    TR-->>U: ⚠️ Approval required — /approve or /deny
+                    TR-->>U: ⚠️ Approval required - /approve or /deny
                     AL->>DB: 💾 Save AWAITING_APPROVAL checkpoint
                     U->>CH: /approve
                     CH->>AL: Resume from checkpoint
@@ -353,7 +353,7 @@ sequenceDiagram
 
 ---
 
-## 🕉️ The Cosmic Pantheon — Full Agent Roster
+## 🕉️ The Cosmic Pantheon - Full Agent Roster
 
 ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, with two additional specialist roles derived from extended Vedic tradition. Roles are selected automatically by the intent classifier or passed explicitly via `agentRole` in the API/CLI.
 
@@ -361,13 +361,13 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 |---|---|---|---|
 | `coordinator` | **Vishnu** | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists via `delegate_to_agent`, synthesizes final output |
 | `researcher` | **Saraswati** | `github`, `memory_search` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
-| `coder` | **Brahma** | *(none — empty schema)* | The Creator. Pure logic and engineering brain; refuses conversational tasks; tool bias architecturally impossible |
+| `coder` | **Brahma** | *(none - empty schema)* | The Creator. Pure logic and engineering brain; refuses conversational tasks; tool bias architecturally impossible |
 | `debugger` | **Shiva** | `github` | The Transformer. Contrarian balance expert; finds blind spots and challenges assumptions |
 | `architect` | **Brihaspati** | `github`, `memory_search` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
 | `synthesizer` | **Dattatreya** | `github`, `schedule_task`, `manage_schedule`, `memory_search` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
 
 > [!NOTE]
-> The `coder` role receives an **empty tool schema** — tool bias is architecturally impossible for it regardless of LLM instruction. The `coordinator` is the only role with `delegate_to_agent`; specialist agents do not recursively delegate. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
+> The `coder` role receives an **empty tool schema** - tool bias is architecturally impossible for it regardless of LLM instruction. The `coordinator` is the only role with `delegate_to_agent`; specialist agents do not recursively delegate. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
@@ -375,14 +375,14 @@ graph LR
 
     IC(["🎯 Intent Classifier<br/>llama-3.1-8b-instant"]):::classifier
 
-    subgraph AGENTS["🕉️ THE COSMIC PANTHEON — SIX AGENTS"]
+    subgraph AGENTS["🕉️ THE COSMIC PANTHEON - SIX AGENTS"]
         direction TB
-        A1["🔵 coordinator — Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate_to_agent"]:::coordinator
-        A2["🟣 researcher — Saraswati<br/>Fact retrieval · No code"]:::researcher
-        A3["🟠 coder — Brahma<br/>Pure logic · EMPTY tool schema"]:::coder
-        A4["🔴 debugger — Shiva<br/>Contrarian · Finds blind spots"]:::debugger
-        A5["🟡 architect — Brihaspati<br/>ADRs · Trade-offs · No prod code"]:::architect
-        A6["🟢 synthesizer — Dattatreya<br/>Cross-domain · Multi-specialist"]:::synthesizer
+        A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate_to_agent"]:::coordinator
+        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code"]:::researcher
+        A3["🟠 coder - Brahma<br/>Pure logic · EMPTY tool schema"]:::coder
+        A4["🔴 debugger - Shiva<br/>Contrarian · Finds blind spots"]:::debugger
+        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code"]:::architect
+        A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist"]:::synthesizer
     end
 
     subgraph TOOLS["🛠️ TOOLS"]
@@ -397,10 +397,10 @@ graph LR
 
     subgraph AUTONOMY["🔰 AUTONOMY POLICY"]
         direction TB
-        AU1["FULL — All ops permitted"]:::policy
+        AU1["FULL - All ops permitted"]:::policy
         AU2["SUPERVISED ← default<br/>NETWORK_OUTBOUND → HITL pause"]:::policy
-        AU3["BACKGROUND — READ_FS only<br/>No scheduling"]:::policy
-        AU4["READONLY — READ_FS only<br/>Most restricted"]:::policy
+        AU3["BACKGROUND - READ_FS only<br/>No scheduling"]:::policy
+        AU4["READONLY - READ_FS only<br/>Most restricted"]:::policy
     end
 
     IC --> A1 & A2 & A3 & A4 & A5 & A6
@@ -426,9 +426,9 @@ arcclaw-channel-api/          ← Channel SPI contracts (zero implementation)
 │   ├── ChannelAllowlist        Determines if a ChannelUser is authorized
 │   ├── ChannelJobNotifier      Sends cron and approval timeout notifications
 │   ├── ChannelDaemon           Daemon lifecycle: isConfigured(), start()
-│   ├── ChannelType             Record — id() is the canonical key (e.g. "TELEGRAM")
+│   ├── ChannelType             Record - id() is the canonical key (e.g. "TELEGRAM")
 │   └── structured/             AgentContribution, SynthesisFunction, SynthesisResult,
-│                               ConflictSummary — typed structured output contracts
+│                               ConflictSummary - typed structured output contracts
 │
 arcclaw-core/                 ← Agent runtime kernel
 │   ├── agent/loop/             AgentLoop, AgentStateMachineRunner, ToolInvocationGuard,
@@ -447,12 +447,12 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           OllamaProviderFactory, OpenRouterProviderFactory
 │   ├── agent/role/             AgentRoleEnum, RoleDefinition, RoleRegistry, ToolCapability
 │   ├── api/                    AgentResource, AgentSessionService, AuditResource,
-│   │                           SystemInfoResource — REST endpoints
+│   │                           SystemInfoResource - REST endpoints
 │   ├── audit/                  AuditService, AuditObserver, AuditHashUtil, AuditEvent,
 │   │                           AuditSchemaEnforcer (WORM triggers), AuditVerifier,
 │   │                           ComplianceAuditService, TelemetryAuditService,
 │   │                           SessionAuditSequencer, SecurityEventType
-│   ├── channel/                ChannelPluginRegistry — startup-validated CDI discovery
+│   ├── channel/                ChannelPluginRegistry - startup-validated CDI discovery
 │   ├── compaction/             CompactionAbortedException, CompactionInFlightFlag,
 │   │                           CompactionRequest, CompactionEventBridge
 │   ├── governance/             GovernanceLayer, GovernanceStrategy SPI, RateLimitTracker,
@@ -500,7 +500,7 @@ arcclaw-core/                 ← Agent runtime kernel
 arcclaw-mcp/                  ← MCP server + client bridge
 │   ├── bridge/                 ExternalMcpToolAdapter, McpToolBridge,
 │   │                           McpToolDescriptor, McpToolAllowlist
-│   ├── server/                 McpToolsBean — exposes internal tools over JSON-RPC
+│   ├── server/                 McpToolsBean - exposes internal tools over JSON-RPC
 │   ├── tool/                   DynamicToolCapability, DynamicToolCapabilityRegistry,
 │   │                           DynamicToolLookupImpl, McpTransportType
 │   └── transport/              McpClientService, McpServerConfig, NdjsonWriter,
@@ -564,7 +564,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 |---|---|
 | `arcclaw-secrets.mount` | systemd unit that mounts `/run/arcclaw/secrets` as a tmpfs (mode 700, 10 MB, `noexec,nosuid`). Required for `TmpfsSecretTransport` on production Linux. Without this, secret env-files fall back to the OS temp directory. |
 | `backfillfts5.sql` | One-time migration script to backfill the `compaction_summary_fts` FTS5 table on existing databases after the Phase 45 deployment. Must be run once on any database created before Phase 45. |
-| `containers.conf` | Podman configuration overrides (`cgroupns=host`, `netns=host`, `storage.driver=vfs`). Required for rootless Podman on some Linux distributions — without it, the sandbox may fail silently on container network setup. |
+| `containers.conf` | Podman configuration overrides (`cgroupns=host`, `netns=host`, `storage.driver=vfs`). Required for rootless Podman on some Linux distributions - without it, the sandbox may fail silently on container network setup. |
 
 ### Why This Split?
 
@@ -572,17 +572,17 @@ arcclaw-app/                  ← Application entrypoint and wiring
 |---|---|
 | `arcclaw-channel-api` | Allows `arcclaw-core` to reference channel concepts (sender, allowlist) without coupling to Telegram or any concrete adapter. Swapping channels requires zero core changes. |
 | `arcclaw-core` | Independently testable. All 933 tests run without any HTTP container. Business rules, governance, persistence, tools, and the agent kernel live here. |
-| `arcclaw-mcp` | MCP server/client logic is isolated from the agent kernel. The `arcclaw-core` `DynamicToolLookup` interface is the only seam — `arcclaw-mcp` provides the implementation via `DynamicToolLookupImpl`. |
+| `arcclaw-mcp` | MCP server/client logic is isolated from the agent kernel. The `arcclaw-core` `DynamicToolLookup` interface is the only seam - `arcclaw-mcp` provides the implementation via `DynamicToolLookupImpl`. |
 | `arcclaw-rag` | Vector search (sqlite-vec) has native library dependencies (`vec0.so`). Isolating it in its own module prevents native image metadata from polluting the core module. |
 | `arcclaw-channel-telegram` | The Telegram channel is a full Maven module with its own test suite (9 test classes). It can be excluded from the build for deployments that don't need Telegram. |
 | `arcclaw-deployment` | The `@WorkspaceScoped` CDI scope, `AgentFunctionProcessor`, `RestResourceBuildStep`, and RAG resource steps are registered at Quarkus build time via `@BuildStep`. Separating this ensures the scope works correctly in native image compilation. |
 | `arcclaw-app` | The only module that knows about external protocols (HTTP, Telegram, CLI). Keeps protocol concerns out of the kernel. |
 
-### `@WorkspaceScoped` — Custom CDI Scope
+### `@WorkspaceScoped` - Custom CDI Scope
 
-Standard CDI scopes (`@RequestScoped`, `@SessionScoped`) are tied to HTTP lifecycle events. Agent runs on virtual threads — especially async runs and cron jobs — have no HTTP request context. `@WorkspaceScoped` is a CDI scope keyed on `sessionId`. The `WorkspaceScopeHolder` uses **JDK 25 `ScopedValue`** (not `ThreadLocal`) to bind a workspace context to the logical execution unit.
+Standard CDI scopes (`@RequestScoped`, `@SessionScoped`) are tied to HTTP lifecycle events. Agent runs on virtual threads - especially async runs and cron jobs - have no HTTP request context. `@WorkspaceScoped` is a CDI scope keyed on `sessionId`. The `WorkspaceScopeHolder` uses **JDK 25 `ScopedValue`** (not `ThreadLocal`) to bind a workspace context to the logical execution unit.
 
-For cases where MicroProfile `ManagedExecutor` or Apache Camel routes do not natively propagate `ScopedValue`, `WorkspaceThreadContextProvider` implements `ThreadContextProvider` and bridges the session ID into a `ThreadLocal` propagation bridge. This ensures the workspace scope is correctly restored across all async execution paths — Camel routes, reactive CDI event observers, and managed thread pools — without leaking state between sessions.
+For cases where MicroProfile `ManagedExecutor` or Apache Camel routes do not natively propagate `ScopedValue`, `WorkspaceThreadContextProvider` implements `ThreadContextProvider` and bridges the session ID into a `ThreadLocal` propagation bridge. This ensures the workspace scope is correctly restored across all async execution paths - Camel routes, reactive CDI event observers, and managed thread pools - without leaking state between sessions.
 
 **Two distinct context layers** (never mix them):
 
@@ -608,7 +608,7 @@ The `%cli` profile is forced by `arcclaw-cli.ps1` and silences all Quarkus banne
 
 ### Convenience Scripts
 
-**Windows** — PowerShell scripts in `scripts/windows/`:
+**Windows** - PowerShell scripts in `scripts/windows/`:
 
 | Script | Purpose |
 |---|---|
@@ -645,14 +645,14 @@ Every incoming message (from REST, Telegram, or CLI) travels through an ordered 
 Incoming Message (any channel)
     ↓
 MessagePipeline:
-    10 — AllowlistHandler            → blocks non-allowlisted users before any processing
-    15 — SessionResolutionHandler    → derives or creates deterministic session UUID
-    30 — CommandDispatchHandler      → routes /commands and zero-token reflexes (no LLM call)
-    50 — IntentClassificationHandler → SkillAwareIntentDetector.findMatch() first (zero classification tokens);
+    10 - AllowlistHandler            → blocks non-allowlisted users before any processing
+    15 - SessionResolutionHandler    → derives or creates deterministic session UUID
+    30 - CommandDispatchHandler      → routes /commands and zero-token reflexes (no LLM call)
+    50 - IntentClassificationHandler → SkillAwareIntentDetector.findMatch() first (zero classification tokens);
                                        falls through to llama-3.1-8b-instant for unmatched messages
-    60 — CompactionHandler           → fires async CDI event if chat window exceeds threshold;
+    60 - CompactionHandler           → fires async CDI event if chat window exceeds threshold;
                                        returns immediately without blocking the pipeline
-    70 — AgentDispatchHandler        → runs the ReAct agent loop, sends reply
+    70 - AgentDispatchHandler        → runs the ReAct agent loop, sends reply
 ```
 
 For Telegram specifically, `TelegramAgentHandler` sends a `⏳` acknowledgment immediately before queuing the message to a per-chat Caffeine executor (serializes messages per user), preventing out-of-order processing.
@@ -677,19 +677,19 @@ Checkpoints are persisted to SQLite at every iteration via `AsyncPersistenceEngi
 
 ## 🧠 The Reflex System (Zero-Token Fast Path)
 
-Before any message reaches the LLM, the `ReflexRegistry` evaluates it against all registered `AgentReflex` implementations. Reflexes that match short-circuit the pipeline entirely — **no LLM tokens are ever consumed**.
+Before any message reaches the LLM, the `ReflexRegistry` evaluates it against all registered `AgentReflex` implementations. Reflexes that match short-circuit the pipeline entirely - **no LLM tokens are ever consumed**.
 
 This matters for three reasons:
 
 1. **Cost**: Commands like `/approve`, `/status`, and `/history` are intent-unambiguous. Routing them through an LLM wastes tokens and adds latency.
-2. **Safety**: The `PromptInjectionReflex` must fire *before* the LLM sees the input — if an adversarial prompt could reach the reasoning engine, it might influence the model to bypass governance.
-3. **Reliability**: Reflexes are pure Java — they cannot hallucinate, and their behaviour is deterministic and fully unit-testable.
+2. **Safety**: The `PromptInjectionReflex` must fire *before* the LLM sees the input - if an adversarial prompt could reach the reasoning engine, it might influence the model to bypass governance.
+3. **Reliability**: Reflexes are pure Java - they cannot hallucinate, and their behaviour is deterministic and fully unit-testable.
 
 | Reflex | Trigger | Behaviour |
 |---|---|---|
 | `ApproveReflex` | `/approve [sessionId] [toolName]` | Resumes a paused `AWAITING_APPROVAL` checkpoint; per-tool or all-tools; admin delegation supported |
 | `DenyReflex` | `/deny [sessionId] [toolName]` | Marks checkpoint `FAILED`, wipes state; per-tool granularity supported |
-| `HaltReflex` | `/halt` | Emergency stop — terminates the workspace and all in-flight runs |
+| `HaltReflex` | `/halt` | Emergency stop - terminates the workspace and all in-flight runs |
 | `HistoryReflex` | `/history` | Dumps recent chat history + compaction summaries |
 | `StatusReflex` | `/status` | Shows current checkpoint state, USD spent, and compaction stats |
 | `ListCronsReflex` | `/crons`, `/cron`, `/list crons` | Lists all scheduled autonomous tasks for the current user (tenant-isolated) |
@@ -703,7 +703,7 @@ This matters for three reasons:
 > [!NOTE]
 > The `PiiScanReflex` and `PromptInjectionReflex` run on **every message** via their `sanitize()` hook in `ReflexRegistry.processIfReflex()`, even when no other reflex matches. PII mode is configurable: `REDACT_AND_FORWARD` (default) silently redacts and passes to the LLM; `BLOCK_AND_NOTIFY` rejects the message outright. Override at runtime via `ARCCLAW_PII_MODE` in your `.env`.
 >
-> **Note on skill routing**: `SkillReflex` handles only the `/skills` list command. Zero-token skill routing for regular messages uses `SkillAwareIntentDetector.findMatch()` called inside `IntentClassificationHandler` — these are distinct mechanisms.
+> **Note on skill routing**: `SkillReflex` handles only the `/skills` list command. Zero-token skill routing for regular messages uses `SkillAwareIntentDetector.findMatch()` called inside `IntentClassificationHandler` - these are distinct mechanisms.
 
 ---
 
@@ -721,7 +721,7 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `DelegateToAgentTool` | `delegate_to_agent` | `READ_FS` | ❌ In-process | Coordinator-only: spawns a specialist sub-agent loop with a fully self-contained goal |
 | `ExternalMcpToolAdapter` | *(dynamic name)* | Varies | ❌ In-process | Wraps tools from connected external MCP servers; registered dynamically via `DynamicToolCapabilityRegistry` |
 
-### Tool Governance — Autonomy Levels
+### Tool Governance - Autonomy Levels
 
 | Operation | FULL | SUPERVISED | BACKGROUND | READONLY |
 |---|---|---|---|---|
@@ -730,13 +730,13 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `READ_FS` | ✅ | ✅ | ✅ | ✅ |
 
 > [!NOTE]
-> **Secret Injection**: Tools annotate their `sandboxCommand()` method with `@RequiresSecret(envVar="GH_TOKEN", vaultKey="GITHUB_TOKEN")`. The `ToolRegistry` reads these annotations reflectively, resolves secrets from `SecretVault`, and injects them via `TmpfsSecretTransport` — an ephemeral env-file written to RAM-backed tmpfs, zeroed from JVM memory on close. Secrets **never** appear in process arguments.
+> **Secret Injection**: Tools annotate their `sandboxCommand()` method with `@RequiresSecret(envVar="GH_TOKEN", vaultKey="GITHUB_TOKEN")`. The `ToolRegistry` reads these annotations reflectively, resolves secrets from `SecretVault`, and injects them via `TmpfsSecretTransport` - an ephemeral env-file written to RAM-backed tmpfs, zeroed from JVM memory on close. Secrets **never** appear in process arguments.
 
 ---
 
 ## 🎯 Custom Skills System
 
-ArcClaw's Skills system is a zero-LLM-token routing mechanism that intercepts messages **before** the intent classifier. When a message matches a skill's trigger pattern (checked by `SkillAwareIntentDetector` inside `IntentClassificationHandler`), the skill's system prompt is injected directly and the agent runs — no classification tokens spent.
+ArcClaw's Skills system is a zero-LLM-token routing mechanism that intercepts messages **before** the intent classifier. When a message matches a skill's trigger pattern (checked by `SkillAwareIntentDetector` inside `IntentClassificationHandler`), the skill's system prompt is injected directly and the agent runs - no classification tokens spent.
 
 ### Skill Document Format
 
@@ -778,7 +778,7 @@ Always reference OWASP categories where applicable.
 | **Built-in (classpath)** | `.md` file in `src/main/resources/skills/` + entry in `index.txt` | Compiled into the binary; requires rebuild to add |
 | **Dynamic (database)** | `POST /api/v1/skills` with `X-ArcClaw-API-Key` | No rebuild needed; stored in `AgentSkillEntity` SQLite table |
 
-Database skills override classpath skills when names conflict — the dynamic tier wins.
+Database skills override classpath skills when names conflict - the dynamic tier wins.
 
 ### Skill REST API
 
@@ -850,14 +850,14 @@ Dynamic MCP tools (2): github [self, HTTP_SSE], memory_search [self, HTTP_SSE]
 
 ArcClaw uses a **dual-database SQLite architecture**:
 
-- `arcclaw-meta.db` — primary metadata database (WAL mode): checkpoints, chat memory, cron entities, audit events, encrypted secrets, compaction summaries, skills.
-- `arcclaw-fts.db` — standalone FTS5 full-text index: `compaction_summary_fts` table for semantic memory search.
+- `arcclaw-meta.db` - primary metadata database (WAL mode): checkpoints, chat memory, cron entities, audit events, encrypted secrets, compaction summaries, skills.
+- `arcclaw-fts.db` - standalone FTS5 full-text index: `compaction_summary_fts` table for semantic memory search.
 
 The two databases are connected at runtime via `ATTACH DATABASE`. `SqliteWalConfigurer` attaches the FTS database once at startup; `FtsConnectionInterceptor` additionally re-attaches on every pool connection acquisition, because WAL-mode connections can lose attached databases when a connection is returned to and re-acquired from the pool.
 
 All writes to SQLite are serialized through a single-threaded `AsyncPersistenceEngine` backed by a `LinkedBlockingQueue`:
 
-- **Critical tier** (capacity 500): mandatory compliance events. If the queue is full, the event executes synchronously on the caller thread — it is **never dropped**.
+- **Critical tier** (capacity 500): mandatory compliance events. If the queue is full, the event executes synchronously on the caller thread - it is **never dropped**.
 - **Telemetry tier** (capacity 5000): informational events. If the queue is full, the event is silently discarded and the `arcclaw.audit.queue.overflow` Micrometer counter is incremented.
 
 ```mermaid
@@ -865,7 +865,7 @@ All writes to SQLite are serialized through a single-threaded `AsyncPersistenceE
 graph LR
 
     APE["⚙️ AsyncPersistenceEngine<br/>Critical queue cap=500 (sync fallback)<br/>Telemetry queue cap=5000 (drop on overflow)"]:::writer
-    CC["🧠 ContextCompactionService<br/>llama-3.1-8b-instant<br/>Async CDI event — non-blocking"]:::compactor
+    CC["🧠 ContextCompactionService<br/>llama-3.1-8b-instant<br/>Async CDI event - non-blocking"]:::compactor
     TMS["🔍 TwoTierMemoryService<br/>FTS5 + vec · RRF k=60"]:::searcher
     SR["🗑 SessionReaper<br/>Scheduled GC<br/>Purges stale sessions"]:::reaper
 
@@ -909,13 +909,13 @@ Long-term memory search merges results from **two** retrieval tiers using **Reci
 
 **RRF formula**: `score(d) = Σ 1.0 / (k + rank)` where `k = 60` and rank is the 1-based position in each ranked list.
 
-**Graceful degradation**: If `FtsConnectionInterceptor.isVectorSearchEnabled()` returns `false` (sqlite-vec extension unavailable), `TwoTierMemoryService` skips the RRF merge entirely and returns FTS5 results directly — no error, no downtime.
+**Graceful degradation**: If `FtsConnectionInterceptor.isVectorSearchEnabled()` returns `false` (sqlite-vec extension unavailable), `TwoTierMemoryService` skips the RRF merge entirely and returns FTS5 results directly - no error, no downtime.
 
 The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`).
 
 ### Long-Term Memory (`MemorySearchTool`)
 
-`MemorySearchTool` queries the two-tier memory service scoped to the current user's `userId`. The LLM can control the search query but **cannot access another user's memories** — tenant isolation is enforced in Java, not in the SQL query.
+`MemorySearchTool` queries the two-tier memory service scoped to the current user's `userId`. The LLM can control the search query but **cannot access another user's memories** - tenant isolation is enforced in Java, not in the SQL query.
 
 ### Soft Reset
 
@@ -935,15 +935,15 @@ After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Re
 | `JsonExtractionException` | Thrown when extraction fails even after lenient parsing |
 | `StructuredOutputException` | Higher-level wrapper for structured output failures |
 
-**`@AgentFunction` annotation**: Marks a SAM interface as a BAML-style agent function. The build-time `AgentFunctionProcessor` (in `arcclaw-deployment`) generates a JSON schema from the **return type** at compile time, embedded in the LLM prompt to constrain its output. Note: schema is generated from the return type — not the input parameter type.
+**`@AgentFunction` annotation**: Marks a SAM interface as a BAML-style agent function. The build-time `AgentFunctionProcessor` (in `arcclaw-deployment`) generates a JSON schema from the **return type** at compile time, embedded in the LLM prompt to constrain its output. Note: schema is generated from the return type - not the input parameter type.
 
 **Built-in structured functions** (in `arcclaw-channel-api/structured/`):
 
 | Interface | Return type | Used by |
 |---|---|---|
-| `SynthesisFunction` | `SynthesisResult` | Dattatreya (synthesizer) — multi-agent result integration |
-| — | `AgentContribution` | Per-agent findings passed to synthesizer |
-| — | `ConflictSummary` | Structured conflict description between agent outputs |
+| `SynthesisFunction` | `SynthesisResult` | Dattatreya (synthesizer) - multi-agent result integration |
+| - | `AgentContribution` | Per-agent findings passed to synthesizer |
+| - | `ConflictSummary` | Structured conflict description between agent outputs |
 
 ---
 
@@ -952,7 +952,7 @@ After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Re
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
 sequenceDiagram
-    actor U as 👤 User — Telegram / CLI
+    actor U as 👤 User - Telegram / CLI
     participant AL as 🧠 AgentLoop<br/>ReAct Engine
     participant ST as ⏰ ScheduleTaskTool<br/>Fork-bomb + Pronoun Guard
     participant DB as 🗃 SQLite<br/>agent_cron table
@@ -963,10 +963,10 @@ sequenceDiagram
     U->>AL: "remind me every day at 9am to check alerts"
     AL->>ST: schedule_task(cronExpression="0 9 * * *",<br/>goal="Check alerts...", runOnce=false)
     ST->>DB: INSERT agent_cron<br/>status=PENDING · nextFireTime calculated
-    ST-->>AL: ✅ Scheduled — cronId=abc-123
+    ST-->>AL: ✅ Scheduled - cronId=abc-123
     AL-->>U: Cron job created successfully
 
-    Note over CS,DB: Polling loop — every 30 seconds
+    Note over CS,DB: Polling loop - every 30 seconds
 
     loop Every 30 seconds
         CS->>DB: SELECT WHERE status=PENDING<br/>AND nextFireTime ≤ now()
@@ -1007,7 +1007,7 @@ sequenceDiagram
     API->>API: ② PromptInjectionReflex<br/>Block jailbreak patterns + CONTEXT_WIPE
     API->>SQLite: Resolve or create session checkpoint
 
-    Note over API,SQLite: ReAct loop begins — every tick checkpointed to SQLite WAL
+    Note over API,SQLite: ReAct loop begins - every tick checkpointed to SQLite WAL
 
     API->>Guard: Tool call requested (e.g. github)
     Guard->>Guard: Check ToolOperation vs Autonomy level
@@ -1015,16 +1015,16 @@ sequenceDiagram
     alt NETWORK_OUTBOUND + SUPERVISED
         Guard-->>API: RequiresApprovalException thrown
         API-->>SQLite: Save AWAITING_APPROVAL checkpoint
-        API-->>User: 202 — awaiting /approve
+        API-->>User: 202 - awaiting /approve
         User->>API: /approve or /deny (per-tool or all)
         API->>SQLite: Resume or fail checkpoint
     end
 
     Guard->>Vault: Resolve secret<br/>vaultKey → GH_TOKEN
-    Vault->>Vault: Argon2id KDF — 64MB · 3 iter<br/>AES-GCM-SIV decrypt
+    Vault->>Vault: Argon2id KDF - 64MB · 3 iter<br/>AES-GCM-SIV decrypt
     Vault-->>Sandbox: Raw secret bytes via AutoCloseable
 
-    Sandbox->>Sandbox: Write tmpfs env-file — mode 600<br/>(systemd mount: /run/arcclaw/secrets)
+    Sandbox->>Sandbox: Write tmpfs env-file - mode 600<br/>(systemd mount: /run/arcclaw/secrets)
     Sandbox->>Sandbox: Podman rootless<br/>--network=none · --read-only<br/>memory=512m + cpu=0.5
     Sandbox-->>Sandbox: close() → zero bytes + unlink tmpfs
 
@@ -1036,14 +1036,14 @@ sequenceDiagram
 
     API->>SQLite: ContextCompactionService (async CDI event)<br/>Summarise oldest msgs · Strips injection artifacts
     SQLite->>FTS: Write compaction_summary_fts<br/>via ATTACH DATABASE (re-attached per pool conn)
-    FTS-->>API: memory_search queries FTS5 + vec<br/>scoped to userId — cross-tenant proof
+    FTS-->>API: memory_search queries FTS5 + vec<br/>scoped to userId - cross-tenant proof
 
     API-->>User: Final reply<br/>Audit verifiable at GET /api/v1/audit/{sessionId}/verify
 ```
 
 ### API Authentication & Rate Limiting
 
-All `/api/v1/*` endpoints (except `/api/v1/info`, `/q/health`, `/q/metrics`) require the `X-ArcClaw-API-Key` header. `ApiKeyAuthFilter` validates it against `ApiKeyRegistry` using **constant-time comparison** (preventing timing attacks). Rate limiting is **per API key name** — each key has its own sliding window; exceeding `requests-per-minute` (default: 20) returns `HTTP 429` with a `Retry-After` header.
+All `/api/v1/*` endpoints (except `/api/v1/info`, `/q/health`, `/q/metrics`) require the `X-ArcClaw-API-Key` header. `ApiKeyAuthFilter` validates it against `ApiKeyRegistry` using **constant-time comparison** (preventing timing attacks). Rate limiting is **per API key name** - each key has its own sliding window; exceeding `requests-per-minute` (default: 20) returns `HTTP 429` with a `Retry-After` header.
 
 - **`DestructiveVocabularyFilter`**: Pre-execution filter that blocks messages containing dangerous shell keywords (e.g., `rm -rf`, `DROP TABLE`, `:(){ :|:& };:`) before they reach the LLM.
 - **`StartupSecurityValidator`**: Validates security posture at startup. In `%prod`, fails fast if weak default secrets are detected. Runs after `DevSecretSeederStartup` to ensure correct CDI `@Priority` ordering.
@@ -1054,7 +1054,7 @@ All `/api/v1/*` endpoints (except `/api/v1/info`, `/q/health`, `/q/metrics`) req
 ArcClaw's `SecretVaultImpl` uses a multi-layer cryptographic scheme:
 
 - **Key Derivation**: `Argon2idKeyDerivation` with 64 MB memory, 3 iterations, 1 parallelism thread.
-- **Encryption**: `AesGcmSivCipher` — AES-256-GCM-SIV authenticated encryption (BouncyCastle 1.83). Nonce is derived from the vault key + salt (deterministic, immune to nonce reuse under key rotation).
+- **Encryption**: `AesGcmSivCipher` - AES-256-GCM-SIV authenticated encryption (BouncyCastle 1.83). Nonce is derived from the vault key + salt (deterministic, immune to nonce reuse under key rotation).
 - **Pepper**: A server-side secret (`arcclaw.vault.pepper`) mixed into the key derivation, preventing offline dictionary attacks even if the database is exfiltrated.
 - **Memory Safety**: `VaultKey` implements `AutoCloseable`. The `close()` method explicitly overwrites the key byte array with zeros before GC.
 
@@ -1091,7 +1091,7 @@ Every agent action is appended to the `audit_event` table with:
 
 - A **HMAC-SHA256 chain**: Row N's `hmacHash = HMAC-SHA256(prevHash | payload)`. Row 1's `prevHash = SHA256("GENESIS:" + sessionId)`. Tampering any row breaks the chain from that point forward.
 - **SQLite WORM triggers** installed by `AuditSchemaEnforcer` on every startup: `UPDATE` and `DELETE` on `audit_event` are rejected at the database level.
-- **Mandatory events** (agent halts if write fails — fail-closed): `VAULT_ACCESS`, `TOOL_INVOKED`, `BUDGET_EXCEEDED`, `PROMPT_INJECTION_BLOCKED`, `APPROVAL_GRANTED`, `APPROVAL_DENIED`, `CRONFIRED`, `CRONFAILED`
+- **Mandatory events** (agent halts if write fails - fail-closed): `VAULT_ACCESS`, `TOOL_INVOKED`, `BUDGET_EXCEEDED`, `PROMPT_INJECTION_BLOCKED`, `APPROVAL_GRANTED`, `APPROVAL_DENIED`, `CRONFIRED`, `CRONFAILED`
 - Chain integrity is verifiable via `GET /api/v1/audit/{sessionId}/verify`
 
 ### Human-in-the-Loop (HITL) Governance
@@ -1117,12 +1117,12 @@ ArcClaw executes AI-generated shell commands inside a three-tier isolation syste
 
 | Tier | Condition | Isolation | Notes |
 |---|---|---|---|
-| **1 — Podman Rootless** | All profiles except `%test`, Podman socket up, image present | Full container isolation: `--network=none --read-only`, memory=512m, cpu=0.5 | Secrets injected via tmpfs, never as CLI args |
-| **2 — Linux Namespaces** | Podman circuit breaker opened after 3 consecutive failures | `unshare` pid + net + mount namespaces | Fallback, Linux only |
-| **3 — Direct Execution** | `%test` profile only, or Windows OS detected | None — host `PATH` `ProcessBuilder` | `gh` CLI must be on `PATH`. No isolation. |
+| **1 - Podman Rootless** | All profiles except `%test`, Podman socket up, image present | Full container isolation: `--network=none --read-only`, memory=512m, cpu=0.5 | Secrets injected via tmpfs, never as CLI args |
+| **2 - Linux Namespaces** | Podman circuit breaker opened after 3 consecutive failures | `unshare` pid + net + mount namespaces | Fallback, Linux only |
+| **3 - Direct Execution** | `%test` profile only, or Windows OS detected | None - host `PATH` `ProcessBuilder` | `gh` CLI must be on `PATH`. No isolation. |
 
 **Why Podman over Docker?**
-- **No privileged daemon socket**: Docker requires mounting `/var/run/docker.sock` — owning that socket grants root-equivalent access to the host. Podman is daemonless.
+- **No privileged daemon socket**: Docker requires mounting `/var/run/docker.sock` - owning that socket grants root-equivalent access to the host. Podman is daemonless.
 - **Rootless by default**: Podman containers run as UID 65534 (nobody). Even if a sandboxed tool escapes, it's unprivileged on the host.
 - **SELinux-native**: Built on UBI 9 (RHEL lineage) where Podman's SELinux label propagation works seamlessly.
 
@@ -1149,7 +1149,7 @@ ArcClaw executes AI-generated shell commands inside a three-tier isolation syste
 |---|---|---|
 | `otel-collector` | `4317` (gRPC), `4318` (HTTP) | Receives OTLP spans from ArcClaw, forwards to Jaeger |
 | `jaeger` | `16686` (UI) | Distributed trace viewer |
-| `prometheus` | `9090` (UI) | Metrics scraper — polls `http://localhost:8080/q/metrics` |
+| `prometheus` | `9090` (UI) | Metrics scraper - polls `http://localhost:8080/q/metrics` |
 
 - **Prometheus** (`/q/metrics`): Micrometer metrics for token consumption (`arcclaw.llm.tokens`), agent invocations (`arcclaw.agent.invocations`), audit queue overflow (`arcclaw.audit.queue.overflow`), and Quarkus scheduler metrics.
 - **Structured Logging**: MDC-enriched log lines include `sessionId`, `userId`, and `chatId` in every log entry.
@@ -1164,22 +1164,22 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ARCCLAW_LLM_API_KEY` | ✅ (provider-conditional) | — | API key for the selected LLM provider (Groq: `gsk_...`, OpenRouter: `sk-or-v1-...`, OpenAI: `sk-...`) |
+| `ARCCLAW_LLM_API_KEY` | ✅ (provider-conditional) | - | API key for the selected LLM provider (Groq: `gsk_...`, OpenRouter: `sk-or-v1-...`, OpenAI: `sk-...`) |
 | `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama` |
 | `ARCCLAW_LLM_MODEL_NAME` | no | `meta-llama/llama-4-scout-17b-16e-instruct` | Primary reasoning model name for the selected provider |
 | `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama) |
-| `ARCCLAW_VAULT_PEPPER` | ✅ | — | Server-side pepper for Argon2id KDF (≥32 random chars). If lost, all vault secrets are unrecoverable. Never change after first boot. |
-| `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | — | HMAC key for the audit log integrity chain (≥32 random chars). Never change after first boot. |
-| `ARCCLAW_API_KEYS_INTERNAL` | ✅ | — | Primary REST API key (`X-ArcClaw-API-Key` header) |
-| `ARCCLAW_API_KEYS_CI` | no | — | Optional secondary REST API key for CI pipelines |
-| `ARCCLAW_EMBED_API_KEY` | ✅ | — | API key for the embedding provider (default: Jina AI, starts with `jina_`) |
+| `ARCCLAW_VAULT_PEPPER` | ✅ | - | Server-side pepper for Argon2id KDF (≥32 random chars). If lost, all vault secrets are unrecoverable. Never change after first boot. |
+| `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | - | HMAC key for the audit log integrity chain (≥32 random chars). Never change after first boot. |
+| `ARCCLAW_API_KEYS_INTERNAL` | ✅ | - | Primary REST API key (`X-ArcClaw-API-Key` header) |
+| `ARCCLAW_API_KEYS_CI` | no | - | Optional secondary REST API key for CI pipelines |
+| `ARCCLAW_EMBED_API_KEY` | ✅ | - | API key for the embedding provider (default: Jina AI, starts with `jina_`) |
 | `ARCCLAW_DATA_DIR` | no | `./data` | Directory where ArcClaw stores SQLite databases and state files |
 | `ARCCLAW_TELEGRAM_ENABLED` | no | `false` | Set `true` to activate the Telegram channel daemon |
-| `TELEGRAM_BOT_TOKEN` | no* | — | Required when `ARCCLAW_TELEGRAM_ENABLED=true` |
-| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | no* | — | Comma-separated numeric Telegram user IDs (required if Telegram enabled) |
-| `ARCCLAW_TELEGRAM_ALLOWED_USERS` | no* | — | Comma-separated Telegram usernames without `@` (required if Telegram enabled) |
+| `TELEGRAM_BOT_TOKEN` | no* | - | Required when `ARCCLAW_TELEGRAM_ENABLED=true` |
+| `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | no* | - | Comma-separated numeric Telegram user IDs (required if Telegram enabled) |
+| `ARCCLAW_TELEGRAM_ALLOWED_USERS` | no* | - | Comma-separated Telegram usernames without `@` (required if Telegram enabled) |
 | `ARCCLAW_AUTO_SEED_SECRETS` | no | `false` | If `true`, seeds `GITHUB_TOKEN` from `.env` into the vault automatically on boot |
-| `GITHUB_TOKEN` | no | — | GitHub Personal Access Token; seeded into vault when `ARCCLAW_AUTO_SEED_SECRETS=true` |
+| `GITHUB_TOKEN` | no | - | GitHub Personal Access Token; seeded into vault when `ARCCLAW_AUTO_SEED_SECRETS=true` |
 | `ARCCLAW_PII_MODE` | no | `REDACT_AND_FORWARD` | PII handling: `REDACT_AND_FORWARD` (silent redact) or `BLOCK_AND_NOTIFY` (reject message) |
 | `ARCCLAW_SESSION_BUDGET_USD` | no | `10.00` | Hard USD budget per session; agent halts when exceeded |
 
@@ -1196,11 +1196,11 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 | [`ARCCLAW_EXTENSION.md`](./ARCCLAW_EXTENSION.md) | Developer extension guide: adding tools, personas, reflexes, channels, skills, LLM providers, ObservationTransformers, ToolGuardInterceptors |
 | [`Architecture_Invariants.md`](./Architecture_Invariants.md) | Mandatory architecture rules (33+ invariants). Read before changing architecture-sensitive code. |
 | [`CHANNEL_SPI.md`](./CHANNEL_SPI.md) | Step-by-step guide for adding a new channel (Discord, Slack, etc.) via the 6-interface SPI |
-| [`MISE_SETUP.md`](./MISE_SETUP.md) | mise task runner — install, trust, all `mise run` tasks, dev/jar/native/compose modes, Windows, troubleshooting |
+| [`MISE_SETUP.md`](./MISE_SETUP.md) | mise task runner - install, trust, all `mise run` tasks, dev/jar/native/compose modes, Windows, troubleshooting |
 | [`MANUAL_SETUP.md`](./MANUAL_SETUP.md) | Manual Setup, Prerequisites, OS-specific setup, build, run modes, Docker Compose, native build |
 | [`TELEGRAM_TESTING.md`](./TELEGRAM_TESTING.md) | Telegram bot end-to-end testing guide |
 | [`FAQ.md`](./FAQ.md) | In-depth architecture Q&A, security rationale, and operational guidance |
-| [`rest-http/`](./rest-http/) | IntelliJ / VSCode REST Client files — see `rest-http/README.md` for full index |
+| [`rest-http/`](./rest-http/) | IntelliJ / VSCode REST Client files - see `rest-http/README.md` for full index |
 
 ---
 

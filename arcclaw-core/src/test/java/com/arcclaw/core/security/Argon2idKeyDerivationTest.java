@@ -33,7 +33,7 @@ class Argon2idKeyDerivationTest {
         // Call derivation
         keyDerivation.deriveSessionKey("test-session-id");
 
-        // Read pepperChars field via reflection — must be all zeros BEFORE @PreDestroy fires
+        // Read pepperChars field via reflection - must be all zeros BEFORE @PreDestroy fires
         Field field = Argon2idKeyDerivation.class.getDeclaredField("pepperChars");
         field.setAccessible(true);
         char[] pepper = (char[]) field.get(keyDerivation);

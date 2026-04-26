@@ -1,6 +1,6 @@
-## Phase 78 — Final Testing Guide (All 8 Layers)
+## Phase 78 - Final Testing Guide (All 8 Layers)
 
-### Layer 1 — Unit Tests (~1 min)
+### Layer 1 - Unit Tests (~1 min)
 
 ```powershell
 ./mvnw test `
@@ -13,7 +13,7 @@
 
 ***
 
-### Layer 2 — Compile + Index Check (~2 min)
+### Layer 2 - Compile + Index Check (~2 min)
 
 ```powershell
 ./mvnw clean compile test-compile `
@@ -25,22 +25,22 @@ Verify `AgentStateChangedEvent` 4-arg constructor used at all call sites. Any mi
 
 ***
 
-### Layer 3 — Startup Health Checks
+### Layer 3 - Startup Health Checks
 
 Start dev server, then verify:
 
 ```http
-### 3.1 — Tools intact (no regressions)
+### 3.1 - Tools intact (no regressions)
 GET http://localhost:8080/api/v1/tools
 X-ArcClaw-API-Key: {{validKey}}
 # Expected: existing tools list, HTTP 200
 
-### 3.2 — Agents empty on cold start (in-memory store wiped on restart)
+### 3.2 - Agents empty on cold start (in-memory store wiped on restart)
 GET http://localhost:8080/api/v1/agents
 X-ArcClaw-API-Key: {{validKey}}
 # Expected: []
 
-### 3.3 — HITL empty on cold start
+### 3.3 - HITL empty on cold start
 GET http://localhost:8080/api/v1/hitl
 X-ArcClaw-API-Key: {{validKey}}
 # Expected: []
@@ -57,10 +57,10 @@ arcclaw started in ~4s
 
 ***
 
-### Layer 4 — SSE Stream (open first, keep alive)
+### Layer 4 - SSE Stream (open first, keep alive)
 
 ```bash
-# Terminal 1 — open BEFORE sending any WebSocket message
+# Terminal 1 - open BEFORE sending any WebSocket message
 curl -N \
   -H "X-ArcClaw-API-Key: key-internal-changeme" \
   -H "Accept: text/event-stream" \
@@ -72,13 +72,13 @@ curl -N \
 data:{"eventType":"heartbeat","agentName":"system","payload":"keep-alive"}
 ```
 
-Heartbeat fires every 20 seconds — confirms SSE pipe is alive. ✅ Verified
+Heartbeat fires every 20 seconds - confirms SSE pipe is alive. ✅ Verified
 
-> **Note:** This endpoint is `GET` only. `POST` returns `405 Method Not Allowed` — that is correct behaviour.
+> **Note:** This endpoint is `GET` only. `POST` returns `405 Method Not Allowed` - that is correct behaviour.
 
 ***
 
-### Layer 5 — WebSocket Connectivity
+### Layer 5 - WebSocket Connectivity
 
 ```bash
 # Terminal 2
@@ -94,7 +94,7 @@ wscat -c ws://localhost:8080/ws/chat
 }
 ```
 
-Key verification — **single session** in server logs:
+Key verification - **single session** in server logs:
 ```
 SessionRegistry: created session <uuid> for [WEBSOCKET/<platformId>/...]
 WebSocket opened: connId=... platformId=... arcclawSession=...   ← same UUID
@@ -104,7 +104,7 @@ No second `SessionRegistry: created session` line when first message arrives. �
 
 ***
 
-### Layer 6 — Agent Run + SSE Events
+### Layer 6 - Agent Run + SSE Events
 
 Send a simple message on the WebSocket:
 
@@ -148,9 +148,9 @@ CLASSIFIER invoked, SLA=437ms, role=coordinator   ← <500ms is healthy
 
 ***
 
-### Layer 7 — Full HITL Loop via WebSocket
+### Layer 7 - Full HITL Loop via WebSocket
 
-**Step 1 — Trigger approval:**
+**Step 1 - Trigger approval:**
 ```json
 {"type":"message","text":"List the public repositories of GitHub user rsrini7 using the github tool."}
 ```
@@ -170,7 +170,7 @@ STATE-MACHINE Pausing session <uuid> for human approval of tool github
 Stamped channel info on checkpoint session=<uuid> channel=websocket platformId=<uuid>
 ```
 
-**Step 2 — Poll HITL (VS Code REST Client):**
+**Step 2 - Poll HITL (VS Code REST Client):**
 ```http
 # @name hitlPending
 GET http://localhost:8080/api/v1/hitl
@@ -178,7 +178,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # Expected: [{taskId, toolName:"github", params:{...}, agentName:"researcher"}]
 ```
 
-**Step 3 — Approve on same WebSocket connection:**
+**Step 3 - Approve on same WebSocket connection:**
 ```json
 {"type":"message","text":"/approve"}
 ```
@@ -202,7 +202,7 @@ APPROVAL_GRANTED
 }
 ```
 
-**Step 4 — Verify HITL cleared:**
+**Step 4 - Verify HITL cleared:**
 ```http
 GET http://localhost:8080/api/v1/hitl
 X-ArcClaw-API-Key: {{validKey}}
@@ -213,7 +213,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ***
 
-### Layer 7B — HITL Reject Path
+### Layer 7B - HITL Reject Path
 
 ```json
 {"type":"message","text":"List the public repositories of GitHub user rsrini7 using the github tool."}
@@ -242,7 +242,7 @@ CHECKPOINT status → FAILED or DENIED
 
 ***
 
-### Layer 7C — HITL via REST UI (HitlResource)
+### Layer 7C - HITL via REST UI (HitlResource)
 
 For approvals triggered from the Lit UI dashboard (not WebSocket `/approve`):
 
@@ -253,7 +253,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-# Uses taskId extracted from Step 1 — no Content-Type, no body
+# Uses taskId extracted from Step 1 - no Content-Type, no body
 POST http://localhost:8080/api/v1/hitl/{{hitlPending.response.body.[0].taskId}}/approve
 X-ArcClaw-API-Key: {{validKey}}
 # Expected: {"status":"approved","taskId":"<id>"}
@@ -273,7 +273,7 @@ Not needed right now
 
 ***
 
-### Layer 8 — Telegram Non-Regression
+### Layer 8 - Telegram Non-Regression
 
 Send any message via Telegram (e.g. "How r u"), then verify:
 
@@ -304,13 +304,13 @@ TELEGRAM-SEND        → reply delivered                           ✅
 
 | Layer | Gate | Status |
 |---|---|---|
-| 1 — Unit tests | All 4 test classes pass | ✅ Verified |
-| 2 — Compile | Clean, `AgentStateChangedEvent` 4-arg everywhere | ✅ Verified |
-| 3 — Startup health | Tools/agents/hitl endpoints respond, zombie recovery clean | ✅ Verified |
-| 4 — SSE stream | `GET` returns heartbeat every 20s | ✅ Verified |
-| 5 — WebSocket connect | Single session UUID, `connected` event with `sessionId` + `platformId` | ✅ Verified |
-| 6 — Agent run | SSE `status_change` fires, `GET /agents` non-empty during run | ✅ Verified |
-| 7 — HITL WebSocket | `/approve` resumes agent, tool executes, reply delivered | ✅ Verified |
-| 7B — HITL reject | `/deny` cancels correctly | Run now |
-| 7C — HITL REST | `POST /hitl/{id}/approve` returns `200`, no body required | Run now |
-| 8 — Telegram | No `AmbiguousResolutionException`, reply delivered | ✅ Verified |
+| 1 - Unit tests | All 4 test classes pass | ✅ Verified |
+| 2 - Compile | Clean, `AgentStateChangedEvent` 4-arg everywhere | ✅ Verified |
+| 3 - Startup health | Tools/agents/hitl endpoints respond, zombie recovery clean | ✅ Verified |
+| 4 - SSE stream | `GET` returns heartbeat every 20s | ✅ Verified |
+| 5 - WebSocket connect | Single session UUID, `connected` event with `sessionId` + `platformId` | ✅ Verified |
+| 6 - Agent run | SSE `status_change` fires, `GET /agents` non-empty during run | ✅ Verified |
+| 7 - HITL WebSocket | `/approve` resumes agent, tool executes, reply delivered | ✅ Verified |
+| 7B - HITL reject | `/deny` cancels correctly | Run now |
+| 7C - HITL REST | `POST /hitl/{id}/approve` returns `200`, no body required | Run now |
+| 8 - Telegram | No `AmbiguousResolutionException`, reply delivered | ✅ Verified |

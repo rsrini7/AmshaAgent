@@ -32,7 +32,7 @@ arcclaw:
       
 quarkus:
   arc:
-    # Exclude channel impl beans from CDI during tests — their dependencies
+    # Exclude channel impl beans from CDI during tests - their dependencies
     # (ChannelServices, ApprovalGateway) live in arcclaw-core which is a Quarkus
     # extension, and extension runtime beans aren't auto-discovered by Arc.
     # These channel modules have their own test suites.

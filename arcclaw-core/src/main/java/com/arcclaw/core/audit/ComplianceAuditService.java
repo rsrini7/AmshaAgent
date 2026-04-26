@@ -28,7 +28,7 @@ public class ComplianceAuditService {
     }
 
     /**
-     * Records a MANDATORY security event — fail-closed.
+     * Records a MANDATORY security event - fail-closed.
      *
      * <p>This method BLOCKS on the background write. If the write fails
      * after all retries, a {@link ComplianceViolationException} is thrown
@@ -43,7 +43,7 @@ public class ComplianceAuditService {
         PersistenceEvent pe = PersistenceEvent.critical(sessionId, type, () -> {
             auditEventRepository.record(event);
         });
-        // Blocks — throws ComplianceViolationException if write fails
+        // Blocks - throws ComplianceViolationException if write fails
         persistenceEngine.submitCritical(pe);
     }
 }

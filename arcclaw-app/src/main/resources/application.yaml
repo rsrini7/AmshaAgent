@@ -1,5 +1,5 @@
 # =============================================================================
-# ArcClaw V1.0.0 — Full Application Configuration
+# ArcClaw V1.0.0 - Full Application Configuration
 # Never hardcode secrets here. Use env vars or Kubernetes Secrets.
 # =============================================================================
 
@@ -69,7 +69,7 @@ quarkus:
     path: /api/v1   # all /sessions endpoints served at /api/v1/sessions
 
   # ---------------------------------------------------------------------------
-  # DATABASE — SQLite
+  # DATABASE - SQLite
   # ---------------------------------------------------------------------------
   datasource:
     db-kind: sqlite
@@ -82,7 +82,7 @@ quarkus:
       #Connection 3 = for REQUIRES_NEW under concurrent approval + async audit drain
       max-size: 3
       transactions: enabled
-      # ✅ ADD THESE — validates connections before handing back to callers
+      # ✅ ADD THESE - validates connections before handing back to callers
       # prevents broken/post-BUSY connections from being reused (the cron cascade fix)
       background-validation-interval: PT30S
       validation-query-sql: "SELECT 1"
@@ -157,7 +157,7 @@ quarkus:
   otel:
     enabled: true
     sdk:
-      disabled: "${OTEL_SDK_DISABLED:true}"  # default off — enable when collector present
+      disabled: "${OTEL_SDK_DISABLED:true}"  # default off - enable when collector present
     exporter:
       otlp:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
@@ -213,7 +213,7 @@ smallrye:
   smallrye-openapi:
     info-title: "ArcClaw Agent API"
     info-version: "1.0.0"
-    info-description: "Autonomous multi-agent framework — Java 21 + Quarkus + LangChain4J"
+    info-description: "Autonomous multi-agent framework - Java 21 + Quarkus + LangChain4J"
 
 
   # ---------------------------------------------------------------------------
@@ -535,22 +535,22 @@ arcclaw:
     roles:
       - name: coordinator
         class: com.arcclaw.core.agent.VishnuAgent
-        description: "Preserver and Captain/Coordinator — task decomposition and synthesis"
+        description: "Preserver and Captain/Coordinator - task decomposition and synthesis"
       - name: researcher
         class: com.arcclaw.core.agent.SaraswatiAgent
-        description: "Research & Knowledge, Wisdom, and Facts — real-time search and evidence"
+        description: "Research & Knowledge, Wisdom, and Facts - real-time search and evidence"
       - name: coder
         class: com.arcclaw.core.agent.BrahmaAgent
-        description: "Math/Code Creator and Logic Expert — rigorous validation"
+        description: "Math/Code Creator and Logic Expert - rigorous validation"
       - name: debugger
         class: com.arcclaw.core.agent.ShivaAgent
-        description: "Creative, Transformer and Balance Expert — blind-spot detection"
+        description: "Creative, Transformer and Balance Expert - blind-spot detection"
       - name: architect
         class: com.arcclaw.core.agent.persona.BrihaspatiAgent
-        description: "Brihaspati — Guru of the Devas, System Designer and Standards Author  — ADRs and architectural trade-offs"
+        description: "Brihaspati - Guru of the Devas, System Designer and Standards Author  - ADRs and architectural trade-offs"
       - name: synthesizer
         class: com.arcclaw.core.agent.persona.DattatreyaAgent
-        description: "Synthesizer and Avadhuta — multi-agent conflict resolution and integration"        
+        description: "Synthesizer and Avadhuta - multi-agent conflict resolution and integration"        
 
 # =============================================================================
 # MICROPROFILE CONTEXT PROPAGATION
@@ -643,7 +643,7 @@ mp:
 
   arcclaw:
     pii:
-      mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Dev — same as prod, see redacted output
+      mode: "${ARCCLAW_PII_MODE:REDACT_AND_FORWARD}"   # Dev - same as prod, see redacted output
     sandbox:
       strategy: NONE        # no Podman in local dev
     governance:

@@ -115,7 +115,7 @@ public class ReasoningStepParser {
 
             if (requests.size() > 1) {
                 log.infof("[PARALLEL-TOOLS] session=%s role=%s: LLM issued %d parallel " +
-                          "tool calls: %s — routing to ParallelToolStepExecutor.",
+                          "tool calls: %s - routing to ParallelToolStepExecutor.",
                           sessionId, agentRole, requests.size(),
                           requests.stream()
                               .map(ToolExecutionRequest::name)
@@ -150,7 +150,7 @@ public class ReasoningStepParser {
                 for (int i = 0; i < requests.size(); i++) {
                     ToolExecutionRequest req = requests.get(i);
                     // §7.19: callId must be non-null for merge loop correctness.
-                    // Ollama does not provide tool call IDs — generate stable fallback.
+                    // Ollama does not provide tool call IDs - generate stable fallback.
                     String callId = req.id() != null
                         ? req.id()
                         : req.name() + "-" + UUID.randomUUID();
@@ -171,7 +171,7 @@ public class ReasoningStepParser {
                 } catch (Exception e) {
                     log.errorf("Failed to serialize parallel batch for session %s: %s",
                                sessionId, e.getMessage());
-                    log.warnf("[PARALLEL-TOOLS] Serialization failure — " +
+                    log.warnf("[PARALLEL-TOOLS] Serialization failure - " +
                               "falling back to first tool '%s' only.", requests.getFirst().name());
                     ToolExecutionRequest req = requests.getFirst();
                     Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
@@ -294,7 +294,7 @@ public class ReasoningStepParser {
                 rawCode = argsJson.substring(codeStart + 1);
             }
         } else {
-            // No language field — assume truncated
+            // No language field - assume truncated
             rawCode = argsJson.substring(codeStart + 1);
         }
 

@@ -130,7 +130,7 @@ public class AgentCronScheduler {
             for (AgentCronEntity job : orphaned) {
                 log.warnf("AgentCronScheduler: failing orphaned approval job id=%s goal='%s'",
                         job.id, job.goal);
-                cronRepository.markFailed(job.id, "Orphaned — session expired before approval (server restart).");
+                cronRepository.markFailed(job.id, "Orphaned - session expired before approval (server restart).");
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
         } catch (IllegalStateException | PersistenceException e) {
@@ -139,7 +139,7 @@ public class AgentCronScheduler {
             if (!isShutdown) {
                 log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
             } else {
-                log.infof("AgentCronScheduler: persistence closed during sweep (app shutting down) — suppression intentional.");
+                log.infof("AgentCronScheduler: persistence closed during sweep (app shutting down) - suppression intentional.");
                 log.debugf(e, "Full shutdown race details:");
             }
         } catch (Exception e) {
@@ -236,7 +236,7 @@ public class AgentCronScheduler {
      * <p>
      * Step 0: Leader election (§T5-3)
      * Step 0.1: Crash recovery (reclaim RUNNING rows stuck > 5 minutes)
-     * Step 1: Query due rows (read-only — no write lock)
+     * Step 1: Query due rows (read-only - no write lock)
      * Step 2: Claim → throttle check → dispatch via JobRunner
      */
     @Scheduled(every = "${arcclaw.cron.poll-interval:30s}",
@@ -244,13 +244,13 @@ public class AgentCronScheduler {
     @ActivateRequestContext
     @Transactional(TxType.NOT_SUPPORTED)
     void pollAndDispatch() {
-        // Step 0 — Leader election (§T5-3)
+        // Step 0 - Leader election (§T5-3)
         if (!advisoryLock.isUnsatisfied() && !advisoryLock.get().tryLock("cron-leader", 30)) {
             return; // Not the leader this cycle
         }
 
         try {
-            // Step 0.1 — Crash recovery
+            // Step 0.1 - Crash recovery
             cronRepository.reclaimStaleCrons(
                     Instant.now().minus(5, ChronoUnit.MINUTES));
         } catch (Exception e) {
@@ -259,7 +259,7 @@ public class AgentCronScheduler {
                 return;
         }
         
-        // Step 1 — Query due rows
+        // Step 1 - Query due rows
         List<AgentCronEntity> due = cronRepository.findDueCrons();
         if (due.isEmpty()) return;
 
@@ -270,7 +270,7 @@ public class AgentCronScheduler {
         while (iter.hasNext()) {
             AgentCronEntity job = iter.next();
             if (job.nextFireTime.isBefore(lookbackCutoff)) {
-                log.warnf("Cron job [%s] missed fire time %s — outside %s lookback window. Marking SKIPPED and rescheduling.",
+                log.warnf("Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
                     job.id, job.nextFireTime, maxLookbackWindow);
                 job.status = CronStatus.SKIPPED;
                 if (job.cronExpression != null && !job.cronExpression.isBlank()) {
@@ -291,7 +291,7 @@ public class AgentCronScheduler {
 
         log.infof("CRON-POLL found %d due job(s)", due.size());
 
-        // Step 2 — Dispatch loop
+        // Step 2 - Dispatch loop
         for (AgentCronEntity job : due) {
             if (!cronRepository.claimForFire(job.id)) continue;
 

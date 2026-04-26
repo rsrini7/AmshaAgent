@@ -9,7 +9,7 @@ import com.arcclaw.ArcClawInfo;
 import com.arcclaw.core.tools.ToolRegistry;
 
 /**
- * Component A1 — SystemEnvironmentContextEnricher.
+ * Component A1 - SystemEnvironmentContextEnricher.
  * Injects host environment metadata into the agent's system prompt.
  *
  * This implementation is stateless and idempotent.

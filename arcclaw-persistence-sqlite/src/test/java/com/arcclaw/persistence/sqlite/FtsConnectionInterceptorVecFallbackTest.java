@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Plain JUnit test — no Quarkus container needed.
+ * Plain JUnit test - no Quarkus container needed.
  * Verifies that FtsConnectionInterceptor gracefully handles a missing vec0 binary
  * without crashing the application.
  */

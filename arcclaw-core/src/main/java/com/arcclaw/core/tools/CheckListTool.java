@@ -17,7 +17,7 @@ import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
- * Component A2 — CheckListTool.
+ * Component A2 - CheckListTool.
  * Allows agents to track progress for multi-step tasks.
  */
 @ApplicationScoped
@@ -61,7 +61,7 @@ public class CheckListTool implements AgentTool {
     }
 
     public JsonObjectSchema parametersSchema() {
-        // Single parameter: "checkList" — an array of objects
+        // Single parameter: "checkList" - an array of objects
         return JsonObjectSchema.builder()
             .addProperty("checkList", JsonArraySchema.builder()
                 .items(JsonObjectSchema.builder()
@@ -83,7 +83,7 @@ public class CheckListTool implements AgentTool {
         String agentRole;
 
         try {
-            // Step 1 — Extract and validate tenant context
+            // Step 1 - Extract and validate tenant context
             // NS2: Fail fast on missing context
             userId    = WorkspaceContext.requireUserId();
             sessionId = WorkspaceContext.requireSessionId();
@@ -152,7 +152,7 @@ public class CheckListTool implements AgentTool {
         // Fire event
         checkListEvents.fire(new CheckListEvent(sessionId, checkList));
 
-        // Audit — NS2: Fail fast on missing role
+        // Audit - NS2: Fail fast on missing role
         auditService.record(sessionId, userId, agentRole, 
             SecurityEventType.TOOL_EXECUTED, "Checklist updated with " + items.size() + " items");
  

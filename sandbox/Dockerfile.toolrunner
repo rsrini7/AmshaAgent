@@ -3,7 +3,7 @@
 # Build: podman build --no-cache -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
 FROM alpine:3.21
 
-# ── System base — tiny, never changes ────────────────────────────────────────
+# ── System base - tiny, never changes ────────────────────────────────────────
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
@@ -11,14 +11,14 @@ RUN apk add --no-cache \
     git \
     bash
 
-# ── Java — JRE only, headless, LTS ───────────────────────────────────────────
+# ── Java - JRE only, headless, LTS ───────────────────────────────────────────
 # openjdk21 is the latest LTS available on Alpine 3.21.
-# openjdk25 is not yet packaged for Alpine stable — edge is too unstable for sandbox.
+# openjdk25 is not yet packaged for Alpine stable - edge is too unstable for sandbox.
 # JRE-headless removes GUI/sound libs; ~100MB vs ~300MB for full JDK.
 RUN apk add --no-cache openjdk21-jre-headless
 
-# ── Go — second heaviest, version bumps quarterly ────────────────────────────
-# CGO_ENABLED=0: pure Go mode — skips GCC/binutils/libstdc++ toolchain (~150MB saved).
+# ── Go - second heaviest, version bumps quarterly ────────────────────────────
+# CGO_ENABLED=0: pure Go mode - skips GCC/binutils/libstdc++ toolchain (~150MB saved).
 # LLM-generated Go code never uses CGo. GOFLAGS=-mod=mod allows go run without go.sum.
 RUN apk add --no-cache go
 ENV CGO_ENABLED=0 \
@@ -29,11 +29,11 @@ ENV CGO_ENABLED=0 \
 RUN apk add --no-cache nodejs npm
 
 # ── Python 3 ──────────────────────────────────────────────────────────────────
-# py3-pip included — LLM-generated code may require pip install at runtime.
+# py3-pip included - LLM-generated code may require pip install at runtime.
 # Remove py3-pip if sandbox policy disallows runtime package installation.
 RUN apk add --no-cache python3 py3-pip
 
-# ── GitHub CLI — changes most frequently of all tooling ──────────────────────
+# ── GitHub CLI - changes most frequently of all tooling ──────────────────────
 RUN apk add --no-cache github-cli
 
 # ── Python runtime hygiene ────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # ── Security hardening ────────────────────────────────────────────────────────
-# Run as a non-root user — LLM-generated code must never run as root.
+# Run as a non-root user - LLM-generated code must never run as root.
 # Must come AFTER all apk installs (root required to install packages).
 RUN addgroup -S sandbox && adduser -S sandbox -G sandbox
 USER sandbox
@@ -50,7 +50,7 @@ USER sandbox
 WORKDIR /workspace
 
 # ── Smoke-test all runtimes at build time ─────────────────────────────────────
-# Build fails fast if any runtime is broken/missing — catch it at image build,
+# Build fails fast if any runtime is broken/missing - catch it at image build,
 # not at first user execution.
 RUN go version && \
     python3 --version && \

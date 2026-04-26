@@ -22,7 +22,7 @@ public record StepDecision(
     }
 
     public static StepDecision continueLoop(String error, int schemaErrorCount) {
-        // Semantic alias for retryEngine() — both signal "fetch a new LLM
+        // Semantic alias for retryEngine() - both signal "fetch a new LLM
         // thought on the next iteration". Kept as a named alias for call-site
         // readability at schema-retry paths vs engine-retry paths.
         return retryEngine(error, schemaErrorCount);

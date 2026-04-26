@@ -20,7 +20,7 @@ import org.jboss.logging.Logger;
  * Uses {@code CREATE TABLE IF NOT EXISTS} and safe {@code ALTER TABLE}
  * migrations wrapped in try-catch for idempotent restarts.
  * <p>
- * DDL lives here — NOT in {@code AuditSchemaEnforcer} — to keep
+ * DDL lives here - NOT in {@code AuditSchemaEnforcer} - to keep
  * cron concerns isolated from audit/WORM logic.
  */
 @ApplicationScoped
@@ -60,7 +60,7 @@ public class CronSchemaEnforcer {
                 )
                 """).executeUpdate();
 
-        // 2. Indexes — partial index on active rows for fast poll queries
+        // 2. Indexes - partial index on active rows for fast poll queries
         em.createNativeQuery(
                 "CREATE INDEX IF NOT EXISTS idx_cron_nextfire ON agent_cron(nextFireTime) WHERE status='ACTIVE'"
         ).executeUpdate();
@@ -73,7 +73,7 @@ public class CronSchemaEnforcer {
                 "CREATE INDEX IF NOT EXISTS idx_cron_userid ON agent_cron(userId)"
         ).executeUpdate();
 
-        // 3. Schema migrations — safe ALTER TABLE for upgrades from older schemas
+        // 3. Schema migrations - safe ALTER TABLE for upgrades from older schemas
         // Check if columns exist before trying to add them to avoid SQLITE_ERROR log pollution
         if (!hasColumn("agent_cron", "runOnce")) {
             try {

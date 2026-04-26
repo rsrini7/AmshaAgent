@@ -22,7 +22,7 @@ public class AuditEventRepository {
 
     @PostConstruct
     void warmupQueryCache() {
-        // Force HQL compilation at startup — now handled by adapter
+        // Force HQL compilation at startup - now handled by adapter
     }
 
     @Inject
@@ -70,9 +70,9 @@ public class AuditEventRepository {
         if (event.sessionId == null || event.sessionId.isBlank())
             throw new IllegalStateException("AuditEvent.sessionId must not be null/blank");
         if (event.prevHash == null || event.prevHash.isBlank())
-            throw new IllegalStateException("AuditEvent.prevHash must not be null — genesis hash failed");
+            throw new IllegalStateException("AuditEvent.prevHash must not be null - genesis hash failed");
         if (event.hmacHash == null || event.hmacHash.isBlank())
-            throw new IllegalStateException("AuditEvent.hmacHash must not be null — HMAC failed");
+            throw new IllegalStateException("AuditEvent.hmacHash must not be null - HMAC failed");
         if (event.sequence < 0)
             throw new IllegalStateException("AuditEvent.sequence must be >= 0");
     }

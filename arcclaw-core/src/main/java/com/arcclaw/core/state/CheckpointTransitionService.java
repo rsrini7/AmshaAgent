@@ -85,7 +85,7 @@ public class CheckpointTransitionService {
     }
 
     /**
-     * Core markFailed implementation — delegates storage, then emits audit.
+     * Core markFailed implementation - delegates storage, then emits audit.
      *
      * <p>§5.18: The SQLite adapter's UPDATE WHERE clause prevents overwriting
      * COMPLETED / ARCHIVED / COMPROMISED checkpoints. This method does not need

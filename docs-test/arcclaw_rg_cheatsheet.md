@@ -1,4 +1,4 @@
-# ArcClaw — Ripgrep & Maven Test Diagnostics Cheatsheet
+# ArcClaw - Ripgrep & Maven Test Diagnostics Cheatsheet
 
 A reference for codebase search patterns and test diagnostics used across the ArcClaw multi-module project.
 
@@ -23,7 +23,7 @@ rg "<SEARCH-TERM>" --type java -l --ignore-file <(echo "*/test/*")
 rg "autonomyLevel|AutonomyLevel|SUPERVISED|FULL|READONLY" --type java -l --ignore-file <(echo "*/test/*")
 ```
 
-Finds all Java files referencing autonomy-related identifiers — useful when refactoring the `AutonomyLevel` enum or tracing where levels are enforced.
+Finds all Java files referencing autonomy-related identifiers - useful when refactoring the `AutonomyLevel` enum or tracing where levels are enforced.
 
 ---
 
@@ -33,7 +33,7 @@ Finds all Java files referencing autonomy-related identifiers — useful when re
 rg "ChannelType.fromString" . --type java
 ```
 
-Locates every call-site that deserializes a `ChannelType` from a string — helpful during channel-API refactors.
+Locates every call-site that deserializes a `ChannelType` from a string - helpful during channel-API refactors.
 
 ---
 
@@ -57,7 +57,7 @@ rg "stalled" . --type java
 rg "recovery" . --type java
 ```
 
-Used to audit task-scheduler resilience logic — stalled-agent detection and recovery flows in the autonomous scheduling subsystem.
+Used to audit task-scheduler resilience logic - stalled-agent detection and recovery flows in the autonomous scheduling subsystem.
 
 ---
 
@@ -107,7 +107,7 @@ Uses PCRE2 multiline mode (`-U -P`) to extract structured failure output:
 
 ## 3. Skipped & Failed Test Discovery
 
-### 3.1 Find Skipped Tests (Linux/macOS — ripgrep)
+### 3.1 Find Skipped Tests (Linux/macOS - ripgrep)
 
 ```bash
 rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testcase[^>]*>.*<skipped"
@@ -117,7 +117,7 @@ rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testcase[^>]*>.*<skipped"
 
 ---
 
-### 3.2 Find Skipped Tests (Windows — PowerShell)
+### 3.2 Find Skipped Tests (Windows - PowerShell)
 
 ```powershell
 Get-ChildItem -Recurse -Filter "TEST-*.xml" -Path "**/target/surefire-reports/" |
@@ -155,4 +155,4 @@ Get-ChildItem -Recurse -Filter "TEST-*.xml" -Path "**/target/surefire-reports/" 
 | `-Dquarkus.log.level=DEBUG` | Enable full Quarkus DEBUG logging |
 | `grep -A 5 "500\|ERROR\|Exception"` | Surface HTTP 500s, ERRORs, and stack traces (5 lines of context) |
 
-> **Tip:** Stacktraces are sometimes emitted only at `DEBUG` level in Quarkus — if an exception is missing context, `DEBUG` mode here is the right lever.
+> **Tip:** Stacktraces are sometimes emitted only at `DEBUG` level in Quarkus - if an exception is missing context, `DEBUG` mode here is the right lever.

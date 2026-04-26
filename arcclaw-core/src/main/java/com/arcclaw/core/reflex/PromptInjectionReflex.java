@@ -75,18 +75,18 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
     }
 
     private static final List<InjectionRule> RULES = List.of(
-            // Category 3 — ArcClaw Governance Bypass (project-specific)
+            // Category 3 - ArcClaw Governance Bypass (project-specific)
             new InjectionRule(HUMAN_APPROVED, "GOVERNANCE_BYPASS"),
             new InjectionRule(AUTO_APPROVE, "GOVERNANCE_BYPASS"),
             new InjectionRule(SKIP_APPROVAL, "GOVERNANCE_BYPASS"),
             new InjectionRule(THIS_IS_APPROVED, "GOVERNANCE_BYPASS"),
 
-            // Category 4 — Exfiltration Probes
+            // Category 4 - Exfiltration Probes
             new InjectionRule(REVEAL_PROMPT, "EXFILTRATION"),
             new InjectionRule(WHAT_ARE_INSTRUCTIONS, "EXFILTRATION"),
             new InjectionRule(REPEAT_EVERYTHING, "EXFILTRATION"),
 
-            // Category 2 — Identity/Role Hijacking
+            // Category 2 - Identity/Role Hijacking
             new InjectionRule(YOU_ARE_NOW, "IDENTITY_HIJACKING"),
             new InjectionRule(YOU_ARE_NO_LONGER, "IDENTITY_HIJACKING"),
             new InjectionRule(PRETEND, "IDENTITY_HIJACKING"),
@@ -94,14 +94,14 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
             new InjectionRule(DEVELOPER_MODE, "IDENTITY_HIJACKING"),
             new InjectionRule(FROM_NOW_ON, "IDENTITY_HIJACKING"),
 
-            // Category 1 — Direct Override Attempts
+            // Category 1 - Direct Override Attempts
             new InjectionRule(IGNORE_INSTRUCTIONS, "DIRECT_OVERRIDE"),
             new InjectionRule(DISREGARD, "DIRECT_OVERRIDE"),
             new InjectionRule(FORGET_TRAINING, "DIRECT_OVERRIDE"),
             new InjectionRule(NEW_INSTRUCTIONS, "DIRECT_OVERRIDE"),
             new InjectionRule(OVERRIDE_PROMPT, "DIRECT_OVERRIDE"),
 
-            // Category 5 — Context Wipe Attempts ← ADD THIS
+            // Category 5 - Context Wipe Attempts ← ADD THIS
             new InjectionRule(CONTEXT_WIPE, "CONTEXT_WIPE_ATTEMPT"));
 
     @Override
@@ -130,7 +130,7 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
     @Override
     public String auditDetail(String sessionId, String input) {
-        // First 200 chars only — do not log full injection attempt
+        // First 200 chars only - do not log full injection attempt
         String truncated = input.length() > 200 ? input.substring(0, 200) + "…" : input;
         return "inputPreview=" + truncated;
     }
@@ -156,7 +156,7 @@ public class PromptInjectionReflex implements AgentReflex, InputSanitizer {
 
     @Override
     public String sanitize(String sessionId, String userId, String input) {
-        // No-op — PromptInjectionReflex only operates in Pass 1
+        // No-op - PromptInjectionReflex only operates in Pass 1
         return input;
     }
 

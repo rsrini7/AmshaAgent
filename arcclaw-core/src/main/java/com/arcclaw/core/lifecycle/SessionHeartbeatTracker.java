@@ -33,7 +33,7 @@ public class SessionHeartbeatTracker {
     private final ConcurrentHashMap<String, SessionMetadata> sessionData = new ConcurrentHashMap<>();
 
     /**
-     * Record a heartbeat for a session — proves the session is still alive.
+     * Record a heartbeat for a session - proves the session is still alive.
      *
      * @param sessionId The workspace session ID.
      */
@@ -45,7 +45,7 @@ public class SessionHeartbeatTracker {
      * Record a heartbeat with an explicit autonomy level (e.g. from REST create).
      */
     public void recordHeartbeat(String sessionId, AutonomyLevel level) {
-        // Preserve existing owner — heartbeat ticks must NOT erase ownership
+        // Preserve existing owner - heartbeat ticks must NOT erase ownership
         SessionMetadata existing = sessionData.get(sessionId);
         String existingOwner = (existing != null) ? existing.ownerKeyName() : null;
         long existingIn  = (existing != null) ? existing.totalInputTokens()  : 0L;
@@ -208,7 +208,7 @@ public class SessionHeartbeatTracker {
     /**
      * Iterate over all sessions whose last heartbeat is before the cutoff,
      * invoking the action for each expired sessionId.
-     * Safe for concurrent modification — ConcurrentHashMap.forEach() is used internally.
+     * Safe for concurrent modification - ConcurrentHashMap.forEach() is used internally.
      */
     public void forEachExpired(Instant cutoff, Consumer<String> action) {
         sessionData.forEach((sessionId, metadata) -> {

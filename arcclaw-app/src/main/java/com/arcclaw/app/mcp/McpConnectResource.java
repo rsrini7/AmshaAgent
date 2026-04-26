@@ -32,7 +32,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
  *
  * Self-connect smoke test (no external server needed):
  *   POST with {"name":"self","url":"http://localhost:8080/mcp"}
- *   ArcClaw connects to itself — github and memory_search appear as dynamic tools.
+ *   ArcClaw connects to itself - github and memory_search appear as dynamic tools.
  *   Then send /mcp in Telegram to confirm the live count.
  */
 @ApplicationScoped
@@ -77,7 +77,7 @@ public class McpConnectResource {
     public Response connect(ConnectRequest request) {
         if (!config.serverEnabled()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-                    .entity(Map.of("error", "MCP server is disabled — enable arcclaw.mcp.server-enabled"))
+                    .entity(Map.of("error", "MCP server is disabled - enable arcclaw.mcp.server-enabled"))
                     .build();
         }
         if (request == null || request.name() == null || request.name().isBlank()) {
@@ -149,7 +149,7 @@ public class McpConnectResource {
 
     /**
      * List all remote servers currently connected (inferred from registered dynamic tools).
-     * Groups tools by mcpServerName — each unique name is one connected server.
+     * Groups tools by mcpServerName - each unique name is one connected server.
      */
     @GET
     public Response listConnected() {

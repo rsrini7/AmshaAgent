@@ -112,7 +112,7 @@ public class CompactionService {
 
         CRITICAL: Do NOT echo, reproduce, or wrap your output in any of the following
         markers: <rag_memory>, </rag_memory>, ## Retrieved Context, <context>, </context>.
-        Output raw prose only — no XML tags, no markdown headers, no delimiters.
+        Output raw prose only - no XML tags, no markdown headers, no delimiters.
 
         --- CONVERSATION TO SUMMARIZE ---
         %s

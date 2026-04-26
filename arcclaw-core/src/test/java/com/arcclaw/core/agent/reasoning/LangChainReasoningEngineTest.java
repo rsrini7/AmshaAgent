@@ -291,7 +291,7 @@ class LangChainReasoningEngineTest {
         ChatRequest sent = captor.getValue();
         assertTrue(sent.toolSpecifications() == null 
                 || sent.toolSpecifications().isEmpty(),
-                "coder must NOT receive tool schemas — schema jailbreak fix");
+                "coder must NOT receive tool schemas - schema jailbreak fix");
     }
 
     @Test
@@ -315,7 +315,7 @@ class LangChainReasoningEngineTest {
         ChatRequest sent = captor.getValue();
         assertTrue(sent.toolSpecifications() == null 
                 || sent.toolSpecifications().isEmpty(),
-                "debugger must NOT receive tool schemas — schema jailbreak fix");
+                "debugger must NOT receive tool schemas - schema jailbreak fix");
     }
 
     @Test
@@ -368,7 +368,7 @@ class LangChainReasoningEngineTest {
         assertFalse(toolNames.contains("schedule_task"),   "researcher must NOT have schedule_task");
         assertFalse(toolNames.contains("manage_schedule"), "researcher must NOT have manage_schedule");
         
-        // Researcher must NOT have shell or vault access — safety boundary
+        // Researcher must NOT have shell or vault access - safety boundary
         assertFalse(toolNames.contains("execute_shell"), "researcher must NOT have execute_shell");
         assertFalse(toolNames.contains("vault_access"),  "researcher must NOT have vault_access");
         }

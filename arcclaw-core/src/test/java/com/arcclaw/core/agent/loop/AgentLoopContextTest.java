@@ -47,10 +47,10 @@ class AgentLoopContextTest {
                 // Manually check if RequestScope context is active
                 try {
                     if (!CDI.current().getBeanManager().getContext(RequestScoped.class).isActive()) {
-                        throw new ContextNotActiveException("Simulated failure — RequestContext is NOT active");
+                        throw new ContextNotActiveException("Simulated failure - RequestContext is NOT active");
                     }
                 } catch (Exception e) {
-                    throw new ContextNotActiveException("Simulated failure — RequestContext is NOT active");
+                    throw new ContextNotActiveException("Simulated failure - RequestContext is NOT active");
                 }
                 return "test-session";
             });

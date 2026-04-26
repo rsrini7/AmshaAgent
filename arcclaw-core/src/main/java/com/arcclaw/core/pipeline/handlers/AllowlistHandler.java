@@ -37,7 +37,7 @@ public class AllowlistHandler implements MessageHandler {
                 .map(ChannelPlugin::allowlist);
 
         if (allowlistOpt.isEmpty()) {
-            log.warnf("No allowlist found for channel %s — allowing access by default.", context.getChannelType());
+            log.warnf("No allowlist found for channel %s - allowing access by default.", context.getChannelType());
             return HandleResult.CONTINUE;
         }
 

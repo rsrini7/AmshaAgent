@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 04 — ALL SIX AGENT ROLES
+### 04 - ALL SIX AGENT ROLES
 ###
 ### ArcClaw ships six persona-based agents. Each has a distinct
 ### system prompt, tool schema, and maxIterations constraint.
@@ -8,12 +8,12 @@
 ### ────────────────────────────────────────────────────────────
 ### coordinator → Vishnu     → github, schedule_task, manage_schedule, memory_search
 ### researcher  → Saraswati  → github, memory_search
-### coder       → Brahma     → NONE (intentionally empty — structural guarantee)
+### coder       → Brahma     → NONE (intentionally empty - structural guarantee)
 ### debugger    → Shiva      → github ONLY
 ### architect   → Brihaspati → github, memory_search (NOT schedule_task)
 ### synthesizer → Dattatreya → github, schedule_task, manage_schedule, memory_search
 ###
-### IMPORTANT — coder vs debugger tool schema:
+### IMPORTANT - coder vs debugger tool schema:
 ###   coder:   EMPTY schema. Structurally cannot invoke ANY tool regardless of prompt.
 ###   debugger: github ONLY. CAN invoke github (read-only). Cannot schedule or search memory.
 ###   The header comment in previous versions incorrectly said both had empty schemas.
@@ -34,7 +34,7 @@
 # @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
-# COORDINATOR — Vishnu (orchestrator, delegation, scheduling)
+# COORDINATOR - Vishnu (orchestrator, delegation, scheduling)
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-1] Create session for coordinator
@@ -46,7 +46,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [ROLE-2] Coordinator: task decomposition (no tools needed)
-# Expect 200 Finished: Vishnu's answer — short, clear, coordinating tone.
+# Expect 200 Finished: Vishnu's answer - short, clear, coordinating tone.
 POST {{baseUrl}}/api/v1/sessions/{{coordSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -65,7 +65,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# RESEARCHER — Saraswati (facts, knowledge retrieval, no fabrication)
+# RESEARCHER - Saraswati (facts, knowledge retrieval, no fabrication)
 # Has: github, memory_search. Strict no-hallucination rule.
 # ─────────────────────────────────────────────────────────────────
 
@@ -98,8 +98,8 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# CODER — Brahma (code generation, math, logic)
-# EMPTY tool schema — structurally CANNOT invoke any tool.
+# CODER - Brahma (code generation, math, logic)
+# EMPTY tool schema - structurally CANNOT invoke any tool.
 # This is enforced at the LangChain4j tool binding level, not just prompts.
 # Will refuse conversational/non-technical requests.
 # ─────────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ROLE-6a] Coder: CANNOT use github tool — empty schema structural guarantee
+### [ROLE-6a] Coder: CANNOT use github tool - empty schema structural guarantee
 # Even if asked directly to use github, the tool is not in Brahma's schema.
 # Expect 200: agent explains it cannot access external systems or use tools,
 # Confirm in audit: NO TOOL_INVOKED event appears for this session.
@@ -164,7 +164,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [ROLE-7] Coder: "brahma" deity alias works identically
-# Note: this is on a FRESH session — coderSession not deleted yet.
+# Note: this is on a FRESH session - coderSession not deleted yet.
 # Uses the same coderSession.
 POST {{baseUrl}}/api/v1/sessions/{{coderSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -184,8 +184,8 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# DEBUGGER — Shiva (bug analysis, stack traces, security audits)
-# Contrarian persona — challenges assumptions, surfaces blind spots.
+# DEBUGGER - Shiva (bug analysis, stack traces, security audits)
+# Contrarian persona - challenges assumptions, surfaces blind spots.
 # Has: github ONLY (not schedule_task, not memory_search).
 # ─────────────────────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [ROLE-9] Debugger: stack trace analysis (no tools needed)
 # Expect 200 Finished: root cause analysis from Shiva.
-# Contrarian response — challenges your assumptions about the cause.
+# Contrarian response - challenges your assumptions about the cause.
 POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -228,7 +228,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [ROLE-9b] Cancel the github call (not under test — just cleanup)
+### [ROLE-9b] Cancel the github call (not under test - just cleanup)
 POST {{baseUrl}}/api/v1/sessions/{{debugSession.response.body.sessionId}}/deny?agentRole=debugger
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -241,9 +241,9 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# ARCHITECT — Brihaspati (system design, ADRs, trade-off analysis)
+# ARCHITECT - Brihaspati (system design, ADRs, trade-off analysis)
 # Has: github, memory_search. Does NOT have schedule_task.
-# Will NOT write production code — delegates to Brahma.
+# Will NOT write production code - delegates to Brahma.
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-10] Create session for architect
@@ -291,7 +291,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SYNTHESIZER — Dattatreya (cross-domain: code + debug + research + arch)
+# SYNTHESIZER - Dattatreya (cross-domain: code + debug + research + arch)
 # The Trinity Incarnate. Has ALL tools.
 # Only activate when ONE task genuinely spans multiple specialist domains.
 # ─────────────────────────────────────────────────────────────────

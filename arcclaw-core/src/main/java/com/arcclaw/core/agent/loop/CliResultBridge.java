@@ -19,7 +19,7 @@ import org.jboss.logging.Logger;
  * thread calls register() or waitForResult(), the result is buffered and delivered
  * immediately when the CLI thread eventually arrives.
  *
- * <p>Calling convention: always use waitForResult() — it internally delegates to
+ * <p>Calling convention: always use waitForResult() - it internally delegates to
  * register() as the single source of truth for waiter/buffer resolution.
  */
 @ApplicationScoped
@@ -52,7 +52,7 @@ public class CliResultBridge {
      * <p>If the result already arrived (buffered), returns an immediately completed
      * future. If no result yet, parks a CompletableFuture for complete() to resolve.
      *
-     * <p>This is the single source of truth — waitForResult() delegates here.
+     * <p>This is the single source of truth - waitForResult() delegates here.
      */
     public CompletableFuture<AgentResult> register(String sessionId) {
         log.debugf("CliResultBridge: registering interest for session %s", sessionId);
@@ -85,15 +85,15 @@ public class CliResultBridge {
             log.infof("CliResultBridge: signaling active waiter for session %s", sessionId);
             waiter.complete(result);
         } else {
-            log.infof("CliResultBridge: no active waiter for session %s — buffering result", sessionId);
+            log.infof("CliResultBridge: no active waiter for session %s - buffering result", sessionId);
             bufferedResults.put(sessionId, result);
         }
     }
 
     /**
-     * Blocking wait for a result. Delegates to register() — the single resolution path.
+     * Blocking wait for a result. Delegates to register() - the single resolution path.
      *
-     * <p>Do NOT call register() before this — it internally handles both the
+     * <p>Do NOT call register() before this - it internally handles both the
      * "result already arrived" and "result pending" cases.
      *
      * @param sessionId  the session to wait on

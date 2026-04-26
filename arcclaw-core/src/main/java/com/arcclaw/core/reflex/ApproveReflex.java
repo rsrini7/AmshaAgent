@@ -30,7 +30,7 @@ public class ApproveReflex extends AbstractDecisionReflex {
     @Override public String getCronSuccessResponse(AgentResult result) { return ""; }
     @Override public String getFailedRetryMessage() {
         return "My last attempt failed before it could be approved (likely due to a rate limit). "
-             + "Please resend your original message to retry — I'll ask for approval again.";
+             + "Please resend your original message to retry - I'll ask for approval again.";
     }
     @Override public String getPerToolSuccessResponse(String toolName) { return ""; }
 
@@ -70,7 +70,7 @@ public class ApproveReflex extends AbstractDecisionReflex {
             }
             case AgentResult.Failed f  -> cronRepository.markFailed(cron.id, f.reason());
             case AgentResult.AwaitingApproval _ -> cronRepository.markAwaitingApproval(cron.id);
-            case AgentResult.AwaitingRetry _    -> {} // No-op — retry handled by RateLimitRetryScheduler
+            case AgentResult.AwaitingRetry _    -> {} // No-op - retry handled by RateLimitRetryScheduler
             case AgentResult.LoopExceeded _     -> cronRepository.markFailed(cron.id, "Loop exceeded");
             default -> {}
         }

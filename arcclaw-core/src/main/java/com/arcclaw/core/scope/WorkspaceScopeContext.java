@@ -18,7 +18,7 @@ import io.quarkus.arc.InjectableContext;
  * <p>
  * <b>Architecture</b>:
  * <ul>
- * <li><b>Outer store</b>: {@code ConcurrentHashMap<String, SessionStore>} — one
+ * <li><b>Outer store</b>: {@code ConcurrentHashMap<String, SessionStore>} - one
  * entry per active session ID.
  * CHM handles cross-session concurrency without locking.</li>
  * <li><b>Inner {@code SessionStore}</b>: per-session bean instances guarded by
@@ -102,7 +102,7 @@ public class WorkspaceScopeContext implements InjectableContext {
     }
 
     /**
-     * Optimized path for Arc — avoids proxy indirection when state is known.
+     * Optimized path for Arc - avoids proxy indirection when state is known.
      */
     @SuppressWarnings("unchecked")
     @Override
@@ -196,7 +196,7 @@ public class WorkspaceScopeContext implements InjectableContext {
             return new WorkspaceContextState(Collections.emptyMap());
         }
         synchronized (store) {
-            // Snapshot — safe to read outside the lock
+            // Snapshot - safe to read outside the lock
             Map<InjectableBean<?>, Object> snapshot = new HashMap<>();
             for (var entry : store.beans.entrySet()) {
                 if (entry.getKey() instanceof InjectableBean<?> bean) {

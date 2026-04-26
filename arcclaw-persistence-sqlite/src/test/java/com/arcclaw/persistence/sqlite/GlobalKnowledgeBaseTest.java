@@ -209,10 +209,10 @@ class GlobalKnowledgeBaseTest {
             // Array separator produces ",0" but we must not match that.
             // We check for the presence of the decimal comma specifically.
             assertFalse(json.contains("0,1") || json.contains("0,2"), 
-                "Locale leaked into float format (decimal comma found) — got: " + json);
+                "Locale leaked into float format (decimal comma found) - got: " + json);
             
             assertTrue(json.contains("0.1") && json.contains("0.2"), 
-                "Expected dot decimal separator — got: " + json);
+                "Expected dot decimal separator - got: " + json);
             assertEquals("[0.1,0.2,0.33]", json);
         } finally {
             Locale.setDefault(original);

@@ -6,7 +6,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 /**
  * CDI event fired when a scheduled cron job completes execution.
  * <p>
- * Carries only the pre-rendered answer text — not the full {@link AgentResult}
+ * Carries only the pre-rendered answer text - not the full {@link AgentResult}
  * which includes {@code List<ReasoningStep>}. Observers need delivery data,
  * not the entire reasoning trace.
  *

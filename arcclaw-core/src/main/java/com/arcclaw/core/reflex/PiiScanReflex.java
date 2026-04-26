@@ -56,7 +56,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         "\\[([^\\]]+)]\\((?:mailto:)?([^)]+)\\)"
     );
 
-    // Matches full UUIDs — used to protect them from card/phone pattern false positives
+    // Matches full UUIDs - used to protect them from card/phone pattern false positives
     private static final Pattern UUID_PATTERN   = Pattern.compile(
         "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     );
@@ -69,10 +69,10 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         new PiiRule(CREDIT_CARD,     "CARD",    "[" + AgentSentinels.REDACTED_HYPHEN + "CARD]"),
         new PiiRule(AADHAAR_SPACED,  "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
         new PiiRule(SSN,             "SSN",     "[" + AgentSentinels.REDACTED_HYPHEN + "SSN]"),
-        // GSTIN before PAN — PAN is a subset of GSTIN
+        // GSTIN before PAN - PAN is a subset of GSTIN
         new PiiRule(GSTIN,           "GSTIN",   "[" + AgentSentinels.REDACTED_HYPHEN + "GSTIN]"),
         new PiiRule(PAN,             "PAN",     "[" + AgentSentinels.REDACTED_HYPHEN + "PAN]"),
-        // Phone before Aadhaar — +91 numbers can look like 12-digit Aadhaar
+        // Phone before Aadhaar - +91 numbers can look like 12-digit Aadhaar
         new PiiRule(PHONE_INDIA,     "PHONE",   "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
         new PiiRule(PHONE_INTL,      "PHONE",   "[" + AgentSentinels.REDACTED_HYPHEN + "PHONE]"),
         new PiiRule(AADHAAR_COMPACT, "AADHAAR", "[" + AgentSentinels.REDACTED_HYPHEN + "AADHAAR]"),
@@ -87,7 +87,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         new PiiRule(UPI_VPA,         "UPI",     "[" + AgentSentinels.REDACTED_HYPHEN + "UPI]")
     );
 
-    /** Triggers block mode only — sanitize() always runs in Pass 2 regardless. */
+    /** Triggers block mode only - sanitize() always runs in Pass 2 regardless. */
     @Override
     public boolean matches(String input) {
         return piiMode == PiiMode.BLOCK_AND_NOTIFY && containsPii(input);
@@ -119,11 +119,11 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     public String sanitize(String sessionId, String userId, String input) {
         if (input == null || input.isBlank()) return input;
 
-        // Step 1 — Flatten markdown links: [display](mailto:href) → display
+        // Step 1 - Flatten markdown links: [display](mailto:href) → display
         // This prevents email in display text surviving redaction
         String result = MARKDOWN_LINK.matcher(input).replaceAll(mr -> mr.group(1));
 
-        // Step 2 — Mask UUIDs temporarily so card/phone patterns don't match inside them
+        // Step 2 - Mask UUIDs temporarily so card/phone patterns don't match inside them
         List<String> uuidPlaceholders = new ArrayList<>();
         Matcher uuidMatcher = UUID_PATTERN.matcher(result);
         StringBuffer uuidProtected = new StringBuffer();
@@ -136,7 +136,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         uuidMatcher.appendTail(uuidProtected);
         result = uuidProtected.toString();
 
-        // Step 3 — Apply PII redaction rules
+        // Step 3 - Apply PII redaction rules
         List<String> detectedTypes = new ArrayList<>();
         boolean redacted = false;
         for (PiiRule rule : RULES) {
@@ -148,7 +148,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
             }
         }
 
-        // Step 4 — Restore UUIDs
+        // Step 4 - Restore UUIDs
         for (int i = 0; i < uuidPlaceholders.size(); i++) {
             result = result.replace("UUID_PLACEHOLDER_" + i + "_", uuidPlaceholders.get(i));
         }
@@ -164,7 +164,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         return result;
     }
 
-    /** Public detection check — mode independent. */
+    /** Public detection check - mode independent. */
     public boolean detectsPii(String input) {
         return containsPii(input);
     }
@@ -178,7 +178,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
     }
 
     /**
-     * Pure PII redaction — always redacts regardless of piiMode.
+     * Pure PII redaction - always redacts regardless of piiMode.
      * Used by ToolObservationSanitizer and ChatMemoryWriter to scrub
      * tool outputs and LLM answers before they enter agent history.
      */

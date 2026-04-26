@@ -5,7 +5,7 @@ package com.arcclaw.persistence.api;
 /**
  * Adapter contract for enforcing WORM (write-once read-many) constraints on the
  * audit_event table. Each persistence adapter implements backend-specific DDL.
- * §5.23: DDL isolation — implementations live in adapter modules only.
+ * §5.23: DDL isolation - implementations live in adapter modules only.
  */
 public interface AuditSchemaPort {
     /**

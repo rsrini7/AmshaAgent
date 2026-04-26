@@ -38,11 +38,11 @@ public class PodmanHealthCheck implements HealthCheck {
                 process.destroyForcibly();
                 return HealthCheckResponse.named("Podman Engine")
                     .down()
-                    .withData("error", "Process timed out — Podman machine may be stopped")
+                    .withData("error", "Process timed out - Podman machine may be stopped")
                     .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
                     .withData("hint", sandboxEnabled
                         ? "Run: podman machine start"
-                        : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
+                        : "Sandbox is disabled - set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                     .build();
             }
 
@@ -70,7 +70,7 @@ public class PodmanHealthCheck implements HealthCheck {
                 .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
                 .withData("hint", sandboxEnabled
                     ? "Run: podman machine start"
-                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
+                    : "Sandbox is disabled - set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                 .build();
 
         } catch (Exception e) {
@@ -84,7 +84,7 @@ public class PodmanHealthCheck implements HealthCheck {
                 .withData("sandbox-enabled", String.valueOf(sandboxEnabled))
                 .withData("hint", sandboxEnabled
                     ? "Run: podman machine start"
-                    : "Sandbox is disabled — set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
+                    : "Sandbox is disabled - set ARCCLAW_SANDBOX_ENABLED=true in .env to enable")
                 .build();
         }
     }

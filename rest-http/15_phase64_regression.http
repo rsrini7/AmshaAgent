@@ -1,37 +1,37 @@
 ### ═══════════════════════════════════════════════════════════════
-### 15 — PHASE 64 REGRESSION SUITE
+### 15 - PHASE 64 REGRESSION SUITE
 ###
 ### This file tests every specific fix introduced in Phase 64.
 ### Run in order: Tier A → Tier B → Tier C → Tier D
 ###
 ### Phase 64 fixes map:
 ###
-###   TIER A — Correctness (all production bugs):
-###     A1: GovernanceLayer — hard limit fires before soft warning
-###     A2: AgentDispatchHandler — AutonomyLevel no longer hardcoded SUPERVISED
-###     A3: CompactionSummaryRepository — non-ASCII FTS5 search returns results
-###     A4: TelegramMarkdownV2Renderer — headings render as bold not \#\# escape
-###     A5: ReasoningStepParser — JSON parse error returns OBSERVE not FINISH
-###     A6: CompactionHandler — fireAsync failure releases inFlight lock
-###     A7: ChannelType.fromString — returns Optional.empty() not silent TELEGRAM
+###   TIER A - Correctness (all production bugs):
+###     A1: GovernanceLayer - hard limit fires before soft warning
+###     A2: AgentDispatchHandler - AutonomyLevel no longer hardcoded SUPERVISED
+###     A3: CompactionSummaryRepository - non-ASCII FTS5 search returns results
+###     A4: TelegramMarkdownV2Renderer - headings render as bold not \#\# escape
+###     A5: ReasoningStepParser - JSON parse error returns OBSERVE not FINISH
+###     A6: CompactionHandler - fireAsync failure releases inFlight lock
+###     A7: ChannelType.fromString - returns Optional.empty() not silent TELEGRAM
 ###
-###   TIER B — Security:
-###     B1: AuditEventRepository — TOCTOU race fixed via SessionAuditSequencer
-###     B2: DevSecretSeeder — removed from ChatCommand, @IfBuildProfile("dev") only
-###     B3: SessionResolutionHandler — UUID v3 (MD5) replaced with SessionRegistry
+###   TIER B - Security:
+###     B1: AuditEventRepository - TOCTOU race fixed via SessionAuditSequencer
+###     B2: DevSecretSeeder - removed from ChatCommand, @IfBuildProfile("dev") only
+###     B3: SessionResolutionHandler - UUID v3 (MD5) replaced with SessionRegistry
 ###
-###   TIER C — Architecture:
+###   TIER C - Architecture:
 ###     C1: Session key is (channelType, channelId, userId) triplet
 ###     C2: ChannelCronNotificationDispatcher replaces Telegram-only observers
 ###     C3: GlobalKnowledgeBase uses rag_chunk table, not "rag:" prefix hack
 ###
-###   TIER D — Quality:
-###     D1: ContextCompactionService — Unicode-safe codepoint truncation
-###     D2: GlobalKnowledgeBase — Locale.ROOT float serialization
-###     D3: SqliteRetryTemplate — consolidated BUSY retry
-###     D4: LlmModelFactory — deduplicated provider switch
-###     D5: TelegramMarkdownV2Renderer.esc() — single-pass rewrite
-###     D6: LangChainReasoningEngine — BudgetWarning not swallowed in structured output
+###   TIER D - Quality:
+###     D1: ContextCompactionService - Unicode-safe codepoint truncation
+###     D2: GlobalKnowledgeBase - Locale.ROOT float serialization
+###     D3: SqliteRetryTemplate - consolidated BUSY retry
+###     D4: LlmModelFactory - deduplicated provider switch
+###     D5: TelegramMarkdownV2Renderer.esc() - single-pass rewrite
+###     D6: LangChainReasoningEngine - BudgetWarning not swallowed in structured output
 ###     D7: Dead code removed (SANDBOX_EXEC, RATE_LIMIT, System.out.println)
 ###
 ### Prerequisites: ArcClaw serve mode, all Phase 64 fixes deployed,
@@ -43,7 +43,7 @@
 
 
 ### ════════════════════════════════════════════════════════════════
-### TIER A — CORRECTNESS REGRESSION
+### TIER A - CORRECTNESS REGRESSION
 ### ════════════════════════════════════════════════════════════════
 
 
@@ -62,7 +62,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### [A1-TEST] Run tasks until budget is near limit, then push it over
 # After this call, check audit for LOOP_BUDGET_EXCEEDED.
 # If the fix was NOT applied, only BUDGET_EXCEEDED (warning) would appear
-# and the next call would then fail — a one-call over-budget window.
+# and the next call would then fail - a one-call over-budget window.
 # After the fix, LOOP_BUDGET_EXCEEDED appears on the call that crossed the limit.
 POST {{baseUrl}}/api/v1/sessions/{{a1Session.response.body.sessionId}}/run
 Content-Type: application/json
@@ -106,7 +106,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [A2-TEST] Run GitHub tool task — must complete WITHOUT approval pause
+### [A2-TEST] Run GitHub tool task - must complete WITHOUT approval pause
 # If autonomy was silently downgraded to SUPERVISED, this returns 202 AWAITING_APPROVAL.
 # After Phase 64-A fix A2: SessionResolutionHandler reads stored autonomy level from
 # checkpoint and pushes it to MessageContext. AgentDispatchHandler uses that value
@@ -125,7 +125,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [A2-VERIFY] Status must be COMPLETED, never AWAITING_APPROVAL
-# If this returns AWAITING_APPROVAL — the fix was not applied.
+# If this returns AWAITING_APPROVAL - the fix was not applied.
 GET {{baseUrl}}/api/v1/sessions/{{a2Session.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -189,7 +189,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [A3-TEST-2] FTS5 special char query — must not throw SQL exception
+### [A3-TEST-2] FTS5 special char query - must not throw SQL exception
 # The * char is a valid FTS5 wildcard prefix operator.
 # The fix escapes it to \* so it is treated as a literal.
 # Expect: no exception, results or empty array
@@ -212,7 +212,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# A4: TelegramMarkdownV2Renderer heading fix — REST cannot directly test
+# A4: TelegramMarkdownV2Renderer heading fix - REST cannot directly test
 # rendering (that is Telegram-specific), but we can verify the agent
 # produces structured output with headings correctly.
 # Visual confirmation required: check Telegram bot response.
@@ -228,7 +228,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [A4-TEST] Request structured output that would contain headings
 # Confirm via Telegram (not REST) that headings render as bold, not \#\# text.
-# REST response contains raw text — look for sections that would be headings.
+# REST response contains raw text - look for sections that would be headings.
 POST {{baseUrl}}/api/v1/sessions/{{a4Session.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -262,9 +262,9 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [A5-TEST] Structured output task — complex enough to potentially get a malformed response
+### [A5-TEST] Structured output task - complex enough to potentially get a malformed response
 # Confirm in logs that if ReasoningStepParser throws, action is NOT FINISH.
-# Log line to look for: "JSON parse error for session ... — retry"
+# Log line to look for: "JSON parse error for session ... - retry"
 POST {{baseUrl}}/api/v1/sessions/{{a5Session.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -284,10 +284,10 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 # ─────────────────────────────────────────────────────────────────
-# A6: CompactionHandler — inFlight lock released after observer failure
+# A6: CompactionHandler - inFlight lock released after observer failure
 # Cannot inject observer failure via REST. Verify via log monitoring:
 #   After any compaction observer exception:
-#     "Compaction observer failed for session ... — releasing inFlight lock"
+#     "Compaction observer failed for session ... - releasing inFlight lock"
 #   Then: next compaction trigger for the same session MUST NOT be skipped.
 # Unit test coverage in CompactionHandlerTest is the primary verification.
 # ─────────────────────────────────────────────────────────────────
@@ -375,10 +375,10 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Turn 10 — compaction may now trigger (threshold crossed)
+### Turn 10 - compaction may now trigger (threshold crossed)
 # Watch logs for: "Compaction triggered for session ..."
 # After Phase 64-A fix A6: "Compaction complete for session ..." must follow.
-# If the observer fails: "Compaction observer failed ... — releasing inFlight lock"
+# If the observer fails: "Compaction observer failed ... - releasing inFlight lock"
 # Then: second trigger MUST also fire (lock was released).
 POST {{baseUrl}}/api/v1/sessions/{{a6Session.response.body.sessionId}}/run
 Content-Type: application/json
@@ -434,7 +434,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 ### ════════════════════════════════════════════════════════════════
-### TIER B — SECURITY REGRESSION
+### TIER B - SECURITY REGRESSION
 ### ════════════════════════════════════════════════════════════════
 
 
@@ -519,13 +519,13 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # B3: Session IDs are random UUIDs from SessionRegistry (not MD5)
-# Before: UUID.nameUUIDFromBytes(chatId+":"+userId) — MD5/UUID v3
+# Before: UUID.nameUUIDFromBytes(chatId+":"+userId) - MD5/UUID v3
 # After: SessionRegistry.resolveOrCreate(channelType, channelId, userId)
 #   → generates UUID.randomUUID() on first call, stores in session_registry,
 #   → returns same UUID on subsequent calls for the same triplet.
 # ─────────────────────────────────────────────────────────────────
 
-### [B3-SETUP] Create a session — UUID must be random (not MD5-derived)
+### [B3-SETUP] Create a session - UUID must be random (not MD5-derived)
 # @name b3Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -553,7 +553,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 ### ════════════════════════════════════════════════════════════════
-### TIER C — ARCHITECTURE REGRESSION
+### TIER C - ARCHITECTURE REGRESSION
 ### ════════════════════════════════════════════════════════════════
 
 
@@ -565,7 +565,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # produce different sessions.
 # ─────────────────────────────────────────────────────────────────
 
-### [C1-SETUP] Create two sessions — both must get distinct IDs
+### [C1-SETUP] Create two sessions - both must get distinct IDs
 # @name c1SessionA
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -626,7 +626,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 
 ### [C2-SMOKE] Create cron via REST and verify CRONCREATED audit event
-# If dispatcher is broken, cron creation still works — only notification delivery fails.
+# If dispatcher is broken, cron creation still works - only notification delivery fails.
 # @name c2Session
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -693,7 +693,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [C3-SEARCH] Recall from RAG — confirm it works after table change
+### [C3-SEARCH] Recall from RAG - confirm it works after table change
 POST {{baseUrl}}/api/v1/sessions/{{c3Session.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -720,12 +720,12 @@ X-ArcClaw-API-Key: {{validKey}}
 
 
 ### ════════════════════════════════════════════════════════════════
-### TIER D — QUALITY REGRESSION SMOKE TESTS
+### TIER D - QUALITY REGRESSION SMOKE TESTS
 ### These are primarily verified by unit tests.
 ### REST tests here confirm the application still behaves correctly.
 ### ════════════════════════════════════════════════════════════════
 
-### [D-SMOKE-1] D1: Compaction with emoji/CJK content — no garbled output
+### [D-SMOKE-1] D1: Compaction with emoji/CJK content - no garbled output
 # @name dSmokeSession
 POST {{baseUrl}}/api/v1/sessions
 Content-Type: application/json
@@ -745,7 +745,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [D-SMOKE-2] D5: Single-pass esc() — all 18 special chars escaped correctly
+### [D-SMOKE-2] D5: Single-pass esc() - all 18 special chars escaped correctly
 # If esc() had a bug (missed a char, double-escaped), the Telegram message
 # would fail to send or render incorrectly. Via REST: confirm agent responds
 # to a message containing MarkdownV2 special chars without error.
@@ -761,11 +761,11 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [D-SMOKE-3] D7: SANDBOX_EXEC removed — calling it via MCP must return error
+### [D-SMOKE-3] D7: SANDBOX_EXEC removed - calling it via MCP must return error
 # After D7 cleanup, SANDBOX_EXEC is no longer in the ToolCapability enum.
 # Any skill YAML or MCP tool referencing "sandboxexec" will be rejected.
-# Test via MCP tools/call — expect error about unknown tool.
-# (Only if MCP server is running — skip if not using MCP)
+# Test via MCP tools/call - expect error about unknown tool.
+# (Only if MCP server is running - skip if not using MCP)
 # POST {{baseUrl}}/mcp
 # Content-Type: application/json
 # Accept: application/json, text/event-stream
@@ -790,7 +790,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ### Run after all tiers to confirm nothing regressed
 ### ════════════════════════════════════════════════════════════════
 
-### System health — all checks must pass
+### System health - all checks must pass
 GET {{baseUrl}}/q/health/ready
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -801,7 +801,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Session list — proves REST layer is up
+### Session list - proves REST layer is up
 GET {{baseUrl}}/api/v1/sessions
 X-ArcClaw-API-Key: {{validKey}}
 

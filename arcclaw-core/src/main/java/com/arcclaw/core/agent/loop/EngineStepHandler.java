@@ -76,12 +76,12 @@ public class EngineStepHandler {
             .collect(Collectors.toUnmodifiableSet());
 
     /**
-     * CDI proxyability constructor — required by @ApplicationScoped for
+     * CDI proxyability constructor - required by @ApplicationScoped for
      * subclass proxy generation. NEVER called at runtime; all real
      * instances are created via the @Inject constructor below.
      *
      * <p>GraalVM native image may invoke this reflectively at build time.
-     * Do NOT throw here. Fields are intentionally null — any runtime call
+     * Do NOT throw here. Fields are intentionally null - any runtime call
      * to a method on a proxy instance backed by this constructor will NPE,
      * which is the correct failure signal for misconfigured injection.
      */
@@ -144,7 +144,7 @@ public class EngineStepHandler {
                 // Fast-path sandbox_exec (reusing code from history) also has 0 tokens.
                 if (!ReasoningStep.OBSERVE.equals(step.action()) && !step.isFastPath() 
                         && (step.outputTokens() <= 1 || isBlankFinish)) {
-                    log.warnf("[STATE-MACHINE] session %s: detected degraded %d-token response (action=%s) — injecting recovery hint",
+                    log.warnf("[STATE-MACHINE] session %s: detected degraded %d-token response (action=%s) - injecting recovery hint",
                             context.sessionId(), step.outputTokens(), step.action());
                     return StepDecision.retryEngine(
                         "System: Your last response was empty, contained only one token, or lacked a FINISH answer. " +
@@ -159,7 +159,7 @@ public class EngineStepHandler {
                 if (ReasoningStep.FINISH.equals(step.action())) {
                     String answer = step.actionInput() != null ? String.valueOf(step.actionInput().get("answer")) : "";
                     if (looksLikeRawToolJson(answer)) {
-                        log.warnf("[STATE-MACHINE] session %s: detected raw JSON in prose answer — injecting recovery hint", context.sessionId());
+                        log.warnf("[STATE-MACHINE] session %s: detected raw JSON in prose answer - injecting recovery hint", context.sessionId());
                         return StepDecision.retryEngine(
                             "System: Your previous response contained raw JSON parameters in the prose answer field. " +
                             "STRICT RULE: You MUST NOT output JSON in the 'answer' field. " +
@@ -177,15 +177,15 @@ public class EngineStepHandler {
                         // schema errors. They bypass the error budget entirely to avoid premature
                         // "repeated formatting errors" failures when the LLM repeatedly returns
                         // prose instead of a tool call.
-                        log.infof("[STATE-MACHINE] session %s: logical correction (non-schema) — retrying without budget penalty", context.sessionId());
+                        log.infof("[STATE-MACHINE] session %s: logical correction (non-schema) - retrying without budget penalty", context.sessionId());
                         return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
                     }
                     
-                    log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
+                    log.warnf("[STATE-MACHINE] session %s: schema parse error - retrying with correction", context.sessionId());
                     if (!step.isTruncationRecovery()) {
                         llmSchemaErrorCount++;
                     } else {
-                        log.infof("[STATE-MACHINE] session %s: truncation recovery turn — exempting from schema retry budget", context.sessionId());
+                        log.infof("[STATE-MACHINE] session %s: truncation recovery turn - exempting from schema retry budget", context.sessionId());
                     }
                     
                     // Schema correction retry budget is mode-aware:
@@ -229,7 +229,7 @@ public class EngineStepHandler {
         }
 
         if (step == null) {
-            log.warn("ReasoningEngine returned null step — terminating");
+            log.warn("ReasoningEngine returned null step - terminating");
             return StepDecision.terminal(AgentResult.failed(
                     "ReasoningEngine returned null step",
                     AgentResult.FailureCategory.SYSTEM_ERROR,
@@ -284,9 +284,9 @@ public class EngineStepHandler {
             if (rawError.contains("not in request.tools")) {
                 String unavailableTool = extractUnavailableToolName(rawError);
 
-                // Bug fix: LLM hallucinated agent name as tool — inject correction and retry
+                // Bug fix: LLM hallucinated agent name as tool - inject correction and retry
                 if (unavailableTool != null && AGENT_IDENTIFIERS.contains(unavailableTool.toLowerCase())) {     
-                    log.warnf("[STATE-MACHINE] session %s: LLM called agent '%s' as tool — retrying with correction",
+                    log.warnf("[STATE-MACHINE] session %s: LLM called agent '%s' as tool - retrying with correction",
                             context.sessionId(), unavailableTool);
                     String correction = String.format(
                         "System: You called '%s' as if it were a tool, but that is an agent name. " +
@@ -311,7 +311,7 @@ public class EngineStepHandler {
                         "I tried to use `%s`, but that tool is not available in this role. "
                         + "Try rephrasing, or start fresh with a more specific request.", unavailableTool)      
                     : "I tried to use a tool that is not available in my current role.";
-                log.warnf("[STATE-MACHINE] session %s: tool '%s' not in request.tools — terminating immediately",
+                log.warnf("[STATE-MACHINE] session %s: tool '%s' not in request.tools - terminating immediately",
                         context.sessionId(), unavailableTool);
                 return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
             }
@@ -321,7 +321,7 @@ public class EngineStepHandler {
             if (isToolUseFailed) {
                 String failedGen = extractFailedGeneration(rawError);
                 if (failedGen != null && looksLikeNaturalLanguage(failedGen)) {
-                    log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose — extracting as FINISH", context.sessionId());
+                    log.infof("[STATE-MACHINE] session %s: tool_use_failed contains prose - extracting as FINISH", context.sessionId());
                     return StepDecision.terminal(AgentResult.finished(failedGen, List.copyOf(history)));        
                 }
 
@@ -343,16 +343,16 @@ public class EngineStepHandler {
                             "RULE: Omit optional fields entirely when you have no value for them. " +
                             "Retry now with only the fields that have real values.";
 
-                // ↓ NEW BRANCH — fires when delegate_to_agent is called with wrong shape
+                // ↓ NEW BRANCH - fires when delegate_to_agent is called with wrong shape
                 } else if (failedGen != null && failedGen.contains("\"agent\"")) {
                     correction = """
                         System: Your delegate_to_agent call was malformed. STRICT RULES:
-                        1. Call delegate_to_agent EXACTLY ONCE per turn — never batch multiple agents.
+                        1. Call delegate_to_agent EXACTLY ONCE per turn - never batch multiple agents.
                         2. Pass exactly TWO flat string parameters only:
                         {"agent": "<name>", "goal": "<self-contained task>"}
                         3. Do NOT wrap in an array []. Do NOT nest under "parameters" or any other key.
                         4. Valid agent names (one at a time): brahma, shiva, saraswati, brihaspati, dattatreya. 
-                        Retry now with a single flat call — one agent, one goal string.""";
+                        Retry now with a single flat call - one agent, one goal string.""";
 
                 } else {
                     correction = "System: Your previous tool call was rejected due to a schema validation error: "
@@ -360,7 +360,7 @@ public class EngineStepHandler {
                             + ". Review the tool schema carefully, correct the invalid fields, and retry.";     
                 }
 
-                log.warnf("[STATE-MACHINE] session %s: tool_use_failed — retrying with correction (attempt %d)",
+                log.warnf("[STATE-MACHINE] session %s: tool_use_failed - retrying with correction (attempt %d)",
                         context.sessionId(), llmSchemaErrorCount);
                 
                 String fallbackDirective = " If no tool is needed, do NOT call any function. " +
@@ -375,7 +375,7 @@ public class EngineStepHandler {
 
             int retryAfterSeconds = extractRetryAfter(classified.getMessage(), 10);
             if (retryAfterSeconds <= 15) { // only auto-retry for short waits
-                log.warnf("[STATE-MACHINE] Rate limit session=%s — sleeping %ds then retrying",
+                log.warnf("[STATE-MACHINE] Rate limit session=%s - sleeping %ds then retrying",
                         context.sessionId(), retryAfterSeconds);
                 try { Thread.sleep(retryAfterSeconds * 1000L); }
                 catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
@@ -383,13 +383,13 @@ public class EngineStepHandler {
             }
 
             // If the last step has a tool observation (e.g. delegate_to_agent result),
-            // return it directly as FINISH rather than FAILED — the work is already done.
+            // return it directly as FINISH rather than FAILED - the work is already done.
             if (!history.isEmpty()) {
                 String lastObs = history.get(history.size() - 1).observation();
                 if (lastObs != null && !lastObs.isBlank()
                         && !lastObs.startsWith("⚠️")
                         && !lastObs.startsWith("Tool execution failed")) {
-                    log.infof("[STATE-MACHINE] session %s: rate-limit on wrap-up — surfacing last tool observation as FINISH", context.sessionId());
+                    log.infof("[STATE-MACHINE] session %s: rate-limit on wrap-up - surfacing last tool observation as FINISH", context.sessionId());
                     return StepDecision.terminal(AgentResult.finished(lastObs, List.copyOf(history)));
                 }
             }

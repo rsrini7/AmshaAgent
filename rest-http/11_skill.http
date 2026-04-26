@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 11 — SKILLS (RUNTIME PERSONA OVERRIDES)
+### 11 - SKILLS (RUNTIME PERSONA OVERRIDES)
 ###
 ### Skills are YAML-defined persona overrides stored in the database
 ### and discovered at runtime by SkillLoader.
@@ -8,7 +8,7 @@
 ###   1. User sends a message.
 ###   2. SkillAwareIntentDetector checks SkillRegistry FIRST.
 ###   3. If a trigger-pattern matches → inject skill's system prompt,
-###      set tool capabilities, run agent — zero Groq classification tokens.
+###      set tool capabilities, run agent - zero Groq classification tokens.
 ###   4. If no match → fall through to LLM-based IntentDetectorService.
 ###   (Nuance #11: SkillRegistry ALWAYS checked before LLM classifier.)
 ###
@@ -21,7 +21,7 @@
 ###   persona: <agentRole>        (optional, which system prompt base to use)
 ###
 ### EXCLUDED from skill frontmatter (Nuance #13):
-###   maxBudgetUsd — explicitly NOT supported. Skills cannot override budget.
+###   maxBudgetUsd - explicitly NOT supported. Skills cannot override budget.
 ###
 ### Endpoints:
 ###   GET    /api/v1/skills          → list all skills (source: classpath|database)
@@ -44,7 +44,7 @@
 # FLOW A: LIST SKILLS (BEFORE CREATING ANY)
 # ─────────────────────────────────────────────────────────────────
 
-### [SKILL-1] List skills — initial state
+### [SKILL-1] List skills - initial state
 # @name skillListBefore
 # Expect 200: empty array [] or classpath-only skills if any are bundled.
 # source="classpath" → bundled in JAR; source="database" → dynamic.
@@ -60,7 +60,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [SKILL-2] Create code-reviewer skill
 # Expect 201: {"message":"Skill saved and registry reloaded: code-reviewer"}
-# Registry reloads immediately — no restart needed.
+# Registry reloads immediately - no restart needed.
 # Telegram test: "review my code for security issues"
 #   → SkillReflex matches, NO Groq classification call, security-focused response.
 POST {{baseUrl}}/api/v1/skills
@@ -86,7 +86,7 @@ When reviewing code:
 1. Check for correctness and edge cases
 2. Flag security vulnerabilities (OWASP Top 10, injection, null deref, resource leaks)
 3. Suggest idiomatic improvements without over-engineering
-4. Be direct — cite patterns and standards, not opinions
+4. Be direct - cite patterns and standards, not opinions
 
 ###
 
@@ -111,11 +111,11 @@ max-iterations: 7
 ---
 You are Saraswati, the knowledge agent. Research technical topics thoroughly.
 Always include: time complexity, space complexity, concrete examples.
-Never fabricate — only cite what you know or can verify.
+Never fabricate - only cite what you know or can verify.
 
 ###
 
-### [SKILL-4] List skills after creating — both must appear
+### [SKILL-4] List skills after creating - both must appear
 # Expect 200: array containing code-reviewer + researcher with source="database"
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
@@ -128,7 +128,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # POST with same name → updates, does NOT create duplicate.
 # ─────────────────────────────────────────────────────────────────
 
-### [SKILL-5] Upsert code-reviewer — add a trigger pattern
+### [SKILL-5] Upsert code-reviewer - add a trigger pattern
 # Expect 201: {"message":"Skill saved and registry reloaded: code-reviewer"}
 # Note: SkillResource always returns 201 for both create AND update.
 # After this, code-reviewer has 5 trigger patterns instead of 4.
@@ -138,7 +138,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ---
 name: code-reviewer
-description: Reviews code — updated with stricter security focus and OWASP alignment
+description: Reviews code - updated with stricter security focus and OWASP alignment
 trigger-patterns:
   - "review.*code"
   - "check.*pr"
@@ -210,7 +210,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [SKILL-10] Message NOT matching any trigger → normal LLM intent classification
 # Expect: IntentClassificationHandler log appears (Groq called for intent).
-# No SkillReflex match — falls through to standard pipeline.
+# No SkillReflex match - falls through to standard pipeline.
 POST {{baseUrl}}/api/v1/sessions/{{skillSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -240,7 +240,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SKILL-12] List after delete — researcher must be gone
+### [SKILL-12] List after delete - researcher must be gone
 # Expect 200: only code-reviewer remains.
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
@@ -257,7 +257,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # After researcher skill deleted, "how does quicksort work" falls through to Groq.
-# Logs: "IntentClassificationHandler" appears — LLM classifier runs.
+# Logs: "IntentClassificationHandler" appears - LLM classifier runs.
 POST {{baseUrl}}/api/v1/sessions/{{postDeleteSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -345,7 +345,7 @@ trigger-patterns:
   - "budget.*test"
 maxBudgetUsd: 999.99
 ---
-This skill tries to override budget — it must be rejected or ignored.
+This skill tries to override budget - it must be rejected or ignored.
 
 ###
 
@@ -396,7 +396,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### Final list — must be empty (or classpath-only skills)
+### Final list - must be empty (or classpath-only skills)
 GET {{baseUrl}}/api/v1/skills
 Accept: application/json
 X-ArcClaw-API-Key: {{validKey}}

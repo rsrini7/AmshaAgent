@@ -10,7 +10,7 @@ import java.util.Optional;
  * Pre-boot CLI utilities for ArcClaw.
  *
  * <p><strong>Design contract:</strong> These methods run <em>before</em>
- * {@code Quarkus.run()} — the CDI container and config system have not
+ * {@code Quarkus.run()} - the CDI container and config system have not
  * started yet. We deliberately do NOT call {@code System.setProperty()} or
  * load values into the JVM environment. Quarkus owns config loading. Our only
  * job here is to fail fast with a clear human-readable message when required
@@ -18,8 +18,8 @@ import java.util.Optional;
  *
  * <p><strong>Telegram validation strategy:</strong>
  * <ul>
- *   <li>{@code attach} mode — hard error if any Telegram var is missing.</li>
- *   <li>{@code serve} mode — Telegram is optional. We soft-warn (print to
+ *   <li>{@code attach} mode - hard error if any Telegram var is missing.</li>
+ *   <li>{@code serve} mode - Telegram is optional. We soft-warn (print to
  *       stderr, do not exit) in three cases:
  *       <ol>
  *         <li>{@code ARCCLAW_TELEGRAM_ENABLED=true} but vars are missing.</li>
@@ -37,7 +37,7 @@ public class CliUtils {
 
     /**
      * Required for every mode except bare --help / --version.
-     * ARCCLAW_LLM_API_KEY is intentionally NOT here — it is provider-conditional.
+     * ARCCLAW_LLM_API_KEY is intentionally NOT here - it is provider-conditional.
      * See GROQ_KEY_SPEC / OPENROUTER_KEY_SPEC / OPENAI_KEY_SPEC below.
      */
     private static final VarSpec[] CORE_VARS = {
@@ -56,8 +56,8 @@ public class CliUtils {
         new VarSpec(
             "ARCCLAW_EMBED_API_KEY",
             "API key for the embedding provider (default: Jina AI).",
-            "1. Sign up at https://jina.ai — free tier: 1M tokens/month, no credit card",
-            "2. Copy your API key — it starts with 'jina_'",
+            "1. Sign up at https://jina.ai - free tier: 1M tokens/month, no credit card",
+            "2. Copy your API key - it starts with 'jina_'",
             "3. Add:  ARCCLAW_EMBED_API_KEY=jina_your_key_here"
         ),
         new VarSpec(
@@ -100,7 +100,7 @@ public class CliUtils {
         "ARCCLAW_LLM_API_KEY",
         "Groq Cloud API key (provider=groq). Starts with 'gsk_'.",
         "1. Sign up at https://console.groq.com",
-        "2. Create an API key — it starts with 'gsk_'",
+        "2. Create an API key - it starts with 'gsk_'",
         "3. Add:  ARCCLAW_LLM_API_KEY=gsk_your_key_here",
         "Also set:  ARCCLAW_LLM_BASE_URL=https://api.groq.com/openai/v1"
     );
@@ -110,7 +110,7 @@ public class CliUtils {
         "ARCCLAW_LLM_API_KEY",        // ← same key, different instructions
         "OpenRouter API key (provider=openrouter). Starts with 'sk-or-v1-'.",
         "1. Sign up at https://openrouter.ai (free tier available)",
-        "2. Create an API key — it starts with 'sk-or-v1-'",
+        "2. Create an API key - it starts with 'sk-or-v1-'",
         "3. Add:  ARCCLAW_LLM_API_KEY=sk-or-v1-your_key_here",
         "Also set:  ARCCLAW_LLM_BASE_URL=https://openrouter.ai/api/v1",
         "Free models with tool support: https://openrouter.ai/models?q=free"
@@ -138,7 +138,7 @@ public class CliUtils {
         "ARCCLAW_LLM_API_KEY",
         "Cerebras AI API key (provider=cerebras).",
         "1. Sign up at https://cloud.cerebras.ai",
-        "2. Create an API key — it starts with 'csk-'",
+        "2. Create an API key - it starts with 'csk-'",
         "3. Add:  ARCCLAW_LLM_API_KEY=csk-your_key_here",
         "Also set:  ARCCLAW_LLM_BASE_URL=https://api.cerebras.ai/v1"
     );
@@ -230,7 +230,7 @@ public class CliUtils {
             missing.add(new VarSpec(
                 "ARCCLAW_TOOLS_SERPER_API_KEY",
                 "Optional Serper.dev API key for Google Search integration.",
-                "1. Sign up at https://serper.dev — 2,500 free searches",
+                "1. Sign up at https://serper.dev - 2,500 free searches",
                 "2. Copy your API key",
                 "3. Add:  ARCCLAW_TOOLS_SERPER_API_KEY=your_key_here"
             ));
@@ -264,7 +264,7 @@ public class CliUtils {
      * <p>Peeks at {@code args[0]} to determine which vars are required.
      * For core vars: exits with code 1 and a full setup guide if any are absent.
      * For Telegram vars in serve mode: prints warnings but does not exit.
-     * Does NOT load or set any properties — Quarkus owns config.
+     * Does NOT load or set any properties - Quarkus owns config.
      *
      * @param args the raw CLI args passed to {@code main()}
      */
@@ -280,13 +280,13 @@ public class CliUtils {
         boolean dotEnvPresent = Files.exists(Path.of(".env"));
         List<VarSpec> missing = new ArrayList<>();
 
-        // ── Core vars — always required (no provider key here) ───────────────
+        // ── Core vars - always required (no provider key here) ───────────────
         for (VarSpec spec : CORE_VARS) {
             if (!isSet(spec.key)) missing.add(spec);
         }
 
-        // ── Provider-aware API key — selected by ARCCLAW_LLM_PROVIDER ────────
-        // Read the provider from the real environment (not Quarkus config —
+        // ── Provider-aware API key - selected by ARCCLAW_LLM_PROVIDER ────────
+        // Read the provider from the real environment (not Quarkus config -
         // the CDI container hasn't started yet at this point in the boot).
         String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
                 .map(String::toLowerCase)
@@ -296,14 +296,14 @@ public class CliUtils {
             case "openai"     -> OPENAI_KEY_SPEC;
             case "gemini"     -> GEMINI_KEY_SPEC;
             case "cerebras"   -> CEREBRAS_KEY_SPEC;
-            case "ollama"     -> null;   // Ollama is local — no API key needed
+            case "ollama"     -> null;   // Ollama is local - no API key needed
             default           -> GROQ_KEY_SPEC;  // groq + any unknown provider
         };
         if (providerKeySpec != null && !isSet(providerKeySpec.key)) {
             missing.add(providerKeySpec);
         }
 
-        // ── Telegram vars — hard required for attach, soft-warn for serve ─────
+        // ── Telegram vars - hard required for attach, soft-warn for serve ─────
         if (mode.equals("attach")) {
             for (VarSpec spec : TELEGRAM_VARS) {
                 if (!isSet(spec.key)) missing.add(spec);
@@ -357,7 +357,7 @@ public class CliUtils {
 
     /**
      * Soft-warns about partial or inconsistent Telegram configuration in
-     * serve mode. Prints to stderr but does NOT exit — Telegram is optional
+     * serve mode. Prints to stderr but does NOT exit - Telegram is optional
      * for serve. Three cases are detected:
      * <ol>
      *   <li>ARCCLAW_TELEGRAM_ENABLED=true but some Telegram vars are missing.</li>
@@ -374,7 +374,7 @@ public class CliUtils {
         boolean hasUserIds = isSet("ARCCLAW_TELEGRAM_ALLOWED_USER_IDS");
         boolean hasUsers   = isSet("ARCCLAW_TELEGRAM_ALLOWED_USERS");
 
-        // Case 0: nothing Telegram-related set at all — gentle info nudge
+        // Case 0: nothing Telegram-related set at all - gentle info nudge
         if (!enabled && !hasToken && !hasUserIds && !hasUsers) {
             System.err.println();
             System.err.println("  INFO: Telegram channel is not configured (optional).");
@@ -405,7 +405,7 @@ public class CliUtils {
             return;
         }
 
-        // Case 2: token present but Telegram not enabled — looks like an oversight
+        // Case 2: token present but Telegram not enabled - looks like an oversight
         if (hasToken && !enabled) {
             System.err.println();
             System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but ARCCLAW_TELEGRAM_ENABLED is not 'true'.");
@@ -415,7 +415,7 @@ public class CliUtils {
             System.err.println();
         }
 
-        // Case 3: token set and enabled, but access control missing — security hole
+        // Case 3: token set and enabled, but access control missing - security hole
         if (hasToken && enabled && (!hasUserIds || !hasUsers)) {
             System.err.println();
             System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but access-control vars are missing.");
@@ -432,10 +432,10 @@ public class CliUtils {
      *
      * <p>Placeholder patterns detected:
      * <ul>
-     *   <li>{@code changeme} — default dev values</li>
-     *   <li>{@code <...>} — angle-bracket templates (e.g. {@code key-<random>})</li>
-     *   <li>{@code your_key_here} / {@code your_..._here} — human-readable stubs</li>
-     *   <li>Repeated {@code x} characters (>=8) — e.g. {@code jina_xxxxxxxx...}</li>
+     *   <li>{@code changeme} - default dev values</li>
+     *   <li>{@code <...>} - angle-bracket templates (e.g. {@code key-<random>})</li>
+     *   <li>{@code your_key_here} / {@code your_..._here} - human-readable stubs</li>
+     *   <li>Repeated {@code x} characters (>=8) - e.g. {@code jina_xxxxxxxx...}</li>
      * </ul>
      */
     private static boolean isSet(String key) {
@@ -451,7 +451,7 @@ public class CliUtils {
     }
 
     // -------------------------------------------------------------------------
-    // VarSpec — unchanged, kept as class (not record) to match original
+    // VarSpec - unchanged, kept as class (not record) to match original
     // -------------------------------------------------------------------------
 
     public static class VarSpec {

@@ -43,7 +43,7 @@ public class IntentClassificationService {
     );
 
     /**
-     * returns true if the text indicates a "write intent" — specifically 
+     * returns true if the text indicates a "write intent" - specifically 
      * for storing information in the long-term memory (ingest_document).
      */
     public boolean isWriteIntent(String text) {

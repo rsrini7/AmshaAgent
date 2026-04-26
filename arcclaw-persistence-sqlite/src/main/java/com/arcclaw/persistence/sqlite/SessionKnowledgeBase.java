@@ -36,7 +36,7 @@ public class SessionKnowledgeBase {
         }
     }
 
-    // Original — unchanged, kept for callers that don't need score filtering.
+    // Original - unchanged, kept for callers that don't need score filtering.
     public List<MemoryChunkDto> search(String query, int topN) {
         return search(query, topN, 0.0);
     }

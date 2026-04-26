@@ -60,7 +60,7 @@ public class IngestDocumentTool implements AgentTool {
         return JsonObjectSchema.builder()
             .addStringProperty("text",
                 "The full factual statement or document text to store, e.g. 'The user's name is Alice'. " +
-                "Do NOT store just an entity name — store the complete fact as a standalone sentence.")
+                "Do NOT store just an entity name - store the complete fact as a standalone sentence.")
             .addStringProperty("label",
                 "A descriptive short label or key for this information (e.g. 'user_name', 'project_overview').")
             .required("text")
@@ -87,7 +87,7 @@ public class IngestDocumentTool implements AgentTool {
 
         if (text.isBlank()) {
             return ToolResponse.failure(400,
-                "text is empty after sanitization — nothing to ingest.");
+                "text is empty after sanitization - nothing to ingest.");
         }
 
         String label = params.containsKey("label")
@@ -150,7 +150,7 @@ public class IngestDocumentTool implements AgentTool {
      * Sanitizes raw text before ingestion.
      * Groq's function-call validator rejects payloads containing
      * consecutive dashes, raw markdown, or control characters.
-     * This also produces cleaner embedding vectors — stripped text
+     * This also produces cleaner embedding vectors - stripped text
      * embeds on semantic content, not formatting noise.
      */
     private String sanitize(String raw) {

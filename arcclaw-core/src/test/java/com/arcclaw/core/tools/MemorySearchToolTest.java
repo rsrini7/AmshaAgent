@@ -75,7 +75,7 @@ class MemorySearchToolTest {
     void testThrowsSecurityExceptionWhenUserIdNotBound() throws Exception {
         MemorySearchTool tool = createTool();
 
-        // Blank userId — intentionally triggers the 403 tenant boundary check
+        // Blank userId - intentionally triggers the 403 tenant boundary check
         ToolResponse response = WorkspaceContext.run("test-session", "", "test-chat",
                 AutonomyLevel.SUPERVISED, "tool",
                 () -> tool.execute(Map.of("query", "test")));

@@ -21,7 +21,7 @@ public class AgentRoleRegistry {
         this.agents = agents;
     }
 
-    /** All registered roles — built-in + any third-party CDI beans. */
+    /** All registered roles - built-in + any third-party CDI beans. */
     public List<AgentRoleEnum> allRoles() {
         return agents.stream()
             .map(a -> AgentRoleEnum.fromString(a.role()))

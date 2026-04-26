@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Integration tests for the Tool Registry — CDI discovery and governance
+ * Integration tests for the Tool Registry - CDI discovery and governance
  * enforcement.
  * <p>
  * Uses the {@code test} profile (NONE sandbox strategy) so no Podman is
@@ -99,14 +99,14 @@ class ToolRegistryTest {
     /**
      * Verify governance: FULL autonomy allows tool invocation.
      * The tool will fail because 'gh' is not installed, but the governance
-     * check should pass — we verify by checking that we did NOT get a
+     * check should pass - we verify by checking that we did NOT get a
      * SecurityException.
      */
     @Test
     void testGovernanceAllowsFullAutonomy() {
         WorkspaceContext.run(TEST_SESSION, "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             // This will *not* throw SecurityException (governance passes).
-            // The tool itself may fail (no 'gh' binary) — that's fine; we're
+            // The tool itself may fail (no 'gh' binary) - that's fine; we're
             // testing governance, not the gh CLI.
             ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("target", "test/repo"));
             assertNotNull(response, "Should get a response (even if tool execution failed)");

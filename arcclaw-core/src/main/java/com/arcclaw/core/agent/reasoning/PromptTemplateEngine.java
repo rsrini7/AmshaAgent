@@ -78,12 +78,12 @@ public class PromptTemplateEngine {
      */
     public String buildSystemPrompt(AgentExecutionContext context, AgentRoleEnum role, String compactionSummary, Instant systemTimeUtc) {
         if (role == null) {
-            log.warn("buildSystemPrompt called with null role — returning fallback");
+            log.warn("buildSystemPrompt called with null role - returning fallback");
             return "PERMITTED TOOLS: None";
         }
 
         // Sort capabilities for deterministic LLM prompt ordering
-        // (RoleDefinition.capabilities() returns an immutable Set — order is undefined).
+        // (RoleDefinition.capabilities() returns an immutable Set - order is undefined).
         // HARD FILTER: only include tools that are actually enabled in the registry.
         // This prevents hallucinations where the LLM tries to call a tool that lacks API keys.
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;

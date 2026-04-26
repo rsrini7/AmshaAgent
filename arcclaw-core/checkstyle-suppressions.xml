@@ -12,7 +12,7 @@
      
    
       <!-- ═══════════════════════════════════════════════════════════
-         agent/loop — scheduled for T2-7 deep conditional extraction
+         agent/loop - scheduled for T2-7 deep conditional extraction
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="MethodLength" files="AgentLoop\.java"/>
     <suppress checks="FileLength|MethodLength" files="AgentStateMachineRunner\.java"/>
@@ -25,7 +25,7 @@
         
 
     <!-- ═══════════════════════════════════════════════════════════
-         agent/reasoning — scheduled for reasoning-layer refactor
+         agent/reasoning - scheduled for reasoning-layer refactor
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="MethodLength" files="ChatHistoryAssembler\.java"/>
     <suppress checks="FileLength|MethodLength" files="LangChainReasoningEngine\.java"/>
@@ -35,7 +35,7 @@
     <suppress checks="MethodLength" files="LlmExceptionClassifier\.java"/>
     
     <!-- ═══════════════════════════════════════════════════════════
-         api — scheduled for AgentSessionService decomposition
+         api - scheduled for AgentSessionService decomposition
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="FileLength|MethodLength" files="AgentSessionService\.java"/>
 
@@ -45,14 +45,14 @@
     <suppress checks="FileLength" files="AsyncPersistenceEngine\.java"/>
 
     <!-- ═══════════════════════════════════════════════════════════
-         pipeline/handlers — scheduled for handler decomposition
+         pipeline/handlers - scheduled for handler decomposition
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="MethodLength" files="AgentDispatchHandler\.java"/>
     <suppress checks="MethodLength" files="CommandDispatchHandler\.java"/>
     <suppress checks="MethodLength" files="IntentClassificationHandler\.java"/>
 
     <!-- ═══════════════════════════════════════════════════════════
-         reflex — scheduled for reflex decomposition
+         reflex - scheduled for reflex decomposition
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="FileLength|MethodLength" files="ApproveReflex\.java"/>
     <suppress checks="MethodLength" files="DenyReflex\.java"/>
@@ -63,12 +63,12 @@
     <suppress checks="MethodLength" files="PodmanContainerExecutor\.java"/>
 
     <!-- ═══════════════════════════════════════════════════════════
-         state — AgentCheckpoint is 1 line over; trivial to fix later
+         state - AgentCheckpoint is 1 line over; trivial to fix later
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="FileLength" files="AgentCheckpoint\.java"/>
 
     <!-- ═══════════════════════════════════════════════════════════
-         tools — scheduled for tool-layer refactor
+         tools - scheduled for tool-layer refactor
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="FileLength|MethodLength" files="SandboxExecTool\.java"/>
     <suppress checks="FileLength|MethodLength" files="GithubTool\.java"/>

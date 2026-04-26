@@ -41,7 +41,7 @@ public class RagContextEnricher implements ContextEnricher {
     // ── Fix Bug A: write-intent goals must never be enriched with past RAG data.
     // Injecting a previously-stored "My name is srini" chunk into "store my name
     // as srini" causes the LLM to conclude the store already happened and emit
-    // "Done" in 1 token — bypassing the ingest_document tool entirely.
+    // "Done" in 1 token - bypassing the ingest_document tool entirely.
     private static final Set<String> WRITE_INTENT_TOKENS = Set.of(
             "store", "save", "remember", "ingest", "add to knowledge",
             "call me", "note that", "add to memory", "memorize"
@@ -55,12 +55,12 @@ public class RagContextEnricher implements ContextEnricher {
         // leaking into background tasks (causes task refusal).
         // Check sessionId because the CRON prefix may have been stripped from the goal text.
         if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            log.debugf("RagContextEnricher: skipping — cron session detected (session=%s)", sessionId);
+            log.debugf("RagContextEnricher: skipping - cron session detected (session=%s)", sessionId);
             return basePrompt;
         }
 
         if (isWriteIntent(goal)) {
-            log.debugf("RagContextEnricher: skipping — write-intent goal (session=%s)", sessionId);
+            log.debugf("RagContextEnricher: skipping - write-intent goal (session=%s)", sessionId);
             return basePrompt;
         }
 
@@ -95,7 +95,7 @@ public class RagContextEnricher implements ContextEnricher {
                 log.debugf("RagContextEnricher: adaptive threshold=%.4f (mean=%.4f, stdDev=%.4f, floor=%.4f) for session %s",
                         (Object) computedThreshold, mean, stdDev, minScore, sessionId);
             } else {
-                // Too few samples for distribution — use a modest floor for small KBs (§ recommendation)
+                // Too few samples for distribution - use a modest floor for small KBs (§ recommendation)
                 computedThreshold = chunks.size() >= 1 ? 0.0 : minScore;
             }
 
@@ -107,7 +107,7 @@ public class RagContextEnricher implements ContextEnricher {
                     .toList();
 
             if (relevant.isEmpty()) {
-                log.debugf("RagContextEnricher: skipping — 0/%d chunks passed threshold=%.4f for session %s",
+                log.debugf("RagContextEnricher: skipping - 0/%d chunks passed threshold=%.4f for session %s",
                     (Object) chunks.size(), threshold, sessionId);
                 return basePrompt;
             }

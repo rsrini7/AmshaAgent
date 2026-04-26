@@ -31,7 +31,7 @@ public class InstantToTextConverter implements AttributeConverter<Instant, Strin
 
     /**
      * Static helper for native SQL parameter binding.
-     * Legacy support — prefer passing Instant to JPQL.
+     * Legacy support - prefer passing Instant to JPQL.
      */
     public static String format(Instant instant) {
         return TemporalUtils.formatIsoLex(instant);

@@ -68,7 +68,7 @@ public class PlaywrightPageRunner {
 
     /**
      * Extra buffer added to the caller-supplied timeoutMs when waiting for the
-     * playwrightThread future — gives Playwright time to throw its own timeout
+     * playwrightThread future - gives Playwright time to throw its own timeout
      * before the outer Future.get() fires.
      */
     private static final long RUN_FUTURE_BUFFER_MS = 5_000L;
@@ -111,7 +111,7 @@ public class PlaywrightPageRunner {
 
     void onStart(@Observes StartupEvent ev) {
         if (!enabled) {
-            log.info("Playwright is disabled — skipping browser warmup.");
+            log.info("Playwright is disabled - skipping browser warmup.");
             initFuture.complete(null);
             return;
         }
@@ -241,7 +241,7 @@ public class PlaywrightPageRunner {
             }
 
             // Wait for NETWORKIDLE using proportional budget.
-            // JS-heavy SPAs (quarkus.io, spring.io) rarely reach NETWORKIDLE —
+            // JS-heavy SPAs (quarkus.io, spring.io) rarely reach NETWORKIDLE -
             // we degrade to LOAD fallback quickly rather than burning the full budget.
             waitForPageReady(page, url, networkIdleTimeoutMs, loadFallbackTimeoutMs);
 
@@ -269,7 +269,7 @@ public class PlaywrightPageRunner {
      * Waits for page readiness using a two-stage strategy:
      * 1. Try NETWORKIDLE with networkIdleTimeoutMs budget.
      * 2. If NETWORKIDLE times out (common on JS-heavy SPAs), fall back to LOAD with loadFallbackTimeoutMs.
-     * 3. If LOAD also times out, warn and proceed — content is likely usable after navigate() returned.
+     * 3. If LOAD also times out, warn and proceed - content is likely usable after navigate() returned.
      *
      * Previously used hardcoded 10s/5s values regardless of caller's timeoutMs, causing
      * total doRun() time to exceed caller budget on slow sites.
@@ -279,12 +279,12 @@ public class PlaywrightPageRunner {
             page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions().setTimeout(networkIdleTimeoutMs));
             log.debugf("[Playwright] NETWORKIDLE reached for: %s", url);
         } catch (TimeoutError e) {
-            log.debugf("[Playwright] NETWORKIDLE timeout (%dms) for %s — falling back to LOAD",
+            log.debugf("[Playwright] NETWORKIDLE timeout (%dms) for %s - falling back to LOAD",
                     networkIdleTimeoutMs, url);
             try {
                 page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(loadFallbackTimeoutMs));
             } catch (TimeoutError ignored) {
-                log.warnf("[Playwright] LOAD fallback also timed out (%dms) for %s — proceeding with partial content",
+                log.warnf("[Playwright] LOAD fallback also timed out (%dms) for %s - proceeding with partial content",
                         loadFallbackTimeoutMs, url);
             }
         }
@@ -301,10 +301,10 @@ public class PlaywrightPageRunner {
                     .filter(s -> s.length() > minFilterChars)
                     .collect(Collectors.joining("\n\n---\n\n"));
                 if (result.length() > minContentChars) return result;
-                log.warnf("[Playwright] Selector '%s' returned only %d chars (min=%d) — engaging fallback chain",
+                log.warnf("[Playwright] Selector '%s' returned only %d chars (min=%d) - engaging fallback chain",
                         llmSelector, result.length(), minContentChars);
             } catch (Exception e) {
-                log.warnf("[Playwright] Selector '%s' failed or timed out — engaging fallback chain", llmSelector);
+                log.warnf("[Playwright] Selector '%s' failed or timed out - engaging fallback chain", llmSelector);
             }
         }
 
@@ -398,7 +398,7 @@ public class PlaywrightPageRunner {
         String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         if (msg.contains("Executable doesn't exist")) {
             String summary = msg.split("\n")[0].trim();
-            log.warnf("[Playwright] Chromium binary not found — initialization skipped. " +
+            log.warnf("[Playwright] Chromium binary not found - initialization skipped. " +
                      "(Run 'npx playwright install chromium'). Details: %s", summary);
         } else {
             log.errorf(e, "[Playwright] Initialization failed: %s", msg);

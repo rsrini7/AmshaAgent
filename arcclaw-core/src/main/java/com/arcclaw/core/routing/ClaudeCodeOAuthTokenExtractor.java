@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 /**
- * Component A3 — ClaudeCodeOAuthTokenExtractor.
+ * Component A3 - ClaudeCodeOAuthTokenExtractor.
  * Reads the OAuth token stored by Claude Code CLI from ~/.claude/credentials.json.
  */
 @ApplicationScoped

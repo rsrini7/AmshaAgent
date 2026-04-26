@@ -1,4 +1,4 @@
-# ArcClaw — Complete End-to-End Workflow
+# ArcClaw - Complete End-to-End Workflow
 
 ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java/Quarkus AI agent framework** built around a checkpoint-driven Thought-Plan-Act-Observe loop with Human-in-the-Loop (HITL) governance, pluggable channel adapters, persistent state, RAG memory, and MCP integration.
 
@@ -23,10 +23,10 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java/Quarkus AI agen
 
 `ArcClawCli.main()` runs **before** Quarkus CDI boots and performs these ordered steps: 
 
-1. **Env-var validation** — `CliUtils.validateRequiredEnvVars()` prints a clear setup guide and exits if required keys are absent; Quarkus never starts with a missing config.
-2. **Data directory provisioning** — resolves `ARCCLAW_DATA_DIR` to an absolute path, creates `workspaces/` sub-dir, and pins it back via `System.setProperty` so every YAML expression (`${ARCCLAW_DATA_DIR}`) resolves to the same location regardless of JVM launch directory.
-3. **vec0 native library installation** — `Vec0NativeLibraryInstaller.performInstallation()` (Priority 10) extracts the correct SQLite-vec `.so/.dylib/.dll` from JAR resources, enabling vector search before any connection opens.
-4. **Quarkus boot** — `Quarkus.run(ArcClawCli.class, args)` starts the CDI container, Hibernate, Agroal, and all extensions.
+1. **Env-var validation** - `CliUtils.validateRequiredEnvVars()` prints a clear setup guide and exits if required keys are absent; Quarkus never starts with a missing config.
+2. **Data directory provisioning** - resolves `ARCCLAW_DATA_DIR` to an absolute path, creates `workspaces/` sub-dir, and pins it back via `System.setProperty` so every YAML expression (`${ARCCLAW_DATA_DIR}`) resolves to the same location regardless of JVM launch directory.
+3. **vec0 native library installation** - `Vec0NativeLibraryInstaller.performInstallation()` (Priority 10) extracts the correct SQLite-vec `.so/.dylib/.dll` from JAR resources, enabling vector search before any connection opens.
+4. **Quarkus boot** - `Quarkus.run(ArcClawCli.class, args)` starts the CDI container, Hibernate, Agroal, and all extensions.
 
 After CDI starts, **Quarkus `StartupEvent` observers** fire in priority order: 
 
@@ -42,7 +42,7 @@ After CDI starts, **Quarkus `StartupEvent` observers** fire in priority order:
 The picocli command tree has four leaf subcommands: 
 
 ### `arcclaw serve` → Daemon REST Mode
-Starts the Quarkus HTTP server (`quarkus.http.port=8080`) and blocks. The Telegram channel route self-registers via its own `StartupEvent` observer — `ServeCommand` itself does nothing except call `Quarkus.waitForExit()`.
+Starts the Quarkus HTTP server (`quarkus.http.port=8080`) and blocks. The Telegram channel route self-registers via its own `StartupEvent` observer - `ServeCommand` itself does nothing except call `Quarkus.waitForExit()`.
 
 ### `arcclaw ask "<goal>"` → One-Shot CLI
 Creates a UUID session, calls `AgentLoop.run()` once, prints the final answer, and terminates the workspace session in the `finally` block.
@@ -86,7 +86,7 @@ Telegram Bot API
   → AgentDispatchHandler → AgentLoop.run()
 ```
 
-`SkillAwareIntentDetector` iterates compiled `Pattern[]` from `SkillRegistry` — if any matches, it bypasses the LLM call entirely and returns `skill:{name}` as the role. Only on a miss does it fall through to the LLM-backed `IntentDetectorService`. 
+`SkillAwareIntentDetector` iterates compiled `Pattern[]` from `SkillRegistry` - if any matches, it bypasses the LLM call entirely and returns `skill:{name}` as the role. Only on a miss does it fall through to the LLM-backed `IntentDetectorService`. 
 
 ### Path C: Cron Scheduler
 
@@ -106,13 +106,13 @@ Quarkus @Scheduled(every="${arcclaw.cron.poll-interval:30s}")
   → CronResultHandler.handleSuccess/handleFailure()
 ```
 
-The cron goal is prefixed with a `SYSTEM CONSTRAINT CRON EXECUTION MODE` directive, instructing the agent not to call delivery tools — ArcClaw delivers the output autonomously. 
+The cron goal is prefixed with a `SYSTEM CONSTRAINT CRON EXECUTION MODE` directive, instructing the agent not to call delivery tools - ArcClaw delivers the output autonomously. 
 
 ***
 
 ## Phase 4: Agent Loop (`AgentLoop.run`)
 
-This is the outer lifecycle shell — it sets up context and delegates all iteration logic to `AgentStateMachineRunner`: 
+This is the outer lifecycle shell - it sets up context and delegates all iteration logic to `AgentStateMachineRunner`: 
 
 ### 4.1 Setup
 - MDC keys (`SESSION_ID`, `AGENT_ROLE`, `USER_ID`) set for structured logging
@@ -168,7 +168,7 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks token budgets. `Bud
 5. `guardFinalAnswer()` checks `CONTEXT_RAG_ECHO_PATTERN` / `CONTEXT_RETRIEVED_ECHO_PATTERN` to prevent the LLM echoing injected RAG headers
 6. `ChatMemoryWriter.saveAnswer(sessionId, answer)` persists AI message
 
-### Step C: ToolStepHandler — Validation (`validateTool`)
+### Step C: ToolStepHandler - Validation (`validateTool`)
 `ToolInvocationGuard.evaluate()` runs this decision tree: 
 
 ```
@@ -183,7 +183,7 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks token budgets. `Bud
 
 For `PauseForApproval`: `ApprovalCheckpointManager.persist()` writes the checkpoint with `AWAITING_APPROVAL` status, stamps channel info, fires `HitlEvent` SSE, returns `AgentResult.AwaitingApproval`.
 
-### Step D: ToolStepHandler — Parallel Batch Execution
+### Step D: ToolStepHandler - Parallel Batch Execution
 For parallel tool batches: 
 
 ```
@@ -371,7 +371,7 @@ Spans at three levels: session (`otelContext.startSessionSpan`), iteration (`sta
 ## Phase 13: Security Architecture
 
 ### API Key Authentication
-Keys are stored as `HMAC-SHA256(rawKey, hmacSecret)` — never plaintext. `ApiKeyRegistry` maintains a `hmacToKeyName` map initialized at startup. Per-key Bucket4j token buckets enforce rate limits; the `isAllowed()` method atomically consumes one token. 
+Keys are stored as `HMAC-SHA256(rawKey, hmacSecret)` - never plaintext. `ApiKeyRegistry` maintains a `hmacToKeyName` map initialized at startup. Per-key Bucket4j token buckets enforce rate limits; the `isAllowed()` method atomically consumes one token. 
 
 ### Secret Vault
 `SecretVault` wraps AES-GCM encrypted secrets with a `ARCCLAW_VAULT_PEPPER` as KDF salt. `VaultKey implements AutoCloseable` zeroes key bytes on `close()` (explicit `@PreDestroy` too). `StartupSecurityValidator` throws `DeploymentException` in prod if: 
@@ -484,4 +484,4 @@ External Input
   (TelegramMarkdownRenderer / REST JSON / CLI stdout)
 ```
 
-Every actor — Telegram users, REST clients, CLI operators, and scheduled cron jobs — converges through the same checkpoint-aware `AgentLoop`, ensuring consistent governance, HITL approval, audit chaining, and observability regardless of the input channel. 
+Every actor - Telegram users, REST clients, CLI operators, and scheduled cron jobs - converges through the same checkpoint-aware `AgentLoop`, ensuring consistent governance, HITL approval, audit chaining, and observability regardless of the input channel. 

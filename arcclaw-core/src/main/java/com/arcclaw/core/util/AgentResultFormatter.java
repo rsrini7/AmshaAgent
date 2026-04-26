@@ -69,7 +69,7 @@ public class AgentResultFormatter {
 
     /**
      * Strips raw TOOLCALL markup that LLMs occasionally embed in FINISH answers.
-     * Safe to call with null or blank — returns as-is.
+     * Safe to call with null or blank - returns as-is.
      * Order matters: strip full blocks first, then bare arrays, then leftover fragments.
      */
     static String sanitize(String text) {
@@ -82,14 +82,14 @@ public class AgentResultFormatter {
 
         // 2. Bare JSON tool-array that IS the entire answer string
         if (BARE_TOOL_JSON_ARRAY.matcher(cleaned).matches()) {
-            return "[Tool output was malformed — no answer text was generated.]";
+            return "[Tool output was malformed - no answer text was generated.]";
         }
 
         // 3. Trailing/leading fragment from a split TOOLCALL block
         cleaned = TOOLCALL_FRAGMENT.matcher(cleaned).replaceAll("").strip();
 
         return cleaned.isBlank()
-            ? "[Tool output was malformed — no answer text was generated.]"
+            ? "[Tool output was malformed - no answer text was generated.]"
             : cleaned;
     }
 

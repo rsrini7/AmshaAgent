@@ -37,7 +37,7 @@ import org.jboss.logging.Logger;
  * Discovers all {@link AgentTool} implementations via {@code Instance<AgentTool>}
  * at runtime. Before invoking any tool, the registry:
  * <ol>
- * <li>Enforces role-capability hard block (schema filter is soft — LLM can hallucinate past it)</li>
+ * <li>Enforces role-capability hard block (schema filter is soft - LLM can hallucinate past it)</li>
  * <li>Verifies autonomy governance via {@link AutonomyPolicy}</li>
  * <li>Reflectively reads {@link RequiresSecret} annotations from the tool's
  *     {@code execute()} method to build the secrets map</li>
@@ -45,7 +45,7 @@ import org.jboss.logging.Logger;
  * </ol>
  * <p>
  * Audit userId/agentRole are sourced from {@link WorkspaceContext}/{@link WorkspaceScopeHolder}
- * ScopedValues — NOT MDC. MDC is ThreadLocal and dies at virtual thread boundaries;
+ * ScopedValues - NOT MDC. MDC is ThreadLocal and dies at virtual thread boundaries;
  * ScopedValues are propagated correctly across Quarkus virtual threads.
  */
 @ApplicationScoped
@@ -219,7 +219,7 @@ public class ToolRegistry {
     /**
      * Static bridge for legacy callers.
      * <p>
-     * NOTE: plain instantiation — ToolSecretExtractor has no CDI dependencies.
+     * NOTE: plain instantiation - ToolSecretExtractor has no CDI dependencies.
      * If dependencies are added in the future, this bridge must be refactored
      * to use Arc.container().instance(ToolSecretExtractor.class).get().
      */

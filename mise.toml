@@ -1,9 +1,9 @@
 # =============================================================================
-# mise.toml — ArcClaw Agent Kernel  (unified, all platforms)
+# mise.toml - ArcClaw Agent Kernel  (unified, all platforms)
 # Docs: https://mise.jdx.dev
 # Platform: Windows · macOS · WSL2 · Linux
 #
-# All tasks use PowerShell (pwsh) — the only true cross-platform scripting
+# All tasks use PowerShell (pwsh) - the only true cross-platform scripting
 # runtime. mise installs pwsh automatically via the [tools] section below.
 #
 # BOOTSTRAP SEQUENCE (fresh clone):
@@ -15,9 +15,9 @@
 #   6. mise run dev
 #
 # NOTE: `start` uses run = [...] array (no shell dependency) so it works
-# even before `mise install` completes — cmd.exe, sh, pwsh all handle it.
+# even before `mise install` completes - cmd.exe, sh, pwsh all handle it.
 #
-# IMPORTANT — mise use --path
+# IMPORTANT - mise use --path
 # All `mise use java@...` calls specify --path mise.toml to prevent writing
 # [tools] changes to any other file.
 # =============================================================================
@@ -49,7 +49,7 @@ trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
 # Setting JDK_JAVA_OPTIONS globally causes Maven to fail parsing --add-opens.
 
 # =============================================================================
-# BOOTSTRAP — works before `mise install` (run = [] uses system default shell)
+# BOOTSTRAP - works before `mise install` (run = [] uses system default shell)
 # =============================================================================
 
 [tasks.start]
@@ -179,7 +179,7 @@ if ($IsWindows) {
 """
 
 [tasks."setup:env-check"]
-description = "Validate .env — warn about missing or placeholder values"
+description = "Validate .env - warn about missing or placeholder values"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -207,7 +207,7 @@ if ($issues.Count -gt 0) {
     $issues | ForEach-Object { Write-Host "    - $_" }
     exit 1
 } else {
-    Write-Host '✅  .env looks good — all required keys are set.'
+    Write-Host '✅  .env looks good - all required keys are set.'
 }
 """
 
@@ -219,7 +219,7 @@ quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
 if ($IsWindows) {
-    Write-Host 'ℹ️   Not needed on native Windows — CRLF fix is for WSL2/Linux only.'
+    Write-Host 'ℹ️   Not needed on native Windows - CRLF fix is for WSL2/Linux only.'
     exit 0
 }
 if (-not (Get-Command dos2unix -ErrorAction SilentlyContinue)) {
@@ -246,12 +246,12 @@ dir = "{{config_root}}"
 run = ["mise use --path mise.toml java@graalvm-community-25.0.2", "java -version"]
 
 [tasks."jdk:temurin"]
-description = "Switch active JDK back to Temurin 25 (default — dev, build, jar tasks)"
+description = "Switch active JDK back to Temurin 25 (default - dev, build, jar tasks)"
 dir = "{{config_root}}"
 run = ["mise use --path mise.toml java@temurin-25", "java -version"]
 
 [tasks."jdk:install"]
-description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) — safe to re-run"
+description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) - safe to re-run"
 dir = "{{config_root}}"
 run = [
     "mise install",
@@ -287,7 +287,7 @@ run = """
 
 [tasks.build-app]
 depends = ["dev:kill", "env:recover", "build:ui-copy"]
-description = "JVM build — all modules, skip tests (fast daily driver) — uses temurin-25"
+description = "JVM build - all modules, skip tests (fast daily driver) - uses temurin-25"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -301,7 +301,7 @@ $envBackup = $null
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
     $envBackup = $true
-    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into JAR.'
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into JAR.'
 }
 
 try {
@@ -333,7 +333,7 @@ $envBackup = $null
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
     $envBackup = $true
-    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into build.'
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into build.'
 }
 
 try {
@@ -365,7 +365,7 @@ $envBackup = $null
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
     $envBackup = $true
-    Write-Host 'ℹ️   .env shielded (.env.build-backup) — tests will use clean defaults.'
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - tests will use clean defaults.'
 }
 
 try {
@@ -383,7 +383,7 @@ try {
 
 [tasks."build:native"]
 depends = ["env:recover", "build:ui-copy"]
-description = "Native binary — Podman container (default on Linux/macOS) or local GraalVM — auto-detects, auto-switches JDK"
+description = "Native binary - Podman container (default on Linux/macOS) or local GraalVM - auto-detects, auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -396,7 +396,7 @@ $mOpts  = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.
 # ── Resolve build strategy ────────────────────────────────────────────────────
 $strategy = 'local'
 if ($IsWindows) {
-    Write-Host 'ℹ️   Windows: using local GraalVM (container build produces Linux ELF — unusable on Windows).'
+    Write-Host 'ℹ️   Windows: using local GraalVM (container build produces Linux ELF - unusable on Windows).'
 } elseif ($env:ARCCLAW_NATIVE_BUILD -eq 'local') {
     Write-Host 'ℹ️   ARCCLAW_NATIVE_BUILD=local: using local GraalVM.'
 } elseif ($env:ARCCLAW_NATIVE_BUILD -eq 'container') {
@@ -439,17 +439,17 @@ $envBackup = $null
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
     $envBackup = $true
-    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into binary.'
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into binary.'
 } elseif (Test-Path 'build.env') {
     Copy-Item 'build.env' '.env'
     $envBackup = 'build.env'
     Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
 } else {
-    Write-Host 'ℹ️   No .env found — building without config override (good for CI).'
+    Write-Host 'ℹ️   No .env found - building without config override (good for CI).'
 }
 
 if ($strategy -eq 'container') {
-    Write-Host 'ℹ️   Container build: host GraalVM not needed — skipping JDK switch.'
+    Write-Host 'ℹ️   Container build: host GraalVM not needed - skipping JDK switch.'
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
         $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
@@ -500,7 +500,7 @@ Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
 
 [tasks."build:native-local"]
 depends = ["env:recover", "build:ui-copy"]
-description = "Native binary — always local GraalVM, no container (fast, any OS) — auto-switches JDK"
+description = "Native binary - always local GraalVM, no container (fast, any OS) - auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -521,13 +521,13 @@ $envBackup = $null
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
     $envBackup = $true
-    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into binary.'
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into binary.'
 } elseif (Test-Path 'build.env') {
     Copy-Item 'build.env' '.env'
     $envBackup = 'build.env'
     Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
 } else {
-    Write-Host 'ℹ️   No .env found — building without config override (good for CI).'
+    Write-Host 'ℹ️   No .env found - building without config override (good for CI).'
 }
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
@@ -558,14 +558,14 @@ if (Test-Path '.env') {
 """
 
 [tasks."build:native-wsl2-local"]
-description = "Native Linux binary via WSL2 — always local GraalVM, no container (fastest WSL2 build)"
+description = "Native Linux binary via WSL2 - always local GraalVM, no container (fastest WSL2 build)"
 quiet = true
 dir = "{{config_root}}"
 run = "mise run build:native-wsl2 --local"
 
 [tasks."build:native-lowmem"]
 depends = ["env:recover", "build:ui-copy"]
-description = "Native binary — local GraalVM, 6 GB heap cap (use when RAM is tight) — auto-switches JDK"
+description = "Native binary - local GraalVM, 6 GB heap cap (use when RAM is tight) - auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -586,13 +586,13 @@ $envBackup = $null
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
     $envBackup = $true
-    Write-Host 'ℹ️   .env shielded (.env.build-backup) — secrets will not be baked into binary.'
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into binary.'
 } elseif (Test-Path 'build.env') {
     Copy-Item 'build.env' '.env'
     $envBackup = 'build.env'
     Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
 } else {
-    Write-Host 'ℹ️   No .env found — building without config override (good for CI).'
+    Write-Host 'ℹ️   No .env found - building without config override (good for CI).'
 }
 try {
     # ── Memory Scaling (Low-Mem Mode) ──────────────────────────────────────
@@ -638,12 +638,12 @@ Write-Host '✅  Build artifacts cleaned.'
 """
 
 # =============================================================================
-# DEV MODE TASKS  (hot reload — Temurin 25, no Podman)
+# DEV MODE TASKS  (hot reload - Temurin 25, no Podman)
 # =============================================================================
 
 [tasks.dev]
 depends = ["env:recover", "build:ui-copy"]
-description = "Dev mode — serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
+description = "Dev mode - serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = false
@@ -704,7 +704,7 @@ try {
 
 [tasks."dev:chat"]
 depends = ["env:recover"]
-description = "Dev mode — interactive REPL with hot reload (strategy: NONE)"
+description = "Dev mode - interactive REPL with hot reload (strategy: NONE)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -766,7 +766,7 @@ try {
 
 [tasks."dev:attach"]
 depends = ["env:recover"]
-description = "Dev mode — Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
+description = "Dev mode - Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -833,7 +833,7 @@ try {
 
 [tasks."dev:ask"]
 depends = ["env:recover"]
-description = 'Dev mode — one-shot task. Set $env:GOAL="your goal" then: mise run dev:ask'
+description = 'Dev mode - one-shot task. Set $env:GOAL="your goal" then: mise run dev:ask'
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -904,7 +904,7 @@ try {
 
 [tasks."dev:no-ui"]
 depends = ["env:recover"]
-description = "Dev mode — serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
+description = "Dev mode - serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -974,7 +974,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 Write-Host '── Scanning for lingering Quarkus processes ─────────────────────'
 $jps = Get-Command jps -ErrorAction SilentlyContinue
-if (-not $jps) { Write-Host '❌  jps not found — is a JDK active? Run: mise run jdk:status'; exit 1 }
+if (-not $jps) { Write-Host '❌  jps not found - is a JDK active? Run: mise run jdk:status'; exit 1 }
 $procs = & jps -l 2>&1 | Where-Object { $_ -match 'quarkus-run\\.jar|quarkus\\.jar|QuarkusDevModeMain' }
 if (-not $procs) {
     Write-Host '✅  No lingering Quarkus processes found.'
@@ -1001,7 +1001,7 @@ Write-Host '──────────────────────�
 
 [tasks."jar:serve"]
 depends = ["env:recover"]
-description = "Run packaged jar — REST daemon on :8080 (CLI profile)"
+description = "Run packaged jar - REST daemon on :8080 (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1030,7 +1030,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."jar:chat"]
 depends = ["env:recover"]
-description = "Run packaged jar — interactive REPL (CLI profile)"
+description = "Run packaged jar - interactive REPL (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1057,7 +1057,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."jar:attach"]
 depends = ["env:recover"]
-description = "Run packaged jar — Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+description = "Run packaged jar - Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1086,7 +1086,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."jar:ask"]
 depends = ["env:recover"]
-description = 'Run packaged jar — one-shot task. Set $env:GOAL="..." then: mise run jar:ask'
+description = 'Run packaged jar - one-shot task. Set $env:GOAL="..." then: mise run jar:ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1156,7 +1156,7 @@ if ($cmd -in @('chat','ask')) {
     $jvmArgs += '-Darcclaw.telegram.enabled=false'
 }
 if ($cmd -eq 'attach') { $jvmArgs += '-Darcclaw.telegram.enabled=true' }
-Write-Host "▶   Starting JAR in dev profile — mode: $cmd"
+Write-Host "▶   Starting JAR in dev profile - mode: $cmd"
 & java @jvmArgs -jar $jar $cmd
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
@@ -1175,7 +1175,7 @@ run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
 # =============================================================================
 
 [tasks."native:serve"]
-description = "Run native binary — REST daemon on :8080"
+description = "Run native binary - REST daemon on :8080"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1194,7 +1194,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:chat"]
-description = "Run native binary — interactive REPL"
+description = "Run native binary - interactive REPL"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1213,7 +1213,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:attach"]
-description = "Run native binary — Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
+description = "Run native binary - Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1233,7 +1233,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:ask"]
-description = 'Run native binary — one-shot task. Set $env:GOAL="..." then: mise run native:ask'
+description = 'Run native binary - one-shot task. Set $env:GOAL="..." then: mise run native:ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1260,7 +1260,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 # =============================================================================
-# DIST — assemble a ready-to-run distribution folder
+# DIST - assemble a ready-to-run distribution folder
 # =============================================================================
 
 [tasks."env:recover"]
@@ -1291,14 +1291,14 @@ $distExe = if ($IsWindows) { "arcclaw.exe" } else { "arcclaw" }
 $distDir = 'dist'
 
 if (-not (Test-Path $src)) {
-    Write-Host "❌  Native binary not found at $src — run: mise run build:native"
+    Write-Host "❌  Native binary not found at $src - run: mise run build:native"
     exit 1
 }
 
 Copy-Item $src "$distDir/$distExe"
 
 Write-Host ''
-Write-Host "✅  dist assembled — binary is self-contained."
+Write-Host "✅  dist assembled - binary is self-contained."
 Write-Host "Run directly (no run.sh needed):"
 Write-Host "  Linux/macOS : ./$distExe serve"
 Write-Host "  Windows     : .\\$distExe serve"
@@ -1370,7 +1370,7 @@ $script:excludeRelPaths = @(
     'arcclaw-app/src/main/resources/native'
 )
 
-# ── Include lists — these override exclusions above ──────────────────────────
+# ── Include lists - these override exclusions above ──────────────────────────
 $script:includeFiles = @(
     'Architecture_Invariants.md',
     'Flyway-Migration.md'
@@ -1381,7 +1381,7 @@ $script:includeRelPaths = @(
 )
 
 function ShouldExclude($item, $relPath) {
-    # ✅ Include list overrides everything — check FIRST
+    # ✅ Include list overrides everything - check FIRST
     if (-not $item.PSIsContainer) {
         if ($script:includeFiles -contains $item.Name) { return $false }
     }
@@ -1499,7 +1499,7 @@ if (Test-Path "dist/$runner") {
 }
 
 if ($packed -eq 0) {
-    Write-Host '❌  No binaries found in dist/ — run mise run build:native first'; exit 1
+    Write-Host '❌  No binaries found in dist/ - run mise run build:native first'; exit 1
 }
 Write-Host ''
 Write-Host "-- Release archives in $out/ --"
@@ -1543,7 +1543,7 @@ Write-Host '✅  Stack stopped. Data volumes preserved.'
 """
 
 [tasks."compose:down-clean"]
-description = "Stop the stack and DELETE all data volumes (irreversible — prompts for confirmation)"
+description = "Stop the stack and DELETE all data volumes (irreversible - prompts for confirmation)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true

@@ -227,7 +227,7 @@ public class CronJobRunner {
     }
 
     private String resolveRole(String goal, String explicitRole) {
-        // Priority 0 — Explicit stored role always wins
+        // Priority 0 - Explicit stored role always wins
         if (explicitRole != null && !explicitRole.isBlank()) {
             return explicitRole;
         }

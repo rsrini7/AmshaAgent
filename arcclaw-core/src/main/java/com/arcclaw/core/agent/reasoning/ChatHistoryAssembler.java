@@ -49,7 +49,7 @@ public class ChatHistoryAssembler {
     }
 
     /**
-     * Detects LLM compliance override responses — organic LLM output where the
+     * Detects LLM compliance override responses - organic LLM output where the
      * model was manipulated into agreeing to a capability restriction.
      * These are filtered from history reconstruction to prevent the override
      * from persisting across turns.
@@ -71,7 +71,7 @@ public class ChatHistoryAssembler {
     public List<ChatMessage> assemble(String sessionId, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
 
-        // STEP 0 — inject compacted summary (§ Resilience / Memory Re-capture)
+        // STEP 0 - inject compacted summary (§ Resilience / Memory Re-capture)
         if (sessionId != null) {
             summaryCache.getSummary(sessionId).ifPresent(summary -> {
                 if (!summary.isBlank()) {
@@ -84,7 +84,7 @@ public class ChatHistoryAssembler {
             });
         }
 
-        // STEP A — persistent chat history
+        // STEP A - persistent chat history
         if (sessionId != null) {
             List<ChatMessage> chatHistory = chatMemoryStore.getMessages(sessionId);
             if (chatHistory != null && !chatHistory.isEmpty()) {
@@ -136,7 +136,7 @@ public class ChatHistoryAssembler {
             }
         }
 
-        // STEP B — ReAct loop steps
+        // STEP B - ReAct loop steps
         int totalSteps = history.size();
         for (int i = 0; i < totalSteps; i++) {
             ReasoningStep step = history.get(i);
@@ -226,7 +226,7 @@ public class ChatHistoryAssembler {
             }
         }
 
-        // STEP C — special goal injection or correction hints (§7.31 turn-flipping)
+        // STEP C - special goal injection or correction hints (§7.31 turn-flipping)
         if (goal != null && goal.equals(AgentSentinels.GOAL_TOOL_APPROVED)) {
             messages.add(UserMessage.userMessage(goal));
         } else if (goal != null && goal.contains("System: ")) {

@@ -122,7 +122,7 @@ class SandboxExecToolTest {
 
     @Test
     void buildCommand_unit_python_returns_os_aware_executable() {
-        // Direct unit test of buildCommand() — no CDI, no mock needed
+        // Direct unit test of buildCommand() - no CDI, no mock needed
         List<String> cmd = tool.buildCommand("python", "x=1");
         assertEquals(EXPECTED_PYTHON, cmd.get(0));
         assertEquals("-c", cmd.get(1));
@@ -481,7 +481,7 @@ class SandboxExecToolTest {
             for (String lang : List.of("python", "python3", "node", "bash")) {
                 Map<String, Object> params = Map.of("code", "x", "language", lang);
                 ToolResponse r = tool.execute(params);
-                // May succeed or fail depending on OS — just must NOT be "Unsupported language"
+                // May succeed or fail depending on OS - just must NOT be "Unsupported language"
                 assertFalse(r.output().startsWith("Unsupported language"),
                         "Language should be accepted: " + lang);
             }

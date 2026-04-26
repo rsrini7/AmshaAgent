@@ -16,7 +16,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
- * Component A3 — ClaudeCodeProviderFactory.
+ * Component A3 - ClaudeCodeProviderFactory.
  * Creates an Anthropic chat model using credentials from Claude Code CLI.
  */
 @ApplicationScoped

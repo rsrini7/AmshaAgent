@@ -98,7 +98,7 @@ class WorkspaceScopeTest {
 
     @Test
     void noSession_throwsContextNotActive() {
-        // No WorkspaceScopeHolder.run/call — scope is inactive
+        // No WorkspaceScopeHolder.run/call - scope is inactive
         assertThrows(ContextNotActiveException.class, () -> counter.increment(),
                 "Accessing @WorkspaceScoped bean without active session should throw ContextNotActiveException");
     }

@@ -84,7 +84,7 @@ public class CommandDispatchHandler implements MessageHandler {
                 // so future inline-button flows work without any further changes.
                 if (s.payload().isPresent()) {
                     String payloadInput = s.payload().get();
-                    log.debugf("[CommandDispatch] /start with deep-link payload '%s' — routing to reflexes",
+                    log.debugf("[CommandDispatch] /start with deep-link payload '%s' - routing to reflexes",
                             payloadInput);
                     dispatch(context, payloadInput);  // reuse existing dispatch → reflex chain
                 } else {
@@ -94,12 +94,12 @@ public class CommandDispatchHandler implements MessageHandler {
                             "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
                             + "Just type your question or task in plain text.\n\n"
                             + "*Commands:*\n"
-                            + "/cron — list scheduled tasks\n"
-                            + "/status — session state\n"
-                            + "/history — conversation history\n"
-                            + "/reset — clear this session\n"
-                            + "/halt — stop current task\n"
-                            + "/approve · /deny — HITL approvals"));
+                            + "/cron - list scheduled tasks\n"
+                            + "/status - session state\n"
+                            + "/history - conversation history\n"
+                            + "/reset - clear this session\n"
+                            + "/halt - stop current task\n"
+                            + "/approve · /deny - HITL approvals"));
                 }
                 yield HandleResult.STOP;
             }
@@ -132,7 +132,7 @@ public class CommandDispatchHandler implements MessageHandler {
                         () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
                     );
                         
-                        //  — Capture sanitized input for the Agent loop even if it's not a direct reply.
+                        //  - Capture sanitized input for the Agent loop even if it's not a direct reply.
                         if (result != null && result.sanitizedInput() != null) {
                             context.setGoal(result.sanitizedInput());
                         }
@@ -144,7 +144,7 @@ public class CommandDispatchHandler implements MessageHandler {
                             .map(ChannelPlugin::sender)
                             .ifPresentOrElse(
                                 s -> s.sendRaw(context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
-                                () -> log.warnf("CommandDispatchHandler: no sender for type %s — error reply dropped", context.getChannelType())
+                                () -> log.warnf("CommandDispatchHandler: no sender for type %s - error reply dropped", context.getChannelType())
                             );
                         yield HandleResult.STOP;
                     }
@@ -177,12 +177,12 @@ public class CommandDispatchHandler implements MessageHandler {
                                 "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
                                 + "Just type your question or task in plain text.\n\n"
                                 + "*Commands:*\n"
-                                + "/cron — list scheduled tasks\n"
-                                + "/status — session state\n"
-                                + "/history — conversation history\n"
-                                + "/reset — clear this session\n"
-                                + "/halt — stop current task\n"
-                                + "/approve · /deny — HITL approvals"));
+                                + "/cron - list scheduled tasks\n"
+                                + "/status - session state\n"
+                                + "/history - conversation history\n"
+                                + "/reset - clear this session\n"
+                                + "/halt - stop current task\n"
+                                + "/approve · /deny - HITL approvals"));
                         yield HandleResult.STOP;
                     }
                 yield HandleResult.CONTINUE;

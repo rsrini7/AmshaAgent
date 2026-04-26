@@ -41,9 +41,9 @@ public class AuditSchemaEnforcer implements AuditSchemaPort {
         //   -- OR --
         //   CREATE RULE no_update AS ON UPDATE TO audit_event DO INSTEAD NOTHING;
         //   CREATE RULE no_delete AS ON DELETE TO audit_event DO INSTEAD NOTHING;
-        // Both approaches satisfy §5.23 DDL isolation — choose per deployment policy.
+        // Both approaches satisfy §5.23 DDL isolation - choose per deployment policy.
 
-        // WORM triggers — already present
+        // WORM triggers - already present
         em.createNativeQuery("""
             CREATE TRIGGER IF NOT EXISTS prevent_audit_update
             BEFORE UPDATE ON audit_event
@@ -68,7 +68,7 @@ public class AuditSchemaEnforcer implements AuditSchemaPort {
 
         enforceWormConstraints();
 
-        // indexes with IF NOT EXISTS — idempotent on every restart
+        // indexes with IF NOT EXISTS - idempotent on every restart
         em.createNativeQuery(
             "CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_event (sessionId)"
         ).executeUpdate();
@@ -96,7 +96,7 @@ public class AuditSchemaEnforcer implements AuditSchemaPort {
             em.createNativeQuery("ATTACH DATABASE '" + ftsPath + "' AS fts").executeUpdate();
         }
 
-        // FTS5 standalone table — stores sessionId for manual mapping
+        // FTS5 standalone table - stores sessionId for manual mapping
         em.createNativeQuery("""
             CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts
             USING fts5(sessionId UNINDEXED, summary)

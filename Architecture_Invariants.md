@@ -130,7 +130,7 @@ These are NOT interchangeable.
   the agent loop.
 - `HitlService.resolve()` MUST call `resumeCheckpoint()` (for approvals) or 
   `rejectAndTerminate()` (for denials) after the decision update. The decision 
-  methods (`approveTool`, `denyAll`) update DB state only — they do NOT trigger 
+  methods (`approveTool`, `denyAll`) update DB state only - they do NOT trigger 
   resume themselves.
 
 ### 3.5 Structured retry budget behavior
@@ -139,7 +139,7 @@ These are NOT interchangeable.
 - Do not swallow hard budget failures.
 - SelfCorrectionRetryManager MUST NOT catch BudgetExceededException or BudgetWarningException.
   These propagate unchanged to the AgentLoop catch block.
-  llmSchemaErrorCount MUST remain a plain int — never AtomicInteger — to prevent
+  llmSchemaErrorCount MUST remain a plain int - never AtomicInteger - to prevent
   the §3.7 CAS-before-check ordering violation from being introducible.
 
 ## 3.6 Chat memory storage boundary
@@ -153,7 +153,7 @@ Storing system messages inflates context, corrupts compaction logic, and leaks t
 ## 3.7 Budget threshold check ordering
 
 In `StructuredRetryLoop`, `assertWithinBudget()` threshold check MUST precede `compareAndSet()`.
-If CAS fires first at 79% budget, `warningSent` is permanently `true` — the real 80% boundary
+If CAS fires first at 79% budget, `warningSent` is permanently `true` - the real 80% boundary
 warning is forever suppressed. The ordering is: check → log → CAS, never CAS → check.
 
 ---
@@ -208,7 +208,7 @@ sanitization and native-image Qute compilation checks.
 
 `AgentFunctionProcessor` MUST generate JSON schema from the SAM **return type** using
 `SchemaFactoryWrapper.acceptJsonFormatVisitor(returnTypeClass, visitor)`.
-MUST NOT use `ToolSpecifications.toolSpecificationFrom()` — that generates the INPUT
+MUST NOT use `ToolSpecifications.toolSpecificationFrom()` - that generates the INPUT
 parameter schema, not the output schema, and produces silent wrong behavior in native tools.
 
 ## 4.10 Delegation Capability Guard
@@ -232,7 +232,7 @@ schedule' must not route to coordinator as a scheduling request).
 If a pattern is broad enough to match negations, implement
 IntentRoutingProvider.shouldSkip(String userMessage) with a
 static final Pattern negation guard. Never compile patterns
-inline — use static final Pattern per §9.1.
+inline - use static final Pattern per §9.1.
 
 ---
 
@@ -255,7 +255,7 @@ inline — use static final Pattern per §9.1.
 ### 5.4 ORM 7 transaction behavior
 - Be careful with `QuarkusTransaction.requiringNew().run(...)` lambda boundaries.
 - Prefer dedicated `@Transactional(REQUIRES_NEW)` methods **at the outermost write boundary** when proxy binding matters.
-- **MUST NOT** nest a `@Transactional(REQUIRES_NEW)` method inside a call stack that already holds an active `@Transactional(REQUIRED)` or `@Transactional` transaction when using SQLite — see §5.8. The `REQUIRES_NEW` must be the outermost transaction boundary for each write unit, not a nested child inside a longer-lived `REQUIRED` context.
+- **MUST NOT** nest a `@Transactional(REQUIRES_NEW)` method inside a call stack that already holds an active `@Transactional(REQUIRED)` or `@Transactional` transaction when using SQLite - see §5.8. The `REQUIRES_NEW` must be the outermost transaction boundary for each write unit, not a nested child inside a longer-lived `REQUIRED` context.
 - Do not assume `em.merge()` is the right fix for already-managed entities.
 
 ### 5.5 Read visibility in tests
@@ -274,7 +274,7 @@ Mixing these two fields corrupts encryption version tracking and is undetectable
 
 ---
 
-## 5.8 SQLite Single-Writer Constraint (CRITICAL — ROOT CAUSE OF P84 BUSY CASCADE)
+## 5.8 SQLite Single-Writer Constraint (CRITICAL - ROOT CAUSE OF P84 BUSY CASCADE)
 
 SQLite WAL mode allows any number of concurrent readers but **only one writer at a time**.
 This is a database engine constraint, not a configuration choice.
@@ -286,7 +286,7 @@ This is a database engine constraint, not a configuration choice.
        └─ withRetry(...)
             └─ self.doUpdateXxx()
                  └─ @Transactional(REQUIRES_NEW)  ← acquires Connection-2, tries COMMIT
-                      └─ SQLITE_BUSY — Connection-1 holds the reserved write lock
+                      └─ SQLITE_BUSY - Connection-1 holds the reserved write lock
 ```
 
 `REQUIRES_NEW` suspends the outer `REQUIRED` transaction but **keeps its Agroal connection
@@ -316,7 +316,7 @@ differs under load and between JVM and native image startup sequences.
 Any operation that performs slow I/O (LLM network calls, external REST, arbitrary sleep,
 full agent loops) MUST NOT run inside an active JTA transaction.
 
-The following are **transaction-free zones** — no `@Transactional` annotation may exist
+The following are **transaction-free zones** - no `@Transactional` annotation may exist
 on them OR on any caller up the CDI call stack:
 
 | Class / Method | Reason |
@@ -329,7 +329,7 @@ on them OR on any caller up the CDI call stack:
 | `CheckpointApprovalService.approveTool/denyTool/approveAll/denyAll` | Calls REQUIRES_NEW writes then resume |
 
 Holding a JTA transaction open across a 30-second LLM call pins one Agroal connection
-for the entire duration. Every concurrent write — audit drain, approval, cron scheduler —
+for the entire duration. Every concurrent write - audit drain, approval, cron scheduler -
 is blocked until that connection is released.
 
 ---
@@ -384,9 +384,9 @@ The `NOT_SUPPORTED` annotations on `CheckpointApprovalService` are **architectur
 annotated `@Transactional(NOT_SUPPORTED)` or carry no transaction annotation.
 
 It calls:
-1. `agentStore.updateBatchToolDecision()` — `REQUIRES_NEW`
-2. `agentStore.isAllBatchToolsDecided()` — `REQUIRES_NEW` read
-3. `resumeHandler.resumeAfterBatchDecision()` — transaction-free zone
+1. `agentStore.updateBatchToolDecision()` - `REQUIRES_NEW`
+2. `agentStore.isAllBatchToolsDecided()` - `REQUIRES_NEW` read
+3. `resumeHandler.resumeAfterBatchDecision()` - transaction-free zone
 
 An outer `@Transactional` wrapping the entire `decide()` call simultaneously violates
 the REQUIRES_NEW nesting rule (§5.8) and the transaction-free zone rule (§5.9).
@@ -438,7 +438,7 @@ When a `REQUIRES_NEW` transaction fails with `SQLITE_BUSY`, Narayana attempts XA
 rollback. SQLite may report "cannot rollback - no transaction is active" (the connection
 already auto-aborted after `busy_timeout`). Narayana marks the XA branch as failed.
 Without `background-validation`, Agroal returns this broken connection to the pool.
-The next caller — completely unrelated to the approval that failed — receives the broken
+The next caller - completely unrelated to the approval that failed - receives the broken
 connection and gets "cannot commit - no transaction is active" even though its own code
 is correct. This is the cron cascade failure mode observed in P84.
 
@@ -459,7 +459,7 @@ exponential backoff on `SQLITE_BUSY` errors.
 
 MUST NOT call `SqliteRetryTemplate.execute()` from inside an active JTA transaction
 (`REQUIRED` or `MANDATORY`). The retry loop assumes each attempt gets a fresh,
-uncontested write lock — an outer transaction's reserved lock ensures every attempt
+uncontested write lock - an outer transaction's reserved lock ensures every attempt
 will fail with `SQLITE_BUSY`, consuming all retries uselessly.
 
 MUST NOT use `SqliteRetryTemplate` for:
@@ -501,7 +501,7 @@ After the C1 storage port extraction (Wave 3), `SqliteRetryTemplate` MUST be enc
 When a `REQUIRES_NEW` transaction fails with `SQLITE_BUSY`:
 
 1. SQLite auto-aborts the failing connection after `busy_timeout` ms.
-2. Narayana attempts XA rollback on the failed branch — SQLite reports
+2. Narayana attempts XA rollback on the failed branch - SQLite reports
    "cannot rollback - no transaction is active" (already aborted).
 3. Narayana marks the XA branch as rolled back but the connection state is
    inconsistent.
@@ -510,10 +510,10 @@ When a `REQUIRES_NEW` transaction fails with `SQLITE_BUSY`:
    own innocent transaction.
 5. **Cascade effect:** If the cron scheduler poll cycle's `reclaimStaleCrons()` owns
    the broken connection, the entire scheduler Narayana TX context is poisoned, and
-   every `cronRepository` write in that cycle fails — even `claimForFire()` for
+   every `cronRepository` write in that cycle fails - even `claimForFire()` for
    completely unrelated jobs.
 
-**Three prevention layers — ALL must be in place simultaneously:**
+**Three prevention layers - ALL must be in place simultaneously:**
 
 | Layer | Rule | Prevents |
 |---|---|---|
@@ -584,7 +584,7 @@ MUST NOT add new terminal statuses to `CheckpointStatus` without updating this q
 
 ---
 
-## 5.19 Checkpoint Query Ordering — ORDER BY id DESC
+## 5.19 Checkpoint Query Ordering - ORDER BY id DESC
 
 Any JPQL or native query that retrieves "the most recent" checkpoint for a session
 MUST include `ORDER BY c.id DESC LIMIT 1`.
@@ -595,9 +595,9 @@ newer AWAITING_APPROVAL checkpoint. This produces the silent failure:
 "No pending tool executions require approval" when there is one.
 
 This applies to:
-- `findBySessionAndRole(sessionId, agentRole)` — internal to `StatefulAgentStore`
-- `findLatestAwaitingApproval(sessionId)` — exposed on `StatefulAgentStore` interface
-- `findLatestAwaitingApprovalForCron(cronId)` — cron approval lookup
+- `findBySessionAndRole(sessionId, agentRole)` - internal to `StatefulAgentStore`
+- `findLatestAwaitingApproval(sessionId)` - exposed on `StatefulAgentStore` interface
+- `findLatestAwaitingApprovalForCron(cronId)` - cron approval lookup
 
 MUST NOT use `getFirstResult()` or `stream().findFirst()` without an explicit ORDER BY.
 
@@ -648,7 +648,7 @@ All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-sp
 
 The constraint that JAX-RS resources injecting `EntityManager` MUST have `@RunOnVirtualThread`
 is enforced at **build time** by `RestResourceBuildStep`. Violations fail the build with a
-`ValidationError` — they do NOT surface as runtime `BlockingOperationNotAllowedException`.
+`ValidationError` - they do NOT surface as runtime `BlockingOperationNotAllowedException`.
 Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 
 ### 6.6 Static run-time objects
@@ -714,7 +714,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 
 7.8 MUST: ParallelToolCall.callId MUST follow the pattern "call_N"
     where N is the 0-based index in the LLM's tool call list.
-    Do NOT use UUID for callIds — LangChain4j requires stable,
+    Do NOT use UUID for callIds - LangChain4j requires stable,
     predictable callId matching between AiMessage and
     ToolExecutionResultMessage.
 
@@ -727,29 +727,29 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 7.10 SHOULD: Test parallel tool execution with Claude 3.5 Sonnet and
      GPT-4o before enabling in production, as parallel tool call
      behavior differs between providers. Groq (llama-3.x) rarely
-     issues parallel tool calls — most parallel call traffic will
+     issues parallel tool calls - most parallel call traffic will
      come from Anthropic and OpenAI providers.
 
 7.11 MUST NOT: Re-introduce a single-tool fast-path in `ReasoningStepParser`.
      All LLM tool-call responses are processed as a list (N ≥ 1).
      The `getFirst()` fallback was removed and MUST NOT be restored
-     as a silent fallback — it hides multi-tool responses from the batch pipeline.
+     as a silent fallback - it hides multi-tool responses from the batch pipeline.
 
 7.13 MUST: OpenTelemetry span context MUST be explicitly propagated
      to virtual threads. Capture io.opentelemetry.context.Context.current()
      on the calling thread BEFORE submitting to the executor. Restore it
      inside each virtual thread via context.makeCurrent(). ContextAwareExecutorService
-     propagates WorkspaceScoped session context (ScopedValue) only — it
+     propagates WorkspaceScoped session context (ScopedValue) only - it
      does NOT propagate OTel ThreadLocal spans.
      (P81 Confirmation: Verified in ParallelToolStepExecutor.java lines 173/192)
 
 7.14 INVARIANT: ReasoningStep history is the in-memory source of truth
      during AgentLoop.runWithRole() execution. ChatHistoryAssembler reads
-     from in-memory history on each LLM call — SQLite does not need to
+     from in-memory history on each LLM call - SQLite does not need to
      be current mid-run. AgentLoop persists history to SQLite via
      agentStore.save() at session end (Finished/Failed/LoopExceeded) or
      HITL pause (AwaitingApproval checkpoint). ChatMemoryWriter manages
-     user goal/AI answer messages in ChatMemoryStore only — it MUST NOT
+     user goal/AI answer messages in ChatMemoryStore only - it MUST NOT
      be used for ReasoningStep history persistence.
      FinishActionHandler MUST NOT call agentStore.save() for ReasoningStep history.
      It returns AgentResult only. AgentLoop owns all persistence triggered by that result.
@@ -767,21 +767,21 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
      does not block the rest of the batch.
 
 7.17 MUST: Metrics counters arcclaw.agent.tool.calls MUST reflect
-     individual tool names in a parallel batch — not the __parallel__
+     individual tool names in a parallel batch - not the __parallel__
      sentinel. The MetricsAgentObserver already receives individual
      onStepComplete() calls from ParallelToolStepExecutor (one per
-     tool) — verify the sentinel step itself does NOT trigger an
+     tool) - verify the sentinel step itself does NOT trigger an
      additional __parallel__ counter increment.
 
 7.18 INVARIANT: ReasoningStep history list is mutated EXACTLY ONCE
-     per parallel batch execution — inside buildCompletedBatchDecision().
+     per parallel batch execution - inside buildCompletedBatchDecision().
      Do NOT add intermediate steps for dedup results or partial
      executions. The single batch step encodes ALL N results.
 
 7.19 INVARIANT: ParallelToolCall.callId() MUST be non-null at the point
      the merge loop executes. ReasoningStepParser MUST generate a
      UUID fallback when ToolExecutionRequest.id() is null (Ollama). 
-     Never use .equals() on a potentially-null callId — use Objects.equals().
+     Never use .equals() on a potentially-null callId - use Objects.equals().
 
 7.20 INVARIANT: A parallel batch HITL pause stores per-tool decision
      state in AgentCheckpoint.batchToolDecisions (TEXT, JSON) as:
@@ -851,11 +851,11 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 
 §7.30 INVARIANT: Within a parallel batch, tools whose autonomy level permits execution WITHOUT human approval (autonomy >= FULL) MUST be pre-executed before the HITL pause. Their results MUST be stored in AgentCheckpoint.preExecutedResults (TEXT, JSON) as toolName → ToolResponse. On resume, CheckpointResumeHandler MUST use pre-stored results instead of re-executing those tools.
 
-§7.31 INVARIANT: A tool is considered "pre-executable" if and only if: (a) the current session's autonomy level is FULL_AUTONOMY, OR (b) the tool name appears in arcclaw.hitl.pre-executable-tools config list. Safe tools are never automatically inferred — they must be explicitly configured. This prevents accidental side effects from misclassification.
+§7.31 INVARIANT: A tool is considered "pre-executable" if and only if: (a) the current session's autonomy level is FULL_AUTONOMY, OR (b) the tool name appears in arcclaw.hitl.pre-executable-tools config list. Safe tools are never automatically inferred - they must be explicitly configured. This prevents accidental side effects from misclassification.
 
 §7.32 MUST: The HITL pause message shown to the user MUST list ONLY the tools that still require approval. Pre-executed tools MUST NOT appear in the keyboard or the approval text. The Approve All / Deny All buttons operate only on the PENDING tools.
 
-§7.33 INVARIANT: Approval delegation is scoped to a single session. An admin (user listed in arcclaw.hitl.delegate-approver-ids) may issue /approve or /deny for ANY active AWAITING_APPROVAL session by providing the sessionId: "/approve <sessionId>". The delegate action is audit-logged with both the admin userId and the original session owner's userId. Delegation MUST NOT bypass per-tool granularity — /approve <sessionId> <toolName> is also valid.
+§7.33 INVARIANT: Approval delegation is scoped to a single session. An admin (user listed in arcclaw.hitl.delegate-approver-ids) may issue /approve or /deny for ANY active AWAITING_APPROVAL session by providing the sessionId: "/approve <sessionId>". The delegate action is audit-logged with both the admin userId and the original session owner's userId. Delegation MUST NOT bypass per-tool granularity - /approve <sessionId> <toolName> is also valid.
 
 §7.34 MUST: Web UI tool approval MUST be per-tool granular. The REST HITL endpoint MUST accept toolName as a parameter (in the JSON request body via CheckpointApprovalRequest). Passing no toolName is valid only for bulk Approve All / Deny All operations.
 
@@ -890,8 +890,8 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 ## 8.6 Sandbox tool exception contract
 
 `SandboxExecTool.execute()` MUST follow this exception contract:
-- `BudgetExceededException` — MUST propagate (not catch); `AgentStateMachineRunner` handles it.
-- `ToolExecutionException`, `TimeoutException`, `SecurityException`, `IOException` — MUST catch
+- `BudgetExceededException` - MUST propagate (not catch); `AgentStateMachineRunner` handles it.
+- `ToolExecutionException`, `TimeoutException`, `SecurityException`, `IOException` - MUST catch
   and return `ToolResponse.failure(message)`. Never propagate to `ToolInvoker`.
 - Output exceeding 8192 characters MUST be truncated at exactly 8192 with suffix
   `[output truncated at 8192 chars]`. Never include raw Java stack traces in tool output.
@@ -906,7 +906,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - Do not compile patterns per request, per message, or inside hot-path methods.
 - All Pattern objects in AnswerQualityGuard MUST be static final.
 - Per-call Pattern.compile() in any answer validation or stripping path is FORBIDDEN.
-  This includes stripRawToolJson() — NVIDIA_STRIP_PATTERN must be static final.
+  This includes stripRawToolJson() - NVIDIA_STRIP_PATTERN must be static final.
 
 ### 9.2 Time measurement
 - Use `System.nanoTime()` for elapsed durations.
@@ -1017,7 +1017,7 @@ Every non-app, non-deployment Maven module that contains CDI beans MUST:
 2. Include `src/main/resources/META-INF/beans.xml` with `bean-discovery-mode="annotated"`.
 
 Without Jandex, `@ApplicationScoped` beans in library modules are **silently invisible**
-to the Quarkus CDI container — no error, no warning, just missing beans.
+to the Quarkus CDI container - no error, no warning, just missing beans.
 This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ---
@@ -1097,8 +1097,8 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
 
 ## 17. General Java Guards
 
-- Null-check `e.getMessage()` before use — several JVM exception types return `null`.
-  Use: `e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()`. Prefer `String.format(...)` / `log.infof(...)` over concatenation in log statements. `MDC` values removed in `finally` blocks only — never remove in `catch`.
+- Null-check `e.getMessage()` before use - several JVM exception types return `null`.
+  Use: `e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()`. Prefer `String.format(...)` / `log.infof(...)` over concatenation in log statements. `MDC` values removed in `finally` blocks only - never remove in `catch`.
 
 ## 18. REST Status Code Conventions
 

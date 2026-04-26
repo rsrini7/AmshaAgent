@@ -21,13 +21,13 @@ import org.jboss.logging.MDC;
  * <p>Extracted from {@code AgentLoop.runWithRole} as part of Phase 2
  * God-class decomposition. Owns three of the seven original responsibilities:
  * <ul>
- *   <li><strong>MDC setup/teardown</strong> — puts and removes the
+ *   <li><strong>MDC setup/teardown</strong> - puts and removes the
  *       {@code SESSION_ID}, {@code AGENT_ROLE}, and {@code USER_ID} keys
  *       so structured logging carries these fields on every line.</li>
- *   <li><strong>Role resolution / canonicalization</strong> — maps raw role
+ *   <li><strong>Role resolution / canonicalization</strong> - maps raw role
  *       strings to their canonical scoped names, with alias expansion and
  *       skill-role pass-through.</li>
- *   <li><strong>Compliance/audit on invalid roles</strong> — records a
+ *   <li><strong>Compliance/audit on invalid roles</strong> - records a
  *       mandatory security event and increments a Micrometer counter before
  *       falling back to COORDINATOR.</li>
  * </ul>
@@ -69,7 +69,7 @@ public class SessionLifecycleCoordinator {
     /**
      * Populates MDC keys {@code SESSION_ID} and {@code AGENT_ROLE}, then
      * resolves the calling-thread {@code userId} from
-     * {@link WorkspaceContext} (§2.3 — not {@code WorkspaceScopeHolder}) and
+     * {@link WorkspaceContext} (§2.3 - not {@code WorkspaceScopeHolder}) and
      * puts it under {@code USER_ID}.
      *
      * <p>The returned {@code userId} must be captured in a {@code final} local
@@ -98,7 +98,7 @@ public class SessionLifecycleCoordinator {
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         MDC.put(MdcKeys.AGENT_ROLE, canonicalRole);
 
-        // §2.3 — WorkspaceContext, not WorkspaceScopeHolder
+        // §2.3 - WorkspaceContext, not WorkspaceScopeHolder
         String userId = WorkspaceContext.resolveUserId();
         MDC.put(MdcKeys.USER_ID, userId);
         return userId;
@@ -107,7 +107,7 @@ public class SessionLifecycleCoordinator {
     /**
      * Removes the MDC keys that were set by {@link #setupMdc}.
      *
-     * <p>Safe to call from a {@code finally} block — catches and logs all
+     * <p>Safe to call from a {@code finally} block - catches and logs all
      * exceptions rather than re-throwing, so that the original loop result
      * is never masked by an MDC cleanup failure.
      */
@@ -122,21 +122,21 @@ public class SessionLifecycleCoordinator {
         }
     }
 
-    // ── Role resolution (§4.4 — alias handling stays inside this method) ──────
+    // ── Role resolution (§4.4 - alias handling stays inside this method) ──────
 
     /**
      * Resolves and canonicalizes the supplied {@code agentRole} string.
      *
      * <p><strong>Resolution rules (in order):</strong>
      * <ol>
-     *   <li><em>Unknown role</em> — falls back to {@code COORDINATOR}, emits
+     *   <li><em>Unknown role</em> - falls back to {@code COORDINATOR}, emits
      *       an audit security event (§2.3 via {@code WorkspaceContext}), and
      *       increments the {@code arcclaw.agent.role.unknown} Micrometer
      *       counter.</li>
-     *   <li><em>Skill role</em> (prefix {@code skill:}) — returned verbatim.
+     *   <li><em>Skill role</em> (prefix {@code skill:}) - returned verbatim.
      *       The full {@code skill:X} string IS the canonical key used for
      *       checkpoint storage, MDC, and system-prompt selection (§4.4).</li>
-     *   <li><em>Standard role</em> — resolved via
+     *   <li><em>Standard role</em> - resolved via
      *       {@link AgentRoleEnum#fromString(String)} and canonicalised via
      *       {@link AgentRoleEnum#toScopedName()}.</li>
      * </ol>
@@ -151,10 +151,10 @@ public class SessionLifecycleCoordinator {
      */
     public String resolveCanonicalRole(String sessionId, String agentRole) {
         if (!AgentRoleEnum.isKnownRole(agentRole)) {
-            log.warnf("SessionLifecycleCoordinator: unknown agentRole '%s' for session %s — defaulting to COORDINATOR",
+            log.warnf("SessionLifecycleCoordinator: unknown agentRole '%s' for session %s - defaulting to COORDINATOR",
                     agentRole, sessionId);
 
-            // §2.3 — WorkspaceContext, not WorkspaceScopeHolder
+            // §2.3 - WorkspaceContext, not WorkspaceScopeHolder
             auditService.record(
                     sessionId,
                     WorkspaceContext.requireUserId(),
@@ -170,7 +170,7 @@ public class SessionLifecycleCoordinator {
             return AgentRoleEnum.COORDINATOR.toScopedName();
         }
 
-        // §4.4 — alias expansion happens HERE, nowhere else.
+        // §4.4 - alias expansion happens HERE, nowhere else.
         // AgentRoleEnum.fromString handles any configured aliases.
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
 
@@ -179,7 +179,7 @@ public class SessionLifecycleCoordinator {
         // and conversation history.  Standard roles are normalised to their
         // scoped names (e.g. "coordinator", "researcher").
         return AgentRoleEnum.isSkillRole(agentRole)
-                ? agentRole                      // skill:X — verbatim canonical key
+                ? agentRole                      // skill:X - verbatim canonical key
                 : resolvedRole.toScopedName();   // coordinator, researcher, …
     }
 }

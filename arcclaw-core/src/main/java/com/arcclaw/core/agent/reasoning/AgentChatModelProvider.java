@@ -10,7 +10,7 @@ import dev.langchain4j.model.chat.ChatModel;
 public interface AgentChatModelProvider {
 
     /**
-     * Provider name — must match the value of {@code arcclaw.llm.provider} config.
+     * Provider name - must match the value of {@code arcclaw.llm.provider} config.
      * e.g. "groq", "openai", "ollama", "openrouter"
      */
     String providerName();

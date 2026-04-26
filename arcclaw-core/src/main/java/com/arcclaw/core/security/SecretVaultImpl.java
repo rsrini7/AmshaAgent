@@ -107,7 +107,7 @@ public class SecretVaultImpl implements SecretVault {
         } catch (Exception e) {
             throw e;
         }
-        // sessionKey NOT auto-closed here — lifecycle managed by VaultKeyCache
+        // sessionKey NOT auto-closed here - lifecycle managed by VaultKeyCache
     }
 
     @Override

@@ -29,7 +29,7 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
             Pattern.CASE_INSENSITIVE
         );
 
-    // FAST-PATH for listing tasks — still anchored as these are command-like
+    // FAST-PATH for listing tasks - still anchored as these are command-like
     private static final Pattern LIST_TASKS_PATTERN = Pattern.compile(
         "(?i)^\\s*(list|show|display|get|view)\\s+(my\\s+)?(tasks?|crons?|jobs?|schedules?|reminders?)\\b"
     );
@@ -72,7 +72,7 @@ public class SchedulingRoutingProvider implements IntentRoutingProvider {
     @Override
     public List<String> promptDirectives() {
         return List.of(
-            "SCHEDULING IS ABSOLUTE PRIORITY — evaluated before any other rule: " +
+            "SCHEDULING IS ABSOLUTE PRIORITY - evaluated before any other rule: " +
             "If the user message contains ANY time-delay signal, you MUST route to 'coordinator'.",
             "Task/cron listing ('list tasks', 'show crons', 'my tasks') MUST route to 'coordinator' " +
             "because only coordinator has the manageschedule tool."

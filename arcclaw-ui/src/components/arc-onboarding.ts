@@ -879,7 +879,7 @@ export class ArcOnboarding extends LitElement {
           <p style="margin-top:var(--space-2);
                     font-size:var(--font-size-xs);
                     color:var(--text-muted)">
-            💡 Ollama runs locally — enter any value (e.g. <code>local</code>)
+            💡 Ollama runs locally - enter any value (e.g. <code>local</code>)
           </p>
         ` : ''}
 
@@ -887,7 +887,7 @@ export class ArcOnboarding extends LitElement {
           <p style="margin-top:var(--space-2);
                     font-size:var(--font-size-xs);
                     color:var(--text-muted)">
-            💡 Claude Code uses the CLI — no API key required
+            💡 Claude Code uses the CLI - no API key required
           </p>
         ` : ''}
       </div>
@@ -979,7 +979,7 @@ export class ArcOnboarding extends LitElement {
         Connect external tool servers (MCP) to extend your agents
         with web search, code execution, databases, and more.
         <strong style="color:var(--text-primary)">Optional</strong>
-        — skip if you're not sure yet.
+        - skip if you're not sure yet.
       </p>
 
       <!-- Registered MCP list -->

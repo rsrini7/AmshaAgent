@@ -53,6 +53,6 @@ class MessageContextTest {
         SessionContext sc = new SessionContext("sess1", user, AutonomyLevel.FULL, false);
         ctx.setSessionContext(sc);
         assertSame(sc, ctx.getSessionContext().get());
-        // Records are immutable by definition — no additional assertion needed
+        // Records are immutable by definition - no additional assertion needed
     }
 }

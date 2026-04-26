@@ -75,7 +75,7 @@ public class IntentDetectorServiceTest {
         String role = service.classify("delete the old data files");
         
         Assertions.assertEquals("coder", role, 
-            "Coder (brahma) is exempt from destructive override — its capabilities list is empty");
+            "Coder (brahma) is exempt from destructive override - its capabilities list is empty");
     }
 
     @Test

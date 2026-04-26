@@ -1,11 +1,11 @@
 ./mvnw help:system -pl arcclaw-mcp
 
-### Phase 63 — A2A Federation (Capstone)
+### Phase 63 - A2A Federation (Capstone)
 
-**Async webhook/callback architecture — no SSE holds:**
+**Async webhook/callback architecture - no SSE holds:**
 
 Instance A → Instance B flow:
-1. `POST /a2a/tasks/send` — payload: `{goal, context, approvedTools[], callbackUrl, correlationId}`
+1. `POST /a2a/tasks/send` - payload: `{goal, context, approvedTools[], callbackUrl, correlationId}`
 2. Instance B creates local session + `AgentCheckpoint` in its own SQLite
 3. If HITL needed: Instance B saves `AWAITING_APPROVAL` checkpoint, POSTs `{type: "ActionRequired", correlationId, toolName, params}` to `callbackUrl` on Instance A, returns `202 Accepted`
 4. Instance A receives callback, looks up `A2ASuspendedCorrelationEntity` by `correlationId`, routes to human via Telegram/REST
@@ -13,9 +13,9 @@ Instance A → Instance B flow:
 6. Instance B resumes checkpoint, completes task, POSTs `{type: "TaskCompleted", result: SynthesisResult}` to Instance A's `callbackUrl`
 7. Instance A reconstitutes state from `A2ASuspendedCorrelationEntity`, merges result, continues local `AgentLoop`
 
-**State persistence on Instance A — `A2ASuspendedCorrelationEntity`:**
+**State persistence on Instance A - `A2ASuspendedCorrelationEntity`:**
 
-Standard Hibernate `@Entity` per Architecture Nuance #11. References existing `AgentCheckpoint` by FK — no state duplication.
+Standard Hibernate `@Entity` per Architecture Nuance #11. References existing `AgentCheckpoint` by FK - no state duplication.
 
 ```java
 @Entity
@@ -32,16 +32,16 @@ public class A2ASuspendedCorrelationEntity {
 }
 ```
 
-**Authentication — Ed25519 JWT via BouncyCastle + Nimbus:**
+**Authentication - Ed25519 JWT via BouncyCastle + Nimbus:**
 
 - Key generation: `Ed25519KeyPairGenerator` from BouncyCastle 1.83 (already in BOM)
-- JWT wrapping: `nimbus-jose-jwt:9.37.3` — `OctetKeyPair`, `JWSHeader.Algorithm = Ed25519`, 15-minute TTL
+- JWT wrapping: `nimbus-jose-jwt:9.37.3` - `OctetKeyPair`, `JWSHeader.Algorithm = Ed25519`, 15-minute TTL
 - Key storage: private key in `SecretVault` (AES-GCM-SIV encrypted), public key in `AgentCard`
 - `A2AAuthFilter` reads `Authorization: Bearer <jwt>`, validates against peer's public key from `AgentCardRegistry`
 
 Add `com.nimbusds:nimbus-jose-jwt:9.37.3` to `arcclaw-a2a/pom.xml` with GraalVM reflection config in `native-image.properties`.
 
-**Rule-based delegation in Dattatreya — never LLM-decided:**
+**Rule-based delegation in Dattatreya - never LLM-decided:**
 
 `A2ADispatchHandler` algorithm:
 1. Parse required `ToolCapability` set from task
@@ -53,7 +53,7 @@ Add `com.nimbusds:nimbus-jose-jwt:9.37.3` to `arcclaw-a2a/pom.xml` with GraalVM 
 
 LLM is never consulted for routing decisions. Hallucination of remote capabilities is structurally impossible.
 
-**Parallel dispatch — `ManagedExecutor` + virtual threads:**
+**Parallel dispatch - `ManagedExecutor` + virtual threads:**
 
 ```java
 @Inject ManagedExecutor executor;
@@ -64,12 +64,12 @@ List<Future<AgentResult>> futures = tasks.stream()
     .toList();
 ```
 
-`StructuredTaskScope` is explicitly forbidden — still preview in JDK 25. No exceptions.
+`StructuredTaskScope` is explicitly forbidden - still preview in JDK 25. No exceptions.
 
-**`SecurityEventType` — new mandatory entries:**
-`A2A_TASK_DELEGATED` — `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
-`A2A_APPROVAL_PENDING` — `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
-`A2A_RESUME_GRANTED` — `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
+**`SecurityEventType` - new mandatory entries:**
+`A2A_TASK_DELEGATED` - `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
+`A2A_APPROVAL_PENDING` - `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
+`A2A_RESUME_GRANTED` - `isMandatory() = true` → `AsyncPersistenceEngine.submitCritical()`
 
 **`AgentCard` published at `/.well-known/agent.json`:**
 
@@ -87,13 +87,13 @@ List<Future<AgentResult>> futures = tasks.stream()
 
 `SystemInfoResource` (Phase 58) provides `version` and instance metadata. `AgentCardRegistry` (`@ApplicationScoped`) holds known peer instances loaded from `arcclaw.a2a.peers[]` config.
 
-**Module:** `arcclaw-a2a` (runtime only). No `arcclaw-a2a-deployment` for MVP — no build-time annotation processing required. Can be added later when `@A2ACapability` build-time scanning is introduced.
+**Module:** `arcclaw-a2a` (runtime only). No `arcclaw-a2a-deployment` for MVP - no build-time annotation processing required. Can be added later when `@A2ACapability` build-time scanning is introduced.
 
 **`ReflectionConfig.java` additions:** `AgentCard.class`, `A2ASuspendedCorrelationEntity.class`, Nimbus JWT classes via `native-image.properties` in `arcclaw-a2a`.
 
 ---
 
-## The Complete Mandate Table — All 10 Cross-Cutting Rules
+## The Complete Mandate Table - All 10 Cross-Cutting Rules
 
 | # | Phase | Mandate | Source |
 |---|-------|---------|--------|
@@ -109,7 +109,7 @@ List<Future<AgentResult>> futures = tasks.stream()
 |-------|------|-------|-------------|----------------------------|
 | **P63** | A2A | 5th | `arcclaw-a2a` | Async webhook (no SSE holds); `A2ASuspendedCorrelationEntity` Hibernate-managed; Ed25519 JWT via Nimbus + BouncyCastle; rule-based delegation; `ManagedExecutor` + virtual threads |
 
-The roadmap is now fully hardened across four AI review rounds. Every critical issue has been adjudicated with a specific, codebase-grounded fix. P60 is the cleanest starting point — shall I produce the full P60 implementation prompt in your established format (`IMPLEMENTATION REQUIREMENTS`, component-by-component, test strategy, doc updates)?
+The roadmap is now fully hardened across four AI review rounds. Every critical issue has been adjudicated with a specific, codebase-grounded fix. P60 is the cleanest starting point - shall I produce the full P60 implementation prompt in your established format (`IMPLEMENTATION REQUIREMENTS`, component-by-component, test strategy, doc updates)?
 
 ---
 
@@ -186,7 +186,7 @@ Since everything is self-contained without a central database, what is the clean
 
 ---
 
-Great question — and the answer is **not quite N×M in physical resources, but yes in interaction space**. Here is the precise breakdown:
+Great question - and the answer is **not quite N×M in physical resources, but yes in interaction space**. Here is the precise breakdown:
 
 ## The Physical Resource Dimension (O(N), not O(N×M))
 
@@ -202,16 +202,16 @@ The key insight is that **M agents within a user's sandbox are LOGICAL**, not ph
 
 So for 10 users with 5 agents each, you have **10 JVMs**, not 50. The M dimension stays entirely in-process and is essentially free until an agent makes an LLM call. [techcommunity.microsoft](https://techcommunity.microsoft.com/blog/appsonazureblog/the-swarm-diaries-what-happens-when-you-let-ai-agents-loose-on-a-codebase/4501393)
 
-## The Real N×M Problem — LLM Rate Limits
+## The Real N×M Problem - LLM Rate Limits
 
 Where N×M *does* hurt is **LLM provider rate limits**. If N=20 users are each running M=5 agents concurrently, you can have 100 simultaneous calls to providers like Groq or OpenAI. This is ArcClaw's actual scaling constraint. The mitigation in your design:
 
-- **Distribute M across different providers** by agent specialty — Garuda hits Groq, Vishnu hits DeepSeek, Brahaspati hits OpenAI. This spreads the N×M load across M separate rate limit buckets instead of hammering one provider.
-- **LangGraph4j checkpointing to SQLite** naturally throttles agents — a paused approval workflow doesn't consume an active LLM connection.
+- **Distribute M across different providers** by agent specialty - Garuda hits Groq, Vishnu hits DeepSeek, Brahaspati hits OpenAI. This spreads the N×M load across M separate rate limit buckets instead of hammering one provider.
+- **LangGraph4j checkpointing to SQLite** naturally throttles agents - a paused approval workflow doesn't consume an active LLM connection.
 
 ## The Interaction Topology
 
-For A2A communication, the interactions are O(N×M) in **message flow** but hierarchical, not full-mesh. A full mesh would be catastrophic — that's O((N×M)²) message paths. Instead, use a **hierarchical + hub-and-spoke hybrid**: [arxiv](https://arxiv.org/html/2603.19431v1)
+For A2A communication, the interactions are O(N×M) in **message flow** but hierarchical, not full-mesh. A full mesh would be catastrophic - that's O((N×M)²) message paths. Instead, use a **hierarchical + hub-and-spoke hybrid**: [arxiv](https://arxiv.org/html/2603.19431v1)
 
 ```
 Gateway (1 process)
@@ -229,7 +229,7 @@ Within a user's JVM, agents talk via Vert.x EventBus (zero-cost, in-process). Cr
 
 ## The Practical Scaling Rule for ArcClaw
 
-The self-contained "no-server" design holds well up to roughly **N=30–50 concurrent users** on a modest 8GB RAM machine (assuming GraalVM native builds at ~50MB each). Beyond that, the bottleneck shifts from RAM to LLM provider rate limits — which is where your provider-per-agent specialization strategy becomes a genuine architectural advantage rather than just a nice-to-have.
+The self-contained "no-server" design holds well up to roughly **N=30–50 concurrent users** on a modest 8GB RAM machine (assuming GraalVM native builds at ~50MB each). Beyond that, the bottleneck shifts from RAM to LLM provider rate limits - which is where your provider-per-agent specialization strategy becomes a genuine architectural advantage rather than just a nice-to-have.
 
 ---
 
@@ -251,15 +251,15 @@ LEVEL 2: Between ArcClaw Instances (THE A2A LAYER)
  [ArcClaw-UserA]  ←── Google A2A JSON-RPC ──►  [LangGraph Agent]
 ```
 
-Each **ArcClaw instance is itself THE agent** from the outside world's perspective. Its internal personas (Vishnu, Brahaspati, Garuda) are private implementation details — other ArcClaw instances don't know or care which persona handles the task internally. [developers.googleblog](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/)
+Each **ArcClaw instance is itself THE agent** from the outside world's perspective. Its internal personas (Vishnu, Brahaspati, Garuda) are private implementation details - other ArcClaw instances don't know or care which persona handles the task internally. [developers.googleblog](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/)
 
 ## Why This Distinction Matters
 
-If you exposed personas directly via A2A (e.g., a dedicated Vishnu endpoint and a dedicated Brahaspati endpoint), you'd create a **chatty, tightly coupled mesh** between instances. Every external caller would need to know ArcClaw's internal persona structure — completely defeating the purpose of encapsulation. [docs.swarms](https://docs.swarms.world/en/latest/swarms/concept/swarm_architectures/)
+If you exposed personas directly via A2A (e.g., a dedicated Vishnu endpoint and a dedicated Brahaspati endpoint), you'd create a **chatty, tightly coupled mesh** between instances. Every external caller would need to know ArcClaw's internal persona structure - completely defeating the purpose of encapsulation. [docs.swarms](https://docs.swarms.world/en/latest/swarms/concept/swarm_architectures/)
 
 Instead, with ArcClaw-as-agent:
 - Each instance publishes **one Agent Card** at `/.well-known/agent.json` describing what the whole ArcClaw can do (write code, review PRs, answer queries, etc.) [a2a-protocol](https://a2a-protocol.org/v0.2.5/specification/)
-- Internally, the receiving ArcClaw decides which persona handles the incoming A2A task — the caller never knows
+- Internally, the receiving ArcClaw decides which persona handles the incoming A2A task - the caller never knows
 - You can completely redesign your persona routing without breaking any external A2A contract
 
 ## What This Looks Like in Practice for ArcClaw
@@ -293,6 +293,6 @@ The calling ArcClaw-UserA never knew Brahaspati existed. [dev](https://dev.to/vi
 | ArcClaw → ArcClaw | Google A2A JSON-RPC | Cross-JVM, public contract |
 | ArcClaw → External agent (LangGraph, CrewAI) | Google A2A JSON-RPC | Vendor-neutral interop  [galileo](https://galileo.ai/blog/google-agent2agent-a2a-protocol-guide) |
 
-This gives ArcClaw a **clean public API surface** (one Agent Card, one A2A endpoint per instance) while keeping personas as a free internal optimization — exactly aligned with your self-contained, no-heavy-dependency philosophy.
+This gives ArcClaw a **clean public API surface** (one Agent Card, one A2A endpoint per instance) while keeping personas as a free internal optimization - exactly aligned with your self-contained, no-heavy-dependency philosophy.
 
 ---

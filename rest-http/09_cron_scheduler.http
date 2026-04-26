@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 09 — AUTONOMOUS CRON SCHEDULER
+### 09 - AUTONOMOUS CRON SCHEDULER
 ###
 ### ArcClaw supports scheduling future agent tasks via the cron
 ### scheduler. Agents schedule tasks via ScheduleTaskTool and list/
@@ -103,7 +103,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # LIST SCHEDULED TASKS (zero-token reflex paths)
 # ─────────────────────────────────────────────────────────────────
 
-### [CRON-4] /crons — list via reflex (no LLM call)
+### [CRON-4] /crons - list via reflex (no LLM call)
 # Expect 200: formatted list of all cron jobs with IDs
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -117,7 +117,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-5] /list crons — natural language alias
+### [CRON-5] /list crons - natural language alias
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -152,7 +152,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-6b] Schedule via GitHub HITL — cron that uses a tool
+### [CRON-6b] Schedule via GitHub HITL - cron that uses a tool
 # A cron job that internally needs github → scheduler sees AWAITING_APPROVAL.
 # Notification arrives via ChannelCronNotificationDispatcher (Phase 64-C2).
 # Goal uses CRON: prefix to prevent fork-bomb nesting.
@@ -173,7 +173,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # IMPORTANT: Replace CRON_ID with actual ID from CRON-4 output.
 # ─────────────────────────────────────────────────────────────────
 
-### [CRON-7] deletecron via reflex — replace CRON_ID with actual value from CRON-4
+### [CRON-7] deletecron via reflex - replace CRON_ID with actual value from CRON-4
 # DeleteCronReflex matches: input.startsWith("deletecron")
 # Expect 200: "✅ Cron job <id> deleted." or "❌ Cron job not found."
 # Audit event: CRONDELETED
@@ -204,7 +204,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [CRON-9] Delete non-existent ID → "not found" message
-# maxIterations=1 — this is a reflex, no LLM needed
+# maxIterations=1 - this is a reflex, no LLM needed
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -218,7 +218,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-11] Coder CANNOT schedule — empty tool schema
+### [CRON-11] Coder CANNOT schedule - empty tool schema
 # Brahma has no scheduletask or manage_schedule in its schema.
 # Expect 200: agent explains it cannot create schedules (no tool available).
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
@@ -233,7 +233,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-12] Researcher CANNOT schedule — no scheduletask in schema
+### [CRON-12] Researcher CANNOT schedule - no scheduletask in schema
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -246,7 +246,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-13] Fork-bomb guard — cron job cannot schedule another cron job
+### [CRON-13] Fork-bomb guard - cron job cannot schedule another cron job
 # Goals fired by AgentCronScheduler are prefixed with "CRON:".
 # ScheduleTaskTool rejects goals that start with "CRON:" (nested scheduling).
 # Simulate by sending CRON: prefix explicitly.
@@ -276,7 +276,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [CRON-15] List crons after one-shot execution — runOnce job gone
+### [CRON-15] List crons after one-shot execution - runOnce job gone
 # CRON-2's one-shot job should have fired and auto-deleted.
 # Expect: the one-shot job no longer appears in /crons.
 POST {{baseUrl}}/api/v1/sessions/{{cronSession.response.body.sessionId}}/run
@@ -292,7 +292,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [CRON-16] Verify HMAC chain intact after cron fires
-# CRONFIRED is a mandatory event — it must be in the chain.
+# CRONFIRED is a mandatory event - it must be in the chain.
 # Expect: {"valid":true,"brokenAtId":null,"totalRows":N}
 GET {{baseUrl}}/api/v1/audit/{{cronSession.response.body.sessionId}}/verify
 X-ArcClaw-API-Key: {{validKey}}
@@ -300,7 +300,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SYNTHESIZER — also has cron scheduling capability
+# SYNTHESIZER - also has cron scheduling capability
 # ─────────────────────────────────────────────────────────────────
 
 ### [CRON-17] Create session for synthesizer cron test

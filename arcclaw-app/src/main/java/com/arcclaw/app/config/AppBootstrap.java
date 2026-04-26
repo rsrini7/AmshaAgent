@@ -98,7 +98,7 @@ public class AppBootstrap {
     }
 
     private static Path resolveBinaryDir() {
-        // 1. Native Image (GraalVM) — resolve to binary's actual location
+        // 1. Native Image (GraalVM) - resolve to binary's actual location
         if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
             String command = ProcessHandle.current().info().command().orElse("");
             if (!command.isEmpty()) {
@@ -114,7 +114,7 @@ public class AppBootstrap {
             } catch (Exception ignored) {}
         }
 
-        // 2. JAR / dev / IDE mode — always use CWD (where the user runs from)
+        // 2. JAR / dev / IDE mode - always use CWD (where the user runs from)
         return Path.of(System.getProperty("user.dir")).toAbsolutePath();
     }
 
@@ -164,11 +164,11 @@ public class AppBootstrap {
     }
 
     static void loadDotEnv(Path dir) {
-        // In native mode: this is the only .env loader — Quarkus config system
+        // In native mode: this is the only .env loader - Quarkus config system
         //   hasn't started yet and DotenvConfigSourceProvider won't fire.
         // In JAR/dev mode: this front-runs Quarkus so CliUtils.validateRequiredEnvVars()
         //   can see the values before CDI starts. DotenvConfigSourceProvider will
-        //   also load them — no conflict since we check env/sysprop before setting.
+        //   also load them - no conflict since we check env/sysprop before setting.
         Path envFile = dir.resolve(".env");
         if (!Files.exists(envFile)) return;
 
@@ -315,7 +315,7 @@ public class AppBootstrap {
 
             System.err.println();
             System.err.println("╔══════════════════════════════════════════════════════════╗");
-            System.err.println("║         ArcClaw — First-Run Interactive Setup            ║");
+            System.err.println("║         ArcClaw - First-Run Interactive Setup            ║");
             System.err.println("╚══════════════════════════════════════════════════════════╝");
             System.err.println();
             System.err.println("  " + missing.size() + " required value(s) need configuration.");
@@ -607,7 +607,7 @@ public class AppBootstrap {
                 }
 
                 if (value.isBlank()) {
-                    System.err.println("     [skipped — add manually to: " + envFile + "]");
+                    System.err.println("     [skipped - add manually to: " + envFile + "]");
                 } else {
                     patchEnvFile(envFile, spec.key, value);
                     System.setProperty(spec.key, value);
@@ -730,7 +730,7 @@ public class AppBootstrap {
                 try {
                     String generated = Base64.getEncoder().encodeToString(
                         SecureRandom.getInstanceStrong().generateSeed(32));
-                    System.err.println("[ArcClaw] ⚠️  " + key + " invalid Base64 — regenerating.");
+                    System.err.println("[ArcClaw] ⚠️  " + key + " invalid Base64 - regenerating.");
                     patchEnvFile(envFile, key, generated);
                     System.setProperty(key, generated);
                     anyFixed = true;
@@ -759,7 +759,7 @@ public class AppBootstrap {
             };
 
             if (defaultUrl != null && !provider.equals("gemini")) {
-                System.err.println("[ArcClaw] ℹ️  ARCCLAW_LLM_BASE_URL missing for provider '" + provider + "' — auto-setting to: " + defaultUrl);
+                System.err.println("[ArcClaw] ℹ️  ARCCLAW_LLM_BASE_URL missing for provider '" + provider + "' - auto-setting to: " + defaultUrl);
                 patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", defaultUrl);
                 System.setProperty("ARCCLAW_LLM_BASE_URL", defaultUrl);
             }
@@ -990,7 +990,7 @@ public class AppBootstrap {
 
         // Force Jina if provider/URL mismatch detected (e.g. Ollama provider with Jina URL)
         if (baseUrl != null && baseUrl.contains("jina.ai") && !"jina".equalsIgnoreCase(provider)) {
-            System.err.println("[ArcClaw] ℹ️  Embedding provider mismatch (Jina URL with " + provider + " provider) — auto-fixing to 'jina'.");
+            System.err.println("[ArcClaw] ℹ️  Embedding provider mismatch (Jina URL with " + provider + " provider) - auto-fixing to 'jina'.");
             forcePatchEnvFile(envFile, "ARCCLAW_EMBED_PROVIDER", "jina");
             System.setProperty("ARCCLAW_EMBED_PROVIDER", "jina");
         }
@@ -998,7 +998,7 @@ public class AppBootstrap {
         // Force Ollama defaults if provider is ollama but URL is wrong
         if ("ollama".equalsIgnoreCase(provider) && (baseUrl == null || baseUrl.contains("jina.ai"))) {
             String defaultOllamaUrl = "http://localhost:11434";
-            System.err.println("[ArcClaw] ℹ️  Ollama embedding URL missing or invalid — auto-setting to: " + defaultOllamaUrl);
+            System.err.println("[ArcClaw] ℹ️  Ollama embedding URL missing or invalid - auto-setting to: " + defaultOllamaUrl);
             patchEnvFile(envFile, "ARCCLAW_EMBED_BASE_URL", defaultOllamaUrl);
             System.setProperty("ARCCLAW_EMBED_BASE_URL", defaultOllamaUrl);
         }
@@ -1008,7 +1008,7 @@ public class AppBootstrap {
         String current = System.getProperty(key, System.getenv(key));
         if (current == null || current.isBlank() || current.equals(wrongValue)) {
             if (!targetValue.equals(current)) {
-                System.err.println("[ArcClaw] ℹ️  " + key + " is inconsistent with provider — auto-setting to: " + targetValue);
+                System.err.println("[ArcClaw] ℹ️  " + key + " is inconsistent with provider - auto-setting to: " + targetValue);
                 patchEnvFile(envFile, key, targetValue);
                 System.setProperty(key, targetValue);
             }
@@ -1071,7 +1071,7 @@ public class AppBootstrap {
     }
 
     /**
-     * Standalone Playwright setup — runs from bootstrap() directly,
+     * Standalone Playwright setup - runs from bootstrap() directly,
      * outside interactiveSetupIfNeeded(), so it is never blocked by
      * the console==null or missing.isEmpty() early returns.
      */
@@ -1101,7 +1101,7 @@ public class AppBootstrap {
 
         if (response == null || response.trim().isEmpty()) {
             if (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
-                System.err.println("  │  (Non-interactive: auto-installing Chromium — already enabled in .env)");
+                System.err.println("  │  (Non-interactive: auto-installing Chromium - already enabled in .env)");
                 System.err.println("  │");
                 PlaywrightBrowserInstaller.installChromium(browsersPath);
             } else {
@@ -1109,7 +1109,7 @@ public class AppBootstrap {
                 System.err.println("  ⚠  Non-interactive stdin detected (running via mise/task runner?).");
                 System.err.println("     To enable Playwright, set in your .env:");
                 System.err.println("       ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true");
-                System.err.println("     Then re-run — Chromium will auto-install on next start.");
+                System.err.println("     Then re-run - Chromium will auto-install on next start.");
             }
             return;
         }

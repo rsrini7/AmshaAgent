@@ -26,7 +26,7 @@ class SessionOwnershipIT {
     private static final String API_KEY_HEADER = "X-ArcClaw-Api-Key";
 
     // Expected owner key NAMES (the map keys, not the secret values)
-    // ApiKeyAuthFilter puts the key-name into MDC.USERID — that is what bindOwner() stores.
+    // ApiKeyAuthFilter puts the key-name into MDC.USERID - that is what bindOwner() stores.
     private static final String OWNER_INTERNAL = "internal";
 
     @Inject

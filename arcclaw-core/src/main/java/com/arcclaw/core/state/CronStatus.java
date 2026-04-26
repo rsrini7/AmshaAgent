@@ -8,7 +8,7 @@ public enum CronStatus {
     AWAITING_APPROVAL,
     SKIPPED;
 
-    /** SQLite text representation — stable across renames */
+    /** SQLite text representation - stable across renames */
     public String toStorageValue() {
         return this.name();
     }

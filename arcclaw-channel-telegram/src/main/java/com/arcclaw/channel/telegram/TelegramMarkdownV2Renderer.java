@@ -46,7 +46,7 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
                     ? "*__" + esc(h.text()) + "__*"
                     : "*" + esc(h.text()) + "*";
             case ReplyNode.CodeBlock cb -> {
-                // Language identifier is NOT MarkdownV2 content — do NOT escape it.
+                // Language identifier is NOT MarkdownV2 content - do NOT escape it.
                 // Telegram uses it as a literal syntax hint: ```java, ```c++, etc.
                 String lang = cb.language() != null ? cb.language().trim() : "";
                 yield "```" + lang + "\n" + cb.code() + "\n```";
@@ -64,7 +64,7 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
                 yield sb.toString();
             }
             case ReplyNode.KeyValue kv -> "*" + esc(kv.key()) + ":* " + esc(kv.value());
-            case ReplyNode.Separator _ -> "———";
+            case ReplyNode.Separator _ -> "---";
             case ReplyNode.ApprovalPrompt ap -> {
                 yield "⚠️ *APPROVAL REQUIRED*\n\n" +
                         "*Tool:* `" + esc(ap.toolName()) + "`\n" +

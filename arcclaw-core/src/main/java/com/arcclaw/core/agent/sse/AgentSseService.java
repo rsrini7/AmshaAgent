@@ -37,7 +37,7 @@ public class AgentSseService {
             proc.onNext(pending);
         }
 
-        // Heartbeat stream — every 25s to prevent proxy/browser idle timeout
+        // Heartbeat stream - every 25s to prevent proxy/browser idle timeout
         Multi<SseEvent> heartbeat = Multi.createFrom().ticks()
             .every(Duration.ofSeconds(25))
             .map(tick -> (SseEvent) new HeartbeatEvent(Instant.now()));

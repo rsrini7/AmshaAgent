@@ -48,7 +48,7 @@ public class SkillLoader {
     TelemetryAuditService telemetryAuditService;
 
     void onStart(@Observes StartupEvent ev) {
-        LOG.info("Initializing AgentSkills — SPI-based load starting");
+        LOG.info("Initializing AgentSkills - SPI-based load starting");
         List<String> warnings = reloadAll(false);
         if (!warnings.isEmpty()) {
             LOG.warnf("Startup skill load completed with %d warning(s):", warnings.size());
@@ -159,7 +159,7 @@ public class SkillLoader {
                         }
                     }
                     String w = "Unknown ToolCapability '" + str + "' in skill '" + skillName
-                            + "' — excluded. Valid values: " + validCapabilityNames();
+                            + "' - excluded. Valid values: " + validCapabilityNames();
                     LOG.warnf(w);
                     warnings.add(w);
                     return (ToolCapability) null;

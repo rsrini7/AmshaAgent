@@ -28,7 +28,7 @@ public interface AgentObserver {
      * @param step      The completed reasoning step (with observation filled).
      */
     default void onStepComplete(String sessionId, String role, ReasoningStep step) {
-        // no-op by default — existing implementations (GovernanceLayer,
+        // no-op by default - existing implementations (GovernanceLayer,
         // AgentOtelContext) are unaffected.
     }
 

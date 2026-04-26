@@ -1,4 +1,4 @@
-# ArcClaw P84 — Complete End-to-End Workflow
+# ArcClaw P84 - Complete End-to-End Workflow
 
 ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI agent framework** built around a checkpoint-driven Thought-Plan-Act-Observe loop with Human-in-the-Loop (HITL) governance, pluggable channel adapters, persistent SQLite state, two-tier RAG memory, and MCP integration.
 
@@ -10,10 +10,10 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 |---|---|
 | `arcclaw-app` | Main deployable; CLI (Picocli), REST endpoints, scheduler wiring, security, channel routing |
 | `arcclaw-core` | Agent loop, state machine, tools, audit, governance, SSE, skill system, persistence |
-| `arcclaw-channel-api` | Channel SPI — sealed interfaces and plugin contracts shared by all channel adapters |
+| `arcclaw-channel-api` | Channel SPI - sealed interfaces and plugin contracts shared by all channel adapters |
 | `arcclaw-channel-telegram` | Apache Camel–backed Telegram bot adapter with HITL inline keyboards |
 | `arcclaw-channel-web` | WebSocket channel adapter + Lit TypeScript frontend |
-| `arcclaw-deployment` | Quarkus build-time processors — custom `@WorkspaceScoped` CDI scope, MCP reflection, REST enforcement |
+| `arcclaw-deployment` | Quarkus build-time processors - custom `@WorkspaceScoped` CDI scope, MCP reflection, REST enforcement |
 | `arcclaw-rag` | Two-tier vector (vec0) + FTS5 RAG memory module |
 | `arcclaw-mcp` | Model Context Protocol server bridge + dynamic client tool loading |
 | `arcclaw-onboarding` | 5-step setup wizard REST API |
@@ -28,10 +28,10 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 
 `ArcClawCli.main()` runs **before** the Quarkus CDI container boots. Steps are strictly ordered:
 
-1. **Env-var validation** — `CliUtils.validateRequiredEnvVars()` checks all required environment variables and hard-exits with a clear setup guide if any are absent. Quarkus never starts with a missing or dirty config.
-2. **Data directory provisioning** — resolves `ARCCLAW_DATA_DIR` to an absolute path, creates `workspaces/` sub-dir, and pins it back via `System.setProperty("ARCCLAW_DATA_DIR", absolutePath)` so every YAML expression (`${ARCCLAW_DATA_DIR}`) resolves to the same absolute path regardless of JVM working directory.
-3. **Vec0 native library installation** — `Vec0NativeLibraryInstaller.performInstallation()` extracts the platform-correct SQLite-vec `.so` / `.dylib` / `.dll` from JAR resources before any JDBC connection is opened, enabling vector similarity search at the SQL layer.
-4. **Quarkus boot** — `Quarkus.run(ArcClawCli.class, args)` starts the CDI container (Quarkus Arc), Hibernate ORM, Agroal connection pool, and all Quarkus extensions.
+1. **Env-var validation** - `CliUtils.validateRequiredEnvVars()` checks all required environment variables and hard-exits with a clear setup guide if any are absent. Quarkus never starts with a missing or dirty config.
+2. **Data directory provisioning** - resolves `ARCCLAW_DATA_DIR` to an absolute path, creates `workspaces/` sub-dir, and pins it back via `System.setProperty("ARCCLAW_DATA_DIR", absolutePath)` so every YAML expression (`${ARCCLAW_DATA_DIR}`) resolves to the same absolute path regardless of JVM working directory.
+3. **Vec0 native library installation** - `Vec0NativeLibraryInstaller.performInstallation()` extracts the platform-correct SQLite-vec `.so` / `.dylib` / `.dll` from JAR resources before any JDBC connection is opened, enabling vector similarity search at the SQL layer.
+4. **Quarkus boot** - `Quarkus.run(ArcClawCli.class, args)` starts the CDI container (Quarkus Arc), Hibernate ORM, Agroal connection pool, and all Quarkus extensions.
 
 ### 1.2 CDI Startup Observers (firing in priority order)
 
@@ -42,13 +42,13 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 | 100 | `RagSchemaInitializer` | Warms the Agroal pool; triggers `FtsConnectionInterceptor.onConnectionAcquire()` which loads `vec0` extension and ATTACHes the FTS database; creates `fts.vec_global` virtual table |
 | Unordered | `SkillLoader.onStart()` | Loads skills from classpath (`ClasspathSkillProvider`, priority 100) and SQLite DB (`DatabaseSkillProvider`, priority 10); parses YAML frontmatter; compiles trigger `Pattern[]`; registers dynamic roles in `RoleRegistry`; snapshots `CompiledSkillEntry[]` into `SkillRegistry` |
 | Unordered | `StartupSecurityValidator` | **Hard gate in prod:** throws `DeploymentException` if vault pepper equals dev default, HMAC audit key is absent, or the Telegram allowlist contains only usernames instead of numeric IDs |
-| Unordered | `DevSecretSeederStartup` | Dev-profile only — seeds mock API keys so the app can run without a `.env` file |
+| Unordered | `DevSecretSeederStartup` | Dev-profile only - seeds mock API keys so the app can run without a `.env` file |
 | Unordered | `AuditSchemaEnforcer` | Verifies audit event table DDL |
 | Unordered | `AgentCronScheduler` (on `ApplicationReady`) | Restores previously persisted cron jobs so scheduled tasks survive restarts |
 
 ### 1.3 Build-Time Processors (`arcclaw-deployment`)
 
-`WorkspaceScopeProcessor` registers `@WorkspaceScoped` as a custom CDI scope at Quarkus **build time**, instructing Arc to generate client proxies for all beans annotated with it. Three `@BuildStep` methods: `customScope()` declares the annotation as a scope; `registerContext()` binds it to `WorkspaceScopeContext`; `unremovableBeans()` prevents Arc dead-code elimination. `RestResourceBuildStep` enforces that any JAX-RS resource injecting `EntityManager` must carry `@RunOnVirtualThread` (Architecture Nuance #16 — prevents `BlockingOperationNotAllowedException`). `AgentFunctionProcessor` processes `@AgentFunction` interfaces and generates JSON schemas from SAM return types at build time via Jandex.
+`WorkspaceScopeProcessor` registers `@WorkspaceScoped` as a custom CDI scope at Quarkus **build time**, instructing Arc to generate client proxies for all beans annotated with it. Three `@BuildStep` methods: `customScope()` declares the annotation as a scope; `registerContext()` binds it to `WorkspaceScopeContext`; `unremovableBeans()` prevents Arc dead-code elimination. `RestResourceBuildStep` enforces that any JAX-RS resource injecting `EntityManager` must carry `@RunOnVirtualThread` (Architecture Nuance #16 - prevents `BlockingOperationNotAllowedException`). `AgentFunctionProcessor` processes `@AgentFunction` interfaces and generates JSON schemas from SAM return types at build time via Jandex.
 
 ---
 
@@ -57,7 +57,7 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 Four leaf subcommands all converge on `AgentLoop.run()`:
 
 ### `arcclaw serve` → Daemon REST Mode
-Starts the Quarkus HTTP server (`quarkus.http.port=8080`) and blocks on `Quarkus.waitForExit()`. The Telegram channel route (`TelegramChannelRoute`) self-registers as a Camel route via its own `StartupEvent` observer — `ServeCommand` itself does nothing except keep the process alive.
+Starts the Quarkus HTTP server (`quarkus.http.port=8080`) and blocks on `Quarkus.waitForExit()`. The Telegram channel route (`TelegramChannelRoute`) self-registers as a Camel route via its own `StartupEvent` observer - `ServeCommand` itself does nothing except keep the process alive.
 
 ### `arcclaw ask "<goal>"` → One-Shot CLI
 Creates a UUID session, activates `WorkspaceContext`, calls `AgentLoop.run()` once, prints the final answer to stdout, and terminates the workspace session in the `finally` block.
@@ -105,7 +105,7 @@ Telegram Bot API
   → AgentDispatchHandler → AgentLoop.run(...)
 ```
 
-`SkillAwareIntentDetector` iterates `static final Pattern[]` from pre-compiled `CompiledSkillEntry` objects in `SkillRegistry`. If any regex matches, it returns `skill:{name}` as the role — zero LLM tokens spent on routing. Only on a miss does it fall through to the LLM-backed `IntentDetectorService`.
+`SkillAwareIntentDetector` iterates `static final Pattern[]` from pre-compiled `CompiledSkillEntry` objects in `SkillRegistry`. If any regex matches, it returns `skill:{name}` as the role - zero LLM tokens spent on routing. Only on a miss does it fall through to the LLM-backed `IntentDetectorService`.
 
 ### Path C: WebSocket (Web Channel)
 
@@ -140,13 +140,13 @@ Browser / client opens ws://host/ws/chat
     → CronResultHandler.handleSuccess / handleFailure()
 ```
 
-The cron goal is prefixed with a `SYSTEM CONSTRAINT: CRON EXECUTION MODE` directive, instructing the agent not to invoke delivery tools — ArcClaw delivers the output autonomously via the notifier chain.
+The cron goal is prefixed with a `SYSTEM CONSTRAINT: CRON EXECUTION MODE` directive, instructing the agent not to invoke delivery tools - ArcClaw delivers the output autonomously via the notifier chain.
 
 ---
 
 ## Phase 4: The Message Pipeline (Handler Chain)
 
-`ChannelServicesImpl.processAsync()` submits the `ChannelMessage` to a virtual-thread executor and runs it through `MessagePipeline` — a sorted list of `MessageHandler` implementations executed in ascending priority order:
+`ChannelServicesImpl.processAsync()` submits the `ChannelMessage` to a virtual-thread executor and runs it through `MessagePipeline` - a sorted list of `MessageHandler` implementations executed in ascending priority order:
 
 | Priority | Handler | Responsibility |
 |---|---|---|
@@ -182,7 +182,7 @@ Any handler can return `HandleResult.STOP` to short-circuit the chain (e.g., `Al
 
 ## Phase 6: Agent Loop Lifecycle (`AgentLoop.run`)
 
-This is the outer lifecycle shell — it sets up MDC, OTel, checkpoints, and delegates iteration logic to `AgentStateMachineRunner`.
+This is the outer lifecycle shell - it sets up MDC, OTel, checkpoints, and delegates iteration logic to `AgentStateMachineRunner`.
 
 ### 6.1 Setup
 
@@ -211,7 +211,7 @@ If `context.isResumeSignal()` and checkpoint is `AWAITING_APPROVAL`:
 
 ### 6.4 Fast-Path: `delegate_to_agent` Finish
 
-`tryDelegateFinishFastPath()` — if the last history step's action is `delegate-to-agent` and the observation is a clean answer (does not start with ⏳ / ⚠️ / ❌), the coordinator skips its wrap-up LLM call and returns the sub-agent's result directly. Saves approximately 9,800 tokens per delegation.
+`tryDelegateFinishFastPath()` - if the last history step's action is `delegate-to-agent` and the observation is a clean answer (does not start with ⏳ / ⚠️ / ❌), the coordinator skips its wrap-up LLM call and returns the sub-agent's result directly. Saves approximately 9,800 tokens per delegation.
 
 ### 6.5 AgentStateMachineRunner
 
@@ -221,18 +221,18 @@ Fires `AgentStateChangedEvent(active, goal)` for SSE broadcast. Saves goal to `C
 
 ## Phase 7: The Thought-Plan-Act-Observe Loop
 
-### Step A: EngineStepHandler — LLM Call
+### Step A: EngineStepHandler - LLM Call
 
 **System prompt construction** (`SystemPromptBuilder`):
 1. Selects the role-specific Qute template from `/templates/personas/` (e.g., `coordinator.txt`, `coder.txt`).
-2. Injects the compaction summary from `CompactionSummaryCache` (`@WorkspaceScoped`) — blocks via `CompactionEventBridge.awaitIfInFlight(sessionId)` on first access to prevent stale-null race.
+2. Injects the compaction summary from `CompactionSummaryCache` (`@WorkspaceScoped`) - blocks via `CompactionEventBridge.awaitIfInFlight(sessionId)` on first access to prevent stale-null race.
 3. Runs all `ContextEnricher` CDI implementations. `RagContextEnricher` (in `arcclaw-rag`) searches both memory tiers, scores chunks by cosine similarity, and injects a `Retrieved Context` block.
 4. Appends `SystemEnvironmentContextEnricher` metadata.
 
 **LLM call** (`LangChainReasoningEngine.nextStep()`):
 - Retrieves `ChatModel` from `ChatModelProducer` (selects active `AgentChatModelProvider` via `arcclaw.llm.provider` config: groq / openai / ollama / openrouter / claude-code).
 - Assembles full message list via `ChatHistoryAssembler` from in-memory `ReasoningStep[]` (SQLite not read mid-run).
-- Filters tool list via `RoleRegistry.permittedTools(AgentRoleEnum)` — tools are gated by `ToolCapability` enum.
+- Filters tool list via `RoleRegistry.permittedTools(AgentRoleEnum)` - tools are gated by `ToolCapability` enum.
 - Cron sessions additionally suppress `schedule_task` and `manage_schedule` tools from the spec.
 - Fires `ChatRequest` with tool specifications.
 
@@ -241,7 +241,7 @@ Fires `AgentStateChangedEvent(active, goal)` for SSE broadcast. Saves goal to `C
 | Exception | Handling |
 |---|---|
 | HTTP 400 `model_not_found` / `invalid_api_key` | Terminal `FAILED` |
-| HTTP 400 `not in request.tools` | Terminal `FINISHED` (tool not in role schema — LLM told so) |
+| HTTP 400 `not in request.tools` | Terminal `FINISHED` (tool not in role schema - LLM told so) |
 | HTTP 400 `tool_use_failed` with prose | `FINISHED` (extract prose as answer) |
 | HTTP 400 schema validation error | Retry with correction prompt (max 2 retries) |
 | HTTP 429 rate-limit ≤ 15s | Sleep + retry |
@@ -261,7 +261,7 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token b
 5. `guardFinalAnswer()` checks `CONTEXT_RAG_ECHO_PATTERN` / `CONTEXT_RETRIEVED_ECHO_PATTERN` to prevent LLM echoing injected RAG headers as the answer.
 6. `ChatMemoryWriter.saveAnswer(sessionId, answer)` persists the AI message to `PersistentChatMemoryStore`.
 
-### Step C: ToolStepHandler — Validation
+### Step C: ToolStepHandler - Validation
 
 `ToolInvocationGuard.evaluate()` runs this decision tree:
 
@@ -280,12 +280,12 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token b
 5. Default → GuardDecision.Allow
 ```
 
-### Step D: ToolStepHandler — Parallel Batch Execution
+### Step D: ToolStepHandler - Parallel Batch Execution
 
 For parallel tool batches (`ReasoningStep.isParallelBatch() == true`):
 
 ```
-Pass 1 — Guard ALL tools before ANY executes (§7.7):
+Pass 1 - Guard ALL tools before ANY executes (§7.7):
   → ANY HITL-required → handleHitlBatch() with pre-execution split (§7.30/7.31)
      - Pre-execute FULL-autonomy tools immediately under runWithFullAutonomy()
      - Persist batch checkpoint with pre-executed results embedded
@@ -293,7 +293,7 @@ Pass 1 — Guard ALL tools before ANY executes (§7.7):
   → DEDUP → return cached result; peers continue (§7.15)
   → BLOCKED → fill "blocked" observation; peers continue
 
-Pass 2 — Execute ALLOWED tools in parallel virtual threads with OTel context propagation (§7.13)
+Pass 2 - Execute ALLOWED tools in parallel virtual threads with OTel context propagation (§7.13)
   → Merge results in original call order for LLM clarity
   → Build CompletedBatch step → append to history
 ```
@@ -311,9 +311,9 @@ On resume after batch approval:
 2. Looks up `AgentTool` by name in `ToolRegistry`.
 3. Calls `AgentTool.execute(params)`.
 4. Passes raw observation through `ToolObservationSanitizer.sanitize()`:
-   - `PiiRedactionTransformer` — strips PII patterns.
-   - `InjectionRedactionTransformer` — removes injected instructions from tool output.
-   - `TruncationTransformer` — truncates observations exceeding configured limit.
+   - `PiiRedactionTransformer` - strips PII patterns.
+   - `InjectionRedactionTransformer` - removes injected instructions from tool output.
+   - `TruncationTransformer` - truncates observations exceeding configured limit.
 5. Re-throws `RequiresApprovalException` so the state machine can pause cleanly.
 
 ### Available Agent Tools
@@ -429,11 +429,11 @@ WorkspaceContext.run(sessionId, userId, chatId, autonomyLevel, agentRole, channe
 
 1. Remove heartbeat from `SessionHeartbeatTracker`.
 2. Clear budget memory (`GovernanceLayer.clearSession()`).
-3. `markCheckpointsFailed()` — marks only `IN_PROGRESS` / `AWAITING_APPROVAL` / `AWAITING_RETRY_APPROVAL` checkpoints as `FAILED`; excludes `COMPLETED` / `FAILED` / `ARCHIVED` / `COMPROMISED` to prevent race condition with `CronResultHandler` (§5.18 fix).
+3. `markCheckpointsFailed()` - marks only `IN_PROGRESS` / `AWAITING_APPROVAL` / `AWAITING_RETRY_APPROVAL` checkpoints as `FAILED`; excludes `COMPLETED` / `FAILED` / `ARCHIVED` / `COMPROMISED` to prevent race condition with `CronResultHandler` (§5.18 fix).
 4. Wipe the session workspace directory (recursive `Files.walkFileTree` delete).
 5. Clear in-memory + persistent `ChatMemory` (`MessageWindowChatMemory.clear()`).
 6. Destroy the `@WorkspaceScoped` CDI context via `WorkspaceScopeContext.destroySession(sessionId)`.
-7. `statefulAgentStore.clearBatchResuming(sessionId)` — clears any in-flight batch resume flag (§7.29).
+7. `statefulAgentStore.clearBatchResuming(sessionId)` - clears any in-flight batch resume flag (§7.29).
 
 All `markCheckpointsFailed` writes are `@Transactional(REQUIRES_NEW)` wrapped in `SqliteRetryTemplate` with exponential backoff + jitter on `SQLITE_BUSY`.
 
@@ -445,7 +445,7 @@ All `markCheckpointsFailed` writes are `@Transactional(REQUIRES_NEW)` wrapped in
 
 `CompactionService.compact()`:
 1. Fetches old `ChatMemory` turns beyond the compaction window.
-2. Calls the **compaction model** — a separate, lighter LLM produced by `CompactionModelProducer` (default `llama-3.1-8b-instant` via Groq, configured independently from the reasoning model).
+2. Calls the **compaction model** - a separate, lighter LLM produced by `CompactionModelProducer` (default `llama-3.1-8b-instant` via Groq, configured independently from the reasoning model).
 3. Writes the summary to `CompactionSummaryEntity` in SQLite.
 4. Clears the compacted turns from `PersistentChatMemoryStore`.
 5. Releases `CompactionEventBridge` latch so the subsequent `CompactionSummaryCache.getSummary()` call in `SystemPromptBuilder` reads the fresh summary.
@@ -460,7 +460,7 @@ The `CompactionEventBridge` uses a `CountDownLatch` per session to prevent a rac
 
 | Tier | Store | Scope | Persistence |
 |---|---|---|---|
-| Session KB | `InMemoryEmbeddingStore` (`@WorkspaceScoped`) | Per session | Ephemeral — lost on session destroy |
+| Session KB | `InMemoryEmbeddingStore` (`@WorkspaceScoped`) | Per session | Ephemeral - lost on session destroy |
 | Global KB | SQLite `fts.vec_global` (vec0 virtual table) + `rag_chunk` table | Cross-session | Persistent across restarts |
 
 ### Ingest Flow
@@ -468,9 +468,9 @@ The `CompactionEventBridge` uses a `CountDownLatch` per session to prevent a rac
 `IngestDocumentTool.execute()` (always requires manual HITL approval):
 1. Sanitize text (strip consecutive dashes, markdown artifacts, control characters).
 2. `EmbeddingModel.embed(text)` → float vector.
-3. `INSERT OR REPLACE INTO fts.vec_global(chunkId, embedding)` — vec0 ANN index.
-4. `em.persist(RagChunkEntity)` — stores original text for hydration.
-5. `sessionKb.ingest()` — adds to in-memory `InMemoryEmbeddingStore`.
+3. `INSERT OR REPLACE INTO fts.vec_global(chunkId, embedding)` - vec0 ANN index.
+4. `em.persist(RagChunkEntity)` - stores original text for hydration.
+5. `sessionKb.ingest()` - adds to in-memory `InMemoryEmbeddingStore`.
 6. Returns `chunkId` as observation.
 
 ### Retrieval
@@ -513,8 +513,8 @@ You are a meticulous code reviewer...
 
 ```
 StartupEvent → SkillLoader.onStart()
-  → ClasspathSkillProvider  (priority 100 — reads /skills/index.txt from classpath)
-  → DatabaseSkillProvider   (priority 10  — reads agent_skill table from SQLite)
+  → ClasspathSkillProvider  (priority 100 - reads /skills/index.txt from classpath)
+  → DatabaseSkillProvider   (priority 10  - reads agent_skill table from SQLite)
   → SkillDefinitionParser.parse(yaml)    [splits on --- delimiter; Jackson YAML for frontmatter]
   → Pattern.compile(triggerPatterns)     [pre-compiled for O(1) matching per pattern]
   → RoleRegistry.registerDynamic(skill:name, RoleDefinition)
@@ -547,7 +547,7 @@ POST /api/v1/mcp/connect  {name, url}
   → Available as tools in agent roles at next invocation
 ```
 
-Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes ArcClaw's own tools discoverable as dynamic tools — useful for multi-agent delegation patterns and tool composition. `McpBuildStep` in `arcclaw-deployment` registers all `com.arcclaw.mcp.*` classes for GraalVM reflection in native image builds.
+Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes ArcClaw's own tools discoverable as dynamic tools - useful for multi-agent delegation patterns and tool composition. `McpBuildStep` in `arcclaw-deployment` registers all `com.arcclaw.mcp.*` classes for GraalVM reflection in native image builds.
 
 ---
 
@@ -593,7 +593,7 @@ Coordinator: THINK → ACTION: delegate_to_agent(agent="brahma", goal="Write uni
 | `openrouter` | `OpenRouterProviderFactory` | Unified multi-model API |
 | `claude-code` | `ClaudeCodeProviderFactory` | `ClaudeCodeOAuthTokenExtractor` reads OAuth token from local Claude Code CLI installation |
 
-The **compaction model** is produced separately by `CompactionModelProducer` (in `arcclaw-app`) — always a lighter/cheaper model regardless of the main reasoning provider, configurable via `arcclaw.memory.compaction.*` properties.
+The **compaction model** is produced separately by `CompactionModelProducer` (in `arcclaw-app`) - always a lighter/cheaper model regardless of the main reasoning provider, configurable via `arcclaw.memory.compaction.*` properties.
 
 `RoutingChatModelProvider` can route requests across providers based on intent or load. `LlmValidationService` implements `LlmValidationGateway` so the onboarding wizard can fire a test call to validate credentials before persisting them.
 
@@ -607,7 +607,7 @@ After `AgentLoop.run()` returns in the cron path, `CronResultHandler` processes 
 |---|---|
 | `Finished` (run-once job) | `cronRepository.markCompleted()` + audit `CRON_FIRED` event |
 | `Finished` (recurring job) | `CronScheduleUtil.computeNext()` → `cronRepository.markFired(nextFireTime)` |
-| `AwaitingApproval` | `cronRepository.markAwaitingApproval()` — session kept alive for `ApproveReflex` |
+| `AwaitingApproval` | `cronRepository.markAwaitingApproval()` - session kept alive for `ApproveReflex` |
 | `Failed` / `LoopExceeded` | `cronRepository.markFailed()` + audit `CRON_FAILED` event |
 
 `CronResultHandler.fireCompletionEvent()` fires an `AgentJobCompleted` CDI event. `ChannelCronNotificationDispatcher` observes it and calls the matching `ChannelPlugin.jobNotifier()` based on `job.channelType`. `CliCronNotificationObserver` prints to stdout for CLI-scheduled tasks.
@@ -639,7 +639,7 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
 ### OpenTelemetry
 
 Spans at three levels, all parented under the session root span:
-- **Session span** (`arcclaw.session`): `otelContext.startSessionSpan(sessionId)` — accumulates cumulative `llm.usage.prompt_tokens` and `llm.usage.completion_tokens`.
+- **Session span** (`arcclaw.session`): `otelContext.startSessionSpan(sessionId)` - accumulates cumulative `llm.usage.prompt_tokens` and `llm.usage.completion_tokens`.
 - **Iteration span** (`agent.iteration`): one per `AgentStateMachineRunner` loop iteration; carries `arcclaw.session.id`, `arcclaw.agent.role`, `arcclaw.iteration`.
 - **Tool span** (`tool.call`): one per `ToolInvoker.invoke()` call; carries `arcclaw.tool.name`, `tool.operation`.
 - **Reflex span** (`reflex.execute`): one per matched reflex.
@@ -669,7 +669,7 @@ Exported to Jaeger via OTLP at `http://localhost:4317`.
 
 ### API Key Authentication
 
-Keys stored as `HMAC-SHA256(rawKey, hmacSecret)` — never plaintext. `ApiKeyRegistry` maintains a `hmacToKeyName` map initialized at startup. Per-key Bucket4j token buckets enforce rate limits; `isAllowed()` atomically consumes one token.
+Keys stored as `HMAC-SHA256(rawKey, hmacSecret)` - never plaintext. `ApiKeyRegistry` maintains a `hmacToKeyName` map initialized at startup. Per-key Bucket4j token buckets enforce rate limits; `isAllowed()` atomically consumes one token.
 
 ### Secret Vault
 
@@ -717,12 +717,12 @@ A 5-step REST wizard at `/onboarding`:
 
 | Step | Endpoint | Payload | Action |
 |---|---|---|---|
-| 1 | `GET /onboarding/step1` | — | Returns system info (version, current provider) |
+| 1 | `GET /onboarding/step1` | - | Returns system info (version, current provider) |
 | 2 | `POST /onboarding/step2` | `{provider, model}` | Saves LLM provider config |
 | 3 | `POST /onboarding/step3` | `{apiKey}` | Validates credential via `LlmValidationGateway`; encrypts in vault |
 | 4 | `POST /onboarding/step4` | `{systemPrompt}` | Persists custom system prompt |
 | 5 | `POST /onboarding/step5` | `{mcpServers[]}` | Registers MCP server connections |
-| — | `GET /onboarding/settings` | — | Returns current config (`hasApiKey`, `provider`, `model`, `version`) |
+| - | `GET /onboarding/settings` | - | Returns current config (`hasApiKey`, `provider`, `model`, `version`) |
 
 `OnboardingStepProvider` SPI allows future steps to self-register (e.g., Telegram token setup, Brave Search key).
 
@@ -832,4 +832,4 @@ External Input
   User receives response
 ```
 
-Every actor — Telegram users, REST clients, WebSocket sessions, CLI operators, and scheduled cron jobs — converges through the same checkpoint-aware `AgentLoop`, ensuring consistent governance, HITL approval, WORM audit chaining, and distributed observability regardless of input channel.
+Every actor - Telegram users, REST clients, WebSocket sessions, CLI operators, and scheduled cron jobs - converges through the same checkpoint-aware `AgentLoop`, ensuring consistent governance, HITL approval, WORM audit chaining, and distributed observability regardless of input channel.

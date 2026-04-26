@@ -4,7 +4,7 @@
 > **Version**: Phase 64 (current)  
 > **Base URL**: `http://localhost:8080`
 
-This directory contains 15 `.http` files covering every REST API surface of ArcClaw. Run them in the order listed below — health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
+This directory contains 15 `.http` files covering every REST API surface of ArcClaw. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
 
 ---
 
@@ -69,9 +69,9 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 
 ---
 
-## Phase 64 Changes — What Each Fix Changes in These Files
+## Phase 64 Changes - What Each Fix Changes in These Files
 
-### Tier A — Correctness
+### Tier A - Correctness
 
 | Fix | Affected Files | What to look for |
 |---|---|---|
@@ -83,7 +83,7 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 | **A6** compactionInFlight lock released | 10, 15 | Second compaction fires after first observer failure |
 | **A7** ChannelType.fromString → Optional | 15 | Known types still resolve; `fromString("UNKNOWN")` → empty |
 
-### Tier B — Security
+### Tier B - Security
 
 | Fix | Affected Files | What to look for |
 |---|---|---|
@@ -91,7 +91,7 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 | **B2** DevSecretSeeder compile-excluded | 01, 15 | No DevSecretSeeder log lines in prod/staging startup |
 | **B3** Session IDs are random UUIDs | 03, 15 | `session_registry` table; ID ≠ MD5 of chatId:userId |
 
-### Tier C — Architecture
+### Tier C - Architecture
 
 | Fix | Affected Files | What to look for |
 |---|---|---|
@@ -99,7 +99,7 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 | **C2** ChannelCronNotificationDispatcher | 09, 15 | Cron notifications still arrive correctly |
 | **C3** rag_chunk table (no "rag:" prefix) | 13, 15 | `SELECT COUNT(*) FROM compaction_summary WHERE session_id LIKE 'rag:%'` = 0 |
 
-### Tier D — Quality
+### Tier D - Quality
 
 | Fix | Affected Files | What to look for |
 |---|---|---|
@@ -226,7 +226,7 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 
 ---
 
-## What Changed in Phase 64 — Summary for Testers
+## What Changed in Phase 64 - Summary for Testers
 
 **Before Phase 64:**
 - Budget hard limit could be exceeded by one call (warning fired before hard stop)
@@ -238,11 +238,11 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 - `ChannelType.fromString` silently returned TELEGRAM for unknown types
 - Audit HMAC chain could fork under concurrent writes (TOCTOU race)
 - `DevSecretSeeder` was runtime-guarded (config flag), not compile-time excluded
-- Session IDs were MD5-derived (UUID v3) — not cryptographically appropriate
+- Session IDs were MD5-derived (UUID v3) - not cryptographically appropriate
 - RAG chunks mixed into `compaction_summary` via `"rag:"` prefix hack
 
 **After Phase 64:**
-- Hard limit checked first — exceeds it on the call that crosses it
+- Hard limit checked first - exceeds it on the call that crosses it
 - FULL/READONLY autonomy levels honoured through all channels
 - Non-ASCII FTS5 queries work correctly (only syntax chars escaped)
 - Telegram headings render as **bold text**
@@ -279,9 +279,9 @@ FROM session_registry ORDER BY created_at DESC LIMIT 10;
 
 - **13_rag.http RAG ingest**: Requires manual approval (SUPERVISED mode). Run the approve request promptly after the ingest trigger, or switch the session to FULL autonomy first (see 14_budget_governance.http FLOW D).
 
-- **09_cron_scheduler.http wait steps**: CRON-14 and CRON-15 require waiting ~90 seconds after CRON-1 to observe `CRONFIRED`. These cannot be automated in REST Client — open the audit endpoint manually after waiting.
+- **09_cron_scheduler.http wait steps**: CRON-14 and CRON-15 require waiting ~90 seconds after CRON-1 to observe `CRONFIRED`. These cannot be automated in REST Client - open the audit endpoint manually after waiting.
 
-- **08_audit_log.http tamper test**: Requires dropping the SQLite WORM trigger manually and restarting the app. Cannot be automated — follow the inline instructions.
+- **08_audit_log.http tamper test**: Requires dropping the SQLite WORM trigger manually and restarting the app. Cannot be automated - follow the inline instructions.
 
 - **07_pii_prompt_injection.http BLOCK_AND_NOTIFY**: Commented out by default. Requires `arcclaw.pii.mode=BLOCK_AND_NOTIFY` in config and a restart to test.
 

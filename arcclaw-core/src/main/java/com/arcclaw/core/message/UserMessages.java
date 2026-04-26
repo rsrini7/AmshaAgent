@@ -16,7 +16,7 @@ public final class UserMessages {
     public static final String TARGET_SESSION_NOT_AWAITING = "❌ Target session not found or not awaiting approval.";
     public static final String DESTRUCTIVE_GUARD_REPLY = "⛔ I can only perform read operations (view, list). " +
                                                          "Destructive operations such as deleting repositories are not supported.";
-    public static final String CLASSIFICATION_RATE_LIMITED = "⏳ Rate limited on classification — defaulting to coordinator.";
+    public static final String CLASSIFICATION_RATE_LIMITED = "⏳ Rate limited on classification - defaulting to coordinator.";
 
     // Approval & Session Control
     public static final String RESUMING_TASK = "✅ Resuming task...";
@@ -38,7 +38,7 @@ public final class UserMessages {
     public static final String DELEGATION_EXCEEDED_FORMAT = "Agent '%s' exceeded its iteration budget (%d iterations). Try simplifying the goal.";
     public static final String SESSION_CLEARED = "🧹 Session state and temporary workspace cleared.";
     public static final String RESET_COMPLETE_FORMAT = "🧹 Agent state, checkpoints, and %d scheduled task(s) have been cleared. " +
-                                                        "Your conversation history has been preserved — we can pick up where we left off.";
+                                                        "Your conversation history has been preserved - we can pick up where we left off.";
     public static final String COMPACTED_SUMMARY_FORMAT = "🗜️ *Compacted Summary* (%d messages):\n%s";
     public static final String ACTIVE_WINDOW_FORMAT = "💬 *Active Window* (%d messages):";
     public static final String NO_HISTORY_FOUND = "📭 No conversation history found for this session.";
@@ -68,7 +68,7 @@ public final class UserMessages {
     // Generic Errors
     public static final String INTERNAL_ERROR = "⚠️ An internal error occurred. Please try again.";
     public static final String UNEXPECTED_FAULT = "⚠️ An unexpected fault occurred while processing your request.";
-    public static final String COULD_NOT_RESUME = "⚠️ Could not resume — session may already be processing.";
+    public static final String COULD_NOT_RESUME = "⚠️ Could not resume - session may already be processing.";
     public static final String APPROVAL_ERROR = "❌ **Approval Error**: An internal fault occurred while resuming the task.";
     public static final String DENIAL_ERROR = "❌ **Denial Error**: An internal fault occurred while terminating the task.";
     public static final String TASK_FAILED = "❌ Task failed. Please try again.";
@@ -95,8 +95,8 @@ public final class UserMessages {
     public static final String CRON_INVALID_FORMAT = "❌ Invalid cron ID format: %s. Use /crons to see valid IDs.";
     public static final String NO_SCHEDULE_FOUND = "No scheduled tasks found.";
     public static final String USAGE_DELETE_CRON = "Usage: deletecron <id>  |  Use /crons to see valid IDs.";
-    public static final String DELETE_CONTEXT_NOT_AVAILABLE = "Cannot delete schedule — user context not available.";
-    public static final String LIST_CONTEXT_NOT_AVAILABLE = "Cannot list schedules — user context not available.";
+    public static final String DELETE_CONTEXT_NOT_AVAILABLE = "Cannot delete schedule - user context not available.";
+    public static final String LIST_CONTEXT_NOT_AVAILABLE = "Cannot list schedules - user context not available.";
 
     private UserMessages() {}
 

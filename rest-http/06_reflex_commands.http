@@ -1,24 +1,24 @@
 ### ═══════════════════════════════════════════════════════════════
-### 06 — REFLEX COMMANDS (ZERO-TOKEN FAST PATH)
+### 06 - REFLEX COMMANDS (ZERO-TOKEN FAST PATH)
 ###
 ### The ReflexRegistry intercepts specific input patterns BEFORE
 ### the LLM is ever invoked. Zero LLM tokens consumed.
 ### All work identically via REST (goal string) or Telegram.
 ###
 ### Reflex map (intercepted by CommandDispatchHandler → ReflexRegistry):
-###   /status        → StatusReflex    — checkpoint state + USD spent
-###   /halt          → HaltReflex      — emergency stop, wipe workspace
-###   /reset         → ResetReflex     — soft reset (clears ReAct, keeps chat)
-###   /history       → HistoryReflex   — recent chat + compaction summaries
-###   /crons         → ListCronsReflex — list scheduled tasks (user-scoped)
-###   /cron          → ListCronsReflex — alias for /crons
-###   /list crons    → ListCronsReflex — natural language alias
-###   /skills        → SkillReflex     — list loaded skills (zero token)
-###   /mcp           → McpReflex       — show MCP connection status (zero token)
-###   /approve       → ApproveReflex   — approve AWAITING_APPROVAL checkpoint
-###   /deny          → DenyReflex      — deny AWAITING_APPROVAL checkpoint
-###   deletecron <id>→ DeleteCronReflex— delete cron job by ID
-###   store KEY=VAL  → VaultStoreHandler — store secret (bypasses PII scan)
+###   /status        → StatusReflex    - checkpoint state + USD spent
+###   /halt          → HaltReflex      - emergency stop, wipe workspace
+###   /reset         → ResetReflex     - soft reset (clears ReAct, keeps chat)
+###   /history       → HistoryReflex   - recent chat + compaction summaries
+###   /crons         → ListCronsReflex - list scheduled tasks (user-scoped)
+###   /cron          → ListCronsReflex - alias for /crons
+###   /list crons    → ListCronsReflex - natural language alias
+###   /skills        → SkillReflex     - list loaded skills (zero token)
+###   /mcp           → McpReflex       - show MCP connection status (zero token)
+###   /approve       → ApproveReflex   - approve AWAITING_APPROVAL checkpoint
+###   /deny          → DenyReflex      - deny AWAITING_APPROVAL checkpoint
+###   deletecron <id>→ DeleteCronReflex- delete cron job by ID
+###   store KEY=VAL  → VaultStoreHandler - store secret (bypasses PII scan)
 ###
 ### PiiScanReflex and PromptInjectionReflex are covered in 07_pii_prompt_injection.http
 ###
@@ -41,11 +41,11 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# /STATUS — checkpoint state + budget
+# /STATUS - checkpoint state + budget
 # StatusReflex queries StatefulAgentStore, GovernanceLayer, CompactionSummaryRepository.
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-1] /status on fresh session — no checkpoint yet
+### [REFLEX-1] /status on fresh session - no checkpoint yet
 # Expect 200: "No active session found" or budget=$0.00
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -72,7 +72,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [REFLEX-2] /status after an agent run — shows COMPLETED + cost
+### [REFLEX-2] /status after an agent run - shows COMPLETED + cost
 # Expect 200: COMPLETED status + token counts + USD cost > $0
 # Phase 64-A A1: budget tracking now correct (hard limit before soft warning).
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
@@ -88,12 +88,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# /HISTORY — recent chat + compaction summaries
+# /HISTORY - recent chat + compaction summaries
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-3] /history — view conversation history
+### [REFLEX-3] /history - view conversation history
 # Expect 200: formatted list of recent messages. Compaction summaries if compacted.
-# History is session-scoped — you only see your own messages.
+# History is session-scoped - you only see your own messages.
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -107,10 +107,10 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# /RESET — soft reset (wipes ReAct checkpoint, keeps chat memory)
+# /RESET - soft reset (wipes ReAct checkpoint, keeps chat memory)
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-4] /reset — clear ReAct state
+### [REFLEX-4] /reset - clear ReAct state
 # Expect 200: "🧹 Session wiped. Memory and tool states cleared."
 # ReAct checkpoint is CLEARED. ChatMemoryStore is PRESERVED.
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
@@ -125,7 +125,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [REFLEX-5] /status after reset — checkpoint cleared, budget retained
+### [REFLEX-5] /status after reset - checkpoint cleared, budget retained
 # Expect 200: NO_ACTIVE_STATE (checkpoint wiped) but cost > $0 (budget survives reset).
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -166,7 +166,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# /CRONS, /CRON, /LIST CRONS — list scheduled tasks (no LLM)
+# /CRONS, /CRON, /LIST CRONS - list scheduled tasks (no LLM)
 # All three aliases call ListCronsReflex → AgentCronRepository.findByUserId()
 # ─────────────────────────────────────────────────────────────────
 
@@ -178,7 +178,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [REFLEX-6] /crons — list all scheduled tasks (alias 1)
+### [REFLEX-6] /crons - list all scheduled tasks (alias 1)
 # Expect 200: "No scheduled tasks found." or formatted list with IDs
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -192,7 +192,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [REFLEX-7] /cron — alias 2 (identical behaviour)
+### [REFLEX-7] /cron - alias 2 (identical behaviour)
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -205,7 +205,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [REFLEX-8] /list crons — natural language alias (identical behaviour)
+### [REFLEX-8] /list crons - natural language alias (identical behaviour)
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -219,7 +219,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# DELETECRON — delete a specific cron job by ID
+# DELETECRON - delete a specific cron job by ID
 # Matches: input.startsWith("deletecron")
 # Tenant-isolated: user can only delete their own cron jobs.
 # ─────────────────────────────────────────────────────────────────
@@ -239,10 +239,10 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# /SKILLS — list loaded skills (zero token, no LLM call)
+# /SKILLS - list loaded skills (zero token, no LLM call)
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-10] /skills — list all currently loaded skills
+### [REFLEX-10] /skills - list all currently loaded skills
 # Expect 200: formatted list of skill names + trigger patterns.
 # "No skills currently loaded" if SkillRegistry is empty.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
@@ -258,10 +258,10 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# /MCP — MCP connection status (zero token, no LLM call)
+# /MCP - MCP connection status (zero token, no LLM call)
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-11] /mcp — show MCP status
+### [REFLEX-11] /mcp - show MCP status
 # Expect 200:
 #   "Exposed internal tools (2): github, memory_search
 #    Dynamic MCP tools: none connected"
@@ -279,12 +279,12 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# VAULT KEY=VALUE — vault store
+# VAULT KEY=VALUE - vault store
 # ReflexRegistry bypasses ALL sanitization for "store" prefix messages.
 # PII scan does NOT run on store commands (prevents false JWT redaction).
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-12] vault KEY=VALUE — vault secret storage
+### [REFLEX-12] vault KEY=VALUE - vault secret storage
 # Expect 200: "✅ Secret 'TEST_KEY' stored securely."
 # Audit event: VAULT_STORE
 # Confirm in logs: NO [PII-REDACTED] line for this message.
@@ -315,10 +315,10 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [REFLEX-12a] store with JWT-like value — PII scan must NOT redact
+### [REFLEX-12a] store with JWT-like value - PII scan must NOT redact
 # A raw JWT would normally trigger [REDACTED-JWT] in PiiScanReflex.
-# store command bypasses PII scan entirely — JWT stored verbatim.
-# Expect: "✅ Secret 'JWT_TOKEN' stored securely." — NO redaction.
+# store command bypasses PII scan entirely - JWT stored verbatim.
+# Expect: "✅ Secret 'JWT_TOKEN' stored securely." - NO redaction.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -346,15 +346,15 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# /HALT — emergency stop
+# /HALT - emergency stop
 # HaltReflex calls WorkspaceManager.terminateSession() immediately.
-# The halted session cannot be resumed — must create a new session.
+# The halted session cannot be resumed - must create a new session.
 # ─────────────────────────────────────────────────────────────────
 
-### [REFLEX-13] /halt on cronRefSession — terminates it
+### [REFLEX-13] /halt on cronRefSession - terminates it
 # Expect 200: "🛑 System Halted. Workspace terminated."
 # Audit event: CHECKPOINT_FAILED with reason "HALT"
-# WARNING: cronRefSession is now terminated — do not reuse it.
+# WARNING: cronRefSession is now terminated - do not reuse it.
 POST {{baseUrl}}/api/v1/sessions/{{cronRefSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -408,7 +408,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [REFLEX-16] /approve on session with no pending approval → error response
 # Expect 200: "No pending approval found" or equivalent.
-# (Not 500 — the reflex handles missing state gracefully.)
+# (Not 500 - the reflex handles missing state gracefully.)
 POST {{baseUrl}}/api/v1/sessions/{{reflexSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}

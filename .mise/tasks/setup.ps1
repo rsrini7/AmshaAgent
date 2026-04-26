@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 #MISE description="First-time setup: interactive .env wizard, chmod +x mvnw, install JDKs"
 #MISE quiet=true
-# NOTE: No -NonInteractive flag — Read-Host requires an interactive shell.
+# NOTE: No -NonInteractive flag - Read-Host requires an interactive shell.
 # NOTE: #MISE dir= templating may not expand in file tasks depending on mise version.
 #       We resolve project root from $PSScriptRoot as a fallback.
 $ErrorActionPreference = 'Stop'
@@ -77,7 +77,7 @@ if (-not (Test-Path $envPath)) {
     Write-Host "`n  ✅ Local .env configuration complete!"
     Write-Host "  ---------------------------------------------------------------------------`n"
 } else {
-    Write-Host 'ℹ️   .env already exists — skipping interactive setup.'
+    Write-Host 'ℹ️   .env already exists - skipping interactive setup.'
 }
 
 if (-not $IsWindows) {

@@ -61,7 +61,7 @@ export class SseManager {
             if (!raw || raw === ': heartbeat') continue;
             const event: AgentEvent = JSON.parse(raw);
             this.onEvent(event);
-          } catch { /* parse error — ignore */ }
+          } catch { /* parse error - ignore */ }
         }
       }
     }

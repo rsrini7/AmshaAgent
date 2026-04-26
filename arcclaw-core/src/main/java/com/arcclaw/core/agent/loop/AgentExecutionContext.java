@@ -13,7 +13,7 @@ import com.arcclaw.core.state.CheckpointStatus;
  * Immutable context for an agent loop execution.
  * Encapsulates all inputs required to start or resume a loop.
  *
- * channelType and channelPlatformId are nullable — only present when
+ * channelType and channelPlatformId are nullable - only present when
  * the loop is driven by an inbound channel message (Telegram, WebSocket, etc.).
  * They are stamped onto the checkpoint inside ApprovalCheckpointManager when
  * the agent pauses for human approval, replacing the post-persist load/save

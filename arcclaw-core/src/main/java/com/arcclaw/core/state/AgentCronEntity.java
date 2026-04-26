@@ -66,7 +66,7 @@ public class AgentCronEntity {
     public String errorReason;
 
     /**
-     * Idempotency key — set BEFORE Telegram send. Provides observability
+     * Idempotency key - set BEFORE Telegram send. Provides observability
      * for at-least-once delivery semantics. If the app crashes before delivery,
      * the job remains ACTIVE and will be retried on next poll.
      */

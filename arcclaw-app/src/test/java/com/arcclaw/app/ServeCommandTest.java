@@ -64,7 +64,7 @@ class ServeCommandTest {
 
     @Test
     void testTelegramRouteAbsentForMockToken() {
-        // mock-token-test triggers placeholder guard in onStart() — route not registered
+        // mock-token-test triggers placeholder guard in onStart() - route not registered
         assertNull(camelContext.getRoute("telegram-bot"),
             "telegram-bot route must be absent for placeholder token");
     }

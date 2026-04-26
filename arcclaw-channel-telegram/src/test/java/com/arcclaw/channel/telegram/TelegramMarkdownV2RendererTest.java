@@ -106,7 +106,7 @@ class TelegramMarkdownV2RendererTest {
     @Test
     void testSeparatorOutput() {
         String output = renderer.render(List.<ReplyNode>of(new ReplyNode.Separator()));
-        assertEquals("———", output);
+        assertEquals("---", output);
     }
 
     @Test

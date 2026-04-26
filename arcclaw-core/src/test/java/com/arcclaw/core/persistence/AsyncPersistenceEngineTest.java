@@ -69,7 +69,7 @@ class AsyncPersistenceEngineTest {
 
         engine.submitTelemetry(event);
 
-        // We do NOT block — just assert the consumer runs it eventually
+        // We do NOT block - just assert the consumer runs it eventually
         assertTrue(latch.await(5, TimeUnit.SECONDS));
     }
 
@@ -289,7 +289,7 @@ class AsyncPersistenceEngineTest {
         engine.submitCritical(nextEvent);
 
         assertTrue(latch.await(5, TimeUnit.SECONDS), 
-            "Second event must be persisted — drain thread must not die after first event failure");
+            "Second event must be persisted - drain thread must not die after first event failure");
         
         // Wait up to 1s for the counter to increment in the drain thread (avoid race)
         long start = System.currentTimeMillis();
@@ -309,6 +309,6 @@ class AsyncPersistenceEngineTest {
                 .filter(t -> t.getName().contains("arcclaw-audit"))
                 .anyMatch(t -> !t.isDaemon());
         
-        assertFalse(anyNonDaemonAuditThread, "Found non-daemon arcclaw-audit threads — all drain threads must be daemon to allow clean JVM exit");
+        assertFalse(anyNonDaemonAuditThread, "Found non-daemon arcclaw-audit threads - all drain threads must be daemon to allow clean JVM exit");
     }
 }

@@ -1,11 +1,11 @@
 ### ═══════════════════════════════════════════════════════════════
-### 03 — SESSION LIFECYCLE
+### 03 - SESSION LIFECYCLE
 ###
 ### Sessions are the top-level container for all agent interactions.
 ### Each session owns:
 ###   - A unique session ID (random UUID via SessionRegistry, Phase 64-B3+)
 ###   - A rolling chat memory store (max 20 messages, SQLite WAL)
-###   - A ReAct checkpoint (StatefulAgentStore — agent loop state)
+###   - A ReAct checkpoint (StatefulAgentStore - agent loop state)
 ###   - A GovernanceLayer budget counter (per-session USD cap)
 ###   - A WorkspaceScoped CDI scope (torn down on DELETE/halt)
 ###
@@ -49,14 +49,14 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-2] Status before any run — NO_ACTIVE_STATE
+### [SESSION-2] Status before any run - NO_ACTIVE_STATE
 # Expect 200: {"sessionId":"...","status":"NO_ACTIVE_STATE","steps":[],"failReason":null}
 GET {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-3] Synchronous run — blocks until agent finishes
+### [SESSION-3] Synchronous run - blocks until agent finishes
 # Expect 200: {"answer":"...","totalInputTokens":N,"totalOutputTokens":N}
 # Audit events: CHECKPOINT_CREATED + LOOP_FINISH
 POST {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/run
@@ -71,21 +71,21 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-4] Status after sync run — COMPLETED
+### [SESSION-4] Status after sync run - COMPLETED
 # Expect 200: {"sessionId":"...","status":"COMPLETED","steps":[...],"failReason":null}
 GET {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-5] List all sessions — sessionA must appear
+### [SESSION-5] List all sessions - sessionA must appear
 # Expect 200: array containing sessionA's ID
 GET {{baseUrl}}/api/v1/sessions
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-6] Run a second goal on same session — chat memory accumulates
+### [SESSION-6] Run a second goal on same session - chat memory accumulates
 POST {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -98,15 +98,15 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-7] Delete session — workspace wiped, CDI scope destroyed
+### [SESSION-7] Delete session - workspace wiped, CDI scope destroyed
 # Expect 200 or 204: success
 DELETE {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-8] Status after delete — expect 404 or NO_ACTIVE_STATE
-# Session is gone — checkpoint lookup finds nothing.
+### [SESSION-8] Status after delete - expect 404 or NO_ACTIVE_STATE
+# Session is gone - checkpoint lookup finds nothing.
 GET {{baseUrl}}/api/v1/sessions/{{sessionA.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
@@ -124,9 +124,9 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-10] run-async — returns 202 immediately, agent runs in background
+### [SESSION-10] run-async - returns 202 immediately, agent runs in background
 # Expect 202: {"sessionId":"...","status":"ACCEPTED"}
-# Do NOT wait for completion — poll SESSION-11 to check progress.
+# Do NOT wait for completion - poll SESSION-11 to check progress.
 POST {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/run-async
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -139,7 +139,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-11] Poll status immediately after async — may be IN_PROGRESS or COMPLETED
+### [SESSION-11] Poll status immediately after async - may be IN_PROGRESS or COMPLETED
 # Poll this repeatedly until status=COMPLETED (or FAILED).
 GET {{baseUrl}}/api/v1/sessions/{{asyncSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
@@ -190,7 +190,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [SESSION-15] Soft reset — wipes ReAct checkpoint, keeps chat memory
+### [SESSION-15] Soft reset - wipes ReAct checkpoint, keeps chat memory
 POST {{baseUrl}}/api/v1/sessions/{{multiSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -273,7 +273,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# FLOW E: ISOLATION — two sessions don't share context
+# FLOW E: ISOLATION - two sessions don't share context
 # ─────────────────────────────────────────────────────────────────
 
 ### [SESSION-20] Create two sessions
@@ -305,7 +305,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [SESSION-22] Session B must NOT know session A's code word
-# Expect: agent answers "I don't know" or similar — NOT "ARCCLAW-ISO-ALPHA".
+# Expect: agent answers "I don't know" or similar - NOT "ARCCLAW-ISO-ALPHA".
 # Chat memories are per-session; workspaces are isolated.
 POST {{baseUrl}}/api/v1/sessions/{{isoB.response.body.sessionId}}/run
 Content-Type: application/json

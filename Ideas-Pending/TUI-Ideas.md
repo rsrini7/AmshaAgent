@@ -1,11 +1,11 @@
-TamboUI — The Modern Alternative
+TamboUI - The Modern Alternative
 A far better fit for Quarkus + TUI in 2026 is TamboUI, announced in February 2026 and co-created by Max Andersen from the Quarkus team and Cédric Champeau. Key advantages over Lanterna:
 
-First-class GraalVM native support — sub-100ms startup, competitive with Go/Rust
-Multiple backends — JLine, Aesh, Panama
+First-class GraalVM native support - sub-100ms startup, competitive with Go/Rust
+Multiple backends - JLine, Aesh, Panama
 PicoCLI integration built-in
-Immediate-mode rendering + CSS layout — declarative Toolkit DSL handles the event loop for you
-Multi-level API — from low-level widgets up to a full declarative toolkit
+Immediate-mode rendering + CSS layout - declarative Toolkit DSL handles the event loop for you
+Multi-level API - from low-level widgets up to a full declarative toolkit
 Works on Java 8+, most ergonomic on modern Java
 TamboUI is essentially Java's answer to Rust's Ratatui or Python's Textual. Given your ArcClaw project uses GraalVM native builds already, TamboUI is the strongly recommended path.
 
@@ -17,7 +17,7 @@ The answer is clear: **use TamboUI alongside PicoCLI, not as a replacement**. Ta
 
 ## Why They're Different Layers
 
-PicoCLI and TamboUI solve different problems at different levels of the stack — they don't compete:
+PicoCLI and TamboUI solve different problems at different levels of the stack - they don't compete:
 
 | Concern | Tool | ArcClaw Role |
 |---|---|---|
@@ -55,7 +55,7 @@ The pattern is: **PicoCLI routes to a command → command launches TamboUI** usi
 ```
 
 ```java
-// Quarkus PicoCLI entrypoint — unchanged
+// Quarkus PicoCLI entrypoint - unchanged
 @QuarkusMain
 @CommandLine.Command(name = "arcclaw", mixinStandardHelpOptions = true,
     subcommands = { MonitorCommand.class, ApproveCommand.class, RunCommand.class })
@@ -88,7 +88,7 @@ public class MonitorCommand implements Runnable {
 ```
 
 ```java
-// TamboUI dashboard — full interactive TUI
+// TamboUI dashboard - full interactive TUI
 import static dev.tamboui.toolkit.Toolkit.*;
 import dev.tamboui.toolkit.app.ToolkitApp;
 
@@ -99,7 +99,7 @@ public class ArcClawDashboard extends ToolkitApp {
     @Override
     protected Element render() {
         return dock(
-            panel("ArcClaw — Agent Monitor",
+            panel("ArcClaw - Agent Monitor",
                 table(agentStatusRows()).headers("Agent", "Status", "Next Run", "Last Tool"),
                 spacer(),
                 paragraph(log.tail(10)).dim()
@@ -119,15 +119,15 @@ public class ArcClawDashboard extends ToolkitApp {
 Given ArcClaw's architecture (agents, HITL approvals, scheduling, multi-LLM), here's what maps naturally to TamboUI's widget library: [byteiota](https://byteiota.com/tamboui-modern-java-terminal-ui-with-graalvm-native/)
 
 - **`arcclaw monitor`** → Full-screen agent status table (TamboUI `Table` widget) + live tool execution log (`Paragraph` with tail scroll)
-- **`arcclaw approve`** → HITL interactive approval queue — list with `[A]pprove / [R]eject / [V]iew` key bindings via `@OnAction`
+- **`arcclaw approve`** → HITL interactive approval queue - list with `[A]pprove / [R]eject / [V]iew` key bindings via `@OnAction`
 - **`arcclaw schedule`** → Cron schedule viewer with `Gauge` widgets showing last/next execution per agent
-- **`arcclaw run --agent X --interactive`** → PicoCLI flags parsed first, then TamboUI inline progress display (`Inline Toolkit` mode — npm-style progress, no full-screen takeover)
+- **`arcclaw run --agent X --interactive`** → PicoCLI flags parsed first, then TamboUI inline progress display (`Inline Toolkit` mode - npm-style progress, no full-screen takeover)
 - **`arcclaw config`** → TamboUI `Form` DSL with validation for configuring LLM endpoints, Telegram tokens, DB paths
 
 ***
 
 ## Native Image Consideration
 
-Since ArcClaw already targets GraalVM native, TamboUI's first-class native support is the key differentiator here. The `tamboui-picocli` module ships its own GraalVM metadata so you don't need to write manual `reflect-config.json` entries for the TUI layer. The startup target you can expect: **< 100ms** — same as your Quarkus native CLI binary today. [tamboui](https://tamboui.dev/docs/main/)
+Since ArcClaw already targets GraalVM native, TamboUI's first-class native support is the key differentiator here. The `tamboui-picocli` module ships its own GraalVM metadata so you don't need to write manual `reflect-config.json` entries for the TUI layer. The startup target you can expect: **< 100ms** - same as your Quarkus native CLI binary today. [tamboui](https://tamboui.dev/docs/main/)
 
 The only caveat: TamboUI is currently on **snapshot builds** (0.2.0-SNAPSHOT via OSSRH) with APIs marked as potentially unstable. For production ArcClaw use, pin to a specific commit hash or wait for a stable release before building core HITL flows on it. [byteiota](https://byteiota.com/tamboui-modern-java-terminal-ui-with-graalvm-native/)

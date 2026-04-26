@@ -2,11 +2,11 @@
 
 | Category | Items | Est. Effort | Target Wave |
 | :--- | :--- | :--- | :--- |
-| **Tier 1 — Invariant-Critical** | 3 items (C3, IM4, LD1 — single delivery) | 2 weeks | Wave 3c |
+| **Tier 1 - Invariant-Critical** | 3 items (C3, IM4, LD1 - single delivery) | 2 weeks | Wave 3c |
 
 ---
 
-## **Tier 1 — Invariant-Critical (MUST Violations)**
+## **Tier 1 - Invariant-Critical (MUST Violations)**
 
 > These address active MUST-level invariant violations or gaps that cause production fragility.
 
@@ -23,13 +23,13 @@
 
 **What to Do:**
 1. Create `LlmProviderException` sealed hierarchy in `arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/error/`:
-    * `LlmRateLimitException` — 429 / rate limit errors
-    * `LlmContextOverflowException` — context window exceeded
-    * `LlmContentFilterException` — content policy violation
-    * `LlmAuthenticationException` — invalid API key / 401
-    * `LlmServiceUnavailableException` — 503 / provider down
-    * `LlmMalformedResponseException` — unparseable LLM output
-2. Create `LlmExceptionClassifier` — single class that consolidates ALL string-parsing heuristics from the 3 affected files into one `classify(Throwable) -> LlmProviderException` method.
+    * `LlmRateLimitException` - 429 / rate limit errors
+    * `LlmContextOverflowException` - context window exceeded
+    * `LlmContentFilterException` - content policy violation
+    * `LlmAuthenticationException` - invalid API key / 401
+    * `LlmServiceUnavailableException` - 503 / provider down
+    * `LlmMalformedResponseException` - unparseable LLM output
+2. Create `LlmExceptionClassifier` - single class that consolidates ALL string-parsing heuristics from the 3 affected files into one `classify(Throwable) -> LlmProviderException` method.
 3. Replace all `catch (Exception e) { if (e.getMessage().contains("rate")) ... }` patterns with typed `catch (LlmRateLimitException e) { ... }` blocks.
 
 **Invariants Referenced:** §20.2, §9.1, §3.5
@@ -49,11 +49,11 @@
 | File | Lines | Path |
 | :--- | :--- | :--- |
 | `LangChainReasoningEngine.java` | 458 | `arcclaw-core/.../agent/reasoning/` |
-| `AgentChatModelProvider.java` | — | `arcclaw-core/.../agent/reasoning/` |
+| `AgentChatModelProvider.java` | - | `arcclaw-core/.../agent/reasoning/` |
 
 **What to Do:**
-1. Define `LlmProviderPort` interface in `arcclaw-core` — `nextStep(LlmRequest) -> LlmResponse`.
-2. Create `LangChain4jLlmAdapter` implementing `LlmProviderPort` — wraps `ChatModel` + applies `LlmExceptionClassifier`.
+1. Define `LlmProviderPort` interface in `arcclaw-core` - `nextStep(LlmRequest) -> LlmResponse`.
+2. Create `LangChain4jLlmAdapter` implementing `LlmProviderPort` - wraps `ChatModel` + applies `LlmExceptionClassifier`.
 3. `LangChainReasoningEngine` injects `LlmProviderPort` instead of `ChatModel`.
 4. Provider-specific factories remain in `arcclaw-app` (adapters).
 
@@ -64,27 +64,27 @@
 * [ ] `LlmProviderPort` interface exists with clear contract.
 * [ ] Adapter module wraps LangChain4j; swapping to another SDK = new adapter only.
 
-The plan is **very solid** — directionally correct and architecturally grounded. Here's the full review against your codebase and invariants:
+The plan is **very solid** - directionally correct and architecturally grounded. Here's the full review against your codebase and invariants:
 
 ***
 
-## ✅ T1-1: LLM Error Type Hierarchy (C3 + LD1) — Strong Plan
+## ✅ T1-1: LLM Error Type Hierarchy (C3 + LD1) - Strong Plan
 
 ### What's confirmed in the actual code
 
 The violation is **worse than described** in the plan. `LangChainReasoningEngine` alone has at least **3 separate layers** of string-parsing heuristics: 
 
 ```java
-// Layer 1 — private helper methods
+// Layer 1 - private helper methods
 private boolean isRateLimitError(String message) { 
     return lower.contains("ratelimitexceeded") || lower.contains("tokens per minute") 
     || lower.contains("tokens per day") || lower.contains("429") ... 
 }
 
-// Layer 2 — cause-chain walker
+// Layer 2 - cause-chain walker
 private String findRateLimitMessage(Throwable e) { ... while (t != null) ... }
 
-// Layer 3 — ad-hoc inline checks
+// Layer 3 - ad-hoc inline checks
 if (msg.contains("tool_use_failed") || msg.contains("was not in request.tools"))
 if (msg.contains("rate limit")) // in IntentClassificationHandler catch block
 if (e.statusCode() == 429 && e.getMessage().contains("rate limit")) // HttpException handler
@@ -96,8 +96,8 @@ The `IntentClassificationHandler` also has its own `429`/`rate limit` string-che
 
 | Gap | Detail |
 |---|---|
-| **6th exception subtype** | `LlmToolCallException` is missing from the hierarchy — `tool_use_failed` / `was not in request.tools` is a distinct failure category from `LlmMalformedResponseException` |
-| **Schema validation errors** | `isSchemaValidationError()` (`"tool call validation failed"`, `"json schema"`, `"invalidtool"`) currently throws `InvalidRequestException` directly — this needs to map to `LlmMalformedResponseException` and be classified too |
+| **6th exception subtype** | `LlmToolCallException` is missing from the hierarchy - `tool_use_failed` / `was not in request.tools` is a distinct failure category from `LlmMalformedResponseException` |
+| **Schema validation errors** | `isSchemaValidationError()` (`"tool call validation failed"`, `"json schema"`, `"invalidtool"`) currently throws `InvalidRequestException` directly - this needs to map to `LlmMalformedResponseException` and be classified too |
 | **`findRateLimitMessage` walk** | The cause-chain walker must move entirely into `LlmExceptionClassifier.classify(Throwable)`, not just the leaf message check. The `ExceptionUtils.getRootCause` call in the second catch block also needs consolidation   |
 | **Provider coverage for tests** | OpenRouter has 4 distinct rate-limit patterns (`ratelimitexceeded`, `perrequestlimit`, `free tier limit`, `x-ratelimit`); Groq has 5 (`tpm`, `tpd`, `tokens per minute`, `tokens per day`, `ratelimitexceeded`). Make sure all are enumerated in unit tests |
 
@@ -109,13 +109,13 @@ The `IntentClassificationHandler` also has its own `429`/`rate limit` string-che
 
 ***
 
-## ✅ T1-2: LLM Provider Port (IM4) — Also Strong, with One Critical Constraint
+## ✅ T1-2: LLM Provider Port (IM4) - Also Strong, with One Critical Constraint
 
 ### What's confirmed in the actual code
 
 `LangChainReasoningEngine` directly `@Inject`s `ChatModel` and builds `ChatRequest`/`ChatResponse` from LangChain4j types inline.  `ChatModelProducer` also wires `AgentChatModelProvider` implementations (Groq, NVIDIA, OpenAI, OpenRouter, Ollama factories) directly into the `ChatModel` CDI bean. 
 
-The `ReasoningEngine` interface at `arcclaw-core` **is** your owned abstraction — the problem is that its implementation (`LangChainReasoningEngine`) sits in core and bleeds LangChain4j types inward. 
+The `ReasoningEngine` interface at `arcclaw-core` **is** your owned abstraction - the problem is that its implementation (`LangChainReasoningEngine`) sits in core and bleeds LangChain4j types inward. 
 
 ### One structural decision to make explicitly
 
@@ -134,7 +134,7 @@ arcclaw-app          →  LangChain4jLlmAdapter (wraps ChatModel + applies LlmEx
                          ChatModelProducer moves here (it's already wiring config)
 ```
 
-⚠️ **Critical constraint from §20.1** (Implementation Proximity): If `LlmProviderPort`'s only implementation is `LangChain4jLlmAdapter` in `arcclaw-app`, the `arcclaw-core` build will fail CDI validation (`UnsatisfiedResolutionException`) unless you use `@Vetoed` on a core-internal stub or mark the injection point `@Inject @Any`. **Verify your module test setup handles this** — this exact trap is documented in your own invariants. 
+⚠️ **Critical constraint from §20.1** (Implementation Proximity): If `LlmProviderPort`'s only implementation is `LangChain4jLlmAdapter` in `arcclaw-app`, the `arcclaw-core` build will fail CDI validation (`UnsatisfiedResolutionException`) unless you use `@Vetoed` on a core-internal stub or mark the injection point `@Inject @Any`. **Verify your module test setup handles this** - this exact trap is documented in your own invariants. 
 
 ### Plan addition needed
 
@@ -161,7 +161,7 @@ If `LlmRequest` contains LangChain4j `ChatMessage`/`ToolSpecification` directly,
 
 ## ✅ Sequencing & Dependency is Correct
 
-T1-1 before T1-2 is the right order — `LlmExceptionClassifier` must exist before `LangChain4jLlmAdapter` can wrap it. 
+T1-1 before T1-2 is the right order - `LlmExceptionClassifier` must exist before `LangChain4jLlmAdapter` can wrap it. 
 
 ***
 
@@ -171,11 +171,11 @@ Run your §19 checklist mentally against this phase:
 
 | Invariant | Impact on P97 |
 |---|---|
-| **§5.8 / §5.9** | No new `@Transactional` enters the reasoning path — `LlmProviderPort.nextStep()` is in the transaction-free zone. Confirm `LangChain4jLlmAdapter` has **no** `@Transactional` annotation |
-| **§20.2** | Core goal of T1-2 — verify with `grep -r "dev.langchain4j.model.chat.ChatModel" arcclaw-core/` post-refactor |
+| **§5.8 / §5.9** | No new `@Transactional` enters the reasoning path - `LlmProviderPort.nextStep()` is in the transaction-free zone. Confirm `LangChain4jLlmAdapter` has **no** `@Transactional` annotation |
+| **§20.2** | Core goal of T1-2 - verify with `grep -r "dev.langchain4j.model.chat.ChatModel" arcclaw-core/` post-refactor |
 | **§1.2 / §20.1** | Adapter in `arcclaw-app`, CDI resolution must be verified in module-level test |
 | **§3.5** | `BudgetExceededException` must still propagate through the port boundary without being swallowed by the adapter's exception translation |
-| **§3.2** | Tool invocation path unchanged — only the LLM call abstraction changes |
+| **§3.2** | Tool invocation path unchanged - only the LLM call abstraction changes |
 | **§6.1** | New sealed hierarchy needs `@RegisterForReflection` if used in native mode |
 
 ***
@@ -184,7 +184,7 @@ Run your §19 checklist mentally against this phase:
 
 **P97 plan is approved to proceed.** Before coding, settle two things:
 1. Add `LlmToolCallException` as a 7th subtype in T1-1 (or merge into `LlmMalformedResponseException` with a clear subcase)
-2. Decide whether `LlmRequest`/`LlmResponse` own their message types or wrap LangChain4j base types — document the decision explicitly in the invariants doc before committing
+2. Decide whether `LlmRequest`/`LlmResponse` own their message types or wrap LangChain4j base types - document the decision explicitly in the invariants doc before committing
 
 ---
 
@@ -200,16 +200,16 @@ Reading `Architecture_Invariants.md` directly, §20.1 and §20.2 say the **oppos
 
 > **§20.2:** *"When moving routing logic into arcclaw-core, **all required LLM provider extensions MUST also be added to arcclaw-core**"*
 
-My earlier T1-2 recommendation to move `*ProviderFactory` classes to `arcclaw-app` directly contradicts these invariants. The invariants were written **after** experiencing a real `UnsatisfiedResolutionException` failure — they encode a hard-won lesson, not a style preference. 
+My earlier T1-2 recommendation to move `*ProviderFactory` classes to `arcclaw-app` directly contradicts these invariants. The invariants were written **after** experiencing a real `UnsatisfiedResolutionException` failure - they encode a hard-won lesson, not a style preference. 
 
 ***
 
 ## Verdict: Proceed with T1-1 Only. T1-2 Needs Redesign Before Coding
 
-### T1-1 — ✅ Proceed as-is
+### T1-1 - ✅ Proceed as-is
 The `LlmProviderException` sealed hierarchy + `LlmExceptionClassifier` extraction is clean, respects all invariants, and has no module boundary implications. Code it. 
 
-### T1-2 — 🔴 Do NOT code the current plan. Redesign first.
+### T1-2 - 🔴 Do NOT code the current plan. Redesign first.
 
 ***
 
@@ -223,7 +223,7 @@ arcclaw-core/agent/reasoning/
 │   ├── LlmProviderPort.java        ← new interface (owned abstraction)
 │   ├── LlmRequest.java             ← new record
 │   └── LlmResponse.java            ← new record
-├── LangChain4jLlmAdapter.java      ← NEW — stays in arcclaw-core (§20.1)
+├── LangChain4jLlmAdapter.java      ← NEW - stays in arcclaw-core (§20.1)
 ├── AgentChatModelProvider.java     ← stays (existing SPI)
 ├── ChatModelProducer.java          ← stays (existing)
 ├── GroqProviderFactory.java        ← stays in arcclaw-core (§20.2)
@@ -242,21 +242,21 @@ arcclaw-core/agent/reasoning/
 
 ### What T1-2 actually achieves (correctly scoped)
 
-The real benefit of T1-2 is not module relocation — it is **abstraction insertion**:
+The real benefit of T1-2 is not module relocation - it is **abstraction insertion**:
 
-1. `LangChainReasoningEngine` stops calling `chatModel.chat(request)` directly and instead calls `llmProviderPort.nextStep(LlmRequest)` — **one seam for testing and future SDK swap**
+1. `LangChainReasoningEngine` stops calling `chatModel.chat(request)` directly and instead calls `llmProviderPort.nextStep(LlmRequest)` - **one seam for testing and future SDK swap**
 2. `LangChain4jLlmAdapter` becomes the **single place** that translates `LlmRequest → ChatRequest` and `ChatResponse → LlmResponse`, and is **also the only place** `LlmExceptionClassifier.classify()` is called
-3. `LangChainReasoningEngine` catches only `LlmProviderException` subtypes, never raw LangChain4j exceptions — **§20.2's intent is preserved internally** even though the classes physically stay in `arcclaw-core`
+3. `LangChainReasoningEngine` catches only `LlmProviderException` subtypes, never raw LangChain4j exceptions - **§20.2's intent is preserved internally** even though the classes physically stay in `arcclaw-core`
 
 ### Updated Done-When for T1-2
 
 - [ ] `LlmProviderPort` interface exists in `arcclaw-core/agent/reasoning/port/`
 - [ ] `LangChainReasoningEngine` injects `LlmProviderPort`, never `ChatModel` directly
-- [ ] `LangChain4jLlmAdapter` is `@ApplicationScoped` in `arcclaw-core` — CDI resolution is unambiguous (§20.1)
+- [ ] `LangChain4jLlmAdapter` is `@ApplicationScoped` in `arcclaw-core` - CDI resolution is unambiguous (§20.1)
 - [ ] All `*ProviderFactory` classes and `ChatModelProducer` remain in `arcclaw-core` (§20.2)
 - [ ] `LangChain4jLlmAdapter.nextStep()` calls `LlmExceptionClassifier.classify()` and rethrows as `LlmProviderException` subtypes
-- [ ] `arcclaw-core` imports of `dev.langchain4j.model.chat.ChatModel` exist only in `LangChain4jLlmAdapter` and `ChatModelProducer` — not in `LangChainReasoningEngine`
-- [ ] §19 checklist passes — no `@Transactional` on the adapter, no transaction-free zone violations
+- [ ] `arcclaw-core` imports of `dev.langchain4j.model.chat.ChatModel` exist only in `LangChain4jLlmAdapter` and `ChatModelProducer` - not in `LangChainReasoningEngine`
+- [ ] §19 checklist passes - no `@Transactional` on the adapter, no transaction-free zone violations
 
 ***
 
@@ -264,7 +264,7 @@ The real benefit of T1-2 is not module relocation — it is **abstraction insert
 
 | Item | Action |
 |---|---|
-| **T1-1** | ✅ Code as planned — sealed hierarchy + `LlmExceptionClassifier` in `arcclaw-core/.../reasoning/error/` |
+| **T1-1** | ✅ Code as planned - sealed hierarchy + `LlmExceptionClassifier` in `arcclaw-core/.../reasoning/error/` |
 | **T1-2** | 🔄 Re-scoped: introduce `LlmProviderPort` + `LangChain4jLlmAdapter` **inside `arcclaw-core`**. No module moves. Boundary is an abstraction seam, not a Maven boundary. |
 | **Invariants doc** | Add a note under §20.2: *"T1-2 boundary is an abstraction seam within `arcclaw-core`, not a Maven module split. `LangChain4jLlmAdapter` MUST remain in `arcclaw-core` per §20.1."* |
 
@@ -321,7 +321,7 @@ I'm making these precise updates now:
 2. **`EngineStepHandler.java`**:
    - I will replace the messy error logic (e.g., checking `e instanceof InvalidRequestException` and using `.contains("not in request.tools")`) to instead use typed catch blocks like `catch (LlmToolCallException e)`.
 
-*(SelfCorrectionRetryManager does not actually contain any `.contains()` checks in the provided codebase—it uses `StructuredOutputException`. I'll safely leave it untouched as doing otherwise would violate invariants).*
+*(SelfCorrectionRetryManager does not actually contain any `.contains()` checks in the provided codebase-it uses `StructuredOutputException`. I'll safely leave it untouched as doing otherwise would violate invariants).*
 
 I've got the exact changes ready, but since time is short and the changes are large and nuanced, please do the following:
 
@@ -417,12 +417,12 @@ This diff addresses all 4 issues flagged in the previous review. Here's the fina
 |---|---|
 | Dead `not in request.tools` duplicate block | ✅ Removed cleanly |
 | `"errors"` false-positive in `isSchemaValidationError` | ✅ Removed |
-| `model_not_found` / `does not exist` fall-through without returning | ✅ Fixed — now returns `LlmAuthenticationException` |
+| `model_not_found` / `does not exist` fall-through without returning | ✅ Fixed - now returns `LlmAuthenticationException` |
 | `LlmProviderPort` missing doc comment for LangChain4j type decision | ✅ Added with correct rationale |
 
 ***
 
-## ✅ `EngineStepHandler` — Clean
+## ✅ `EngineStepHandler` - Clean
 
 The branch structure is now correct and non-overlapping: 
 
@@ -436,19 +436,19 @@ classify(e) →
 
 No dead code, no duplicate branches, no raw LangChain4j exception types. The `isToolUseFailed` derivation from `rawError` (which is `classified.getMessage()`) is correct. 
 
-## ✅ `LlmExceptionClassifier` — Clean
+## ✅ `LlmExceptionClassifier` - Clean
 
-- `"errors"` removed from `isSchemaValidationError` — 5 specific patterns remain, all correctly scoped 
-- `model_not_found` and `does not exist` now return `LlmAuthenticationException` alongside `invalid_api_key` — the fix is correct. These are all terminal configuration errors, same `FailureCategory.SYSTEM_ERROR` semantics 
+- `"errors"` removed from `isSchemaValidationError` - 5 specific patterns remain, all correctly scoped 
+- `model_not_found` and `does not exist` now return `LlmAuthenticationException` alongside `invalid_api_key` - the fix is correct. These are all terminal configuration errors, same `FailureCategory.SYSTEM_ERROR` semantics 
 - Cause-chain walk structure is sound: `InvalidRequestException`/400 → schema → tool call → auth → HTTP status → rate limit string → advance chain
 
-## ✅ `LlmProviderPort` — Clean
+## ✅ `LlmProviderPort` - Clean
 
 The doc comment is precise: it names the trade-off, explains the reason, and flags it for future extraction without being prescriptive. 
 
-## ✅ `LangChainReasoningEngine` — Clean
+## ✅ `LangChainReasoningEngine` - Clean
 
-Both call sites (`nextStep` for primary reasoning and for structured output) updated. `BudgetWarningException`/`BudgetExceededException` re-throw is preserved before `LlmProviderException` handling in the structured output path — §3.5 intact. All three old private methods (`isSchemaValidationError`, `isRateLimitError`, `findRateLimitMessage`) fully deleted.
+Both call sites (`nextStep` for primary reasoning and for structured output) updated. `BudgetWarningException`/`BudgetExceededException` re-throw is preserved before `LlmProviderException` handling in the structured output path - §3.5 intact. All three old private methods (`isSchemaValidationError`, `isRateLimitError`, `findRateLimitMessage`) fully deleted.
 
 ***
 
@@ -475,7 +475,7 @@ public class PlaywrightPageRunner {
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
 
-    // Fires after startup, on a background thread — doesn't block main
+    // Fires after startup, on a background thread - doesn't block main
     void onStart(@ObservesAsync StartupEvent ev) {
         try {
             log.info("Initializing Playwright in background...");
@@ -511,13 +511,13 @@ public class PlaywrightPageRunner {
 
 ## Playwright Threading Note
 
-Playwright Java is **not thread-safe** — `Playwright`, `Browser`, `Page` instances must all be used on the thread that created them.  Whichever option you choose, make sure `fetchPage` calls run on the same thread that initialized the instance. Using a dedicated single-thread executor or virtual thread per invocation (creating a new `Playwright.create()` per call) are both valid patterns. If you're already pinning to one thread, you're fine. [playwright](https://playwright.dev/java/docs/multithreading)
+Playwright Java is **not thread-safe** - `Playwright`, `Browser`, `Page` instances must all be used on the thread that created them.  Whichever option you choose, make sure `fetchPage` calls run on the same thread that initialized the instance. Using a dedicated single-thread executor or virtual thread per invocation (creating a new `Playwright.create()` per call) are both valid patterns. If you're already pinning to one thread, you're fine. [playwright](https://playwright.dev/java/docs/multithreading)
 
 ***
 
 ## Recommendation
 
-**(`@ObservesAsync`)** is the best fit for ArcClaw — it keeps the browser warm without delaying startup, and the `CompletableFuture` gate ensures correctness if a tool call races with init.
+**(`@ObservesAsync`)** is the best fit for ArcClaw - it keeps the browser warm without delaying startup, and the `CompletableFuture` gate ensures correctness if a tool call races with init.
 
 ---
 
@@ -543,8 +543,8 @@ Here's the full updated file. Here's a summary of every change made and why:
 
 ## Changes vs. Your Original
 
-### 🔴 Threading fix — `newSingleThreadExecutor`
-Replaced `volatile Browser/Playwright` fields + `synchronized run()` with a dedicated `ExecutorService playwrightThread`. All Playwright work — init, `doRun`, `refreshBrowser`, `destroy` — is dispatched onto this single thread. This is the correct way to honour Playwright Java's thread affinity requirement. [playwright](https://playwright.dev/java/docs/multithreading)
+### 🔴 Threading fix - `newSingleThreadExecutor`
+Replaced `volatile Browser/Playwright` fields + `synchronized run()` with a dedicated `ExecutorService playwrightThread`. All Playwright work - init, `doRun`, `refreshBrowser`, `destroy` - is dispatched onto this single thread. This is the correct way to honour Playwright Java's thread affinity requirement. [playwright](https://playwright.dev/java/docs/multithreading)
 
 ```java
 private final ExecutorService playwrightThread =
@@ -556,32 +556,32 @@ private final ExecutorService playwrightThread =
 ```
 
 ### 🔴 Shutdown hook removed
-`Runtime.getRuntime().addShutdownHook` was deleted entirely. `@PreDestroy` is the authoritative Quarkus shutdown path — the hook would race with it and cause a double-close. `destroy()` now dispatches the close onto `playwrightThread` and then calls `shutdown()` + `awaitTermination(10s)` for a clean drain.
+`Runtime.getRuntime().addShutdownHook` was deleted entirely. `@PreDestroy` is the authoritative Quarkus shutdown path - the hook would race with it and cause a double-close. `destroy()` now dispatches the close onto `playwrightThread` and then calls `shutdown()` + `awaitTermination(10s)` for a clean drain.
 
 ### ⚠️ `awaitReady()` exception unwrapping
 `ExecutionException`, `TimeoutException`, and `InterruptedException` are now caught and handled individually with proper messages and `Thread.currentThread().interrupt()` on the interrupted path.
 
 ### ⚠️ `refreshBrowser()` guard
-Replaced `initialized.get()` (which was `true` even on failed init) with `initFuture.isDone() && !initFuture.isCompletedExceptionally()` — correctly skips refresh after a failed startup.
+Replaced `initialized.get()` (which was `true` even on failed init) with `initFuture.isDone() && !initFuture.isCompletedExceptionally()` - correctly skips refresh after a failed startup.
 
 ### ⚠️ `run()` public method
 `synchronized` keyword removed (thread safety is now the executor's job). Wraps the `playwrightThread.submit().get()` call with proper `ExecutionException` unwrapping, `TimeoutException`, and `InterruptedException` handling. `RUN_FUTURE_BUFFER_MS = 15_000L` gives Playwright's own timeout time to fire before the `Future.get()` timeout does.
 
 ### Cleanup
-- `AtomicBoolean initialized` removed — no longer needed
-- `volatile` removed from `playwright`/`browser` fields — no longer accessed cross-thread
+- `AtomicBoolean initialized` removed - no longer needed
+- `volatile` removed from `playwright`/`browser` fields - no longer accessed cross-thread
 - `resolvePlaywrightEnv()` extracted as a named private method
 - `handleInitFailure()` extracted to keep `onStart` clean
 
 ---
 
-Only `PlaywrightPageRunner.java` changed — `PlaywrightBrowserTool.java` is untouched. Here's exactly what changed and why:
+Only `PlaywrightPageRunner.java` changed - `PlaywrightBrowserTool.java` is untouched. Here's exactly what changed and why:
 
 ***
 
-## Changes — Targeted and Minimal
+## Changes - Targeted and Minimal
 
-### 🔴 Root cause fix — proportional sub-budgets
+### 🔴 Root cause fix - proportional sub-budgets
 
 **Before (hardcoded):**
 ```java
@@ -610,18 +610,18 @@ The buffer only needs to cover thread-scheduling jitter, not the entire NETWORKI
 
 ### ⚠️ `waitForPageReady()` extracted as named method
 
-The NETWORKIDLE/LOAD wait logic is now in its own method with a clear Javadoc explaining *why* the proportional budget exists — specifically calling out `quarkus.io` and `spring.io` as JS-heavy SPAs that rarely reach NETWORKIDLE.
+The NETWORKIDLE/LOAD wait logic is now in its own method with a clear Javadoc explaining *why* the proportional budget exists - specifically calling out `quarkus.io` and `spring.io` as JS-heavy SPAs that rarely reach NETWORKIDLE.
 
 ### ⚠️ `awaitReady()` fast-path added
 
 ```java
-// Fast path — already initialized, skip Future.get() overhead
+// Fast path - already initialized, skip Future.get() overhead
 if (initFuture.isDone() && !initFuture.isCompletedExceptionally()) return;
 ```
 
 Every hot-path `run()` call after startup now returns from `awaitReady()` immediately without touching `Future.get()`.
 
-### Minor — `page.setDefaultTimeout(timeoutMs)` added
+### Minor - `page.setDefaultTimeout(timeoutMs)` added
 
 ```java
 page.setDefaultNavigationTimeout(timeoutMs);
@@ -640,35 +640,35 @@ initDone=false initFailed=false browser=NULL
 **Init has not completed yet when the tool fires.** `@ObservesAsync StartupEvent` is being dispatched, but the `playwright-worker` thread hasn't finished launching Chromium by the time the first user message arrives. The `awaitReady()` slow-path then blocks for 60 seconds waiting for an init that is either:
 
 1. **Still running** (Chromium launch is slow on this machine/environment), or
-2. **Stuck** — the `playwright-worker` thread is queued behind something else
+2. **Stuck** - the `playwright-worker` thread is queued behind something else
 
-The smoking gun: `initDone=false` AND `initFailed=false` means init is **in-flight but not yet done**. This is a **startup race** — the tool fires before Chromium is ready.
+The smoking gun: `initDone=false` AND `initFailed=false` means init is **in-flight but not yet done**. This is a **startup race** - the tool fires before Chromium is ready.
 
 ***
 
-## Root Cause — `@ObservesAsync StartupEvent` fires too late
+## Root Cause - `@ObservesAsync StartupEvent` fires too late
 
 `@ObservesAsync` dispatches the event on a separate CDI thread from the startup sequence. In jar mode under load (Telegram polling starts immediately), the first user message can arrive and route to `browser_navigate` **before** the `playwright-worker` thread finishes `playwright.chromium().launch()`.
 
-The `awaitReady()` slow-path correctly blocks on `initFuture.get(60s)` — but Chromium launch itself is taking **more than 60 seconds** on first cold start in your environment. That's why `initDone` is still `false` after 60 seconds.
+The `awaitReady()` slow-path correctly blocks on `initFuture.get(60s)` - but Chromium launch itself is taking **more than 60 seconds** on first cold start in your environment. That's why `initDone` is still `false` after 60 seconds.
 
 ***
 
-## The real fix — switch from `@ObservesAsync` to `@Observes` (synchronous)
+## The real fix - switch from `@ObservesAsync` to `@Observes` (synchronous)
 
 `@Observes StartupEvent` blocks Quarkus startup until init completes. The app won't accept traffic until Playwright is ready. This is the correct model for a required infrastructure component.
 
 The only change needed is in `PlaywrightPageRunner.java`:
 
 ```java
-// BEFORE — async, races with first request
+// BEFORE - async, races with first request
 void onStart(@ObservesAsync StartupEvent ev) {
 
-// AFTER — synchronous, startup blocks until Playwright is ready
+// AFTER - synchronous, startup blocks until Playwright is ready
 void onStart(@Observes StartupEvent ev) {
 ```
 
-But with synchronous observation, you **cannot** dispatch to `playwrightThread` via `submit()` and return — that would deadlock (startup thread waits on Future, Quarkus holds startup lock). Instead, init must run directly on the startup thread, and then hand off ownership to `playwrightThread` for all subsequent calls.
+But with synchronous observation, you **cannot** dispatch to `playwrightThread` via `submit()` and return - that would deadlock (startup thread waits on Future, Quarkus holds startup lock). Instead, init must run directly on the startup thread, and then hand off ownership to `playwrightThread` for all subsequent calls.
 
 ---
 
@@ -677,7 +677,7 @@ But with synchronous observation, you **cannot** dispatch to `playwrightThread` 
 **3 new `@ConfigProperty` fields** at the top of the class (add alongside the existing `enabled`/`headless` fields):
 
 ```yaml
-# application.yaml — add under playwright:
+# application.yaml - add under playwright:
 playwright:
   min-content-chars: 200   # min chars for selector result to be accepted
   min-filter-chars: 15     # min chars per individual text node
@@ -690,11 +690,11 @@ playwright:
 |---|---|---|
 | `s.length() > 10` (LLM selector filter) | `s.length() > minFilterChars` | Configurable noise filter |
 | `result.length() > 50` (LLM selector accept) | `result.length() > minContentChars` | Rejects thin results like `"Blog"` |
-| No wait before `allInnerTexts()` | `page.waitForSelector(sel, ...selectorWaitMs)` | SPAs mount elements after NETWORKIDLE — without this, `allInnerTexts()` returns empty even when the element exists in the DOM but hasn't rendered yet |
+| No wait before `allInnerTexts()` | `page.waitForSelector(sel, ...selectorWaitMs)` | SPAs mount elements after NETWORKIDLE - without this, `allInnerTexts()` returns empty even when the element exists in the DOM but hasn't rendered yet |
 | `s.length() > 15` (fallback filter) | `s.length() > minFilterChars` | Configurable |
 | `result.length() > 200` (fallback accept) | `result.length() > minContentChars` | Configurable |
 
-The `waitForSelector` is placed **between** the selector string definition and the `allInnerTexts()` call — its `TimeoutError` is caught by the existing `catch (Exception ignored)` so a missing selector just moves to the next one in the chain without interrupting the loop.
+The `waitForSelector` is placed **between** the selector string definition and the `allInnerTexts()` call - its `TimeoutError` is caught by the existing `catch (Exception ignored)` so a missing selector just moves to the next one in the chain without interrupting the loop.
 
 ---
 
@@ -846,13 +846,13 @@ These changes significantly improve the robustness profile for models like `llam
 
 ---
 
-## Tier 2 Architecture Hardening — Review
+## Tier 2 Architecture Hardening - Review
 
 ### T2-1: MCP Schema Derivation ✅ Sound, with one catch
 
-The approach is correct — derive from `AgentTool.parametersSchema()` at registration time instead of hand-writing schema objects. However, §21.10 must be respected: MCP requests must operate within **isolated sessions linked to specific client IDs**, and role assignment must dynamically reflect capability headers. The schema fix must not accidentally share a single `McpToolBridge` descriptor cache across tenants. If the bridge caches the derived schema in a static or `@ApplicationScoped` field keyed only by tool name (not by client session), you get schema cross-contamination. Ensure the `parametersSchema()` result is computed per-registration and not re-derived in a per-request path (it's a `JsonObjectSchema` object, not per-session, so one `static final` cache keyed by tool name is fine — just don't cache per-session-role overrides in the same map).
+The approach is correct - derive from `AgentTool.parametersSchema()` at registration time instead of hand-writing schema objects. However, §21.10 must be respected: MCP requests must operate within **isolated sessions linked to specific client IDs**, and role assignment must dynamically reflect capability headers. The schema fix must not accidentally share a single `McpToolBridge` descriptor cache across tenants. If the bridge caches the derived schema in a static or `@ApplicationScoped` field keyed only by tool name (not by client session), you get schema cross-contamination. Ensure the `parametersSchema()` result is computed per-registration and not re-derived in a per-request path (it's a `JsonObjectSchema` object, not per-session, so one `static final` cache keyed by tool name is fine - just don't cache per-session-role overrides in the same map).
 
-**Also check:** §6.7 — `McpToolBridge` is in `arcclaw-mcp`; if the bridge introduces new DTOs for JSON-RPC payloads, a `ReflectionConfig` class is needed in `arcclaw-mcp/.../config/` for GraalVM native.
+**Also check:** §6.7 - `McpToolBridge` is in `arcclaw-mcp`; if the bridge introduces new DTOs for JSON-RPC payloads, a `ReflectionConfig` class is needed in `arcclaw-mcp/.../config/` for GraalVM native.
 
 ***
 
@@ -862,13 +862,13 @@ The Micrometer counter names proposed are good. Two invariant checks:
 
 **§9.3 (SHOULD):** The invariants already define `arcclaw.agent.tool.calls` (§7.17) and the sentinel step must NOT increment an extra parallel counter. Any new `arcclaw.agent.loop.failure` counter placed in `AgentStateMachineRunner` must not double-count a failure that is also counted in `MetricsAgentObserver`. The safest placement is in `AgentLoop.runWithRole()` catch block, not inside the state machine runner itself.
 
-**§5.9 + §3.1 boundary rule:** The `arcclaw.agent.orphaned.sweep` counter belongs in `WorkspaceManager.terminateSession()` or the GC sweep scheduler, never inside a `@Transactional(REQUIRED)` context (§5.12 — `pollAndDispatch` is `NOT_SUPPORTED`). Placing a Micrometer counter call inside a transaction is harmless, but placing it after an LLM call inside `@Transactional` would violate §5.9.
+**§5.9 + §3.1 boundary rule:** The `arcclaw.agent.orphaned.sweep` counter belongs in `WorkspaceManager.terminateSession()` or the GC sweep scheduler, never inside a `@Transactional(REQUIRED)` context (§5.12 - `pollAndDispatch` is `NOT_SUPPORTED`). Placing a Micrometer counter call inside a transaction is harmless, but placing it after an LLM call inside `@Transactional` would violate §5.9.
 
 ***
 
 ### T2-3: ArchUnit Module Boundary Tests ✅ Correct targets, one missing boundary
 
-The three boundaries listed are correct and directly map to §1.2–§1.5. One **missing rule**: the invariants also protect `arcclaw-persistence-sqlite` from leaking `SqliteRetryTemplate` into `arcclaw-core` (§5.14.1 — "no `PersistenceRetryPort` in core"). Add a fourth ArchUnit rule:
+The three boundaries listed are correct and directly map to §1.2–§1.5. One **missing rule**: the invariants also protect `arcclaw-persistence-sqlite` from leaking `SqliteRetryTemplate` into `arcclaw-core` (§5.14.1 - "no `PersistenceRetryPort` in core"). Add a fourth ArchUnit rule:
 
 ```java
 noClasses().that().resideInPackage("com.arcclaw.core..")
@@ -877,7 +877,7 @@ noClasses().that().resideInPackage("com.arcclaw.core..")
     .check(importedClasses);
 ```
 
-Also, per §20.1, the `SkillAwareIntentDetector` / `IntentClassificationService` implementations must stay in `arcclaw-core`, not downstream — add a rule verifying `IntentDetector` implementations reside in `com.arcclaw.core.agent..` not in `com.arcclaw.app..`.
+Also, per §20.1, the `SkillAwareIntentDetector` / `IntentClassificationService` implementations must stay in `arcclaw-core`, not downstream - add a rule verifying `IntentDetector` implementations reside in `com.arcclaw.core.agent..` not in `com.arcclaw.app..`.
 
 ***
 
@@ -885,7 +885,7 @@ Also, per §20.1, the `SkillAwareIntentDetector` / `IntentClassificationService`
 
 The interfaces and CDI alternative injection pattern are correct in principle. The problem is with `AnswerGuardStrategy`:
 
-**§9.1 (MUST):** All 4 raw tool call leak patterns (`RAW_TOOL_CALL_PATTERN`, `RAW_DELEGATE_CALL_PATTERN`, `RAW_TOOL_JSON_PATTERN`, `NVIDIA_TOOL_CALL_PATTERN`) and `SUSPICIOUSLY_SHORT` must remain `static final Pattern` in whatever class owns them. If `AnswerGuardStrategy` is an interface and the default implementation is a separate class, these patterns must be `static final` in the **default implementation class**, not compiled in `guardFinalAnswer()` method body. A CDI alternative implementation must similarly declare its own `static final` patterns — never inline-compiled.
+**§9.1 (MUST):** All 4 raw tool call leak patterns (`RAW_TOOL_CALL_PATTERN`, `RAW_DELEGATE_CALL_PATTERN`, `RAW_TOOL_JSON_PATTERN`, `NVIDIA_TOOL_CALL_PATTERN`) and `SUSPICIOUSLY_SHORT` must remain `static final Pattern` in whatever class owns them. If `AnswerGuardStrategy` is an interface and the default implementation is a separate class, these patterns must be `static final` in the **default implementation class**, not compiled in `guardFinalAnswer()` method body. A CDI alternative implementation must similarly declare its own `static final` patterns - never inline-compiled.
 
 **§4.11 (MUST NOT):** The interface contract should state `guardFinalAnswer()` receives `static final` compiled patterns as input OR the implementation must pre-compile them. The interface itself should not force implementations to compile patterns per-call. A `default` method in the interface that calls `Pattern.compile()` would silently violate this on every invocation.
 
@@ -897,7 +897,7 @@ The goal is correct but the completion path has a hard invariant conflict:
 
 **§4.2 (MUST):** `ToolRegistry.invokeTool()` is **string-keyed**. Any typed capability enum must bridge through canonical tool-name accessors. "Do not compare external tool names against enum constant names." If `AgentRoleEnum` is modified to derive its permitted tool sets from `@ToolMetadata(capabilities=...)` at CDI discovery time, the bridge between the annotation-discovered capability IDs and the string keys used by `ToolRegistry` must go through `ToolCapability.toolName`, not `ToolCapability.name()` (the enum constant name).
 
-**§4.1 (MUST):** "Duplicate logical registrations MUST fail fast at startup." The auto-discovery pipeline must throw `IllegalStateException` at `@PostConstruct` time if two tools annotate the same `capabilityId` — not silently overwrite.
+**§4.1 (MUST):** "Duplicate logical registrations MUST fail fast at startup." The auto-discovery pipeline must throw `IllegalStateException` at `@PostConstruct` time if two tools annotate the same `capabilityId` - not silently overwrite.
 
 **§4.4 (MUST):** "Template selection over roles must remain exhaustive." If `AgentRoleEnum` previously enumerated capabilities statically, removing that static list means any template selection switch over roles that assumed exhaustive enum values will silently miss new annotation-discovered tools. Any `switch` on `AgentRoleEnum` values that previously served as an exhaustive check needs a `default → throw` guard added.
 
@@ -905,7 +905,7 @@ The goal is correct but the completion path has a hard invariant conflict:
 
 ### T2-6: Complexity Gate Enforcement in CI ✅ Clean
 
-No invariant conflicts. The plan correctly scopes it to `arcclaw-core`. One implementation note: the current violations (C2 god classes pre-refactor) must be explicitly **baselined** in an allow-list or the gate will fail immediately on the existing codebase before they are fixed. Use Maven Enforcer's `<excludes>` or Checkstyle's `<suppressions>` file — whichever is used — and treat it as a living document that shrinks with each C2/T2-7 fix.
+No invariant conflicts. The plan correctly scopes it to `arcclaw-core`. One implementation note: the current violations (C2 god classes pre-refactor) must be explicitly **baselined** in an allow-list or the gate will fail immediately on the existing codebase before they are fixed. Use Maven Enforcer's `<excludes>` or Checkstyle's `<suppressions>` file - whichever is used - and treat it as a living document that shrinks with each C2/T2-7 fix.
 
 ***
 
@@ -913,7 +913,7 @@ No invariant conflicts. The plan correctly scopes it to `arcclaw-core`. One impl
 
 **`CheckpointResumeHandler` (518 lines):**
 
-**§5.9 (MUST NOT):** This class is reachable from `AgentLoop.runWithRole()`. Extracting named policy methods is safe, but if any extracted method accidentally acquires a `@Transactional` annotation (e.g., a developer adds one for a local DB write inside the policy object), it will violate the transaction-free zone invariant. The "no `@Transactional` on anything reachable from `AgentLoop`" rule must be enforced — T2-6's CI gate doesn't catch this, so it must be covered by the T2-3 ArchUnit test (add a rule: no `@Transactional(REQUIRED)` on any class in `com.arcclaw.core.agent.loop..`).
+**§5.9 (MUST NOT):** This class is reachable from `AgentLoop.runWithRole()`. Extracting named policy methods is safe, but if any extracted method accidentally acquires a `@Transactional` annotation (e.g., a developer adds one for a local DB write inside the policy object), it will violate the transaction-free zone invariant. The "no `@Transactional` on anything reachable from `AgentLoop`" rule must be enforced - T2-6's CI gate doesn't catch this, so it must be covered by the T2-3 ArchUnit test (add a rule: no `@Transactional(REQUIRED)` on any class in `com.arcclaw.core.agent.loop..`).
 
 **§7.29–§7.31 (INVARIANT):** `CheckpointResumeHandler` owns the pre-executed tool result reconstruction on resume (§7.30). When extracting deeply nested conditionals here, the `preExecutedResults` lookup branch must not be absorbed into a generic "tool dispatch" policy object that later gets reused outside the resume path. It is exclusively a resume-path concern.
 
@@ -921,7 +921,7 @@ No invariant conflicts. The plan correctly scopes it to `arcclaw-core`. One impl
 
 **§7.7 (MUST):** The deduplication guard must check ALL tools in a batch before ANY tool executes. If the deep conditional extraction splits the "check" branch from the "execute" branch into separate policy objects, and someone connects them with an intermediate state, this atomicity guarantee breaks. The extracted objects must together guarantee: dedup check → (all pass OR all halt) → execute. No interleaving.
 
-**§7.15 (MUST NOT):** A deduplicated tool's cached result must not cause its peers to be skipped. If the nested conditional that handles the dedup-hit case is extracted into a `DedupPolicy` object, it must return the cached result for the deduped tool and `Optional.empty()` (continue) for its peers — not a short-circuit that skips the batch.
+**§7.15 (MUST NOT):** A deduplicated tool's cached result must not cause its peers to be skipped. If the nested conditional that handles the dedup-hit case is extracted into a `DedupPolicy` object, it must return the cached result for the deduped tool and `Optional.empty()` (continue) for its peers - not a short-circuit that skips the batch.
 
 ***
 
@@ -929,13 +929,13 @@ No invariant conflicts. The plan correctly scopes it to `arcclaw-core`. One impl
 
 | Task | Risk Level | Blocking Dependencies |
 |---|---|---|
-| **T2-3** ArchUnit | Low — add first | None; gates everything else |
+| **T2-3** ArchUnit | Low - add first | None; gates everything else |
 | **T2-6** CI gate + baseline | Low | T2-3 recommended first |
-| **T2-1** MCP schema | Medium — §6.7 native risk | None |
-| **T2-2** Metrics | Low — placement matters | None |
-| **T2-7** Conditional extraction | Medium — §5.9 / §7.7 / §7.15 risks | T2-3 should be passing first |
-| **T2-4** Strategy interfaces | Medium — §9.1 static final risk | C2 Phase 3 must be complete |
-| **T2-5** Annotation pipeline | High — §4.2 / §4.1 / §4.4 conflicts | Full §4.x review before starting |
+| **T2-1** MCP schema | Medium - §6.7 native risk | None |
+| **T2-2** Metrics | Low - placement matters | None |
+| **T2-7** Conditional extraction | Medium - §5.9 / §7.7 / §7.15 risks | T2-3 should be passing first |
+| **T2-4** Strategy interfaces | Medium - §9.1 static final risk | C2 Phase 3 must be complete |
+| **T2-5** Annotation pipeline | High - §4.2 / §4.1 / §4.4 conflicts | Full §4.x review before starting |
 
 T2-5 has the most invariant surface area and should be the **last** item tackled, after all registry and naming invariants are validated in the existing codebase.
 
@@ -966,7 +966,7 @@ File: arcclaw-mcp/.../McpToolBridge.java
 - Add Micrometer counters/timers at these exact points:
   1. arcclaw.agent.loop.failure  → AgentLoop.runWithRole() catch block ONLY
   2. arcclaw.agent.orphaned.sweep → WorkspaceManager GC sweep (NOT inside
-     any @Transactional method — §5.9, §5.12)
+     any @Transactional method - §5.9, §5.12)
   3. arcclaw.hitl.timeout.auto_deny → HITL expiry path in WorkspaceManager
   4. arcclaw.agent.tool.timeout → parallel tool timeout path (§7.16)
   5. arcclaw.llm.rate_limit.hit → rate-limit catch in LangChainReasoningEngine
@@ -982,7 +982,7 @@ Write ArchUnit tests covering ALL of the following:
 1. com.arcclaw.core does NOT import com.arcclaw.channel.telegram or
    com.arcclaw.channel.web
 2. com.arcclaw.core does NOT import com.arcclaw.persistence.sqlite
-   (§5.14.1 — no SqliteRetryTemplate in core)
+   (§5.14.1 - no SqliteRetryTemplate in core)
 3. Channel modules do NOT import com.arcclaw.core.* directly (§1.4 SPI)
 4. com.arcclaw.core does NOT import com.arcclaw.app (§16.1)
 5. IntentDetector implementations reside in com.arcclaw.core.agent..*
@@ -1015,11 +1015,11 @@ Rules:
 - ALL regex patterns (RAW_TOOL_CALL_PATTERN, RAW_DELEGATE_CALL_PATTERN,
   RAW_TOOL_JSON_PATTERN, NVIDIA_TOOL_CALL_PATTERN, SUSPICIOUSLY_SHORT,
   CONTEXT_RAG_ECHO_PATTERN) MUST remain static final in the default
-  implementation class — NEVER compiled inside a method body (§9.1, §4.11).
+  implementation class - NEVER compiled inside a method body (§9.1, §4.11).
 - The interface MUST NOT contain any default method that calls
   Pattern.compile().
 - CDI alternatives are injectable via @Alternative + @Priority.
-- BudgetExceededException MUST propagate — do NOT catch in
+- BudgetExceededException MUST propagate - do NOT catch in
   CorrectionStrategy (§3.5, §8.6).
 - Add test demonstrating CDI @Alternative injection.
 
@@ -1067,7 +1067,7 @@ Target: no method >40 lines, no nesting depth >3.
 
 MANDATORY invariant guards for CheckpointResumeHandler:
 - preExecutedResults lookup (§7.30) MUST stay exclusively in the resume
-  path — do NOT merge it into a generic tool-dispatch policy object.
+  path - do NOT merge it into a generic tool-dispatch policy object.
 - No extracted method or class may carry @Transactional (§5.9). The T2-3
   ArchUnit rule #6 will enforce this automatically after T2-3 is done.
 
@@ -1076,13 +1076,13 @@ MANDATORY invariant guards for ToolStepHandler:
   The extracted DedupPolicy class MUST return: check-all → (all-pass OR
   all-halt) → execute. No interleaving (§7.7).
 - A dedup-hit tool MUST return its cached observation and let ALL peer tools
-  in the batch proceed to execution normally — do NOT short-circuit the
+  in the batch proceed to execution normally - do NOT short-circuit the
   batch (§7.15).
 
 ---
 
 ## Test Requirements (all tasks)
-- Use org.junit.jupiter.api.Assertions only — NO AssertJ (§16.8).
+- Use org.junit.jupiter.api.Assertions only - NO AssertJ (§16.8).
 - New module test configs MUST include quarkus.shutdown.timeout=5S and
   quarkus.transaction-manager.enable-recovery=false (§16.6).
 
@@ -1234,22 +1234,22 @@ Explanation:
 
 ---
 
-### 🚨 `SelfCorrectionRetryManager.retryCounts` ConcurrentHashMap — §3.7 Violation
+### 🚨 `SelfCorrectionRetryManager.retryCounts` ConcurrentHashMap - §3.7 Violation
 
 **Correct and I should have caught this.** I did call out §3.5 and §8.6 (BudgetExceededException propagation) on T2-4, but I missed §3.7 entirely.
 
 The invariant is explicit:
 > "The retry counter must be a plain int scoped to the loop, never an AtomicInteger or ConcurrentHashMap."
 
-The reason is subtle — the loop is single-threaded per session, so CAS-style operations introduce ordering hazards at no benefit. Worse, a `ConcurrentHashMap<String, Integer>` on an `@ApplicationScoped` bean means every session accumulates an entry that is **never cleaned up** — a slow memory leak per session. This is a real correctness and memory regression.
+The reason is subtle - the loop is single-threaded per session, so CAS-style operations introduce ordering hazards at no benefit. Worse, a `ConcurrentHashMap<String, Integer>` on an `@ApplicationScoped` bean means every session accumulates an entry that is **never cleaned up** - a slow memory leak per session. This is a real correctness and memory regression.
 
 **Why I missed it:** I verified that `BudgetExceededException` propagates and that the interface contract was sound, but I didn't audit the internal state management of `SelfCorrectionRetryManager` in the diff. I should have.
 
 ***
 
-### 🚨 ArchUnit Rule 3 — `channelsShouldNotImportCoreDirectly` Too Broad
+### 🚨 ArchUnit Rule 3 - `channelsShouldNotImportCoreDirectly` Too Broad
 
-**Correct and I missed it.** `com.arcclaw.channel.api.*` is the shared SPI package — it lives under `com.arcclaw.channel..` but is legitimately imported by both sides. The rule as written will fail immediately because `com.arcclaw.channel.telegram` legitimately imports `com.arcclaw.channel.api`. I noted the rule in my review as correct without checking whether the package glob included the SPI itself.
+**Correct and I missed it.** `com.arcclaw.channel.api.*` is the shared SPI package - it lives under `com.arcclaw.channel..` but is legitimately imported by both sides. The rule as written will fail immediately because `com.arcclaw.channel.telegram` legitimately imports `com.arcclaw.channel.api`. I noted the rule in my review as correct without checking whether the package glob included the SPI itself.
 
 **Why I missed it:** I verified the intent matched §1.4, but I didn't check whether the package pattern `com.arcclaw.channel..` was broader than intended. That's a gap in my diff analysis.
 
@@ -1257,7 +1257,7 @@ The reason is subtle — the loop is single-threaded per session, so CAS-style o
 
 ### 🚨 Checkstyle Gate Missing Suppressions Baseline
 
-**Correct and I explicitly called this out** — "Confirm `checkstyle-suppressions.xml` exists with TODO comments referencing C2/T2-7 tasks, otherwise `mvn verify` will fail on the pre-existing violations immediately." The other model gave the exact XML needed to fix it. My review identified the problem; I just didn't provide the resolution.
+**Correct and I explicitly called this out** - "Confirm `checkstyle-suppressions.xml` exists with TODO comments referencing C2/T2-7 tasks, otherwise `mvn verify` will fail on the pre-existing violations immediately." The other model gave the exact XML needed to fix it. My review identified the problem; I just didn't provide the resolution.
 
 ***
 
@@ -1275,9 +1275,9 @@ The reason is subtle — the loop is single-threaded per session, so CAS-style o
 
 ***
 
-### ⚠️ `FinishActionHandler.guard()` Both Branches Identical — Dead Code
+### ⚠️ `FinishActionHandler.guard()` Both Branches Identical - Dead Code
 
-**Correct and I missed it.** I reviewed that the guard result was used correctly but didn't notice both branches of the `if (guardResult.isFailure())` block assign `answer = guardResult.answer()` identically. The `isFailure()` distinction is a no-op — the suggested fix (don't write to `ChatMemoryWriter` on failure, or simplify to a single assignment) is correct.
+**Correct and I missed it.** I reviewed that the guard result was used correctly but didn't notice both branches of the `if (guardResult.isFailure())` block assign `answer = guardResult.answer()` identically. The `isFailure()` distinction is a no-op - the suggested fix (don't write to `ChatMemoryWriter` on failure, or simplify to a single assignment) is correct.
 
 **Why I missed it:** I was checking that `static final` patterns remained in the implementation class and didn't trace the actual branch logic in `FinishActionHandler`.
 
@@ -1285,13 +1285,13 @@ The reason is subtle — the loop is single-threaded per session, so CAS-style o
 
 ### ⚠️ `BudgetExceededException` Bypasses `arcclaw.agent.loop.failure` Counter
 
-**Correct and I missed it.** I verified the counter was placed in the `catch (Exception e)` block in `AgentLoop`, but §3.5 says `BudgetExceededException` must propagate — meaning it exits the catch block before the counter fires. The counter never increments for budget exhaustions. This needs either a separate `catch (BudgetExceededException bue)` that increments the counter and rethrows, or a `finally` block counter for all terminal exits.
+**Correct and I missed it.** I verified the counter was placed in the `catch (Exception e)` block in `AgentLoop`, but §3.5 says `BudgetExceededException` must propagate - meaning it exits the catch block before the counter fires. The counter never increments for budget exhaustions. This needs either a separate `catch (BudgetExceededException bue)` that increments the counter and rethrows, or a `finally` block counter for all terminal exits.
 
 ***
 
 ### ⚠️ `@Capability` Duplicate ID and `cap.value()` vs `tool.name()` Mismatch
 
-**Correct — I explicitly called this out** as "verify `CapabilityRegistry.grant()` throws on duplicate" but I didn't provide the specific implementation. The other model gave the exact code. The `cap.value() != tool.name()` typo-safety check is an additional finding I missed entirely.
+**Correct - I explicitly called this out** as "verify `CapabilityRegistry.grant()` throws on duplicate" but I didn't provide the specific implementation. The other model gave the exact code. The `cap.value() != tool.name()` typo-safety check is an additional finding I missed entirely.
 
 ***
 
@@ -1341,17 +1341,17 @@ The Tier 2 hardening phase is now complete, with all specified invariants for st
 
 ---
 
-These are all pre-existing violations that need to be baselined — not refactored right now. The clean fix is to expand `checkstyle-suppressions.xml` to cover all current offenders, so CI goes green immediately and the suppressions file serves as the living "debt list" that shrinks with each planned refactor.
+These are all pre-existing violations that need to be baselined - not refactored right now. The clean fix is to expand `checkstyle-suppressions.xml` to cover all current offenders, so CI goes green immediately and the suppressions file serves as the living "debt list" that shrinks with each planned refactor.
 
 ## Key decisions in this baseline
 
-**`FileLength|MethodLength` combined on the same `files` pattern** — Checkstyle `suppress` supports `|` in the `checks` attribute, so you don't need two entries per file. This keeps the file compact.
+**`FileLength|MethodLength` combined on the same `files` pattern** - Checkstyle `suppress` supports `|` in the `checks` attribute, so you don't need two entries per file. This keeps the file compact.
 
-**Regex escaping on `.`** — every filename uses `\.java` not `.java`. Without the escape, `.` matches any character and could inadvertently suppress violations in similarly-named files in other packages.
+**Regex escaping on `.`** - every filename uses `\.java` not `.java`. Without the escape, `.` matches any character and could inadvertently suppress violations in similarly-named files in other packages.
 
-**`AgentCheckpoint.java` is 401 lines — 1 over.** Suppressed for now. The trivial fix (remove one blank line or a single comment) can be done in place without a refactor work item.
+**`AgentCheckpoint.java` is 401 lines - 1 over.** Suppressed for now. The trivial fix (remove one blank line or a single comment) can be done in place without a refactor work item.
 
-**`CheckListTool.java` `execute` is 61 lines — 1 over.** Same situation — suppressed rather than forcing a pointless 1-line extraction.
+**`CheckListTool.java` `execute` is 61 lines - 1 over.** Same situation - suppressed rather than forcing a pointless 1-line extraction.
 
 ## One structural note
 

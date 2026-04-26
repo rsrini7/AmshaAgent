@@ -178,7 +178,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     /**
      * Atomically marks the session as RESUMING.
      * @return true if this caller is the first to mark it (safe to resume)
-     *         false if another thread already marked it (skip — already resuming)
+     *         false if another thread already marked it (skip - already resuming)
      * §7.29, §T5-4
      */
     boolean markBatchResuming(String sessionId, String agentRole);
@@ -256,7 +256,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     /**
      * Returns {@code true} if the latest AWAITING_APPROVAL checkpoint for this
      * session has been waiting longer than {@code timeoutHours}, or if no such
-     * checkpoint exists (treat as expired — nothing to approve).
+     * checkpoint exists (treat as expired - nothing to approve).
      *
      * @param sessionId    the workspace session to check
      * @param timeoutHours the HITL approval window in hours

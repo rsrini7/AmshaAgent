@@ -8,7 +8,7 @@ package com.arcclaw.core.agent.reasoning;
 public interface ContextEnricher {
     /**
      * Enrich the base system prompt with additional context.
-     * Must return a non-null string — if no context is available,
+     * Must return a non-null string - if no context is available,
      * return basePrompt unchanged.
      *
      * @param sessionId current workspace session ID

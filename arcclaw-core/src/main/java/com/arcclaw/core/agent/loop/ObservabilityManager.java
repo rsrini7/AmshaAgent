@@ -21,9 +21,9 @@ import org.jboss.logging.Logger;
  * <p>Extracted from {@code AgentLoop.runWithRole} as part of Phase 2
  * God-class decomposition. Owns two of the seven original responsibilities:
  * <ul>
- *   <li><strong>OTel spans</strong> — begin/end the session-level root span
+ *   <li><strong>OTel spans</strong> - begin/end the session-level root span
  *       via {@link AgentOtelContext}.</li>
- *   <li><strong>Observer callbacks</strong> — broadcast {@code onLoopComplete}
+ *   <li><strong>Observer callbacks</strong> - broadcast {@code onLoopComplete}
  *       and {@code onStepComplete} to all registered {@link AgentObserver}
  *       instances.</li>
  * </ul>
@@ -40,11 +40,11 @@ import org.jboss.logging.Logger;
  * OTel {@link Context} must be captured on the <em>calling thread</em> before
  * the {@code submit()} call via {@link #captureContext()}.
  * {@code ContextAwareExecutorService} propagates only
- * {@code WorkspaceScopeHolder} — it does <strong>not</strong> propagate OTel
+ * {@code WorkspaceScopeHolder} - it does <strong>not</strong> propagate OTel
  * {@code ThreadLocal}s.
  *
  * <pre>{@code
- * // CORRECT — context captured on calling thread
+ * // CORRECT - context captured on calling thread
  * Context otelCtx = observabilityManager.captureContext();
  * executor.submit(() -> {
  *     try (Scope s = otelCtx.makeCurrent()) {
@@ -52,7 +52,7 @@ import org.jboss.logging.Logger;
  *     }
  * });
  *
- * // WRONG — captured inside lambda, OTel ThreadLocal already gone
+ * // WRONG - captured inside lambda, OTel ThreadLocal already gone
  * executor.submit(() -> {
  *     Context.current(); // too late
  * });
@@ -79,7 +79,7 @@ public class ObservabilityManager {
      * Starts the session-level root OTel span and returns it.
      *
      * <p>Must be called on the thread that will later call
-     * {@link #captureContext()} — so the returned span is active before any
+     * {@link #captureContext()} - so the returned span is active before any
      * executor submission that needs to propagate OTel context (§7.13).
      *
      * @param sessionId workspace session identifier
@@ -94,7 +94,7 @@ public class ObservabilityManager {
      * Ends the session-level root OTel span and releases per-session token
      * accumulators.
      *
-     * <p>Safe to call from a {@code finally} block — logs a warning on
+     * <p>Safe to call from a {@code finally} block - logs a warning on
      * failure but never re-throws, to preserve the original loop result.
      *
      * @param sessionId workspace session identifier
@@ -144,7 +144,7 @@ public class ObservabilityManager {
      *
      * @param sessionId  workspace session identifier
      * @param userId     the user who owns this session (use the value captured
-     *                   before entering the {@code try} block — MDC may be
+     *                   before entering the {@code try} block - MDC may be
      *                   stale in {@code finally})
      * @param agentRole  canonical agent role
      * @param goalHash   HMAC-SHA256 of the original goal for audit chaining;

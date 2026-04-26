@@ -39,7 +39,7 @@ public record ToolResponse(
         return new ToolResponse(exitCode, output, false, false, errorCode, traceId, rootCauseClass);
     }
 
-    /** Infrastructure failure — sandbox/external system is offline. */
+    /** Infrastructure failure - sandbox/external system is offline. */
     public static ToolResponse infraFailure(String reason) {
         return new ToolResponse(1, reason, false, true, "INFRA_FAILURE", null, null);
     }

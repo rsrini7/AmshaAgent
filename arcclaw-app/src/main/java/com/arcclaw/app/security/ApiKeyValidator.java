@@ -7,7 +7,7 @@ import jakarta.inject.Inject;
  * Thin validation facade over {@link ApiKeyRegistry}.
  *
  * Use this wherever a simple boolean "is this key valid and not rate-limited?"
- * check is needed outside the JAX-RS filter pipeline — e.g. WebSocket
+ * check is needed outside the JAX-RS filter pipeline - e.g. WebSocket
  * handshake handlers, SSE endpoint guards, or service-layer pre-checks.
  *
  * The full audit logging and MDC population remain in {@link ApiKeyAuthFilter};

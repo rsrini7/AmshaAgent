@@ -134,7 +134,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
         if (id == null || id.isBlank()) {
-            log.warnf("markFired called with null/blank id — skipping");
+            log.warnf("markFired called with null/blank id - skipping");
             return;
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
@@ -152,7 +152,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markCompleted(String id, Instant lastFireTime) {
         if (id == null || id.isBlank()) {
-            log.warnf("markCompleted called with null/blank id — skipping");
+            log.warnf("markCompleted called with null/blank id - skipping");
             return;
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
@@ -169,7 +169,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markAwaitingApproval(String id) {
         if (id == null || id.isBlank()) {
-            log.warnf("markAwaitingApproval called with null/blank id — skipping");
+            log.warnf("markAwaitingApproval called with null/blank id - skipping");
             return;
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
@@ -196,7 +196,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markFailed(String id, String errorReason) {
         if (id == null || id.isBlank()) {
-            log.warnf("markFailed called with null/blank id — skipping");
+            log.warnf("markFailed called with null/blank id - skipping");
             return;
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
@@ -213,7 +213,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markSkipped(String id, Instant nextFireTime, Instant now) {
         if (id == null || id.isBlank()) {
-            log.warnf("markSkipped called with null/blank id — skipping");
+            log.warnf("markSkipped called with null/blank id - skipping");
             return;
         }
         // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)

@@ -17,7 +17,7 @@
 allowing agents to read JavaScript-rendered pages that are inaccessible to plain HTTP fetch.</description>
 
   <dependencies>
-    <!-- Core only — §16.1: tool modules MUST NOT depend on arcclaw-app -->
+    <!-- Core only - §16.1: tool modules MUST NOT depend on arcclaw-app -->
     <dependency>
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-core</artifactId>

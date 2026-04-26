@@ -49,7 +49,7 @@ public record SkillDefinition(
     public SkillDefinition {
         Objects.requireNonNull(name, "SkillDefinition.name must not be null");
         Objects.requireNonNull(systemPrompt, "SkillDefinition.systemPrompt must not be null");
-        // Guard description against null — SkillReflex calls description().isBlank()
+        // Guard description against null - SkillReflex calls description().isBlank()
         description = (description == null) ? "" : description;
         triggerPatterns = triggerPatterns == null ? List.of() : List.copyOf(triggerPatterns);
         toolCapabilities = toolCapabilities == null ? List.of() : List.copyOf(toolCapabilities);

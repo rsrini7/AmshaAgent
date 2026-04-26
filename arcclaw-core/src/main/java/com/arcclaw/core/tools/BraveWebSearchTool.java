@@ -25,7 +25,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * Component A5 — BraveWebSearchTool.
+ * Component A5 - BraveWebSearchTool.
  * Allows agents to search the web using the Brave Search API.
  */
 @ApplicationScoped
@@ -116,7 +116,7 @@ public class BraveWebSearchTool implements AgentTool {
         String agentRole;
 
         try {
-            // Step 1 — Extract and validate tenant context
+            // Step 1 - Extract and validate tenant context
             // NS2: Fail fast on missing context
             userId    = WorkspaceContext.requireUserId();
             sessionId = WorkspaceContext.requireSessionId();

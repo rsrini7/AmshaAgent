@@ -47,7 +47,7 @@ public class ChatMemoryWriter {
         if (currentHistory == null) currentHistory = new ArrayList<>();
         else currentHistory = new ArrayList<>(currentHistory);
 
-        // Deduplication — skip if last message already contains this goal
+        // Deduplication - skip if last message already contains this goal
         if (!currentHistory.isEmpty()) {
             ChatMessage lastMsg = currentHistory.getLast();
             if (lastMsg instanceof UserMessage

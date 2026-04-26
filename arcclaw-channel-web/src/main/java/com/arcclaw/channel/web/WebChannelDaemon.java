@@ -30,7 +30,7 @@ public class WebChannelDaemon implements ChannelDaemon {
 
     @Override
     public void start() {
-        log.infof("Web channel daemon started — WebSocket endpoint /ws/chat active.");
+        log.infof("Web channel daemon started - WebSocket endpoint /ws/chat active.");
     }
 
     // While ChannelDaemon doesn't strictly define stop() in its API, we can provide it
@@ -41,6 +41,6 @@ public class WebChannelDaemon implements ChannelDaemon {
     public void stop() {
         int count = sessionStore.all().size();
         sessionStore.closeAll();
-        log.infof("Web channel daemon stopped — closed %d WebSocket sessions.", count);
+        log.infof("Web channel daemon stopped - closed %d WebSocket sessions.", count);
     }
 }

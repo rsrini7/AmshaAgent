@@ -38,7 +38,7 @@ public class PlaywrightBrowserTool implements AgentTool {
     AuditService auditService;
 
     // NOTE: WorkspaceContext is a pure static utility (ScopedValue-backed), NOT a CDI bean.
-    // Use WorkspaceContext.userId(), WorkspaceContext.requireSessionId(), etc. — all static calls.
+    // Use WorkspaceContext.userId(), WorkspaceContext.requireSessionId(), etc. - all static calls.
 
     @Override
     public String name() {
@@ -47,7 +47,7 @@ public class PlaywrightBrowserTool implements AgentTool {
 
     @Override
     public boolean requiresSandbox() {
-        // Podman not required — runs on host directly.
+        // Podman not required - runs on host directly.
         return false;
     }
 
@@ -106,7 +106,7 @@ public class PlaywrightBrowserTool implements AgentTool {
                 "Set arcclaw.tools.playwright.enabled=true to activate.");
         }
 
-        // Guard 2: userId from WorkspaceContext (static, never from params — see BraveWebSearchTool)
+        // Guard 2: userId from WorkspaceContext (static, never from params - see BraveWebSearchTool)
         String userId;
         try {
             userId = WorkspaceContext.requireUserId();
@@ -127,7 +127,7 @@ public class PlaywrightBrowserTool implements AgentTool {
             return ToolResponse.failure(400, "Parameter 'url' is required.");
         }
 
-        // Guard 4: URL scheme — only http / https
+        // Guard 4: URL scheme - only http / https
         if (!SAFE_URL_PATTERN.matcher(url.trim()).matches()) {
             return ToolResponse.failure(400,
                 "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + url);
@@ -144,7 +144,7 @@ public class PlaywrightBrowserTool implements AgentTool {
                 result = truncateAtSentence(result, MAX_CONTENT_CHARS) + "\n[content truncated]";
             }
 
-            // Audit with URL only — NEVER log page content.
+            // Audit with URL only - NEVER log page content.
             // AuditService.record() 5-arg signature: (sessionId, userId, agentRole, type, detail)
             String sessionId = WorkspaceContext.requireSessionId();
             auditService.record(sessionId, userId, WorkspaceContext.requireAgentRole(),

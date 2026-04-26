@@ -53,7 +53,7 @@ public class ResetReflex implements AgentReflex {
         String trimmed = input.trim().toLowerCase();
         boolean isHardReset = trimmed.contains("hard") || trimmed.contains("clear all");
 
-        // 1. Soft workspace reset — clears memory, workspace dir, CDI scope
+        // 1. Soft workspace reset - clears memory, workspace dir, CDI scope
         //    Does NOT remove heartbeat. Does NOT clear governance budget.
         workspaceManager.resetSessionState(sessionId);
 
@@ -79,11 +79,11 @@ public class ResetReflex implements AgentReflex {
             statefulAgentStore.deleteCheckpoint(sessionId, role.toScopedName());
         }
 
-        // 6. Clear stale cron jobs — session-scoped only, NOT user-scoped
+        // 6. Clear stale cron jobs - session-scoped only, NOT user-scoped
         long deletedCrons = cronRepository.deleteAllBySessionId(sessionId);
 
         String logStatus = isHardReset ? "chat history cleared" : "Chat memory retained";
-        log.infof("[ResetReflex] Session %s reset — workspace, checkpoints, " +
+        log.infof("[ResetReflex] Session %s reset - workspace, checkpoints, " +
         "compaction, %d cron job(s) cleared. %s. Heartbeat and budget retained.",
         sessionId, deletedCrons, logStatus);
 

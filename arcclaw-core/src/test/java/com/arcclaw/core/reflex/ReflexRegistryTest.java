@@ -101,10 +101,10 @@ class ReflexRegistryTest {
 
     @Test
     void testLogInjectionGuardTruncatesLongInput() {
-        // /reset with 250 chars appended — reflex matches on /reset prefix
+        // /reset with 250 chars appended - reflex matches on /reset prefix
         // but we want to verify the registry doesn't throw on long input
         String longInput = "/reset" + "A".repeat(250);
-        // ResetReflex.matches() uses equalsIgnoreCase — this won't match
+        // ResetReflex.matches() uses equalsIgnoreCase - this won't match
         // so it tests that the registry handles long non-matching input cleanly
         ReflexResult result = reflexRegistry.processIfReflex(
                 "session-1", "user-1","chat-1", longInput, createContext(longInput));
@@ -122,7 +122,7 @@ class ReflexRegistryTest {
         assertTrue(result.commandResponse().isPresent());
         assertTrue(result.commandResponse().get().contains("cleared"));
         verify(workspaceManager).resetSessionState("session-reset");
-        // Reset must NOT wipe chat memory — preserved in soft-reset
+        // Reset must NOT wipe chat memory - preserved in soft-reset
         verifyNoInteractions(chatMemoryStore);
     }
 
@@ -143,7 +143,7 @@ class ReflexRegistryTest {
         assertTrue(result.commandResponse().isPresent());
         assertTrue(result.commandResponse().get().contains("Halted"));
         verify(workspaceManager).terminateSession("session-halt");
-        // Halt must NOT wipe chat memory — different from reset
+        // Halt must NOT wipe chat memory - different from reset
         verifyNoInteractions(chatMemoryStore);
     }
 
@@ -222,7 +222,7 @@ class ReflexRegistryTest {
         ReflexResult result = reflexRegistry.processIfReflex(
                 "session-err", "user-1","chat-1", "/reset", createContext("/reset"));
 
-        // Must NOT throw — must return safe error message
+        // Must NOT throw - must return safe error message
         assertTrue(result.commandResponse().isPresent());
         assertTrue(result.commandResponse().get().contains("System Error"));
         // Telegram consumer loop must not be affected

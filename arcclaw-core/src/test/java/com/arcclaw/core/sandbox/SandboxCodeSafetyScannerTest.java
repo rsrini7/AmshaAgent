@@ -97,7 +97,7 @@ public class SandboxCodeSafetyScannerTest {
             "os.Remove(\"/etc/hosts\")"));
     }
 
-    // Java/Go clean code — must NOT be blocked
+    // Java/Go clean code - must NOT be blocked
 
     @Test
     void java_hello_world_is_clean() {
@@ -123,21 +123,21 @@ public class SandboxCodeSafetyScannerTest {
             "os.WriteFile(\"output.txt\", []byte(\"hello\"), 0644)"));
     }
 
-    // Language-scope guard — Java patterns must NOT fire on Python code
+    // Language-scope guard - Java patterns must NOT fire on Python code
 
     @Test
     void java_runtime_pattern_does_not_block_python_code() {
-        // "Runtime" is a valid Python class name — should not be blocked
+        // "Runtime" is a valid Python class name - should not be blocked
         assertNull(SandboxCodeSafetyScanner.findViolation("python",
             "class Runtime: pass\nRuntime().start()"));
     }
 
     @Test
     void go_exec_pattern_does_not_block_node_code() {
-        // "exec" is valid in node — should not be blocked
+        // "exec" is valid in node - should not be blocked
         assertNull(SandboxCodeSafetyScanner.findViolation("node",
             "const { exec } = require('child_process')"));
         // ^ NOTE: if your scanner blocks this, you need a language-scope guard 
-        // in SandboxCodeSafetyScanner — patterns must only fire for their target lang
+        // in SandboxCodeSafetyScanner - patterns must only fire for their target lang
     }
 }

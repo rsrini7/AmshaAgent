@@ -60,7 +60,7 @@ public class DenyReflex extends AbstractDecisionReflex {
     @Override
     protected void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result) {
         if (result instanceof AgentResult.AwaitingRetry) {
-            return; // No-op — retry handled by RateLimitRetryScheduler (#736)
+            return; // No-op - retry handled by RateLimitRetryScheduler (#736)
         }
         cronRepository.markFailed(cron.id, reason != null ? reason : "User denied tool execution.");
     }

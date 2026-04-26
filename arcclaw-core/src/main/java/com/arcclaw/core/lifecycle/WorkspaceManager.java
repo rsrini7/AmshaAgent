@@ -82,7 +82,7 @@ public class WorkspaceManager {
             auditObserver.cleanupSession(sessionId);
         }
 
-        // 2. Mark only truly live checkpoints FAILED — not terminal ones.
+        // 2. Mark only truly live checkpoints FAILED - not terminal ones.
         //    doMarkCheckpointsFailedRequiresNew now excludes COMPLETED, ARCHIVED,
         //    and COMPROMISED in addition to FAILED. Previously, a cron job that
         //    finalized as COMPLETED would be immediately clobbered to FAILED here
@@ -144,7 +144,7 @@ public class WorkspaceManager {
      * immediately after CronResultHandler marks the job COMPLETED. If the finalize
      * transaction (REQUIRES_NEW) hasn't fully flushed to SQLite before this query runs,
      * the checkpoint is still visible as IN_PROGRESS in the EntityManager cache and gets
-     * incorrectly overwritten to FAILED — corrupting the audit trail and triggering
+     * incorrectly overwritten to FAILED - corrupting the audit trail and triggering
      * spurious failure notifications.
      *
      * By excluding all terminal statuses, we ensure only truly in-flight checkpoints
@@ -157,9 +157,9 @@ public class WorkspaceManager {
         try {
             checkpointStore.markCheckpointsFailed(sessionId);
         } catch (IllegalStateException e) {
-            // EntityManager already closed — JVM is shutting down, checkpoint
+            // EntityManager already closed - JVM is shutting down, checkpoint
             // status update is best-effort only. Process is dying anyway.
-            log.debugf("markCheckpointsFailed skipped for session=%s — EntityManager closed (shutdown in progress)", sessionId);
+            log.debugf("markCheckpointsFailed skipped for session=%s - EntityManager closed (shutdown in progress)", sessionId);
         } catch (Exception e) {
             log.errorf("Failed to mark checkpoints FAILED for session=%s: %s",
                        sessionId, e.getMessage());

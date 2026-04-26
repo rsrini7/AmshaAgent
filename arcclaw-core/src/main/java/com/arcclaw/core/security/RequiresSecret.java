@@ -9,7 +9,7 @@ import java.lang.annotation.*;
  * {@link SecretVault} and injected into the container environment
  * as the variable named {@link #envVar()}.
  * <p>
- * This annotation is {@link Repeatable} — a method can declare
+ * This annotation is {@link Repeatable} - a method can declare
  * multiple required secrets.
  *
  * <pre>

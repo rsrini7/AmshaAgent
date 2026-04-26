@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 02 — API KEY AUTHENTICATION & RATE LIMITING
+### 02 - API KEY AUTHENTICATION & RATE LIMITING
 ###
 ### All /api/v1/* endpoints (except /api/v1/info) require:
 ###   X-ArcClaw-API-Key: <key>
@@ -30,7 +30,7 @@
 # @invalidKey = totally-wrong-key
 
 # ─────────────────────────────────────────────────────────────────
-# NEGATIVE TESTS — all must return 401
+# NEGATIVE TESTS - all must return 401
 # ─────────────────────────────────────────────────────────────────
 
 ### [AUTH-1] Missing API key → expect 401
@@ -81,7 +81,7 @@ DELETE {{baseUrl}}/api/v1/sessions/00000000-0000-0000-0000-000000000000
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# PUBLIC BYPASS — these endpoints skip auth entirely
+# PUBLIC BYPASS - these endpoints skip auth entirely
 # ─────────────────────────────────────────────────────────────────
 
 ### [AUTH-9] /q/health bypasses auth → expect 200 (no key needed)
@@ -101,8 +101,8 @@ GET {{baseUrl}}/api/v1/info
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# POSITIVE TESTS — both keys must be accepted
-# AUTH-12 (internal key) appears before AUTH-13 (CI key) — order fixed.
+# POSITIVE TESTS - both keys must be accepted
+# AUTH-12 (internal key) appears before AUTH-13 (CI key) - order fixed.
 # ─────────────────────────────────────────────────────────────────
 
 ### [AUTH-12] Internal key accepted → expect 201
@@ -121,7 +121,7 @@ X-ArcClaw-API-Key: {{ciKey}}
 
 ###
 
-### [AUTH-14] Run a simple agent task with internal key — verifies auth flows through pipeline
+### [AUTH-14] Run a simple agent task with internal key - verifies auth flows through pipeline
 POST {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -136,7 +136,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [AUTH-15] Access internal session status with CI key → expect 401
 # Sessions are associated with the creating key. Another key cannot access them.
-# (Only if the API enforces per-key session isolation — verify this behavior.)
+# (Only if the API enforces per-key session isolation - verify this behavior.)
 GET {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{ciKey}}
 
@@ -146,7 +146,7 @@ X-ArcClaw-API-Key: {{ciKey}}
 # RATE LIMIT TEST
 # ApiKeyRegistry: 20 requests/minute per key (sliding window).
 # The 21st request returns HTTP 429 + Retry-After: 60.
-# Each key has its own independent counter — CI and internal are separate.
+# Each key has its own independent counter - CI and internal are separate.
 #
 # HOW TO TEST:
 # 1. Send AUTH-16 request 21 times rapidly (use REST client's "repeat" feature).
@@ -160,14 +160,14 @@ X-ArcClaw-API-Key: {{ciKey}}
 # Exhaust AUTH-16 (internal), then AUTH-17 (CI) must still return 200.
 # ─────────────────────────────────────────────────────────────────
 
-### [AUTH-16] Rate limit probe for internal key — run this 21 times rapidly
+### [AUTH-16] Rate limit probe for internal key - run this 21 times rapidly
 # Expect: HTTP 200 for requests 1–20, HTTP 429 on request 21.
 GET {{baseUrl}}/api/v1/sessions/{{authInternalSession.response.body.sessionId}}/status/coordinator
 X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [AUTH-17] CI key has independent counter — must still return 200 after internal is rate-limited
+### [AUTH-17] CI key has independent counter - must still return 200 after internal is rate-limited
 # After AUTH-16 is rate-limited, this CI key request must succeed (200).
 # The two keys do NOT share a rate limit counter.
 GET {{baseUrl}}/api/v1/sessions/{{authCiSession.response.body.sessionId}}/status/coordinator

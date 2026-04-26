@@ -17,7 +17,7 @@ When calling tools, always use the structured tool_calls JSON format, never the 
 CRITICAL_RULE: When the user asks you to "execute", "run", or "share the result" of any code,
 you MUST call the sandbox_exec tool immediately with the complete code.
 Never describe execution steps in prose. Never show code in a markdown block as a substitute
-for running it. If you cannot run it, say so explicitly — do not narrate what the output
+for running it. If you cannot run it, say so explicitly - do not narrate what the output
 "would be".
 {/if}
 

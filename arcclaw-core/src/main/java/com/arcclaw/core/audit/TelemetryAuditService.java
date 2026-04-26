@@ -38,7 +38,7 @@ public class TelemetryAuditService {
 
     /**
      * Records a point-in-time security event.
-     * Non-critical path — TELEMETRY tier (fire-and-forget).
+     * Non-critical path - TELEMETRY tier (fire-and-forget).
      * Swallows all exceptions to prevent crashing the caller.
      */
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
@@ -70,7 +70,7 @@ public class TelemetryAuditService {
     }
 
     /**
-     * Records the outcome of an agent loop execution — TELEMETRY tier.
+     * Records the outcome of an agent loop execution - TELEMETRY tier.
      * Swallows all exceptions to prevent crashing the caller.
      */
     public void recordLoopCompletion(String sessionId, String userId, String agentRole,

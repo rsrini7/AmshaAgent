@@ -34,7 +34,7 @@
       transition: background var(--transition-slow),
                   color var(--transition-slow);
     }
-    /* Subtle noise texture — dark mode only */
+    /* Subtle noise texture - dark mode only */
     [data-theme="dark"] body::before,
     :root:not([data-theme]) body::before {
       content: "";
@@ -46,7 +46,7 @@
     /* Utility and Theme Rail - removed, handled by arc-theme-toggle */
   </style>
   <script>
-    // Instant theme init — runs before body renders (no flash)
+    // Instant theme init - runs before body renders (no flash)
     (function() {
       const stored = sessionStorage.getItem('arc-theme');
       const system = matchMedia('(prefers-color-scheme: light)').matches

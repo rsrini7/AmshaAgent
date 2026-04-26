@@ -4,7 +4,7 @@
 podman run --rm arcclaw-tool-runner:latest apk info | sort
 ```
 
-**Check image history — shows every layer and the command that created it:**
+**Check image history - shows every layer and the command that created it:**
 ```bash
 podman history arcclaw-tool-runner:latest
 ```

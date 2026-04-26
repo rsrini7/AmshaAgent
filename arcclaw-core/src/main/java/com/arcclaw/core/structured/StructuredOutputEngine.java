@@ -41,7 +41,7 @@ public class StructuredOutputEngine {
             
             Return a JSON INSTANCE with actual data values.
             Do NOT wrap your response in schema keys like "type" or "properties".
-            Do NOT return the schema itself — return the DATA that matches the schema.
+            Do NOT return the schema itself - return the DATA that matches the schema.
             Do not include any thought process, markdown text, or explanations outside the JSON block.
             Return ONLY the JSON.
             """, combinedContext, schema);

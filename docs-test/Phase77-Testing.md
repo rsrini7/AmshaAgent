@@ -1,6 +1,6 @@
-## Phase 77 — Updated Testing Guide
+## Phase 77 - Updated Testing Guide
 
-### Layer 1 — Unit Tests (~30 sec)
+### Layer 1 - Unit Tests (~30 sec)
 
 ```powershell
 ./mvnw test `
@@ -22,7 +22,7 @@
 
 ***
 
-### Layer 2 — Compile Check (~2 min)
+### Layer 2 - Compile Check (~2 min)
 
 ```powershell
 ./mvnw clean compile test-compile `
@@ -34,7 +34,7 @@ Catches `ToolCapability` rename breaks and `addEnumProperty` signature issues th
 
 ***
 
-### Layer 3 — Stale Reference Grep
+### Layer 3 - Stale Reference Grep
 
 ```powershell
 # No stale WEB_SEARCH refs (non-suffixed)
@@ -53,14 +53,14 @@ grep -n "NETWORK_OUTBOUND" `
 
 ***
 
-### Layer 4 — Live Server Tool Registry ✅ (Already Verified)
+### Layer 4 - Live Server Tool Registry ✅ (Already Verified)
 
 ```http
 GET http://localhost:8080/api/v1/tools
 X-ArcClaw-API-Key: {{validKey}}
 ```
 
-**Expected response — with both keys = `none`:**
+**Expected response - with both keys = `none`:**
 ```json
 [
   "delegate_to_agent",
@@ -76,14 +76,14 @@ X-ArcClaw-API-Key: {{validKey}}
 ```
 
 **Verify:**
-- `brave_web_search` — **absent** ✅ (`isEnabled()` gating works)
-- `serper_web_search` — **absent** ✅ (`isEnabled()` gating works)
-- `check_list` — **present as lowercase** ✅ (`name()` returns `ToolCapability.CHECK_LIST.toolName()`)
-- `add_mcp_server` — **present** ✅
+- `brave_web_search` - **absent** ✅ (`isEnabled()` gating works)
+- `serper_web_search` - **absent** ✅ (`isEnabled()` gating works)
+- `check_list` - **present as lowercase** ✅ (`name()` returns `ToolCapability.CHECK_LIST.toolName()`)
+- `add_mcp_server` - **present** ✅
 
 ***
 
-### Layer 5 — Enable Serper + Re-verify
+### Layer 5 - Enable Serper + Re-verify
 
 ```bash
 # In .env, set real key:
@@ -101,7 +101,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ***
 
-### Layer 6 — Live Serper Search (End-to-End)
+### Layer 6 - Live Serper Search (End-to-End)
 
 Send via Telegram or CLI with `researcher` role:
 
@@ -127,11 +127,11 @@ INFO  TOOL_EXECUTED | serper_web_search | session-xxx
 
 | Layer | Gate | Status |
 |---|---|---|
-| 1 — Unit tests | 18/18 pass | ✅ Verified |
-| 2 — Compile | Clean, 0 errors | ✅ Verified |
-| 3 — Grep checks | No stale refs | ✅ Verified |
-| 4 — Tool registry live | Correct names, search tools absent | ✅ Verified |
-| 5 — Serper key enable | `serper_web_search` appears | Run when needed |
-| 6 — Live search call | Audit log shows `TOOL_EXECUTED` | Run when needed |
+| 1 - Unit tests | 18/18 pass | ✅ Verified |
+| 2 - Compile | Clean, 0 errors | ✅ Verified |
+| 3 - Grep checks | No stale refs | ✅ Verified |
+| 4 - Tool registry live | Correct names, search tools absent | ✅ Verified |
+| 5 - Serper key enable | `serper_web_search` appears | Run when needed |
+| 6 - Live search call | Audit log shows `TOOL_EXECUTED` | Run when needed |
 
-Layers 1–4 are **done and verified**. Layers 5–6 are **on-demand** — run when you plug in a real Serper key.
+Layers 1–4 are **done and verified**. Layers 5–6 are **on-demand** - run when you plug in a real Serper key.

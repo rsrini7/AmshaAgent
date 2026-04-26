@@ -105,7 +105,7 @@ public class ParallelToolStepExecutor {
         // 1. Deserialize batch
         List<ParallelToolCall> calls = deserializeBatch(batchStep, context.sessionId());
         if (calls == null || calls.isEmpty()) {
-            log.errorf("[PARALLEL] session=%s: empty or corrupt batch — terminating.", context.sessionId());
+            log.errorf("[PARALLEL] session=%s: empty or corrupt batch - terminating.", context.sessionId());
             return StepDecision.terminal(AgentResult.failed(
                 "Parallel tool batch was empty or corrupt.",
                 AgentResult.FailureCategory.SYSTEM_ERROR,
@@ -131,7 +131,7 @@ public class ParallelToolStepExecutor {
                 // §7.4: ANY tool needs HITL → pause ENTIRE batch atomically.
                 // §7.30: PRE-EXECUTE tools whose autonomy level is >= FULL.
                 log.infof("[PARALLEL-HITL] session=%s tool=%s requires approval " +
-                          "— evaluating pre-execution for remaining %d tools.",
+                          "- evaluating pre-execution for remaining %d tools.",
                           context.sessionId(), call.toolName(), calls.size());
                 return handleHitlBatch(context, history, batchStep, calls);
             }
@@ -149,7 +149,7 @@ public class ParallelToolStepExecutor {
 
             if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate dedup) {
                 // §7.15: Dedup tool → use cached result; DO NOT skip peers.
-                log.infof("[PARALLEL-DEDUP] session=%s tool=%s is duplicate — " +
+                log.infof("[PARALLEL-DEDUP] session=%s tool=%s is duplicate - " +
                           "using cached observation, continuing with remaining %d tools.",
                           context.sessionId(), call.toolName(),
                           calls.size() - 1);
@@ -165,7 +165,7 @@ public class ParallelToolStepExecutor {
         // If ALL tools were dedup, return the merged dedup batch
         if (allowedCalls.isEmpty()) {
             log.infof("[PARALLEL-DEDUP] session=%s all %d tools were duplicates " +
-                      "— returning merged dedup batch.",
+                      "- returning merged dedup batch.",
                       context.sessionId(), calls.size());
             List<ParallelToolCall> allDedup = new ArrayList<>(dedupCalls);
             return buildCompletedBatchDecision(
@@ -258,7 +258,7 @@ public class ParallelToolStepExecutor {
                         AgentResult.FailureCategory.SYSTEM_ERROR,
                         List.copyOf(history)));
                 } catch (TimeoutException e) {
-                    // §7.16: timeout — tool slot gets a FAIL result, batch continues
+                    // §7.16: timeout - tool slot gets a FAIL result, batch continues
                     future.cancel(true);
                     ParallelToolCall timedOut = allowedCalls.get(i);
                     log.warnf("[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",

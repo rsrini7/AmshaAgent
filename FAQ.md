@@ -1,4 +1,4 @@
-# ArcClaw V1.0.0 — Frequently Asked Questions (FAQ)
+# ArcClaw V1.0.0 - Frequently Asked Questions (FAQ)
 
 ---
 
@@ -16,7 +16,7 @@
 10. [Structured Output Engine](#-structured-output-engine)
 11. [Cron Scheduler & Autonomous Tasks](#-cron-scheduler--autonomous-tasks)
 12. [Security & Secrets](#-security--secrets)
-13. [Extending ArcClaw — Tools, Personas & Reflexes](#-extending-arcclaw--tools-personas--reflexes)
+13. [Extending ArcClaw - Tools, Personas & Reflexes](#-extending-arcclaw--tools-personas--reflexes)
 14. [Channels & Telegram Integration](#-channels--telegram-integration)
 15. [Runtime & Operations](#-runtime--operations)
 16. [Testing](#-testing)
@@ -29,12 +29,12 @@
 
 The reactor enforces strict architectural separation that prevents accidental dependency creep. The six modules are:
 
-- **`arcclaw-channel-api`** — pure interfaces (`ChannelSender`, `IntentDetector`, `ChannelAllowlist`, structured output types) with no implementation. This allows `arcclaw-core` to reference channel concepts without coupling to Telegram or any specific adapter.
-- **`arcclaw-core`** — domain logic and CDI interfaces. Has zero awareness of REST, Telegram, or CLI. This is the "kernel" that could theoretically be embedded in any JVM runtime.
-- **`arcclaw-mcp`** — MCP server/client logic. Exposes `DynamicToolLookupImpl` behind the `DynamicToolLookup` interface defined in `arcclaw-core`. Keeping it separate means the kernel has no compile-time dependency on MCP transport code.
-- **`arcclaw-rag`** — Two-tier RAG memory (sqlite-vec). The `vec0.so` native extension has platform-specific native image metadata. Isolating it prevents this from polluting the core module.
-- **`arcclaw-deployment`** — Quarkus build-time processors. Contains the `@BuildStep` logic that wires up the custom `@WorkspaceScoped` CDI scope, MCP build steps (`McpBuildStep`), and RAG resource steps (`RagResourcesBuildStep`). Keeping this separate ensures the scope works correctly in native image compilation.
-- **`arcclaw-app`** — the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `arcclaw-app`**.
+- **`arcclaw-channel-api`** - pure interfaces (`ChannelSender`, `IntentDetector`, `ChannelAllowlist`, structured output types) with no implementation. This allows `arcclaw-core` to reference channel concepts without coupling to Telegram or any specific adapter.
+- **`arcclaw-core`** - domain logic and CDI interfaces. Has zero awareness of REST, Telegram, or CLI. This is the "kernel" that could theoretically be embedded in any JVM runtime.
+- **`arcclaw-mcp`** - MCP server/client logic. Exposes `DynamicToolLookupImpl` behind the `DynamicToolLookup` interface defined in `arcclaw-core`. Keeping it separate means the kernel has no compile-time dependency on MCP transport code.
+- **`arcclaw-rag`** - Two-tier RAG memory (sqlite-vec). The `vec0.so` native extension has platform-specific native image metadata. Isolating it prevents this from polluting the core module.
+- **`arcclaw-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up the custom `@WorkspaceScoped` CDI scope, MCP build steps (`McpBuildStep`), and RAG resource steps (`RagResourcesBuildStep`). Keeping this separate ensures the scope works correctly in native image compilation.
+- **`arcclaw-app`** - the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `arcclaw-app`**.
 
 The rule is: **kernel logic never imports application-layer code**. This makes `arcclaw-core` independently testable with zero Quarkus startup overhead.
 
@@ -54,7 +54,7 @@ The dual-database design (`arcclaw-meta.db` for structured state, `arcclaw-fts.d
 
 ### Q: Why use Virtual Threads instead of reactive Vert.x coroutines?
 
-Agent loops are fundamentally I/O-bound. They spend ~95% of their time blocked on LLM API responses or waiting for Podman sandbox processes to finish. Both Virtual Threads and Vert.x coroutines solve blocking I/O — the difference is ergonomics and safety.
+Agent loops are fundamentally I/O-bound. They spend ~95% of their time blocked on LLM API responses or waiting for Podman sandbox processes to finish. Both Virtual Threads and Vert.x coroutines solve blocking I/O - the difference is ergonomics and safety.
 
 Vert.x reactive code is non-blocking by design but is **collaborative**: if any frame on the event loop blocks, every other request stalls. That makes it brittle for agentic workloads where any reasoning step might block for 10–30 seconds. Virtual Threads (JEP 444, stable in JDK 21) are **preemptive**: the JVM parks the thread at any blocking call and recycles the underlying carrier thread, with zero risk of event-loop starvation. The code also reads exactly like synchronous Java, which keeps the agent loop logic readable and debuggable.
 
@@ -62,9 +62,9 @@ Vert.x reactive code is non-blocking by design but is **collaborative**: if any 
 
 ### Q: What is `@WorkspaceScoped` and why is a custom CDI scope necessary?
 
-Standard CDI scopes (`@RequestScoped`, `@SessionScoped`) are tied to HTTP lifecycle events. Agent runs on virtual threads — especially async runs and cron jobs — have no HTTP request context. Without a custom scope, any bean holding per-session state would either be shared globally (`@ApplicationScoped`) or lost across thread boundaries.
+Standard CDI scopes (`@RequestScoped`, `@SessionScoped`) are tied to HTTP lifecycle events. Agent runs on virtual threads - especially async runs and cron jobs - have no HTTP request context. Without a custom scope, any bean holding per-session state would either be shared globally (`@ApplicationScoped`) or lost across thread boundaries.
 
-`@WorkspaceScoped` is a CDI scope keyed on `sessionId`. The `WorkspaceScopeHolder` uses Java 21 `ScopedValue` (not `ThreadLocal`) to bind a workspace context to the logical execution — it propagates correctly across virtual threads, CDI-managed executors, and Camel routes without leaking state between sessions. The `arcclaw-deployment` module wires this scope up at Quarkus build time via `@BuildStep`.
+`@WorkspaceScoped` is a CDI scope keyed on `sessionId`. The `WorkspaceScopeHolder` uses Java 21 `ScopedValue` (not `ThreadLocal`) to bind a workspace context to the logical execution - it propagates correctly across virtual threads, CDI-managed executors, and Camel routes without leaking state between sessions. The `arcclaw-deployment` module wires this scope up at Quarkus build time via `@BuildStep`.
 
 ---
 
@@ -93,7 +93,7 @@ ArcClaw runs **Podman inside a Docker container** (nested containerization). For
 
 ArcClaw executes AI-generated shell commands inside isolated containers. The threat model is: *an LLM has crafted a tool invocation that may contain adversarial input*. The sandbox's job is to contain the blast radius. Podman is the right tool for three reasons:
 
-**1. No privileged daemon socket.** Docker requires mounting `/var/run/docker.sock` into the ArcClaw container to spawn child containers. Owning that socket grants root-equivalent access to the entire host. Podman is daemonless — containers are direct child processes of the `arcclaw` user process, with no socket exposure.
+**1. No privileged daemon socket.** Docker requires mounting `/var/run/docker.sock` into the ArcClaw container to spawn child containers. Owning that socket grants root-equivalent access to the entire host. Podman is daemonless - containers are direct child processes of the `arcclaw` user process, with no socket exposure.
 
 **2. Rootless by default.** Podman containers run with the calling user's UID (UID 1000 for `arcclaw`). Even if a sandboxed tool escapes the container, it runs as an unprivileged user on the host. Docker's rootless mode requires manual setup and has limitations around cgroup v2 and storage drivers.
 
@@ -124,13 +124,13 @@ Yes. Set `arcclaw.sandbox.strategy=NONE` in your local `application.yaml` (the `
 
 ### Q: Why Java 25 / Quarkus instead of Python (LangChain / LangGraph) or Go?
 
-ArcClaw's design requirements — a custom CDI scope, native image compilation, virtual threads, SQLite WAL concurrency, and Podman process spawning — all land in a sweet spot where Java 25 + Quarkus excels. The specific choices:
+ArcClaw's design requirements - a custom CDI scope, native image compilation, virtual threads, SQLite WAL concurrency, and Podman process spawning - all land in a sweet spot where Java 25 + Quarkus excels. The specific choices:
 
-**Java over Python:** Python's async model (asyncio/gevent) is cooperative and brittle under sustained I/O load from LLM calls. Java 25 Virtual Threads are preemptive, JVM-managed, and trivially composable with existing blocking libraries (JDBC, ProcessBuilder). The JVM's JIT also gives significantly lower latency on repeated agent-loop iterations after warm-up. Native image compilation via GraalVM further brings startup time to under 100 ms — impossible with a Python interpreter.
+**Java over Python:** Python's async model (asyncio/gevent) is cooperative and brittle under sustained I/O load from LLM calls. Java 25 Virtual Threads are preemptive, JVM-managed, and trivially composable with existing blocking libraries (JDBC, ProcessBuilder). The JVM's JIT also gives significantly lower latency on repeated agent-loop iterations after warm-up. Native image compilation via GraalVM further brings startup time to under 100 ms - impossible with a Python interpreter.
 
 **Quarkus over Spring Boot:** Quarkus was designed for GraalVM native image from day one. Spring Native exists but is a retrofit. Quarkus's build-time CDI model (all bean wiring resolved at compile time) is what makes `@WorkspaceScoped` implementable without reflection hacks. Quarkus also ships Micrometer, OTLP, Health, and Scheduler as first-class extensions with native-image metadata pre-configured.
 
-**Java over Go:** Go lacks generics-mature library support for LLM orchestration, CDI-style IoC, and JPA-level SQLite ORM. The LangChain4J ecosystem is also far richer than any Go equivalent, and Go's goroutine model — while excellent — doesn't offer the CDI context propagation mechanism needed for `@WorkspaceScoped` beans.
+**Java over Go:** Go lacks generics-mature library support for LLM orchestration, CDI-style IoC, and JPA-level SQLite ORM. The LangChain4J ecosystem is also far richer than any Go equivalent, and Go's goroutine model - while excellent - doesn't offer the CDI context propagation mechanism needed for `@WorkspaceScoped` beans.
 
 ---
 
@@ -148,7 +148,7 @@ Spring AI is a strong alternative but is more opinionated toward the Spring ecos
 
 ### Q: Why Groq as the default LLM provider instead of OpenAI or a local model?
 
-Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. ArcClaw V1.0.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction — both available on Groq.
+Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. ArcClaw V1.0.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction - both available on Groq.
 
 Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for fully air-gapped deployments. Switching is a two-line change in `application.yaml`.
 
@@ -156,7 +156,7 @@ Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for f
 
 ### Q: Why Apache Camel for the Telegram adapter instead of the Bot4J or TelegramBots library?
 
-Apache Camel's `camel-telegram` component handles the long-polling lifecycle, graceful shutdown, and retry logic for the Telegram Bot API automatically. More importantly, Camel's `ManagedExecutor` handoff lets ArcClaw bridge the Vert.x event loop thread (where Camel routes run) to a Quarkus-managed virtual thread (where the CDI context and `@WorkspaceScoped` beans live) in a single line. Writing the same handoff with a raw Telegram library would require explicit thread pool management and careful CDI context propagation — all code that Camel handles transparently.
+Apache Camel's `camel-telegram` component handles the long-polling lifecycle, graceful shutdown, and retry logic for the Telegram Bot API automatically. More importantly, Camel's `ManagedExecutor` handoff lets ArcClaw bridge the Vert.x event loop thread (where Camel routes run) to a Quarkus-managed virtual thread (where the CDI context and `@WorkspaceScoped` beans live) in a single line. Writing the same handoff with a raw Telegram library would require explicit thread pool management and careful CDI context propagation - all code that Camel handles transparently.
 
 ---
 
@@ -168,7 +168,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 |---|---|---|---|
 | `coordinator` | Vishnu | Can use all tools | General tasks, delegation, scheduling |
 | `researcher` | Saraswati | Read-only tools only; never fabricates | External data retrieval, GitHub lookups |
-| `coder` | Brahma | Empty tool schema — no tools | Pure code generation, math, logic |
+| `coder` | Brahma | Empty tool schema - no tools | Pure code generation, math, logic |
 | `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
 | `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
@@ -179,13 +179,13 @@ The `IntentDetectorService` uses `llama-3.1-8b-instant` to auto-route incoming m
 
 ### Q: Why do `coder` and `debugger` have empty (or near-empty) tool schemas?
 
-This is a deliberate architectural constraint called **schema filtering**. When the LLM receives a tool schema, it is tempted to use those tools even when the task doesn't require them (tool bias). By passing an empty tool schema to `coder` and a read-only schema to `debugger`, it is *structurally impossible* for those personas to trigger a network call or file mutation — regardless of what the user prompt says. The constraint is enforced in `AgentRoleEnum.definition().toolNames()` and applied in `LangChainReasoningEngine` before the prompt is sent.
+This is a deliberate architectural constraint called **schema filtering**. When the LLM receives a tool schema, it is tempted to use those tools even when the task doesn't require them (tool bias). By passing an empty tool schema to `coder` and a read-only schema to `debugger`, it is *structurally impossible* for those personas to trigger a network call or file mutation - regardless of what the user prompt says. The constraint is enforced in `AgentRoleEnum.definition().toolNames()` and applied in `LangChainReasoningEngine` before the prompt is sent.
 
 ---
 
 ### Q: My Agent loop randomly failed with: *"System Error: You provided invalid JSON formatting"*. What happened?
 
-This is a **JSON Hallucination** — the LLM generated malformed JSON for a tool invocation (e.g., a trailing comma or unescaped quote). Instead of crashing, `LangChainReasoningEngine` intercepts the `JsonParseException` and returns the error message back to the LLM as a "System Error" observation. This allows the LLM to self-correct on the next iteration. It is most common with smaller local models (`llama3.2:1b`). Groq-hosted Llama 4 Scout is significantly more reliable on structured output.
+This is a **JSON Hallucination** - the LLM generated malformed JSON for a tool invocation (e.g., a trailing comma or unescaped quote). Instead of crashing, `LangChainReasoningEngine` intercepts the `JsonParseException` and returns the error message back to the LLM as a "System Error" observation. This allows the LLM to self-correct on the next iteration. It is most common with smaller local models (`llama3.2:1b`). Groq-hosted Llama 4 Scout is significantly more reliable on structured output.
 
 ---
 
@@ -211,7 +211,7 @@ When the user sends `/approve`, the `ApproveReflex` loads the checkpoint from SQ
 
 After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Reset**: the internal ReAct loop state (tool call history, reasoning step sequence) is wiped, but the LangChain4J `ChatMemoryStore` (the conversational history visible to the LLM) is preserved.
 
-Without this reset, a "ghost" tool trigger from a previous task can contaminate the next request — the LLM sees a prior `ToolExecutionResultMessage` in context and incorrectly assumes it is still mid-task. The soft reset eliminates this poisoning while keeping the conversation flowing naturally.
+Without this reset, a "ghost" tool trigger from a previous task can contaminate the next request - the LLM sees a prior `ToolExecutionResultMessage` in context and incorrectly assumes it is still mid-task. The soft reset eliminates this poisoning while keeping the conversation flowing naturally.
 
 ---
 
@@ -224,8 +224,8 @@ A `AgentReflex` is a deterministic fast-path that intercepts specific input patt
 This matters for three reasons:
 
 1. **Cost:** Commands like `/approve`, `/status`, and `/history` are intent-unambiguous. Routing them through an LLM classification step wastes tokens and adds latency.
-2. **Safety:** The `PromptInjectionReflex` must fire *before* the LLM sees the input — if an adversarial prompt could reach the reasoning engine, it might influence the model to bypass governance.
-3. **Reliability:** Reflexes are pure Java — they cannot hallucinate, and their behaviour is deterministic and fully unit-testable.
+2. **Safety:** The `PromptInjectionReflex` must fire *before* the LLM sees the input - if an adversarial prompt could reach the reasoning engine, it might influence the model to bypass governance.
+3. **Reliability:** Reflexes are pure Java - they cannot hallucinate, and their behaviour is deterministic and fully unit-testable.
 
 ---
 
@@ -236,7 +236,7 @@ This matters for three reasons:
 - **`REDACT_AND_FORWARD`** (default): Replaces detected PII with placeholder tokens (e.g., `[EMAIL]`, `[PHONE]`) and passes the sanitized message to the LLM. The user sees no interruption.
 - **`BLOCK_AND_NOTIFY`**: Rejects the message outright and returns an error. Use this in regulated environments where PII must never touch the LLM API.
 
-Note: `store <key>=<value>` messages bypass PII scanning entirely in `ReflexRegistry` — this prevents secret values (like a GitHub PAT that might match the JWT pattern) from being incorrectly redacted.
+Note: `store <key>=<value>` messages bypass PII scanning entirely in `ReflexRegistry` - this prevents secret values (like a GitHub PAT that might match the JWT pattern) from being incorrectly redacted.
 
 ---
 
@@ -244,14 +244,14 @@ Note: `store <key>=<value>` messages bypass PII scanning entirely in `ReflexRegi
 
 It maintains four categories of compiled patterns:
 
-1. **Fake approval bypass** — patterns like "human approved", "auto-approve", "this has been pre-approved", "skip governance".
-2. **System prompt extraction** — patterns like "reveal your instructions", "repeat everything", "show your system prompt".
-3. **Role override attempts** — patterns that try to redefine the agent's persona mid-conversation.
-4. **Security bypass vocabulary** — patterns from `DestructiveVocabularyFilter` (shell destructive commands).
+1. **Fake approval bypass** - patterns like "human approved", "auto-approve", "this has been pre-approved", "skip governance".
+2. **System prompt extraction** - patterns like "reveal your instructions", "repeat everything", "show your system prompt".
+3. **Role override attempts** - patterns that try to redefine the agent's persona mid-conversation.
+4. **Security bypass vocabulary** - patterns from `DestructiveVocabularyFilter` (shell destructive commands).
 
 If any pattern matches, the message is blocked before it reaches the intent classifier or agent loop. The block is logged as a `SecurityEventType.PROMPT_INJECTION_ATTEMPT` audit event.
 
-The `ToolObservationSanitizer` also runs both `PromptInjectionReflex.sanitize()` and `PiiScanReflex.redactPii()` on **tool output** before appending it to agent history — so adversarial content in a tool's stdout cannot inject instructions into the reasoning context.
+The `ToolObservationSanitizer` also runs both `PromptInjectionReflex.sanitize()` and `PiiScanReflex.redactPii()` on **tool output** before appending it to agent history - so adversarial content in a tool's stdout cannot inject instructions into the reasoning context.
 
 ---
 
@@ -276,7 +276,7 @@ After connecting an external MCP server via `POST /api/v1/mcp/connect`, the resp
 Both skip the LLM in different ways:
 
 - **Reflexes** handle *operational commands* (`/approve`, `/halt`, `/status`, etc.) and *security filters* (PII, injection). They return a direct response and end the pipeline immediately.
-- **Skills** handle *content routing* — they match a user's natural-language query against a trigger pattern and inject a custom system prompt, then run the full agent loop with that persona. The agent still reasons and may still call tools; only the intent classifier step is skipped.
+- **Skills** handle *content routing* - they match a user's natural-language query against a trigger pattern and inject a custom system prompt, then run the full agent loop with that persona. The agent still reasons and may still call tools; only the intent classifier step is skipped.
 
 In short: a reflex replaces the LLM entirely. A skill replaces *only the intent classification step* and adjusts the persona.
 
@@ -313,13 +313,13 @@ To deploy as built-in (requires rebuild): place the `.md` file in `src/main/reso
 
 ### Q: What happens if two skills have overlapping trigger patterns?
 
-`SkillRegistry` evaluates skills in load order (built-in classpath skills first, then database-tier skills). The first match wins. To avoid conflicts, make trigger patterns as specific as possible. If you need to replace a built-in skill, upsert a database-tier skill with the same `name` — it will shadow the built-in entry.
+`SkillRegistry` evaluates skills in load order (built-in classpath skills first, then database-tier skills). The first match wins. To avoid conflicts, make trigger patterns as specific as possible. If you need to replace a built-in skill, upsert a database-tier skill with the same `name` - it will shadow the built-in entry.
 
 ---
 
 ### Q: How do I update an existing skill without creating a duplicate?
 
-`POST /api/v1/skills` is an **upsert** — if a skill with the same `name` already exists in the database tier, it is replaced in-place and the registry is reloaded. You will see `{"message":"Skill saved and registry reloaded: <name>"}` in the response for both new and updated skills.
+`POST /api/v1/skills` is an **upsert** - if a skill with the same `name` already exists in the database tier, it is replaced in-place and the registry is reloaded. You will see `{"message":"Skill saved and registry reloaded: <name>"}` in the response for both new and updated skills.
 
 ---
 
@@ -366,7 +366,7 @@ Always run `GET /api/v1/mcp/status` before starting the protocol sequence to con
 
 ### Q: How do dynamic MCP tools appear to agents?
 
-After connecting an external MCP server, `DynamicToolCapabilityRegistry` registers each of its tools as a `DynamicToolCapability`. `DynamicToolLookupImpl` (in `arcclaw-mcp`) provides the `DynamicToolLookup` implementation used by `ToolRegistry`. The tool then appears in the LLM's tool schema for roles that permit dynamic tools — the LLM invokes them exactly like built-in tools, and `ExternalMcpToolAdapter` dispatches the call to the remote server via `McpClientService`.
+After connecting an external MCP server, `DynamicToolCapabilityRegistry` registers each of its tools as a `DynamicToolCapability`. `DynamicToolLookupImpl` (in `arcclaw-mcp`) provides the `DynamicToolLookup` implementation used by `ToolRegistry`. The tool then appears in the LLM's tool schema for roles that permit dynamic tools - the LLM invokes them exactly like built-in tools, and `ExternalMcpToolAdapter` dispatches the call to the remote server via `McpClientService`.
 
 ---
 
@@ -397,7 +397,7 @@ Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `
 
 ### Q: What is the `MemorySearchTool` and how is long-term memory retrieved?
 
-`MemorySearchTool` queries the two-tier memory service (`TwoTierMemoryService`) scoped to the current user's `userId` (from `WorkspaceScopeHolder.USER_ID`) — the LLM can control the search query but **cannot access another user's memories**. Tenant isolation is enforced in Java, not in the SQL query.
+`MemorySearchTool` queries the two-tier memory service (`TwoTierMemoryService`) scoped to the current user's `userId` (from `WorkspaceScopeHolder.USER_ID`) - the LLM can control the search query but **cannot access another user's memories**. Tenant isolation is enforced in Java, not in the SQL query.
 
 The search merges FTS5 keyword results and sqlite-vec vector results using Reciprocal Rank Fusion (RRF, k=60). If the vector extension is unavailable, it degrades silently to FTS5-only results.
 
@@ -417,8 +417,8 @@ It is a **one-time migration script** to be run after deploying the Phase 45 FTS
 
 ArcClaw's `TwoTierMemoryService` merges results from two sources using **Reciprocal Rank Fusion (RRF)**:
 
-- **Tier 1 — FTS5 (keyword)**: `CompactionSummaryRepository` queries `arcclaw-fts.db` using SQLite's FTS5 full-text search. Results are ranked by keyword relevance.
-- **Tier 2 — Vector (semantic)**: `GlobalKnowledgeBase` (application-scoped, always active) and `SessionKnowledgeBase` (`@WorkspaceScoped`, active only when a workspace is live) store embedded chunks. Queries use cosine similarity via sqlite-vec.
+- **Tier 1 - FTS5 (keyword)**: `CompactionSummaryRepository` queries `arcclaw-fts.db` using SQLite's FTS5 full-text search. Results are ranked by keyword relevance.
+- **Tier 2 - Vector (semantic)**: `GlobalKnowledgeBase` (application-scoped, always active) and `SessionKnowledgeBase` (`@WorkspaceScoped`, active only when a workspace is live) store embedded chunks. Queries use cosine similarity via sqlite-vec.
 
 **RRF merge formula**: `score(d) = Σ 1.0 / (60 + rank)` across both ranked lists. This outperforms either method alone on mixed-domain queries.
 
@@ -434,7 +434,7 @@ ArcClaw's `TwoTierMemoryService` merges results from two sources using **Recipro
 
 ### Q: What happens if sqlite-vec is unavailable?
 
-`FtsConnectionInterceptor.isVectorSearchEnabled()` checks at startup whether the extension loaded successfully. If not, `TwoTierMemoryService` takes the **fast path**: it skips the RRF merge entirely and returns FTS5 results directly. No error is thrown, no agent functionality is lost — only the semantic vector search dimension is unavailable. Check boot logs for: `vector search disabled — vec0 extension not loaded`.
+`FtsConnectionInterceptor.isVectorSearchEnabled()` checks at startup whether the extension loaded successfully. If not, `TwoTierMemoryService` takes the **fast path**: it skips the RRF merge entirely and returns FTS5 results directly. No error is thrown, no agent functionality is lost - only the semantic vector search dimension is unavailable. Check boot logs for: `vector search disabled - vec0 extension not loaded`.
 
 ---
 
@@ -447,7 +447,7 @@ ArcClaw's `TwoTierMemoryService` merges results from two sources using **Recipro
 
 ### Q: How do I ingest documents for RAG retrieval?
 
-Use `IngestDocumentTool` (tool name: `ingest_document`). It accepts document content and a scope (`global` or `session`) and chunks + embeds the document into the appropriate knowledge base. For persistent global knowledge, use `global` scope — it survives application restarts if the embedding store is backed by a persistent store. For session-scoped ephemeral context, use `session` scope.
+Use `IngestDocumentTool` (tool name: `ingest_document`). It accepts document content and a scope (`global` or `session`) and chunks + embeds the document into the appropriate knowledge base. For persistent global knowledge, use `global` scope - it survives application restarts if the embedding store is backed by a persistent store. For session-scoped ephemeral context, use `session` scope.
 
 ---
 
@@ -501,7 +501,7 @@ Two layers:
 Three ways:
 
 - **Telegram / CLI:** Send `/crons` or `/list crons` to get a formatted list. Send `deletecron <id>` to cancel by ID. These are zero-token reflexes.
-- **Agent tool:** Ask the coordinator agent "list my scheduled tasks" — it will invoke `ManageScheduleTool` with `action=list`. Ask it to "delete cron job abc-123" to invoke `action=delete`.
+- **Agent tool:** Ask the coordinator agent "list my scheduled tasks" - it will invoke `ManageScheduleTool` with `action=list`. Ask it to "delete cron job abc-123" to invoke `action=delete`.
 - **Direct SQL (admin):** `UPDATE agent_cron SET status = 'CANCELLED' WHERE id = 'abc-123';` on `arcclaw-meta.db`.
 
 ---
@@ -552,7 +552,7 @@ This fail-fast pattern ensures misconfigured production deployments are caught a
 
 ---
 
-## 🔧 Extending ArcClaw — Tools, Personas & Reflexes
+## 🔧 Extending ArcClaw - Tools, Personas & Reflexes
 
 ### Q: What is the minimal contract for adding a new tool?
 
@@ -578,7 +578,7 @@ If your tool needs sandbox isolation, set `requiresSandbox()` to `true`, impleme
 
 ### Q: How do I make a new tool available only to specific agent roles?
 
-Add your tool's `ToolCapability` entry to the `Set<ToolCapability>` inside the relevant `AgentRoleEnum` entries. Tool schema filtering is applied in `LangChainReasoningEngine.getPermittedToolNames()` — it intersects the agent's declared `allowedTools()` with the full registered tool list. Any tool not in the intersection is **invisible to the LLM** for that role, regardless of what the user prompt says.
+Add your tool's `ToolCapability` entry to the `Set<ToolCapability>` inside the relevant `AgentRoleEnum` entries. Tool schema filtering is applied in `LangChainReasoningEngine.getPermittedToolNames()` - it intersects the agent's declared `allowedTools()` with the full registered tool list. Any tool not in the intersection is **invisible to the LLM** for that role, regardless of what the user prompt says.
 
 ---
 
@@ -595,7 +595,7 @@ The new persona is immediately available via `--role your_role` on the CLI and `
 
 ### Q: How do I add a new Reflex?
 
-Implement `AgentReflex`, annotate `@ApplicationScoped`, return `true` from `matches(String input)` for your trigger, and implement `execute()`. The `ReflexRegistry` discovers it via CDI automatically. Order of reflex evaluation is unspecified — make sure your `matches()` pattern is specific enough not to shadow other reflexes.
+Implement `AgentReflex`, annotate `@ApplicationScoped`, return `true` from `matches(String input)` for your trigger, and implement `execute()`. The `ReflexRegistry` discovers it via CDI automatically. Order of reflex evaluation is unspecified - make sure your `matches()` pattern is specific enough not to shadow other reflexes.
 
 If your reflex needs to sanitize input before the LLM sees it (like `PiiScanReflex`), override the default `sanitize()` method.
 
@@ -609,7 +609,7 @@ Yes. The `arcclaw-channel-api` module defines the `ChannelSender` and `ChannelAl
 2. Create a Camel route (or equivalent) that reads messages from the channel and feeds them into `MessagePipeline.process(MessageContext)`.
 3. Register the channel's allowlist by implementing `ChannelAllowlist` and contributing it to the pipeline's `AllowlistHandler`.
 
-The entire reflex system, skill routing, intent classification, session routing, and agent execution are channel-agnostic — your new adapter gets all of these for free.
+The entire reflex system, skill routing, intent classification, session routing, and agent execution are channel-agnostic - your new adapter gets all of these for free.
 
 ---
 
@@ -617,7 +617,7 @@ The entire reflex system, skill routing, intent classification, session routing,
 
 ### Q: How does session continuity work across Telegram bot restarts?
 
-Sessions are identified using `UUID.nameUUIDFromBytes(chatId + ":" + userId)`. This is a **deterministic** UUID derived from the Telegram chat and user identity — it produces the same session ID every time for the same user, whether the bot has been restarted, redeployed, or migrated. As long as `arcclaw-meta.db` is mounted from a persistent volume, the user's conversation history and pending checkpoints survive any JVM restart.
+Sessions are identified using `UUID.nameUUIDFromBytes(chatId + ":" + userId)`. This is a **deterministic** UUID derived from the Telegram chat and user identity - it produces the same session ID every time for the same user, whether the bot has been restarted, redeployed, or migrated. As long as `arcclaw-meta.db` is mounted from a persistent volume, the user's conversation history and pending checkpoints survive any JVM restart.
 
 ---
 
@@ -631,9 +631,9 @@ Telegram's MarkdownV2 format requires escaping every special character (`_`, `*`
 
 `TelegramAllowlistGuard` is evaluated in the `AllowlistHandler` at the start of the `MessagePipeline`. If the user's Telegram user ID or username is not in `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` / `ARCCLAW_TELEGRAM_ALLOWED_USERS`, the message is rejected before it reaches the intent classifier or agent loop.
 
-If `arcclaw.channel.telegram.silent-block=false` (default), the user receives the configured `block-response` message (default: `⛔ Access denied.`). If `silent-block=true`, the message is dropped silently with no reply — useful when you do not want to reveal that the bot is running.
+If `arcclaw.channel.telegram.silent-block=false` (default), the user receives the configured `block-response` message (default: `⛔ Access denied.`). If `silent-block=true`, the message is dropped silently with no reply - useful when you do not want to reveal that the bot is running.
 
-An empty allowlist (`ARCCLAW_TELEGRAM_ALLOWED_USERS=`) allows all users — this is the open-access mode used in development.
+An empty allowlist (`ARCCLAW_TELEGRAM_ALLOWED_USERS=`) allows all users - this is the open-access mode used in development.
 
 ---
 
@@ -667,7 +667,7 @@ These are generated by the `maven-compiler-plugin` inside `target/maven-status/`
 
 ### Q: Why does `arcclaw-cli.ps1` not prompt to rebuild before running?
 
-The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N)"`) is commented out in the shipping version. This is intentional — the wrapper is designed for day-to-day usage where you have already built the JAR. Uncomment the block if you want the interactive rebuild prompt during active development cycles.
+The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N)"`) is commented out in the shipping version. This is intentional - the wrapper is designed for day-to-day usage where you have already built the JAR. Uncomment the block if you want the interactive rebuild prompt during active development cycles.
 
 ---
 
@@ -689,8 +689,8 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 
 Tests live in two modules:
 
-- **`arcclaw-core/src/test`** — pure unit and integration tests with zero Quarkus startup. Covers agent loop state machines, reasoning engine, reflex system, sandbox circuit breaker, secret vault, context compaction, FTS5 search, audit HMAC, governance budget, workspace lifecycle, and tool implementations.
-- **`arcclaw-app/src/test`** — `@QuarkusTest` integration tests that start the full CDI context. Covers REST API end-to-end (`AgentResourceTest`), Telegram route startup and routing, API key auth, rate limiting, security validators, and scheduler concurrency.
+- **`arcclaw-core/src/test`** - pure unit and integration tests with zero Quarkus startup. Covers agent loop state machines, reasoning engine, reflex system, sandbox circuit breaker, secret vault, context compaction, FTS5 search, audit HMAC, governance budget, workspace lifecycle, and tool implementations.
+- **`arcclaw-app/src/test`** - `@QuarkusTest` integration tests that start the full CDI context. Covers REST API end-to-end (`AgentResourceTest`), Telegram route startup and routing, API key auth, rate limiting, security validators, and scheduler concurrency.
 
 Both test modules use an **in-memory SQLite** database (`target/`) so no file cleanup is required between tests.
 

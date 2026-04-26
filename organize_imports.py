@@ -10,7 +10,7 @@ def get_import_category(imp):
 
 
 def is_redundant_java_lang(imp):
-    """java.lang.String / java.lang.Integer etc. are auto-imported — strip them."""
+    """java.lang.String / java.lang.Integer etc. are auto-imported - strip them."""
     if imp.startswith('java.lang.'):
         return '.' not in imp.replace('java.lang.', '', 1)
     return False

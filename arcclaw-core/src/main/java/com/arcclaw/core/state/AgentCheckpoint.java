@@ -77,7 +77,7 @@ public class AgentCheckpoint {
     /**
      * Jackson-serialized {@code List<ReasoningStep>}.
      * <p>
-     * Stored as standard TEXT — no {@code @Lob} for SQLite compatibility.
+     * Stored as standard TEXT - no {@code @Lob} for SQLite compatibility.
      * @deprecated Replaced by {@link ReasoningStepEntity} in Phase 55.3.
      */
     @Deprecated
@@ -85,12 +85,12 @@ public class AgentCheckpoint {
     @Nullable
     private String stateJson;
 
-    /** Channel platform ID (e.g. Telegram chat ID) — used for timeout notifications. */
+    /** Channel platform ID (e.g. Telegram chat ID) - used for timeout notifications. */
     @Column(name = "channel_platform_id", length = 128)
     @Nullable
     private String channelPlatformId;
 
-    /** Channel type (e.g. TELEGRAM, REST_API) — used for timeout notifications. */
+    /** Channel type (e.g. TELEGRAM, REST_API) - used for timeout notifications. */
     @Column(name = "channel_type", length = 32)
     @Nullable
     private String channelType;
@@ -103,7 +103,7 @@ public class AgentCheckpoint {
      * instead of the synthetic {@code AgentSentinels.GOAL_RESUME_APPROVED} string,
      * which would produce semantically meaningless RAG query vectors.
      * <p>
-     * Truncated to 2048 chars — goals longer than this are rare and SQLite TEXT
+     * Truncated to 2048 chars - goals longer than this are rare and SQLite TEXT
      * has no hard limit, but the column bound prevents runaway input.
      */
     @Column(name = "original_goal", length = 2048)
@@ -255,7 +255,7 @@ public class AgentCheckpoint {
     /**
      * Returns the original user goal captured when this checkpoint was paused
      * for human approval. Use this as the goal for {@code AgentStateMachineRunner}
-     * on resume — never use {@link com.arcclaw.core.agent.AgentSentinels#GOAL_RESUME_APPROVED}
+     * on resume - never use {@link com.arcclaw.core.agent.AgentSentinels#GOAL_RESUME_APPROVED}
      * as the RAG query string.
      */
     public String getOriginalGoal() {
@@ -263,7 +263,7 @@ public class AgentCheckpoint {
     }
 
     /**
-     * Sets the original user goal. Call this exactly once — inside
+     * Sets the original user goal. Call this exactly once - inside
      * {@code AgentStepProcessor.persistApprovalCheckpoint()} when the
      * checkpoint transitions to {@code AWAITING_APPROVAL}.
      * Never overwrite an already-set non-blank value.

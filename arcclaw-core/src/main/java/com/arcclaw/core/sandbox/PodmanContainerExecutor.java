@@ -124,7 +124,7 @@ public class PodmanContainerExecutor {
             span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
 
 
-            // Track before start — avoids race on early failure.
+            // Track before start - avoids race on early failure.
             activeContainerNames.add(containerName);
             try (Scope _ = span.makeCurrent()) {
                 var podmanCmd = new ArrayList<>(List.of(
@@ -165,7 +165,7 @@ public class PodmanContainerExecutor {
 
                 var pb = new ProcessBuilder(podmanCmd);
 
-                // check mkdirs() return value — silent failure leaves ProcessBuilder
+                // check mkdirs() return value - silent failure leaves ProcessBuilder
                 // pointing at a non-existent directory, producing a confusing OS error.
                 File workspaceDir = Path.of(workspaceRootDir, sessionId).toFile();
                 if (!workspaceDir.exists()) {
@@ -174,7 +174,7 @@ public class PodmanContainerExecutor {
                         throw new IOException(
                             "Failed to create workspace directory: " + workspaceDir.getAbsolutePath());
                     }
-                    log.warnf("PIE Workspace dir missing — recreated: %s",
+                    log.warnf("PIE Workspace dir missing - recreated: %s",
                               workspaceDir.getAbsolutePath());
                 }
 
@@ -183,7 +183,7 @@ public class PodmanContainerExecutor {
                 var process = pb.start();
                 transport.deliver(process);
 
-                // START reading stdout/stderr in background BEFORE waitFor() —
+                // START reading stdout/stderr in background BEFORE waitFor() -
                 // prevents pipe buffer deadlock when output exceeds ~64KB
                 var stdoutFuture = CompletableFuture.supplyAsync(() -> {
                     try {
@@ -212,7 +212,7 @@ public class PodmanContainerExecutor {
                     throw new ToolExecutionException("Tool timed out after " + effectiveTimeout + "s");
                 }
 
-                // Safe to get now — process has exited and stdout is fully drained
+                // Safe to get now - process has exited and stdout is fully drained
                 String stdout = "";
                 String stderr = "";
                 try {
@@ -258,7 +258,7 @@ public class PodmanContainerExecutor {
 
             } catch (Exception e) {
                 span.recordException(e);
-                // null-guard e.getMessage() — some exception types (e.g. NullPointerException)
+                // null-guard e.getMessage() - some exception types (e.g. NullPointerException)
                 // return null from getMessage(), which causes OpenTelemetry to throw internally.
                 span.setStatus(StatusCode.ERROR,
                     e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());

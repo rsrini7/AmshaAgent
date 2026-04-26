@@ -59,7 +59,7 @@ public class FallbackChatModel implements ChatModel {
         }
 
         // ── Tier 2: Compact/Chitchat (Efficiency Path) ──
-        // Try fallback first — it's faster and cheaper for non-tool prose answers.
+        // Try fallback first - it's faster and cheaper for non-tool prose answers.
         if (isCompact) {
             triedFallback = true;
             try {

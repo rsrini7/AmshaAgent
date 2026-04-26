@@ -133,7 +133,7 @@ public class HitlService {
             }
         }
 
-        // mirrors DenyReflex/ApproveReflex — triggers AgentLoop resume/denial path
+        // mirrors DenyReflex/ApproveReflex - triggers AgentLoop resume/denial path
         if (resolvedCp != null) {
             checkpointApprovalService.triggerResume(resolvedCp);
         }

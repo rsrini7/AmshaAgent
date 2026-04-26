@@ -129,13 +129,13 @@ class ChannelCommandParseTest {
     void parseInjectionPayloadFallsToUnknown() {
         String injection = "/approve; DROP TABLE agent_checkpoints; --";
         // The regex only captures the first whitespace-delimited token as cronId,
-        // so the full payload is harmless — the cronId is just the second token.
+        // so the full payload is harmless - the cronId is just the second token.
         ChannelCommand cmd = ChannelCommand.parse(injection);
         // Regardless of whether it matches Approve or Unknown, the raw SQL
         // must NOT be treated as a real cronId that reaches the DB.
         // Approve.cronId contains only the second whitespace-delimited token.
         if (cmd instanceof ChannelCommand.Approve a) {
-            // cronId is "; DROP TABLE..." — handler must sanitise before DB lookup
+            // cronId is "; DROP TABLE..." - handler must sanitise before DB lookup
             assertTrue(a.cronId().isPresent());
             // Verify it is a bounded string, not the entire injection tail
             assertFalse(a.cronId().get().contains(" "), "cronId must be a single token");

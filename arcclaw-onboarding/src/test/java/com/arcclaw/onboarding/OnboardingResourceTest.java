@@ -38,7 +38,7 @@ class OnboardingResourceTest {
     void testWizardFlow() {
         Mockito.when(mockModelFactory.validate(any(), any(), any())).thenReturn(true);
 
-        // Manual cookie tracking — SessionFilter only works with JSESSIONID, not custom cookies
+        // Manual cookie tracking - SessionFilter only works with JSESSIONID, not custom cookies
         final String[] sid = {null};
 
         // 1. GET /status → step=1 on fresh start

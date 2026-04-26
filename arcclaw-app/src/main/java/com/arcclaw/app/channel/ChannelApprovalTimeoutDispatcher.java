@@ -27,14 +27,14 @@ public class ChannelApprovalTimeoutDispatcher {
 
     void onApprovalTimedOut(@ObservesAsync ApprovalTimedOutEvent event) {
         if (event.channelPlatformId() == null || event.channelPlatformId().isBlank()) {
-            log.debugf("No channelPlatformId for session=%s — skipping timeout notification",
+            log.debugf("No channelPlatformId for session=%s - skipping timeout notification",
                     event.sessionId());
             return;
         }
 
         Optional<ChannelType> typeOpt = ChannelType.fromString(event.channelType());
         if (typeOpt.isEmpty()) {
-            log.warnf("ChannelApprovalTimeoutDispatcher: unknown channelType '%s' for session %s — " +
+            log.warnf("ChannelApprovalTimeoutDispatcher: unknown channelType '%s' for session %s - " +
                     "dropping timeout notification. Fix: ensure channelType is set on AgentCronEntity.",
                     event.channelType(), event.sessionId());
             return;
@@ -45,7 +45,7 @@ public class ChannelApprovalTimeoutDispatcher {
             .map(ChannelPlugin::jobNotifier)
             .ifPresentOrElse(
                 n -> n.notifyApprovalTimeout(event.channelPlatformId(), event.sessionId(), event.pendingToolName(), event.timeoutMinutes()),
-                () -> log.warnf("No ChannelPlugin for channelType [%s] — dropping notification", type)
+                () -> log.warnf("No ChannelPlugin for channelType [%s] - dropping notification", type)
             );
     }
 }

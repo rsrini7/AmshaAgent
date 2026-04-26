@@ -10,9 +10,9 @@ import com.arcclaw.persistence.api.PersistenceAction;
  *
  * <p>Two tiers:
  * <ul>
- *   <li>{@code CRITICAL} — caller blocks on {@code future} until the background
+ *   <li>{@code CRITICAL} - caller blocks on {@code future} until the background
  *       thread confirms the write. Used for mandatory security events.</li>
- *   <li>{@code TELEMETRY} — fire-and-forget: {@code future} is {@code null},
+ *   <li>{@code TELEMETRY} - fire-and-forget: {@code future} is {@code null},
  *       caller does not block.</li>
  * </ul>
  */
@@ -26,7 +26,7 @@ public final class PersistenceEvent {
     private final PersistenceAction dbAction;
 
     /**
-     * For CRITICAL events only — the caller joins on this future.
+     * For CRITICAL events only - the caller joins on this future.
      * {@code null} for TELEMETRY events.
      */
     private final CompletableFuture<Void> future;

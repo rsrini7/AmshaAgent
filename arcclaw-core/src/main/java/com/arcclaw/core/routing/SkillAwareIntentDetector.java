@@ -48,7 +48,7 @@ public class SkillAwareIntentDetector implements IntentDetector {
             }
         }
 
-        // No skill trigger match — fallback to expensive LLM classification
+        // No skill trigger match - fallback to expensive LLM classification
         return fallbackService.classify(userMessage);
     }
 }

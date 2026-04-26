@@ -9,7 +9,7 @@ import jakarta.persistence.*;
 import com.arcclaw.core.agent.AgentSentinels;
 
 /**
- * Immutable WORM audit record. Insert-only — no update or delete operations permitted.
+ * Immutable WORM audit record. Insert-only - no update or delete operations permitted.
  * Includes an HMAC chain for tamper detection.
  */
 @Entity
@@ -64,7 +64,7 @@ public class AuditEvent {
     @Column(name = "idempotency_key", updatable = false, length = 128)
     public String idempotencyKey;
 
-    // Monotonic per-session insert order — set exclusively by AuditEventRepository.record()
+    // Monotonic per-session insert order - set exclusively by AuditEventRepository.record()
     @Column(nullable = false, updatable = false)
     public long sequence;
 
@@ -94,7 +94,7 @@ public class AuditEvent {
         e.outputTokens   = outputTokens;
         e.usdCost        = usdCost;
         e.iterationsUsed = iterationsUsed;
-        e.sequence       = 0; // placeholder — set by AuditEventRepository.record() before persist
+        e.sequence       = 0; // placeholder - set by AuditEventRepository.record() before persist
         e.timestamp      = Instant.now();
         return e;
     }
@@ -115,7 +115,7 @@ public class AuditEvent {
         e.outputTokens   = 0;
         e.usdCost        = BigDecimal.ZERO;
         e.iterationsUsed = 0;
-        e.sequence       = 0; // placeholder — set by AuditEventRepository.record() before persist
+        e.sequence       = 0; // placeholder - set by AuditEventRepository.record() before persist
         e.timestamp      = Instant.now();
         return e;
     }

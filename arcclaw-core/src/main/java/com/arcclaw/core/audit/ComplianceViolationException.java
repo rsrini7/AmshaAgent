@@ -5,7 +5,7 @@ package com.arcclaw.core.audit;
  * after all retry attempts. Signals a fail-closed compliance violation.
  *
  * <p>When this exception appears in the call stack, the agent loop MUST halt
- * immediately — no subsequent LLM calls or tool executions are permitted
+ * immediately - no subsequent LLM calls or tool executions are permitted
  * because the audit trail is broken.
  */
 public class ComplianceViolationException extends RuntimeException {

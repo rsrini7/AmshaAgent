@@ -1,7 +1,7 @@
 import os
 import re
 
-# Matches FQNs rooted at java/jakarta/com/org/dev/io — covers Quarkus, Vert.x, SmallRye, etc.
+# Matches FQNs rooted at java/jakarta/com/org/dev/io - covers Quarkus, Vert.x, SmallRye, etc.
 fqn_pattern = re.compile(
     r'\b((?:java|jakarta|com|org|dev|io)\.(?:[a-z_][\w_]*\.)+([A-Z][\w$]*))\b'
 )
@@ -60,7 +60,7 @@ def should_skip_import(fqn, current_path):
 
 
 def is_redundant_java_lang(imp):
-    """java.lang.String, java.lang.Integer, etc. are auto-imported — skip them."""
+    """java.lang.String, java.lang.Integer, etc. are auto-imported - skip them."""
     if imp.startswith('java.lang.'):
         return '.' not in imp.replace('java.lang.', '', 1)
     return False

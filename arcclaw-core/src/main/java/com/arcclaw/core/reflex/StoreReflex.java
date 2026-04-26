@@ -54,7 +54,7 @@ public class StoreReflex implements AgentReflex {
             return new ReflexResult(Optional.empty(), structuredGoal);
         }
 
-        //  2 — Alias "remember X" to a structured storage goal
+        //  2 - Alias "remember X" to a structured storage goal
         return new ReflexResult(Optional.empty(), "Remember this information: " + content);
     }
 }

@@ -1,4 +1,4 @@
-# Quarkus LangChain4j — Google AI Gemini Integration
+# Quarkus LangChain4j - Google AI Gemini Integration
 
 The extension `quarkus-langchain4j-ai-gemini` provides the `AiGeminiChatLanguageModel` integration using the **Google AI (Gemini Developer API)**. This is the API-key-based path used in ArcClaw.
 

@@ -241,7 +241,7 @@ public class AgentLoop {
 
     private void updateStoreForRetry(String sessionId, String canonicalRole,
                                    AgentResult.AwaitingRetry awaitingRetry, MessageContext context) {
-        log.warnf("Session %s paused due to rate limit — retry after %dms",
+        log.warnf("Session %s paused due to rate limit - retry after %dms",
                 sessionId, awaitingRetry.retryAfterMs());
         agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
             cp.setStatus(CheckpointStatus.AWAITING_RETRY);
@@ -250,7 +250,7 @@ public class AgentLoop {
 
             if (context != null && context.getUser() != null && "TELEGRAM".equalsIgnoreCase(cp.getChannelType())) {
                 long waitSec = awaitingRetry.retryAfterMs() / 1000;
-                String notice = "⏳ Rate limit hit — I'll automatically retry in " + waitSec + " seconds.";
+                String notice = "⏳ Rate limit hit - I'll automatically retry in " + waitSec + " seconds.";
                 channelPluginRegistry.find(context.getUser().channel().id())
                         .map(ChannelPlugin::sender)
                         .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
@@ -283,7 +283,7 @@ public class AgentLoop {
     }
 
     private AgentResult handleComplianceViolation(String sessionId, String canonicalRole, ComplianceViolationException cve) {
-        log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s — halting agent.",
+        log.errorf("[SECURITY ALERT] ComplianceViolationException for session=%s eventType=%s - halting agent.",
                 sessionId, cve.getEventType());
         String msg = AgentErrorMessageUtil.safeMessage(cve);
         AgentResult result = AgentResult.failed("COMPLIANCE_VIOLATION: " + msg,
@@ -327,7 +327,7 @@ public class AgentLoop {
 
         if (last.success() != null) {
             if (!last.success()) {
-                log.warnf("[AgentLoop] Delegate tool for session %s marked as failed — skipping fast-path.", sessionId);
+                log.warnf("[AgentLoop] Delegate tool for session %s marked as failed - skipping fast-path.", sessionId);
                 return Optional.empty();
             }
         } else {
@@ -345,25 +345,25 @@ public class AgentLoop {
         if (opening.contains("i was unable") || opening.contains("unable to fetch") 
                 || opening.contains("could not find") || opening.contains("i cannot") 
                 || opening.contains("could not retrieve")) {
-            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases — injecting observation to allow coordinator wrap-up without restart", sessionId);
+            log.infof("[AgentLoop] Delegate result for session %s contains failure phrases - injecting observation to allow coordinator wrap-up without restart", sessionId);
             
             // Fix C2: Instead of empty (which causes restart), we return a finished result 
             // that forces the coordinator to see the failure in history and wrap up.
             List<ReasoningStep> historyWithFailure = new ArrayList<>(resumedHistory);
-            historyWithFailure.add(ReasoningStep.observe(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed — synthesize and finish"));
+            historyWithFailure.add(ReasoningStep.observe(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed - synthesize and finish"));
             
             return Optional.of(AgentResult.finished(observation, historyWithFailure));
         }
 
         log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +
-                "for session %s — skipping coordinator wrap-up LLM call", sessionId);
+                "for session %s - skipping coordinator wrap-up LLM call", sessionId);
         return Optional.of(AgentResult.finished(observation, List.copyOf(resumedHistory)));
     }
 
     private void tryStampChannelInfo(String sessionId, String canonicalRole,
                                      MessageContext context) {
         if (context == null || context.getUser() == null) {
-            log.warnf("No MessageContext user for session %s — " +
+            log.warnf("No MessageContext user for session %s - " +
                       "approval timeout notification will be skipped.", sessionId);
             return;
         }
@@ -376,7 +376,7 @@ public class AgentLoop {
             log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
                        sessionId, context.getUser().channel(), context.getUser().platformId());
         } catch (Exception e) {
-            log.warnf("Failed to stamp channel info for session %s — Cause: %s",
+            log.warnf("Failed to stamp channel info for session %s - Cause: %s",
                       sessionId, AgentErrorMessageUtil.safeMessage(e));
         }
     }

@@ -40,7 +40,7 @@ public class ChatStreamResource {
 
     private final UnicastProcessor<AgentEvent> processor = UnicastProcessor.create();
 
-    // Subscribe to the UnicastProcessor ONCE — the resulting hotStream
+    // Subscribe to the UnicastProcessor ONCE - the resulting hotStream
     // can be subscribed to many times (one per SSE connection)
     private final Multi<AgentEvent> hotStream = processor.broadcast().toAllSubscribers();
 
@@ -59,7 +59,7 @@ public class ChatStreamResource {
         Multi<AgentEvent> heartbeat = Multi.createFrom().ticks().every(Duration.ofSeconds(20))
                 .map(t -> new AgentEvent("heartbeat", "system", "keep-alive"));
 
-        // hotStream is shared — each subscriber gets their own downstream from the broadcast
+        // hotStream is shared - each subscriber gets their own downstream from the broadcast
         return Multi.createBy().merging().streams(hotStream, heartbeat);
     }
 

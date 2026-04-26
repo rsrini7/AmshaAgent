@@ -19,7 +19,7 @@ import org.jboss.logging.Logger;
  * <strong>Compaction race guard:</strong> On the first fetch, this cache calls
  * {@link CompactionEventBridge#awaitIfInFlight(String)} before querying the DB.
  * This guarantees the cache is populated AFTER any in-flight compaction has
- * committed its summary — preventing a stale-null scenario where the cache
+ * committed its summary - preventing a stale-null scenario where the cache
  * loads before compaction writes and then serves {@code null} for the rest of
  * the session.
  * <p>

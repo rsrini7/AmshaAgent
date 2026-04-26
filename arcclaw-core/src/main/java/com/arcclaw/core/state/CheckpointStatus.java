@@ -36,14 +36,14 @@ public enum CheckpointStatus {
     /**
      * The user explicitly denied a HITL tool-call approval request.
      * <p>
-     * Distinct from {@link #FAILED} — the agent did not crash; the user
+     * Distinct from {@link #FAILED} - the agent did not crash; the user
      * made an intentional decision to reject the pending tool invocation.
      * Terminal. No retry without a new session.
      */
     DENIED,
 
     /**
-     * Agent loop completed successfully — the FINISH action was reached
+     * Agent loop completed successfully - the FINISH action was reached
      * and an answer was returned to the user.
      * Terminal.
      */
@@ -54,7 +54,7 @@ public enum CheckpointStatus {
      * an unexpected exception, schema self-correction was exhausted, or
      * a consecutive-failure circuit breaker tripped.
      * <p>
-     * Does NOT include loop iteration cap exhaustion — see {@link #LOOP_EXCEEDED}.
+     * Does NOT include loop iteration cap exhaustion - see {@link #LOOP_EXCEEDED}.
      * Terminal.
      */
     FAILED,
@@ -63,7 +63,7 @@ public enum CheckpointStatus {
      * Agent loop terminated because the maximum iteration count was reached
      * before a FINISH action was produced ({@code AgentResult.loopExceeded()}).
      * <p>
-     * Distinct from {@link #FAILED} — the agent did not crash; it simply
+     * Distinct from {@link #FAILED} - the agent did not crash; it simply
      * could not complete the goal within its allocated budget. Useful for
      * tuning {@code maxIterations} and identifying goals that are too broad.
      * Terminal.

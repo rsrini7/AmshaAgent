@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 05 — AGENT DELEGATION (Phase 76)
+### 05 - AGENT DELEGATION (Phase 76)
 ###
 ### The Coordinator (Vishnu) delegates complex tasks to domain-expert
 ### sub-agents via the `delegate_to_agent` tool. This file covers:
@@ -12,7 +12,7 @@
 ###   E. Role-capability enforcement: non-coordinator roles blocked (403)
 ###   F. GitHub misuse guard (ToolStepHandler Component 5)
 ###   G. Inner session checkpoint isolation (":d:" prefix rows)
-###   H. Repeated delegation — unique inner session IDs (collision fix)
+###   H. Repeated delegation - unique inner session IDs (collision fix)
 ###   I. Loop exceeded and budget propagation
 ###   J. Self-contained goal quality: vague "fix it" must be rephrased
 ###   K. Negative routing: phrases that must NOT trigger delegation
@@ -45,7 +45,7 @@
 # @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION A — HAPPY PATH: COORDINATOR → EACH SPECIALIST
+# SECTION A - HAPPY PATH: COORDINATOR → EACH SPECIALIST
 # Each test: coordinator session → explicit delegation goal →
 # verify sub-agent result is returned as coordinator's final answer.
 # Logs to check: TOOL_INVOKED(delegate_to_agent), inner session with
@@ -153,7 +153,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION B — DEITY ALIAS RESOLUTION IN DELEGATE_TO_AGENT
+# SECTION B - DEITY ALIAS RESOLUTION IN DELEGATE_TO_AGENT
 # The 'agent' param accepts deity names which AgentRoleEnum.fromString()
 # resolves to the correct role. Includes misspelling alias "brahaspati".
 # ─────────────────────────────────────────────────────────────────
@@ -235,7 +235,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION C — DelegationRoutingProvider FAST-PATH INTENT ROUTING
+# SECTION C - DelegationRoutingProvider FAST-PATH INTENT ROUTING
 # Natural language phrases like "ask shiva to...", "tell brahma to..."
 # must route to COORDINATOR (not directly to the specialist) via
 # DelegationRoutingProvider at priority 5 in IntentDetectorService.
@@ -300,7 +300,7 @@ Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
 
 {
-    "goal": "Have the synthesizer look at this: our Quarkus app has high CPU during startup — could this be CDI bean scanning, native image config, or a threading issue?",
+    "goal": "Have the synthesizer look at this: our Quarkus app has high CPU during startup - could this be CDI bean scanning, native image config, or a threading issue?",
     "maxIterations": 5
 }
 
@@ -339,7 +339,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION D — GUARD RAILS: SELF-DELEGATION AND INVALID INPUTS
+# SECTION D - GUARD RAILS: SELF-DELEGATION AND INVALID INPUTS
 # DelegateToAgentTool must reject self-delegation, unknown agents,
 # and blank/missing parameters with ToolResponse.failure(400, ...).
 # The coordinator propagates the tool error to the user gracefully.
@@ -381,7 +381,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [DEL-21] Self-delegation guard: agent="vishnu" → 400
-# vishnu is the deity alias for coordinator — must also be rejected.
+# vishnu is the deity alias for coordinator - must also be rejected.
 # Expect 200: same "Cannot delegate to yourself" error propagated.
 POST {{baseUrl}}/api/v1/sessions/{{guardSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -443,7 +443,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION E — ROLE-CAPABILITY ENFORCEMENT
+# SECTION E - ROLE-CAPABILITY ENFORCEMENT
 # ONLY coordinator holds DELEGATE_TO_AGENT in its capability set.
 # Any other role attempting it gets 403 ROLE_CAPABILITY_MISMATCH
 # from ToolRegistry before the tool's execute() is even called.
@@ -457,7 +457,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-26] Coder (Brahma) CANNOT use delegate_to_agent — empty schema + 403
+### [DEL-26] Coder (Brahma) CANNOT use delegate_to_agent - empty schema + 403
 # Brahma has an empty tool schema (no tools at the LangChain4j binding level).
 # Even if the LLM attempts the call, ToolRegistry would block with 403.
 # Expect 200: agent explains the tool is not available to it.
@@ -474,7 +474,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-27] Debugger (Shiva) CANNOT use delegate_to_agent — has github but NOT delegate
+### [DEL-27] Debugger (Shiva) CANNOT use delegate_to_agent - has github but NOT delegate
 # Shiva's schema has github only. Attempting delegate_to_agent gets 403.
 # Audit: TOOL_BLOCKED for this session.
 POST {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}/run
@@ -489,7 +489,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-28] Researcher (Saraswati) CANNOT use delegate_to_agent — 403
+### [DEL-28] Researcher (Saraswati) CANNOT use delegate_to_agent - 403
 # Audit: TOOL_BLOCKED for this session.
 POST {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -503,7 +503,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-29] Architect (Brihaspati) CANNOT use delegate_to_agent — 403
+### [DEL-29] Architect (Brihaspati) CANNOT use delegate_to_agent - 403
 # Audit: TOOL_BLOCKED for this session.
 POST {{baseUrl}}/api/v1/sessions/{{capSession.response.body.sessionId}}/run
 Content-Type: application/json
@@ -517,7 +517,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-29a] Verify TOOL_BLOCKED in audit for all above — NO TOOL_INVOKED for delegate_to_agent
+### [DEL-29a] Verify TOOL_BLOCKED in audit for all above - NO TOOL_INVOKED for delegate_to_agent
 # Expect: TOOL_BLOCKED events with reasonCode=ROLE_CAPABILITY_MISMATCH.
 # Confirm: zero TOOL_INVOKED(delegate_to_agent) events in this session.
 GET {{baseUrl}}/api/v1/audit/session/{{capSession.response.body.sessionId}}
@@ -531,7 +531,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION F — GITHUB MISUSE GUARD (ToolStepHandler Phase 76 fix)
+# SECTION F - GITHUB MISUSE GUARD (ToolStepHandler Phase 76 fix)
 # Coordinator CAN legitimately call github when a real GitHub resource
 # is present in the goal or args (owner/repo, github.com URL).
 # Without a resource, ToolStepHandler returns retryEngine directive
@@ -563,7 +563,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 ### [DEL-32] GitHub guard ALLOWS: owner/repo pattern present in goal
-# Coordinator has a legitimate reason to call github — repo name in goal.
+# Coordinator has a legitimate reason to call github - repo name in goal.
 # Expect 200 or 202 (AWAITING_APPROVAL for NETWORK_OUTBOUND in SUPERVISED mode).
 # Logs: no guard redirect, github tool call attempted.
 POST {{baseUrl}}/api/v1/sessions/{{ghGuardSession.response.body.sessionId}}/run-async
@@ -629,7 +629,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION G — INNER SESSION CHECKPOINT ISOLATION
+# SECTION G - INNER SESSION CHECKPOINT ISOLATION
 # Each delegation creates a checkpoint row keyed on:
 #   (innerSessionId, agentRole) where innerSessionId = outer + ":d:" + role + ":" + uuid
 # These inner rows must be separate from the outer coordinator row.
@@ -643,7 +643,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-36] Delegate to brahma — triggers inner coder checkpoint row
+### [DEL-36] Delegate to brahma - triggers inner coder checkpoint row
 # Expect 200 Finished: Brahma's answer in coordinator response.
 # Post-check: outer coordinator session status = COMPLETED.
 # Inner session row exists under {outerSessionId}:d:coder:{uuid} key.
@@ -659,7 +659,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-37] Check outer coordinator session status — must be COMPLETED
+### [DEL-37] Check outer coordinator session status - must be COMPLETED
 # Inner session row must NOT overwrite or merge with this outer row.
 # Expect: status=COMPLETED, agentRole=coordinator.
 GET {{baseUrl}}/api/v1/sessions/{{isoSession.response.body.sessionId}}/status
@@ -667,7 +667,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-38] Check outer coordinator audit — must contain TOOL_INVOKED(delegate_to_agent)
+### [DEL-38] Check outer coordinator audit - must contain TOOL_INVOKED(delegate_to_agent)
 # Must NOT contain sandboxexec or inner-agent tool events (those are inner session).
 GET {{baseUrl}}/api/v1/audit/session/{{isoSession.response.body.sessionId}}
 X-ArcClaw-API-Key: {{validKey}}
@@ -675,17 +675,17 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION H — REPEATED DELEGATION (COLLISION FIX VERIFICATION)
+# SECTION H - REPEATED DELEGATION (COLLISION FIX VERIFICATION)
 # Delegating to the same agent twice in one coordinator session must
 # produce two DISTINCT inner session IDs (UUID suffix ensures this).
 # The second delegation must NOT resume from the first's checkpoint.
 # ─────────────────────────────────────────────────────────────────
 
 ### [DEL-39] Delegate to brahma a SECOND time in the same outer session
-# Must get a fresh inner session — NOT resume {outerSessionId}:d:coder:{old-uuid}.
+# Must get a fresh inner session - NOT resume {outerSessionId}:d:coder:{old-uuid}.
 # Expect 200 Finished: fresh Brahma result with no history from DEL-36.
 # If inner session IDs collide, this would resume the isPrime checkpoint
-# and produce incorrect/merged output — watch for that regression.
+# and produce incorrect/merged output - watch for that regression.
 POST {{baseUrl}}/api/v1/sessions/{{isoSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}
@@ -704,7 +704,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION I — LOOP EXCEEDED AND BUDGET PROPAGATION
+# SECTION I - LOOP EXCEEDED AND BUDGET PROPAGATION
 # AgentResult.LoopExceeded from the inner agent is translated by
 # DelegateToAgentTool to ToolResponse.failure(500, "exceeded its
 # iteration budget"). Coordinator must relay this, not drop it.
@@ -741,7 +741,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION J — SELF-CONTAINED GOAL QUALITY
+# SECTION J - SELF-CONTAINED GOAL QUALITY
 # The coordinator prompt (delegate-to-agent-rules.txt) requires that
 # the goal passed to delegate_to_agent is FULLY self-contained.
 # The sub-agent has no conversation history.
@@ -795,7 +795,7 @@ X-ArcClaw-API-Key: {{validKey}}
 ###
 
 # ─────────────────────────────────────────────────────────────────
-# SECTION K — NEGATIVE ROUTING: MUST NOT TRIGGER DELEGATION
+# SECTION K - NEGATIVE ROUTING: MUST NOT TRIGGER DELEGATION
 # These inputs must NOT fire DelegationRoutingProvider fast-path.
 # They should route directly to the most appropriate specialist.
 # ─────────────────────────────────────────────────────────────────
@@ -822,7 +822,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-47] "Ask me how this works" — "me" is not an agent name
+### [DEL-47] "Ask me how this works" - "me" is not an agent name
 # The verb "ask" is present but the target "me" is not in AGENT_NAMES.
 # DelegationRoutingProvider must NOT match. Routes to researcher/coordinator.
 POST {{baseUrl}}/api/v1/sessions/{{negRouteSession.response.body.sessionId}}/run
@@ -836,7 +836,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-48] "Ask vishnu to do something" — vishnu excluded from AGENT_NAMES
+### [DEL-48] "Ask vishnu to do something" - vishnu excluded from AGENT_NAMES
 # vishnu is intentionally absent from DelegationRoutingProvider.AGENT_NAMES
 # to prevent a coordinator-routes-to-coordinator self-loop.
 # Expect: normal coordinator routing, NO delegation fast-path triggered.
@@ -851,7 +851,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ###
 
-### [DEL-49] "tell the coordinator to schedule a task" — coordinator excluded
+### [DEL-49] "tell the coordinator to schedule a task" - coordinator excluded
 # "coordinator" not in AGENT_NAMES. Should route as a normal scheduling intent.
 # Expect: role=coordinator (via normal classification), schedules the task.
 # Must NOT trigger the delegation fast-path and create an inner session.

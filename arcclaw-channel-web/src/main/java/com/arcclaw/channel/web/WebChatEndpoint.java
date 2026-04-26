@@ -185,13 +185,13 @@ public class WebChatEndpoint {
             sessionStore.unregister(platformId);
         }
         
-        // Terminate using ArcClaw sessionId — not platformId (§78-fix-2)
+        // Terminate using ArcClaw sessionId - not platformId (§78-fix-2)
         if (arcclawSessionId != null && terminatingSessions.add(arcclawSessionId)) {
             try {
-                // HITL sessions must survive WebSocket disconnects — user may reconnect
+                // HITL sessions must survive WebSocket disconnects - user may reconnect
                 // from another tab or device to approve/deny.
                 if (pendingApprovalChecker.hasPendingApproval(arcclawSessionId)) {
-                    log.infof("WebSocket %s: connId=%s arcclawSession=%s — skipping termination (AWAITING_APPROVAL pending)",
+                    log.infof("WebSocket %s: connId=%s arcclawSession=%s - skipping termination (AWAITING_APPROVAL pending)",
                         reason, connId, arcclawSessionId);
                     return; // SessionReaper handles cleanup after HITL timeout
                 }
@@ -206,10 +206,10 @@ public class WebChatEndpoint {
                 terminatingSessions.remove(arcclawSessionId);
             }
         } else if (arcclawSessionId != null) {
-            log.debugf("WebSocket %s: connId=%s arcclawSession=%s — termination already in progress",
+            log.debugf("WebSocket %s: connId=%s arcclawSession=%s - termination already in progress",
                 reason, connId, arcclawSessionId);
         } else {
-            log.debugf("WebSocket %s: connId=%s (platformId=%s) — no ArcClaw session found for termination",
+            log.debugf("WebSocket %s: connId=%s (platformId=%s) - no ArcClaw session found for termination",
                 reason, connId, platformId);
         }
     }

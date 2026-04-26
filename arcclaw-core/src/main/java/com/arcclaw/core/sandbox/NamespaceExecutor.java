@@ -36,7 +36,7 @@ public class NamespaceExecutor {
             if (!workspaceDir.exists()) {
                 workspaceDir.mkdirs();
                 // log not available in this simple class, but following user request pattern
-                System.err.println("PIE Workspace dir missing — recreated: " + workspaceDir.getAbsolutePath());
+                System.err.println("PIE Workspace dir missing - recreated: " + workspaceDir.getAbsolutePath());
             }
             pb.directory(workspaceDir);
         }
