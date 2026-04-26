@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -68,6 +69,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject IntentClassificationService intentClassifier;
     @Inject MeterRegistry meterRegistry;
     @Inject ObjectMapper objectMapper;
+    @Inject CompactionSummaryCache summaryCache;
 
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
@@ -95,7 +97,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             String languageForSuccessCheck = (targetLanguage == null && priorCode != null) 
                     ? priorCode.language() : targetLanguage;
 
-            if (!historyAlreadyContainsAttemptForLanguage(history, ToolCapability.SANDBOX_EXEC.toolName(), languageForSuccessCheck)) {
+            if (!historyAlreadyContainsAttemptForLanguage(history, ToolCapability.SANDBOX_EXEC.toolName(), languageForSuccessCheck, sessionId)) {
                 if (priorCode != null) {
                     // If target language is specified, we must match it. If not, we take the latest.
                     boolean languageMatches = targetLanguage == null || targetLanguage.equalsIgnoreCase(priorCode.language());
@@ -310,16 +312,37 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         }
 
                         if (partialCode != null && !partialCode.isBlank()) {
-                            log.infof("[LangChainReasoningEngine] Recovered partial code from truncation (attempt %d) for session %s", 
-                                    truncationRetryCount + 1, sessionId);
                             String lang = TextPatternUtils.inferLanguage(partialCode);
-                            String markdown = String.format("```%s\n%s\n```", lang != null ? lang : "", partialCode);
-                            return ReasoningStep.pending(
-                                    "Extracted code after repeated truncation attempts.",
-                                    ReasoningStep.FINISH,
-                                    Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown),
-                                    0, 0
-                            );
+                            String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
+
+                            // 🟢 Bug-2 Fix: Check if the recovered code matches the requested language.
+                            // This prevents surfacing old Java error text when the user asked for Go.
+                            boolean looksLikeCode = partialCode.contains("func ") || partialCode.contains("package ")
+                                    || partialCode.contains("def ") || partialCode.contains("public class ")
+                                    || partialCode.contains("#!/") || partialCode.contains("const ") || partialCode.contains("function ");
+                            boolean langMatches = targetLanguage == null 
+                                    || targetLanguage.equalsIgnoreCase(lang)
+                                    || (lang == null && looksLikeCode);
+
+                            if (langMatches) {
+                                log.infof("[LangChainReasoningEngine] Recovered partial %s code from truncation (attempt %d) for session %s", 
+                                        lang, truncationRetryCount + 1, sessionId);
+                                
+                                // 🟢 Bug-2 Fix (cont): If the partialCode is mixed with prose, try to strip it.
+                                CodeBlock extracted = extractCodeBlockFromText(partialCode);
+                                if (extracted != null && extracted.code() != null) {
+                                    partialCode = extracted.code();
+                                    lang = extracted.language();
+                                }
+                                
+                                String markdown = String.format("```%s\n%s\n```", lang != null ? lang : "", partialCode);
+                                return ReasoningStep.pending(
+                                        "Extracted code after repeated truncation attempts.",
+                                        ReasoningStep.FINISH,
+                                        Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown),
+                                        0, 0
+                                );
+                            }
                         }
                     }
 
@@ -366,14 +389,27 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             log.warnf("[LangChainReasoningEngine] Goal='%s' requests execution but LLM " +
                                             "returned code plan (has ``` fences) for session %s — injecting correction",
                                     goal, sessionId);
+
+                            // 🟢 Bug-3 Fix: Quote the compiler error from history to guide the LLM.
+                            String errorObs = history.stream()
+                                    .filter(s -> Boolean.FALSE.equals(s.success()) && s.observation() != null)
+                                    .map(ReasoningStep::observation)
+                                    .reduce((_, second) -> second)
+                                    .orElse(null);
+
+                            String hint = "STOP. The user asked you to EXECUTE the code — not explain it. " +
+                                    "Do NOT output markdown, steps, or code blocks. " +
+                                    "Call sandbox_exec RIGHT NOW with the complete code as your ONLY response.";
+                            
+                            if (errorObs != null) {
+                                hint = "The previous execution failed with the following error:\n" + 
+                                       errorObs + "\n\n" + hint;
+                            }
+
                             return ReasoningStep.pending(
                                     "LLM returned code explanation instead of calling sandbox_exec",
                                     "OBSERVE", Map.of(), 0, 0
-                            ).withObservation(
-                                    "STOP. The user asked you to EXECUTE the code — not explain it. " +
-                                    "Do NOT output markdown, steps, or code blocks. " +
-                                    "Call sandbox_exec RIGHT NOW with the complete code as your ONLY response."
-                            );
+                            ).withObservation(hint);
                         }
 
                         // intercept write intents before FINISH (only if not already done)
@@ -679,9 +715,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
     }
 
-    private boolean historyAlreadyContainsAttemptForLanguage(List<ReasoningStep> history, String toolName, String language) {
-        if (history == null) return false;
-        return history.stream().anyMatch(step -> {
+    private boolean historyAlreadyContainsAttemptForLanguage(List<ReasoningStep> history, String toolName, String language, String sessionId) {
+        if (history != null && history.stream().anyMatch(step -> {
             if (!toolName.equals(step.action()) || step.observation() == null || step.observation().isBlank()) {
                 return false;
             }
@@ -689,7 +724,25 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             
             Object langParam = step.actionInput() != null ? step.actionInput().get("language") : null;
             return language.equalsIgnoreCase(String.valueOf(langParam));
-        });
+        })) {
+            return true;
+        }
+
+        // 🟢 Observation Fix: Check compaction summary if history was pruned
+        if (sessionId != null) {
+            Optional<String> summary = summaryCache.getSummary(sessionId);
+            if (summary.isPresent() && language != null) {
+                String s = summary.get().toLowerCase();
+                // Check if summary mentions a failure for this language/tool
+                if (s.contains("failed") && s.contains(language.toLowerCase()) && s.contains(toolName.toLowerCase())) {
+                    log.infof("[LangChainReasoningEngine] Compaction-aware guard: detected prior %s %s failure in summary for session %s", 
+                            language, toolName, sessionId);
+                    return true;
+                }
+            }
+        }
+        
+        return false;
     }
 
     private boolean historyAlreadyContains(List<ReasoningStep> history, String toolName) {

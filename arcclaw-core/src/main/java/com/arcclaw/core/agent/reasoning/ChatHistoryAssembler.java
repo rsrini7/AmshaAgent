@@ -183,7 +183,7 @@ public class ChatHistoryAssembler {
                 continue;
             }
 
-            if (step.action() != null && !step.action().equals(ReasoningStep.FINISH)) {
+            if (step.action() != null && !step.action().equals(ReasoningStep.FINISH) && !ReasoningStep.OBSERVE.equals(step.action())) {
                 String argsJson = "{}";
                 try {
                     if (step.actionInput() != null) {
@@ -206,6 +206,18 @@ public class ChatHistoryAssembler {
                 if (rawObs != null) {
                     String safeObs = truncateObservation(rawObs, step.action());
                     messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(callId, step.action(), safeObs));
+                }
+            } else if (ReasoningStep.OBSERVE.equals(step.action())) {
+                String obs = step.observation();
+                if (obs != null && !obs.isBlank()) {
+                    ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
+                    // Use UserMessage if last was AiMessage to "flip" the turn, 
+                    // otherwise keep as SystemMessage.
+                    if (last instanceof AiMessage) {
+                        messages.add(UserMessage.userMessage(obs));
+                    } else {
+                        messages.add(SystemMessage.systemMessage(obs));
+                    }
                 }
             } else {
                 if (!thought.isEmpty()) {

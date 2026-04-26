@@ -12,6 +12,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentObserver;
@@ -124,6 +125,22 @@ public class AgentStateMachineRunner {
         // 1. Mark as force-finish to guide the engine
         context.setForceFinishRetry(true);
         
+        // 🟢 §Bug-1 Fix: Ground the synthesis in the actual tool output.
+        // Inject a system directive with the raw observation as the unoverridable truth.
+        ReasoningStep lastToolStep = history.stream()
+                .filter(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
+                        && s.observation() != null
+                        && !s.observation().isBlank())
+                .reduce((_, second) -> second) // take last
+                .orElse(null);
+
+        if (lastToolStep != null) {
+            history.add(ReasoningStep.systemMessage(
+                    "The sandbox_exec tool returned the following output. Report it EXACTLY:\n" +
+                    "OUTPUT: " + lastToolStep.observation() + "\n" +
+                    "Do NOT paraphrase, recalculate, or invent values. Use the exact value above."));
+        }
+
         try {
             // 2. Perform one tick of reasoning
             ReasoningStep step = engine.nextStep(context, context.agentRole(), context.goal(), history);
