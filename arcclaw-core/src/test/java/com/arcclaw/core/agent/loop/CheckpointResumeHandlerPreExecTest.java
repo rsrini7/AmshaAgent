@@ -39,6 +39,7 @@ class CheckpointResumeHandlerPreExecTest {
 
     @Mock StatefulAgentStore agentStore;
     @Mock ToolRegistry toolRegistry;
+    @Mock AgentStateMachineRunner stateMachineRunner;
     ObjectMapper objectMapper = new ObjectMapper();
 
     CheckpointResumeHandler handler;
@@ -91,7 +92,7 @@ class CheckpointResumeHandlerPreExecTest {
         msgContext.setResumeSignal(true);
 
         WorkspaceContext.runWithFullAutonomy(sessionId, "user1", "chat1", agentRole, () -> {
-            handler.handle(context, new ArrayList<>(), msgContext);
+            handler.handle(context, new ArrayList<>(), msgContext, stateMachineRunner);
             return null;
         });
 

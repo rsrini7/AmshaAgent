@@ -85,25 +85,29 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // bypass the LLM and issue the sandbox_exec tool call directly using the code
         // block found in history. This prevents model-side truncation errors.
         // Scoped by language (§Bug-1 fix) to allow Go execution after successful Java run.
-        String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
-        if (AgentRoleEnum.CODER.id().equals(agentRole)
-                && TextPatternUtils.goalRequestsExecution(goal)
-                && !historyAlreadyContainsSuccessfulForLanguage(cappedHistory, ToolCapability.SANDBOX_EXEC.toolName(), targetLanguage)) {
-            
+        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(goal)) {
+            String targetLanguage = TextPatternUtils.goalMentionsLanguage(goal);
             CodeBlock priorCode = extractLatestCodeBlock(cappedHistory);
-            if (priorCode != null) {
-                // If target language is specified, we must match it. If not, we take the latest.
-                boolean languageMatches = targetLanguage == null || targetLanguage.equalsIgnoreCase(priorCode.language());
 
-                if (languageMatches) {
-                    log.infof("[LangChainReasoningEngine] Fast-path: Reusing prior %s code block for execution goal in session %s",
-                            priorCode.language(), sessionId);
-                    
-                    return ReasoningStep.fastPath(
-                            "Fast-path execution from history.",
-                            ToolCapability.SANDBOX_EXEC.toolName(),
-                            Map.of("code", priorCode.code(), "language", priorCode.language())
-                    );
+            // §Bug: Narrow generic "execute it" check to the latest block's language
+            String languageForSuccessCheck = (targetLanguage == null && priorCode != null) 
+                    ? priorCode.language() : targetLanguage;
+
+            if (!historyAlreadyContainsSuccessfulForLanguage(cappedHistory, ToolCapability.SANDBOX_EXEC.toolName(), languageForSuccessCheck)) {
+                if (priorCode != null) {
+                    // If target language is specified, we must match it. If not, we take the latest.
+                    boolean languageMatches = targetLanguage == null || targetLanguage.equalsIgnoreCase(priorCode.language());
+
+                    if (languageMatches) {
+                        log.infof("[LangChainReasoningEngine] Fast-path: Reusing prior %s code block for execution goal in session %s",
+                                priorCode.language(), sessionId);
+                        
+                        return ReasoningStep.fastPath(
+                                "Fast-path execution from history.",
+                                ToolCapability.SANDBOX_EXEC.toolName(),
+                                Map.of("code", priorCode.code(), "language", priorCode.language())
+                        );
+                    }
                 }
             }
         }
@@ -111,6 +115,16 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
 
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, cappedHistory);
+
+        // §Bug-3 fix: Enforce a message-count cap to prevent fallback model trigger.
+        // 12-15 messages is enough for turn-to-turn context while staying within 
+        // the primary model's reliable reasoning window.
+        int MAX_ASSEMBLED_MESSAGES = 15;
+        if (assembled.size() > MAX_ASSEMBLED_MESSAGES) {
+            log.debugf("[LangChainReasoningEngine] Pruning assembled history for session %s from %d to %d messages.",
+                    sessionId, assembled.size(), MAX_ASSEMBLED_MESSAGES);
+            assembled = assembled.subList(assembled.size() - MAX_ASSEMBLED_MESSAGES, assembled.size());
+        }
 
         // § Resilience: Extract the compacted summary from history to merge into the main SystemPrompt.
         // This ensures only ONE SystemMessage is sent (for adapter compatibility) and that

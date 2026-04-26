@@ -66,6 +66,9 @@ class CheckpointResumeHandlerTest {
     @Mock
     ToolRegistry toolRegistry;
 
+    @Mock
+    AgentStateMachineRunner stateMachineRunner;
+
     CheckpointResumeHandler handler;
 
     @BeforeEach
@@ -88,7 +91,7 @@ class CheckpointResumeHandlerTest {
     @Test
     void testReturnsNullOnNonResumptionGoal() {
         MessageContext ctx = createContext("some normal goal", false);
-        AgentResult result = handler.handle(createCtx("session", "some normal goal"), new ArrayList<>(), ctx);
+        AgentResult result = handler.handle(createCtx("session", "some normal goal"), new ArrayList<>(), ctx, stateMachineRunner);
         assertNull(result);
     }
 
@@ -104,7 +107,7 @@ class CheckpointResumeHandlerTest {
         when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
 
         MessageContext ctx = createContext(AgentSentinels.GOAL_DENY_APPROVED, true);
-        AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_DENY_APPROVED), new ArrayList<>(), ctx);
+        AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_DENY_APPROVED), new ArrayList<>(), ctx, stateMachineRunner);
 
         assertNotNull(result);
         assertEquals("❌ Tool execution was denied and the task has been cancelled.", ((AgentResult.Finished) result).answer());
@@ -128,12 +131,15 @@ class CheckpointResumeHandlerTest {
             when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
             when(toolRegistry.invokeTool(eq("testTool"), eq("{\"param\":\"val\"}"), eq("session")))
                 .thenReturn(ToolResponse.success("tool done"));
+            
+            AgentResult mockResult = AgentResult.finished("done", new ArrayList<>());
+            when(stateMachineRunner.runFinishPass(any(), any(), any())).thenReturn(mockResult);
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
 
-            assertNull(result); // Null means continue loop
+            assertNotNull(result); 
             assertEquals(1, history.size());
             assertEquals("tool done", history.get(0).observation());
 
@@ -141,6 +147,7 @@ class CheckpointResumeHandlerTest {
             assertNull(checkpoint.getPendingToolName());
             assertNull(checkpoint.getPendingToolParametersJson());
             verify(agentStore).save(checkpoint);
+            verify(stateMachineRunner).runFinishPass(any(), any(), eq(history));
         });
     }
 
@@ -157,12 +164,15 @@ class CheckpointResumeHandlerTest {
             when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
             when(toolRegistry.invokeTool(eq("testTool"), eq("{\"param\":\"val\"}"), eq("session")))
                 .thenReturn(ToolResponse.success("tool done"));
+            
+            AgentResult mockResult = AgentResult.finished("done", new ArrayList<>());
+            when(stateMachineRunner.runFinishPass(any(), any(), any())).thenReturn(mockResult);
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
 
-            assertNull(result);
+            assertNotNull(result);
             assertEquals(1, history.size());
             assertEquals("tool done", history.get(0).observation());
 
@@ -189,7 +199,7 @@ class CheckpointResumeHandlerTest {
 
             List<ReasoningStep> history = new ArrayList<>();
             MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
-            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
 
             assertNotNull(result);
             assertTrue(result instanceof AgentResult.Failed);

@@ -325,7 +325,8 @@ public class CheckpointResumeHandler {
 
     public AgentResult handle(AgentExecutionContext context,
                               List<ReasoningStep> history,
-                              MessageContext messageContext) {
+                              MessageContext messageContext,
+                              AgentStateMachineRunner stateMachineRunner) {
         if (messageContext == null || !messageContext.isResumeSignal()) return null;
 
         var checkpoint = agentStore.load(context.sessionId(), context.agentRole()).orElse(null);
@@ -348,7 +349,7 @@ public class CheckpointResumeHandler {
             return resumeParallelBatch(context, history, checkpoint, resolvedChannelType);
         }
 
-        return executePendingTool(context, history, checkpoint, resolvedChannelType);
+        return executePendingTool(context, history, checkpoint, resolvedChannelType, stateMachineRunner);
     }
 
     private AgentResult performDenialCleanup(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint) {
@@ -362,7 +363,7 @@ public class CheckpointResumeHandler {
         return AgentResult.finished("❌ Tool execution was denied and the task has been cancelled.", List.copyOf(history));
     }
 
-    private AgentResult executePendingTool(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint, String channelType) {
+    private AgentResult executePendingTool(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint, String channelType, AgentStateMachineRunner stateMachineRunner) {
         String toolName = checkpoint.getPendingToolName();
         String paramsJson = checkpoint.getPendingToolParametersJson();
         String sessionId = context.sessionId();
@@ -383,7 +384,7 @@ public class CheckpointResumeHandler {
 
             if (response.isInfraFailure()) return handleInfraFailure(history);
 
-            recordReasoningStep(toolName, paramsJson, response.output(), history, sessionId);
+            recordReasoningStep(toolName, paramsJson, response.output(), response.success(), history, sessionId);
             
             // §Issue 4: Force summarization turn for ingest_document
             if (ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)) {
@@ -394,10 +395,10 @@ public class CheckpointResumeHandler {
             
             completeInProgressCheckpoint(checkpoint);
 
-            // §7.32: Return null to allow the StateMachine to continue for one final synthesis turn.
-            // Hardening in AgentStateMachineRunner ensures it respects context.startingIteration()
-            // to avoid infinite loops.
-            return null;
+            // §Bug-2 Fix: Perform a direct terminal synthesis pass instead of re-entering 
+            // the full state machine loop. This ensures we produce a FINISH step with 
+            // the observation result without accidentally re-triggering the fast path.
+            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
         } catch (Exception e) {
             return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
         }
@@ -408,7 +409,7 @@ public class CheckpointResumeHandler {
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
     }
 
-    private void recordReasoningStep(String tool, String paramsJson, String output, List<ReasoningStep> history, String sessionId) {
+    private void recordReasoningStep(String tool, String paramsJson, String output, boolean success, List<ReasoningStep> history, String sessionId) {
         Map<String, Object> params = Map.of();
         try {
             if (paramsJson != null && !paramsJson.isBlank()) {
@@ -418,7 +419,7 @@ public class CheckpointResumeHandler {
             log.warnf("Failed to parse params for session %s", sessionId);
         }
         history.add(ReasoningStep.pending("Executing " + tool + " after human approval.", tool, params, 0, 0)
-                .withObservation(output));
+                .withObservation(output, success));
     }
 
     private void completeInProgressCheckpoint(AgentCheckpoint checkpoint) {

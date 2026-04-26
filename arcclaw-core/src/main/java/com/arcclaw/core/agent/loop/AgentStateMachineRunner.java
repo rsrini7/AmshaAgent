@@ -112,6 +112,75 @@ public class AgentStateMachineRunner {
     }
 
     /**
+     * Performs a single terminal synthesis pass (FINISH) after a tool has been
+     * executed and approved during resumption. This bypasses the full iteration
+     * loop to prevent accidental tool re-invocation (§Bug-2).
+     */
+    public AgentResult runFinishPass(AgentExecutionContext context,
+                                     ReasoningEngine engine,
+                                     List<ReasoningStep> history) {
+        log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
+        
+        // 1. Mark as force-finish to guide the engine
+        context.setForceFinishRetry(true);
+        
+        try {
+            // 2. Perform one tick of reasoning
+            ReasoningStep step = engine.nextStep(context, context.agentRole(), context.goal(), history);
+            
+            // 3. Process the finish outcome
+            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
+                    context, history, step, 0);
+
+            if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
+                if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
+                    writer.saveAnswer(context.sessionId(), c.answer());
+                }
+                // §Bug: Adding synthetic observations to FINISH steps is misleading.
+                // The tool execution step is already in history.
+                return c.result();
+            }
+            
+            // 🟢 §Bug-2 Fix: If it didn't finish, inject a strict guidance hint and retry ONCE.
+            log.warnf("StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.", 
+                    context.sessionId());
+            
+            int historySizeBeforeHint = history.size();
+            history.add(ReasoningStep.systemMessage("You have already executed the tool. " +
+                    "Summarize the result and provide your final answer using the FINISH action now. " +
+                    "Do NOT attempt to call any more tools."));
+            
+            try {
+                ReasoningStep retryStep = engine.nextStep(context, context.agentRole(), context.goal(), history);
+                FinishActionHandler.FinishOutcome retryOutcome = finishActionHandler.handle(
+                        context, history, retryStep, 0);
+
+                if (retryOutcome instanceof FinishActionHandler.FinishOutcome.Completed rc) {
+                    if (context.sessionId() != null && rc.answer() != null && !rc.answer().isBlank()) {
+                        writer.saveAnswer(context.sessionId(), rc.answer());
+                    }
+                    return rc.result();
+                }
+            } finally {
+                // 🟢 §Bug-2 Fix: Strip the guidance hint AND any partial steps from the failed retry attempt.
+                // Callers relying on history mutation from finishActionHandler during retry
+                // will not see those steps — they're cleaned up here to keep history consistent
+                // before handing off to the standard loop.
+                if (history.size() > historySizeBeforeHint) {
+                    history.subList(historySizeBeforeHint, history.size()).clear();
+                }
+            }
+
+            // If it STILL didn't finish, fall back to the standard loop as a safety net
+            log.errorf("StateMachine: terminal retry failed for session %s; falling back to standard loop.", 
+                    context.sessionId());
+            return run(context, engine, history);
+        } finally {
+            context.setForceFinishRetry(false);
+        }
+    }
+
+    /**
      * Executes the Thought-Plan-Act-Observe loop for the given execution context.
      *
      * <p><strong>§3.5 / §8.6:</strong> {@link BudgetExceededException} and

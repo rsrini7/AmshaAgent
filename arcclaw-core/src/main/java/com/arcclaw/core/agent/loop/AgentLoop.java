@@ -176,7 +176,7 @@ public class AgentLoop {
 
             result = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
                     .call(() -> {
-                        AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context);
+                        AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context, stateMachineRunner);
                         if (resumeResult != null) {
                             return resumeResult;
                         } else if (context != null && context.isResumeSignal() && hasApprovedToolPending(sessionId, canonicalRole)) {
