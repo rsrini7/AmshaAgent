@@ -37,8 +37,14 @@ public class ResumeCoordinationGuard {
 
     private static final Logger log = Logger.getLogger(ResumeCoordinationGuard.class);
 
-    /** Sessions currently in the RESUMING state. Value = time the mark was set. */
-    private final ConcurrentHashMap<String, Instant> resumingBatches = new ConcurrentHashMap<>();
+    /** 
+     * Capture both when the mark was set and whether it involves browser tools
+     * so we can apply the correct TTL consistently.
+     */
+    private record ResumeMark(Instant startTime, boolean hasBrowserTool) {}
+
+    /** Sessions currently in the RESUMING state. */
+    private final ConcurrentHashMap<String, ResumeMark> resumingBatches = new ConcurrentHashMap<>();
 
     /**
      * Stale-mark TTL. After N seconds a lingering mark is auto-expired by
@@ -48,6 +54,9 @@ public class ResumeCoordinationGuard {
     @ConfigProperty(name = "arcclaw.resumption.stale-mark-seconds", defaultValue = "60")
     long staleResumeSeconds;
 
+    @ConfigProperty(name = "arcclaw.resumption.playwright-stale-mark-seconds", defaultValue = "300")
+    long playwrightStaleMarkSeconds;
+
     /**
      * Atomically marks the session as RESUMING.
      *
@@ -56,21 +65,32 @@ public class ResumeCoordinationGuard {
      *         already resuming.
      */
     public boolean markResuming(String sessionId) {
-        return resumingBatches.putIfAbsent(sessionId, Instant.now()) == null;
+        return markResuming(sessionId, false);
+    }
+
+    /**
+     * Overloaded to store the browser-tool flag.
+     */
+    public boolean markResuming(String sessionId, boolean hasBrowserTool) {
+        return resumingBatches.putIfAbsent(sessionId, new ResumeMark(Instant.now(), hasBrowserTool)) == null;
     }
 
     /**
      * Returns {@code true} if the session is currently marked as RESUMING.
      *
-     * <p>Auto-expires stale marks after {@code staleResumeSeconds} to prevent 
+     * <p>Auto-expires stale marks after the appropriate TTL to prevent 
      * permanently blocked sessions after a crash.
      */
     public boolean isResuming(String sessionId) {
-        Instant start = resumingBatches.get(sessionId);
-        if (start == null) return false;
-        if (Duration.between(start, Instant.now()).toSeconds() > staleResumeSeconds) {
+        ResumeMark mark = resumingBatches.get(sessionId);
+        if (mark == null) return false;
+
+        long ttl = mark.hasBrowserTool() ? playwrightStaleMarkSeconds : staleResumeSeconds;
+
+        if (Duration.between(mark.startTime(), Instant.now()).toSeconds() > ttl) {
             log.warnf("ResumeCoordinationGuard: stale resume mark auto-expired for session=%s "
-                    + "(marked %s ago)", sessionId, Duration.between(start, Instant.now()));
+                    + "(marked %s ago, ttl=%ds, browser=%b)", sessionId, 
+                    Duration.between(mark.startTime(), Instant.now()), ttl, mark.hasBrowserTool());
             resumingBatches.remove(sessionId);
             return false;
         }

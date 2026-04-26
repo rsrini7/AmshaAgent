@@ -176,13 +176,17 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     // ── Resume guard (§3.4 / §7.29 — all delegated, public API stays here) ───
 
     /**
-     * §3.4 / §7.29 / §T5-4: Atomically marks the session as RESUMING.
      * Delegates to {@link CheckpointStorePort#claimForResume} for distributed safety.
      * Also maintains an in-memory mark in {@link ResumeCoordinationGuard} for
      * instance-local backpressure.
      */
     @Override
     public boolean markBatchResuming(String sessionId, String agentRole) {
+        return markBatchResuming(sessionId, agentRole, false);
+    }
+
+    @Override
+    public boolean markBatchResuming(String sessionId, String agentRole, boolean hasBrowserTool) {
         // 1. Instance-local check (fast path)
         if (resumeGuard.isResuming(sessionId)) {
             return false;
@@ -192,14 +196,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         // Transition AWAITING_APPROVAL -> RESUMING in SQLite
         boolean claimed = storeAdapter.claimForResume(sessionId, agentRole);
         if (claimed) {
-            resumeGuard.markResuming(sessionId);
+            resumeGuard.markResuming(sessionId, hasBrowserTool);
         }
         return claimed;
     }
 
     @Override
     public boolean markResuming(String sessionId) {
-        return resumeGuard.markResuming(sessionId);
+        return resumeGuard.markResuming(sessionId, false);
     }
 
     @Override
@@ -222,6 +226,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override public void clearResuming(String sessionId)
         { resumeGuard.clearResuming(sessionId); }
+
+    @Override
+    public void releaseResumeClaim(String sessionId, String agentRole) {
+        storeAdapter.releaseResumeClaim(sessionId, agentRole);
+        resumeGuard.clearResuming(sessionId);
+    }
 
     // ── Batch tool decisions ──────────────────────────────────────────────────
 

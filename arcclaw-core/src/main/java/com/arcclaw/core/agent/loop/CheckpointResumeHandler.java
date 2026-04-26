@@ -97,7 +97,7 @@ public class CheckpointResumeHandler {
         AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);
         if (checkpoint == null) {
             log.warnf("[RESUME-GUARD] checkpoint null after claim for session=%s — releasing DB state.", sessionId);
-            // agentStore.releaseResumeClaim(sessionId, agentRole); // transition back to AWAITING or FAILED // todo
+            agentStore.releaseResumeClaim(sessionId, agentRole); 
             return;
         }
 
@@ -105,7 +105,7 @@ public class CheckpointResumeHandler {
         // We only use the lock for parallel batches (size > 1) to avoid race conditions.
         // Single-tool approvals (sequential) don't need the guard and can proceed directly.
         if (checkpoint.isParallelBatch()) {
-            if (!agentStore.markBatchResuming(sessionId, agentRole)) {
+            if (!agentStore.markBatchResuming(sessionId, agentRole, checkpoint.hasBrowserTool())) {
                 log.infof("[BATCH-RESUME-GUARD] parallel batch for session=%s already resuming — skipping duplicate.", sessionId);
                 return;
             }

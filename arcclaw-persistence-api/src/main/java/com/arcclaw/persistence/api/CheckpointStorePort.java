@@ -185,5 +185,12 @@ public interface CheckpointStorePort {
      */
     boolean claimForRetry(Long id);
 
+    /**
+     * Atomically transitions a checkpoint for a session/role from RESUMING back
+     * to AWAITING_APPROVAL if a thread handoff or execution setup fails.
+     * Prevents "stuck in RESUMING" scenarios.
+     */
+    void releaseResumeClaim(String sessionId, String agentRole);
+
     boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision);
 }

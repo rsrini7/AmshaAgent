@@ -176,6 +176,11 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     boolean markBatchResuming(String sessionId, String agentRole);
 
     /**
+     * Overloaded to accept a browser-tool flag for adjusting the resumption TTL.
+     */
+    boolean markBatchResuming(String sessionId, String agentRole, boolean hasBrowserTool);
+
+    /**
      * Atomically marks the session as RESUMING (generic execution lock).
      * @return true if successfully claimed
      */
@@ -203,6 +208,8 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * Clears the RESUMING flag for the session (generic execution lock).
      */
     void clearResuming(String sessionId);
+
+    void releaseResumeClaim(String sessionId, String agentRole);
 
     /**
      * Returns the most-recent checkpoint for this session that is in

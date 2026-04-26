@@ -343,6 +343,29 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public void releaseResumeClaim(String sessionId, String agentRole) {
+        withRetry(() -> {
+            self.doReleaseResumeClaim(sessionId, agentRole);
+            return null;
+        }, "release-resume-claim");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doReleaseResumeClaim(String sessionId, String agentRole) {
+        // Atomic transition back to AWAITING_APPROVAL to allow future attempts
+        em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'AWAITING_APPROVAL', updated_at = :now " +
+                "WHERE checkpoint_id = (SELECT checkpoint_id FROM agent_checkpoint " +
+                "            WHERE session_id = :sid AND agent_role = :role " +
+                "            ORDER BY checkpoint_id DESC LIMIT 1) " +
+                "  AND status = 'RESUMING'"
+        ).setParameter("sid", sessionId)
+         .setParameter("role", agentRole)
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
+         .executeUpdate();
+    }
+
+    @Override
     public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) {
         return withRetry(() -> self.doFindLatestAwaitingApproval(sessionId), "find-latest-awaiting");
     }

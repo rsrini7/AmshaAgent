@@ -1,5 +1,8 @@
 package com.arcclaw.core.agent.role;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.quarkus.qute.TemplateData;
@@ -99,9 +102,30 @@ public enum ToolCapability {
     private final String toolName;
     private final String description;
 
+    private static final Map<String, ToolCapability> BY_TOOL_NAME =
+            Arrays.stream(values()).collect(Collectors.toMap(c -> c.toolName, c -> c));
+
     ToolCapability(String toolName, String description) {
         this.toolName = toolName;
         this.description = description;
+    }
+
+    /**
+     * Returns true if this capability requires a headless browser (Playwright).
+     */
+    public boolean isBrowserBacked() {
+        return this == BROWSER_NAVIGATE || this == WEB_SEARCH_SERPER;
+    }
+
+    /**
+     * Resolves a tool identifier to its corresponding capability.
+     * 
+     * @param toolName the tool identifier string.
+     * @return an Optional containing the ToolCapability if found.
+     */
+    public static Optional<ToolCapability> fromToolName(String toolName) {
+        if (toolName == null) return Optional.empty();
+        return Optional.ofNullable(BY_TOOL_NAME.get(toolName));
     }
 
     /**

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.annotation.Nullable;
 import jakarta.persistence.Column;
@@ -20,6 +21,7 @@ import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -413,5 +415,24 @@ public class AgentCheckpoint {
         if (!isParallelBatch()) return Collections.emptyList();
         String composite = pendingToolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
         return Arrays.asList(composite.split(","));
+    }
+
+    /**
+     * Returns true if any tool in this checkpoint is browser-backed (e.g. Playwright).
+     * Used to apply a longer resumption TTL for heavy tasks.
+     */
+    public boolean hasBrowserTool() {
+        if (pendingToolName == null) return false;
+
+        if (isParallelBatch()) {
+            return parallelToolNames().stream()
+                .map(ToolCapability::fromToolName)
+                .flatMap(Optional::stream)
+                .anyMatch(ToolCapability::isBrowserBacked);
+        }
+        
+        return ToolCapability.fromToolName(pendingToolName)
+                .map(ToolCapability::isBrowserBacked)
+                .orElse(false);
     }
 }
