@@ -39,6 +39,8 @@ import org.jboss.logging.Logger;
  *
  * <p><strong>§5.9 / §5.10 (MUST NOT):</strong> No {@code @Transactional}.
  * This class lives in the transaction-free zone.
+ *
+ * <p>Refactored to constructor injection as part of T4-1.
  */
 @ApplicationScoped
 public class FinishActionHandler {
@@ -72,20 +74,24 @@ public class FinishActionHandler {
             Pattern.MULTILINE
     );
 
-    @Inject
-    AnswerGuardStrategy qualityGuard;
+    private final AnswerGuardStrategy qualityGuard;
+    private final CodeGenerationPolicy codePolicy;
+    private final RateLimitTracker rateLimitTracker;
+    private final Instance<AgentObserver> observers;
+    private final CorrectionStrategy correctionStrategy;
 
     @Inject
-    CodeGenerationPolicy codePolicy;
-
-    @Inject
-    RateLimitTracker rateLimitTracker;
-
-    @Inject
-    Instance<AgentObserver> observers;
- 
-    @Inject
-    CorrectionStrategy correctionStrategy;
+    public FinishActionHandler(AnswerGuardStrategy qualityGuard,
+                               CodeGenerationPolicy codePolicy,
+                               RateLimitTracker rateLimitTracker,
+                               Instance<AgentObserver> observers,
+                               CorrectionStrategy correctionStrategy) {
+        this.qualityGuard = qualityGuard;
+        this.codePolicy = codePolicy;
+        this.rateLimitTracker = rateLimitTracker;
+        this.observers = observers;
+        this.correctionStrategy = correctionStrategy;
+    }
 
     /**
      * Encapsulates the outcome of finish-action processing so the caller can
@@ -96,21 +102,11 @@ public class FinishActionHandler {
 
         /**
          * The answer passed all guards — return it as the session result.
-         *
-         * @param result the final {@link AgentResult} (Finished or Failed)
-         * @param answer the clean answer string; the caller writes this to
-         *               ChatMemoryWriter
          */
         record Completed(AgentResult result, String answer) implements FinishOutcome {}
 
         /**
-         * A raw tool-call leak was detected and is retryable. The caller should
-         * add {@code correctedStep} to history and set {@code correctionHint} as
-         * the next {@code transientError}.
-         *
-         * @param correctedStep    the step with the leak stripped (ready for history)
-         * @param correctionHint   the self-correction message for the next LLM turn
-         * @param leakedToolName   the leaked tool name (for log/metrics)
+         * A raw tool-call leak was detected and is retryable.
          */
         record RetryLeak(ReasoningStep correctedStep,
                          String correctionHint,
@@ -119,36 +115,10 @@ public class FinishActionHandler {
         /**
          * The schema self-correction budget was exhausted and no salvageable
          * answer remains.
-         *
-         * @param result a {@link AgentResult#failed} result ready to return
          */
         record SalvageFailed(AgentResult result) implements FinishOutcome {}
     }
 
-    /**
-     * Processes a FINISH step and returns a {@link FinishOutcome} describing
-     * what should happen next.
-     *
-     * <p>The caller ({@link AgentStateMachineRunner}) is responsible for:
-     * <ul>
-     *   <li>Adding any {@link FinishOutcome.RetryLeak#correctedStep()} to
-     *       history before the next iteration.</li>
-     *   <li>Calling {@code writer.saveAnswer()} when the outcome is
-     *       {@link FinishOutcome.Completed}.</li>
-     *   <li>Never calling {@code agentStore.save()} based on this outcome
-     *       (§7.14).</li>
-     * </ul>
-     *
-     * @param sessionId         the active session ID
-     * @param agentRole         the canonical agent role
-     * @param history           the current in-memory reasoning history (read-only)
-     * @param step              the FINISH {@link ReasoningStep} from the engine
-     * @param llmSchemaErrorCount current schema error count
-     *        BEFORE the caller increments it for the next iteration.
-     *        withinBudget() relies on this being the pre-increment value.
-     *        Do NOT pass llmSchemaErrorCount++ here.
-     * @return a {@link FinishOutcome} — never {@code null}
-     */
     public FinishOutcome handle(String sessionId,
                                 String agentRole,
                                 List<ReasoningStep> history,
@@ -183,7 +153,7 @@ public class FinishActionHandler {
         if (answer != null && codePolicy.isGeneratedCodeBlock(answer, agentRole)
                 && !codePolicy.canGenerateCode(agentRole)) {
             String refusal = codePolicy.buildRefusalMessage(agentRole);
-            log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);
+            log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);     
             AgentResult result = AgentResult.finished(refusal, List.copyOf(history));
             return new FinishOutcome.Completed(result, refusal);
         }
@@ -196,7 +166,7 @@ public class FinishActionHandler {
         AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(answer, history);
         answer = guardResult.answer();
         if (guardResult.isFailure()) {
-            log.warnf("FINISH-GUARD failure in session %s: %s", sessionId, guardResult.failureReason());
+            log.warnf("FINISH-GUARD failure in session %s: %s (possible model collapse)", sessionId, guardResult.failureReason());        
         }
 
         // --- Observers ---
@@ -208,29 +178,19 @@ public class FinishActionHandler {
         return new FinishOutcome.Completed(result, finalAnswer);
     }
 
-    /**
-     * Prevents internal JVM exception messages (e.g. NullPointerException) from
-     * leaking into the final answer. Surfacing these to users is a security
-     * and UX risk.
-     */
     private String sanitizeErrorForUser(String answer, String sessionId) {
         if (answer == null) return null;
 
-        // §7.33: Inner sessions (delegate prefix) produce developer analysis — never sanitize
         if (sessionId != null && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
             return answer;
         }
 
         if (INTERNAL_JVM_ERROR_PATTERN.matcher(answer).find()) {
-            log.errorf("INTERNAL-LEAK BLOCKED in session %s: detected JVM exception in answer", sessionId);
+            log.errorf("INTERNAL-LEAK BLOCKED in session %s: detected JVM exception in answer", sessionId);     
             return "I encountered an internal error while formatting the response. Please try again.";
         }
         return answer;
     }
-
-    // -------------------------------------------------------------------------
-    // Leak handling (retry or salvage)
-    // -------------------------------------------------------------------------
 
     private FinishOutcome handleLeak(String candidateAnswer,
                                      ReasoningStep step,
@@ -238,10 +198,8 @@ public class FinishActionHandler {
                                      int llmSchemaErrorCount,
                                      String sessionId) {
 
-        // Leakage detection now delegates solely to the strategy
         boolean isLeak = qualityGuard.isRawToolCallLeak(candidateAnswer);
 
-        // Rate-limited: strip and return immediately rather than retrying
         if (isLeak && rateLimitTracker.isBackingOff("primary")) {
             log.warnf("FINISH-HANDLER rate-limited — stripping leak instead of retrying for session %s", sessionId);
             String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
@@ -249,38 +207,33 @@ public class FinishActionHandler {
             return new FinishOutcome.Completed(result, stripped);
         }
 
-        // Early salvage: if we've already tried correcting once and have meaningful content,
-        // don't burn the whole budget if the result is usable.
         String cleanThought = qualityGuard.stripRawToolJson(candidateAnswer);
         if (llmSchemaErrorCount >= 1
                 && !cleanThought.isBlank()
                 && cleanThought.length() > SALVAGE_MIN_LENGTH
                 && !cleanThought.contains(SALVAGE_REJECT_PHRASE)
-                && (step.outputTokens() >= 50 || step.outputTokens() <= 0)) { // handles 0 token cases too
-            log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s — clean thought is usable",
+                && (step.outputTokens() >= 50 || step.outputTokens() <= 0)) {      
+            log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s — clean thought is usable",   
                     llmSchemaErrorCount, sessionId);
             return new FinishOutcome.Completed(
                     AgentResult.finished(cleanThought, List.copyOf(history)), cleanThought);
         }
 
-        // Within retry budget: strip + enqueue correction
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
             log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON — retrying (attempt %d)",
                     sessionId, llmSchemaErrorCount + 1);
 
-            // Strip leak BEFORE adding to history so the LLM doesn't see the leak again
             ReasoningStep cleanStep = step.withObservation(cleanThought);
 
             String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
-            String correctionHint = "System: Your last response was a raw tool call JSON or TOOLCALLS format "
+            String correctionHint = "System: Your last response was a raw tool call JSON or TOOLCALLS format "  
                     + "written as plain text, not a valid FINISH answer. You MUST invoke tools through the tool "
-                    + "mechanism — NEVER write TOOLCALLS or raw JSON in your answer text. Retry now: call "
-                    + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
+                    + "mechanism — NEVER write TOOLCALLS or raw JSON in your answer text. Retry now: call "     
+                    + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer."; 
 
             return new FinishOutcome.RetryLeak(cleanStep, correctionHint, leakedTool);
         }
 
-        // Budget exhausted — attempt salvage
         return salvage(candidateAnswer, history, sessionId);
     }
 
@@ -301,7 +254,7 @@ public class FinishActionHandler {
         log.errorf("STATE-MACHINE session %s exceeded schema self-correction limit. No salvageable answer found.",
                 sessionId);
         AgentResult failed = AgentResult.failed(
-                "I encountered a formatting error and could not complete your request. Please try again.",
+                "I encountered a formatting error and could not complete your request. Please try again.",      
                 AgentResult.FailureCategory.SCHEMA_ERROR,
                 List.copyOf(history));
         return new FinishOutcome.SalvageFailed(failed);

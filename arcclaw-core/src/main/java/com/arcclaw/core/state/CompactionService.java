@@ -58,10 +58,10 @@ public class CompactionService {
     @ConfigProperty(name = "arcclaw.memory.compaction.enabled", defaultValue = "true")
     boolean enabled;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.threshold", defaultValue = "16")
+    @ConfigProperty(name = "arcclaw.memory.compaction.threshold", defaultValue = "10")
     int threshold;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.keep-recent", defaultValue = "6")
+    @ConfigProperty(name = "arcclaw.memory.compaction.keep-recent", defaultValue = "5")
     int keepRecent;
 
     private static final Logger log = Logger.getLogger(CompactionService.class);

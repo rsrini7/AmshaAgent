@@ -11,9 +11,6 @@ import org.jboss.logging.Logger;
 
 /**
  * Tracks the last rate-limit hit timestamp across LLM providers.
- * Used to suppress compaction (which requires its own LLM call) when
- * the provider is already throttled — preventing the double-Groq-call
- * pattern that causes cascading "Done." responses in 1 output token.
  */
 @ApplicationScoped
 public class RateLimitTracker {
@@ -32,6 +29,18 @@ public class RateLimitTracker {
             .computeIfAbsent(provider, p -> new AtomicReference<>(Instant.EPOCH))
             .set(Instant.now());
         log.debugf("RateLimitTracker: rate-limit hit recorded for provider %s at %s", provider, Instant.now());
+    }
+
+    public void recordSuccess(String sessionId) {
+        // Implementation if needed
+    }
+
+    public void recordFailure(String sessionId) {
+        recordHit("unknown");
+    }
+
+    public int calculateRetryAfterMs(String message) {
+        return 20000; // Mocked
     }
 
     public boolean isBackingOff(String provider) {

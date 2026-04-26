@@ -1,13 +1,13 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -20,7 +20,6 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ReasoningStepEntity;
 import com.arcclaw.core.state.ToolDecision;
-import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
@@ -31,17 +30,10 @@ import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
 /**
- * SQLite adapter implementation of {@link CheckpointStorePort}.
- * 
- * Encapsulates all SQLite-specific concerns including:
- * - REQUIRES_NEW transaction boundaries for write operations
- * - Retry logic wrapping via {@link SqliteRetryTemplate}
- * - em.clear() patterns for fresh DB reads after BUSY retries
- * - Instant formatting for SQLite TEXT timestamp comparisons
- * 
- * Architecture note (§5.14.1): Retry-on-BUSY logic is intentionally encapsulated
- * inside this adapter. It does NOT leak via a PersistenceRetryPort interface.
- * Postgres adapters will handle retry differently or not at all.
+ * SQLite implementation of CheckpointStorePort.
+ * §1.2: All JPQL moved from core to here.
+ * §5.8: Implements single-writer safe transaction patterns using REQUIRES_NEW
+ *       at the outermost write boundary via self-proxy interception.
  */
 @ApplicationScoped
 @Unremovable
@@ -49,14 +41,26 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCheckpointStoreAdapter.class);
 
-    @Inject EntityManager em;
-    @Inject ObjectMapper objectMapper;
-    @Inject SqliteRetryTemplate retryTemplate;
-    @Inject SqliteCheckpointStoreAdapter self; // CDI proxy for @Transactional(REQUIRES_NEW)
+    @Inject
+    EntityManager em;
+
+    @Inject
+    public SqliteCheckpointStoreAdapter self; // self-proxy for @Transactional interception
+
+    @Inject
+    SqliteRetryTemplate retryTemplate;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Override
     public CheckpointDto save(CheckpointDto checkpointDto) {
         return withRetry(() -> self.doSaveEntity(checkpointDto), "save-entity");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
+        return internalSaveEntity(checkpointDto);
     }
 
     @Override
@@ -65,17 +69,16 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return withRetry(() -> self.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed), "upsert-with-steps");
     }
 
-    /**
-     * Atomically finds or creates a checkpoint and updates its metadata.
-     * Restores TOCTOU safety (§FIX 1).
-     */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
         String stateJson, String autonomy, int iterationsUsed) {
+        
         em.clear();
-        List<AgentCheckpoint> results = em.createQuery(
+        List<AgentCheckpoint> existing = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.agentRole = :role AND c.status <> :archived " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.agentRole = :role " +
+                "  AND c.status <> :archived " +
                 "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
@@ -83,47 +86,114 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 .setParameter("archived", CheckpointStatus.ARCHIVED)
                 .setMaxResults(1)
                 .getResultList();
-        
+
         AgentCheckpoint entity;
         boolean created = false;
-        if (results.isEmpty()) {
+        if (existing.isEmpty()) {
             entity = new AgentCheckpoint();
             entity.setSessionId(sessionId);
             entity.setAgentRole(agentRole);
+            entity.setCreatedAt(Instant.now());
             created = true;
         } else {
-            entity = results.get(0);
+            entity = existing.get(0);
         }
-        
+
         entity.setStatus(CheckpointStatus.IN_PROGRESS);
         entity.setStateJson(stateJson);
         if (autonomy != null) {
             entity.setAutonomyLevel(AutonomyLevel.valueOf(autonomy));
         }
         entity.setIterationsUsed(iterationsUsed);
-        
+        entity.setUpdatedAt(Instant.now());
+
         if (created) {
             em.persist(entity);
         } else {
             entity = em.merge(entity);
         }
         
+        em.flush();
         return new CheckpointUpsertResult(CheckpointMapper.toDto(entity), created);
     }
 
-    /**
-     * Saves or updates a checkpoint in a fresh, isolated transaction.
-     * Handles both inserts and updates; clears L1 cache before querying existing.
-     * 
-     * Caller must NOT be inside a REQUIRED transaction.
-     * 
-     * NOTE: When called from doSaveCheckpointWithSteps(), the @Transactional annotation
-     * on this method is bypassed (direct call, not CDI proxy). This is intentional.
-     */
+    @Override
+    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, 
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
+        return withRetry(() -> self.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps), "upsert-and-finalize");
+    }
+
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
-        em.clear();
+    public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps) {
         
+        em.clear();
+        List<AgentCheckpoint> existing = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.agentRole = :role " +
+                "  AND c.status <> :archived " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("role", agentRole)
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
+                .setMaxResults(1)
+                .getResultList();
+
+        AgentCheckpoint entity;
+        boolean created = false;
+        CheckpointStatus status = CheckpointStatus.valueOf(finalStatus);
+
+        if (existing.isEmpty()) {
+            entity = new AgentCheckpoint();
+            entity.setSessionId(sessionId);
+            entity.setAgentRole(agentRole);
+            entity.setCreatedAt(Instant.now());
+            created = true;
+        } else {
+            entity = existing.get(0);
+        }
+
+        entity.setStatus(status);
+        entity.setStateJson(stateJson);
+        entity.setUpdatedAt(Instant.now());
+
+        if (status == CheckpointStatus.COMPLETED) {
+            entity.setCompletedAt(Instant.now());
+        } else if (status == CheckpointStatus.FAILED) {
+            entity.setFailedAt(Instant.now());
+        }
+
+        if (created) {
+            em.persist(entity);
+        } else {
+            entity = em.merge(entity);
+        }
+        
+        em.flush();
+        CheckpointDto savedDto = CheckpointMapper.toDto(entity);
+        
+        // 🟢 ATOMICITY FIX: Internal private method avoids nested REQUIRES_NEW
+        internalSaveSteps(savedDto.id(), steps);
+        
+        return new CheckpointUpsertResult(savedDto, created);
+    }
+
+    @Override
+    public CheckpointDto saveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
+        return withRetry(() -> self.doSaveCheckpointWithSteps(checkpointDto, steps), "save-checkpoint-steps");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public CheckpointDto doSaveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
+        CheckpointDto saved = internalSaveEntity(checkpointDto);
+        internalSaveSteps(saved.id(), steps);
+        return saved;
+    }
+
+    private CheckpointDto internalSaveEntity(CheckpointDto checkpointDto) {
+        em.clear();
         if (checkpointDto.id() == null) {
             AgentCheckpoint entity = CheckpointMapper.toEntity(checkpointDto);
             em.persist(entity);
@@ -138,23 +208,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             updateEntityFromDto(managed, checkpointDto);
             return CheckpointMapper.toDto(managed);
         }
-    }
-
-    @Override
-    public CheckpointDto saveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
-        return withRetry(() -> self.doSaveCheckpointWithSteps(checkpointDto, steps), "save-checkpoint-steps");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public CheckpointDto doSaveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
-        // INTENTIONAL: doSaveEntity and doSaveSteps are called directly (not via self) so
-        // their @Transactional(REQUIRES_NEW) is NOT intercepted. They participate in THIS
-        // method's REQUIRES_NEW transaction, ensuring checkpoint + steps commit atomically.
-        // Do NOT change to self.doSaveEntity() — that would start a nested REQUIRES_NEW,
-        // split the commit, and break atomicity.
-        CheckpointDto saved = doSaveEntity(checkpointDto);
-        doSaveSteps(saved.id(), steps);
-        return saved;
     }
 
     @Override
@@ -216,6 +269,24 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public void transitionStatus(Long id, String newStatus) {
+        withRetry(() -> {
+            self.doTransitionStatus(id, newStatus);
+            return null;
+        }, "transition-status");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doTransitionStatus(Long id, String newStatus) {
+        em.clear();
+        AgentCheckpoint entity = em.find(AgentCheckpoint.class, id);
+        if (entity != null) {
+            entity.setStatus(CheckpointStatus.valueOf(newStatus));
+            entity.setUpdatedAt(Instant.now());
+        }
+    }
+
+    @Override
     public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) {
         return withRetry(() -> self.doFindLatestAwaitingApproval(sessionId), "find-latest-awaiting");
     }
@@ -238,126 +309,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    public Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
-        return withRetry(() -> self.doFindLatestAwaitingApprovalWithPrefix(sessionPrefix), "find-awaiting-prefix");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public Optional<CheckpointDto> doFindLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
-        em.clear();
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId LIKE :prefix " +
-                "  AND c.status = :status " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
-                .setParameter("prefix", sessionPrefix + "%")
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .map(CheckpointMapper::toDto)
-                .findFirst();
-    }
-
-    @Override
-    public void transitionStatus(Long id, String newStatus) {
-        withRetry(() -> {
-            self.doTransitionStatus(id, newStatus);
-            return null;
-        }, "transition-status");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doTransitionStatus(Long id, String newStatus) {
-        em.clear();
-        AgentCheckpoint checkpoint = em.find(AgentCheckpoint.class, id);
-        if (checkpoint != null) {
-            CheckpointStatus status = CheckpointStatus.valueOf(newStatus);
-            checkpoint.setStatus(status);
-            Instant now = Instant.now();
-            switch (status) {
-                case COMPLETED:
-                    checkpoint.setCompletedAt(now);
-                    checkpoint.setFailReason(null);
-                    break;
-                case FAILED:
-                    checkpoint.setFailedAt(now);
-                    break;
-                default:
-                    // No-op for other statuses
-                    break;
-            }
-            log.debugf("Transitioned checkpoint %d to status %s", id, newStatus);
-        }
-    }
-
-    @Override
-    public Optional<CheckpointDto> findLatestBySession(String sessionId) {
-        return withRetry(() -> self.doFindLatestBySession(sessionId), "find-latest");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public Optional<CheckpointDto> doFindLatestBySession(String sessionId) {
-        em.clear();
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .map(CheckpointMapper::toDto)
-                .findFirst();
-    }
-
-    @Override
-    public Optional<CheckpointDto> findLatestNonArchivedBySession(String sessionId) {
-        return withRetry(() -> self.doFindLatestNonArchivedBySession(sessionId), "find-latest-non-archived");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public Optional<CheckpointDto> doFindLatestNonArchivedBySession(String sessionId) {
-        em.clear();
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.status <> :archived " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("archived", CheckpointStatus.ARCHIVED)
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .map(CheckpointMapper::toDto)
-                .findFirst();
-    }
-
-    @Override
-    public Optional<CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status) {
-        return withRetry(() -> self.doFindLatestBySessionAndStatus(sessionId, status), "find-latest-status");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public Optional<CheckpointDto> doFindLatestBySessionAndStatus(String sessionId, String status) {
-        em.clear();
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.status = :status " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("status", CheckpointStatus.valueOf(status))
-                .setMaxResults(1)
-                .getResultList()
-                .stream()
-                .map(CheckpointMapper::toDto)
-                .findFirst();
-    }
-
-    @Override
     public void saveSteps(Long checkpointId, List<ReasoningStepDto> steps) {
         withRetry(() -> {
             self.doSaveSteps(checkpointId, steps);
@@ -367,8 +318,10 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doSaveSteps(Long checkpointId, List<ReasoningStepDto> steps) {
-        // NOTE: When called from doSaveCheckpointWithSteps(), the @Transactional annotation
-        // on this method is bypassed (direct call, not CDI proxy). This is intentional.
+        internalSaveSteps(checkpointId, steps);
+    }
+
+    private void internalSaveSteps(Long checkpointId, List<ReasoningStepDto> steps) {
         em.clear();
         em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
                 .setParameter("id", checkpointId)
@@ -391,6 +344,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             entity.setRootCauseClass(dto.rootCauseClass());
             em.persist(entity);
         }
+        em.flush();
     }
 
     @Override
@@ -400,19 +354,16 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<ReasoningStepDto> doLoadSteps(Long checkpointId) {
-        em.clear();
         return em.createQuery(
-                "SELECT r FROM ReasoningStepEntity r " +
-                "WHERE r.checkpointId = :id ORDER BY r.sequenceNum ASC",
+                "SELECT r FROM ReasoningStepEntity r WHERE r.checkpointId = :id ORDER BY r.sequenceNum ASC",
                 ReasoningStepEntity.class)
                 .setParameter("id", checkpointId)
                 .getResultList()
                 .stream()
-                .map(e -> new ReasoningStepDto(
-                        e.getThoughtJson(), e.getAction(), e.getActionInputJson(),
-                        e.getObservation(), e.getInputTokens(), e.getOutputTokens(),
-                        e.getSuccess(), e.getErrorCode(), e.getTraceId(), e.getRootCauseClass()))
-                .toList();
+                .map(s -> new ReasoningStepDto(s.getThoughtJson(), s.getAction(), s.getActionInputJson(),
+                        s.getObservation(), s.getInputTokens(), s.getOutputTokens(), s.getSuccess(), 
+                        s.getErrorCode(), s.getTraceId(), s.getRootCauseClass()))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -425,17 +376,10 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doDeleteSteps(Long checkpointId) {
-        em.clear();
         em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
                 .setParameter("id", checkpointId)
                 .executeUpdate();
     }
-
-    @Override
-    public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
-        return withRetry(() -> self.doFindStaleAwaitingApproval(cutoff), "find-stale-approvals");
-    }
-
 
     @Override
     public List<CheckpointDto> findByStatus(String status) {
@@ -444,120 +388,182 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public List<CheckpointDto> doFindByStatus(String status) {
-        em.clear();
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status", AgentCheckpoint.class)
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status ORDER BY c.id DESC",
+                AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.valueOf(status))
                 .getResultList()
-                .stream().map(CheckpointMapper::toDto).toList();
+                .stream()
+                .map(CheckpointMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
-        return withRetry(() -> self.doIsCheckpointExpired(sessionId, timeoutHours), "is-checkpoint-expired");
+        return withRetry(() -> self.doIsCheckpointExpired(sessionId, timeoutHours), "is-expired");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doIsCheckpointExpired(String sessionId, long timeoutHours) {
-        Instant cutoff = Instant.now().minus(timeoutHours, ChronoUnit.HOURS);
-        
-        List<AgentCheckpoint> rows = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.status = :status " +
-                "ORDER BY c.id DESC",
+        Instant cutoff = Instant.now().minus(Duration.ofHours(timeoutHours));
+        List<AgentCheckpoint> results = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
-            .setParameter("sid", sessionId)
-            .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-            .setMaxResults(1)
-            .getResultList();
-            
-        if (rows.isEmpty()) {
-            // Diagnostic: check if the session exists at all with ANY status
-            Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid", Long.class)
-                    .setParameter("sid", sessionId)
-                    .getSingleResult();
-            log.warnf("isCheckpointExpired found 0 records with AWAITING_APPROVAL for session %s (Total records for session: %d)", 
-                      sessionId, count);
-            return true;   // no AWAITING_APPROVAL → treat as expired
-        }
-        
-        AgentCheckpoint cp = rows.get(0);
-        if (cp.getUpdatedAt() == null) return true;
-        return cp.getUpdatedAt().isBefore(cutoff);
-    }
-
-    @Override
-    public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
-        return withRetry(() -> self.doFindInProgressZombies(cutoff), "find-in-progress-zombies");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public List<CheckpointDto> doFindInProgressZombies(Instant cutoff) {
-        em.clear();
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.IN_PROGRESS)
-                .setParameter("cutoff", cutoff)
-                .getResultList()
-                .stream().map(CheckpointMapper::toDto).toList();
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public List<CheckpointDto> doFindStaleAwaitingApproval(Instant cutoff) {
-        em.clear();
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", cutoff)
-                .getResultList()
-                .stream().map(CheckpointMapper::toDto).toList();
+                .getResultList();
+        return !results.isEmpty();
     }
-
 
     @Override
     public boolean isSessionActive(String sessionId) {
-        return withRetry(() -> self.doIsSessionActive(sessionId), "is-session-active");
+        return withRetry(() -> self.doIsSessionActive(sessionId), "is-active");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doIsSessionActive(String sessionId) {
-        em.clear();
-        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status NOT IN :terminalStatuses", Long.class)
+        List<AgentCheckpoint> results = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status NOT IN (:terminalStatuses)",
+                AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
                 .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
-                .getSingleResult();
-        return count > 0;
+                .setMaxResults(1)
+                .getResultList();
+        return !results.isEmpty();
     }
 
-    /**
-     * Checks if there are any pending tool approvals for a session.
-     * Used to determine if a session has awaiting-approval checkpoints.
-     */
-    public boolean hasPendingApproval(String sessionId) {
-        return withRetry(() -> self.doHasPendingApproval(sessionId), "has-pending-approval");
+    @Override
+    public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
+        return withRetry(() -> self.doFindInProgressZombies(cutoff), "find-zombies");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public boolean doHasPendingApproval(String sessionId) {
-        em.clear();
-        return !em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.status = :status",
+    public List<CheckpointDto> doFindInProgressZombies(Instant cutoff) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
                 AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
+                .setParameter("status", CheckpointStatus.IN_PROGRESS)
+                .setParameter("cutoff", cutoff)
+                .getResultList()
+                .stream()
+                .map(CheckpointMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
+        return withRetry(() -> self.doFindStaleApprovals(cutoff), "find-stale-approvals");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public List<CheckpointDto> doFindStaleApprovals(Instant cutoff) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
+                AgentCheckpoint.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("cutoff", cutoff)
+                .getResultList()
+                .stream()
+                .map(CheckpointMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<CheckpointDto> findLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+        return withRetry(() -> self.doFindLatestAwaitingApprovalWithPrefix(sessionPrefix), "find-latest-prefix");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<CheckpointDto> doFindLatestAwaitingApprovalWithPrefix(String sessionPrefix) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :prefix AND c.status = :status ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("prefix", sessionPrefix + "%")
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setMaxResults(1)
                 .getResultList()
-                .isEmpty();
+                .stream()
+                .map(CheckpointMapper::toDto)
+                .findFirst();
     }
 
-    /**
-     * Deletes a checkpoint with a matching (sessionId, agentRole) pair.
-     * Typically used for cleanup during session termination.
-     */
+    @Override
+    public Optional<CheckpointDto> findLatestBySession(String sessionId) {
+        return withRetry(() -> self.doFindLatestBySession(sessionId), "find-latest");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<CheckpointDto> doFindLatestBySession(String sessionId) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .map(CheckpointMapper::toDto)
+                .findFirst();
+    }
+
+    @Override
+    public Optional<CheckpointDto> findLatestNonArchivedBySession(String sessionId) {
+        return withRetry(() -> self.doFindLatestNonArchivedBySession(sessionId), "find-latest-non-archived");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<CheckpointDto> doFindLatestNonArchivedBySession(String sessionId) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status <> :archived ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("archived", CheckpointStatus.ARCHIVED)
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .map(CheckpointMapper::toDto)
+                .findFirst();
+    }
+
+    @Override
+    public Optional<CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status) {
+        return withRetry(() -> self.doFindLatestBySessionAndStatus(sessionId, status), "find-latest-status");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public Optional<CheckpointDto> doFindLatestBySessionAndStatus(String sessionId, String status) {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status = :status ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("status", CheckpointStatus.valueOf(status))
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .map(CheckpointMapper::toDto)
+                .findFirst();
+    }
+
+    @Override
+    public void markCheckpointsFailed(String sessionId) {
+        withRetry(() -> {
+            self.doMarkCheckpointsFailed(sessionId);
+            return null;
+        }, "mark-failed-all");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void doMarkCheckpointsFailed(String sessionId) {
+        em.createQuery("UPDATE AgentCheckpoint c SET c.status = :failed, c.failedAt = :now, c.updatedAt = :now " +
+                       "WHERE c.sessionId = :sid AND c.status NOT IN (:terminalStatuses)")
+                .setParameter("failed", CheckpointStatus.FAILED)
+                .setParameter("now", Instant.now())
+                .setParameter("sid", sessionId)
+                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
+                .executeUpdate();
+    }
+
+    @Override
     public void deleteCheckpoint(String sessionId, String role) {
         withRetry(() -> {
             self.doDeleteCheckpoint(sessionId, role);
@@ -567,85 +573,38 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doDeleteCheckpoint(String sessionId, String role) {
-        em.clear();
-        em.createQuery(
-            "DELETE FROM AgentCheckpoint c " +
-            "WHERE c.sessionId = :sid AND c.agentRole = :role")
-        .setParameter("sid", sessionId)
-        .setParameter("role", role)
-        .executeUpdate();
-        log.debugf("Deleted checkpoint for session=%s, role=%s", sessionId, role);
-    }
-
-    /**
-     * Marks all non-terminal checkpoints for a session as FAILED.
-     * Used during session cleanup (markCheckpointsFailed).
-     */
-    public void markCheckpointsFailed(String sessionId) {
-        withRetry(() -> {
-            self.doMarkCheckpointsFailed(sessionId);
-            return null;
-        }, "mark-checkpoints-failed");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public void doMarkCheckpointsFailed(String sessionId) {
-        List<AgentCheckpoint> checkpoints = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid " +
-                "  AND c.status NOT IN (:terminalStatuses)",
+        List<AgentCheckpoint> results = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
-                .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
+                .setParameter("role", role)
                 .getResultList();
-
-        Instant now = Instant.now();
-        for (var checkpoint : checkpoints) {
-            if (checkpoint == null) {
-                log.warnf("Found null checkpoint in list for session=%s", sessionId);
-                continue;
-            }
-            checkpoint.setStatus(CheckpointStatus.FAILED);
-            checkpoint.setFailedAt(now);
-            checkpoint.setFailReason("Session terminated by WorkspaceManager");
-        }
-        if (!checkpoints.isEmpty()) {
-            log.infof("Marked %d checkpoint(s) FAILED for session=%s",
-                      checkpoints.size(), sessionId);
-        }
+        results.forEach(em::remove);
     }
-
-    // ── FIX 8B: purgeOldChatHistory — moved from SessionReaper ──────────
 
     @Override
     public void purgeOldChatHistory(Instant cutoff) {
         withRetry(() -> {
             self.doPurgeOldChatHistory(cutoff);
             return null;
-        }, "purge-old-chat-history");
+        }, "purge-history");
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doPurgeOldChatHistory(Instant cutoff) {
-        em.clear();
-        int deleted = em.createQuery(
-            "DELETE FROM ChatMemoryEntity m WHERE m.memoryId NOT IN (" +
-            "  SELECT c.sessionId FROM AgentCheckpoint c " +
-            "  WHERE c.updatedAt > :cutoff " +
-            "     OR c.status NOT IN (:terminalStatuses)" +
-            ")")
-            // Hibernate 6 bulk JPQL bypasses autoApply converters for parameters.
-            // Manually format to String using TemporalUtils for SQLite TEXT comparison.
-            .setParameter("cutoff", TemporalUtils.formatIsoLex(cutoff))
-            .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
-            .executeUpdate();
-
-        if (deleted > 0) {
-            log.infof("Purge complete: removed %d stale chat memory row(s).", deleted);
-        }
+        em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId IN " +
+                       "(SELECT c.id FROM AgentCheckpoint c WHERE c.updatedAt < :cutoff)")
+                .setParameter("cutoff", cutoff)
+                .executeUpdate();
+        em.createQuery("DELETE FROM AgentCheckpoint c WHERE c.updatedAt < :cutoff")
+                .setParameter("cutoff", cutoff)
+                .executeUpdate();
     }
 
-    // ── FIX 9: Atomic status transition methods ─────────────────────────
+    @Override
+    public boolean hasPendingApproval(String sessionId) {
+        return findLatestAwaitingApproval(sessionId).isPresent();
+    }
 
     @Override
     public void markFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
@@ -655,47 +614,18 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         }, "mark-failed");
     }
 
-    @Override
-    public List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason) {
-        return withRetry(() -> self.doRecoverInProgressZombies(inProgressCutoff, failReason), "recover-zombies");
-    }
-
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public List<CheckpointDto> doRecoverInProgressZombies(Instant inProgressCutoff, String failReason) {
-        em.clear();
-        
-        // 1. In-progress zombies
-        List<AgentCheckpoint> inProgress = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.IN_PROGRESS)
-                .setParameter("cutoff", inProgressCutoff)
-                .getResultList();
-        
-        Instant now = Instant.now();
-        List<CheckpointDto> results = new ArrayList<>();
-        
-        for (AgentCheckpoint cp : inProgress) {
-            cp.setStatus(CheckpointStatus.FAILED);
-            cp.setFailedAt(now);
-            cp.setFailReason(failReason);
-            results.add(CheckpointMapper.toDto(cp));
-        }
-
-        return results;
-    }
-
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
         em.clear();
         AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
         if (cp == null) return;
         cp.setStatus(CheckpointStatus.FAILED);
-        cp.setFailedAt(Instant.now());
         cp.setFailReason(failReason);
         cp.setErrorCode(errorCode);
         cp.setTraceId(traceId);
         cp.setRootCauseClass(rootCauseClass);
+        cp.setFailedAt(Instant.now());
+        cp.setUpdatedAt(Instant.now());
     }
 
     @Override
@@ -713,7 +643,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         if (cp == null) return;
         cp.setStatus(CheckpointStatus.COMPLETED);
         cp.setCompletedAt(Instant.now());
-        cp.setFailReason(null);
+        cp.setUpdatedAt(Instant.now());
     }
 
     @Override
@@ -734,7 +664,36 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         cp.setFailReason(reason);
     }
 
-    // ── FIX 10: Atomic batch tool decision update ───────────────────────
+    @Override
+    public boolean claimForRetry(Long id) {
+        return withRetry(() -> self.doClaimForRetry(id), "claim-for-retry");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public boolean doClaimForRetry(Long id) {
+        em.clear();
+        AgentCheckpoint entity = em.find(AgentCheckpoint.class, id);
+        if (entity != null && CheckpointStatus.AWAITING_RETRY == entity.getStatus()) {
+            entity.setStatus(CheckpointStatus.IN_PROGRESS);
+            entity.setRetryAfterMs(null);
+            entity.setUpdatedAt(Instant.now());
+            em.flush();
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason) {
+        return withRetry(() -> self.doRecoverInProgressZombies(inProgressCutoff, failReason), "recover-zombies");
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public List<CheckpointDto> doRecoverInProgressZombies(Instant inProgressCutoff, String failReason) {
+        List<CheckpointDto> zombies = findInProgressZombies(inProgressCutoff);
+        zombies.forEach(c -> self.doMarkFailed(c.id(), failReason, "ZOMBIE", null, null));
+        return zombies;
+    }
 
     @Override
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole,
@@ -779,12 +738,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     /**
      * Retry wrapper that delegates to retryTemplate with SQLite BUSY handling.
-     * 
-     * Encapsulates the SqliteRetryTemplate inside the adapter; callers see
-     * only the CheckpointStorePort interface, not retry semantics.
-     * 
-     * Architecture rule (§5.14.1): Retry-on-BUSY is a SQLite-specific concern
-     * that MUST NOT leak to core domain code via a PersistenceRetryPort interface.
      */
     private <T> T withRetry(Callable<T> task, String operation) {
         try {

@@ -24,6 +24,10 @@ public class LlmExceptionClassifier {
                 if (msg != null && (msg.contains("model_not_found") || msg.contains("does not exist") || msg.contains("invalid_api_key"))) {
                     return new LlmAuthenticationException(msg, throwable);
                 }
+
+                if (msg != null && (msg.toLowerCase().contains("degraded") || msg.toLowerCase().contains("cannot be invoked") || msg.toLowerCase().contains("overloaded"))) {
+                    return new LlmServiceUnavailableException(msg, throwable);
+                }
             }
 
             if (t instanceof HttpException) {

@@ -16,14 +16,18 @@ import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import io.quarkus.arc.Unremovable;
+import org.jboss.logging.Logger;
 
 /**
  * SQLite implementation of CronStorePort.
  * §1.2: All JPQL moved from core to here.
+ * §7.33: Native queries preferred for bulk updates to bypass Hibernate 6 bulk JPQL converter bypass bug.
  */
 @ApplicationScoped
 @Unremovable
 public class SqliteCronStoreAdapter implements CronStorePort {
+
+    private static final Logger log = Logger.getLogger(SqliteCronStoreAdapter.class);
 
     @Inject
     EntityManager em;
@@ -82,6 +86,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCronDto> findById(String id) {
+        if (id == null || id.isBlank()) return Optional.empty();
         AgentCronEntity entity = em.find(AgentCronEntity.class, id);
         return Optional.ofNullable(entity).map(this::toDto);
     }
@@ -89,6 +94,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean claimForFire(String id) {
+        if (id == null || id.isBlank()) return false;
         int updated = em.createNativeQuery(
                 "UPDATE agentcron SET status=:running WHERE id=:id AND status=:active"
         ).setParameter("id", id)
@@ -101,6 +107,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void releaseClaimToActive(String id) {
+        if (id == null || id.isBlank()) return;
         em.createNativeQuery(
                 "UPDATE agentcron SET status=:active WHERE id=:id AND status=:running"
         ).setParameter("id", id)
@@ -112,9 +119,14 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
-        em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = :active, c.lastFireTime = :last, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("active", CronStatus.ACTIVE)
+        if (id == null || id.isBlank()) {
+            log.warnf("markFired called with null/blank id — skipping");
+            return;
+        }
+        // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
+        em.createNativeQuery(
+                "UPDATE agentcron SET status = :active, lastFireTime = :last, nextFireTime = :next, updatedAt = :now WHERE id = :id"
+        ).setParameter("active", CronStatus.ACTIVE.name())
          .setParameter("last", lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null)
          .setParameter("next", nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null)
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
@@ -125,9 +137,14 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markCompleted(String id, Instant lastFireTime) {
-        em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = :completed, c.lastFireTime = :last, c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("completed", CronStatus.COMPLETED)
+        if (id == null || id.isBlank()) {
+            log.warnf("markCompleted called with null/blank id — skipping");
+            return;
+        }
+        // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
+        em.createNativeQuery(
+                "UPDATE agentcron SET status = :completed, lastFireTime = :last, updatedAt = :now WHERE id = :id"
+        ).setParameter("completed", CronStatus.COMPLETED.name())
          .setParameter("last", lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null)
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
@@ -137,9 +154,14 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markAwaitingApproval(String id) {
-        em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = :awaiting, c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL)
+        if (id == null || id.isBlank()) {
+            log.warnf("markAwaitingApproval called with null/blank id — skipping");
+            return;
+        }
+        // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
+        em.createNativeQuery(
+                "UPDATE agentcron SET status = :awaiting, updatedAt = :now WHERE id = :id"
+        ).setParameter("awaiting", CronStatus.AWAITING_APPROVAL.name())
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
          .executeUpdate();
@@ -148,6 +170,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void setDeliveryId(String id, String deliveryId) {
+        if (id == null || id.isBlank()) return;
         em.createNativeQuery(
                 "UPDATE agentcron SET lastDeliveryId=:d WHERE id=:id"
         ).setParameter("d", deliveryId)
@@ -158,9 +181,14 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markFailed(String id, String errorReason) {
-        em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = :failed, c.errorReason = :err, c.updatedAt = :now WHERE c.id = :id"
-        ).setParameter("failed", CronStatus.FAILED)
+        if (id == null || id.isBlank()) {
+            log.warnf("markFailed called with null/blank id — skipping");
+            return;
+        }
+        // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
+        em.createNativeQuery(
+                "UPDATE agentcron SET status = :failed, errorReason = :err, updatedAt = :now WHERE id = :id"
+        ).setParameter("failed", CronStatus.FAILED.name())
          .setParameter("err", errorReason)
          .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
          .setParameter("id", id)
@@ -170,10 +198,14 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void markSkipped(String id, Instant nextFireTime, Instant now) {
-        // IMPORTANT: String passed explicitly because Hibernate 6 bulk JPQL bypasses Converter autoApply for bind parameters.
-        em.createQuery(
-            "UPDATE AgentCronEntity c SET c.status = :skipped, c.nextFireTime = :next, c.updatedAt = :now WHERE c.id = :id"
-         ).setParameter("skipped", CronStatus.SKIPPED)
+        if (id == null || id.isBlank()) {
+            log.warnf("markSkipped called with null/blank id — skipping");
+            return;
+        }
+        // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
+        em.createNativeQuery(
+            "UPDATE agentcron SET status = :skipped, nextFireTime = :next, updatedAt = :now WHERE id = :id"
+         ).setParameter("skipped", CronStatus.SKIPPED.name())
           .setParameter("next", nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null)
           .setParameter("now", now != null ? TemporalUtils.formatIsoLex(now) : null)
          .setParameter("id", id)
@@ -183,13 +215,15 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void reclaimStaleCrons(Instant threshold) {
-        em.createQuery(
-                "UPDATE AgentCronEntity c SET c.status = :active " +
-                "WHERE c.status = :running AND " +
-                "(c.lastFireTime <= :threshold OR (c.lastFireTime IS NULL AND c.createdAt <= :threshold))"
-        ).setParameter("active", CronStatus.ACTIVE)
-         .setParameter("running", CronStatus.RUNNING)
-         .setParameter("threshold", threshold != null ? TemporalUtils.formatIsoLex(threshold) : null)
+        if (threshold == null) return;
+        // Bulk update uses native query to avoid type mismatch on Instant fields (H6 bug)
+        em.createNativeQuery(
+                "UPDATE agentcron SET status = :active " +
+                "WHERE status = :running AND " +
+                "(lastFireTime <= :threshold OR (lastFireTime IS NULL AND createdAt <= :threshold))"
+        ).setParameter("active", CronStatus.ACTIVE.name())
+         .setParameter("running", CronStatus.RUNNING.name())
+         .setParameter("threshold", TemporalUtils.formatIsoLex(threshold))
          .executeUpdate();
     }
 
@@ -229,6 +263,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public int deleteByIdAndUserId(String id, String userId) {
+        if (id == null || id.isBlank()) return 0;
         return em.createQuery(
                 "DELETE FROM AgentCronEntity c WHERE c.id = :id AND c.userId = :userId"
         ).setParameter("id", id)

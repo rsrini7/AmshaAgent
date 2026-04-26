@@ -32,8 +32,6 @@ import org.jboss.logging.Logger;
 
 /**
  * Validates tool calls before invocation.
- * Handles deduplication, security intent guards, and pre-invocation
- * human-in-the-loop (HITL) approvals.
  */
 @ApplicationScoped
 public class ToolInvocationGuard {
@@ -45,13 +43,13 @@ public class ToolInvocationGuard {
     @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
     @Inject public Instance<ToolGuardInterceptor> interceptors;
     
-    // Session-scoped deduplication cache: SessionId -> (DedupeKey -> Observation)
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
 
     private List<ToolGuardInterceptor> sortedInterceptors;
 
     @PostConstruct
     public void init() {
+        log.info("Initializing ToolInvocationGuard with discovered interceptors...");
         if (interceptors == null) {
             this.sortedInterceptors = List.of();
             return;
@@ -59,13 +57,11 @@ public class ToolInvocationGuard {
         this.sortedInterceptors = interceptors.stream()
             .sorted(Comparator.comparingInt(this::getPriority))
             .toList();
-        log.infof("ToolInvocationGuard initialized with %d sorted interceptors.", sortedInterceptors.size());
     }
 
 
     private int getPriority(ToolGuardInterceptor interceptor) {
         Class<?> clazz = interceptor.getClass();
-        // Handle CDI proxies
         if (interceptor instanceof Subclass) {
             clazz = clazz.getSuperclass();
         }
@@ -82,15 +78,10 @@ public class ToolInvocationGuard {
         record Blocked(String observation) implements GuardDecision {}
     }
 
-    /**
-     * Evaluates whether a tool call should proceed, be blocked, be deduplicated, or
-     * pause for approval.
-     */
     public GuardDecision evaluate(String sessionId, String agentRole,
             String toolName, Map<String, Object> params,
             List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
-        // 0. RUN REGISTERED INTERCEPTORS (SPI) - now sorted by priority
         for (ToolGuardInterceptor interceptor : sortedInterceptors) {
             if (interceptor.handledToolNames().isEmpty()
                     || interceptor.handledToolNames().contains(toolName)) {
@@ -102,17 +93,13 @@ public class ToolInvocationGuard {
             }
         }
 
-        // 0.5 RESOLVE IDEMPOTENCY MODE
         IdempotencyMode mode = toolRegistry.findTool(toolName)
                 .map(AgentTool::idempotencyMode)
                 .orElse(IdempotencyMode.NON_IDEMPOTENT);
 
-        // 1. DEDUPLICATION CHECK (O(1) with stable hash/JSON key)
-        // Skip for NON_IDEMPOTENT tools as they should run every time if requested.
         if (mode != IdempotencyMode.NON_IDEMPOTENT) {
             Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
                 Map<String, String> index = new ConcurrentHashMap<>();
-                // Build index from history on first access in this turn
                 for (ReasoningStep past : history) {
                     if (past.observation() != null && !past.observation().isBlank()) {
                         index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
@@ -124,27 +111,24 @@ public class ToolInvocationGuard {
             String currentKey = buildDedupeKey(toolName, params);
             if (dedupeIndex.containsKey(currentKey)) {
                 String pastObservation = dedupeIndex.get(currentKey);
-                log.warnf("[DEDUP-GUARD] Duplicate call '%s' (mode=%s) detected for session=%s — bypassing re-execution.",
-                        toolName, mode, sessionId);
-                String cachedObs = pastObservation + "\n\n[NOTE: This result was retrieved from " +
-                        "the session cache. The " + (mode == IdempotencyMode.AT_MOST_ONCE ? "AT_MOST_ONCE " : "") +
-                        "tool was not re-executed.]";
+                String cachedObs = pastObservation + "\n\n[DEDUP]";
                 return new GuardDecision.Deduplicate(cachedObs);
             }
         }
 
-        // 1.5 TOOL EXISTENCE CHECK (Internal and Dynamic)
         boolean isInternalTool = toolRegistry.findTool(toolName).isPresent();
         boolean isDynamicAllowed = !isInternalTool
                 && dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
                 && dynamicToolLookup.get().isDynamicToolAllowed(toolName);
 
         if (!isInternalTool && !isDynamicAllowed) {
-            log.warnf("[GUARD] Unknown tool call attempt: %s in session %s", toolName, sessionId);
+            log.warnf(
+                "GUARD Unknown tool call attempt '%s' in session '%s' — " +
+                "not in ToolRegistry and not allowed by DynamicToolLookup.",
+                toolName, sessionId);
             return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
         }
 
-        // 3. HITL PRE-APPROVAL CHECK
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
@@ -161,8 +145,6 @@ public class ToolInvocationGuard {
                 String paramsJson = objectMapper.writeValueAsString(params);
                 return new GuardDecision.PauseForApproval(toolName, paramsJson);
             } catch (Exception e) {
-                log.errorf("Failed to serialize params for HITL in session %s — blocking tool for safety: %s", sessionId, e.getMessage());
-                log.debug("Full parameter serialization failure stack trace:", e);
                 return new GuardDecision.Blocked(
                         "Tool blocked: failed to serialize parameters for approval.");
             }
@@ -170,17 +152,11 @@ public class ToolInvocationGuard {
 
         return new GuardDecision.Allow();
     }
-    /**
-     * Clears cached deduplication data for a terminated session.
-     */
+
     public void clearSession(String sessionId) {
         sessionDedupeCache.remove(sessionId);
     }
 
-    /**
-     * Records a new tool call in the deduplication cache so subsequent or parallel calls
-     * with identical parameters can be skipped.
-     */
     public void recordToolCall(String sessionId, String toolName, Map<String, Object> params, String observation) {
         Map<String, String> index = sessionDedupeCache.computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
         if (observation != null) {
@@ -193,15 +169,11 @@ public class ToolInvocationGuard {
             return toolName + ":empty";
         }
         try {
-            // Normalize params: sort keys for consistent JSON representation
             TreeMap<String, Object> sorted = new TreeMap<>(params);
             String normalizedJson = objectMapper.writeValueAsString(sorted);
-            // Use stable hash suffix to keep keys manageable but deterministic
             return toolName + ":" + normalizedJson.hashCode();
         } catch (Exception e) {
-            // Fallback for non-serializable content (unlikely in ToolInvocationGuard)
             return toolName + ":err:" + Objects.hash(params);
         }
     }
 }
-

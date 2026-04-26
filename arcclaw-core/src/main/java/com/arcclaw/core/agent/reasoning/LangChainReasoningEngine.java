@@ -186,14 +186,33 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
-                        log.infof("[LangChainReasoningEngine] Coordinator prose-answer pattern detected " +
-                                "(no tools, no code fences) for session %s — finishing", sessionId);
-                        return ReasoningStep.pending(
-                                "LLM generated valid prose — extracted from failed_generation",
-                                "FINISH",
-                                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, extractedProse),
-                                0, 0
-                        );
+                        // §7.31: Coordinator fast-path — if model returns prose instead of tool call,
+                        // and it's NOT a write-intent, extract it as a valid answer.
+                        if (AgentRoleEnum.COORDINATOR.id().equals(agentRole)) {
+                            log.infof("[LangChainReasoningEngine] Coordinator prose-answer pattern detected " +
+                                    "(no tools, no code fences) for session %s — finishing", sessionId);
+                            return ReasoningStep.pending(
+                                    "LLM generated valid prose — extracted from failed_generation",
+                                    "FINISH",
+                                    Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, extractedProse),
+                                    0, 0
+                            );
+                        }
+
+                        // §7.40: Coder hard-correction — if model returns prose for an execution goal,
+                        // force it back into tool-calling mode immediately.
+                        if (AgentRoleEnum.CODER.id().equals(agentRole) && goalRequestsExecution(goal)) {
+                            log.warnf("[LangChainReasoningEngine] Coder produced prose for execution goal '%s' " +
+                                    "in session %s — injecting hard-tool correction", goal, sessionId);
+                            return ReasoningStep.pending(
+                                    "Coder returned text instead of calling sandbox_exec",
+                                    "OBSERVE", Map.of(), 0, 0
+                            ).withObservation(
+                                    "STOP. You must EXECUTE code to fulfill this request. " +
+                                    "Do NOT write text. Do NOT explain. Do NOT use markdown. " +
+                                    "Call sandbox_exec RIGHT NOW as your ONLY output."
+                            );
+                        }
                     }
 
                     // Extraction failed — fallback: inject correction context

@@ -31,22 +31,57 @@ public class FallbackChatModel implements ChatModel {
     public ChatResponse chat(ChatRequest chatRequest) {
         try {
             return primary.chat(chatRequest);
-        } catch (RuntimeException e) {
-            if (isRateLimitException(e)) {
-                log.warnf("[ArcClaw] ⚠️ Primary model %s rate-limited, falling back to %s", 
-                         primaryName, fallbackName);
-                return fallback.chat(chatRequest);
+        } catch (Throwable t) {
+            if (isRetriableOnFallback(t)) {
+                log.warnf("[ArcClaw] ⚠️ Primary model '%s' failed, falling back to '%s'. Cause: %s", 
+                         primaryName, fallbackName, t.getMessage());
+                try {
+                    return fallback.chat(chatRequest);
+                } catch (Exception fe) {
+                    log.errorf("[ArcClaw] ❌ Fallback model '%s' also failed: %s", fallbackName, fe.getMessage());
+                    throw fe;
+                }
             }
-            throw e;
+            if (t instanceof RuntimeException re) throw re;
+            throw new RuntimeException(t);
         }
     }
 
-    private boolean isRateLimitException(Throwable e) {
+    private boolean isRetriableOnFallback(Throwable e) {
         if (e == null) return false;
+        
+        // 1. Explicit rate limit check
+        String className = e.getClass().getSimpleName();
+        if (className.contains("RateLimit")) return true;
+
         String msg = e.getMessage();
-        if (msg != null && (msg.contains("429") || msg.toLowerCase().contains("rate limit"))) {
-            return true;
+        if (msg != null) {
+            String lower = msg.toLowerCase();
+            // 2. HTTP 429 and common rate limit phrases
+            if (lower.contains("429") || 
+                lower.contains("rate limit") || 
+                lower.contains("too many requests") ||
+                lower.contains("rate_limit_exceeded") ||
+                lower.contains("tokens per minute") ||
+                lower.contains("tpm limit") ||
+                lower.contains("rpm limit")) {
+                return true;
+            }
+            
+            // 3. retriable 5xx errors (service unavailable/overloaded)
+            if (lower.contains("502") || lower.contains("503") || lower.contains("504") ||
+                lower.contains("service unavailable") || lower.contains("bad gateway") ||
+                lower.contains("gateway timeout") || lower.contains("overloaded")) {
+                return true;
+            }
+
+            // 4. Handle cases where 401/403 might be transient or misreported during high load
+            if (lower.contains("401") || lower.contains("403")) {
+                return true;
+            }
         }
-        return isRateLimitException(e.getCause());
+
+        // Recursive check for causes
+        return isRetriableOnFallback(e.getCause());
     }
 }

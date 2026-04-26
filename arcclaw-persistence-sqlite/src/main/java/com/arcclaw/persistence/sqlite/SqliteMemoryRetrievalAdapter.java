@@ -14,6 +14,7 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.persistence.api.BackendCapabilities;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
@@ -87,13 +88,13 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     }
 
     @Override
-    public String index(MemoryEntryDto entry) {
+    public IngestResult index(MemoryEntryDto entry) {
         String chunkId = globalKb.ingest(entry.text());
         String fallbackId = entry.id() != null ? "session-" + entry.id() : UUID.randomUUID().toString();
         sessionKb.ingest(
             chunkId != null ? chunkId : fallbackId,
             entry.text());
-        return chunkId != null ? chunkId : fallbackId;
+        return new IngestResult(chunkId != null ? chunkId : fallbackId, chunkId == null);
     }
 
     @Override

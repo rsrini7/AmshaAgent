@@ -7,7 +7,6 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.PersistenceAction;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
-import com.arcclaw.persistence.api.PersistenceContext;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -46,15 +45,6 @@ public class SqlitePersistenceAdapter implements PersistenceAdapterPort {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void persistSynchronously(PersistenceAction action) {
         em.clear();
-        action.execute(new PersistenceContext() {
-            @Override public void persist(Object entity) { em.persist(entity); }
-            
-            // NOTE: entity is a JPA managed entity (e.g. AgentCheckpoint), not a DTO.
-            // This must delegate to EntityManager.merge(), not a StorePort.
-            @Override public void merge(Object entity)   { em.merge(entity); }
-            
-            @Override public void remove(Object entity)  { em.remove(entity); }
-            @Override public <T> T find(Class<T> type, Object id) { return em.find(type, id); }
-        });
+        action.execute();
     }
 }

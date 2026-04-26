@@ -37,7 +37,7 @@ public class SqliteChatMemoryStoreAdapter implements ChatMemoryStorePort {
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional
     public Optional<ChatMemoryDto> findById(String memoryId) {
         em.clear();
         ChatMemoryEntity entity = em.find(ChatMemoryEntity.class, memoryId);
@@ -55,7 +55,7 @@ public class SqliteChatMemoryStoreAdapter implements ChatMemoryStorePort {
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional
     public List<Long> getTimestamps(String memoryId) {
         // ChatMemoryEntity currently doesn't store per-message timestamps in a queryable way
         // (they are likely inside the messagesJson). Returning empty to satisfy API for now.

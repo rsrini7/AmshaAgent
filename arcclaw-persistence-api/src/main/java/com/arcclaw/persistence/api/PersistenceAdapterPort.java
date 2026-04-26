@@ -9,7 +9,7 @@ public interface PersistenceAdapterPort {
      * 
      * @param sessionId the context session ID
      * @param operationName descriptive name for logging/metrics
-     * @param action the action to execute, providing access to a PersistenceContext
+     * @param action the action to execute
      */
     void execute(String sessionId, String operationName, PersistenceAction action);
 }

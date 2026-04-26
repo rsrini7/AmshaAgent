@@ -51,7 +51,7 @@ public final class AgentErrorMessageUtil {
         String apiMessage = stripped;
         boolean isJson = false;
 
-        Matcher messageMatcher = Pattern.compile("\"message\"\\s*:\\s*\"(.*?)(?<!\\\\)\"").matcher(stripped);
+        Matcher messageMatcher = Pattern.compile("\"(?:message|detail)\"\\s*:\\s*\"(.*?)(?<!\\\\)\"").matcher(stripped);
         if (messageMatcher.find()) {
             apiMessage = messageMatcher.group(1)
                                   .replace("\\\"", "\"")
@@ -187,6 +187,11 @@ public final class AgentErrorMessageUtil {
 
         String result = sb.toString();
         return result.isEmpty() ? "a few moments" : result;
+    }
+
+    public static String hashGoal(String goal) {
+        if (goal == null) return "none";
+        return String.valueOf(goal.hashCode()); // Simple hash for audit chaining
     }
 
     private static String extractModelName(String message) {

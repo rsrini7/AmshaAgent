@@ -1,20 +1,19 @@
 package com.arcclaw.channel.telegram;
 
-import org.mockito.Mockito;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Named;
 
 import com.arcclaw.channel.api.IntentDetector;
-
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.qute.Template;
 import io.smallrye.common.annotation.Identifier;
-import jakarta.annotation.Priority;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Alternative;
-import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Named;
+import org.mockito.Mockito;
 
 /**
  * Centralised mock producers for all @QuarkusTest tests in

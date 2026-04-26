@@ -16,10 +16,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
+import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
+import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.governance.BudgetWarningException;
@@ -30,13 +35,13 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.FinishReason;
@@ -44,10 +49,7 @@ import dev.langchain4j.model.output.TokenUsage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
+import jakarta.inject.Inject;
 
 @QuarkusTest
 class LangChainReasoningEngineTest {
@@ -56,7 +58,7 @@ class LangChainReasoningEngineTest {
     ReasoningEngine reasoningEngine;
 
     @InjectMock
-    ChatModel chatModel;
+    LlmProviderPort llmProviderPort;
 
     @InjectMock
     SystemPromptBuilder promptBuilder;
@@ -96,7 +98,7 @@ class LangChainReasoningEngineTest {
                 .finishReason(FinishReason.STOP)
                 .build();
 
-        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I have finished the task", ReasoningStep.FINISH, Map.of("answer", "I have finished the task"), 100, 100));
@@ -128,7 +130,7 @@ class LangChainReasoningEngineTest {
                 .finishReason(FinishReason.TOOL_EXECUTION)
                 .build();
 
-        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", "github", Map.of("repo", "test/repo"), 100, 100));
@@ -173,7 +175,7 @@ class LangChainReasoningEngineTest {
 
             // Capture the request to verify filtered messages
             ArgumentCaptor<ChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatRequest.class);
-            when(chatModel.chat(requestCaptor.capture())).thenReturn(mockResponse);
+            when(llmProviderPort.nextStep(requestCaptor.capture())).thenReturn(mockResponse);
                 when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
             // For the filter test, we need the assembler to actually return the filtered messages if it were the real one,
             // but here we are mocking the engine's call to assembler. 
@@ -230,8 +232,7 @@ class LangChainReasoningEngineTest {
 
             ArgumentCaptor<ChatRequest> requestCaptor =
                 ArgumentCaptor.forClass(ChatRequest.class);
-            when(chatModel.chat(requestCaptor.capture()))
-                .thenReturn(ChatResponse.builder().aiMessage(new AiMessage("some response")).build());
+            when(llmProviderPort.nextStep(requestCaptor.capture())).thenReturn(ChatResponse.builder().aiMessage(new AiMessage("some response")).build());
                 when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
             // NOTE: This lambda uses hardcoded strings, not the real COMPLIANCE_OVERRIDE_PATTERN.
             // Pattern coverage is proven in ChatHistoryAssemblerTest.testAssemble_complianceOverrideIsRedacted().
@@ -272,7 +273,7 @@ class LangChainReasoningEngineTest {
 
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
-        when(chatModel.chat(captor.capture())).thenReturn(response);
+        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 100, 100));
@@ -296,7 +297,7 @@ class LangChainReasoningEngineTest {
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
         when(roleRegistry.permittedTools(any())).thenReturn(Set.of());                
-        when(chatModel.chat(captor.capture())).thenReturn(response);
+        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("ok", ReasoningStep.FINISH, Map.of(), 100, 100));
@@ -319,7 +320,7 @@ class LangChainReasoningEngineTest {
 
         ArgumentCaptor<ChatRequest> captor = 
                 ArgumentCaptor.forClass(ChatRequest.class);
-        when(chatModel.chat(captor.capture())).thenReturn(response);
+        when(llmProviderPort.nextStep(captor.capture())).thenReturn(response);
 
         // Mock RoleRegistry to return permitted tools for researcher
         when(roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER))
@@ -363,12 +364,11 @@ class LangChainReasoningEngineTest {
         assertFalse(toolNames.contains("execute_shell"), "researcher must NOT have execute_shell");
         assertFalse(toolNames.contains("vault_access"),  "researcher must NOT have vault_access");
     }
-
-    @Test
-    void testCronFiredSessionStripsScheduleTools() {
-        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        when(chatModel.chat(captor.capture())).thenReturn(
-                ChatResponse.builder().aiMessage(new AiMessage("OK")).build());
+@Test
+void testCronFiredSessionStripsScheduleTools() {
+    ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+    when(llmProviderPort.nextStep(captor.capture())).thenReturn(
+            ChatResponse.builder().aiMessage(new AiMessage("OK")).build());
 
         // Mock RoleRegistry to return permitted tools for coordinator
         when(roleRegistry.permittedTools(AgentRoleEnum.COORDINATOR))
@@ -422,7 +422,7 @@ class LangChainReasoningEngineTest {
 
             ArgumentCaptor<ChatRequest> requestCaptor =
                 ArgumentCaptor.forClass(ChatRequest.class);
-            when(chatModel.chat(requestCaptor.capture()))
+            when(llmProviderPort.nextStep(requestCaptor.capture()))
                 .thenReturn(ChatResponse.builder()
                     .aiMessage(new AiMessage("Here is the sort function"))
                     .build());
@@ -481,7 +481,7 @@ class LangChainReasoningEngineTest {
         // Set up other necessary mocks
         AiMessage mockAiMessage = AiMessage.aiMessage("{\"label\":\"name\",\"text\":\"Srini\"}");
         ChatResponse mockResponse = ChatResponse.builder().aiMessage(mockAiMessage).build();
-        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
 
@@ -494,6 +494,30 @@ class LangChainReasoningEngineTest {
         assertTrue(resultStep.observation().contains("CORRECTION: The user wants to STORE data. You MUST call ingest_document"));
     }
 
+    @Test
+    void testCoderRoleProseWithExecutionGoalForcesHardCorrection() {
+        // Arrange
+        String sessionId = "coder-prose-test";
+        String goal = "execute python code";
+        
+        // Simulate LlmToolCallException which is what triggers the failed_generation logic
+        LlmToolCallException ex = new LlmToolCallException(
+            "{\"error\":{\"message\":\"tool_use_failed\"}, \"failed_generation\":\"I will explain the code first...\"}"
+        );
+        
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenThrow(ex);
+        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("System Prompt");
+        when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
+
+        // Act
+        ReasoningStep step = reasoningEngine.nextStep(createCtx(sessionId), "coder", goal, List.of());
+
+        // Assert
+        assertEquals("OBSERVE", step.action());
+        assertTrue(step.observation().contains("STOP. You must EXECUTE code"));
+        assertTrue(step.observation().contains("Call sandbox_exec RIGHT NOW"));
+    }
+
     @InjectMock
     GovernanceStrategy governanceLayer;
 
@@ -503,7 +527,7 @@ class LangChainReasoningEngineTest {
                 .aiMessage(AiMessage.aiMessage("result"))
                 .tokenUsage(new TokenUsage(100, 100))
                 .build();
-        when(chatModel.chat(any(ChatRequest.class))).thenReturn(mockResponse);
+        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any())).thenReturn("sys prompt");
         
         Mockito.doThrow(new BudgetWarningException("budget low"))

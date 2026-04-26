@@ -18,6 +18,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
+import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 /**
@@ -90,20 +91,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                                            List<ReasoningStep> steps,
                                            CheckpointStatus finalStatus) {
         String json = serializer.serializeSteps(steps);
-        Optional<AgentCheckpoint> existingOpt = load(sessionId, agentRole);
-        boolean isNew = existingOpt.isEmpty();
+        List<ReasoningStepDto> stepDtos = 
+            steps.stream().map(serializer::toDto).toList();
 
-        AgentCheckpoint checkpoint = existingOpt.orElseGet(AgentCheckpoint::new);
-        checkpoint.setSessionId(sessionId);
-        checkpoint.setAgentRole(agentRole);
-        checkpoint.setStateJson(json);
-        checkpoint.setStatus(finalStatus);
-        if (finalStatus == CheckpointStatus.COMPLETED) checkpoint.setCompletedAt(Instant.now());
-        else if (finalStatus == CheckpointStatus.FAILED) checkpoint.setFailedAt(Instant.now());
+        CheckpointUpsertResult result = storeAdapter.upsertAndFinalize(
+                sessionId, agentRole, json, finalStatus.name(), stepDtos);
 
-        CheckpointDto saved = storeAdapter.saveCheckpointWithSteps(
-                CheckpointMapper.toDto(checkpoint),
-                steps.stream().map(serializer::toDto).toList());
+        CheckpointDto saved = result.checkpoint();
+        boolean isNew = result.created();
 
         String userId = WorkspaceContext.resolveUserId();
         if (isNew) {
@@ -112,8 +107,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                     WorkspaceContext.requireAutonomyOrSupervised());
         }
         // Emit audit-only: status is already baked into the checkpoint by
-        // saveCheckpointWithSteps above. Do NOT call markCompleted/markFailed
-        // here — those also invoke storeAdapter, causing a redundant second write.
+        // upsertAndFinalize above.
         transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id());
         return CheckpointMapper.toEntity(saved);
     }
@@ -153,8 +147,13 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      * §3.4 / §7.29: Atomically marks the session as RESUMING.
      * Delegates to {@link ResumeCoordinationGuard} — implementation detail hidden.
      */
-    @Override public boolean markBatchResuming(String sessionId)
-        { return resumeGuard.markResuming(sessionId); }
+    @Override
+    public boolean claimForRetry(Long id) {
+        return storeAdapter.claimForRetry(id);
+    }
+
+    @Override
+    public boolean markBatchResuming(String sessionId) { return resumeGuard.markResuming(sessionId); }
 
     /**
      * §7.29: Returns true if the session is currently RESUMING (JVM-local).

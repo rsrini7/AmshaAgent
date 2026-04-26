@@ -143,6 +143,13 @@ public interface CheckpointStorePort {
     CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
         String stateJson, String autonomy, int iterationsUsed);
 
+    /**
+     * Atomically upserts a checkpoint and finalizes its status to prevent TOCTOU races
+     * with background schedulers.
+     */
+    CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, 
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps);
+
     List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason);
 
     void purgeOldChatHistory(Instant cutoff);
@@ -150,6 +157,13 @@ public interface CheckpointStorePort {
     void markFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass);
     void markCompleted(Long checkpointId);
     void markOrphaned(Long checkpointId, String reason);
+
+    /**
+     * Atomically claims a checkpoint for retry by transitioning its status
+     * from AWAITING_RETRY to IN_PROGRESS and clearing retry metadata.
+     * @return true if successfully claimed
+     */
+    boolean claimForRetry(Long id);
 
     boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision);
 }

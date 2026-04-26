@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.state.AgentCheckpoint;
@@ -44,10 +45,16 @@ public class RateLimitRetryScheduler {
 
     /**
      * Polls every 30 seconds for rate-limited sessions that are ready to resume.
+     * 
+     * <p><strong>§5.9 (MUST):</strong> This method is transaction-free. Atomic state 
+     * transition is handled by {@link StatefulAgentStore#claimForRetry(Long)}.
      */
     @Scheduled(every = "30s", identity = "rate-limit-retry")
+    @ActivateRequestContext
     public void processPendingRetries() {
         List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
+        log.tracef("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)", awaiting.size());
+        
         if (awaiting.isEmpty()) {
             backlogMaxAge.set(0);
             return;
@@ -63,24 +70,27 @@ public class RateLimitRetryScheduler {
             maxAgeSec = Math.max(maxAgeSec, ageSec);
 
             long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : 30000;
-            Instant readyAt = cp.getUpdatedAt().plusNanos(retryAfterMs * 1_000_000L);
+            Instant readyAt = cp.getUpdatedAt().plus(retryAfterMs, ChronoUnit.MILLIS);
 
             if (now.isAfter(readyAt)) {
-                log.infof("Resuming rate-limited session %s (retryAfterMs=%d)",
-                        cp.getSessionId(), retryAfterMs);
+                log.infof("Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
+                        cp.getSessionId(), retryAfterMs, ageSec);
 
-                // Clear retry metadata before resume attempt
-                cp.setRetryAfterMs(null);
-                agentStore.save(cp);
-
-                try {
-                    // Offload to background thread via AgentLoop.resume
-                    // AgentLoop.run() will transition status to IN_PROGRESS when it starts.
-                    agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
-                } catch (Exception e) {
-                    log.errorf(e, "Failed to resume rate-limited session %s", cp.getSessionId());
-                    agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
+                // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the adapter
+                if (agentStore.claimForRetry(cp.getId())) {
+                    try {
+                        // Offload to background thread via AgentLoop.resume
+                        agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
+                    } catch (Exception e) {
+                        log.errorf(e, "Failed to resume rate-limited session %s", cp.getSessionId());
+                        agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
+                    }
+                } else {
+                    log.debugf("Session %s was already claimed by another thread, skipping", cp.getSessionId());
                 }
+            } else {
+                long remaining = Duration.between(now, readyAt).toSeconds();
+                log.debugf("Session %s still in backoff (%ds remaining)", cp.getSessionId(), remaining);
             }
         }
         

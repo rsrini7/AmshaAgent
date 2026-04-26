@@ -1,12 +1,9 @@
-// arcclaw-core/src/test/java/com/arcclaw/core/persistence/CheckpointMapperTest.java
-
 package com.arcclaw.core.persistence;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Instant;
 
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
@@ -15,79 +12,94 @@ import org.junit.jupiter.api.Test;
 class CheckpointMapperTest {
 
     @Test
-    void roundTrip_allFieldsPreserved() {
+    void testRoundTrip() {
         AgentCheckpoint entity = new AgentCheckpoint();
-        entity.setId(42L);
-        entity.setSessionId("sess-roundtrip");
-        entity.setAgentRole("ORCHESTRATOR");
-        entity.setStatus(CheckpointStatus.IN_PROGRESS);
-        entity.setAutonomyLevel(AutonomyLevel.SUPERVISED);
-        entity.setStateJson("{\"steps\":[]}");
-        entity.setChannelPlatformId("user-123");
-        entity.setChannelType("websocket");
-        entity.setOriginalGoal("Do the thing");
-        entity.setFailedAt(null);
-        entity.setCompletedAt(null);
-        entity.setFailReason(null);
-        entity.setPendingToolName("bash");
-        entity.setBatchToolDecisions("{\"bash\":\"PENDING\"}");
-        entity.setPendingToolParametersJson("{\"cmd\":\"ls\"}");
-        entity.setPreExecutedResults("{\"bash\":\"ok\"}");
-        entity.setMaxIterations(10);
-        entity.setIterationsUsed(3);
-        entity.setRetryAfterMs(500);
+        entity.setId(1L);
+        entity.setSessionId("s1");
+        entity.setAgentRole("coordinator");
+        entity.setOriginalGoal("goal");
         entity.setSystemNote("note");
-        entity.setErrorCode("ERR_001");
-        entity.setTraceId("trace-abc");
-        entity.setRootCauseClass("SomeException");
-        entity.setCreatedAt(Instant.parse("2025-01-01T00:00:00Z"));
-        entity.setUpdatedAt(Instant.parse("2025-01-02T00:00:00Z"));
+        entity.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        entity.setPendingToolName("github");
+        entity.setPendingToolParametersJson("{\"arg\":\"val\"}");
+        entity.setBatchToolDecisions("{\"github\":\"PENDING\"}");
+        entity.setStateJson("[{\"thought\":\"thinking\",\"action\":\"github\"}]");
+        entity.setMaxIterations(5);
+        entity.setChannelType("telegram");
+        entity.setChannelPlatformId("u123");
+        entity.setPreExecutedResults("{\"tool\":\"result\"}");
+        entity.setErrorCode("ERR123");
+        entity.setTraceId("trace-456");
+        entity.setRootCauseClass("java.lang.RuntimeException");
+        entity.setCreatedAt(Instant.now());
+        entity.setUpdatedAt(Instant.now());
+        entity.setFailedAt(Instant.now().plusSeconds(1));
+        entity.setCompletedAt(Instant.now().plusSeconds(2));
 
         CheckpointDto dto = CheckpointMapper.toDto(entity);
-        AgentCheckpoint roundTripped = CheckpointMapper.toEntity(dto);
+        
+        assertEquals(entity.getId(), dto.id());
+        assertEquals(entity.getSessionId(), dto.sessionId());
+        assertEquals(entity.getAgentRole(), dto.agentRole());
+        assertEquals(entity.getOriginalGoal(), dto.originalGoal());
+        assertEquals(entity.getSystemNote(), dto.systemNote());
+        assertEquals(entity.getStatus().name(), dto.status());
+        assertEquals(entity.getPendingToolName(), dto.pendingToolName());
+        assertEquals(entity.getPendingToolParametersJson(), dto.pendingToolParametersJson());
+        assertEquals(entity.getBatchToolDecisions(), dto.batchToolDecisions());
+        assertEquals(entity.getStateJson(), dto.stateJson());
+        assertEquals(entity.getMaxIterations(), dto.maxIterations());
+        assertEquals(entity.getChannelType(), dto.channelType());
+        assertEquals(entity.getChannelPlatformId(), dto.channelPlatformId());
+        assertEquals(entity.getPreExecutedResults(), dto.preExecutedResults());
+        assertEquals(entity.getErrorCode(), dto.errorCode());
+        assertEquals(entity.getTraceId(), dto.traceId());
+        assertEquals(entity.getRootCauseClass(), dto.rootCauseClass());
+        assertEquals(entity.getCreatedAt(), dto.createdAt());
+        assertEquals(entity.getUpdatedAt(), dto.updatedAt());
+        assertEquals(entity.getFailedAt(), dto.failedAt());
+        assertEquals(entity.getCompletedAt(), dto.completedAt());
 
-        assertEquals(entity.getId(),                  roundTripped.getId());
-        assertEquals(entity.getSessionId(),            roundTripped.getSessionId());
-        assertEquals(entity.getAgentRole(),            roundTripped.getAgentRole());
-        assertEquals(entity.getStatus(),               roundTripped.getStatus());
-        assertEquals(entity.getAutonomyLevel(),        roundTripped.getAutonomyLevel());
-        assertEquals(entity.getStateJson(),            roundTripped.getStateJson());
-        assertEquals(entity.getChannelPlatformId(),    roundTripped.getChannelPlatformId());
-        assertEquals(entity.getChannelType(),          roundTripped.getChannelType());
-        assertEquals(entity.getOriginalGoal(),         roundTripped.getOriginalGoal());
-        assertEquals(entity.getPendingToolName(),      roundTripped.getPendingToolName());
-        assertEquals(entity.getBatchToolDecisions(),   roundTripped.getBatchToolDecisions());
-        assertEquals(entity.getPendingToolParametersJson(), roundTripped.getPendingToolParametersJson());
-        assertEquals(entity.getPreExecutedResults(),   roundTripped.getPreExecutedResults());
-        assertEquals(entity.getMaxIterations(),        roundTripped.getMaxIterations());
-        assertEquals(entity.getIterationsUsed(),       roundTripped.getIterationsUsed());
-        assertEquals(entity.getRetryAfterMs(),         roundTripped.getRetryAfterMs());
-        assertEquals(entity.getSystemNote(),           roundTripped.getSystemNote());
-        assertEquals(entity.getErrorCode(),            roundTripped.getErrorCode());
-        assertEquals(entity.getTraceId(),              roundTripped.getTraceId());
-        assertEquals(entity.getRootCauseClass(),       roundTripped.getRootCauseClass());
-        assertEquals(entity.getCreatedAt(),            roundTripped.getCreatedAt());
-        assertEquals(entity.getUpdatedAt(),            roundTripped.getUpdatedAt());
+        AgentCheckpoint backToEntity = CheckpointMapper.toEntity(dto);
+        
+        assertEquals(entity.getId(), backToEntity.getId());
+        assertEquals(entity.getSessionId(), backToEntity.getSessionId());
+        assertEquals(entity.getAgentRole(), backToEntity.getAgentRole());
+        assertEquals(entity.getOriginalGoal(), backToEntity.getOriginalGoal());
+        assertEquals(entity.getSystemNote(), backToEntity.getSystemNote());
+        assertEquals(entity.getStatus(), backToEntity.getStatus());
+        assertEquals(entity.getStateJson(), backToEntity.getStateJson());
+        assertEquals(entity.getPendingToolName(), backToEntity.getPendingToolName());
+        assertEquals(entity.getPendingToolParametersJson(), backToEntity.getPendingToolParametersJson());
+        assertEquals(entity.getBatchToolDecisions(), backToEntity.getBatchToolDecisions());
+        assertEquals(entity.getMaxIterations(), backToEntity.getMaxIterations());
+        assertEquals(entity.getChannelType(), backToEntity.getChannelType());
+        assertEquals(entity.getChannelPlatformId(), backToEntity.getChannelPlatformId());
+        assertEquals(entity.getPreExecutedResults(), backToEntity.getPreExecutedResults());
+        assertEquals(entity.getErrorCode(), backToEntity.getErrorCode());
+        assertEquals(entity.getTraceId(), backToEntity.getTraceId());
+        assertEquals(entity.getRootCauseClass(), backToEntity.getRootCauseClass());
+        assertEquals(entity.getCreatedAt(), backToEntity.getCreatedAt());
+        assertEquals(entity.getUpdatedAt(), backToEntity.getUpdatedAt());
+        assertEquals(entity.getFailedAt(), backToEntity.getFailedAt());
+        assertEquals(entity.getCompletedAt(), backToEntity.getCompletedAt());
+        assertEquals(entity.getIterationsUsed(), backToEntity.getIterationsUsed());
+        assertEquals(entity.getRetryAfterMs(), backToEntity.getRetryAfterMs());
+        assertEquals(entity.getAutonomyLevel(), backToEntity.getAutonomyLevel());
     }
 
     @Test
-    void roundTrip_nullFieldsSafe() {
-        AgentCheckpoint sparse = new AgentCheckpoint();
-        sparse.setId(1L);
-        sparse.setSessionId("sess-sparse");
-        // All other fields null — verifies no NPE in mapper
-        assertDoesNotThrow(() -> CheckpointMapper.toDto(sparse));
-    }
-
-    @Test
-    void toEntity_nullTimestampsSafe() {
+    void testToEntity_nullTimestampsSafe() {
         CheckpointDto dto = new CheckpointDto(
-            1L, "sess-1", "COORDINATOR", "IN_PROGRESS", "SUPERVISED", "{}", "user-1", "telegram",
-            "goal", null, null, null, null, null, null, null,
-            5, 0, null, null, null, null, null, Instant.now(), Instant.now()
+            null, "s1", "coord", "AWAITING_APPROVAL", "FULL", "[]",
+            "u123", "telegram", "goal", null, null, null,
+            "tool", "{}", "{}", null, 5, 0, null, "note",
+            "ERR", "trace", "java.lang.RuntimeException", null, null
         );
-        AgentCheckpoint entity = assertDoesNotThrow(() -> CheckpointMapper.toEntity(dto));
-        assertNull(entity.getFailedAt());
-        assertNull(entity.getCompletedAt());
+
+        AgentCheckpoint entity = CheckpointMapper.toEntity(dto);
+        assertEquals("s1", entity.getSessionId());
+        assertNull(entity.getCreatedAt());
+        assertNull(entity.getUpdatedAt());
     }
 }

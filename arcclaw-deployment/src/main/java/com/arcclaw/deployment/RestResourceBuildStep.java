@@ -14,8 +14,8 @@ import org.jboss.jandex.FieldInfo;
  * Build-time enforcement of the @RunOnVirtualThread requirement for JPA-enabled
  * REST resources.
  *
- * Architecture Nuance #16: JAX-RS resources that inject EntityManager or use
- * PersistenceContext MUST be annotated with @RunOnVirtualThread to avoid
+ * Architecture Nuance #16: JAX-RS resources that inject EntityManager
+ * MUST be annotated with @RunOnVirtualThread to avoid
  * BlockingOperationNotAllowedException at runtime when running on the event
  * loop.
  */
@@ -24,7 +24,6 @@ public class RestResourceBuildStep {
     private static final DotName JAX_RS_PATH = DotName.createSimple("jakarta.ws.rs.Path");
     private static final DotName RUN_ON_VIRTUAL_THREAD = DotName
             .createSimple("io.smallrye.common.annotation.RunOnVirtualThread");
-    private static final DotName PERSISTENCE_CONTEXT = DotName.createSimple("jakarta.persistence.PersistenceContext");
     private static final DotName INJECT = DotName.createSimple("jakarta.inject.Inject");
     private static final String ENTITY_MANAGER_CLASS = "jakarta.persistence.EntityManager";
 
@@ -39,8 +38,7 @@ public class RestResourceBuildStep {
                 continue;
             ClassInfo classInfo = pathAnnotation.target().asClass();
 
-            // Check: does this class inject EntityManager (directly or via
-            // @PersistenceContext)?
+            // Check: does this class inject EntityManager?
             boolean hasJpaInjection = hasJpaInjection(classInfo);
             if (!hasJpaInjection)
                 continue;
@@ -48,7 +46,7 @@ public class RestResourceBuildStep {
             // Check: does it have @RunOnVirtualThread?
             if (!classInfo.hasAnnotation(RUN_ON_VIRTUAL_THREAD)) {
                 errors.produce(new ValidationErrorBuildItem(new RuntimeException(
-                        "REST resource " + classInfo.name() + " injects JPA/EntityManager " +
+                        "REST resource " + classInfo.name() + " injects EntityManager " +
                                 "but is missing @RunOnVirtualThread at class level. " +
                                 "This will cause BlockingOperationNotAllowedException at runtime. " +
                                 "Add @RunOnVirtualThread to the class declaration. " +
@@ -59,9 +57,6 @@ public class RestResourceBuildStep {
 
     private boolean hasJpaInjection(ClassInfo classInfo) {
         for (FieldInfo field : classInfo.fields()) {
-            // Direct @PersistenceContext injection
-            if (field.hasAnnotation(PERSISTENCE_CONTEXT))
-                return true;
             // @Inject EntityManager
             if (field.hasAnnotation(INJECT) &&
                     field.type().name().toString().equals(ENTITY_MANAGER_CLASS))

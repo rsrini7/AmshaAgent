@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.reasoning;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -12,18 +13,20 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.routing.FallbackChatModel;
 import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
  * Produces the single {@link ChatModel} bean used by the agent reasoning engine.
- * Selects the active {@link AgentChatModelProvider} based on
- * {@code arcclaw.llm.provider} config and delegates model creation to it.
+ * Selects the active {@link AgentChatModelProvider} and manages fallbacks.
  */
 @ApplicationScoped
 public class ChatModelProducer {
 
     private static final Logger log = Logger.getLogger(ChatModelProducer.class);
+    private static final AtomicBoolean loggedConfig = new AtomicBoolean(false);
 
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;
@@ -35,7 +38,7 @@ public class ChatModelProducer {
     @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
     int maxRetries;
 
-    @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT60S")
+    @ConfigProperty(name = "arcclaw.llm.timeout", defaultValue = "PT120S")
     Duration timeout;
 
     @ConfigProperty(name = "arcclaw.llm.fallback-provider")
@@ -65,37 +68,78 @@ public class ChatModelProducer {
     @Inject
     LlmModelFactory modelFactory;
 
+    private void logConfig(String resolvedFbProvider, String displayModel) {
+        if (loggedConfig.compareAndSet(false, true)) {
+            log.debugf("ChatModelProducer: primary=%s fallback=%s model=%s", 
+                provider, resolvedFbProvider.isEmpty() ? "none" : resolvedFbProvider, displayModel);
+            
+            if (log.isTraceEnabled()) {
+                log.trace("--- LLM Configuration Context ---");
+                System.getenv().forEach((k, v) -> {
+                    if (k.startsWith("ARCCLAW_LLM_")) log.tracef("Env: %s = %s", k, mask(v));
+                });
+                log.trace("--------------------------------");
+            }
+        }
+    }
+
     @Produces
     @ApplicationScoped
     public ChatModel chatModel() {
         AgentChatModelProvider providerFactory = providers.stream()
             .filter(p -> p.providerName().equalsIgnoreCase(provider))
             .findFirst()
-            .orElseThrow(() -> new IllegalStateException(
-                "No AgentChatModelProvider found for provider='" + provider +
-                "'. Available providers: " +
-                providers.stream().map(AgentChatModelProvider::providerName).toList()));
+            .orElseThrow(() -> new IllegalStateException("No AgentChatModelProvider found for provider='" + provider + "'"));
 
-        log.infof("ChatModelProducer: using provider=%s", provider);
+        // 🟢 Robust fallback detection (bypassing injection quirks)
+        Config config = ConfigProvider.getConfig();
+        String fbProvider = config.getOptionalValue("ARCCLAW_LLM_FALLBACK_PROVIDER", String.class)
+                .or(() -> config.getOptionalValue("arcclaw.llm.fallback-provider", String.class))
+                .or(() -> fallbackProvider)
+                .orElse("").trim();
+        String fbModel = config.getOptionalValue("ARCCLAW_LLM_FALLBACK_MODEL", String.class)
+                .or(() -> config.getOptionalValue("arcclaw.llm.fallback-model", String.class))
+                .or(() -> fallbackModel)
+                .orElse("").trim();
+        String fbBaseUrl = config.getOptionalValue("ARCCLAW_LLM_FALLBACK_BASE_URL", String.class)
+                .or(() -> config.getOptionalValue("arcclaw.llm.fallback-base-url", String.class))
+                .or(() -> fallbackBaseUrl)
+                .orElse("");
+
+        String resolvedFbProvider = !fbProvider.isEmpty() ? fbProvider 
+                : LlmModelFactory.inferProviderFromUrl(fbBaseUrl);
+        
+        String displayModel = !fbModel.isEmpty() ? fbModel 
+                : ("ollama".equalsIgnoreCase(resolvedFbProvider) ? ollamaModelId : "default");
+
+        logConfig(resolvedFbProvider, displayModel);
+
         ChatModel primary = providerFactory.create();
 
-        String configuredFallbackModel = fallbackModel.orElse("").trim();
-        if (!configuredFallbackModel.isBlank()) {
-            String configuredFallbackBaseUrl = fallbackBaseUrl.orElse("");
-            String configuredFallbackApiKey = fallbackApiKey.orElse("");
-            log.infof("ChatModelProducer: fallback configured model=%s", configuredFallbackModel);
-            String fbProvider = fallbackProvider.filter(p -> !p.isBlank())
-                .orElseGet(() -> LlmModelFactory.inferProviderFromUrl(configuredFallbackBaseUrl));
-            
-            log.infof("ChatModelProducer: fallback provider=%s", fbProvider);
-            ChatModel fallback = modelFactory.createModel(
-                fbProvider, configuredFallbackBaseUrl, configuredFallbackApiKey,
-                configuredFallbackModel, 8192, timeout, maxRetries,
-                ollamaBaseUrl, ollamaModelId);
+        if (!resolvedFbProvider.isEmpty() || !fbModel.isEmpty()) {
+            try {
+                String fbApiKey = config.getOptionalValue("ARCCLAW_LLM_FALLBACK_API_KEY", String.class)
+                        .or(() -> config.getOptionalValue("arcclaw.llm.fallback-api-key", String.class))
+                        .or(() -> fallbackApiKey)
+                        .orElse("");
+
+                ChatModel fallback = modelFactory.createModel(
+                    resolvedFbProvider, fbBaseUrl, fbApiKey,
+                    fbModel, 8192, timeout, maxRetries, 
+                    ollamaBaseUrl, ollamaModelId);
                 
-            return new FallbackChatModel(primary, fallback, modelName, configuredFallbackModel);
+                return new FallbackChatModel(primary, fallback, modelName, displayModel);
+            } catch (Exception e) {
+                log.errorf("ChatModelProducer: Fallback init failed: %s", e.getMessage());
+                return primary;
+            }
         }
 
         return primary;
+    }
+
+    private String mask(String v) {
+        if (v == null || v.length() < 5) return "***";
+        return v.substring(0, 3) + "***";
     }
 }
