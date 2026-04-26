@@ -304,7 +304,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                     // 🟢 FIX: Implement a truncation counter to force a FINISH exit after repeated failures.
                     // This prevents exhausting the budget on redundant retries of oversized code.
-                    int truncationRetryCount = context.getTruncationRetryCount();
+                    int truncationRetryCount = countTruncationAttempts(history);
 
                     // If the truncated generation contains a sandbox_exec call, 
                     // OR if we've already tried and failed twice, extract whatever we have and FINISH.
@@ -386,11 +386,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             );
                         }
 
-                        // LLM wrote code explanation (```...```) instead of executing 
-                        // This is the most common failure: goal says "execute" but LLM sends a plan
-                        if (TextPatternUtils.goalRequestsExecution(goal) && proseIsUnexecutedCodePlan(extractedProse)) {
+                        // LLM wrote code explanation instead of executing.
+                        // Force back to tool calling and quote any prior error from history.
+                        if (TextPatternUtils.goalRequestsExecution(goal)) {
                             log.warnf("[LangChainReasoningEngine] Goal='%s' requests execution but LLM " +
-                                            "returned code plan (has ``` fences) for session %s — injecting correction",
+                                            "returned prose for session %s — injecting correction",
                                     goal, sessionId);
 
                             // 🟢 Bug-3 Fix: Quote the compiler error from history to guide the LLM.
@@ -410,7 +410,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                             }
 
                             return ReasoningStep.pending(
-                                    "LLM returned code explanation instead of calling sandbox_exec",
+                                    "LLM returned prose instead of calling sandbox_exec",
                                     "OBSERVE", Map.of(), 0, 0
                             ).withObservation(hint);
                         }
@@ -567,10 +567,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (idx == -1) return false;
         int start = idx + FAILED_GEN_KEY.length();
         if (start >= message.length()) return false;
-        String snippet = message.substring(start)
-                .replace("\\n", "\n").replace("\\\"", "\"").stripLeading();
-        // Reject JSON objects or arrays as prose
-        return !snippet.startsWith("{") && !snippet.startsWith("[");
+        
+        // Truncated JSON should also be considered a candidate for prose recovery
+        // to allow the extractPartialCodeFromTruncatedJson path to fire.
+        return true;
     }
 
     private String extractProseFromFailedGeneration(String message) {
@@ -630,9 +630,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private boolean containsEmbeddedSandboxToolCall(String prose) {
         if (prose == null) return false;
         String lower = prose.toLowerCase();
-        // Detect embedded tool call JSON: must have tool name + code/language params
-        return (lower.contains("\"sandbox_exec\"") || lower.contains(ToolCapability.SANDBOX_EXEC.toolName()))
-               && (lower.contains("\"code\"") || lower.contains("\"language\""));
+        // Detect embedded tool call JSON: must have tool name + code/language params.
+        // Also match if it looks like a truncated JSON tool call (contains both code and language).
+        boolean hasToolName = lower.contains("\"sandbox_exec\"") || lower.contains(ToolCapability.SANDBOX_EXEC.toolName());
+        boolean hasParams = lower.contains("\"code\"") && lower.contains("\"language\"");
+        
+        return hasToolName || hasParams;
     }
 
     private boolean goalIsWriteIntent(String goal) {
@@ -659,14 +662,6 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 .replace("\\\"", "\"")
                 .replace("\\n", "\n")
                 .replace("\\t", "\t");
-    }
-
-    /**
-     * Returns true if the prose contains markdown code fences.
-     */
-    private boolean proseIsUnexecutedCodePlan(String prose) {
-        if (prose == null) return false;
-        return prose.contains("```");
     }
 
     /**
@@ -781,6 +776,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         }
         
         return false;
+    }
+
+    private int countTruncationAttempts(List<ReasoningStep> history) {
+        if (history == null) return 0;
+        return (int) history.stream()
+                .filter(step -> ReasoningStep.OBSERVE.equals(step.action())
+                        && step.observation() != null
+                        && step.observation().contains("was cut off because the code was too large"))
+                .count();
     }
 
     private boolean historyAlreadyContains(List<ReasoningStep> history, String toolName) {

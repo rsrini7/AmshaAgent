@@ -557,7 +557,7 @@ class LangChainReasoningEngineTest {
 
         // Assert
         assertEquals("OBSERVE", step.action());
-        assertTrue(step.observation().contains("STOP. You must EXECUTE code"));
+        assertTrue(step.observation().contains("STOP. The user asked you to EXECUTE the code"), "Hint should match actual code");
         assertTrue(step.observation().contains("Call sandbox_exec RIGHT NOW"));
     }
 

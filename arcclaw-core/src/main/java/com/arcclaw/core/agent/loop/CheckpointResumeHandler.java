@@ -396,10 +396,16 @@ public class CheckpointResumeHandler {
             
             completeInProgressCheckpoint(checkpoint);
 
-            // §Bug-2 Fix: Perform a direct terminal synthesis pass instead of re-entering 
-            // the full state machine loop. This ensures we produce a FINISH step with 
-            // the observation result without accidentally re-triggering the fast path.
-            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+            // 🟢 §Bug-2 Fix: Perform a direct terminal synthesis pass instead of re-entering 
+            // the full state machine loop, BUT only if the execution succeeded.
+            // If it failed (e.g. compilation error), return null to fall back to the 
+            // standard loop so the LLM can analyze the error and retry.
+            if (response.success()) {
+                return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+            } else {
+                log.warnf("[AgentLoop] Tool execution failed for session %s. Falling back to standard loop for self-correction.", sessionId);
+                return null;
+            }
         } catch (Exception e) {
             return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
         }

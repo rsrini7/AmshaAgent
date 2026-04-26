@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -153,6 +154,36 @@ class CheckpointResumeHandlerTest {
     }
 
     @Test
+    void testApprovalPath_whenToolReturnsFailure_returnsNullForStandardLoopFallback() throws Exception {
+        WorkspaceContext.runWithFullAutonomy("session", "user", "chat", "coordinator", () -> {
+            AgentCheckpoint checkpoint = new AgentCheckpoint();
+            checkpoint.setSessionId("session");
+            checkpoint.setAgentRole("coordinator");
+            checkpoint.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            checkpoint.setPendingToolName("testTool");
+            checkpoint.setPendingToolParametersJson("{\"param\":\"val\"}");
+
+            when(agentStore.load("session", "coordinator")).thenReturn(Optional.of(checkpoint));
+            // Simulate a failed tool call (e.g. compilation error) - success=false
+            when(toolRegistry.invokeTool(eq("testTool"), eq("{\"param\":\"val\"}"), eq("session")))
+                .thenReturn(new ToolResponse(1, "compilation failed", false, false, "ERROR", null, null));
+
+            List<ReasoningStep> history = new ArrayList<>();
+            MessageContext ctx = createContext(AgentSentinels.GOAL_RESUME_APPROVED, true);
+            AgentResult result = handler.handle(createCtx("session", AgentSentinels.GOAL_RESUME_APPROVED), history, ctx, stateMachineRunner);
+
+            // Assert: returns null to trigger fallback to standard loop
+            assertNull(result, "Should return null on tool failure to trigger standard loop fallback"); 
+            assertEquals(1, history.size());
+            assertEquals("compilation failed", history.get(0).observation());
+            assertFalse(history.get(0).success());
+
+            assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
+            verify(agentStore).save(checkpoint);
+        });
+    }
+
+    @Test
     void testApprovalPathWhenCheckpointAlreadyResuming() throws Exception {
         WorkspaceContext.runWithFullAutonomy("session", "user", "chat", "coordinator", () -> {
             AgentCheckpoint checkpoint = new AgentCheckpoint();
@@ -212,7 +243,6 @@ class CheckpointResumeHandlerTest {
         });
     }
 
-    // Moved from AgentLoopTest
     @Test
     void testResumedHistoryHasFlatToolArguments() throws Exception {
         LlmProviderPort model = mock(LlmProviderPort.class);
@@ -284,7 +314,6 @@ class CheckpointResumeHandlerTest {
 
             // Mock response to just return something
             when(model.nextStep(any(ChatRequest.class))).thenReturn(
-                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                     ChatResponse.builder().aiMessage(AiMessage.aiMessage("response")).build()
             );
 
@@ -294,7 +323,6 @@ class CheckpointResumeHandlerTest {
                     .arguments("{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}")
                     .build();
             when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of(
-                    // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                     AiMessage.aiMessage("thought", List.of(req))
             ));
             
@@ -322,6 +350,7 @@ class CheckpointResumeHandlerTest {
                 }
             }
             assertTrue(found, "Should have found the reconstructed ToolExecutionRequest in chat messages");
+            return null;
         });
     }
 }
