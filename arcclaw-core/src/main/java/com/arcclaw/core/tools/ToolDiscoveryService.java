@@ -1,5 +1,7 @@
 package com.arcclaw.core.tools;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -9,6 +11,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.role.Capability;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import org.jboss.logging.Logger;
@@ -32,6 +35,7 @@ public class ToolDiscoveryService {
     private Map<String, Map<String, String>> secretsCache;
 
     public void discover() {
+        capabilityRegistry.clear(); // idempotent — safe on hot-reload (§4.2)
         log.info("ToolDiscoveryService: Discovering and indexing agent tools...");
         Map<String, AgentTool> mutableToolIndex = new HashMap<>();
         Map<String, ToolRegistry.ToolDescriptor> mutableDescriptorCache = new LinkedHashMap<>();
@@ -71,22 +75,46 @@ public class ToolDiscoveryService {
 
     private void registerCapabilities(AgentTool tool) {
         String name = tool.name();
-        var meta = tool.getClass().getAnnotation(ToolMetadata.class);
-        if (meta == null) {
-            Class<?> current = tool.getClass();
-            while (current != null && current != Object.class) {
-                meta = current.getAnnotation(ToolMetadata.class);
-                if (meta != null) break;
-                current = current.getSuperclass();
-            }
+        Class<?> toolClass = tool.getClass();
+
+        // 1. Scan class-level ToolMetadata (backward compatibility)
+        ToolMetadata classMeta = findAnnotation(toolClass, ToolMetadata.class);
+        if (classMeta != null) {
+            grantToRoles(classMeta.defaultRoles(), name);
         }
 
-        if (meta != null) {
-            log.debugf("Discovered dynamic tool capability: %s (granting to: %s)",
-                      meta.capabilityId(), String.join(", ", meta.defaultRoles()));
-            for (String roleId : meta.defaultRoles()) {
-                capabilityRegistry.grant(roleId, name);
+        // 2. Scan method-level @Capability (Tier 2-5 requirement)
+        for (Method method : toolClass.getMethods()) {
+            Capability cap = method.getAnnotation(Capability.class);
+            if (cap != null) {
+                if (!cap.value().equals(name)) {
+                    throw new IllegalStateException(String.format(
+                        "Mismatch between tool name '%s' and @Capability value '%s' on %s.%s. " +
+                        "Capability name must match the tool name (§T2-5).",
+                        name, cap.value(), toolClass.getSimpleName(), method.getName()));
+                }
+                log.debugf("Discovered @Capability on %s.%s: %s", 
+                    toolClass.getSimpleName(), method.getName(), cap.value());
+                grantToRoles(cap.defaultRoles(), name);
             }
+        }
+    }
+
+    private <T extends Annotation> T findAnnotation(Class<?> clazz, Class<T> annotationClass) {
+        Class<?> current = clazz;
+        while (current != null && current != Object.class) {
+            T ann = current.getAnnotation(annotationClass);
+            if (ann != null) return ann;
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    private void grantToRoles(String[] roles, String toolName) {
+        if (roles == null) return;
+        for (String roleId : roles) {
+            log.debugf("Granting tool %s to role: %s", toolName, roleId);
+            capabilityRegistry.grant(roleId, toolName);
         }
     }
 

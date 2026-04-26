@@ -206,7 +206,7 @@ class CheckpointResumeHandlerTest {
         WorkspaceContext.runWithFullAutonomy("test-session", "user", "chat", "coordinator", () -> {
             // Act
             Map<String, Object> params = Map.of("parameters", "{\"action\":\"repo\",\"command\":\"view\",\"target\":\"rsrini7/arcclaw\"}");
-            ReasoningStep step = ReasoningStep.of("thought", "github", params, "obs", 0, 0);
+            ReasoningStep step = ReasoningStep.of("thought", "github", params, "obs", 100, 100);
 
             // Mock response to just return something
             when(model.nextStep(any(ChatRequest.class))).thenReturn(
@@ -226,7 +226,7 @@ class CheckpointResumeHandlerTest {
             
             // Mock parser
             when(stepParser.parse(any(), any(), any())).thenReturn(
-                ReasoningStep.pending("response", ReasoningStep.FINISH, Map.of(), 0, 0)
+                ReasoningStep.pending("response", ReasoningStep.FINISH, Map.of(), 100, 100)
             );
 
             engine.nextStep(createCtx("test-session", "goal"), "coordinator", "goal", List.of(step));

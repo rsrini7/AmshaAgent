@@ -29,6 +29,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcManaged;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;
 
@@ -76,6 +77,9 @@ public class AgentLoop {
 
     @Inject
     ObservabilityManager observabilityManager;
+
+    @Inject
+    MeterRegistry meterRegistry;
 
     @ActivateRequestContext
     public AgentResult resume(String sessionId, String agentRole, String goal) {
@@ -169,7 +173,13 @@ public class AgentLoop {
             result = AgentResult.failed(msg, AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
             return result;
 
-        } catch (BudgetExceededException | BudgetWarningException e) {
+        } catch (BudgetExceededException e) {
+            meterRegistry.counter("arcclaw.agent.loop.failure",
+                    "role", canonicalRole != null ? canonicalRole : "unknown",
+                    "exception", e.getClass().getSimpleName()).increment();
+            throw e;
+ 
+        } catch (BudgetWarningException e) {
             throw e;
 
         } catch (ComplianceViolationException cve) {
@@ -177,6 +187,9 @@ public class AgentLoop {
             return result;
 
         } catch (Exception e) {
+            meterRegistry.counter("arcclaw.agent.loop.failure",
+                    "role", canonicalRole != null ? canonicalRole : "unknown",
+                    "exception", e.getClass().getSimpleName()).increment();
             result = handleSystemError(sessionId, canonicalRole, e);
             return result;
 

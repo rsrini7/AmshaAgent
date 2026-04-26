@@ -9,17 +9,22 @@ import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.mcp.config.McpToolAllowlist;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpServerRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 class McpToolBridgeTest {
@@ -27,25 +32,51 @@ class McpToolBridgeTest {
     private McpToolBridge bridge;
     private ToolRegistry mockRegistry;
     private McpToolAllowlist mockAllowlist;
+    private ObjectMapper mockObjectMapper;
 
     @BeforeEach
     void setUp() {
         bridge = new McpToolBridge();
         mockRegistry = mock(ToolRegistry.class);
         mockAllowlist = mock(McpToolAllowlist.class);
+        mockObjectMapper = mock(ObjectMapper.class);
         bridge.toolRegistry = mockRegistry;
         bridge.allowlist = mockAllowlist;
+        bridge.objectMapper = mockObjectMapper;
         bridge.auditService = mock(AuditService.class);
+        bridge.clearCache();
     }
 
     @Test
-    void testGetExposedTools() {
+    void testGetExposedTools() throws Exception {
         when(mockAllowlist.exposedTools()).thenReturn(List.of("github", "memory_search"));
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
+        when(mockObjectMapper.writeValueAsString(ArgumentMatchers.any())).thenReturn("{}");
         
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(2, tools.size());
         assertEquals("github", tools.get(0).name());
         assertEquals("memory_search", tools.get(1).name());
+    }
+
+    @Test
+    void testGetExposedToolsSchemaDerivation() throws Exception {
+        when(mockAllowlist.exposedTools()).thenReturn(List.of("github"));
+        AgentTool mockTool = mock(AgentTool.class);
+        JsonObjectSchema schema = JsonObjectSchema.builder().build();
+        when(mockTool.parametersSchema()).thenReturn(schema);
+        when(mockRegistry.findTool("github")).thenReturn(Optional.of(mockTool));
+        when(mockObjectMapper.writeValueAsString(schema)).thenReturn("{\"schema\":\"v1\"}");
+
+        List<McpToolDescriptor> tools = bridge.getExposedTools();
+        assertEquals(1, tools.size());
+        assertEquals("{\"schema\":\"v1\"}", tools.get(0).inputSchema());
+
+        // Verify cache: second call does not hit registry/mapper again
+        bridge.getExposedTools();
+        Mockito.verify(mockRegistry, Mockito.times(1)).findTool("github");
+        Mockito.verify(mockObjectMapper, Mockito.times(1)).writeValueAsString(schema);
     }
 
     @Test
@@ -132,5 +163,13 @@ class McpToolBridgeTest {
         Mockito.verify(bridge.auditService).record(anyString(), anyString(), roleCaptor.capture(), eq(SecurityEventType.TOOL_INVOKED), anyString());
         
         assertEquals("coder", roleCaptor.getValue());
+    }
+
+    @Test
+    void testWarmSchemaCacheThrowsOnMissingTool() {
+        when(mockAllowlist.exposedTools()).thenReturn(List.of("missing_tool"));
+        when(mockRegistry.findTool("missing_tool")).thenReturn(Optional.empty());
+
+        assertThrows(IllegalStateException.class, () -> bridge.warmSchemaCache());
     }
 }

@@ -133,6 +133,7 @@ class WorkspaceManagerGcSweepTest {
         // Setup mock to return a timed out checkpoint
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setSessionId(sessionId);
+        cp.setAgentRole("coordinator");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
         when(agentStoreMock.findStaleAwaitingApproval(any())).thenReturn(List.of(cp));

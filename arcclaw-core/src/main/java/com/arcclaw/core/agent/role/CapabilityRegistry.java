@@ -25,7 +25,12 @@ public class CapabilityRegistry {
      * @param toolName The unique tool name (e.g., "browser_navigate").
      */
     public void grant(String roleId, String toolName) {
-        roleSupplementalTools.computeIfAbsent(roleId, k -> ConcurrentHashMap.newKeySet()).add(toolName);
+        Set<String> tools = roleSupplementalTools.computeIfAbsent(roleId, k -> ConcurrentHashMap.newKeySet());
+        if (!tools.add(toolName)) {
+             throw new IllegalStateException(String.format(
+                 "Duplicate tool-capability grant: role '%s' already has tool '%s' registered (§T2-5).",
+                 roleId, toolName));
+        }
     }
 
     /**
@@ -37,5 +42,15 @@ public class CapabilityRegistry {
     public Set<String> getSupplementalTools(String roleId) {
         Set<String> tools = roleSupplementalTools.get(roleId);
         return (tools == null) ? Set.of() : Collections.unmodifiableSet(tools);
+    }
+ 
+    /**
+     * Clears all registered supplemental tools.
+     * <p>
+     * <strong>§4.2:</strong> This is idempotent and safe to call during
+     * CDI hot-reload via {@code ToolDiscoveryService}.
+     */
+    public void clear() {
+        roleSupplementalTools.clear();
     }
 }

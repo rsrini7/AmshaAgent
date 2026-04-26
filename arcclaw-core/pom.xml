@@ -233,6 +233,66 @@
               </execution>
           </executions>
       </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>complexity-gate</id>
+            <phase>verify</phase>
+            <goals><goal>check</goal></goals>
+            <configuration>
+              <suppressionsLocation>checkstyle-suppressions.xml</suppressionsLocation>
+              <checkstyleRules>
+                <module name="Checker">
+                  <module name="FileLength">
+                    <property name="max" value="400"/>
+                  </module>
+                  <module name="TreeWalker">
+                    <module name="MethodLength">
+                      <property name="max" value="60"/>
+                      <property name="countEmpty" value="false"/>
+                    </module>
+                  </module>
+                </module>
+              </checkstyleRules>
+              <consoleOutput>true</consoleOutput>
+              <failsOnError>true</failsOnError>
+              <includeTestSourceDirectory>false</includeTestSourceDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>enforce-stable-deps</id>
+            <goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>*:*:*:*:*:*beta*</exclude>
+                    <exclude>*:*:*:*:*:*alpha*</exclude>
+                  </excludes>
+                  <includes>
+                    <include>io.quarkiverse.langchain4j:*</include>
+                    <include>dev.langchain4j:*</include>
+                  </includes>
+                  <message>Unstable (alpha/beta) dependencies are forbidden except for LangChain4J modules (§T2-6).</message>
+                </bannedDependencies>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>

@@ -20,6 +20,9 @@ class DynamicToolDiscoveryTest {
     @Inject
     ToolRegistry toolRegistry;
 
+    @Inject
+    ToolDiscoveryService discoveryService;
+
     @Test
     void testAnnotationDrivenCapabilityDiscovery() {
         // 1. Verify that the dynamic_test_tool is granted to researcher
@@ -37,5 +40,17 @@ class DynamicToolDiscoveryTest {
         Set<String> coderTools = roleRegistry.permittedTools(AgentRoleEnum.CODER);
         assertTrue(!coderTools.contains("dynamic_test_tool"),
             "Coder should not have dynamic_test_tool");
+    }
+ 
+    @Test
+    void testDiscoveryIsIdempotentOnHotReload() {
+        // Simulating multiple discovery cycles (e.g., dev-mode hot-reloads)
+        // This should not throw 'Duplicate tool-capability grant' because we call registry.clear() at the start.
+        discoveryService.discover();
+        discoveryService.discover();
+        
+        Set<String> researcherTools = roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER);
+        assertTrue(researcherTools.contains("dynamic_test_tool"), 
+            "Researcher should still have the tool after re-discovery");
     }
 }

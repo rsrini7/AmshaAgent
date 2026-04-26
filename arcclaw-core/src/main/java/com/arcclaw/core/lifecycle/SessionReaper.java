@@ -28,6 +28,7 @@ import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
@@ -46,6 +47,8 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class SessionReaper {
+
+    @Inject MeterRegistry meterRegistry;
 
     private static final Logger log = Logger.getLogger(SessionReaper.class);
 
@@ -156,6 +159,7 @@ public class SessionReaper {
                 return;
             }
             log.warnf("GC sweep: session=%s expired", sessionId);
+            meterRegistry.counter("arcclaw.agent.orphaned.sweep").increment();
             cliResultBridge.cancel(sessionId); 
             compactionInFlight.remove(sessionId);
             workspaceManager.terminateSession(sessionId);
@@ -190,6 +194,8 @@ public class SessionReaper {
         for (AgentCheckpoint cp : stale) {
             log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh — auto-denying.",
                     cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
+            meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
+                    "role", cp.getAgentRole()).increment();
             markApprovalTimedOut(cp);
         }
     }

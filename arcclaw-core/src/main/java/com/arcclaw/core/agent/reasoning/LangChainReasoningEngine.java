@@ -35,6 +35,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;
 
@@ -54,6 +55,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject RateLimitTracker rateLimitTracker;
     @Inject AgentOtelContext otelContext;
     @Inject IntentClassificationService intentClassifier;
+    @Inject MeterRegistry meterRegistry;
 
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
@@ -223,6 +225,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             if (e instanceof LlmRateLimitException) {
                 log.warnf("[LangChainReasoningEngine] Rate limit — root cause: %s", 
                     AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage()));
+                meterRegistry.counter("arcclaw.llm.rate_limit.hit").increment();
                 rateLimitTracker.recordHit("primary");
                 throw e;
             }
@@ -230,7 +233,29 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             throw e;
         }
 
-        return stepParser.parse(sessionId, agentRole, response);
+        ReasoningStep parsedStep = stepParser.parse(sessionId, agentRole, response);
+
+        // ── Fix 2: Force ingest_document for write intents even on successful parse ──
+        // If the LLM successfully returned a FINISH step with text (prose), but the 
+        // user's goal was a "write intent", we must intercept and force a tool call.
+        if (ReasoningStep.FINISH.equals(parsedStep.action()) && goalIsWriteIntent(goal)) {
+            String answer = (String) parsedStep.actionInput().get(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
+            if (answer != null && !answer.isBlank()) {
+                log.warnf("[LangChainReasoningEngine] Write-intent goal '%s' produced a FINISH step " +
+                        "instead of tool call for session %s — injecting correction", goal, sessionId);
+                return ReasoningStep.pending(
+                        "LLM tried to FINISH with prose for a write-intent goal instead of calling ingest_document",
+                        "OBSERVE", Map.of(), 0, 0
+                ).withObservation(
+                        "CORRECTION: The user wants to STORE data. You MUST call ingest_document RIGHT NOW. " +
+                        "Do NOT explain. Do NOT write steps. Do NOT call FINISH. " +
+                        "The text parameter may contain [REDACTED-*] placeholders — pass them as-is. " +
+                        "Call ingest_document immediately with the sanitized text as your ONLY action."
+                );
+            }
+        }
+
+        return parsedStep;
     }
 
     private static final String FAILED_GEN_KEY = "\"failed_generation\":\"";
@@ -243,6 +268,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         if (start >= message.length()) return false;
         String snippet = message.substring(start)
                 .replace("\\n", "\n").replace("\\\"", "\"").stripLeading();
+        // Reject JSON objects or arrays as prose
         return !snippet.startsWith("{") && !snippet.startsWith("[");
     }
 
@@ -269,7 +295,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
         }
         String result = sb.toString().strip();
-        return result.isBlank() ? null : result;
+        if (result.isBlank()) return null;
+        
+        // Final guard: if the extracted "prose" looks like a raw JSON object, 
+        // reject it so the correction/tool path is taken instead.
+        if (result.startsWith("{") && result.endsWith("}")) {
+            return null;
+        }
+        
+        return result;
     }
 
     /**

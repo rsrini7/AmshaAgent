@@ -73,7 +73,7 @@ public class FinishActionHandler {
     );
 
     @Inject
-    AnswerQualityGuard qualityGuard;
+    AnswerGuardStrategy qualityGuard;
 
     @Inject
     CodeGenerationPolicy codePolicy;
@@ -83,6 +83,9 @@ public class FinishActionHandler {
 
     @Inject
     Instance<AgentObserver> observers;
+ 
+    @Inject
+    CorrectionStrategy correctionStrategy;
 
     /**
      * Encapsulates the outcome of finish-action processing so the caller can
@@ -140,8 +143,10 @@ public class FinishActionHandler {
      * @param agentRole         the canonical agent role
      * @param history           the current in-memory reasoning history (read-only)
      * @param step              the FINISH {@link ReasoningStep} from the engine
-     * @param llmSchemaErrorCount the current schema-error retry count (used to
-     *                           decide salvage vs. hard-fail)
+     * @param llmSchemaErrorCount current schema error count
+     *        BEFORE the caller increments it for the next iteration.
+     *        withinBudget() relies on this being the pre-increment value.
+     *        Do NOT pass llmSchemaErrorCount++ here.
      * @return a {@link FinishOutcome} — never {@code null}
      */
     public FinishOutcome handle(String sessionId,
@@ -187,9 +192,12 @@ public class FinishActionHandler {
         answer = AgentErrorMessageUtil.sanitizeLlmErrorPhrases(answer);
         answer = sanitizeErrorForUser(answer, sessionId);
 
-        // --- Quality guard (null/blank, short, echo strips) ---
-        int outputTokens = step.outputTokens() > 0 ? step.outputTokens() : 0;
-        answer = qualityGuard.guardFinalAnswer(answer, outputTokens, sessionId);
+        // --- Quality guard (null/blank, short, echo strips, leaks) ---
+        AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(answer, history);
+        answer = guardResult.answer();
+        if (guardResult.isFailure()) {
+            log.warnf("FINISH-GUARD failure in session %s: %s", sessionId, guardResult.failureReason());
+        }
 
         // --- Observers ---
         final String finalAnswer = answer;
@@ -230,11 +238,11 @@ public class FinishActionHandler {
                                      int llmSchemaErrorCount,
                                      String sessionId) {
 
-        boolean isRawJson = AnswerQualityGuard.RAW_TOOL_JSON_PATTERN.matcher(candidateAnswer).find();
-        boolean isNvidiaLeak = AnswerQualityGuard.NVIDIA_TOOL_CALL_PATTERN.matcher(candidateAnswer).find();
+        // Leakage detection now delegates solely to the strategy
+        boolean isLeak = qualityGuard.isRawToolCallLeak(candidateAnswer);
 
         // Rate-limited: strip and return immediately rather than retrying
-        if ((isRawJson || isNvidiaLeak) && rateLimitTracker.isBackingOff("primary")) {
+        if (isLeak && rateLimitTracker.isBackingOff("primary")) {
             log.warnf("FINISH-HANDLER rate-limited — stripping leak instead of retrying for session %s", sessionId);
             String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
             AgentResult result = AgentResult.finished(stripped, List.copyOf(history));
@@ -256,7 +264,7 @@ public class FinishActionHandler {
         }
 
         // Within retry budget: strip + enqueue correction
-        if (llmSchemaErrorCount < 4) {
+        if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
             log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON — retrying (attempt %d)",
                     sessionId, llmSchemaErrorCount + 1);
 

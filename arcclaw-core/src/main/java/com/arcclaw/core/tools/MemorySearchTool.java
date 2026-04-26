@@ -72,6 +72,11 @@ public class MemorySearchTool implements AgentTool {
     }
 
     @Override
+    public boolean requiresManualApproval(Map<String, Object> params) {
+        return true;
+    }
+
+    @Override
     public ToolResponse execute(Map<String, Object> params) {
         String userId;
         String sessionId;
