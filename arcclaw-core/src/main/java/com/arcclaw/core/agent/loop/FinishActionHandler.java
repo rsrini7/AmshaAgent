@@ -13,6 +13,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.TextPatternUtils;
 import org.apache.commons.text.StringEscapeUtils;
 import org.jboss.logging.Logger;
 
@@ -384,15 +385,6 @@ public class FinishActionHandler {
     }
 
     private boolean looksLikeJson(String text) {
-        if (text == null) return false;
-        String trimmed = text.strip();
-        
-        // Only flag single-block JSON — multi-line prose ending with } is valid.
-        // 20 lines covers all realistic tool-call JSON echoes.
-        long lineCount = trimmed.lines().count();
-        if (lineCount > 20) return false;
-
-        return (trimmed.startsWith("{") && trimmed.endsWith("}"))
-                || (trimmed.startsWith("[") && trimmed.endsWith("]"));
+        return TextPatternUtils.looksLikeJson(text);
     }
 }

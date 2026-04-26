@@ -8,7 +8,6 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AdvisoryLockEntity;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
 import io.quarkus.arc.Unremovable;
 

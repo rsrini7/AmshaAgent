@@ -118,12 +118,13 @@ public class SystemPromptBuilder {
             If the user asks "who am I", "what is my name", or similar identity questions,
             FIRST check the current conversation and compacted summary for any self-introduction
             (e.g. "I am X", "my name is X", "call me X"). Only call memory_search if the name
-            is genuinely absent from both.
+            is genuinely absent from both. When calling memory_search, set the query parameter to "user name identity".
 
             CROSS-DOMAIN HANDOFF:
             If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
             use `delegate_to_agent` to hand off the task to 'coordinator' or the appropriate
-            specialist. Do NOT just refuse the request.
+            specialist. Do NOT just refuse the request. When delegating, set the agent parameter
+            to the target persona name.
 
             CRITICAL INSTRUCTIONS FOR TOOL USAGE:
             1. You already have all necessary permissions to execute tools securely.
@@ -291,14 +292,14 @@ public class SystemPromptBuilder {
             with the exact placeholder text. The system will automatically resolve the 
             original value before storage.
             
-            LABEL EXTRACTION (KEY=VALUE pairs):
-            - Label is everything BEFORE the first '=' sign. 
-            - Text is everything AFTER the first '=' sign.
-            - The text may itself contain '=' characters (e.g. JWT tokens) — include them fully.
-            Examples:
-            "store FOO=bar"                    -> label="FOO",      text="bar"
-            "store JWT_TOKEN=eyJhbG...Qssw5c"  -> label="JWT_TOKEN", text="eyJhbG...Qssw5c"
-            "store API_KEY=abc=def=ghi"        -> label="API_KEY",  text="abc=def=ghi"
+            LABEL EXTRACTION (Key-Value semantics):
+            - The label is the identifier before the '=' character.
+            - The text is everything after the first '=' character.
+            - If the text contains '=' characters, preserve them exactly.
+            Example for "store USER_NAME=Srini":
+            Call ingest_document with text set to "USER_NAME=Srini".
+            Example for "store JWT=abc=def":
+            Call ingest_document with text set to "JWT=abc=def".
 
             HARD TOOL-CALLING CONSTRAINT:
             If you are performing a storage operation (ingest_document), you MUST NOT 
@@ -339,7 +340,7 @@ public class SystemPromptBuilder {
         7. If a tool fails with "Security violation", do NOT retry. Explain to user.
         8. For time-delay phrases ("tomorrow", "in 5 min"): call `schedule_task` ONLY.
         9. STORAGE rule: call `ingest_document`. Output JSON tool-call ONLY. NO thought or text answer before tool result.
-        10. STORAGE format: `KEY=value`. Preserve `=` exactly.
+        10. STORAGE format: "label=value" (e.g. "USER_NAME=Srini"). Preserve the "=" exactly.
         11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
         12. RECALL: Check `[CONTEXT FROM PRIOR SESSION]` block and history before tools. Answer DIRECTLY if info is present.
         13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks (e.g. scheduling).
@@ -393,7 +394,7 @@ public class SystemPromptBuilder {
             1. If information can be inferred from conversation, summary, or the CURRENT SYSTEM TIME provided above, answer directly. Do NOT call tools or write code to check the time.
             2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
-            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> cron="*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.
+            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> "*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.
             5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"), you MUST delegate the entire task to 'brahma' with clear instructions to write AND execute the code. Do not attempt to write the code yourself if execution is requested.
             6. If the user explicitly asks for GitHub/gh/repo info and gives owner/repo: call `github`.
             7. Use `memory_search` only for past-session recall not in the current conversation or summary.
