@@ -51,16 +51,15 @@ public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
           .setParameter("now", now)
           .executeUpdate();
         
-        // 2. Attempt to insert fresh lock
-        try {
-            AdvisoryLockEntity lock = new AdvisoryLockEntity(lockKey, ownerId, now.plusSeconds(timeoutSeconds));
-            em.persist(lock);
-            em.flush();
-            return true;
-        } catch (Exception e) {
-            // Already locked by someone else
-            return false;
-        }
+        // 2. Attempt to insert fresh lock using native 'OR IGNORE' to avoid noisy PK violation exceptions
+        int rows = em.createNativeQuery(
+                "INSERT OR IGNORE INTO advisory_lock (lock_key, owner_id, expires_at) VALUES (?, ?, ?)")
+          .setParameter(1, lockKey)
+          .setParameter(2, ownerId)
+          .setParameter(3, now.plusSeconds(timeoutSeconds).toString()) // ISO string for SQLite
+          .executeUpdate();
+
+        return rows > 0;
     }
 
     @Override
