@@ -6,8 +6,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
+
+import io.quarkus.arc.Unremovable;
 
 @ApplicationScoped
 @Unremovable

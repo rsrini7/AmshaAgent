@@ -31,12 +31,12 @@ import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
-import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
