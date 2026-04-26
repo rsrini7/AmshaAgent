@@ -12,6 +12,11 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
+import com.arcclaw.core.agent.reasoning.error.LlmMalformedResponseException;
+import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
+import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
+import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
+import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
@@ -27,13 +32,10 @@ import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.exception.InvalidRequestException;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
 import io.opentelemetry.api.trace.Span;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -42,58 +44,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private static final Logger log = Logger.getLogger(LangChainReasoningEngine.class);
 
 
-
-
-    private boolean isSchemaValidationError(String message) {
-        if (message == null) return false;
-        return message.contains("tool call validation failed")
-            || message.contains("did not match schema")
-            || message.contains("value must be one of")
-            || message.contains("errors")
-            // OpenRouter/provider-agnostic additions:
-            || message.toLowerCase().contains("json schema")
-            || message.toLowerCase().contains("invalid_tool");
-    }
-
-    /**
-     * Checks whether a message string signals a Groq rate-limit rejection.
-     * Covers both TPM (tokens-per-minute) and TPD (tokens-per-day) variants.
-     */
-    private boolean isRateLimitError(String message) {
-        if (message == null) return false;
-        String lower = message.toLowerCase();
-        return lower.contains("ratelimitexceeded")       // Groq TPM
-                || lower.contains("tokens per minute")        // Groq verbose
-                || lower.contains("tokens per day")           // Groq TPD
-                || lower.contains("tpm")                      // Groq short
-                || lower.contains("tpd")                      // Groq short
-                || lower.contains("rate limit")               // Generic
-                // OpenRouter-specific:
-                || lower.contains("rate_limit_exceeded")      // OpenRouter JSON code
-                || lower.contains("too many requests")        // HTTP 429 text
-                || lower.contains("no credits")               // OpenRouter free tier exhausted
-                || lower.contains("per_request_limit")        // OpenRouter per-request cap
-                || lower.contains("free tier limit")          // OpenRouter free tier message
-                || lower.contains("x-ratelimit")              // Header-based hint in message
-                || message.contains("429");                   // Numeric HTTP code in message
-    }
-
-    /**
-     * Walks the full exception cause chain looking for a rate-limit signal.
-     * Returns the first message that contains a Groq rate-limit indicator,
-     * or null if none is found.
-     */
-    private String findRateLimitMessage(Throwable e) {
-        Throwable t = e;
-        while (t != null) {
-            String msg = AgentErrorMessageUtil.safeMessage(t);
-            if (isRateLimitError(msg)) return msg;
-            t = t.getCause();
-        }
-        return null;
-    }
-
-    @Inject ChatModel chatModel;
+    @Inject LlmProviderPort llmProviderPort;
     @Inject ToolRegistry toolRegistry;
     @Inject RoleRegistry roleRegistry;
     @Inject SystemPromptBuilder promptBuilder;
@@ -152,17 +103,17 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         ChatResponse response;
         try {
-            response = chatModel.chat(request);
-        } catch (InvalidRequestException e) {
-            String msg = AgentErrorMessageUtil.safeMessage(e);
-
-            if (isSchemaValidationError(msg)) {
+            response = llmProviderPort.nextStep(request);
+        } catch (LlmProviderException e) {
+            
+            if (e instanceof LlmMalformedResponseException) {
                 log.warnf("[LangChainReasoningEngine] Schema validation error — " +
-                        "re-throwing to state machine for retry handling: %s", msg);
+                        "re-throwing to state machine for retry handling: %s", e.getMessage());
                 throw e;
             }
 
-            if (msg.contains("tool_use_failed") || msg.contains("was not in request.tools")) {
+            if (e instanceof LlmToolCallException) {
+                String msg = e.getMessage();
 
                 if (isProseGenerationFailure(msg)) {
                     String extractedProse = extractProseFromFailedGeneration(msg);
@@ -268,21 +219,15 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         "If no tool is needed, output your answer directly and call FINISH."
                 );
             }
-            throw e;
-        } catch (Exception e) {
-            String rateLimitMsg = findRateLimitMessage(e);
-            if (rateLimitMsg != null) {
-                Throwable rootCause = ExceptionUtils.getRootCause(e);
-                String rootMsg = rootCause != null ? AgentErrorMessageUtil.safeMessage(rootCause) : AgentErrorMessageUtil.safeMessage(e);
+
+            if (e instanceof LlmRateLimitException) {
                 log.warnf("[LangChainReasoningEngine] Rate limit — root cause: %s", 
-                    AgentErrorMessageUtil.sanitizeErrorMessage(rootMsg));
+                    AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage()));
                 rateLimitTracker.recordHit("primary");
-                String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
-                throw new RuntimeException(clean, e);
+                throw e;
             }
 
-            String clean = AgentErrorMessageUtil.sanitizeErrorMessage(AgentErrorMessageUtil.safeMessage(e));
-            throw new RuntimeException(clean, e);
+            throw e;
         }
 
         return stepParser.parse(sessionId, agentRole, response);
@@ -421,7 +366,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     .messages(messages)
                     .build();
 
-            ChatResponse response = chatModel.chat(request);
+            ChatResponse response = llmProviderPort.nextStep(request);
 
             TokenUsage usage = response.tokenUsage();
             if (usage != null) {
@@ -440,11 +385,10 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             return response.aiMessage().text();
         } catch (BudgetWarningException | BudgetExceededException e) {
             throw e;
-        } catch (Exception e) {
-            String rateLimitMsg = findRateLimitMessage(e);
-            if (rateLimitMsg != null) {
-                log.warnf("[LangChainReasoningEngine] Rate limit in structured output — %s", rateLimitMsg);
-                String clean = AgentErrorMessageUtil.sanitizeErrorMessage(rateLimitMsg);
+        } catch (LlmProviderException e) {
+            if (e instanceof LlmRateLimitException) {
+                log.warnf("[LangChainReasoningEngine] Rate limit in structured output — %s", e.getMessage());
+                String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
                 throw new RuntimeException("Structured output LLM call failed: " + clean, e);
             }
             String clean = AgentErrorMessageUtil.sanitizeErrorMessage(AgentErrorMessageUtil.safeMessage(e));

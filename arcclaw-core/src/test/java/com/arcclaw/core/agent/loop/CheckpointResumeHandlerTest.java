@@ -26,6 +26,7 @@ import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
+import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -40,7 +41,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -167,7 +167,7 @@ class CheckpointResumeHandlerTest {
     // Moved from AgentLoopTest
     @Test
     void testResumedHistoryHasFlatToolArguments() throws Exception {
-        ChatModel model = mock(ChatModel.class);
+        LlmProviderPort model = mock(LlmProviderPort.class);
         ToolRegistry tr = mock(ToolRegistry.class);
         RoleRegistry roleRegistry = mock(RoleRegistry.class);
         SystemPromptBuilder promptBuilder = mock(SystemPromptBuilder.class);
@@ -179,7 +179,7 @@ class CheckpointResumeHandlerTest {
         LangChainReasoningEngine engine = new LangChainReasoningEngine();
         
         Field field;
-        field = engine.getClass().getDeclaredField("chatModel");
+        field = engine.getClass().getDeclaredField("llmProviderPort");
         field.setAccessible(true);
         field.set(engine, model);
 
@@ -209,7 +209,7 @@ class CheckpointResumeHandlerTest {
             ReasoningStep step = ReasoningStep.of("thought", "github", params, "obs", 0, 0);
 
             // Mock response to just return something
-            when(model.chat(any(ChatRequest.class))).thenReturn(
+            when(model.nextStep(any(ChatRequest.class))).thenReturn(
                     // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
                     ChatResponse.builder().aiMessage(AiMessage.aiMessage("response")).build()
             );
@@ -232,7 +232,7 @@ class CheckpointResumeHandlerTest {
             engine.nextStep(createCtx("test-session", "goal"), "coordinator", "goal", List.of(step));
 
             ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-            verify(model).chat(captor.capture());
+            verify(model).nextStep(captor.capture());
 
             // Extract the messages and find the AiMessage that corresponds to the history
             List<ChatMessage> messages = captor.getValue().messages();

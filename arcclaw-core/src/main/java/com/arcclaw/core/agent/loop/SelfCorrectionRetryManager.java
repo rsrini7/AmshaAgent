@@ -50,7 +50,7 @@ public class SelfCorrectionRetryManager {
      * treated as exceeded (matches the hard-coded limit previously in
      * AgentStateMachineRunner).
      */
-    static final int MAX_SCHEMA_CORRECTION_RETRIES = 2;
+    static final int MAX_SCHEMA_CORRECTION_RETRIES = 4;
 
     /**
      * Represents the outcome of a schema-error retry decision.

@@ -241,13 +241,26 @@ public class FinishActionHandler {
             return new FinishOutcome.Completed(result, stripped);
         }
 
+        // Early salvage: if we've already tried correcting once and have meaningful content,
+        // don't burn the whole budget if the result is usable.
+        String cleanThought = qualityGuard.stripRawToolJson(candidateAnswer);
+        if (llmSchemaErrorCount >= 1
+                && !cleanThought.isBlank()
+                && cleanThought.length() > SALVAGE_MIN_LENGTH
+                && !cleanThought.contains(SALVAGE_REJECT_PHRASE)
+                && (step.outputTokens() >= 50 || step.outputTokens() <= 0)) { // handles 0 token cases too
+            log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s — clean thought is usable",
+                    llmSchemaErrorCount, sessionId);
+            return new FinishOutcome.Completed(
+                    AgentResult.finished(cleanThought, List.copyOf(history)), cleanThought);
+        }
+
         // Within retry budget: strip + enqueue correction
-        if (llmSchemaErrorCount < 2) {
+        if (llmSchemaErrorCount < 4) {
             log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON — retrying (attempt %d)",
                     sessionId, llmSchemaErrorCount + 1);
 
             // Strip leak BEFORE adding to history so the LLM doesn't see the leak again
-            String cleanThought = qualityGuard.stripRawToolJson(candidateAnswer);
             ReasoningStep cleanStep = step.withObservation(cleanThought);
 
             String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
