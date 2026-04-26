@@ -306,8 +306,13 @@ public class SystemPromptBuilder {
             information explicitly mentioned in the context window.
             Only call `memory_search` or other tools when the information is genuinely 
             absent from the current context window (e.g. "what did we discuss last week?").
-            Calling a tool when the answer is already in context is a critical error 
-            that wastes resources.
+            
+            EXCEPTION TO DIRECT ANSWERS: If the user asks for code generation or 
+            execution in a DIFFERENT language or environment (e.g. "do same in bash"), 
+            you MUST NOT answer from memory. You MUST call the appropriate tool 
+            (like sandbox_exec) to ensure correctness in the new context. 
+            Calling a tool when the answer is already in context is usually an error,
+            but failing to execute code for a new request is a critical failure.
 
             RESPONSE LENGTH RULE:
             Default to concise answers (2-3 sentences or 5 bullet points max).
@@ -436,6 +441,7 @@ public class SystemPromptBuilder {
     private static final String COMPACT_TOOL_PRIORITY_RULES = """
             TOOL PRIORITY RULES:
             1. If information can be inferred from conversation, summary, or the CURRENT SYSTEM TIME provided above, answer directly. Do NOT call external tools (like web search) or write code to check the time.
+            1b. EXCEPTION: If the user asks for code generation or execution in a DIFFERENT language (e.g. "do same in bash"), you MUST call the tool (e.g. sandbox_exec). Do NOT answer from memory.
             2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
             4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> "*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself — store it as the goal text for the cron runner.

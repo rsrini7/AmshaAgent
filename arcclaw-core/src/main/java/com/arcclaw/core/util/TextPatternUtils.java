@@ -24,12 +24,13 @@ public final class TextPatternUtils {
                 || lower.contains("run the")
                 || lower.contains("share result")
                 || lower.contains("share the result")
-                || lower.contains("share generated")
                 || lower.contains("run same")
+                || lower.contains("try same")
                 || lower.contains("do same")
-                || lower.contains("execute again");
-    }
-
+                || lower.contains("execute again")
+                || lower.contains("share generated")
+                || lower.contains("just do it");
+                }
     /**
      * Extracts a normalized language name if mentioned in the goal.
      * Uses word boundaries to avoid false positives (e.g. "government" matching "go").

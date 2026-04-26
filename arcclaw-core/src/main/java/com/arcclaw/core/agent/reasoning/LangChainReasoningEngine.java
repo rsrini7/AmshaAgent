@@ -446,7 +446,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                         // §7.40: Coder hard-correction — if model returns prose for an execution goal,
                         // force it back into tool-calling mode immediately.
-                        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(goal)) {
+                        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(goal)
+                                && proseIsUnexecutedCodePlan(extractedProse)) {
                             log.warnf("[LangChainReasoningEngine] Coder produced prose for execution goal '%s' " +
                                     "in session %s — injecting hard-tool correction", goal, sessionId);
                             return ReasoningStep.pending(
@@ -785,6 +786,24 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         && step.observation() != null
                         && step.observation().contains("was cut off because the code was too large"))
                 .count();
+    }
+
+    /**
+     * Returns true if the prose contains markdown code fences OR raw code-like keywords.
+     * This is used to detect when a model "forgot" to call sandbox_exec and wrote
+     * the code as text instead.
+     */
+    private boolean proseIsUnexecutedCodePlan(String prose) {
+        if (prose == null || prose.isBlank()) return false;
+        
+        // Explicit markdown fences are the strongest indicator
+        if (prose.contains("```")) return true;
+
+        // Keyword detection for unfenced code plans (common in weaker models)
+        String lower = prose.toLowerCase();
+        return lower.contains("public class ") || lower.contains("func main") 
+            || lower.contains("def ") || lower.contains("package main")
+            || lower.contains("import \"fmt\"") || lower.contains("public static void");
     }
 
     private boolean historyAlreadyContains(List<ReasoningStep> history, String toolName) {
