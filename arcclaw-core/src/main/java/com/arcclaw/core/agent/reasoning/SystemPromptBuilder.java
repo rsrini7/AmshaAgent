@@ -355,7 +355,7 @@ public class SystemPromptBuilder {
         9. STORAGE rule: call `ingest_document`. Output JSON tool-call ONLY. NO thought or text answer before tool result.
         10. STORAGE format: "label=value" (e.g. "USER_NAME=Alice"). Preserve the "=" exactly.
         11. PII BLOCKED: If you see REDACTED-PHONE/etc in a store request, TELL the user it was blocked. Do not silently ignore.
-        12. RECALL PRIORITY: 1. Active Window, 2. Summary. ONLY call tools if absent from BOTH. Never call tools if the info was already mentioned in this conversation.
+        12. RECALL PRIORITY: 1. Active Window, 2. Summary. If info was mentioned in THIS conversation, you MUST NOT call tools. Answer directly.
         13. DELEGATE: Use `delegate_to_agent` for out-of-role tasks. Set the agent parameter to the persona name.
         14. IDENTITY RECALL: For "who am I" questions, check history first. Only call `memory_search` (query="user name identity") if absent.
         15. PREFERENCE RECALL: For "what i like/love" questions, check history first. Only call `memory_search` (query="user preferences likes hobbies") if absent.
