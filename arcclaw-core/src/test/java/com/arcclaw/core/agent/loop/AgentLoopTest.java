@@ -33,6 +33,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 class AgentLoopTest {
 
@@ -53,7 +54,7 @@ class AgentLoopTest {
                 historyAssembler = mock(ChatHistoryAssembler.class);
                 stepParser = mock(ReasoningStepParser.class);
 
-                when(promptBuilder.build(any(), any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
+                when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("MOCK SYSTEM PROMPT");
 
                 engine = new LangChainReasoningEngine();
 

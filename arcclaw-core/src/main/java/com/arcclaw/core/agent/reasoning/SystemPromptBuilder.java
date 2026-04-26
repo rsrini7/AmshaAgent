@@ -423,16 +423,17 @@ public class SystemPromptBuilder {
             12. If you encounter a request you cannot fulfill, use `delegate_to_agent` (set agent to persona name) to handoff.
             """;
 
-    public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal) {
+    public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal, boolean isTruncationRecovery) {
         String detectionGoal = (context != null) ? context.goal() : goal;
         boolean isSimpleChitchat = intentService != null && intentService.isSimpleConversational(detectionGoal);
-        boolean isCompact = compactPromptEnabled || (contextWindow > 0 && contextWindow <= 8192);
+        boolean isCompact = compactPromptEnabled || (contextWindow > 0 && contextWindow <= 8192) || isTruncationRecovery;
 
-        log.debugf("[SPB] goal='%s' intentService=%s isSimpleChitchat=%b isCompact=%b",
+        log.debugf("[SPB] goal='%s' intentService=%s isSimpleChitchat=%b isCompact=%b isTruncationRecovery=%b",
                    detectionGoal,
                    intentService == null ? "NULL" : "OK",
                    isSimpleChitchat,
-                   isCompact);
+                   isCompact,
+                   isTruncationRecovery);
 
         // --- Skill persona resolution ---
         final String personaPrompt;

@@ -171,7 +171,12 @@ public class EngineStepHandler {
 
                 if (ReasoningStep.OBSERVE.equals(step.action())) {
                     log.warnf("[STATE-MACHINE] session %s: schema parse error — retrying with correction", context.sessionId());
-                    llmSchemaErrorCount++;
+                    
+                    if (!step.isTruncationRecovery()) {
+                        llmSchemaErrorCount++;
+                    } else {
+                        log.infof("[STATE-MACHINE] session %s: truncation recovery turn — exempting from schema retry budget", context.sessionId());
+                    }
                     
                     // Schema correction retry budget is mode-aware:
                     // STRICT (default): arcclaw.agent.schema-correction.max-retries-strict (default 4)

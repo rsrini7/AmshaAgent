@@ -38,6 +38,7 @@ public final class AgentExecutionContext {
     private CheckpointStatus lastCheckpointStatus;
     private boolean statusDirty = true;
     private boolean forceFinishRetry = false;
+    private int truncationRetryCount = 0;
 
     public AgentExecutionContext(
             String sessionId,
@@ -96,6 +97,9 @@ public final class AgentExecutionContext {
 
     public boolean isForceFinishRetry() { return forceFinishRetry; }
     public void setForceFinishRetry(boolean forceFinishRetry) { this.forceFinishRetry = forceFinishRetry; }
+
+    public int getTruncationRetryCount() { return truncationRetryCount; }
+    public void incrementTruncationRetry() { this.truncationRetryCount++; }
 
     /** Convenience: true when full channel stamping info is available. */
     public boolean hasChannelInfo() {

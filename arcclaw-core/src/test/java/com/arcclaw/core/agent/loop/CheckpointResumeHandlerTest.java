@@ -54,6 +54,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -225,7 +226,7 @@ class CheckpointResumeHandlerTest {
         AgentOtelContext otelContext = mock(AgentOtelContext.class);
         MeterRegistry meterRegistry = mock(MeterRegistry.class);
         
-        when(promptBuilder.build(any(), any(), any(), any())).thenReturn("MOCK SYSTEM PROMPT");
+        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("MOCK SYSTEM PROMPT");
         when(intentClassifier.isWriteIntent(anyString())).thenReturn(false);
 
         LangChainReasoningEngine engine = new LangChainReasoningEngine();

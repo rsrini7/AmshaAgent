@@ -36,6 +36,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 class LangChainReasoningEnginePersonaTest {
 
@@ -104,7 +105,7 @@ class LangChainReasoningEnginePersonaTest {
     void testDebuggerRoleDoesNotSayCoordinator() {
         // Arrange
         String persona = "You are Shiva, the Debugger and Code Analyst.";
-        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
 
         // Act
         engine.nextStep(createCtx("sess-1"), "debugger", "fix this bug", Collections.emptyList());
@@ -127,7 +128,7 @@ class LangChainReasoningEnginePersonaTest {
     void testCoordinatorRoleContainsTrimurtiContext() {
         // Arrange
         String persona = "You are Vishnu, the Coordinator. THE TRIMURTI";
-        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
 
         // Act
         engine.nextStep(createCtx("sess-2"), "coordinator", "plan tasks", Collections.emptyList());

@@ -114,7 +114,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             }
         }
 
-        String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal);
+        boolean isTruncationRecovery = context.getTruncationRetryCount() > 0;
+        String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal, isTruncationRecovery);
 
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, cappedHistory);
 
@@ -297,7 +298,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                     // 🟢 FIX: Implement a truncation counter to force a FINISH exit after repeated failures.
                     // This prevents exhausting the budget on redundant retries of oversized code.
-                    int truncationRetryCount = countTruncationAttempts(history);
+                    int truncationRetryCount = context.getTruncationRetryCount();
 
                     // If the truncated generation contains a sandbox_exec call, 
                     // OR if we've already tried and failed twice, extract whatever we have and FINISH.
@@ -330,10 +331,12 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         log.warnf("[LangChainReasoningEngine] Truncated/partial code detected in " +
                                 "failed_generation for session %s — injecting size-constraint retry",
                                 sessionId);
+                        context.incrementTruncationRetry();
                         return ReasoningStep.pending(
                                 "Response was truncated because the code was too long",
                                 "OBSERVE", Map.of(), 0, 0
-                        ).withObservation(
+                        ).withTruncationRecovery(true)
+                        .withObservation(
                                 "Your previous response was cut off because the code was too large. " +
                                 "STOP. Do NOT attempt to call sandbox_exec directly with this code. " +
                                 "Instead, provide the code using a FINISH answer first, " +
@@ -632,7 +635,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
         Span span = otelContext.childSpan(sessionId, "structured_output_generation");
         try {
-            String systemPrompt = promptBuilder.build(null, agentRole, sessionId, "");
+            String systemPrompt = promptBuilder.build(null, agentRole, sessionId, "", false);
 
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(SystemMessage.systemMessage(systemPrompt));
@@ -696,14 +699,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         );
     }
 
-    private int countTruncationAttempts(List<ReasoningStep> history) {
-        if (history == null) return 0;
-        return (int) history.stream()
-                .filter(step -> ReasoningStep.OBSERVE.equals(step.action())
-                        && step.observation() != null
-                        && step.observation().contains("was cut off because the code was too large"))
-                .count();
-    }
+
 
     private CodeBlock extractLatestCodeBlock(List<ReasoningStep> history) {
         if (history == null || history.isEmpty()) return null;

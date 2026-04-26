@@ -63,7 +63,7 @@ class SystemPromptBuilderTest {
         when(toolRegistry.listTools()).thenReturn(Collections.emptyList());
 
         // Act
-        String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal");
+                String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal", false);
 
         // Assert
         int arcClawIdx = result.indexOf("You are ArcClaw");
@@ -82,10 +82,10 @@ class SystemPromptBuilderTest {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("MOCK_PERSONA");
 
         // Act & Assert
-        String resultCoord = builder.build(createCtx("s1"), "coordinator", "s1", "some goal");
+        String resultCoord = builder.build(createCtx("s1"), "coordinator", "s1", "some goal", false);
         assertTrue(resultCoord.contains("YOUR INTERNAL ARCHITECTURE"), "Coordinator should have trimurti block");
 
-        String resultDebugger = builder.build(createCtx("s2"), "debugger", "s2", "some goal");
+        String resultDebugger = builder.build(createCtx("s2"), "debugger", "s2", "some goal", false);
         assertTrue(!resultDebugger.contains("YOUR INTERNAL ARCHITECTURE"), "Debugger should NOT have trimurti block");
     }
 
@@ -97,7 +97,7 @@ class SystemPromptBuilderTest {
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
         builder.contextWindow = 8192;
 
-        String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal");
+        String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);
 
         assertTrue(result.contains("STORAGE format: \"label=value\""),
                 "Compact prompt should preserve STORAGE format guidance");
@@ -129,7 +129,7 @@ class SystemPromptBuilderTest {
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
         builder.contextWindow = 8192;
 
-        String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal");
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal", false);
 
         assertTrue(!result.contains("retry once with a broader selector"),
                 "Compact browser retry rule should only appear for browser-capable roles");
@@ -144,7 +144,7 @@ class SystemPromptBuilderTest {
         builder.contextWindow = 128000;
         builder.compactPromptEnabled = true;
 
-        String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal");
+        String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);
 
         assertTrue(result.contains("TOOL PRIORITY RULES:"),
                 "Explicit compact prompt flag should force the compact prompt path");
@@ -160,7 +160,7 @@ class SystemPromptBuilderTest {
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
         builder.contextWindow = 8192;
 
-        String result = builder.build(createCtx("s1"), "researcher", "s1", "lookup latest Spring Boot and Quarkus LTS");
+        String result = builder.build(createCtx("s1"), "researcher", "s1", "lookup latest Spring Boot and Quarkus LTS", false);
 
         assertTrue(result.contains("For factual lookup results such as versions, dates, statuses, or comparisons, the final answer MUST be plain text sentences or bullets."),
                 "Compact prompt should forbid JSON-style fact answers that trip the non-coder code-block guard");
@@ -180,7 +180,7 @@ class SystemPromptBuilderTest {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("MOCK_PERSONA");
 
         // Act
-        String result = builder.build(ctx, "coordinator", "s1", "some goal");
+        String result = builder.build(ctx, "coordinator", "s1", "some goal", false);
 
         // Assert
         assertTrue(result.contains("PII PROTECTION NOTICE:"), "Prompt should contain PII notice");
