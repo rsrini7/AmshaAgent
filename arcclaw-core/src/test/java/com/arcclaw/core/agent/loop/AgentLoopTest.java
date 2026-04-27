@@ -31,6 +31,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.TextPatternUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -65,6 +66,7 @@ class AgentLoopTest {
                 setField(engine, "promptBuilder", promptBuilder);
                 setField(engine, "historyAssembler", historyAssembler);
                 setField(engine, "stepParser", stepParser);
+                setField(engine, "textPatternUtils", new TextPatternUtils());
         }
 
         private void setField(Object target, String name, Object value) throws Exception {

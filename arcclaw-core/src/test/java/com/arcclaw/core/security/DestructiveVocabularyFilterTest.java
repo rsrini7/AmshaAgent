@@ -24,26 +24,26 @@ public class DestructiveVocabularyFilterTest {
     @Test
     void testDeleteDetected_researcher() {
         // Researcher has capabilities, "delete" is destructive
-        String result = filter.filter("researcher", "delete the repo");
-        Assertions.assertEquals("coordinator", result);
+        String result = filter.filter(AgentRoleEnum.RESEARCHER.id(), "delete the repo");
+        Assertions.assertEquals(AgentRoleEnum.COORDINATOR.id(), result);
     }
 
     @Test
     void testRmRfWithSpaceDetected() {
-        String result = filter.filter("researcher", "rm -rf /data");
-        Assertions.assertEquals("coordinator", result);
+        String result = filter.filter(AgentRoleEnum.RESEARCHER.id(), "rm -rf /data");
+        Assertions.assertEquals(AgentRoleEnum.COORDINATOR.id(), result);
     }
 
     @Test
     void testRmRfNoSpaceDetected() {
-        String result = filter.filter("researcher", "rm-rf everything");
-        Assertions.assertEquals("coordinator", result);
+        String result = filter.filter(AgentRoleEnum.RESEARCHER.id(), "rm-rf everything");
+        Assertions.assertEquals(AgentRoleEnum.COORDINATOR.id(), result);
     }
 
     @Test
     void testRmRfCamelCaseDetected() {
-        String result = filter.filter("researcher", "Run RM -RF on it");
-        Assertions.assertEquals("coordinator", result);
+        String result = filter.filter(AgentRoleEnum.RESEARCHER.id(), "Run RM -RF on it");
+        Assertions.assertEquals(AgentRoleEnum.COORDINATOR.id(), result);
     }
 
     @Test
@@ -62,13 +62,13 @@ public class DestructiveVocabularyFilterTest {
 
     @Test
     void testNonDestructiveMessagePassesThrough() {
-        String result = filter.filter("researcher", "write a function to list files");
-        Assertions.assertEquals("researcher", result);
+        String result = filter.filter(AgentRoleEnum.RESEARCHER.id(), "write a function to list files");
+        Assertions.assertEquals(AgentRoleEnum.RESEARCHER.id(), result);
     }
 
     @Test
     void testDestructiveFilterFallbackToCoordinator() {
-        String result = filter.filter("researcher", "delete the repo");
+        String result = filter.filter(AgentRoleEnum.RESEARCHER.id(), "delete the repo");
         Assertions.assertEquals(AgentRoleEnum.COORDINATOR.id(), result);
     }
 }

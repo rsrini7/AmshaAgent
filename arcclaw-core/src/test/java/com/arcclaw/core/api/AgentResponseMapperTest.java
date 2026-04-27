@@ -13,11 +13,20 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper.AgentResponse;
 import com.arcclaw.core.api.AgentResponseMapper.ApprovalRequiredResponse;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class AgentResponseMapperTest {
 
     private final AgentResponseMapper mapper = new AgentResponseMapper();
+    private final AuditService auditService = Mockito.mock(AuditService.class);
+
+    @BeforeEach
+    void setUp() {
+        mapper.auditService = auditService;
+    }
 
     @Test
     void testMapResult_finished_sync_returns200() {
