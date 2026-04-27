@@ -181,7 +181,7 @@ public class AgentLoop {
                         if (resumeResult != null) {
                             return resumeResult;
                         } else if (context != null && context.isResumeSignal() && hasApprovedToolPending(sessionId, canonicalRole)) {
-                            // §Bug-2 Fix: If we are resuming and there's already an approved tool, 
+                            // If we are resuming and there's already an approved tool, 
                             // DO NOT call nextStep/fastPath again. Procedural resumption is 
                             // handled by stateMachineRunner or already handled by checkpointResumeHandler.
                             // However, we need to ensure the state machine starts at the correct point.
@@ -352,7 +352,7 @@ public class AgentLoop {
                 || opening.contains("could not retrieve")) {
             log.infof("[AgentLoop] Delegate result for session %s contains failure phrases - injecting observation to allow coordinator wrap-up without restart", sessionId);
             
-            // Fix C2: Instead of empty (which causes restart), we return a finished result 
+            // Instead of empty (which causes restart), we return a finished result 
             // that forces the coordinator to see the failure in history and wrap up.
             List<ReasoningStep> historyWithFailure = new ArrayList<>(resumedHistory);
             historyWithFailure.add(ReasoningStep.observe(ToolCapability.DELEGATE_TO_AGENT.toolName(), observation, "Delegate failed - synthesize and finish"));
