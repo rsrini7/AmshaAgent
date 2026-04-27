@@ -36,7 +36,7 @@ public class AgentResponseMapper {
     public record AgentResponse(String answer, int totalInputTokens, int totalOutputTokens) {}
     public record ApprovalRequiredResponse(String toolName, String paramsJson, String sessionId) {}
     public record RateLimitRetryResponse(long retryAfterMs, String sessionId) {}
-    public record ErrorResponse(String reason, String code) {}
+    public record AgentErrorResponse(String reason, String code) {}
 
     public Response mapResult(AgentResult result, boolean isAsync) {
         return switch (result) {

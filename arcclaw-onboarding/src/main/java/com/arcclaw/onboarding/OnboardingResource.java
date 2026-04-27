@@ -132,7 +132,7 @@ public class OnboardingResource {
         if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.CREDENTIALS)) {
             log.warnf("Forbidden jump: sid=%s tries to reach CREDENTIALS while at %s", sid, state.currentStep);
             return Response.status(403)
-                .entity(new AgentResponseMapper.ErrorResponse("Forbidden", "Onboarding step out of sequence"))
+                .entity(new AgentResponseMapper.AgentErrorResponse("Forbidden", "Onboarding step out of sequence"))
                 .cookie(createCookie(sid)).build();
         }
 
