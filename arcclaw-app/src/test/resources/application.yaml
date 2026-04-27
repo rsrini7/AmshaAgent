@@ -24,6 +24,9 @@ arcclaw:
     telegram:
       enabled: false
       bot-token: "mock-telegram-token"
+  tools:
+    playwright:
+      enabled: false
   vault:
     pepper: "test-pepper"
     master-key: "test-master-key-32-chars-padded!"
