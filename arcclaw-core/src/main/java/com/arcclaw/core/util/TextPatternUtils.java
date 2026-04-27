@@ -11,7 +11,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class TextPatternUtils {
 
     @ConfigProperty(name = "arcclaw.core.util.json-salvage-max-lines", defaultValue = "20")
-    int jsonSalvageMaxLines;
+    int jsonSalvageMaxLines = 20;
 
     public TextPatternUtils() {}
 
