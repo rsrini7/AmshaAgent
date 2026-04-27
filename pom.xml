@@ -36,7 +36,6 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <quarkus.config.build-time-config-sources>false</quarkus.config.build-time-config-sources>
-    <maven.surefire.argLine>-Xmx3072m --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</maven.surefire.argLine>
   </properties>
 
   <dependencyManagement>
@@ -155,17 +154,20 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.5.5</version>
           <configuration>
-            <argLine>${maven.surefire.argLine}</argLine>
+            <argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
             <systemPropertyVariables>
               <arcclaw.data-dir>./target</arcclaw.data-dir>
               <arcclaw.workspace.root-dir>./target/workspaces</arcclaw.workspace.root-dir>
               <quarkus.test.profile>test</quarkus.test.profile>
+              <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+              <maven.home>${maven.home}</maven.home>
+              <quarkus.http.test-port>0</quarkus.http.test-port>
+              <quarkus.shutdown.timeout>5S</quarkus.shutdown.timeout>
             </systemPropertyVariables>
-            <!-- Kill the forked JVM immediately after System.exit instead of waiting 30s -->
             <shutdown>kill</shutdown>
-            <!-- Ensure each test module gets a fresh JVM -->
             <forkCount>1</forkCount>
             <reuseForks>true</reuseForks>
+            <forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>
           </configuration>
         </plugin>
       </plugins>

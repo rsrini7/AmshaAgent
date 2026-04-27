@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -21,6 +22,11 @@ class TelegramChannelSenderEditMessageTest {
     @Mock ProducerTemplate producerTemplate;
     @Mock TelegramMarkdownV2Renderer renderer;
     @InjectMocks TelegramChannelSender sender;
+
+    @BeforeEach
+    void setUp() {
+        sender.maxLength = 4096;
+    }
 
     @Test
     void testEditMessage_sendsEditMessageTextMessage() {

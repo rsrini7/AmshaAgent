@@ -15,6 +15,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import org.apache.camel.ProducerTemplate;
 import org.jboss.logging.Logger;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,6 +33,11 @@ class TelegramChannelSenderTest {
 
   private final ChannelUser user =
       new ChannelUser("123", "123", "alice", ChannelType.TELEGRAM);
+
+  @BeforeEach
+  void setUp() {
+      sender.maxLength = 4096;
+  }
 
   @Test
   void testSendWithNodesCallsSendRaw() {
