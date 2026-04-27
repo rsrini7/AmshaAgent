@@ -53,42 +53,42 @@ public class AgentProducer {
 
     @Produces
     @ApplicationScoped
-    @AgentRole("coordinator")
+    @AgentRole(AgentRoleEnum.COORDINATOR_ID)
     public Agent coordinator() {
         return new DefaultAgent(AgentRoleEnum.COORDINATOR, () -> coordinatorTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("coder")
+    @AgentRole(AgentRoleEnum.CODER_ID)
     public Agent coder() {
         return new DefaultAgent(AgentRoleEnum.CODER, () -> coderTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("debugger")
+    @AgentRole(AgentRoleEnum.DEBUGGER_ID)
     public Agent debugger() {
         return new DefaultAgent(AgentRoleEnum.DEBUGGER, () -> debuggerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("researcher")
+    @AgentRole(AgentRoleEnum.RESEARCHER_ID)
     public Agent researcher() {
         return new DefaultAgent(AgentRoleEnum.RESEARCHER, () -> researcherTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("architect")
+    @AgentRole(AgentRoleEnum.ARCHITECT_ID)
     public Agent architect() {
         return new DefaultAgent(AgentRoleEnum.ARCHITECT, () -> architectTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("synthesizer")
+    @AgentRole(AgentRoleEnum.SYNTHESIZER_ID)
     public Agent synthesizer() {
         return new DefaultAgent(AgentRoleEnum.SYNTHESIZER, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }

@@ -69,8 +69,7 @@ public enum ToolCapability {
      */
     DELEGATE_TO_AGENT("delegate_to_agent",
         "Delegate a task to a domain expert sub-agent. " +
-        "REQUIRED: 'agent' (string name: shiva, brahma, saraswati, brihaspati, dattatreya), 'goal' (string self-contained task description). " +
-        "Example: {\\\"agent\\\":\\\"shiva\\\",\\\"goal\\\":\\\"Analyze the stack trace in app.log and fix the NPE\\\"}"),
+        "REQUIRED: 'agent' (one of: shiva, brahma, saraswati, brihaspati, dattatreya), 'goal' (string task description)."),
 
     /**
      * Ability to ingest a document into the RAG knowledge base.
