@@ -9,6 +9,7 @@ import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -64,7 +65,7 @@ public class AgentResponseMapper {
                             r.retryAfterMs(), r.sessionId()))
                     .build();
             case AgentResult.LoopExceeded l -> Response.status(408)
-                    .entity(new ErrorResponse(
+                    .entity(new ArcClawErrorResponse(
                             "Iteration limit " + l.maxIterations() + " reached",
                             "LOOP_EXCEEDED"))
                     .build();
@@ -127,23 +128,23 @@ public class AgentResponseMapper {
     private Response mapFailedResponse(AgentResult.Failed f) {
         return switch (f.category()) {
             case COMPLIANCE_VIOLATION -> Response.status(451)
-                    .entity(new ErrorResponse(f.reason(), "COMPLIANCE")).build();
+                    .entity(new ArcClawErrorResponse(f.reason(), "COMPLIANCE")).build();
             case BUDGET_EXCEEDED -> Response.status(429)
-                    .entity(new ErrorResponse(f.reason(), "BUDGET")).build();
+                    .entity(new ArcClawErrorResponse(f.reason(), "BUDGET")).build();
             case USER_DENIED -> Response.status(422)
-                    .entity(new ErrorResponse(f.reason(), "USER_DENIED")).build();
+                    .entity(new ArcClawErrorResponse(f.reason(), "USER_DENIED")).build();
             case SCHEMA_ERROR -> Response.status(422)
-                    .entity(new ErrorResponse(
+                    .entity(new ArcClawErrorResponse(
                             "The agent encountered a schema error and could not complete "
                             + "the request. Try rephrasing your goal.",
                             "SCHEMA"))
                     .build();
             case SYSTEM_ERROR -> Response.serverError()
-                    .entity(new ErrorResponse(f.reason(), "SYSTEM")).build();
+                    .entity(new ArcClawErrorResponse(f.reason(), "SYSTEM")).build();
             case RATE_LIMIT -> Response.status(429)
-                    .entity(new ErrorResponse(f.reason(), "RATE_LIMIT")).build();
+                    .entity(new ArcClawErrorResponse(f.reason(), "RATE_LIMIT")).build();
             case SECURITY_POLICY -> Response.status(403)
-                    .entity(new ErrorResponse(f.reason(), "SECURITY_POLICY")).build();
+                    .entity(new ArcClawErrorResponse(f.reason(), "SECURITY_POLICY")).build();
         };
     }
 }

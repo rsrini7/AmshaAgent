@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 import com.arcclaw.app.util.CliUtils;
 import com.arcclaw.core.sandbox.SandboxStrategy;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -105,13 +106,17 @@ public class AppBootstrap {
                 try {
                     Path p = Path.of(command).toAbsolutePath().getParent();
                     if (Files.exists(p)) return p;
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    log.debugf("Failed to resolve binary dir from command: %s", ExceptionUtils.getRootCauseMessage(e));
+                }
             }
             // /proc/self/exe fallback for Linux native
             try {
                 Path proc = Path.of("/proc/self/exe");
                 if (Files.exists(proc)) return proc.toRealPath().getParent();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.debugf("Failed to resolve binary dir from /proc/self/exe: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         // 2. JAR / dev / IDE mode - always use CWD (where the user runs from)
@@ -279,7 +284,9 @@ public class AppBootstrap {
         if (!Files.exists(envFile)) {
             try (InputStream in = AppBootstrap.class.getResourceAsStream("/env-example")) {
                 if (in != null) Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException ignored) {}
+            } catch (IOException e) {
+                log.debugf("Failed to seed .env from example: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         if (!missing.isEmpty()) {
@@ -1186,7 +1193,9 @@ public class AppBootstrap {
             while (System.in.available() > 0) {
                 System.in.read();
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.debugf("Failed to drain input buffer: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
     }
 
     private static boolean canRun(String... cmd) {
@@ -1194,6 +1203,7 @@ public class AppBootstrap {
             Process p = new ProcessBuilder(cmd).start();
             return p.waitFor(2, TimeUnit.SECONDS);
         } catch (Exception e) {
+            log.debugf("Command %s check failed: %s", (cmd.length > 0 ? cmd[0] : "unknown"), ExceptionUtils.getRootCauseMessage(e));
             return false;
         }
     }

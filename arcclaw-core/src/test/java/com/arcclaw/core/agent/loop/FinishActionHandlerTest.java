@@ -15,6 +15,7 @@ import jakarta.enterprise.inject.Instance;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,8 +37,9 @@ class FinishActionHandlerTest {
         rateLimitTracker = mock(RateLimitTracker.class);
         observers = mock(Instance.class);
         correctionStrategy = mock(CorrectionStrategy.class);
+        TextPatternUtils textPatternUtils = new TextPatternUtils();
 
-        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, new ObjectMapper());
+        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, new ObjectMapper(), textPatternUtils);
 
         // Default mock behaviors
         when(qualityGuard.isRawToolCallLeak(anyString())).thenReturn(false);

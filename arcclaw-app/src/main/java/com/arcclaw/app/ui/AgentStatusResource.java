@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.security.AutonomyLevel;
 import io.smallrye.mutiny.Multi;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 /**
@@ -37,6 +38,7 @@ public class AgentStatusResource {
     @Path("/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Subscribe to live agent state change events via SSE")
     public Multi<AgentSseService.SseEvent> agentEvents(@QueryParam("sessionId") String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return Multi.createFrom().failure(
@@ -46,6 +48,7 @@ public class AgentStatusResource {
     }
  
     @GET
+    @Operation(summary = "List all active agents and their current statuses")
     public List<AgentStatusDto> listAgents() {
         return stateStore.getAll().stream()
             .map(s -> {

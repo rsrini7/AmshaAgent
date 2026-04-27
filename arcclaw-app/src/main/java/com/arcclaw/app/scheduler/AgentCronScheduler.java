@@ -75,6 +75,9 @@ public class AgentCronScheduler {
     @ConfigProperty(name = "arcclaw.cron.max-lookback-window", defaultValue = "PT5M")
     Duration maxLookbackWindow;
 
+    @ConfigProperty(name = "arcclaw.cron.startup-delay-ms", defaultValue = "5000")
+    long startupDelayMs;
+
     private ScheduledExecutorService preciseScheduler;
     private volatile boolean active = true;
 
@@ -108,7 +111,7 @@ public class AgentCronScheduler {
         vThreads.execute(() -> {
             try {
                 // Wait briefly for persistence adapters to stabilize
-                Thread.sleep(5000);
+                Thread.sleep(startupDelayMs);
                 if (!active) return;
                 sweepOrphanedApprovalJobs();
             } catch (InterruptedException e) {

@@ -12,7 +12,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 
 /**
- * Resurrects the last archived stale approval by treating the /retry command
+ * Resurrects the last archived stale approval by treating the /retry reflex
  * as if the user re-typed the original goal.
  */
 @ApplicationScoped

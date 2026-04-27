@@ -70,6 +70,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     @Inject MeterRegistry meterRegistry;
     @Inject ObjectMapper objectMapper;
     @Inject CompactionSummaryCache summaryCache;
+    @Inject TextPatternUtils textPatternUtils;
 
     @Override
     public ReasoningStep nextStep(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> history) {
@@ -87,13 +88,13 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // bypass the LLM and issue the sandbox_exec tool call directly using the code
         // block found in history. This prevents model-side truncation errors.
         // Scoped by language (§Bug-1 fix) to allow Go execution after successful Java run.
-        String targetLanguage = TextPatternUtils.goalMentionsLanguage(context.goal());
+        String targetLanguage = textPatternUtils.goalMentionsLanguage(context.goal());
         boolean hasRecentExecution = history != null && history.stream().anyMatch(s ->
                 ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
                         && Boolean.TRUE.equals(s.success()));
 
         if (AgentRoleEnum.CODER.id().equals(agentRole) 
-                && (TextPatternUtils.goalRequestsExecution(context.goal()) || (hasRecentExecution && targetLanguage != null))
+                && (textPatternUtils.goalRequestsExecution(context.goal()) || (hasRecentExecution && targetLanguage != null))
                 && !context.isForceFinishRetry()) {
             CodeBlock priorCode = extractLatestCodeBlock(cappedHistory);
 
@@ -124,7 +125,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal, isTruncationRecovery);
 
         String finalGoal = goal;
-        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(context.goal()) && !context.isForceFinishRetry()) {
+        if (AgentRoleEnum.CODER.id().equals(agentRole) && textPatternUtils.goalRequestsExecution(context.goal()) && !context.isForceFinishRetry()) {
              // Only nudge if we haven't already nudged via an OBSERVE correction this turn
              long observeCount = cappedHistory == null ? 0 : cappedHistory.stream()
                      .skip(context.getCheckpointRestoreOffset())
@@ -328,7 +329,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                         }
 
                         if (partialCode != null && !partialCode.isBlank()) {
-                            String lang = TextPatternUtils.inferLanguage(partialCode);
+                            String lang = textPatternUtils.inferLanguage(partialCode);
 
                             // 🟢 Bug-2 Fix: Check if the recovered code matches the requested language.
                             // This prevents surfacing old Java error text when the user asked for Go.
@@ -400,7 +401,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                         // LLM wrote code explanation instead of executing.
                         // Force back to tool calling and quote any prior error from history.
-                        if (TextPatternUtils.goalRequestsExecution(goal)) {
+                        if (textPatternUtils.goalRequestsExecution(goal)) {
                             log.warnf("[LangChainReasoningEngine] Goal='%s' requests execution but LLM " +
                                             "returned prose for session %s - injecting correction",
                                     goal, sessionId);
@@ -458,7 +459,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                         // §7.40: Coder hard-correction - if model returns prose for an execution goal,
                         // force it back into tool-calling mode immediately.
-                        if (AgentRoleEnum.CODER.id().equals(agentRole) && TextPatternUtils.goalRequestsExecution(goal)
+                        if (AgentRoleEnum.CODER.id().equals(agentRole) && textPatternUtils.goalRequestsExecution(goal)
                                 && proseIsUnexecutedCodePlan(extractedProse)) {
                             log.warnf("[LangChainReasoningEngine] Coder produced prose for execution goal '%s' " +
                                     "in session %s - injecting hard-tool correction", goal, sessionId);
@@ -532,7 +533,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         // "execution intent", and we haven't executed it for this language yet, intercept.
         if (ReasoningStep.FINISH.equals(parsedStep.action()) 
                 && AgentRoleEnum.CODER.id().equals(agentRole)
-                && TextPatternUtils.goalRequestsExecution(context.goal())
+                && textPatternUtils.goalRequestsExecution(context.goal())
                 && targetLanguage != null
                 && !context.isForceFinishRetry()) {
             
@@ -856,7 +857,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             // If a specifier was present but unrecognized (e.g. ```rust), we keep it null
             // to avoid mis-detecting it as another language via content scanning.
             if (language == null && (rawSpecifier == null || rawSpecifier.isBlank()) && !code.isBlank()) {
-                language = TextPatternUtils.inferLanguage(code);
+                language = textPatternUtils.inferLanguage(code);
             }
 
             if (language != null && !code.isBlank()) {

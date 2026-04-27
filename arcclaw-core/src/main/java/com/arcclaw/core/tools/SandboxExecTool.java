@@ -16,6 +16,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
@@ -27,35 +28,13 @@ import org.jboss.logging.Logger;
 
 /**
  * SandboxExecTool - executes user-submitted code inside an isolated Podman container.
- *
- * ┌─────────────────────────────────────────────────────────────────────┐
- * │  Java execution architecture (WHY we compile on host, run in JRE)  │
- * │                                                                     │
- * │  Option A - java --source 21 inside container (REJECTED):          │
- * │    Requires JDK inside the container image. JEP 330 (--source) is  │
- * │    a "source launcher" that internally calls javax.tools.JavaCompiler│
- * │    before running. Even though no .class files land on disk, the   │
- * │    compiler API must be present - it ships only with the JDK, not  │
- * │    the JRE. Using openjdk21-jdk adds ~200MB to the sandbox image   │
- * │    with no security or runtime benefit.                             │
- * │                                                                     │
- * │  Option B - compile on host, run .class in JRE (CHOSEN):           │
- * │    ArcClaw always runs on a full JDK (Quarkus requires it).        │
- * │    We use the host's javac (from java.home) to compile .java →     │
- * │    .class into the workspace dir. The container mounts that dir     │
- * │    read-only and runs: java -cp /workspace ClassName               │
- * │    The JRE is sufficient for this - no compiler needed in image.   │
- * │    Compiler errors surface immediately as tool failures with the    │
- * │    real javac output, not a cryptic container error.                │
- * │                                                                     │
- * │  WHY NOT openjdk25 in Dockerfile:                                  │
- * │    JDK 25 is not yet packaged for Alpine stable (3.21). It is only │
- * │    available on Alpine edge, which is the rolling-release branch   │
- * │    - too unstable for a security-sensitive sandbox image. JDK 21   │
- * │    is the current LTS and the correct choice.                       │
- * └─────────────────────────────────────────────────────────────────────┘
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "sandbox_exec",
+    description = "Execute code in an isolated sandbox",
+    defaultRoles = {"coder", "debugger"}
+)
 public class SandboxExecTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(SandboxExecTool.class);

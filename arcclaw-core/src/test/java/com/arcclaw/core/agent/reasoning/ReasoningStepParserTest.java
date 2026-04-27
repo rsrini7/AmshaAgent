@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -28,7 +29,7 @@ class ReasoningStepParserTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        parser = new ReasoningStepParser(objectMapper);
+        parser = new ReasoningStepParser(objectMapper, new TextPatternUtils());
     }
 
     @Test

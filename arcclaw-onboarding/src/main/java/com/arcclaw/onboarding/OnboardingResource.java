@@ -27,6 +27,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.api.AgentResponseMapper;
+import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
@@ -48,6 +50,7 @@ import com.arcclaw.onboarding.spi.OnboardingStepProvider;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.logging.Logger;
 
 @Path("/onboarding")
@@ -80,6 +83,7 @@ public class OnboardingResource {
     );
 
     @GET @Path("/status")
+    @Operation(summary = "Get current onboarding session status and step")
     public Response status(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
@@ -98,6 +102,7 @@ public class OnboardingResource {
     }
 
     @POST @Path("/step/1")
+    @Operation(summary = "Start onboarding and move to Provider selection")
     public Response step1(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
@@ -106,7 +111,9 @@ public class OnboardingResource {
 
         if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.PROVIDER)) {
             log.warnf("Forbidden jump: sid=%s tries to reach PROVIDER while at %s", sid, state.currentStep);
-            return Response.status(403).cookie(createCookie(sid)).build();
+            return Response.status(403)
+                .entity(new ArcClawErrorResponse("Forbidden", "Onboarding step out of sequence"))
+                .cookie(createCookie(sid)).build();
         }
 
         state.advance();
@@ -115,6 +122,7 @@ public class OnboardingResource {
 
     @POST @Path("/step/2")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Select LLM provider and model")
     public Response step2(Step2Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
@@ -123,7 +131,9 @@ public class OnboardingResource {
 
         if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.CREDENTIALS)) {
             log.warnf("Forbidden jump: sid=%s tries to reach CREDENTIALS while at %s", sid, state.currentStep);
-            return Response.status(403).cookie(createCookie(sid)).build();
+            return Response.status(403)
+                .entity(new AgentResponseMapper.ErrorResponse("Forbidden", "Onboarding step out of sequence"))
+                .cookie(createCookie(sid)).build();
         }
 
         String model = (req.model() != null && !req.model().isBlank())
@@ -140,13 +150,16 @@ public class OnboardingResource {
     @POST @Path("/step/3")
     @Consumes(MediaType.APPLICATION_JSON)
     @RunOnVirtualThread
+    @Operation(summary = "Validate credentials and move to System Prompt step")
     public Response step3(Step3Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
 
         if (!state.canProceedTo(OnboardingSessionRegistry.OnboardingState.Step.SYSTEM_PROMPT)) {
             log.warnf("Forbidden jump: sid=%s tries to reach SYSTEM_PROMPT while at %s", sid, state.currentStep);
-            return Response.status(403).cookie(createCookie(sid)).build();
+            return Response.status(403)
+                .entity(new ArcClawErrorResponse("Forbidden", "Onboarding step out of sequence"))
+                .cookie(createCookie(sid)).build();
         }
 
         String provider = state.selectedProvider;
@@ -182,12 +195,15 @@ public class OnboardingResource {
 
     @POST @Path("/step/4")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Configure default system prompt and move to MCP step")
     public Response step4(Step4Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
 
         if (!state.canProceedTo(Step.MCP))
-            return Response.status(403).cookie(createCookie(sid)).build();
+            return Response.status(403)
+                .entity(new ArcClawErrorResponse("Forbidden", "Onboarding step out of sequence"))
+                .cookie(createCookie(sid)).build();
 
         String prompt = (req.systemPrompt() == null || req.systemPrompt().isBlank())
             ? "You are ArcClaw, a helpful AI assistant."
@@ -201,12 +217,15 @@ public class OnboardingResource {
 
     @POST @Path("/step/5")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Register MCP servers and complete onboarding")
     public Response step5(Step5Request req, @CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
 
         if (!state.canProceedTo(Step.COMPLETE))
-            return Response.status(403).cookie(createCookie(sid)).build();
+            return Response.status(403)
+                .entity(new ArcClawErrorResponse("Forbidden", "Onboarding step out of sequence"))
+                .cookie(createCookie(sid)).build();
 
         List<String> registered = new ArrayList<>();
 
@@ -240,6 +259,7 @@ public class OnboardingResource {
     }
 
     @GET @Path("/complete")
+    @Operation(summary = "Finalize setup and retrieve API keys for the UI")
     public Response complete(@CookieParam(COOKIE_NAME) Cookie cookie, @Context HttpHeaders headers) {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);

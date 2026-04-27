@@ -15,11 +15,13 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.mcp.transport.McpConnectionException;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 
 /**
  * REST admin endpoint for managing outbound MCP client connections at runtime.
@@ -74,20 +76,21 @@ public class McpConnectResource {
      */
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Connect to a remote MCP server (HTTP/SSE)")
     public Response connect(ConnectRequest request) {
         if (!config.serverEnabled()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-                    .entity(Map.of("error", "MCP server is disabled - enable arcclaw.mcp.server-enabled"))
+                    .entity(new ArcClawErrorResponse("MCP server is disabled", "enable arcclaw.mcp.server-enabled"))
                     .build();
         }
         if (request == null || request.name() == null || request.name().isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "name is required"))
+                    .entity(new ArcClawErrorResponse("name is required"))
                     .build();
         }
         if (request.url() == null || request.url().isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "url is required"))
+                    .entity(new ArcClawErrorResponse("url is required"))
                     .build();
         }
 
@@ -99,12 +102,7 @@ public class McpConnectResource {
             mcpClientService.connect(request.name(), request.url());
         } catch (McpConnectionException e) {
             return Response.status(Response.Status.BAD_GATEWAY)
-                    .entity(Map.of(
-                        "error", "MCP handshake failed",
-                        "detail", e.getMessage(),
-                        "name", request.name(),
-                        "url", request.url()
-                    ))
+                    .entity(new ArcClawErrorResponse("MCP handshake failed", e.getMessage()))
                     .build();
         }
 
@@ -126,6 +124,7 @@ public class McpConnectResource {
      */
     @DELETE
     @Path("/{name}")
+    @Operation(summary = "Disconnect an MCP server and deregister its tools")
     public Response disconnect(@PathParam("name") String name) {
         long toolsBefore = registry.getAll().stream()
                 .filter(t -> t.mcpServerName().equals(name))
@@ -133,7 +132,7 @@ public class McpConnectResource {
 
         if (toolsBefore == 0) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", "No connected server found with name: " + name))
+                    .entity(new ArcClawErrorResponse("No connected server found", "name: " + name))
                     .build();
         }
 
@@ -152,6 +151,7 @@ public class McpConnectResource {
      * Groups tools by mcpServerName - each unique name is one connected server.
      */
     @GET
+    @Operation(summary = "List all currently connected remote MCP servers")
     public Response listConnected() {
         var grouped = registry.getAll().stream()
                 .collect(Collectors.groupingBy(

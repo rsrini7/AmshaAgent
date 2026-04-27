@@ -21,6 +21,7 @@ import java.util.zip.ZipFile;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Playwright;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -394,7 +395,9 @@ public class PlaywrightBrowserInstaller {
                     return;
                 }
                 log.infof("Playwright driver version changed: %s → %s, re-extracting...", extracted, currentVersion);
-            } catch (IOException ignored) {}
+            } catch (IOException e) {
+                log.debugf("Failed to read Playwright driver version: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         // Find driver-bundle JAR
@@ -442,9 +445,13 @@ public class PlaywrightBrowserInstaller {
                     Manifest mf = new Manifest(in);
                     String ver = mf.getMainAttributes().getValue("Implementation-Version");
                     if (ver != null && ver.matches("\\d+\\.\\d+\\.\\d+")) return ver;
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    log.debugf("Failed to read Playwright manifest: %s", ExceptionUtils.getRootCauseMessage(e));
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.debugf("Failed to list Playwright manifest resources: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
 
         // 2. Fallback: scan Maven local repo for known driver-bundle version
         Path m2 = Path.of(System.getProperty("user.home"), ".m2", "repository",
@@ -456,7 +463,9 @@ public class PlaywrightBrowserInstaller {
                     .filter(v -> v.matches("\\d+\\.\\d+\\.\\d+"))
                     .sorted(Comparator.reverseOrder())
                     .findFirst().orElse("unknown");
-            } catch (IOException ignored) {}
+            } catch (IOException e) {
+                log.debugf("Failed to read Playwright driver version: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
         return "unknown";
     }

@@ -35,6 +35,7 @@ import com.arcclaw.core.util.MdcManaged;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import io.smallrye.common.annotation.Identifier;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -294,7 +295,9 @@ public class AgentLoop {
                 agentStore.markFailed(cp.getId(), "COMPLIANCE_VIOLATION: " + msg,
                     "COMPLIANCE_VIOLATION", traceId, ClassUtils.getCleanName(cve))
             );
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.debugf("Failed to mark checkpoint failed for session %s: %s", sessionId, ExceptionUtils.getRootCauseMessage(e));
+        }
         return result;
     }
 
@@ -309,7 +312,9 @@ public class AgentLoop {
                 agentStore.markFailed(cp.getId(), "SYSTEM_ERROR: " + errMsg,
                     "SYSTEM_ERROR", traceId, ClassUtils.getCleanName(e))
             );
-        } catch (Exception ignored) {}
+        } catch (Exception ex) {
+            log.debugf("Failed to mark checkpoint failed for session %s: %s", sessionId, ExceptionUtils.getRootCauseMessage(ex));
+        }
         return result;
     }
 

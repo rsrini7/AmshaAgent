@@ -20,7 +20,7 @@ import com.arcclaw.core.security.VaultKey;
 import org.jboss.logging.Logger;
 
 /**
- * High-priority reflex that intercepts "vault KEY=VALUE" commands for known vault keys.
+ * High-priority reflex that intercepts "vault KEY=VALUE" reflexs for known vault keys.
  * This prevents secrets from being sent to the LLM and stored in the RAG knowledge base.
  */
 @ApplicationScoped
@@ -29,7 +29,7 @@ public class VaultStoreReflex implements AgentReflex {
 
     private static final Logger log = Logger.getLogger(VaultStoreReflex.class);
 
-    // Matches commands like "vault ARCCLAW_TOOLS_BRAVE_API_KEY=sk-xxxx" or "vault ... --force"
+    // Matches reflexs like "vault ARCCLAW_TOOLS_BRAVE_API_KEY=sk-xxxx" or "vault ... --force"
     // Supports various dash types (-, --, -) to handle platform auto-formatting.
     private static final Pattern VAULT_STORE_PATTERN =
             Pattern.compile("^vault\\s+(\\w+)\\s*=\\s*(.+?)(?:\\s+([--]{1,2}force))?$", Pattern.CASE_INSENSITIVE);
@@ -86,7 +86,7 @@ public class VaultStoreReflex implements AgentReflex {
             try (var _ = existing.get()) {
                 if (!force) {
                     return ReflexResult.respond("⚠️ Secret `" + keyName + "` already exists in vault.\n" +
-                            "To overwrite it, append `--force` to your command:\n" +
+                            "To overwrite it, append `--force` to your reflex:\n" +
                             "`vault " + keyName + "=" + value + " --force`", context);
                 }
             }

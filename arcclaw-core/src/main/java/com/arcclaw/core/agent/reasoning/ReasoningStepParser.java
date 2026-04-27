@@ -36,14 +36,17 @@ public class ReasoningStepParser {
             Pattern.compile("\\b(at\\s+\\d{1,2}(:\\d{2})?\\s*(am|pm)?|every\\s+(day|hour|minute|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b");
 
     private final ObjectMapper objectMapper;
+    private final TextPatternUtils textPatternUtils;
 
     protected ReasoningStepParser() {
         this.objectMapper = null;
+        this.textPatternUtils = null;
     }
 
     @Inject
-    public ReasoningStepParser(ObjectMapper objectMapper) {
+    public ReasoningStepParser(ObjectMapper objectMapper, TextPatternUtils textPatternUtils) {
         this.objectMapper = objectMapper;
+        this.textPatternUtils = textPatternUtils;
     }
 
     public ReasoningStep parse(String sessionId, String agentRole, ChatResponse response) {
@@ -64,11 +67,11 @@ public class ReasoningStepParser {
                 // ── Execution-Follow-Up Interception (§Bug-Fix-1) ──
                 // If the tool is sandbox_exec, but the user DID NOT ask to execute or run code,
                 // convert this call into a FINISH step with the code from params.
-                if (ToolCapability.SANDBOX_EXEC.toolName().equals(req.name()) && !TextPatternUtils.goalRequestsExecution(rawGoal)) {
+                if (ToolCapability.SANDBOX_EXEC.toolName().equals(req.name()) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
                     String code = recoverCodeForDisplay(req.arguments());
                     if (code != null && !code.isBlank()) {
                         log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
-                        String language = TextPatternUtils.inferLanguage(code);
+                        String language = textPatternUtils.inferLanguage(code);
                         String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
                         return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, 
                                 Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
@@ -311,7 +314,7 @@ public class ReasoningStepParser {
         }
 
         if (language == null || language.isBlank()) {
-            language = TextPatternUtils.inferLanguage(code);
+            language = textPatternUtils.inferLanguage(code);
         }
 
         if (code.isBlank() || language == null || language.isBlank()) return Map.of();

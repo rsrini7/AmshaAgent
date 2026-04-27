@@ -23,6 +23,7 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.UnicastProcessor;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 /**
@@ -55,6 +56,7 @@ public class ChatStreamResource {
     @GET
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Stream agent status changes and keep-alive heartbeats via SSE")
     public Multi<AgentEvent> stream() {
         Multi<AgentEvent> heartbeat = Multi.createFrom().ticks().every(Duration.ofSeconds(20))
                 .map(t -> new AgentEvent("heartbeat", "system", "keep-alive"));
@@ -66,6 +68,7 @@ public class ChatStreamResource {
     @GET
     @Path("/history/{sessionId}")
     @Produces(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Retrieve full chat history for a session, enriched with approval IDs")
     public List<ChatMessageDto> history(@PathParam("sessionId") String sessionId) {
 
         final Long actionIdForPause = statefulAgentStore.findLatestAwaitingApproval(sessionId)

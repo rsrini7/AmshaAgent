@@ -146,7 +146,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 sb.append("• `/%s %s` - (Background) ".formatted(getActionName().toLowerCase(), c.id))
                   .append(c.goal).append("\n");
             }
-            sb.append("\nPlease reply with the specific command.");
+            sb.append("\nPlease reply with the specific reflex.");
             return sb.toString();
         }
         return null;

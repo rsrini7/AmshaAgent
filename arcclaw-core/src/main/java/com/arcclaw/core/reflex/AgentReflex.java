@@ -33,7 +33,7 @@ public interface AgentReflex {
 
     /**
      * Compile-safe audit event type this reflex produces when it fires.
-     * Default covers all simple command reflexes (status, history, reset, halt, cron, etc.)
+     * Default covers all simple reflex reflexes (status, history, reset, halt, cron, etc.)
      */
     default SecurityEventType auditEventType() {
         return SecurityEventType.REFLEX_COMMAND;
@@ -44,7 +44,7 @@ public interface AgentReflex {
      * Default uses the reflex class name stripped of CDI proxy suffixes.
      */
     default String auditDetail(String sessionId, String input) {
-        return "command=" + ClassUtils.getCleanName(this);
+        return "reflex=" + ClassUtils.getCleanName(this);
     }
 
     /**

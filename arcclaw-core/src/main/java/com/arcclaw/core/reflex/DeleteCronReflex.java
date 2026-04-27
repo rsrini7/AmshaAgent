@@ -18,7 +18,7 @@ import com.arcclaw.core.state.AgentCronRepository;
  * Handles three input forms:
  *   - "deletecron <id>"       - REST reflex / direct
  *   - "/deletecron <id>"      - slash form
- *   - "/cron delete <id>"     - Telegram command dispatch form
+ *   - "/cron delete <id>"     - Telegram reflex dispatch form
  */
 @ApplicationScoped
 @ReflexPriority(500)
@@ -50,7 +50,7 @@ public class DeleteCronReflex implements AgentReflex {
 
         String uid = WorkspaceScopeHolder.USER_ID.get();
 
-        // Normalize prefix - extract cronId regardless of which command form was used
+        // Normalize prefix - extract cronId regardless of which reflex form was used
         String normalized = input.trim();
         String lower = normalized.toLowerCase();
         int prefixLen;

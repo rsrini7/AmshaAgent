@@ -47,6 +47,7 @@ import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
@@ -110,12 +111,13 @@ class AgentStateMachineRunnerTest {
         codePolicy            = mock(CodeGenerationPolicy.class);
         correctionStrategy    = mock(CorrectionStrategy.class);
         objectMapper = mock(ObjectMapper.class);
+        TextPatternUtils textPatternUtils = new TextPatternUtils();
 
-        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper);
+        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper, textPatternUtils);
 
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager(agentStore, agentSseService, new ObjectMapper());
 
-        EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, new ObjectMapper(), rateLimitTracker, agentStore, 4, 6);
+        EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, new ObjectMapper(), rateLimitTracker, agentStore, 4, 6, 15, 10);
 
         ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor);
 

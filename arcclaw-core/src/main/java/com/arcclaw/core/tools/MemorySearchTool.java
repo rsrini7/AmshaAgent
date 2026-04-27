@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.Fts5QueryUtil;
@@ -27,6 +28,11 @@ import org.jboss.logging.Logger;
  * never from LLM parameters. The LLM can only control the search query.
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "memory_search",
+    description = "Semantic search across historical session memories",
+    defaultRoles = {"architect", "coordinator", "researcher", "synthesizer"}
+)
 public class MemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(MemorySearchTool.class);

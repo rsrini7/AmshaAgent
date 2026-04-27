@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -22,6 +23,11 @@ import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "ingest_document",
+    description = "Ingest a document into the RAG knowledge base",
+    defaultRoles = {"coordinator", "synthesizer"}
+)
 public class IngestDocumentTool implements AgentTool {
 
     @Inject MemoryRetrievalPort memoryPort;

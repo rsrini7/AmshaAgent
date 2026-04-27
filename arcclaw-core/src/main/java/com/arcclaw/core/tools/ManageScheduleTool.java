@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.message.UserMessages;
@@ -28,6 +29,11 @@ import dev.langchain4j.model.chat.request.json.JsonStringSchema;
  * and deletion is tenant-isolated (user can only delete their own jobs).
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "manage_schedule",
+    description = "Manage (list/delete) existing scheduled tasks",
+    defaultRoles = {"coordinator", "synthesizer"}
+)
 public class ManageScheduleTool implements AgentTool {
 
     @Inject

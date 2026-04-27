@@ -15,6 +15,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.CronTaskScheduled;
@@ -59,6 +60,11 @@ import org.jboss.logging.Logger;
  *         schema parse correction. Boolean schema makes LLMs emit the JSON literal.
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "schedule_task",
+    description = "Schedule future or continuous background tasks",
+    defaultRoles = {"coordinator", "synthesizer"}
+)
 public class ScheduleTaskTool implements AgentTool {
 
     public static final String NAME = ToolCapability.SCHEDULE_TASK.toolName();

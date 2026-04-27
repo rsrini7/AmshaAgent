@@ -13,7 +13,7 @@ import com.arcclaw.core.reflex.ReflexPriority;
 import com.arcclaw.core.reflex.ReflexResult;
 
 /**
- * Handles the {@code /skills} command.
+ * Handles the {@code /skills} reflex.
  * <p>
  * Lists all currently loaded skills mapped into the {@link SkillRegistry}.
  */

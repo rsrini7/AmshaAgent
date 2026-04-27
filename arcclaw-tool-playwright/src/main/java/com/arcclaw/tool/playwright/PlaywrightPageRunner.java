@@ -31,6 +31,7 @@ import com.microsoft.playwright.options.ScreenshotScale;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -48,30 +49,23 @@ public class PlaywrightPageRunner {
     @ConfigProperty(name = "arcclaw.tools.playwright.selector-wait-ms", defaultValue = "2000")
     int selectorWaitMs;
 
+    @ConfigProperty(name = "arcclaw.tools.playwright.max-screenshot-bytes", defaultValue = "1048576")
+    int maxScreenshotBytes;
+
+    @ConfigProperty(name = "arcclaw.tools.playwright.network-idle-ratio", defaultValue = "0.30")
+    double networkIdleRatio;
+
+    @ConfigProperty(name = "arcclaw.tools.playwright.run-future-buffer-ms", defaultValue = "5000")
+    long runFutureBufferMs;
+
     private static final Pattern SAFE_URL_PATTERN =
         Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
-
-    private static final int MAX_SCREENSHOT_BYTES = 1_048_576; // 1 MB
-
-    /**
-     * NETWORKIDLE budget = 30% of caller timeoutMs.
-     * Keeps NETWORKIDLE from eating the entire budget on JS-heavy SPAs.
-     * Example: timeoutMs=30000 → 9000ms NETWORKIDLE, 4500ms LOAD fallback.
-     */
-    private static final double NETWORK_IDLE_RATIO = 0.30;
 
     /**
      * LOAD fallback budget = 15% of caller timeoutMs.
      * Applied only when NETWORKIDLE times out.
      */
     private static final double LOAD_FALLBACK_RATIO = 0.15;
-
-    /**
-     * Extra buffer added to the caller-supplied timeoutMs when waiting for the
-     * playwrightThread future - gives Playwright time to throw its own timeout
-     * before the outer Future.get() fires.
-     */
-    private static final long RUN_FUTURE_BUFFER_MS = 5_000L;
 
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
     boolean enabled;
@@ -140,7 +134,11 @@ public class PlaywrightPageRunner {
             closeBrowserQuietly(browser, "destroy");
             browser = null;
             if (playwright != null) {
-                try { playwright.close(); } catch (Exception ignored) {}
+                try { 
+                    playwright.close(); 
+                } catch (Exception e) {
+                    log.debugf("Failed to close playwright during destroy: %s", ExceptionUtils.getRootCauseMessage(e));
+                }
                 playwright = null;
             }
         });
@@ -191,7 +189,7 @@ public class PlaywrightPageRunner {
         try {
             return playwrightThread
                 .submit(() -> doRun(url, action, selector, timeoutMs))
-                .get(timeoutMs + RUN_FUTURE_BUFFER_MS, TimeUnit.MILLISECONDS);
+                .get(timeoutMs + runFutureBufferMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (cause instanceof PlaywrightException pe) throw pe;
@@ -200,7 +198,7 @@ public class PlaywrightPageRunner {
                 (cause != null ? cause.getMessage() : e.getMessage()));
         } catch (TimeoutException e) {
             throw new PlaywrightException(
-                "Playwright run timed out after " + (timeoutMs + RUN_FUTURE_BUFFER_MS) + "ms for: " + url);
+                "Playwright run timed out after " + (timeoutMs + runFutureBufferMs) + "ms for: " + url);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new PlaywrightException("Playwright run interrupted for: " + url);
@@ -215,7 +213,7 @@ public class PlaywrightPageRunner {
 
         // Derive proportional sub-budgets from the caller's total timeoutMs.
         // This prevents NETWORKIDLE from eating the entire budget on JS-heavy SPAs.
-        int networkIdleTimeoutMs = (int) (timeoutMs * NETWORK_IDLE_RATIO);
+        int networkIdleTimeoutMs = (int) (timeoutMs * networkIdleRatio);
         int loadFallbackTimeoutMs = (int) (timeoutMs * LOAD_FALLBACK_RATIO);
 
         long t0 = System.currentTimeMillis();
@@ -251,7 +249,9 @@ public class PlaywrightPageRunner {
                 Thread.sleep(500); 
                 page.evaluate("window.scrollBy(0, window.innerHeight)");
                 Thread.sleep(500);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.debugf("Failed human-like interaction for %s: %s", url, ExceptionUtils.getRootCauseMessage(e));
+            }
 
             String result = switch (action) {
                 case "screenshot" -> captureScreenshot(page);
@@ -347,7 +347,7 @@ public class PlaywrightPageRunner {
 
     private String captureScreenshot(Page page) {
         byte[] png = page.screenshot(new Page.ScreenshotOptions().setFullPage(false));
-        if (png.length > MAX_SCREENSHOT_BYTES) {
+        if (png.length > maxScreenshotBytes) {
             png = page.screenshot(new Page.ScreenshotOptions().setFullPage(false).setScale(ScreenshotScale.CSS));
         }
         return Base64.getEncoder().encodeToString(png);
