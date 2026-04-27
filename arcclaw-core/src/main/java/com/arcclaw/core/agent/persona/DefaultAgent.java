@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.structured.SynthesisResult;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentPersona;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.structured.StructuredOutputEngine;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,19 +28,19 @@ public class DefaultAgent implements Agent {
 
     private static final Logger log = Logger.getLogger(DefaultAgent.class);
 
-    private final AgentRoleEnum roleEnum;
+    private final AgentPersona persona;
     private final Supplier<Template> templateSupplier;
     private final String defaultTimezone;
     private final StructuredOutputEngine structuredOutputEngine;
     private final ObjectMapper objectMapper;
 
     public DefaultAgent(
-            AgentRoleEnum roleEnum,
+            AgentPersona persona,
             Supplier<Template> templateSupplier,
             String defaultTimezone,
             StructuredOutputEngine structuredOutputEngine,
             ObjectMapper objectMapper) {
-        this.roleEnum = roleEnum;
+        this.persona = persona;
         this.templateSupplier = templateSupplier;
         this.defaultTimezone = defaultTimezone;
         this.structuredOutputEngine = structuredOutputEngine;
@@ -48,12 +49,13 @@ public class DefaultAgent implements Agent {
 
     @Override
     public String role() {
-        return roleEnum.toScopedName();
+        return persona.roleId();
     }
 
     @Override
     public String systemPrompt(AgentExecutionContext context) {
         TemplateInstance instance = templateSupplier.get().instance();
+        AgentRoleEnum roleEnum = new AgentRoleEnum(persona.roleId());
         instance.data("tools", String.join(", ", roleEnum.definition().toolNames()));
 
         // Injection §7.38: hydrated at render-time for deterministic relative scheduling.
@@ -81,12 +83,12 @@ public class DefaultAgent implements Agent {
 
     @Override
     public List<String> allowedTools() {
-        return List.copyOf(roleEnum.definition().toolNames());
+        return List.copyOf(new AgentRoleEnum(persona.roleId()).definition().toolNames());
     }
 
     @Override
     public AgentResult synthesize(String sessionId, String combinedContext, List<ReasoningStep> history) {
-        if (!AgentRoleEnum.SYNTHESIZER.id().equals(roleEnum.id())) {
+        if (persona != AgentPersona.DATTATREYA) {
             return Agent.super.synthesize(sessionId, combinedContext, history);
         }
 
@@ -95,7 +97,7 @@ public class DefaultAgent implements Agent {
                 sessionId, role(), combinedContext, "SynthesisFunction", SynthesisResult.class);
 
         log.infof("[%s] Synthesis complete: %d contributions integrated.",
-                roleEnum.id(),
+                persona.roleId(),
                 result.contributions() != null ? result.contributions().size() : 0);
 
         try {
