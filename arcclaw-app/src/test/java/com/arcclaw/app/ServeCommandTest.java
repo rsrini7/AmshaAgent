@@ -36,6 +36,7 @@ class ServeCommandTest {
             return Map.of(
                 "arcclaw.channel.telegram.enabled", "true",
                 "arcclaw.channel.telegram.bot-token", "mock-token-test",
+                "camel.component.telegram.base-uri", "http://localhost:9999/dummy",
                 "quarkus.mcp.server.stdio.enabled", "false",
                 "quarkus.opentelemetry.enabled", "false"
             );

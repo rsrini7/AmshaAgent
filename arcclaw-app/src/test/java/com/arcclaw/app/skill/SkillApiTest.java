@@ -86,7 +86,7 @@ class SkillApiTest {
             .when().post("/api/v1/skills")
             .then()
             .statusCode(400)
-            .body("message", containsString("exactly two ---"));
+            .body("detail", containsString("exactly two ---"));
     }
 
     @Test
