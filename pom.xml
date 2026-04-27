@@ -36,6 +36,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <quarkus.config.build-time-config-sources>false</quarkus.config.build-time-config-sources>
+    <maven.surefire.argLine>-Xmx3072m --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</maven.surefire.argLine>
   </properties>
 
   <dependencyManagement>
@@ -154,7 +155,7 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.5.5</version>
           <configuration>
-            <argLine>-Xmx2048m --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
+            <argLine>${maven.surefire.argLine}</argLine>
             <systemPropertyVariables>
               <arcclaw.data-dir>./target</arcclaw.data-dir>
               <arcclaw.workspace.root-dir>./target/workspaces</arcclaw.workspace.root-dir>

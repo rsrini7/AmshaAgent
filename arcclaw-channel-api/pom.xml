@@ -40,18 +40,6 @@
         </configuration>
       </plugin>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED -Dnet.bytebuddy.experimental=true -Djdk.net.URLClassPath.disableClassPathURLCheck=true --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
-          <!-- Kill the forked JVM immediately after System.exit instead of waiting 30s -->
-          <shutdown>kill</shutdown>
-          <!-- Ensure each test module gets a fresh JVM -->
-          <forkCount>1</forkCount>
-          <reuseForks>true</reuseForks>
-        </configuration>
-      </plugin>
-      <plugin>
         <groupId>io.smallrye</groupId>
         <artifactId>jandex-maven-plugin</artifactId>
         <version>3.5.3</version>
