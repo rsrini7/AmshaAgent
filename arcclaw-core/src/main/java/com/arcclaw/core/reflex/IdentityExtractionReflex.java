@@ -58,13 +58,32 @@ public class IdentityExtractionReflex implements AgentReflex {
 
     @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
-        extractAndIngest(input, NAME_PATTERN, IdentityLabel.USER_NAME);
-        extractAndIngest(input, ALIAS_PATTERN, IdentityLabel.USER_ALIAS);
-        extractAndIngest(input, HOBBY_PATTERN, IdentityLabel.USER_HOBBY);
-        extractAndIngest(input, PREF_PATTERN, IdentityLabel.USER_PREF);
-        extractAndIngest(input, LIKE_PATTERN, IdentityLabel.USER_LIKE);
-        extractAndIngest(input, EMPLOYER_PATTERN, IdentityLabel.USER_EMPLOYER);
-        extractAndIngest(input, LOCATION_PATTERN, IdentityLabel.USER_LOCATION);
+        // §Bug-4 Fix: Prevent label pollution by splitting compound sentences.
+        String[] clauses = input.split("(?i)\\b(and|but)\\b|[,\\.]");
+        boolean prevWasFirstPerson = false;
+        
+        for (String rawClause : clauses) {
+            String clause = rawClause.trim();
+            if (clause.isBlank()) continue;
+            
+            // Re-inject dropped pronouns for compound verbs (e.g. "i am Srini and love to study")
+            String lower = clause.toLowerCase();
+            boolean isFirstPerson = lower.startsWith("i ") || lower.startsWith("my ");
+            
+            if (!isFirstPerson && prevWasFirstPerson) {
+                clause = "i " + clause;
+            }
+            
+            prevWasFirstPerson = isFirstPerson || (!isFirstPerson && prevWasFirstPerson);
+
+            extractAndIngest(clause, NAME_PATTERN, IdentityLabel.USER_NAME);
+            extractAndIngest(clause, ALIAS_PATTERN, IdentityLabel.USER_ALIAS);
+            extractAndIngest(clause, HOBBY_PATTERN, IdentityLabel.USER_HOBBY);
+            extractAndIngest(clause, PREF_PATTERN, IdentityLabel.USER_PREF);
+            extractAndIngest(clause, LIKE_PATTERN, IdentityLabel.USER_LIKE);
+            extractAndIngest(clause, EMPLOYER_PATTERN, IdentityLabel.USER_EMPLOYER);
+            extractAndIngest(clause, LOCATION_PATTERN, IdentityLabel.USER_LOCATION);
+        }
 
         // Forward to the LLM without blocking
         return ReflexResult.forward(context);

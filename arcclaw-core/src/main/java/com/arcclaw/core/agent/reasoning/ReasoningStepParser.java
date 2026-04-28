@@ -225,17 +225,45 @@ public class ReasoningStepParser {
     private Map<String, Object> doDeserialize(String json) throws Exception {
         Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
         if (parsed != null) {
-            parsed.entrySet().forEach(entry -> {
-                if (entry.getValue() instanceof String s) {
-                    if ("true".equalsIgnoreCase(s)) {
-                        entry.setValue(Boolean.TRUE);
-                    } else if ("false".equalsIgnoreCase(s)) {
-                        entry.setValue(Boolean.FALSE);
-                    }
-                }
-            });
+            coerceBooleans(parsed);
         }
         return parsed != null ? parsed : Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void coerceBooleans(Map<String, Object> map) {
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            Object val = entry.getValue();
+            if (val instanceof String s) {
+                if ("true".equalsIgnoreCase(s)) {
+                    entry.setValue(Boolean.TRUE);
+                } else if ("false".equalsIgnoreCase(s)) {
+                    entry.setValue(Boolean.FALSE);
+                }
+            } else if (val instanceof Map) {
+                coerceBooleans((Map<String, Object>) val);
+            } else if (val instanceof List list) {
+                coerceBooleans(list);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void coerceBooleans(List<Object> list) {
+        for (int i = 0; i < list.size(); i++) {
+            Object item = list.get(i);
+            if (item instanceof String s) {
+                if ("true".equalsIgnoreCase(s)) {
+                    list.set(i, Boolean.TRUE);
+                } else if ("false".equalsIgnoreCase(s)) {
+                    list.set(i, Boolean.FALSE);
+                }
+            } else if (item instanceof Map) {
+                coerceBooleans((Map<String, Object>) item);
+            } else if (item instanceof List innerList) {
+                coerceBooleans(innerList);
+            }
+        }
     }
 
     /**

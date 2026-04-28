@@ -41,6 +41,12 @@ public class IntentClassificationService {
         Pattern.CASE_INSENSITIVE
     );
 
+    private static final Pattern SCHEDULE_INTENT_PATTERN = Pattern.compile(
+        "\\b(schedule|cron|run at|run every|run daily|run hourly|every\\s+(hour|minute|day|week|month|\\d+)|daily|hourly|weekly|monthly)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
+
     /**
      * returns true if the text indicates a "write intent" - specifically 
      * for storing information in the long-term memory (ingest_document).
@@ -72,6 +78,15 @@ public class IntentClassificationService {
         if (text == null || text.isBlank()) return false;
         return IDENTITY_QUERY_PATTERN.matcher(text).find();
     }
+
+    /**
+     * Returns true if the goal inherently requires task scheduling.
+     */
+    public boolean isScheduleIntent(String text) {
+        if (text == null || text.isBlank()) return false;
+        return SCHEDULE_INTENT_PATTERN.matcher(text).find();
+    }
+
 
     /**
      * Returns true for short messages that lack any verbs suggesting tool usage.
