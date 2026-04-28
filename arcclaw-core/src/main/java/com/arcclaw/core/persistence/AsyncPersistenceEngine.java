@@ -20,6 +20,7 @@ import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -209,7 +210,9 @@ public class AsyncPersistenceEngine {
                 log.warn("AsyncPersistenceEngine Critical drain interrupted - shutting down.");
             } catch (Exception e) {
                 if (running.get()) {
-                    log.errorf("Unexpected error in critical drain: %s", e.getMessage());
+                    log.errorf("Unexpected error in critical drain: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.debugf("Full stacktrace for critical drain failure: %s", 
+                               ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
                 }
                 if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
                     event.getFuture().completeExceptionally(e);
@@ -239,7 +242,9 @@ public class AsyncPersistenceEngine {
             } catch (Exception e) {
                 // telemetry errors are logged and swallowed
                 if (running.get()) {
-                    log.warnf("TELEMETRY event dropped: %s", e.getMessage());
+                    log.warnf("TELEMETRY event dropped: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.debugf("Full stacktrace for telemetry drop: %s", 
+                               ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
                 }
             }
         }

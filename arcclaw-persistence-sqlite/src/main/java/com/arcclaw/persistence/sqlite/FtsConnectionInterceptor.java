@@ -12,6 +12,7 @@ import jakarta.inject.Singleton;
 
 import io.agroal.api.AgroalPoolInterceptor;
 import io.quarkus.arc.Arc;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.sqlite.SQLiteConnection;
@@ -111,8 +112,12 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                 if (!alreadyLoaded) {
                     SQLiteConnection sqliteConn = connection.unwrap(SQLiteConnection.class);
                     sqliteConn.getDatabase().enable_load_extension(true);
+                    
+                    // Windows hardening: ensure absolute path and forward slashes for SQLite load_extension
+                    String absoluteVecPath = Path.of(vecExtensionPath).toAbsolutePath().toString().replace("\\", "/");
+                    
                     try (Statement vecStmt = connection.createStatement()) {
-                        vecStmt.execute("SELECT load_extension('" + vecExtensionPath + "')");
+                        vecStmt.execute("SELECT load_extension('" + absoluteVecPath + "')");
                     }
                 }
 
@@ -127,18 +132,19 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                 if (warnedUnavailable.compareAndSet(false, true)) {
                     log.warnf("FtsConnectionInterceptor: sqlite-vec unavailable at " +
                               "path '%s' - vector search degraded to FTS5-only. " +
-                              "Ensure the correct platform binary exists under ./lib/",
-                              vecExtensionPath);
+                              "Root cause: %s",
+                              vecExtensionPath, ExceptionUtils.getRootCauseMessage(e));
                 }
-                log.debugf(e, "Full stacktrace for vector load failure: %s",
-                           e.getMessage());
+                log.debugf("Full stacktrace for vector load failure: %s",
+                           ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
             }
 
         } catch (Exception e) {
             if (Arc.container() != null) {
                 log.warnf("FtsConnectionInterceptor: Failed to verify/attach " +
-                          "fts schema: %s", e.getMessage());
-                log.debugf(e, "Full stacktrace for fts attachment failure");
+                          "fts schema: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Full stacktrace for fts attachment failure: %s", 
+                           ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
             }
         }
     }
