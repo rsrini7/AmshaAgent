@@ -87,13 +87,32 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
-                if (d.targetSid.isPresent()) {
-                    String res = handleDelegatePath(d.targetSid.get(), userId, chatId, reason, context, sessionId);
-                    if (res != null) return res;
-                }
-                if (d.cronId.isPresent() && !d.cronId.get().equals(sessionId)) {
-                    String res = handleCronDecision(d.cronId.get(), userId, chatId, reason, context);
-                    if (res != null) return res;
+                if (d.targetId.isPresent()) {
+                    String targetId = d.targetId.get();
+
+                    // Runtime disambiguation: probe session first, then cron.
+                    // 1. Session pending? → requires delegate role for cross-session approval
+                    Optional<AgentCheckpoint> targetPending = statefulAgentStore.findLatestAwaitingApproval(targetId);
+                    if (targetPending.isPresent()) {
+                        if (!delegateGuard.isDelegate(userId)) {
+                            log.warnf("[%s-DELEGATE-DENIED] user=%s attempted session decision for id=%s",
+                                    getActionName(), userId, targetId);
+                            return getNotAuthorizedMessage();
+                        }
+                        return handleDelegateDecision(targetId, userId, chatId, reason, context);
+                    }
+
+                    // 2. Not a session — try as cron task (owner can approve their own tasks)
+                    try {
+                        String cronRes = handleCronDecision(targetId, userId, chatId, reason, context);
+                        if (cronRes != null) return cronRes;
+                    } catch (Exception e) {
+                        log.debugf("Cron resolution failed for %s: %s", targetId, e.getMessage());
+                    }
+
+                    // 3. Nothing found
+                    if (statefulAgentStore.isSessionActive(targetId)) return getTargetNotAwaitingMessage();
+                    return "Target session not found or has no pending approval.";
                 }
                 if (d.toolName.isPresent()) return handlePerToolDecision(d.toolName.get(), sessionId, userId, chatId, reason, context);
 
@@ -111,16 +130,6 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
                 if (!pendingCrons.isEmpty()) return handleCronFallbackGuidance(pendingCrons);
 
-                // §Regression Fix: If an external ID was provided but no path accepted it, provide a relevant error.
-                // Exclude the current session's own ID — it's handled by the general session path above.
-                boolean hasExternalId = (d.targetSid.isPresent() && !d.targetSid.get().equals(sessionId))
-                                     || (d.cronId.isPresent() && !d.cronId.get().equals(sessionId));
-                if (hasExternalId) {
-                    String targetId = d.targetSid.orElse(d.cronId.orElse(null));
-                    if (statefulAgentStore.isSessionActive(targetId)) return getTargetNotAwaitingMessage();
-                    return "❌ Cron task not found.";
-                }
-
                 if (!statefulAgentStore.isSessionActive(sessionId)) {
                     log.debugf("%sReflex: session %s already completed", getActionName(), sessionId);
                     return getNoPendingMessage();
@@ -135,25 +144,19 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         }
     }
 
-    private record DecisionParams(Optional<String> cronId, Optional<String> targetSid, Optional<String> toolName, Optional<String> reasonOpt) {}
+    private record DecisionParams(Optional<String> targetId, Optional<String> toolName, Optional<String> reasonOpt) {}
 
     private DecisionParams extractDecisionParams(ChannelCommand cmd) {
         if (cmd instanceof ChannelCommand.Approve a) {
-            return new DecisionParams(a.cronId(), a.targetSessionId(), a.toolName(), a.reason());
+            return new DecisionParams(a.targetId(), a.toolName(), a.reason());
         } else if (cmd instanceof ChannelCommand.Deny d) {
-            return new DecisionParams(d.cronId(), d.targetSessionId(), d.toolName(), d.reason());
+            return new DecisionParams(d.targetId(), d.toolName(), d.reason());
         }
         return null;
     }
 
-    private String handleDelegatePath(String targetSid, String userId, String chatId, String reason, MessageContext context, String currentSessionId) throws Exception {
-        if (!delegateGuard.isDelegate(userId)) {
-            log.warnf("[%s-DELEGATE-DENIED] admin=%s attempted decision for session=%s",
-                    getActionName(), userId, targetSid);
-            return getNotAuthorizedMessage();
-        }
-        return handleDelegateDecision(targetSid, userId, chatId, reason, context);
-    }
+    // handleDelegatePath removed — authorization gate is now inline in execute().
+    // handleDelegateDecision is called directly after the delegate check passes.
 
     private String handleAmbiguityDetection(Optional<AgentCheckpoint> latestPending, List<AgentCronEntity> pendingCrons) {
         if (latestPending.isPresent() && !pendingCrons.isEmpty()) {

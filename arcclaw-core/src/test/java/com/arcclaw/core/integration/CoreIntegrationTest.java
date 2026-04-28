@@ -58,6 +58,6 @@ class CoreIntegrationTest {
         
         assertTrue(cmd instanceof ChannelCommand.Approve);
         ChannelCommand.Approve app = (ChannelCommand.Approve) cmd;
-        assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), app.targetSessionId());
+        assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), app.targetId());
     }
 }

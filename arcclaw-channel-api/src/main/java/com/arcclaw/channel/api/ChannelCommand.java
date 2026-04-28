@@ -82,14 +82,12 @@ public sealed interface ChannelCommand
 
         return switch (cmd) {
             case "approve" -> new Approve(
-                parseCronId(optArg),
+                parseTargetId(optArg),
                 parseToolName(optArg),
-                parseTargetSessionId(optArg),
                 optReason);
             case "deny"    -> new Deny(
-                parseCronId(optArg),
+                parseTargetId(optArg),
                 parseToolName(optArg),
-                parseTargetSessionId(optArg),
                 optReason);
             case "status"  -> new Status();
             case "halt"    -> new Halt();
@@ -117,18 +115,13 @@ public sealed interface ChannelCommand
         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     );
 
-    private static Optional<String> parseCronId(Optional<String> argOpt) {
-        // Cron IDs contain a hyphen but are not full UUIDs
-        return argOpt.filter(arg -> arg.contains("-") && !UUID_PATTERN.matcher(arg).matches());
+    private static Optional<String> parseTargetId(Optional<String> argOpt) {
+        // IDs are either UUIDs or hyphenated strings (cron segment IDs)
+        return argOpt.filter(arg -> arg.contains("-"));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
         return argOpt.filter(arg -> !arg.contains("-") && !arg.isBlank());
-    }
-
-    private static Optional<String> parseTargetSessionId(Optional<String> argOpt) {
-        // Session IDs are strictly UUIDs
-        return argOpt.filter(arg -> UUID_PATTERN.matcher(arg).matches());
     }
 
     // ------------------------------------------------------------------
@@ -138,29 +131,26 @@ public sealed interface ChannelCommand
     /**
      * Approves a pending tool execution.
      *
-     * @param cronId   if present, targets a specific cron-session approval;
+     * @param targetId if present, targets a specific session or cron task ID;
      * @param toolName if present, targets a specific tool in a parallel batch
      * @param reason   optional human-provided reason for approval
      */
     record Approve(
-        Optional<String> cronId,
+        Optional<String> targetId,
         Optional<String> toolName,
-        Optional<String> targetSessionId,
         Optional<String> reason
     ) implements ChannelCommand {}
 
     /**
      * Denies a pending tool execution.
      *
-     * @param cronId   if present, targets a specific cron-session approval;
+     * @param targetId if present, targets a specific session or cron task ID;
      * @param toolName if present, targets a specific tool in a parallel batch
-     * @param targetSessionId if present, targets a specific session for delegation (§7.33)
      * @param reason   optional human-provided reason for denial
      */
     record Deny(
-        Optional<String> cronId,
+        Optional<String> targetId,
         Optional<String> toolName,
-        Optional<String> targetSessionId,
         Optional<String> reason
     ) implements ChannelCommand {}
 

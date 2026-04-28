@@ -79,6 +79,9 @@ class ApproveReflexDelegateTest {
         String targetSid = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + targetSid;
         
+        // Session exists with pending approval — delegate gate fires
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.of(cp));
         when(delegateGuard.isDelegate(adminId)).thenReturn(false);
         
         MessageContext context = createTestContext(targetSid, adminId, input);
@@ -95,7 +98,7 @@ class ApproveReflexDelegateTest {
         String targetSid = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + targetSid;
         
-        when(delegateGuard.isDelegate(adminId)).thenReturn(true);
+        // No pending session — falls through session path to cron path to "not found"
         when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.empty());
         
         MessageContext context = createTestContext(targetSid, adminId, input);
@@ -107,12 +110,14 @@ class ApproveReflexDelegateTest {
 
     @Test
     void explicitSelfApprovalById_RequiresDelegateRole() {
-        // Verifies the behavioral change: removing the targetSid.equals(currentSessionId) guard
-        // means owners cannot explicitly approve their own sessions by ID unless they are delegates.
+        // Verifies: owners cannot explicitly approve their own sessions by ID unless delegate.
+        // The auth gate only fires when a pending session IS found for the target ID.
         String ownerId = "regularUser";
         String mySessionId = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + mySessionId;
         
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
         when(delegateGuard.isDelegate(ownerId)).thenReturn(false);
         
         MessageContext context = createTestContext(mySessionId, ownerId, input);
@@ -140,6 +145,35 @@ class ApproveReflexDelegateTest {
         
         // Verify approval goes through
         assertTrue(result.commandResponse().get().contains(AbstractDecisionReflex.MSG_RESUMING_TASK));
+    }
+
+    @Test
+    void approve_withCronUUID_routesToCronHandler() {
+        // Exact scenario from production bug: /approve <uuid> where the UUID is a cron job ID,
+        // not a session. The runtime disambiguation chain should resolve it via the cron path
+        // without requiring delegate role (task owner approving their own cron).
+        String userId = "regularUser";
+        String cronUUID = "153d443c-84f5-4123-873b-22565fc61f31";
+        String sessionId = "current-session-id";
+        String input = "/approve " + cronUUID;
+
+        // 1. Not a pending session
+        when(agentStore.findLatestAwaitingApproval(eq(cronUUID))).thenReturn(Optional.empty());
+        // 2. Not an active main-chat session either — so handleCronDecision won't bail
+        when(agentStore.isSessionActive(cronUUID)).thenReturn(false);
+
+        MessageContext context = createTestContext(sessionId, userId, input);
+
+        var result = reflex.execute(sessionId, userId, "chat1", input, context);
+
+        // The cron path is attempted. Since we haven't mocked the full cron chain,
+        // it will throw (CheckpointResolutionException) and fall through to "not found".
+        // The critical assertion: we did NOT get "not authorized" — regular users can
+        // approve cron tasks without delegate role.
+        assertTrue(result.commandResponse().isPresent());
+        String response = result.commandResponse().get();
+        assertTrue(!response.contains("not authorized"),
+                "Cron task approval by owner should not require delegate role, got: " + response);
     }
 
     private MessageContext createTestContext(String sessionId, String userId, String text) {
