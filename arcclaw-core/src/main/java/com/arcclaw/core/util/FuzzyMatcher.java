@@ -1,4 +1,5 @@
 package com.arcclaw.core.util;
+
 import java.util.regex.Pattern;
 
 /**

@@ -1,8 +1,9 @@
 package com.arcclaw.channel.telegram;
 
+import java.util.regex.Pattern;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import java.util.regex.Pattern;
 
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
