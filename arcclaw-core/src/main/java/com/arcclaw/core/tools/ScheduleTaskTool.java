@@ -77,6 +77,9 @@ public class ScheduleTaskTool implements AgentTool {
             Pattern.CASE_INSENSITIVE
     );
 
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+    private static final Pattern IT_PRONOUN_PATTERN = Pattern.compile(".*\\bit\\b.*", Pattern.CASE_INSENSITIVE);
+
     @Inject AgentCronRepository cronRepository;
     @Inject AuditService auditService;
     @Inject Event<CronTaskScheduled> cronScheduledEvent;
@@ -238,8 +241,8 @@ public class ScheduleTaskTool implements AgentTool {
         }
 
         // Step 2 - Naked pronoun guard
-        boolean hasNakedIt = goal.split("\\s+").length < 6
-                && goal.toLowerCase().matches(".*\\bit\\b.*");
+        boolean hasNakedIt = WHITESPACE_PATTERN.split(goal).length < 6
+                && IT_PRONOUN_PATTERN.matcher(goal).matches();
         boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
         if (hasNakedPronoun) {
             return ToolResponse.failure(422,
@@ -254,7 +257,7 @@ public class ScheduleTaskTool implements AgentTool {
         // runOnce=true already guarantees single-fire - dom/month are always redundant
         // and dangerous (task silently never fires if the cron tick crosses midnight).
         if (runOnce && cronExpression != null) {
-            String[] fields = cronExpression.trim().split("\\s+");
+            String[] fields = WHITESPACE_PATTERN.split(cronExpression.trim());
             if (fields.length == 5) {
                 cronExpression = fields[0] + " " + fields[1] + " * * *";
             }

@@ -3,6 +3,7 @@ package com.arcclaw.core.tools;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -36,6 +37,7 @@ import org.jboss.logging.Logger;
 public class MemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(MemorySearchTool.class);
+    private static final Pattern WORK_QUERY_PATTERN = Pattern.compile(".*(what did i|what have i|my work|my project|my task).*", Pattern.CASE_INSENSITIVE);
 
     @Inject
     CompactionStorePort compactionRepo;
@@ -168,7 +170,7 @@ public class MemorySearchTool implements AgentTool {
             return "user name identity";
         }
         // Self-referential work queries
-        if (lower.matches(".*(what did i|what have i|my work|my project|my task).*")) {
+        if (WORK_QUERY_PATTERN.matcher(lower).matches()) {
             return "project task work history";
         }
         return query;

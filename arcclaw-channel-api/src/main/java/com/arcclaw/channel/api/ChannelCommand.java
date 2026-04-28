@@ -34,6 +34,9 @@ public sealed interface ChannelCommand
             Pattern.CASE_INSENSITIVE
     );
 
+    Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+    Pattern SESSION_ID_PATTERN = Pattern.compile("\\d+-\\d+");
+
     /**
      * Returns {@code true} for commands that alter agent state or authorise tool
      * execution (Approve, Deny, Halt, Reset). Returns {@code false} for read-only
@@ -93,7 +96,7 @@ public sealed interface ChannelCommand
             case "crons"   -> new CronTasks();
             case "start"   -> new Start(optArg);
             case "cron" -> {
-                String[] parts = text.trim().split("\\s+");
+                String[] parts = WHITESPACE_PATTERN.split(text.trim());
                 if ("delete".equalsIgnoreCase(arg)) {
                     String cronId = parts.length > 2 ? parts[2].strip() : null;
                     yield new DeleteCron(
@@ -110,7 +113,7 @@ public sealed interface ChannelCommand
 
     private static Optional<String> parseCronId(Optional<String> argOpt) {
         // Exclude session IDs (numeric-hyphen-numeric) from cronId matching §75-B2
-        return argOpt.filter(arg -> arg.contains("-") && !arg.matches("\\d+-\\d+"));
+        return argOpt.filter(arg -> arg.contains("-") && !SESSION_ID_PATTERN.matcher(arg).matches());
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
@@ -119,7 +122,7 @@ public sealed interface ChannelCommand
 
     private static Optional<String> parseTargetSessionId(Optional<String> argOpt) {
         // Session IDs match pattern: digits-digits (e.g. 12345-1711234567890)
-        return argOpt.filter(arg -> arg.matches("\\d+-\\d+"));
+        return argOpt.filter(arg -> SESSION_ID_PATTERN.matcher(arg).matches());
     }
 
     // ------------------------------------------------------------------

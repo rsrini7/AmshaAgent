@@ -67,6 +67,9 @@ public class PlaywrightPageRunner {
      */
     private static final double LOAD_FALLBACK_RATIO = 0.15;
 
+    private static final Pattern NEWLINE_CONSOLIDATION_PATTERN = Pattern.compile("\n{3,}");
+    private static final Pattern LINE_BREAK_PATTERN = Pattern.compile("\n");
+
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
     boolean enabled;
 
@@ -397,7 +400,7 @@ public class PlaywrightPageRunner {
     private void handleInitFailure(Exception e) {
         String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         if (msg.contains("Executable doesn't exist")) {
-            String summary = msg.split("\n")[0].trim();
+            String summary = LINE_BREAK_PATTERN.split(msg)[0].trim();
             log.warnf("[Playwright] Chromium binary not found - initialization skipped. " +
                      "(Run 'npx playwright install chromium'). Details: %s", summary);
         } else {
@@ -434,7 +437,7 @@ public class PlaywrightPageRunner {
     }
 
     private String normalizeWhitespace(String text) {
-        return text == null ? "" : text.replaceAll("\n{3,}", "\n\n").trim();
+        return text == null ? "" : NEWLINE_CONSOLIDATION_PATTERN.matcher(text).replaceAll("\n\n").trim();
     }
 
     private String safeMessage(Throwable t) {

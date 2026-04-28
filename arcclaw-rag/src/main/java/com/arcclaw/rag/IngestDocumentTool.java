@@ -34,6 +34,14 @@ public class IngestDocumentTool implements AgentTool {
     @Inject AuditService auditService;
     @Inject PiiScanReflex piiReflex;
 
+    private static final Pattern DASH_CLEANUP = Pattern.compile("-{2,}");
+    private static final Pattern EQUALS_CLEANUP = Pattern.compile("={2,}");
+    private static final Pattern STAR_CLEANUP = Pattern.compile("\\*{2,}");
+    private static final Pattern CODE_BLOCK_CLEANUP = Pattern.compile("(?m)^```.*$");
+    private static final Pattern HEADER_CLEANUP = Pattern.compile("(?m)^#{1,6}\\s+");
+    private static final Pattern NEWLINE_CLEANUP = Pattern.compile("(?m)(\\n\\s*){3,}");
+    private static final Pattern CONTROL_CHAR_CLEANUP = Pattern.compile("[\\p{Cntrl}&&[^\n\t]]");
+
     @Override
     public String name() {        return ToolCapability.INGEST_DOCUMENT.toolName();
     }
@@ -160,14 +168,14 @@ public class IngestDocumentTool implements AgentTool {
      * embeds on semantic content, not formatting noise.
      */
     private String sanitize(String raw) {
-        return raw
-            .replaceAll("-{2,}", "-")
-            .replaceAll("={2,}", "")
-            .replaceAll("\\*{2,}", "")
-            .replaceAll("(?m)^```.*$", "")
-            .replaceAll("(?m)^#{1,6}\\s+", "")
-            .replaceAll("(?m)(\\n\\s*){3,}", "\n\n")
-            .replaceAll("[\\p{Cntrl}&&[^\n\t]]", "") // control chars except \n and \t
-            .strip();
+        if (raw == null) return null;
+        String text = DASH_CLEANUP.matcher(raw).replaceAll("-");
+        text = EQUALS_CLEANUP.matcher(text).replaceAll("");
+        text = STAR_CLEANUP.matcher(text).replaceAll("");
+        text = CODE_BLOCK_CLEANUP.matcher(text).replaceAll("");
+        text = HEADER_CLEANUP.matcher(text).replaceAll("");
+        text = NEWLINE_CLEANUP.matcher(text).replaceAll("\n\n");
+        text = CONTROL_CHAR_CLEANUP.matcher(text).replaceAll("");
+        return text.strip();
     }
 }

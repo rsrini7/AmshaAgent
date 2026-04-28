@@ -3,6 +3,7 @@ package com.arcclaw.channel.telegram;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.apache.camel.component.telegram.model.InlineKeyboardButton;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -15,6 +16,7 @@ import org.jboss.logging.Logger;
 class BatchHitlKeyboardBuilder {
 
     private static final Logger log = Logger.getLogger(BatchHitlKeyboardBuilder.class);
+    private static final Pattern PIPE_PATTERN = Pattern.compile("\\|");
 
     /**
      * @param sessionId the active session ID (embedded in callback data)
@@ -90,7 +92,7 @@ class BatchHitlKeyboardBuilder {
         }
 
         // Switch to pipe separator to support namespaced tools (§7.25)
-        String[] parts = callbackData.split("\\|");
+        String[] parts = PIPE_PATTERN.split(callbackData);
         if (parts.length < 2) return Optional.empty();
 
         String action = parts[0];
