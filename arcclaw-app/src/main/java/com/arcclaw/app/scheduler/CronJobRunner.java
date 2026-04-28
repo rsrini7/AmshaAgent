@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -40,6 +41,11 @@ public class CronJobRunner {
 
     private static final Logger log = Logger.getLogger(CronJobRunner.class);
 
+    private static final Pattern CRON_PREFIX_PATTERN = Pattern.compile("^CRON\\s+");
+    private static final Pattern PURE_ANNOUNCEMENT_PATTERN = Pattern.compile("^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?).*");
+    private static final Pattern ANNOUNCEMENT_PREFIX_PATTERN = Pattern.compile("(?i)^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|chat))?(?:\\s*[:=,])?\\s*");
+    private static final Pattern ANNOUNCEMENT_SUFFIX_PATTERN = Pattern.compile("(?i)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|stdout|chat)|\\s+in\\s+(?:the\\s+)?chat)$");
+
     @Inject
     AgentLoop agentLoop;
 
@@ -71,7 +77,7 @@ public class CronJobRunner {
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
         
         try {
-            String stripped = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "").trim() : "";
+            String stripped = job.goal != null ? CRON_PREFIX_PATTERN.matcher(job.goal).replaceFirst("").trim() : "";
             
             // §Bug2: Short-circuit pure announcements to direct send, bypassing agent loop
             if (isPureAnnouncement(stripped)) {
@@ -133,8 +139,7 @@ public class CronJobRunner {
         String normalized = goal.toLowerCase().trim();
         
         // Explicit announcement prefixes
-        String prefixRegex = "^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?).*";
-        if (normalized.matches(prefixRegex)) {
+        if (PURE_ANNOUNCEMENT_PATTERN.matcher(normalized).matches()) {
             return true;
         }
 
@@ -169,11 +174,8 @@ public class CronJobRunner {
             if (goal == null) return null;
             String result = goal.trim();
 
-            String prefixRegex = "(?i)^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|chat))?(?:\\s*[:=,])?\\s*";
-            result = result.replaceFirst(prefixRegex, "").trim();
-
-            String suffixRegex = "(?i)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|stdout|chat)|\\s+in\\s+(?:the\\s+)?chat)$";
-            result = result.replaceFirst(suffixRegex, "").trim();
+            result = ANNOUNCEMENT_PREFIX_PATTERN.matcher(result).replaceFirst("").trim();
+            result = ANNOUNCEMENT_SUFFIX_PATTERN.matcher(result).replaceFirst("").trim();
 
             // Strip surrounding quotes if present
             if (result.startsWith("'") && result.endsWith("'") && result.length() > 2) {
