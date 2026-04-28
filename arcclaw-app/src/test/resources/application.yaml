@@ -131,3 +131,5 @@ quarkus:
         level: "OFF"
       "com.arcclaw.app.channel.telegram.TelegramAgentHandler":
         level: "OFF"
+      "com.arcclaw.app.session.SessionRegistry":
+        level: "WARN"
