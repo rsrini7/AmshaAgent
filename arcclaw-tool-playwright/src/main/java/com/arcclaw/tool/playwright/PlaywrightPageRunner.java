@@ -1,5 +1,7 @@
 package com.arcclaw.tool.playwright;
 
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.HashMap;
@@ -391,6 +393,8 @@ public class PlaywrightPageRunner {
         return env;
     }
 
+    private static final Object ERR_LOCK = new Object();
+
     private void handleInitFailure(Exception e) {
         String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         if (msg.contains("Executable doesn't exist")) {
@@ -408,28 +412,48 @@ public class PlaywrightPageRunner {
 
     private void closeBrowserQuietly(Browser browserRef, String phase) {
         if (browserRef == null) return;
-        try {
-            browserRef.close();
-        } catch (Throwable t) {
-            if (isBenignCloseError(t)) {
-                log.debugf("[Playwright] Browser close skipped benign error during %s: %s",
-                        phase, safeMessage(t));
-            } else {
-                log.warnf("[Playwright] Browser close failed during %s: %s", phase, safeMessage(t));
+        synchronized (ERR_LOCK) {
+            PrintStream originalErr = System.err;
+            try {
+                // Internal Playwright threads often print "Pipe closed" to System.err
+                // even when we catch the exception. We temporarily redirect to silence them.
+                System.setErr(new PrintStream(OutputStream.nullOutputStream()));
+                browserRef.close();
+            } catch (Throwable t) {
+                if (System.err != originalErr) System.setErr(originalErr);
+                if (isBenignCloseError(t)) {
+                    log.debugf("[Playwright] Browser close skipped benign error during %s: %s",
+                            phase, safeMessage(t));
+                } else {
+                    log.warnf("[Playwright] Browser close failed during %s: %s", phase, safeMessage(t));
+                }
+            } finally {
+                if (System.err != originalErr) {
+                    System.setErr(originalErr);
+                }
             }
         }
     }
 
     private void closePlaywrightQuietly(Playwright playwrightRef, String phase) {
         if (playwrightRef == null) return;
-        try {
-            playwrightRef.close();
-        } catch (Throwable t) {
-            if (isBenignCloseError(t)) {
-                log.debugf("[Playwright] Playwright close skipped benign error during %s: %s",
-                        phase, safeMessage(t));
-            } else {
-                log.warnf("[Playwright] Playwright close failed during %s: %s", phase, safeMessage(t));
+        synchronized (ERR_LOCK) {
+            PrintStream originalErr = System.err;
+            try {
+                System.setErr(new PrintStream(OutputStream.nullOutputStream()));
+                playwrightRef.close();
+            } catch (Throwable t) {
+                if (System.err != originalErr) System.setErr(originalErr);
+                if (isBenignCloseError(t)) {
+                    log.debugf("[Playwright] Playwright close skipped benign error during %s: %s",
+                            phase, safeMessage(t));
+                } else {
+                    log.warnf("[Playwright] Playwright close failed during %s: %s", phase, safeMessage(t));
+                }
+            } finally {
+                if (System.err != originalErr) {
+                    System.setErr(originalErr);
+                }
             }
         }
     }
@@ -440,6 +464,7 @@ public class PlaywrightPageRunner {
         boolean matches = msg.contains("stream closed")
             || msg.contains("pipe closed")
             || msg.contains("pipe is being closed")
+            || msg.contains("broken pipe")
             || msg.contains("connection closed")
             || msg.contains("target page, context or browser has been closed");
         
