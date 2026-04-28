@@ -343,6 +343,24 @@ public class CheckpointResumeHandler {
             return performDenialCleanup(context, history, checkpoint);
         }
 
+        // §Issue 6: Strict Goal Isolation
+        // If the user provided a specific goal during resumption (e.g., "use Python instead"),
+        // use THAT goal instead of the original goal stored in the checkpoint.
+        String resumeGoal = (messageContext.getGoal() != null && !messageContext.getGoal().isBlank() && !AgentSentinels.GOAL_RESUME_APPROVED.equals(messageContext.getGoal()))
+                ? messageContext.getGoal()
+                : resolveResumeGoal(checkpoint);
+        
+        // Ensure the execution context reflects this goal isolation
+        if (!context.goal().equals(resumeGoal)) {
+            log.infof("[AgentLoop] Isolated specific resumption goal for session %s: %s", context.sessionId(), resumeGoal);
+            context = new AgentExecutionContext(
+                    context.sessionId(), context.userId(), context.chatId(), context.agentRole(),
+                    resumeGoal, context.autonomyLevel(), context.structuredOutputMode(), context.maxIterations(),
+                    context.startingIteration(), context.channelType(), context.channelPlatformId(),
+                    context.systemNote(), context.data()
+            );
+        }
+
         String resolvedChannelType = resolveChannelType(context, messageContext);
 
         if (checkpoint.isParallelBatch()) {
@@ -401,6 +419,11 @@ public class CheckpointResumeHandler {
             // If it failed (e.g. compilation error), return null to fall back to the 
             // standard loop so the LLM can analyze the error and retry.
             if (response.success()) {
+                if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
+                    // Double response fix: return result directly without coordinator synthesis
+                    log.infof("[AgentLoop] Skipping coordinator synthesis for successful delegate completion in session %s", sessionId);
+                    return AgentResult.finished(response.output(), List.copyOf(history));
+                }
                 return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
             } else {
                 log.warnf("[AgentLoop] Tool execution failed for session %s. Falling back to standard loop for self-correction.", sessionId);

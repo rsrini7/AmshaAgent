@@ -2,9 +2,10 @@ package com.arcclaw.core.routing;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -24,6 +25,7 @@ import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -37,6 +39,10 @@ public class IntentDetectorService implements IntentDetector {
     @Inject
     @Identifier("intent-classifier")
     ChatModel classifierModel;
+
+    @Inject
+    @Identifier("intent-classifier-fallback")
+    Instance<ChatModel> fallbackModel;
 
     @Inject
     @Identifier("intent-classifier-mode")
@@ -58,6 +64,12 @@ public class IntentDetectorService implements IntentDetector {
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.sla-warn-ms", defaultValue = "2000")
     long slaWarnMs;
+
+    @ConfigProperty(name = "arcclaw.routing.intent-classifier.sla-timeout-ms", defaultValue = "5000")
+    long slaTimeoutMs;
+
+    @Inject
+    ManagedExecutor managedExecutor;
 
     static final String DELIM_OPEN  = "<<<USER_INPUT_START>>>";
     static final String DELIM_CLOSE = "<<<USER_INPUT_END>>>";
@@ -146,23 +158,27 @@ public class IntentDetectorService implements IntentDetector {
                 .replace(DELIM_OPEN, "")
                 .replace(DELIM_CLOSE, "");
         String wrapped = DELIM_OPEN + "\n" + sanitized + "\n" + DELIM_CLOSE;
-        String safePrompt = dynamicClassifierPrompt.formatted(wrapped);
-
+        String tempPrompt = dynamicClassifierPrompt.formatted(wrapped);
         if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
-            safePrompt = "CRITICAL: You MUST respond with ONLY a single role name token. No explanation, no JSON, no punctuation.\n\n" + safePrompt;
+            tempPrompt = "CRITICAL: You MUST respond with ONLY a single role name token. No explanation, no JSON, no punctuation.\n\n" + tempPrompt;
         }
+        final String finalSafePrompt = tempPrompt;
 
         String raw;
         long startNs = System.nanoTime();
         try {
-            raw = classifierModel.chat(safePrompt);
+            // §Issue 1: Add a hard timeout to ensure SLA compliance
+            raw = CompletableFuture.supplyAsync(() -> 
+                classifierModel.chat(finalSafePrompt), managedExecutor
+            ).get(slaTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException te) {
+            log.warnf("IntentDetector SLA breach (TIMEOUT > %dms) - using fast fallback model", slaTimeoutMs);
+            String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
+            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase()), userMessage);
         } catch (Exception e) {
-            log.warnf("Intent classifier failed: %s. Defaulting to coordinator.", ExceptionUtils.getRootCauseMessage(e));
-            log.debugf("Intent classifier failure cause chain: %s",
-                ExceptionUtils.getThrowableList(e).stream()
-                    .map(t -> t.getClass().getSimpleName() + ": " + t.getMessage())
-                    .collect(Collectors.joining(" -> ")));
-            return AgentRoleEnum.COORDINATOR.toScopedName();
+            log.warnf("Intent classifier failed: %s. Using fast fallback model.", ExceptionUtils.getRootCauseMessage(e));
+            String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
+            return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase()), userMessage);
         }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
         if (elapsedMs > slaWarnMs) {
@@ -177,6 +193,47 @@ public class IntentDetectorService implements IntentDetector {
         String result = sanitize(raw.trim().toLowerCase());
         log.debugf("CLASSIFIER invoked, SLA=%dms, role=%s", elapsedMs, result);
         return destructiveFilter.filter(result, userMessage);
+    }
+
+    private String tryFallbackOrHeuristic(String prompt, String userMessage) {
+        if (fallbackModel != null && fallbackModel.isResolvable()) {
+            try {
+                return CompletableFuture.supplyAsync(() -> fallbackModel.get().chat(prompt), managedExecutor)
+                    .get(1500, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                log.warnf("Intent fallback failed: %s. Using local heuristic.", ExceptionUtils.getRootCauseMessage(e));
+                return localHeuristicClassify(userMessage);
+            }
+        }
+        return localHeuristicClassify(userMessage);
+    }
+
+    private String localHeuristicClassify(String userMessage) {
+        String lower = userMessage.toLowerCase().trim();
+        
+        // 1. Prioritize Coordination/Scheduling (unambiguous keywords only)
+        if (lower.contains("schedule") || lower.contains("cron") || lower.contains("remind")) {
+            return AgentRoleEnum.COORDINATOR.toScopedName();
+        }
+
+        // 2. Coder keywords
+        if (lower.contains("code") || lower.contains("write") || lower.contains("program") 
+                || lower.contains("script") || lower.contains("refactor") || lower.contains("bug")) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+
+        // 3. Researcher keywords (checked after coordinator to handle "schedule to get github...")
+        if (lower.contains("search") || lower.contains("find") || lower.contains("research") 
+                || lower.contains("google") || lower.contains("github") || lower.contains("lookup")) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        }
+
+        // 4. Debugger keywords
+        if (lower.contains("debug") || lower.contains("error") || lower.contains("fail")) {
+            return AgentRoleEnum.DEBUGGER.toScopedName();
+        }
+        
+        return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 
     private String sanitize(String raw) {

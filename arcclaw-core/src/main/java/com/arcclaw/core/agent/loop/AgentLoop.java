@@ -11,6 +11,7 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
@@ -90,6 +91,9 @@ public class AgentLoop {
     @Inject
     MeterRegistry meterRegistry;
 
+    @Inject
+    IntentClassificationService intentClassificationService;
+
     @ActivateRequestContext
     public AgentResult resume(String sessionId, String agentRole, String goal) {
         return run(sessionId, agentRole, goal, reasoningEngine, DEFAULT_MAX_ITERATIONS);
@@ -145,10 +149,16 @@ public class AgentLoop {
 
             String effectiveRole = canonicalRole;
             if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-                resumedHistory.addAll(r.history());
-                effectiveRole = r.checkpointRole();
-                log.infof("[AgentLoop] Resuming session=%s as role=%s (canonical=%s)", 
-                        sessionId, effectiveRole, canonicalRole);
+                // §Issue 6: Only restore history if it's a continuity command (follow-up).
+                // Fresh goals should start with a clean history to avoid task confusion.
+                if (intentClassificationService.isContinuityCommand(goal)) {
+                    resumedHistory.addAll(r.history());
+                    effectiveRole = r.checkpointRole();
+                } else {
+                    log.infof("[AgentLoop] Fresh goal detected for session %s - skipping history restoration from %s turn and resetting to canonical role %s to avoid task confusion.", 
+                            sessionId, r.checkpointRole(), canonicalRole);
+                    // effectiveRole remains canonicalRole
+                }
             }
 
             StructuredOutputMode mode = Arrays.stream(StructuredOutputMode.values())
@@ -187,7 +197,7 @@ public class AgentLoop {
                             // However, we need to ensure the state machine starts at the correct point.
                             return stateMachineRunner.run(finalCtx, engine, finalHistory);
                         } else {
-                            return tryDelegateFinishFastPath(sessionId, finalHistory)
+                            return tryDelegateFinishFastPath(sessionId, finalHistory, context)
                                     .orElseGet(() -> stateMachineRunner.run(
                                             finalCtx, engine, finalHistory));
                         }
@@ -319,9 +329,13 @@ public class AgentLoop {
     }
 
     private Optional<AgentResult> tryDelegateFinishFastPath(
-            String sessionId, List<ReasoningStep> resumedHistory) {
+            String sessionId, List<ReasoningStep> resumedHistory, MessageContext messageContext) {
 
         if (resumedHistory.isEmpty()) return Optional.empty();
+        
+        // §Issue 3: If this is a resume signal, CheckpointResumeHandler already handled it.
+        // Don't fast-path here to avoid double-processing and double-send.
+        if (messageContext != null && messageContext.isResumeSignal()) return Optional.empty();
 
         ReasoningStep last = resumedHistory.getLast();
         String toolName = last.action();
@@ -329,6 +343,13 @@ public class AgentLoop {
 
         if (!ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) return Optional.empty();
         if (observation == null || observation.isBlank()) return Optional.empty();
+
+        // §Issue 3: Only fast-path if the goal is a generic follow-up.
+        // Specific new goals must go through the LLM.
+        String goal = (messageContext != null) ? messageContext.getGoal() : null;
+        if (goal != null && !intentClassificationService.isContinuityCommand(goal)) {
+            return Optional.empty();
+        }
 
         if (last.success() != null) {
             if (!last.success()) {

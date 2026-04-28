@@ -12,8 +12,6 @@ import jakarta.ws.rs.Path;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentDetector;
-import com.arcclaw.persistence.sqlite.AuditSchemaEnforcer;
-import com.arcclaw.persistence.sqlite.FtsConnectionInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;

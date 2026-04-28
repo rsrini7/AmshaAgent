@@ -58,12 +58,7 @@ public class CronJobRunner {
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
     int cronMaxIterations;
 
-    private static final String PREFIX_OUTPUT_MSG = "output the following message:";
-    private static final String PREFIX_OUTPUT     = "output ";
-    private static final String PREFIX_SAY        = "say ";
-    private static final String PREFIX_TELL       = "tell ";
-    private static final String PREFIX_SEND_MSG   = "send message:";
-    private static final String PREFIX_SEND_TEXT  = "send text:";
+
 
     public void execute(AgentCronEntity job) {
         String executionId = UUID.randomUUID().toString();
@@ -138,9 +133,8 @@ public class CronJobRunner {
         String normalized = goal.toLowerCase().trim();
         
         // Explicit announcement prefixes
-        if (normalized.startsWith(PREFIX_OUTPUT) || normalized.startsWith(PREFIX_SAY)
-                || normalized.startsWith(PREFIX_TELL) 
-                || normalized.startsWith(PREFIX_SEND_MSG) || normalized.startsWith(PREFIX_SEND_TEXT)) {
+        String prefixRegex = "^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?).*";
+        if (normalized.matches(prefixRegex)) {
             return true;
         }
 
@@ -169,18 +163,27 @@ public class CronJobRunner {
                    normalized.equals("check: what is the current time?");
         }
 
-        private String stripAnnouncementPrefix(String goal) {
-        if (goal == null) return null;
-        String lower = goal.toLowerCase();
-        if (lower.startsWith(PREFIX_OUTPUT_MSG)) return goal.substring(PREFIX_OUTPUT_MSG.length()).trim();
-        if (lower.startsWith(PREFIX_OUTPUT))      return goal.substring(PREFIX_OUTPUT.length()).trim();
-        if (lower.startsWith(PREFIX_SAY))         return goal.substring(PREFIX_SAY.length()).trim();
-        if (lower.startsWith(PREFIX_TELL))        return goal.substring(PREFIX_TELL.length()).trim();
-        if (lower.startsWith(PREFIX_SEND_MSG))    return goal.substring(PREFIX_SEND_MSG.length()).trim();
-        if (lower.startsWith(PREFIX_SEND_TEXT))   return goal.substring(PREFIX_SEND_TEXT.length()).trim();
-        return goal;
-        }
 
+
+        private String stripAnnouncementPrefix(String goal) {
+            if (goal == null) return null;
+            String result = goal.trim();
+
+            String prefixRegex = "(?i)^(?:print|say|tell|output(?: message)?|display|send(?: message| text)?)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|chat))?(?:\\s*[:=,])?\\s*";
+            result = result.replaceFirst(prefixRegex, "").trim();
+
+            String suffixRegex = "(?i)(?:\\s+to\\s+(?:the\\s+)?(?:console|user|stdout|chat)|\\s+in\\s+(?:the\\s+)?chat)$";
+            result = result.replaceFirst(suffixRegex, "").trim();
+
+            // Strip surrounding quotes if present
+            if (result.startsWith("'") && result.endsWith("'") && result.length() > 2) {
+                result = result.substring(1, result.length() - 1).trim();
+            } else if (result.startsWith("\"") && result.endsWith("\"") && result.length() > 2) {
+                result = result.substring(1, result.length() - 1).trim();
+            }
+
+            return result;
+        }
     /**
      * §New Issue 1: Surgically extract the natural language goal from a serialized tool call string.
      * Example: delegate_to_agent(agent="saraswati", goal="github repo view ...") -> "github repo view ..."
