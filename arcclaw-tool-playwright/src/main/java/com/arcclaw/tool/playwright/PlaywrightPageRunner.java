@@ -136,14 +136,8 @@ public class PlaywrightPageRunner {
         playwrightThread.submit(() -> {
             closeBrowserQuietly(browser, "destroy");
             browser = null;
-            if (playwright != null) {
-                try { 
-                    playwright.close(); 
-                } catch (Exception e) {
-                    log.debugf("Failed to close playwright during destroy: %s", ExceptionUtils.getRootCauseMessage(e));
-                }
-                playwright = null;
-            }
+            closePlaywrightQuietly(playwright, "destroy");
+            playwright = null;
         });
         playwrightThread.shutdown();
         try {
@@ -408,32 +402,48 @@ public class PlaywrightPageRunner {
         }
         closeBrowserQuietly(browser, "init-failure");
         browser = null;
-        if (playwright != null) {
-            try { playwright.close(); } catch (Exception ignored) {}
-            playwright = null;
-        }
+        closePlaywrightQuietly(playwright, "init-failure");
+        playwright = null;
     }
 
     private void closeBrowserQuietly(Browser browserRef, String phase) {
         if (browserRef == null) return;
         try {
             browserRef.close();
-        } catch (Exception e) {
-            if (isBenignCloseError(e)) {
+        } catch (Throwable t) {
+            if (isBenignCloseError(t)) {
                 log.debugf("[Playwright] Browser close skipped benign error during %s: %s",
-                        phase, safeMessage(e));
+                        phase, safeMessage(t));
             } else {
-                log.warnf("[Playwright] Browser close failed during %s: %s", phase, safeMessage(e));
+                log.warnf("[Playwright] Browser close failed during %s: %s", phase, safeMessage(t));
+            }
+        }
+    }
+
+    private void closePlaywrightQuietly(Playwright playwrightRef, String phase) {
+        if (playwrightRef == null) return;
+        try {
+            playwrightRef.close();
+        } catch (Throwable t) {
+            if (isBenignCloseError(t)) {
+                log.debugf("[Playwright] Playwright close skipped benign error during %s: %s",
+                        phase, safeMessage(t));
+            } else {
+                log.warnf("[Playwright] Playwright close failed during %s: %s", phase, safeMessage(t));
             }
         }
     }
 
     private boolean isBenignCloseError(Throwable t) {
+        if (t == null) return false;
         String msg = safeMessage(t).toLowerCase();
-        return msg.contains("stream closed")
+        boolean matches = msg.contains("stream closed")
             || msg.contains("pipe closed")
             || msg.contains("pipe is being closed")
+            || msg.contains("connection closed")
             || msg.contains("target page, context or browser has been closed");
+        
+        return matches || isBenignCloseError(t.getCause());
     }
 
     private String normalizeWhitespace(String text) {

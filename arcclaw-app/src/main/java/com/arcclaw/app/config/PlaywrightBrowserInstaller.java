@@ -325,7 +325,11 @@ public class PlaywrightBrowserInstaller {
         try (Playwright playwright = Playwright.create(options)) {
             Browser browser = playwright.chromium().launch(
                 new BrowserType.LaunchOptions().setHeadless(true));
-            browser.close();
+            try {
+                browser.close();
+            } catch (Exception e) {
+                log.debugf("Benign error during browser close in installer: %s", safeMessage(e));
+            }
             System.err.println();
             System.err.println("  ✓ Playwright Chromium installed successfully.");
         }
