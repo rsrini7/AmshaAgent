@@ -12,7 +12,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class IntentClassificationService {
 
-    // Matches goals that indicate a desire to persist or store information
     private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
         "\\b(save|store|ingest|remember|add to memory|note that|call me|my name is|refer to me as|address me as)\\b",
         Pattern.CASE_INSENSITIVE
@@ -48,6 +47,11 @@ public class IntentClassificationService {
      */
     public boolean isWriteIntent(String text) {
         if (text == null || text.isBlank()) return false;
+        // §Hardening: Interrogative phrases (ending with '?') are recall intents, not write intents.
+        // e.g. "you still remember?" vs "remember that I am Srini"
+        if (text.trim().endsWith("?")) {
+            return false;
+        }
         return WRITE_INTENT_PATTERN.matcher(text).find();
     }
 

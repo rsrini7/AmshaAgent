@@ -141,8 +141,8 @@ public class AgentLoop {
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
 
-        try {
-            observabilityManager.beginSession(sessionId);
+        io.opentelemetry.api.trace.Span span = observabilityManager.beginSession(sessionId);
+        try (io.opentelemetry.context.Scope scope = span.makeCurrent()) {
 
             var decision = checkpointResumeCoordinator.resolveResumePath(
                     sessionId, canonicalRole, capturedUserId, context);

@@ -27,7 +27,6 @@ public class AgentOtelContext implements AgentObserver {
     Tracer tracer;
 
     private final ConcurrentHashMap<String, Span> rootSpans = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Scope> rootScopes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicLong> totalInputTokens = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicLong> totalOutputTokens = new ConcurrentHashMap<>();
 
@@ -44,7 +43,6 @@ public class AgentOtelContext implements AgentObserver {
                 .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
                 .startSpan();
         rootSpans.put(sessionId, span);
-        rootScopes.put(sessionId, span.makeCurrent());
         return span;
     }
 
@@ -59,10 +57,6 @@ public class AgentOtelContext implements AgentObserver {
         Span span = rootSpans.remove(sessionId);
         if (span != null) {
             span.end();
-        }
-        Scope scope = rootScopes.remove(sessionId);
-        if (scope != null) {
-            scope.close();
         }
         totalInputTokens.remove(sessionId);
         totalOutputTokens.remove(sessionId);

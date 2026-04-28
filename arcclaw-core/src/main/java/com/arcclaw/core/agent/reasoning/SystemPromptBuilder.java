@@ -135,8 +135,10 @@ public class SystemPromptBuilder {
 
             CROSS-DOMAIN HANDOFF:
             If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
-            use `delegate_to_agent` to hand off the task to 'coordinator' or the appropriate
-            specialist. Do NOT just refuse the request. When delegating, set the agent parameter
+            use `delegate_to_agent` to hand off the task to the appropriate specialist.
+            If you are the 'coordinator', you MUST NOT delegate to 'coordinator'; invoke the
+            required tools (e.g. `schedule_task`, `memory_search`) directly.
+            Do NOT just refuse the request. When delegating, set the agent parameter
             to the target persona name.
 
             CRITICAL INSTRUCTIONS FOR TOOL USAGE:
@@ -455,7 +457,7 @@ public class SystemPromptBuilder {
             9. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
             10. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.
             11. A denied or failed tool call does not block a different valid tool on the next user message.
-            12. If you encounter a request you cannot fulfill, use `delegate_to_agent` (set agent to persona name) to handoff.
+            12. If you encounter a request you cannot fulfill, use `delegate_to_agent` (set agent to persona name) to handoff. If you are 'coordinator', do NOT delegate to 'coordinator'; call tools directly.
             """;
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal, boolean isTruncationRecovery) {

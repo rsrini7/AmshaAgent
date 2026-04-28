@@ -230,6 +230,20 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         }
 
         AgentCronEntity cron = cronRepository.findById(resolvedJobId);
+        if (cron == null) {
+            // §UX: If user provided the execution suffix (UUID) or a segment instead of the job ID,
+            // resolve it from the full session ID in the checkpoint.
+            // Format: "cron-<jobId>-<executionUuid>"
+            if (cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+                String sub = cronSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+                // Job IDs (UUIDs) are always 36 chars.
+                if (sub.length() >= 36) {
+                    resolvedJobId = sub.substring(0, 36);
+                    cron = cronRepository.findById(resolvedJobId);
+                }
+            }
+        }
+        
         if (cron == null) return "❌ Cron task not found.";
 
         if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) return getAlreadyProcessingMessage();
