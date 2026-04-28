@@ -35,6 +35,7 @@ import com.arcclaw.core.util.ClassUtils;
 import com.arcclaw.core.util.MdcManaged;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 import io.smallrye.common.annotation.Identifier;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
@@ -141,8 +142,8 @@ public class AgentLoop {
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
 
-        io.opentelemetry.api.trace.Span span = observabilityManager.beginSession(sessionId);
-        try (io.opentelemetry.context.Scope scope = span.makeCurrent()) {
+        Span span = observabilityManager.beginSession(sessionId);
+        try (Scope scope = span.makeCurrent()) {
 
             var decision = checkpointResumeCoordinator.resolveResumePath(
                     sessionId, canonicalRole, capturedUserId, context);

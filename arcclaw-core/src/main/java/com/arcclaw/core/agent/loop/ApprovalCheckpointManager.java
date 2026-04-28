@@ -71,6 +71,7 @@ public class ApprovalCheckpointManager {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
+        agentStore.clearBatchResuming(sessionId);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(toolName);
         cp.setPendingToolRole(agentRole);
@@ -129,6 +130,9 @@ public class ApprovalCheckpointManager {
         String agentRole = context.agentRole();
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
+        // §Resume-Fix: Clear any stale in-memory resume flag from previous (failed/orphaned)
+        // resume attempts. A new HITL pause invalidates any prior resume state.
+        agentStore.clearBatchResuming(sessionId);
 
         Map<String, ToolDecision> decisions = new LinkedHashMap<>();
         calls.forEach(call -> decisions.put(
@@ -190,6 +194,7 @@ public class ApprovalCheckpointManager {
         String agentRole = context.agentRole();
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
+        agentStore.clearBatchResuming(sessionId);
 
         Map<String, ToolDecision> decisions = new LinkedHashMap<>();
         hitlCalls.forEach(call ->

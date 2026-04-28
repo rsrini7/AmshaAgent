@@ -35,7 +35,6 @@ public sealed interface ChannelCommand
     );
 
     Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
-    Pattern SESSION_ID_PATTERN = Pattern.compile("\\d+-\\d+");
 
     /**
      * Returns {@code true} for commands that alter agent state or authorise tool
@@ -112,8 +111,9 @@ public sealed interface ChannelCommand
     }
 
     private static Optional<String> parseCronId(Optional<String> argOpt) {
-        // Exclude session IDs (numeric-hyphen-numeric) from cronId matching §75-B2
-        return argOpt.filter(arg -> arg.contains("-") && !SESSION_ID_PATTERN.matcher(arg).matches());
+        // Any arg containing a hyphen is a potential cron/job ID.
+        // Handler-level guards (isSessionActive) disambiguate from session IDs at runtime.
+        return argOpt.filter(arg -> arg.contains("-"));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
@@ -121,8 +121,9 @@ public sealed interface ChannelCommand
     }
 
     private static Optional<String> parseTargetSessionId(Optional<String> argOpt) {
-        // Session IDs match pattern: digits-digits (e.g. 12345-1711234567890)
-        return argOpt.filter(arg -> SESSION_ID_PATTERN.matcher(arg).matches());
+        // §75-B2: Session IDs are UUIDs (indistinguishable from cron job IDs at parse time).
+        // Delegation targets are resolved by handleDelegatePath at runtime, not here.
+        return Optional.empty();
     }
 
     // ------------------------------------------------------------------

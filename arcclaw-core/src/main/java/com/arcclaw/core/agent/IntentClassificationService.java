@@ -49,10 +49,12 @@ public class IntentClassificationService {
         if (text == null || text.isBlank()) return false;
         // §Hardening: Interrogative phrases (ending with '?') are recall intents, not write intents.
         // e.g. "you still remember?" vs "remember that I am Srini"
-        if (text.trim().endsWith("?")) {
+        // Check the FIRST LINE only — system corrections may be appended after newlines.
+        String firstLine = text.contains("\n") ? text.substring(0, text.indexOf('\n')).trim() : text.trim();
+        if (firstLine.endsWith("?")) {
             return false;
         }
-        return WRITE_INTENT_PATTERN.matcher(text).find();
+        return WRITE_INTENT_PATTERN.matcher(firstLine).find();
     }
 
     /**

@@ -9,7 +9,6 @@ import jakarta.inject.Inject;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
 import org.jboss.logging.Logger;
 
 /**
