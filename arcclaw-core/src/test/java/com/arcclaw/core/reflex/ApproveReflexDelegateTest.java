@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -93,7 +94,7 @@ class ApproveReflexDelegateTest {
     }
 
     @Test
-    void delegateUserWithSessionId_SessionNotFound_Rejected() {
+    void anyUser_withUUID_noSessionFound_getsNotFoundMessage() {
         String adminId = "admin123";
         String targetSid = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + targetSid;
@@ -162,6 +163,11 @@ class ApproveReflexDelegateTest {
         // 2. Not an active main-chat session either — so handleCronDecision won't bail
         when(agentStore.isSessionActive(cronUUID)).thenReturn(false);
 
+        // Mock the checkpoint approval so we reach the cron repository lookup
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getSessionId()).thenReturn("cron-job123-exec456");
+        when(checkpointApprovalService.approveAll(eq(cronUUID), any())).thenReturn(cp);
+
         MessageContext context = createTestContext(sessionId, userId, input);
 
         var result = reflex.execute(sessionId, userId, "chat1", input, context);
@@ -174,6 +180,9 @@ class ApproveReflexDelegateTest {
         String response = result.commandResponse().get();
         assertTrue(!response.contains("not authorized"),
                 "Cron task approval by owner should not require delegate role, got: " + response);
+
+        // Verify the cron path was actually attempted
+        verify(cronRepository, atLeastOnce()).findById(any());
     }
 
     private MessageContext createTestContext(String sessionId, String userId, String text) {
