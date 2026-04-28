@@ -23,6 +23,7 @@ class ChannelCommandParseTest {
         ChannelCommand cmd = ChannelCommand.parse("/approve");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
         assertTrue(((ChannelCommand.Approve) cmd).cronId().isEmpty());
+        assertTrue(((ChannelCommand.Approve) cmd).targetSessionId().isEmpty());
     }
 
     @Test
@@ -176,22 +177,66 @@ class ChannelCommandParseTest {
 
     @Test
     void parseApproveWithSessionId() {
-        ChannelCommand cmd = ChannelCommand.parse("/approve 12345-1711234567890");
+        ChannelCommand cmd = ChannelCommand.parse("/approve b2ada049-88e1-474d-9589-783a82190d46");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
         ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
-        assertEquals(Optional.of("12345-1711234567890"), a.targetSessionId());
+        assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), a.targetSessionId());
         assertTrue(a.cronId().isEmpty());
     }
 
     @Test
     void parseApproveWithSessionIdAndTool() {
-        ChannelCommand cmd = ChannelCommand.parse("/approve 12345-1711234567890 github");
+        ChannelCommand cmd = ChannelCommand.parse("/approve b2ada049-88e1-474d-9589-783a82190d46 github");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
         ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
-        assertEquals(Optional.of("12345-1711234567890"), a.targetSessionId());
-        // Since it contains digits and a hyphen, it does NOT match parseCronId anymore §75-B2
+        assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), a.targetSessionId());
+        // Full UUID format — matches targetSessionId, excluded from parseCronId by UUID_PATTERN guard
         assertTrue(a.cronId().isEmpty()); 
         // Parser only captures the first argument as targetSessionId, github is in 'rest' of arg
         assertTrue(a.toolName().isEmpty()); 
+    }
+
+    @Test
+    void parseApproveWithCronStyleArg_notParsedAsSessionId() {
+        ChannelCommand cmd = ChannelCommand.parse("/approve cron-abc123");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertTrue(a.targetSessionId().isEmpty());
+        assertTrue(a.cronId().isPresent());
+    }
+
+    @Test
+    void parseApprove_doubleSlashNormalizedToSingle() {
+        ChannelCommand cmd = ChannelCommand.parse("//approve");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+    }
+
+    @Test
+    void parseApproveWithSessionId_doubleSlashNormalized() {
+        ChannelCommand cmd = ChannelCommand.parse("//approve b2ada049-88e1-474d-9589-783a82190d46");
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertTrue(a.targetSessionId().isPresent());
+        assertEquals("b2ada049-88e1-474d-9589-783a82190d46", a.targetSessionId().get());
+    }
+
+    @Test
+    void parseApproveWithCronId_doubleSlashNormalized() {
+        ChannelCommand cmd = ChannelCommand.parse("//approve cron-abc123");
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertTrue(a.cronId().isPresent());
+        assertTrue(a.targetSessionId().isEmpty());
+    }
+
+    @Test
+    void parseApprove_tripleSlash_isUnknown() {
+        // Only one level of normalization — ///approve is treated as malformed
+        ChannelCommand cmd = ChannelCommand.parse("///approve");
+        assertInstanceOf(ChannelCommand.Unknown.class, cmd);
+    }
+
+    @Test
+    void parseApprove_doubleSlashWithBackticks_normalized() {
+        ChannelCommand cmd = ChannelCommand.parse("`//approve`");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
     }
 }

@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import org.jboss.logging.Logger;
 
 /**
@@ -26,6 +27,7 @@ public class AgentOtelContext implements AgentObserver {
     Tracer tracer;
 
     private final ConcurrentHashMap<String, Span> rootSpans = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Scope> rootScopes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicLong> totalInputTokens = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicLong> totalOutputTokens = new ConcurrentHashMap<>();
 
@@ -42,6 +44,8 @@ public class AgentOtelContext implements AgentObserver {
                 .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
                 .startSpan();
         rootSpans.put(sessionId, span);
+        // §OTel Fix: Spans must be made current to be visible to child builders
+        rootScopes.put(sessionId, span.makeCurrent());
         return span;
     }
 
@@ -53,6 +57,10 @@ public class AgentOtelContext implements AgentObserver {
     public void endSessionSpan(String sessionId) {
         if (sessionId == null)
             return;
+        Scope scope = rootScopes.remove(sessionId);
+        if (scope != null) {
+            scope.close();
+        }
         Span span = rootSpans.remove(sessionId);
         if (span != null) {
             span.end();

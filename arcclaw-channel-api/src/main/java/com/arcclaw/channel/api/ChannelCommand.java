@@ -59,7 +59,7 @@ public sealed interface ChannelCommand
         if (text == null || text.isBlank()) {
             return new Unknown(text == null ? "" : text);
         }
-        
+
         // Strip surrounding backticks - Telegram MarkdownV2 inline code formatting
         // causes copy-pasted commands to arrive as `/approve <id>` with backticks
         String trimmed = text.trim();
@@ -67,9 +67,12 @@ public sealed interface ChannelCommand
             trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
         }
 
-        var matcher = CMD_PATTERN.matcher(trimmed);
+        // Normalize double-slash prefix (e.g. //approve -> /approve)
+        String input = trimmed.startsWith("//") ? trimmed.substring(1) : trimmed;
+
+        var matcher = CMD_PATTERN.matcher(input);
         if (!matcher.matches()) {
-            return new Unknown(text);
+            return new Unknown(input);
         }
         String cmd = matcher.group(1).toLowerCase();
         String arg = matcher.group(2); // may be null
@@ -95,7 +98,7 @@ public sealed interface ChannelCommand
             case "crons"   -> new CronTasks();
             case "start"   -> new Start(optArg);
             case "cron" -> {
-                String[] parts = WHITESPACE_PATTERN.split(text.trim());
+                String[] parts = WHITESPACE_PATTERN.split(input.trim());
                 if ("delete".equalsIgnoreCase(arg)) {
                     String cronId = parts.length > 2 ? parts[2].strip() : null;
                     yield new DeleteCron(
@@ -106,14 +109,17 @@ public sealed interface ChannelCommand
             }
             case "deletecron" -> new DeleteCron(optArg);
             case "listtask", "listtasks", "crontask", "crontasks" -> new CronTasks();
-            default -> new Unknown(text);
+            default -> new Unknown(input);
         };
     }
 
+    static final Pattern UUID_PATTERN = Pattern.compile(
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    );
+
     private static Optional<String> parseCronId(Optional<String> argOpt) {
-        // Any arg containing a hyphen is a potential cron/job ID.
-        // Handler-level guards (isSessionActive) disambiguate from session IDs at runtime.
-        return argOpt.filter(arg -> arg.contains("-"));
+        // Cron IDs contain a hyphen but are not full UUIDs
+        return argOpt.filter(arg -> arg.contains("-") && !UUID_PATTERN.matcher(arg).matches());
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
@@ -121,9 +127,8 @@ public sealed interface ChannelCommand
     }
 
     private static Optional<String> parseTargetSessionId(Optional<String> argOpt) {
-        // §75-B2: Session IDs are UUIDs (indistinguishable from cron job IDs at parse time).
-        // Delegation targets are resolved by handleDelegatePath at runtime, not here.
-        return Optional.empty();
+        // Session IDs are strictly UUIDs
+        return argOpt.filter(arg -> UUID_PATTERN.matcher(arg).matches());
     }
 
     // ------------------------------------------------------------------

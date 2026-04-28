@@ -18,6 +18,7 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 @QuarkusTest
 class AgentOtelContextTest {
@@ -70,8 +71,9 @@ class AgentOtelContextTest {
         // End session span
         agentOtelContext.endSessionSpan(sessionId);
 
-        verify(span).end();
-        verify(scope).close();
+        InOrder inOrder = inOrder(scope, span);
+        inOrder.verify(scope).close();
+        inOrder.verify(span).end();
     }
 
     @Test

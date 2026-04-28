@@ -26,6 +26,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -75,7 +76,7 @@ class ApproveReflexDelegateTest {
     @Test
     void nonDelegateUserWithSessionIdArg_Rejected() {
         String adminId = "attacker";
-        String targetSid = "12345-67890";
+        String targetSid = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + targetSid;
         
         when(delegateGuard.isDelegate(adminId)).thenReturn(false);
@@ -91,7 +92,7 @@ class ApproveReflexDelegateTest {
     @Test
     void delegateUserWithSessionId_SessionNotFound_Rejected() {
         String adminId = "admin123";
-        String targetSid = "12345-67890";
+        String targetSid = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + targetSid;
         
         when(delegateGuard.isDelegate(adminId)).thenReturn(true);
@@ -101,7 +102,44 @@ class ApproveReflexDelegateTest {
         
         var result = reflex.execute(targetSid, adminId, "chat1", input, context);
         
-        assertTrue(result.commandResponse().get().contains("Target session not found"));
+        assertTrue(result.commandResponse().get().contains("Target session not found or has no pending approval."));
+    }
+
+    @Test
+    void explicitSelfApprovalById_RequiresDelegateRole() {
+        // Verifies the behavioral change: removing the targetSid.equals(currentSessionId) guard
+        // means owners cannot explicitly approve their own sessions by ID unless they are delegates.
+        String ownerId = "regularUser";
+        String mySessionId = "b2ada049-88e1-474d-9589-783a82190d46";
+        String input = "/approve " + mySessionId;
+        
+        when(delegateGuard.isDelegate(ownerId)).thenReturn(false);
+        
+        MessageContext context = createTestContext(mySessionId, ownerId, input);
+        var result = reflex.execute(mySessionId, ownerId, "chat1", input, context);
+        
+        assertTrue(result.commandResponse().get().contains("not authorized"));
+    }
+
+    @Test
+    void selfApproval_AllowedForDelegates() throws Exception {
+        String adminId = "delegateUser";
+        String mySessionId = "b2ada049-88e1-474d-9589-783a82190d46";
+        String input = "/approve " + mySessionId;
+        
+        when(delegateGuard.isDelegate(adminId)).thenReturn(true);
+        
+        // Mock the pending checkpoint for their own session
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getAgentRole()).thenReturn("coordinator");
+        when(cp.hasBatchToolDecisions()).thenReturn(false);
+        when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
+        
+        MessageContext context = createTestContext(mySessionId, adminId, input);
+        var result = reflex.execute(mySessionId, adminId, "chat1", input, context);
+        
+        // Verify approval goes through
+        assertTrue(result.commandResponse().get().contains(AbstractDecisionReflex.MSG_RESUMING_TASK));
     }
 
     private MessageContext createTestContext(String sessionId, String userId, String text) {

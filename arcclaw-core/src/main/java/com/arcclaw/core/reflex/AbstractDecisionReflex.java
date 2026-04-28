@@ -42,6 +42,8 @@ import org.jboss.logging.Logger;
  */
 public abstract class AbstractDecisionReflex implements AgentReflex {
 
+    public static final String MSG_RESUMING_TASK = "Resuming task...";
+
     @Inject protected Logger log;
     @Inject protected StatefulAgentStore statefulAgentStore;
     @Inject protected AgentCronRepository cronRepository;
@@ -145,9 +147,6 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     }
 
     private String handleDelegatePath(String targetSid, String userId, String chatId, String reason, MessageContext context, String currentSessionId) throws Exception {
-        if (targetSid.equals(currentSessionId)) {
-            return null;
-        }
         if (!delegateGuard.isDelegate(userId)) {
             log.warnf("[%s-DELEGATE-DENIED] admin=%s attempted decision for session=%s",
                     getActionName(), userId, targetSid);
@@ -226,9 +225,10 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         log.infof("[DELEGATE-%s] admin=%s decision for session=%s", getActionName(), adminId, targetSid);
         
         Optional<AgentCheckpoint> latestPending = statefulAgentStore.findLatestAwaitingApproval(targetSid);
-        String activeRole = latestPending.map(AgentCheckpoint::getAgentRole).orElse(null);
-
-        if (activeRole == null) return null;
+        if (latestPending.isEmpty()) {
+            return "Target session not found or has no pending approval.";
+        }
+        String activeRole = latestPending.get().getAgentRole();
 
         AgentCheckpoint cp = latestPending.get();
         if (cp.hasBatchToolDecisions()) {
@@ -239,7 +239,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         auditService.logSecurityEvent(SecurityEventType.DELEGATE_APPROVAL, adminId, auditMsg);
 
         checkpointResumeHandler.resumeAfterBatchDecision(targetSid, activeRole, adminId, adminChatId, context.getUser().channel().name());
-        return "Resuming task...";
+        return MSG_RESUMING_TASK;
     }
 
     private String handleCronDecision(String cronId, String userId, String chatId, String reason, MessageContext context) throws Exception {
