@@ -112,9 +112,6 @@ public class CheckpointResumeCoordinator {
                                             String capturedUserId,
                                             MessageContext context) {
 
-        // 🟢 FIX: Search by sessionId across ALL roles for this session. 
-        // specialized roles (researcher/coder) save checkpoints with their own role name,
-        // but the resume dispatcher may be the coordinator.
         Optional<AgentCheckpoint> existingCheckpoint = agentStore.findLatestNonArchivedCheckpoint(sessionId);
         if (existingCheckpoint.isEmpty()) {
             return new ResumeDecision.FreshStart();
@@ -124,7 +121,6 @@ public class CheckpointResumeCoordinator {
         CheckpointStatus status = checkpoint.getStatus();
 
         // Ensure we only resume if the role matches, OR if it's a cross-role resume (§7.31/§7.46)
-        // If the checkpoint role is different but status is AWAITING/RESUMING, we MUST restore it.
         boolean roleMatches = Objects.equals(checkpoint.getAgentRole(), canonicalRole);
         boolean isResumableStatus = (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING);
         
@@ -135,66 +131,68 @@ public class CheckpointResumeCoordinator {
         }
 
         if (status == CheckpointStatus.IN_PROGRESS) {
+            return handleInProgress(checkpoint);
+        }
+
+        if (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING) {
+            return handleAwaitingApproval(checkpoint, context, capturedUserId, canonicalRole);
+        }
+
+        if (status == CheckpointStatus.COMPLETED && roleMatches) {
+            return handleCompleted(checkpoint);
+        }
+
+        return handleTerminalMismatch(checkpoint, status, roleMatches);
+    }
+
+    private ResumeDecision handleInProgress(AgentCheckpoint checkpoint) {
+        List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
+        log.infof("CheckpointResumeCoordinator: restored %d steps from IN_PROGRESS for session=%s",
+                loadedSteps != null ? loadedSteps.size() : 0, checkpoint.getSessionId());
+        return new ResumeDecision.ResumedHistory(
+                loadedSteps != null ? loadedSteps : new ArrayList<>(),
+                checkpoint.getIterationsUsed(),
+                checkpoint.getAgentRole(),
+                checkpoint.getContextDataJson());
+    }
+
+    private ResumeDecision handleAwaitingApproval(AgentCheckpoint checkpoint, MessageContext context, 
+                                                 String capturedUserId, String canonicalRole) {
+        CheckpointStatus status = checkpoint.getStatus();
+        boolean isResume = (context != null && context.isResumeSignal()) || status == CheckpointStatus.RESUMING;
+        if (isResume) {
             List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-            log.infof("CheckpointResumeCoordinator: restored %d steps from IN_PROGRESS for session=%s",
-                    loadedSteps != null ? loadedSteps.size() : 0, sessionId);
+            log.infof("CheckpointResumeCoordinator: restored %d steps from %s for session=%s",
+                    loadedSteps != null ? loadedSteps.size() : 0, status, checkpoint.getSessionId());
             return new ResumeDecision.ResumedHistory(
                     loadedSteps != null ? loadedSteps : new ArrayList<>(),
                     checkpoint.getIterationsUsed(),
                     checkpoint.getAgentRole(),
                     checkpoint.getContextDataJson());
+        } else {
+            archiveStaleApproval(checkpoint.getSessionId(), canonicalRole, capturedUserId, checkpoint, context);
+            return new ResumeDecision.AbortedStale();
         }
+    }
 
-        if (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING) {
-            // §7.29 / §T5-4: RESUMING status is an explicit "active" signal. 
-            // If the checkpoint is RESUMING, it means a thread has already claimed
-            // it and is currently executing the tool. We MUST restore history 
-            // so the new message can be processed AFTER the current turn finishes
-            // (or rejected by the concurrency lock).
-            boolean isResume = (context != null && context.isResumeSignal()) || status == CheckpointStatus.RESUMING;
-            if (isResume) {
-                List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-                log.infof("CheckpointResumeCoordinator: restored %d steps from %s for session=%s",
-                        loadedSteps != null ? loadedSteps.size() : 0, status, sessionId);
-                return new ResumeDecision.ResumedHistory(
-                        loadedSteps != null ? loadedSteps : new ArrayList<>(),
-                        checkpoint.getIterationsUsed(),
-                        checkpoint.getAgentRole(),
-                        checkpoint.getContextDataJson());
-            } else {
-                // Stale approval discard path (§3.4)
-                archiveStaleApproval(sessionId, canonicalRole, capturedUserId, checkpoint, context);
-                return new ResumeDecision.AbortedStale();
-            }
-        }
+    private ResumeDecision handleCompleted(AgentCheckpoint checkpoint) {
+        List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
+        log.infof("CheckpointResumeCoordinator: restored %d steps from COMPLETED turn for session=%s",
+                loadedSteps != null ? loadedSteps.size() : 0, checkpoint.getSessionId());
+        
+        checkpoint.setStatus(CheckpointStatus.ARCHIVED);
+        agentStore.save(checkpoint);
 
-        // §7.31/§7.46: If a checkpoint is COMPLETED, we still want to restore its history
-        // so the NEXT turn in the same session knows what happened (e.g. Coder seeing 
-        // the code it just wrote). We archive the status but keep the steps.
-        if (status == CheckpointStatus.COMPLETED && roleMatches) {
-            List<ReasoningStep> loadedSteps = agentStore.deserializeSteps(checkpoint);
-            log.infof("CheckpointResumeCoordinator: restored %d steps from COMPLETED turn for session=%s",
-                    loadedSteps != null ? loadedSteps.size() : 0, sessionId);
-            
-            // Archive it now so it's not "latest" for the next poll
-            checkpoint.setStatus(CheckpointStatus.ARCHIVED);
-            agentStore.save(checkpoint);
+        int MAX_CARRY_STEPS = 10;
+        List<ReasoningStep> pruned = (loadedSteps != null && loadedSteps.size() > MAX_CARRY_STEPS)
+                ? loadedSteps.subList(loadedSteps.size() - MAX_CARRY_STEPS, loadedSteps.size())
+                : (loadedSteps != null ? loadedSteps : new ArrayList<>());
 
-            // §7.46: Prune history to prevent unbounded growth across many turns.
-            // 10 steps is enough to capture the prior code block and basic reasoning.
-            int MAX_CARRY_STEPS = 10;
-            List<ReasoningStep> pruned = (loadedSteps != null && loadedSteps.size() > MAX_CARRY_STEPS)
-                    ? loadedSteps.subList(loadedSteps.size() - MAX_CARRY_STEPS, loadedSteps.size())
-                    : (loadedSteps != null ? loadedSteps : new ArrayList<>());
+        return new ResumeDecision.ResumedHistory(
+                pruned, 0, checkpoint.getAgentRole(), checkpoint.getContextDataJson());
+    }
 
-            return new ResumeDecision.ResumedHistory(
-                    pruned,
-                    0, // Reset iterations for the new goal
-                    checkpoint.getAgentRole(),
-                    checkpoint.getContextDataJson());
-        }
-
-        // Other terminal statuses or role mismatches: Archive and start fresh
+    private ResumeDecision handleTerminalMismatch(AgentCheckpoint checkpoint, CheckpointStatus status, boolean roleMatches) {
         log.debugf("CheckpointResumeCoordinator: ignoring terminal checkpoint (status=%s, roleMatch=%b). Archiving.", 
                 status, roleMatches);
         checkpoint.setStatus(CheckpointStatus.ARCHIVED);
