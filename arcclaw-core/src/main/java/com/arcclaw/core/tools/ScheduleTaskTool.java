@@ -197,9 +197,12 @@ public class ScheduleTaskTool implements AgentTool {
             default        -> false;
         };
 
+        // NPE-SAFE: executionRole can be null. CronJobRunner.resolveRole()
+        // handles null by falling back to keyword-based resolution (e.g. "write python" -> "coder").
+        // Do NOT add a hardcoded default here as it overrides the runner's specialist detection.
         String executionRole = (String) params.get("executionRole");
-        if (executionRole == null || executionRole.isBlank()) {
-            executionRole = AgentRoleEnum.RESEARCHER.toScopedName();
+        if (executionRole != null && executionRole.isBlank()) {
+            executionRole = null;
         }
 
         // Step 1 - Validate cronExpression or absolute time trigger
