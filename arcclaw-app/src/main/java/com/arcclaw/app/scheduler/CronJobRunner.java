@@ -279,7 +279,11 @@ public class CronJobRunner {
         // 4. Role keywords
         if (normalized.contains("researcher task") || normalized.contains("fetch") || normalized.contains("discovery")) {
             return AgentRoleEnum.RESEARCHER.toScopedName();
-        } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("fix bug") || normalized.contains("refactor")) {
+        } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("write python")
+                || normalized.contains("write script") || normalized.contains("write program")
+                || normalized.contains("fix bug") || normalized.contains("refactor")) {
+            // NOTE: "write program" is intentionally broad — false positives (e.g. "write program spec")
+            // are acceptable since CODER will delegate or fail gracefully rather than silently mismatch.
             return AgentRoleEnum.CODER.toScopedName();
         }
         

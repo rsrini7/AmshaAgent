@@ -501,6 +501,9 @@ arcclaw:
     stale-mark-seconds: ${ARCCLAW_RESUMPTION_STALE_MARK_SECONDS:60}
     playwright-stale-mark-seconds: ${ARCCLAW_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS:300}
 
+  checkpoint:
+    stale-claim-minutes: ${ARCCLAW_CHECKPOINT_STALE_CLAIM_MINUTES:2}
+
   audit:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
 

@@ -110,20 +110,26 @@ public class ToolStepHandler {
         }
 
         // 🟢 FIX: Specialist Tool Redirection
-        // If coordinator attempts a specialist tool (sandbox, search, browser) for which it 
+        // If coordinator or researcher attempts a specialist tool (sandbox, search, browser) for which it 
         // lacks capabilities, redirect to the appropriate specialist agent via delegate_to_agent.
         // Guard: don't redirect if this step is already a delegation to avoid infinite loops.
-        if (AgentRoleEnum.COORDINATOR.toScopedName().equals(context.agentRole()) 
+        String currentRole = context.agentRole();
+        if ((AgentRoleEnum.COORDINATOR.toScopedName().equals(currentRole) || AgentRoleEnum.RESEARCHER.toScopedName().equals(currentRole))
                 && !ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
+            
             if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) {
                  return StepDecision.proceedWithFailures(
                     redirectToDelegate(step, context.sessionId(), "coder"), consecutiveFailures);
             }
-            if (ToolCapability.WEB_SEARCH_BRAVE.toolName().equals(toolName)
-                    || ToolCapability.WEB_SEARCH_SERPER.toolName().equals(toolName)
-                    || ToolCapability.BROWSER_NAVIGATE.toolName().equals(toolName)) {
-                 return StepDecision.proceedWithFailures(
-                    redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+            
+            // Coordinator lacks research tools, but researcher HAS them - only redirect coordinator for these
+            if (AgentRoleEnum.COORDINATOR.toScopedName().equals(currentRole)) {
+                if (ToolCapability.WEB_SEARCH_BRAVE.toolName().equals(toolName)
+                        || ToolCapability.WEB_SEARCH_SERPER.toolName().equals(toolName)
+                        || ToolCapability.BROWSER_NAVIGATE.toolName().equals(toolName)) {
+                     return StepDecision.proceedWithFailures(
+                        redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+                }
             }
         }
 

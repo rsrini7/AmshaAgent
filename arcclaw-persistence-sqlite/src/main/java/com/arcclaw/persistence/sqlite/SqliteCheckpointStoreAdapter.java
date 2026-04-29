@@ -2,6 +2,7 @@ package com.arcclaw.persistence.sqlite;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +29,7 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -47,6 +49,9 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Inject
     public SqliteCheckpointStoreAdapter self; // self-proxy for @Transactional interception
+
+    @ConfigProperty(name = "arcclaw.checkpoint.stale-claim-minutes", defaultValue = "2")
+    int staleClaimMinutes;
 
     @Inject
     SqliteRetryTemplate retryTemplate;
@@ -333,17 +338,24 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doClaimForResume(String sessionId, String agentRole) {
-        // Atomic transition of the latest checkpoint to RESUMING
-        // We need to find the latest ID first in a subquery or native SQL
+        // Atomic transition of the latest checkpoint to RESUMING.
+        // §Retry-Fix: Allow transitioning from AWAITING_APPROVAL immediately.
+        // Allow transitioning from RESUMING or IN_PROGRESS only if stale (configurable)
+        // to prevent double-resumption while allowing recovery of orphaned sessions.
+        Instant cutoff = Instant.now().minus(staleClaimMinutes, ChronoUnit.MINUTES);
+        String cutoffStr = TemporalUtils.formatIsoLex(cutoff);
+        String nowStr = TemporalUtils.formatIsoLex(Instant.now());
+
         int updated = em.createNativeQuery(
                 "UPDATE agent_checkpoint SET status = 'RESUMING', updated_at = :now " +
                 "WHERE checkpoint_id = (SELECT checkpoint_id FROM agent_checkpoint " +
                 "            WHERE session_id = :sid AND agent_role = :role " +
                 "            ORDER BY checkpoint_id DESC LIMIT 1) " +
-                "  AND status = 'AWAITING_APPROVAL'"
+                "  AND (status = 'AWAITING_APPROVAL' OR (status IN ('RESUMING', 'IN_PROGRESS') AND updated_at < :cutoff))"
         ).setParameter("sid", sessionId)
          .setParameter("role", agentRole)
-         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now())) // §ISO-LEX consistency
+         .setParameter("now", nowStr)
+         .setParameter("cutoff", cutoffStr)
          .executeUpdate();
         return updated == 1;
     }
@@ -378,14 +390,18 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public Optional<CheckpointDto> doFindLatestAwaitingApproval(String sessionId) {
+        // §Issue-Fix: Allow finding checkpoints that are AWAITING_APPROVAL, RESUMING, or IN_PROGRESS.
+        // IMPORTANT: em.clear() is the fix for the "checkpoint status changes not immediately visible" bug.
         em.clear();
         return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c " +
-                "WHERE c.sessionId = :sid AND c.status = :status " +
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid " +
+                "  AND c.status IN (:s1, :s2, :s3) " +
                 "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("sid", sessionId)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("s1", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("s2", CheckpointStatus.RESUMING)
+                .setParameter("s3", CheckpointStatus.IN_PROGRESS)
                 .setMaxResults(1)
                 .getResultList()
                 .stream()
@@ -561,11 +577,19 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public Optional<CheckpointDto> doFindLatestAwaitingApprovalBySessionContaining(String segment) {
+        // §Issue-Fix: Allow finding checkpoints that are AWAITING_APPROVAL, RESUMING, or IN_PROGRESS.
+        // This is critical for resolving cron-sessions that may have stalled or been orphaned.
+        // IMPORTANT: em.clear() is the fix for the "checkpoint status changes not immediately visible" bug.
+        em.clear();
         return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment AND c.status = :status ORDER BY c.id DESC",
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment " +
+                "  AND c.status IN (:s1, :s2, :s3) " +
+                "ORDER BY c.id DESC",
                 AgentCheckpoint.class)
                 .setParameter("segment", "%" + segment + "%")
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("s1", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("s2", CheckpointStatus.RESUMING)
+                .setParameter("s3", CheckpointStatus.IN_PROGRESS)
                 .setMaxResults(1)
                 .getResultList()
                 .stream()

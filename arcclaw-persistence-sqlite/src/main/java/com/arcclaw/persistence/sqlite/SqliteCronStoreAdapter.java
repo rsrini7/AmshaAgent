@@ -101,6 +101,8 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCronDto> findById(String id) {
         if (id == null || id.isBlank()) return Optional.empty();
+        // IMPORTANT: em.clear() is the fix for the "chat mode changes not immediately visible" bug.
+        em.clear();
         AgentCronEntity entity = em.find(AgentCronEntity.class, id);
         return Optional.ofNullable(entity).map(this::toDto);
     }
