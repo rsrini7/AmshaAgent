@@ -23,6 +23,8 @@ import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -40,6 +42,7 @@ public class SandboxExecTool implements AgentTool {
     private static final Logger log = Logger.getLogger(SandboxExecTool.class);
     private static final int MAX_OUTPUT_CHARS = 8192;
     private static final String TRUNCATION_SUFFIX = "[output truncated at 8192 chars]";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // ── Container-side mount point for the workspace directory.
     // ProcessIsolationExecutor mounts workspaceRoot here read-only.
@@ -104,10 +107,12 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public List<String> sandboxCommand(Map<String, Object> params) {
+        ensureUnwrapped(params);
         String code = (String) params.get("code");
         String lang = (String) params.get("language");
         if (code == null) throw new IllegalArgumentException("Parameter 'code' is required.");
         if (lang == null) throw new IllegalArgumentException("Parameter 'language' is required.");
+
         lang = lang.toLowerCase();
 
         String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
@@ -143,6 +148,7 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {
+        ensureUnwrapped(params);
         String lang = (String) params.get("language");
         String code = (String) params.get("code");
         if (lang == null || code == null) return;
@@ -464,5 +470,25 @@ public class SandboxExecTool implements AgentTool {
         int endIndex = output.offsetByCodePoints(
                 0, Math.min(output.codePointCount(0, output.length()), MAX_OUTPUT_CHARS));
         return output.substring(0, endIndex) + TRUNCATION_SUFFIX;
+    }
+
+    private void ensureUnwrapped(Map<String, Object> params) {
+        if (params == null) return;
+        Object codeObj = params.get("code");
+        if (!(codeObj instanceof String code)) return;
+
+        if (code.trim().startsWith("{") && code.contains("\"code\"") && code.contains("\"language\"")) {
+            try {
+                JsonNode node = MAPPER.readTree(code);
+                if (node.has("code")) {
+                    params.put("code", node.get("code").asText());
+                }
+                if (node.has("language")) {
+                    params.put("language", node.get("language").asText());
+                }
+            } catch (Exception e) {
+                // ignore and proceed with raw code if parsing fails
+            }
+        }
     }
 }

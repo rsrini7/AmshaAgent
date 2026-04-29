@@ -18,11 +18,13 @@ public final class Fts5QueryUtil {
         if (input == null || input.isBlank()) return "\"\"";
 
         // Replace all non-word, non-space characters with a space.
-        // \w = [a-zA-Z0-9_] - covers all FTS5 special chars comprehensively.
+        // This sanitizes against FTS5 operators like *, ^, etc.
         String sanitized = input.replaceAll("[^\\w\\s]", " ").trim();
 
-        if (sanitized.isBlank()) return "\"\"";
+        if (sanitized.isBlank()) return "";
 
-        return "\"" + sanitized + "\"";
+        // Return tokens as-is. FTS5 will perform an implicit AND search on tokens.
+        // This is much more flexible than phrase search for RAG.
+        return sanitized;
     }
 }

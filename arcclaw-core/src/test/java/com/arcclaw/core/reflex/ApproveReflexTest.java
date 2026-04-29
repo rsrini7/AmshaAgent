@@ -191,7 +191,7 @@ class ApproveReflexTest {
         cron.status = CronStatus.AWAITING_APPROVAL;
 
         // Session CP exists
-        when(statefulAgentStore.findLatestAwaitingApproval(eq("session-1")))
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1"))
                 .thenReturn(Optional.of(cp));
         
         MessageContext ctx = createContext("/approve");
@@ -209,10 +209,10 @@ class ApproveReflexTest {
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
-        // Only "session-1" has a pending checkpoint; "cron-123" is a cron task
-        when(statefulAgentStore.findLatestAwaitingApproval(eq("session-1")))
+        // Fix: Use specific IDs to avoid misidentifying cron ID as session ID
+        when(statefulAgentStore.findLatestAwaitingApproval("session-1"))
                 .thenReturn(Optional.of(cp));
-        when(statefulAgentStore.findLatestAwaitingApproval(eq("cron-123")))
+        when(statefulAgentStore.findLatestAwaitingApproval("cron-123"))
                 .thenReturn(Optional.empty());
         
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
@@ -225,6 +225,7 @@ class ApproveReflexTest {
         AgentCronEntity cron = new AgentCronEntity();
         cron.id = "cron-123";
         cron.userId = userId;
+        cron.chatId = "chat-1";
         cron.status = CronStatus.AWAITING_APPROVAL;
         AgentCheckpoint cp2 = new AgentCheckpoint();
         cp2.setSessionId("cron-session-1");

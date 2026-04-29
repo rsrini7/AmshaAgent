@@ -55,7 +55,7 @@ class MemorySearchToolTest {
                 "session-2", "Reviewed blockchain consensus algorithms", 
                 Instant.parse("2026-02-21T14:00:00Z"), 0, "user-42");
 
-        when(compactionRepo.search("user-42", "\"blockchain\"", 5))
+        when(compactionRepo.search("user-42", "blockchain", 5))
                 .thenReturn(List.of(e1, e2));
         when(memoryPort.search(anyString(), anyInt(), anyString())).thenReturn(List.of());
 

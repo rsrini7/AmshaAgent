@@ -54,10 +54,11 @@ public enum ToolCapability {
         "Interpreted (python/node/bash): runs inline. " +
         "Compiled (java): needs a complete class with main(). Filename = class name. " +
         "Go: needs complete program with 'package main' and 'func main()'. " +
-        "ALWAYS pass flat JSON. Examples: " +
+        "CRITICAL: The 'code' parameter MUST be a plain string of source code. NEVER wrap the source code in an additional JSON object inside the string. " +
+        "Examples: " +
         "{\"code\":\"System.out.println(\\\"Hello\\\");\",\"language\":\"java\"} - WRONG (no class). " +
         "{\"code\":\"public class Main{public static void main(String[] a){System.out.println(\\\"Hello\\\");}}\",\"language\":\"java\"} - CORRECT. " +
-        "CRITICAL: Keep your JSON payload under 2000 characters to prevent max_tokens truncation. For short snippets, use a compact single-line form without newlines."),
+        "Keep your JSON payload under 2000 characters to prevent max_tokens truncation. For short snippets, use a compact single-line form without newlines."),
 
     /**
      * Ability to delegate tasks to a domain expert sub-agent.

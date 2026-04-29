@@ -144,6 +144,8 @@ public class CronJobRunner {
         }
 
         // Check for lack of tool-like verbs (heuristic for simple statements)
+        // NOTE: These keywords are intentionally broad. The guard's purpose is to
+        // route any goal that implies agent work into the agent loop, not to be selective.
         boolean hasActionVerb = normalized.contains("fetch") || normalized.contains("search") 
                 || normalized.contains("check") || normalized.contains("monitor") 
                 || normalized.contains("run") || normalized.contains("execute")
@@ -152,6 +154,10 @@ public class CronJobRunner {
                 || normalized.contains("delete") || normalized.contains("update")
                 || normalized.contains("create") || normalized.contains("google")
                 || normalized.contains("memory") || normalized.contains("browse")
+                || normalized.contains("find") || normalized.contains("retrieve")
+                || normalized.contains("get") || normalized.contains("write")
+                || normalized.contains("summarize") || normalized.contains("read")
+                || normalized.contains("extract") || normalized.contains("identify")
                 || normalized.contains(ToolCapability.GITHUB.toolName())
                 || normalized.contains(ToolCapability.BROWSER_NAVIGATE.toolName())
                 || normalized.contains(ToolCapability.WEB_SEARCH_SERPER.toolName());
