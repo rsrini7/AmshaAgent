@@ -59,7 +59,7 @@ class StatefulAgentStoreConcurrencyTest {
         CheckpointDto incoming = new CheckpointDto(
             id, "s1", "role", "AWAITING_APPROVAL", null, null, null, null, null, 
             null, null, null, null, objectMapper.writeValueAsString(incomingDecisions), 
-            null, null, null, 0, null, null, null, null, null, Instant.now(), Instant.now()
+            null, null, null, 0, null, null, null, null, null, null, Instant.now(), Instant.now()
         );
 
         when(em.find(AgentCheckpoint.class, id)).thenReturn(managed);
@@ -95,7 +95,7 @@ class StatefulAgentStoreConcurrencyTest {
         CheckpointDto incoming = new CheckpointDto(
             id, "s1", "role", "AWAITING_APPROVAL", null, null, null, null, null, 
             null, null, null, null, objectMapper.writeValueAsString(incomingDecisions), 
-            null, null, null, 0, null, null, null, null, null, Instant.now(), Instant.now()
+            null, null, null, 0, null, null, null, null, null, null, Instant.now(), Instant.now()
         );
 
         when(em.find(AgentCheckpoint.class, id)).thenReturn(managed);
