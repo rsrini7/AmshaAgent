@@ -104,7 +104,7 @@ public class AppBootstrap {
             String command = ProcessHandle.current().info().command().orElse("");
             if (!command.isEmpty()) {
                 try {
-                    Path p = Path.of(command).toAbsolutePath().getParent();
+                    Path p = Path.of(command).toAbsolutePath().normalize().getParent();
                     if (Files.exists(p)) return p;
                 } catch (Exception e) {
                     log.debugf("Failed to resolve binary dir from command: %s", ExceptionUtils.getRootCauseMessage(e));

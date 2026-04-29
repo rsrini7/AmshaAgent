@@ -12,6 +12,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.jar.Manifest;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -56,10 +57,16 @@ public class PlaywrightBrowserInstaller {
                     name.startsWith("chromium_headless_shell-");
                 if (!nameMatch) return false;
                 // verify the actual executable exists, not just the folder
-                Path exe = isWindows()
-                    ? p.resolve("chrome-headless-shell-win64").resolve("chrome-headless-shell.exe")
-                    : p.resolve("chrome-headless-shell").resolve("chrome-headless-shell");
-                return Files.exists(exe);
+                try (Stream<Path> subDirs = Files.list(p)) {
+                    return subDirs.anyMatch(sub -> {
+                        String subName = sub.getFileName().toString();
+                        if (!subName.startsWith("chrome-headless-shell")) return false;
+                        Path exe = isWindows()
+                            ? sub.resolve("chrome-headless-shell.exe")
+                            : sub.resolve("chrome-headless-shell");
+                        return Files.exists(exe);
+                    });
+                } catch (IOException e) { return false; }
             });
         } catch (IOException e) { return false; }
     }
@@ -383,22 +390,23 @@ public class PlaywrightBrowserInstaller {
         if (!"true".equalsIgnoreCase(playwrightEnabled)) return;
 
         String platform  = detectPlatform();          // "win32_x64", "mac", "mac-arm64", "linux"
-        Path  driverDir  = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION).resolve(platform);
+        Path  driverDir  = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION).resolve(platform).toAbsolutePath().normalize();
         Path  markerFile = driverDir.resolve(".playwright-version");
 
         // Detect current version from driver-bundle JAR on classpath
         String currentVersion = detectPlaywrightVersion();
 
-        // Check if already extracted and version matches
-        if (Files.exists(driverDir) && Files.exists(markerFile)) {
+        // Check if already extracted and version matches AND binaries exist
+        Path nodeExe = driverDir.resolve(isWindows() ? "node.exe" : "node");
+        if (Files.exists(driverDir) && Files.exists(markerFile) && Files.exists(nodeExe)) {
             try {
                 String extracted = Files.readString(markerFile).trim();
-                if (extracted.equals(currentVersion)) {
+                if (extracted.equals(currentVersion) && !currentVersion.equals("unknown")) {
                     log.debugf("Playwright driver already extracted (v%s) at %s", currentVersion, driverDir);
                     System.setProperty("playwright.cli.dir", driverDir.toString());
                     return;
                 }
-                log.infof("Playwright driver version changed: %s → %s, re-extracting...", extracted, currentVersion);
+                log.infof("Playwright driver version changed or incomplete: %s → %s, re-extracting...", extracted, currentVersion);
             } catch (IOException e) {
                 log.debugf("Failed to read Playwright driver version: %s", ExceptionUtils.getRootCauseMessage(e));
             }
@@ -427,7 +435,15 @@ public class PlaywrightBrowserInstaller {
             log.infof("Playwright CLI driver ready at %s", driverDir);
 
         } catch (Exception e) {
-            log.warnf("Failed to extract Playwright driver: %s - will fall back to DriverJar", e.getMessage());
+            log.warnf("Failed to extract Playwright driver: %s", e.getMessage());
+            if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+                System.err.println();
+                System.err.println("  ⚠️  Playwright Driver Missing (Native Mode)");
+                System.err.println("     Could not find driver-bundle JAR to extract the Node.js driver.");
+                System.err.println("     Please place 'driver-bundle-" + currentVersion + ".jar' next to the binary");
+                System.err.println("     or extract it manually to: " + driverDir);
+                System.err.println();
+            }
         }
     }
 
@@ -457,21 +473,18 @@ public class PlaywrightBrowserInstaller {
             log.debugf("Failed to list Playwright manifest resources: %s", ExceptionUtils.getRootCauseMessage(e));
         }
 
-        // 2. Fallback: scan Maven local repo for known driver-bundle version
-        Path m2 = Path.of(System.getProperty("user.home"), ".m2", "repository",
-            "com", "microsoft", "playwright", "driver-bundle");
-        if (Files.exists(m2)) {
-            try (Stream<Path> dirs = Files.list(m2)) {
-                return dirs.filter(Files::isDirectory)
-                    .map(p -> p.getFileName().toString())
-                    .filter(v -> v.matches("\\d+\\.\\d+\\.\\d+"))
-                    .sorted(Comparator.reverseOrder())
-                    .findFirst().orElse("unknown");
-            } catch (IOException e) {
-                log.debugf("Failed to read Playwright driver version: %s", ExceptionUtils.getRootCauseMessage(e));
-            }
-        }
-        return "unknown";
+        // 3. Fallback: scan current directory for driver-bundle-*.jar
+        try (Stream<Path> files = Files.list(Path.of(System.getProperty("user.dir")))) {
+            Optional<String> found = files.map(p -> p.getFileName().toString())
+                .filter(name -> name.startsWith("driver-bundle-") && name.endsWith(".jar"))
+                .map(name -> name.substring("driver-bundle-".length(), name.length() - ".jar".length()))
+                .filter(v -> v.matches("\\d+\\.\\d+\\.\\d+"))
+                .sorted(Comparator.reverseOrder())
+                .findFirst();
+            if (found.isPresent()) return found.get();
+        } catch (IOException ignored) {}
+
+        return "1.58.0"; // Final fallback matching project pom.xml
     }
 
     private static Path findDriverBundleJar(String version) {
@@ -489,10 +502,21 @@ public class PlaywrightBrowserInstaller {
                 if (Files.exists(p)) return p;
             }
         }
+
+        // 3. Binary directory (Native mode - look for JAR next to the executable)
+        // We can't easily get binaryDir here without passing it, but we can try CWD
+        Path cwdJar = Path.of(System.getProperty("user.dir")).resolve("driver-bundle-" + version + ".jar");
+        if (Files.exists(cwdJar)) return cwdJar;
+        
+        // Also check for versionless JAR
+        Path cwdJarSimple = Path.of(System.getProperty("user.dir")).resolve("driver-bundle.jar");
+        if (Files.exists(cwdJarSimple)) return cwdJarSimple;
+
         return null;
     }
 
     private static void extractFromJar(Path jar, String jarPrefix, Path targetDir) throws Exception {
+        targetDir = targetDir.toAbsolutePath().normalize();
         Files.createDirectories(targetDir);
         String prefixWithSlash = jarPrefix + "/";
         try (var zf = new ZipFile(jar.toFile())) {
