@@ -80,7 +80,7 @@ public class CheckpointResumeCoordinator {
         record FreshStart() implements ResumeDecision {}
 
         /** Resume with existing history. */
-        record ResumedHistory(List<ReasoningStep> history, int iterationsUsed, String checkpointRole) implements ResumeDecision {}
+        record ResumedHistory(List<ReasoningStep> history, int iterationsUsed, String checkpointRole, String contextDataJson) implements ResumeDecision {}
 
         /** Stale approval was active but discarded; starting fresh. */
         record AbortedStale() implements ResumeDecision {}
@@ -141,7 +141,8 @@ public class CheckpointResumeCoordinator {
             return new ResumeDecision.ResumedHistory(
                     loadedSteps != null ? loadedSteps : new ArrayList<>(),
                     checkpoint.getIterationsUsed(),
-                    checkpoint.getAgentRole());
+                    checkpoint.getAgentRole(),
+                    checkpoint.getContextDataJson());
         }
 
         if (status == CheckpointStatus.AWAITING_APPROVAL || status == CheckpointStatus.RESUMING) {
@@ -158,7 +159,8 @@ public class CheckpointResumeCoordinator {
                 return new ResumeDecision.ResumedHistory(
                         loadedSteps != null ? loadedSteps : new ArrayList<>(),
                         checkpoint.getIterationsUsed(),
-                        checkpoint.getAgentRole());
+                        checkpoint.getAgentRole(),
+                        checkpoint.getContextDataJson());
             } else {
                 // Stale approval discard path (§3.4)
                 archiveStaleApproval(sessionId, canonicalRole, capturedUserId, checkpoint, context);
@@ -188,7 +190,8 @@ public class CheckpointResumeCoordinator {
             return new ResumeDecision.ResumedHistory(
                     pruned,
                     0, // Reset iterations for the new goal
-                    checkpoint.getAgentRole());
+                    checkpoint.getAgentRole(),
+                    checkpoint.getContextDataJson());
         }
 
         // Other terminal statuses or role mismatches: Archive and start fresh

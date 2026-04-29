@@ -27,6 +27,7 @@ public record CheckpointDto(
     int iterationsUsed,
     Integer retryAfterMs,
     String systemNote,
+    String contextDataJson,
     String errorCode,
     String traceId,
     String rootCauseClass,

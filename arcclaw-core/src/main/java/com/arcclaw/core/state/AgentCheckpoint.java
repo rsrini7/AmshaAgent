@@ -171,6 +171,14 @@ public class AgentCheckpoint {
     @Nullable
     private String systemNote;
 
+    /**
+     * JSON-serialized Map<String, Object> containing transient execution data
+     * (e.g. SUGGESTED_NEXT_FIRE_TIME) from MessageContext. §7.48
+     */
+    @Column(name = "context_data", columnDefinition = "TEXT")
+    @Nullable
+    private String contextDataJson;
+
     /** Categorized error code for diagnostics (e.g. AUTH_FAILED, TOOL_TIMEOUT). */
     @Column(name = "error_code", length = 64)
     @Nullable
@@ -357,6 +365,9 @@ public class AgentCheckpoint {
 
     public String getSystemNote() { return systemNote; }
     public void setSystemNote(String systemNote) { this.systemNote = systemNote; }
+
+    public String getContextDataJson() { return contextDataJson; }
+    public void setContextDataJson(String contextDataJson) { this.contextDataJson = contextDataJson; }
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;

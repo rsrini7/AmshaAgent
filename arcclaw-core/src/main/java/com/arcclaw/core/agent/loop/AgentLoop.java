@@ -3,7 +3,9 @@ package com.arcclaw.core.agent.loop;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -167,6 +169,19 @@ public class AgentLoop {
                 .findFirst()
                 .orElse(StructuredOutputMode.NATIVE);
 
+            Map<String, Object> mergedData = new HashMap<>();
+            if (context != null) {
+                mergedData.putAll(context.getData());
+            }
+            if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r && r.contextDataJson() != null) {
+                Map<String, Object> restored = agentStore.deserializeContextData(r.contextDataJson());
+                if (restored != null) {
+                    // §Issue 4.2: Prioritize restored context data (especially for cron metadata)
+                    // during resumption to ensure scheduling continuity.
+                    mergedData.putAll(restored);
+                }
+            }
+
             AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
                     sessionId,
                     capturedUserId,
@@ -180,7 +195,7 @@ public class AgentLoop {
                     context != null && context.getUser() != null ? context.getUser().channel().name() : null,
                     context != null && context.getUser() != null ? context.getUser().platformId() : null,
                     systemNote,
-                    context != null ? context.getData() : null
+                    mergedData
             );
 
             final AgentExecutionContext finalCtx = agentExecutionContext;

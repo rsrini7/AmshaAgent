@@ -89,7 +89,7 @@ public class CronJobRunner {
             }
 
             // §Bug1: Short-circuit time checks to avoid code-gen failures in researcher role
-            if (isTimeCheck(stripped)) {
+            if (isTimeCheck(stripped.toLowerCase())) {
                 log.infof("CRON-SHORT-CIRCUIT cronId=%s time-check", job.id);
                 String time = ZonedDateTime.now(ZoneOffset.UTC)
                     .format(DateTimeFormatter.RFC_1123_DATE_TIME);
@@ -162,36 +162,39 @@ public class CronJobRunner {
                 || normalized.contains(ToolCapability.BROWSER_NAVIGATE.toolName())
                 || normalized.contains(ToolCapability.WEB_SEARCH_SERPER.toolName());
 
+        // §Issue: Exclude dynamic triggers from short-circuit. 
+        // If the message is a specific time check, we want the specialized short-circuit later.
+        if (isTimeCheck(normalized) || normalized.contains("now") || normalized.contains("date")) {
+            return false;
+        }
+
         return !hasActionVerb && goal.length() < 200;
+    }
+
+    private boolean isTimeCheck(String normalized) {
+        if (normalized == null || normalized.isBlank()) return false;
+        return normalized.contains("what is the current time") || 
+               normalized.contains("what time is it") ||
+               normalized.contains("tell me the time") ||
+               normalized.equals("check: what is the current time?");
+    }
+
+    private String stripAnnouncementPrefix(String goal) {
+        if (goal == null) return null;
+        String result = goal.trim();
+
+        result = ANNOUNCEMENT_PREFIX_PATTERN.matcher(result).replaceFirst("").trim();
+        result = ANNOUNCEMENT_SUFFIX_PATTERN.matcher(result).replaceFirst("").trim();
+
+        // Strip surrounding quotes if present
+        if (result.startsWith("'") && result.endsWith("'") && result.length() > 2) {
+            result = result.substring(1, result.length() - 1).trim();
+        } else if (result.startsWith("\"") && result.endsWith("\"") && result.length() > 2) {
+            result = result.substring(1, result.length() - 1).trim();
         }
 
-        private boolean isTimeCheck(String goal) {
-            if (goal == null || goal.isBlank()) return false;
-            String normalized = goal.toLowerCase().trim();
-            return normalized.contains("what is the current time") || 
-                   normalized.contains("what time is it") ||
-                   normalized.contains("tell me the time") ||
-                   normalized.equals("check: what is the current time?");
-        }
-
-
-
-        private String stripAnnouncementPrefix(String goal) {
-            if (goal == null) return null;
-            String result = goal.trim();
-
-            result = ANNOUNCEMENT_PREFIX_PATTERN.matcher(result).replaceFirst("").trim();
-            result = ANNOUNCEMENT_SUFFIX_PATTERN.matcher(result).replaceFirst("").trim();
-
-            // Strip surrounding quotes if present
-            if (result.startsWith("'") && result.endsWith("'") && result.length() > 2) {
-                result = result.substring(1, result.length() - 1).trim();
-            } else if (result.startsWith("\"") && result.endsWith("\"") && result.length() > 2) {
-                result = result.substring(1, result.length() - 1).trim();
-            }
-
-            return result;
-        }
+        return result;
+    }
     /**
      * §New Issue 1: Surgically extract the natural language goal from a serialized tool call string.
      * Example: delegate_to_agent(agent="saraswati", goal="github repo view ...") -> "github repo view ..."

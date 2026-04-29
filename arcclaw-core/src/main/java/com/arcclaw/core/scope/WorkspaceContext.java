@@ -1,5 +1,7 @@
 package com.arcclaw.core.scope;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
@@ -211,5 +213,18 @@ public final class WorkspaceContext {
      */
     public static String suggestedCronSource() {
         return SUGGESTED_CRON_SOURCE.isBound() ? SUGGESTED_CRON_SOURCE.get() : null;
+    }
+
+    /**
+     * @return A map of all bound ScopedValues for persistence.
+     */
+    public static Map<String, Object> getData() {
+        Map<String, Object> data = new HashMap<>();
+        if (SUGGESTED_CRON.isBound()) data.put("SUGGESTED_CRON", SUGGESTED_CRON.get());
+        if (SUGGESTED_NEXT_FIRE_TIME.isBound()) data.put("SUGGESTED_NEXT_FIRE_TIME", SUGGESTED_NEXT_FIRE_TIME.get());
+        if (SUGGESTED_CRON_SOURCE.isBound()) data.put("SUGGESTED_CRON_SOURCE", SUGGESTED_CRON_SOURCE.get());
+        if (IS_WRITE_INTENT.isBound()) data.put("IS_WRITE_INTENT", IS_WRITE_INTENT.get());
+        if (IS_COMPACT.isBound()) data.put("IS_COMPACT", IS_COMPACT.get());
+        return data;
     }
 }

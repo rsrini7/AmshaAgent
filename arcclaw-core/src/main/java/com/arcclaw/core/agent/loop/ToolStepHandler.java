@@ -106,7 +106,25 @@ public class ToolStepHandler {
         // 2. Coordinator-Github Redirect (§1 & §2)
         if (isCoordinatorGithubViolation(context, toolName, step)) {
             return StepDecision.proceedWithFailures(
-                redirectToDelegate(step, context.sessionId()), consecutiveFailures);
+                redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+        }
+
+        // 🟢 FIX: Specialist Tool Redirection
+        // If coordinator attempts a specialist tool (sandbox, search, browser) for which it 
+        // lacks capabilities, redirect to the appropriate specialist agent via delegate_to_agent.
+        // Guard: don't redirect if this step is already a delegation to avoid infinite loops.
+        if (AgentRoleEnum.COORDINATOR.toScopedName().equals(context.agentRole()) 
+                && !ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
+            if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) {
+                 return StepDecision.proceedWithFailures(
+                    redirectToDelegate(step, context.sessionId(), "coder"), consecutiveFailures);
+            }
+            if (ToolCapability.WEB_SEARCH_BRAVE.toolName().equals(toolName)
+                    || ToolCapability.WEB_SEARCH_SERPER.toolName().equals(toolName)
+                    || ToolCapability.BROWSER_NAVIGATE.toolName().equals(toolName)) {
+                 return StepDecision.proceedWithFailures(
+                    redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+            }
         }
 
         // 3. Known or Dynamic Tool check
@@ -143,11 +161,11 @@ public class ToolStepHandler {
         return !goalHasRes && !argsHaveRes;
     }
 
-    private ReasoningStep redirectToDelegate(ReasoningStep step, String sessionId) {
-        log.warnf("[TOOL-GUARD] Coordinator github auto-redirect for session %s", sessionId);
+    private ReasoningStep redirectToDelegate(ReasoningStep step, String sessionId, String agent) {
+        log.warnf("[TOOL-GUARD] Coordinator %s auto-redirect for session %s to agent %s", step.action(), sessionId, agent);
         String delegateGoal = buildDelegateGoal(step.action(), step.actionInput() != null ? step.actionInput() : Map.of());
         return ReasoningStep.pending(step.thought(), ToolCapability.DELEGATE_TO_AGENT.toolName(),
-            Map.of("agent", "researcher", "goal", delegateGoal), 0, 0);
+            Map.of("agent", agent, "goal", delegateGoal), 0, 0);
     }
 
     private boolean isKnownTool(String toolName) {

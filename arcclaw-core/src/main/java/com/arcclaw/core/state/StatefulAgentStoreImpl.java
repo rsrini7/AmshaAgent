@@ -57,9 +57,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal) {
         String json = serializer.serializeSteps(steps);
+        Map<String, Object> contextData = WorkspaceContext.getData();
+        String contextDataJson = (contextData == null || contextData.isEmpty()) 
+            ? null : serializer.serialize(contextData);
         AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
         CheckpointUpsertResult result = storeAdapter.upsertWithSteps(
-                sessionId, agentRole, json, autonomy.toString(), steps.size(), goal);
+                sessionId, agentRole, json, autonomy.toString(), steps.size(), goal, contextDataJson);
         if (result.created()) {
             transitionService.emitCreated(
                     sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy,
@@ -96,6 +99,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
+    public Map<String, Object> deserializeContextData(String json) {
+        return serializer.deserialize(json, new TypeReference<Map<String, Object>>() {});
+    }
+
+    @Override
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void saveSteps(Long checkpointId, List<ReasoningStep> steps) {
         if (checkpointId == null || steps == null) return;
@@ -120,11 +128,14 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                                            CheckpointStatus finalStatus,
                                            String goal) {
         String json = serializer.serializeSteps(steps);
+        Map<String, Object> contextData = WorkspaceContext.getData();
+        String contextDataJson = (contextData == null || contextData.isEmpty()) 
+            ? null : serializer.serialize(contextData);
         List<ReasoningStepDto> stepDtos = 
             steps.stream().map(serializer::toDto).toList();
 
         CheckpointUpsertResult result = storeAdapter.upsertAndFinalize(
-                sessionId, agentRole, json, finalStatus.name(), stepDtos, goal);
+                sessionId, agentRole, json, finalStatus.name(), stepDtos, goal, contextDataJson);
 
         CheckpointDto saved = result.checkpoint();
         boolean isNew = result.created();

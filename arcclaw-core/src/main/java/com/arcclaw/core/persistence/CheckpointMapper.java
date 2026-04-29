@@ -31,6 +31,7 @@ public class CheckpointMapper {
             entity.getIterationsUsed(),
             entity.getRetryAfterMs(),
             entity.getSystemNote(),
+            entity.getContextDataJson(),
             entity.getErrorCode(),
             entity.getTraceId(),
             entity.getRootCauseClass(),
@@ -63,6 +64,7 @@ public class CheckpointMapper {
         entity.setIterationsUsed(dto.iterationsUsed());
         entity.setRetryAfterMs(dto.retryAfterMs());
         entity.setSystemNote(dto.systemNote());
+        entity.setContextDataJson(dto.contextDataJson());
         entity.setErrorCode(dto.errorCode());
         entity.setTraceId(dto.traceId());
         entity.setRootCauseClass(dto.rootCauseClass());

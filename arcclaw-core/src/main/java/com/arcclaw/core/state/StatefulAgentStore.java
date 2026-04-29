@@ -2,6 +2,7 @@ package com.arcclaw.core.state;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
@@ -51,6 +52,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @return The list of reasoning steps.
      */
     List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint);
+    Map<String, Object> deserializeContextData(String json);
 
     /**
      * Persists granular reasoning steps for a specific checkpoint.
