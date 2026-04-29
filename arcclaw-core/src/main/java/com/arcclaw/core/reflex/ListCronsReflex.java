@@ -70,7 +70,7 @@ public class ListCronsReflex implements AgentReflex {
 
         String output = filtered.stream()
                 .map(AgentCronEntity::toDisplayString)
-                .collect(Collectors.joining("\n---\n"));
+                .collect(Collectors.joining("\n\n---\n\n"));
 
         int hidden = jobs.size() - filtered.size();
         if (hidden > 0) {

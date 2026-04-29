@@ -111,7 +111,7 @@ public class ManageScheduleTool implements AgentTool {
                     }
                     String listing = jobs.stream()
                             .map(AgentCronEntity::toDisplayString)
-                            .collect(Collectors.joining("\n---\n"));
+                            .collect(Collectors.joining("\n\n---\n\n"));
                     yield ToolResponse.success(listing);
                 }
                 case "delete" -> {
