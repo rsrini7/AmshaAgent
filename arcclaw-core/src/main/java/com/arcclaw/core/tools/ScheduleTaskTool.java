@@ -229,7 +229,8 @@ public class ScheduleTaskTool implements AgentTool {
 
         // We require AT LEAST a cronExpression OR an absolute fire time (for runOnce)
         if ((cronExpression == null || cronExpression.isBlank()) 
-                && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())) {
+                && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())
+                && !runOnce) {
             return ToolResponse.failure(400, "Missing required parameter: cronExpression. " +
                     "For recurring tasks (runOnce=false), you must supply a valid 5-field UNIX cron expression. " +
                     "Examples: '*/1 * * * *' for every minute, '0 * * * *' for every hour, " +
@@ -273,12 +274,19 @@ public class ScheduleTaskTool implements AgentTool {
                 Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Failed to parse suggestedNextFireTime '%s' - falling back to cron", suggestedNextFireTime);
                 nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
             }
+        } else if (runOnce && (cronExpression == null || cronExpression.isBlank())) {
+            // §Fix: Default one-shot to "now" if no time was suggested and no cron provided.
+            // We add a 10s buffer to allow for persistence ingestion and initial polling.
+            // This case typically fires when an agent (e.g., in a cron-resumed session) calls
+            // schedule_task without a TimeContextInjector in scope to provide a fire time hint.
+            nextFireTime = Instant.now().plusSeconds(10); 
+            Logger.getLogger(ScheduleTaskTool.class).infof("[ScheduleTaskTool] No time suggested for one-shot task - defaulting to 'now' (+10s): %s", nextFireTime);
         } else {
             nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
         }
 
         if (nextFireTime == null) {
-            return ToolResponse.failure(400, "Could not determine next fire time for '" + cronExpression + "'. Use 5-field UNIX format.");
+            return ToolResponse.failure(400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
         }
 
         // Step 5 - Build and persist entity

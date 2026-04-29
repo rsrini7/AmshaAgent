@@ -1,0 +1,1 @@
+do not use dir /s /b or grep which are keep on failing right use powershell frindly commands to find files also use rg (ripgrep) which is already installed in my pc alternative to grep.

@@ -176,6 +176,8 @@ public class CronJobRunner {
         return normalized.contains("what is the current time") || 
                normalized.contains("what time is it") ||
                normalized.contains("tell me the time") ||
+               normalized.contains("with the current time") ||
+               normalized.contains("show the current time") ||
                normalized.equals("check: what is the current time?");
     }
 

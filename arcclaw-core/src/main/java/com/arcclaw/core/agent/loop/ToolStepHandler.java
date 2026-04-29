@@ -462,10 +462,13 @@ public class ToolStepHandler {
 
     private StepDecision evaluateCircuitBreaker(ReasoningStep step, ToolResponse res, int failures, String sid, List<ReasoningStep> history) {
         int newFailures = (res != null && res.success()) ? 0 : failures + 1;
-        if (newFailures >= 2) {
-            log.warnf("[STATE-MACHINE] Circuit breaker tripped session=%s", sid);
+        
+        // §Fix: Increase threshold from 2 to 3 to handle transient parameter mismatches
+        // where the LLM might need more than one correction turn to align with the schema.
+        if (newFailures >= 3) {
+            log.warnf("[STATE-MACHINE] Circuit breaker tripped session=%s after %d consecutive failures", sid, newFailures);
             return StepDecision.terminal(AgentResult.finished(
-                "❌ I encountered repeated errors. Please rephrase your request.", List.copyOf(history)));      
+                "❌ I encountered repeated errors (" + newFailures + "). Please rephrase your request or check the tool parameters.", List.copyOf(history)));      
         }
         return StepDecision.proceedWithFailures(step, newFailures);
     }

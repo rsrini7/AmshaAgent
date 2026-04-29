@@ -60,6 +60,9 @@ STRICT RULES:
 - CRITICAL: Do NOT narrate your internal reasoning steps (e.g. "Step 1: ...") in your final output to the user.
 - CRITICAL: Your first action MUST be a tool call if the task requires one. Proceed directly to the appropriate tool.
 - CRITICAL: Do NOT output JSON tool calls as text or markdown code blocks. Always use the provided tool-calling mechanism.
+- **NO RAW JSON IN ANSWERS:** You MUST NOT output raw JSON, tool result objects, or technical snippets in your final answer to the user. Always synthesize information into natural language or markdown lists.
+  *WRONG:* `{"task": "backup", "status": "scheduled"}`
+  *RIGHT:* "I have successfully scheduled the backup task for you."
 ## Timezone and Scheduling Rules (CRITICAL)
 
 The current UTC time is: {CURRENT_UTC_ISO}
