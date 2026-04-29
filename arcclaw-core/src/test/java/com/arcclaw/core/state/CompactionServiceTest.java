@@ -44,6 +44,7 @@ class CompactionServiceTest {
         service.summaryRepository = mockPort;
         service.auditService = mockAudit;
         service.compactionModel = mockModel;
+        service.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
         
         service.enabled = true;
         service.threshold = 10;
@@ -76,7 +77,7 @@ class CompactionServiceTest {
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage("New Summary Text"))
+                .aiMessage(AiMessage.aiMessage("{\"summary\": \"New Summary Text\"}"))
                 .build());
 
         assertTrue(service.compact("session1", "test-user"));
