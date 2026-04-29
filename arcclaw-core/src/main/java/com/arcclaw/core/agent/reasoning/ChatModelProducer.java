@@ -148,6 +148,7 @@ public class ChatModelProducer {
     @Produces
     @Identifier("agent-output-mode")
     @Dependent
+    @Unremovable
     public StructuredOutputMode structuredOutputMode() {
         StructuredOutputMode primaryMode = findProvider().structuredOutputMode();
         

@@ -46,7 +46,7 @@ public class IntentDetectorService implements IntentDetector {
 
     @Inject
     @Identifier("intent-classifier-mode")
-    StructuredOutputMode structuredOutputMode;
+    Instance<StructuredOutputMode> structuredOutputModeInstance;
 
     @Inject
     DestructiveVocabularyFilter destructiveFilter;
@@ -155,7 +155,9 @@ public class IntentDetectorService implements IntentDetector {
                 .replace(DELIM_CLOSE, "");
         String wrapped = DELIM_OPEN + "\n" + sanitized + "\n" + DELIM_CLOSE;
         String tempPrompt = dynamicClassifierPrompt.formatted(wrapped);
-        if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+        StructuredOutputMode mode = (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied()) 
+                ? structuredOutputModeInstance.get() : StructuredOutputMode.NATIVE;
+        if (mode == StructuredOutputMode.PROMPT_DIRECTIVE) {
             tempPrompt = "CRITICAL: You MUST respond with ONLY a single role name token. No explanation, no JSON, no punctuation.\n\n" + tempPrompt;
         }
         final String finalSafePrompt = tempPrompt;

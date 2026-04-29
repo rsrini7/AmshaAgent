@@ -76,6 +76,7 @@ public class IntentDetectorModelProducer {
     @Produces
     @Identifier("intent-classifier-mode")
     @Dependent
+    @Unremovable
     public StructuredOutputMode intentDetectorMode() {
         return structuredOutputMode;
     }

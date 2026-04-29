@@ -73,6 +73,7 @@ public class CompactionModelProducer {
     @Produces
     @Identifier("compaction-mode")
     @Dependent
+    @Unremovable
     public StructuredOutputMode compactionMode() {
         return structuredOutputMode;
     }

@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
@@ -88,7 +89,7 @@ public class AgentLoop {
 
     @Inject
     @Identifier("agent-output-mode")
-    StructuredOutputMode structuredOutputMode;
+    Instance<StructuredOutputMode> structuredOutputModeInstance;
 
     @Inject
     MeterRegistry meterRegistry;
@@ -163,7 +164,8 @@ public class AgentLoop {
                 }
             }
 
-            StructuredOutputMode mode = structuredOutputMode != null ? structuredOutputMode : StructuredOutputMode.NATIVE;
+            StructuredOutputMode mode = (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied()) 
+                ? structuredOutputModeInstance.get() : StructuredOutputMode.NATIVE;
 
             Map<String, Object> mergedData = new HashMap<>();
             if (context != null) {

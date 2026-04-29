@@ -51,7 +51,7 @@ public class SystemPromptBuilder {
 
     @Inject
     @Identifier("agent-output-mode")
-    StructuredOutputMode structuredOutputMode;
+    Instance<StructuredOutputMode> structuredOutputModeInstance;
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;
@@ -499,7 +499,9 @@ public class SystemPromptBuilder {
         }
 
         StringBuilder sb = new StringBuilder();
-        if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+        StructuredOutputMode mode = (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied()) 
+                ? structuredOutputModeInstance.get() : StructuredOutputMode.NATIVE;
+        if (mode == StructuredOutputMode.PROMPT_DIRECTIVE) {
             sb.append("CRITICAL: You MUST respond ONLY in the required JSON schema. Never respond in prose.\n\n");
         }
 

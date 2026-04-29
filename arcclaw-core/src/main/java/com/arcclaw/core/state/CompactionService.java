@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
@@ -61,7 +62,7 @@ public class CompactionService {
 
     @Inject
     @Identifier("compaction-mode")
-    StructuredOutputMode compactionMode;
+    Instance<StructuredOutputMode> compactionModeInstance;
 
     @Inject
     RateLimitTracker rateLimitTracker;
@@ -198,6 +199,11 @@ public class CompactionService {
         return true;
     }
 
+    private StructuredOutputMode resolveCompactionMode() {
+        return (compactionModeInstance != null && !compactionModeInstance.isUnsatisfied()) 
+                ? compactionModeInstance.get() : StructuredOutputMode.NATIVE;
+    }
+
     private String buildCompactionPrompt(String sessionId, List<ChatMessage> toCompact) {
         Optional<CompactionSummaryDto> existingSummaryOpt =
                 summaryRepository.findLatestBySessionId(sessionId);
@@ -212,9 +218,10 @@ public class CompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        if (compactionMode == StructuredOutputMode.NATIVE) {
+        StructuredOutputMode mode = resolveCompactionMode();
+        if (mode == StructuredOutputMode.NATIVE) {
             prompt = "Respond with valid JSON. Include the merged summary in a field named 'summary'.\n\n" + prompt;
-        } else if (compactionMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+        } else if (mode == StructuredOutputMode.PROMPT_DIRECTIVE) {
             prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
         }
         return prompt;
@@ -230,7 +237,7 @@ public class CompactionService {
                 
                 if (responseText == null || responseText.isBlank()) {
                     newSummary = "";
-                } else if (compactionMode == StructuredOutputMode.NATIVE) {
+                } else if (resolveCompactionMode() == StructuredOutputMode.NATIVE) {
                     try {
                         JsonNode node = objectMapper.readTree(responseText);
                         JsonNode summaryNode = node.get("summary");
