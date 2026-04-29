@@ -62,12 +62,18 @@ public class CompactionModelProducer {
     @Identifier("compaction")
     @ApplicationScoped
     public ChatModel compactionModel() {
+        String cleanProvider = clean(provider);
         log.infof("CompactionModelProducer compaction provider=%s model=%s mode=%s", 
-                  provider, modelId, structuredOutputMode);
+                  cleanProvider, modelId, structuredOutputMode);
         return modelFactory.createModel(
-            provider, compactionBaseUrl, compactionApiKey,
+            cleanProvider, compactionBaseUrl, compactionApiKey,
             modelId, compactionMaxTokens, Duration.ofSeconds(10),
             maxRetries, ollamaBaseUrl, ollamaModelId, structuredOutputMode, true);
+    }
+
+    private String clean(String v) {
+        if (v == null) return null;
+        return v.split("#")[0].trim();
     }
 
     @Produces

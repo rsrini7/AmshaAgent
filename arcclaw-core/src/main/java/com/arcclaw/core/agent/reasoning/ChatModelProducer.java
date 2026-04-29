@@ -169,10 +169,20 @@ public class ChatModelProducer {
     }
 
     private AgentChatModelProvider findProvider() {
-        return providers.stream()
-            .filter(p -> p.providerName().equalsIgnoreCase(provider))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("No AgentChatModelProvider found for provider='" + provider + "'"));
+        // We use the injected 'provider' field but ensure it's cleaned of inline comments/whitespace
+        String cleanProvider = clean(provider != null ? provider : "groq");
+        
+        for (AgentChatModelProvider p : providers) {
+            if (p.providerName().equalsIgnoreCase(cleanProvider)) {
+                return p;
+            }
+        }
+        throw new RuntimeException("No AgentChatModelProvider found for provider='" + cleanProvider + "' (raw: '" + provider + "')");
+    }
+
+    private String clean(String value) {
+        if (value == null) return null;
+        return value.split("#")[0].trim();
     }
 
     private String mask(String v) {

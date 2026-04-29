@@ -65,12 +65,18 @@ public class IntentDetectorModelProducer {
     @ApplicationScoped
     @Identifier("intent-classifier")
     public ChatModel intentDetectorModel() {
+        String cleanProvider = clean(provider);
         log.infof("IntentDetectorModelProducer intent-classifier provider=%s model=%s mode=%s",
-                  provider, intentModelName, structuredOutputMode);
+                  cleanProvider, intentModelName, structuredOutputMode);
         return modelFactory.createModel(
-            provider, intentBaseUrl, intentApiKey,
+            cleanProvider, intentBaseUrl, intentApiKey,
             intentModelName, 10, Duration.ofSeconds(timeoutSeconds),
             maxRetries, ollamaBaseUrl, ollamaModelId, structuredOutputMode, true);
+    }
+
+    private String clean(String v) {
+        if (v == null) return null;
+        return v.split("#")[0].trim();
     }
 
     @Produces
