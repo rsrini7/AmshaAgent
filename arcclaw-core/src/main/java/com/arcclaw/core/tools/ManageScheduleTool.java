@@ -109,9 +109,9 @@ public class ManageScheduleTool implements AgentTool {
                     if (jobs.isEmpty()) {
                         yield ToolResponse.success(NO_SCHEDULE_FOUND);
                     }
-                    String listing = jobs.stream()
+                    String listing = "```\n" + jobs.stream()
                             .map(AgentCronEntity::toDisplayString)
-                            .collect(Collectors.joining("\n"));
+                            .collect(Collectors.joining("\n")) + "\n```";
                     yield ToolResponse.success(listing);
                 }
                 case "delete" -> {
