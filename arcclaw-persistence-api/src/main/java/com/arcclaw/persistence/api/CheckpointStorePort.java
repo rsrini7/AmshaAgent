@@ -160,14 +160,14 @@ public interface CheckpointStorePort {
      * Restores TOCTOU safety (§FIX 1).
      */
     CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, 
-        String stateJson, String autonomy, int iterationsUsed, String originalGoal);
+        String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson);
 
     /**
      * Atomically upserts a checkpoint and finalizes its status to prevent TOCTOU races
      * with background schedulers.
      */
     CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, 
-        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal);
+        String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson);
 
     List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason);
 

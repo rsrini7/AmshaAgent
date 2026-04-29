@@ -15,6 +15,7 @@ import com.arcclaw.core.api.dto.AuditEventResponse;
 import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditEventRepository;
 import com.arcclaw.core.audit.AuditVerifier;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 
 @Path("/audit")
 @Produces(MediaType.APPLICATION_JSON)
@@ -32,6 +33,7 @@ public class AuditResource {
 
     @GET
     @Path("/session/{sessionId}")
+    @Operation(summary = "Retrieve all audit log events for a specific session")
     public Response getSessionAudit(@PathParam("sessionId") String sessionId) {
         var authError = sessionService.validateSession(sessionId);
         if (authError.isPresent()) return authError.get();
@@ -47,6 +49,7 @@ public class AuditResource {
 
     @GET
     @Path("/{sessionId}/verify")
+    @Operation(summary = "Verify the cryptographic HMAC chain integrity for a session's audit log")
     public Response verifySessionChain(@PathParam("sessionId") String sessionId) {
         var authError = sessionService.validateSession(sessionId);
         if (authError.isPresent()) return authError.get();

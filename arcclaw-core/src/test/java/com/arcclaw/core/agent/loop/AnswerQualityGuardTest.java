@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import java.util.List;
 
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.TextPatternUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,7 @@ class AnswerQualityGuardTest {
         
         guard = new AnswerQualityGuard();
         guard.toolRegistry = toolRegistry;
+        guard.textPatternUtils = new TextPatternUtils();
         guard.initialize();
     }
 

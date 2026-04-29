@@ -44,8 +44,8 @@ public class CommandDispatchHandler implements MessageHandler {
         return switch (cmd) {
             case ChannelCommand.Approve a -> {
                 String input = "/approve";
-                if (a.cronId().isPresent()) {
-                    input += " " + a.cronId().get();
+                if (a.targetId().isPresent()) {
+                    input += " " + a.targetId().get();
                 } else if (a.toolName().isPresent()) {
                     input += " " + a.toolName().get();
                 }
@@ -54,8 +54,8 @@ public class CommandDispatchHandler implements MessageHandler {
             }
             case ChannelCommand.Deny d -> {
                 String input = "/deny";
-                if (d.cronId().isPresent()) {
-                    input += " " + d.cronId().get();
+                if (d.targetId().isPresent()) {
+                    input += " " + d.targetId().get();
                 } else if (d.toolName().isPresent()) {
                     input += " " + d.toolName().get();
                 }

@@ -106,7 +106,31 @@ public class ToolStepHandler {
         // 2. Coordinator-Github Redirect (§1 & §2)
         if (isCoordinatorGithubViolation(context, toolName, step)) {
             return StepDecision.proceedWithFailures(
-                redirectToDelegate(step, context.sessionId()), consecutiveFailures);
+                redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+        }
+
+        // 🟢 FIX: Specialist Tool Redirection
+        // If coordinator or researcher attempts a specialist tool (sandbox, search, browser) for which it 
+        // lacks capabilities, redirect to the appropriate specialist agent via delegate_to_agent.
+        // Guard: don't redirect if this step is already a delegation to avoid infinite loops.
+        String currentRole = context.agentRole();
+        if ((AgentRoleEnum.COORDINATOR.toScopedName().equals(currentRole) || AgentRoleEnum.RESEARCHER.toScopedName().equals(currentRole))
+                && !ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
+            
+            if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) {
+                 return StepDecision.proceedWithFailures(
+                    redirectToDelegate(step, context.sessionId(), "coder"), consecutiveFailures);
+            }
+            
+            // Coordinator lacks research tools, but researcher HAS them - only redirect coordinator for these
+            if (AgentRoleEnum.COORDINATOR.toScopedName().equals(currentRole)) {
+                if (ToolCapability.WEB_SEARCH_BRAVE.toolName().equals(toolName)
+                        || ToolCapability.WEB_SEARCH_SERPER.toolName().equals(toolName)
+                        || ToolCapability.BROWSER_NAVIGATE.toolName().equals(toolName)) {
+                     return StepDecision.proceedWithFailures(
+                        redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+                }
+            }
         }
 
         // 3. Known or Dynamic Tool check
@@ -143,11 +167,11 @@ public class ToolStepHandler {
         return !goalHasRes && !argsHaveRes;
     }
 
-    private ReasoningStep redirectToDelegate(ReasoningStep step, String sessionId) {
-        log.warnf("[TOOL-GUARD] Coordinator github auto-redirect for session %s", sessionId);
+    private ReasoningStep redirectToDelegate(ReasoningStep step, String sessionId, String agent) {
+        log.warnf("[TOOL-GUARD] Coordinator %s auto-redirect for session %s to agent %s", step.action(), sessionId, agent);
         String delegateGoal = buildDelegateGoal(step.action(), step.actionInput() != null ? step.actionInput() : Map.of());
         return ReasoningStep.pending(step.thought(), ToolCapability.DELEGATE_TO_AGENT.toolName(),
-            Map.of("agent", "researcher", "goal", delegateGoal), 0, 0);
+            Map.of("agent", agent, "goal", delegateGoal), 0, 0);
     }
 
     private boolean isKnownTool(String toolName) {
@@ -300,13 +324,13 @@ public class ToolStepHandler {
             String toolName, Map<String, Object> params) {
         try {
             final String suggestedCron = (context != null && context.data() != null)
-                ? (String) context.data().get("SUGGESTED_CRON")
+                ? String.valueOf(context.data().get("SUGGESTED_CRON"))
                 : null;
             final String suggestedNextFireTime = (context != null && context.data() != null)
-                ? (String) context.data().get("SUGGESTED_NEXT_FIRE_TIME")
+                ? String.valueOf(context.data().get("SUGGESTED_NEXT_FIRE_TIME"))
                 : null;
             final String suggestedCronSource = (context != null && context.data() != null)
-                ? (String) context.data().get("SUGGESTED_CRON_SOURCE")
+                ? String.valueOf(context.data().get("SUGGESTED_CRON_SOURCE"))
                 : null;
 
             return WorkspaceContext.run(context.sessionId(), context.userId(), context.chatId(), 
@@ -444,10 +468,13 @@ public class ToolStepHandler {
 
     private StepDecision evaluateCircuitBreaker(ReasoningStep step, ToolResponse res, int failures, String sid, List<ReasoningStep> history) {
         int newFailures = (res != null && res.success()) ? 0 : failures + 1;
-        if (newFailures >= 2) {
-            log.warnf("[STATE-MACHINE] Circuit breaker tripped session=%s", sid);
+        
+        // §Fix: Increase threshold from 2 to 3 to handle transient parameter mismatches
+        // where the LLM might need more than one correction turn to align with the schema.
+        if (newFailures >= 3) {
+            log.warnf("[STATE-MACHINE] Circuit breaker tripped session=%s after %d consecutive failures", sid, newFailures);
             return StepDecision.terminal(AgentResult.finished(
-                "❌ I encountered repeated errors. Please rephrase your request.", List.copyOf(history)));      
+                "❌ I encountered repeated errors (" + newFailures + "). Please rephrase your request or check the tool parameters.", List.copyOf(history)));      
         }
         return StepDecision.proceedWithFailures(step, newFailures);
     }

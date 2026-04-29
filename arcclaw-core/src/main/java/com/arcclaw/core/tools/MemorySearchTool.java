@@ -2,6 +2,7 @@ package com.arcclaw.core.tools;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -9,6 +10,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.Fts5QueryUtil;
@@ -27,9 +29,15 @@ import org.jboss.logging.Logger;
  * never from LLM parameters. The LLM can only control the search query.
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "memory_search",
+    description = "Semantic search across historical session memories",
+    defaultRoles = {"architect", "coordinator", "researcher", "synthesizer"}
+)
 public class MemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(MemorySearchTool.class);
+    private static final Pattern WORK_QUERY_PATTERN = Pattern.compile(".*(what did i|what have i|my work|my project|my task).*", Pattern.CASE_INSENSITIVE);
 
     @Inject
     CompactionStorePort compactionRepo;
@@ -159,10 +167,10 @@ public class MemorySearchTool implements AgentTool {
         String lower = query.toLowerCase().strip();
         // Self-referential identity queries
         if (intentService.isIdentityQuery(lower)) {
-            return "user name identity";
+            return "user name identity preference hobby interest";
         }
         // Self-referential work queries
-        if (lower.matches(".*(what did i|what have i|my work|my project|my task).*")) {
+        if (WORK_QUERY_PATTERN.matcher(lower).matches()) {
             return "project task work history";
         }
         return query;

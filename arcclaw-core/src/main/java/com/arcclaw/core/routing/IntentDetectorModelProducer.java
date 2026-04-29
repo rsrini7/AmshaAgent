@@ -77,4 +77,15 @@ public class IntentDetectorModelProducer {
     public String intentDetectorMode() {
         return structuredOutputMode.name();
     }
+
+    @Produces
+    @ApplicationScoped
+    @Identifier("intent-classifier-fallback")
+    public ChatModel intentDetectorFallbackModel() {
+        log.infof("IntentDetectorModelProducer intent-classifier-fallback model=%s", ollamaModelId);
+        return modelFactory.createModel(
+            "ollama", ollamaBaseUrl, null,
+            ollamaModelId, 10, Duration.ofMillis(1500),
+            1, ollamaBaseUrl, ollamaModelId, structuredOutputMode, true);
+    }
 }

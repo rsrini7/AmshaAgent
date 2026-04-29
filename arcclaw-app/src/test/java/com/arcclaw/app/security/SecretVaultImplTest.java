@@ -61,7 +61,7 @@ public class SecretVaultImplTest {
         // Wait for background audit writes to finish
         auditService.waitForIdle();
         repository.deleteBySessionId(TEST_SESSION_ID);
-        repository.deleteBySessionId("SYSTEM");
+        repository.delete("SYSTEM", "test-system-key");
     }
 
     @Test

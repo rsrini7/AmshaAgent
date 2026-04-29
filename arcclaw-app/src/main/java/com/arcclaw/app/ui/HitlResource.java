@@ -21,10 +21,12 @@ import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.scope.WorkspaceContext;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 @ApplicationScoped
@@ -41,6 +43,7 @@ public class HitlResource {
     @Path("/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Subscribe to live HITL approval requests via SSE")
     public Multi<AgentSseService.SseEvent> hitlEvents(@QueryParam("sessionId") String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return Multi.createFrom().failure(
@@ -63,6 +66,7 @@ public class HitlResource {
     }
 
     @GET
+    @Operation(summary = "List all pending tool execution approvals for the current user")
     public Response listPending() {
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
         String userId = WorkspaceContext.resolveUserId();
@@ -88,6 +92,7 @@ public class HitlResource {
     @POST
     @Path("{taskId}/approve")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Approve a pending tool execution")
     public Response approve(@PathParam("taskId") String taskId, CheckpointApprovalRequest request) {
         String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null) ? request.reason() : "Approved via REST";
@@ -102,6 +107,7 @@ public class HitlResource {
     @POST
     @Path("{taskId}/reject")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Reject a pending tool execution")
     public Response reject(@PathParam("taskId") String taskId, CheckpointApprovalRequest request) {
         String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null && request.reason() != null && !request.reason().isBlank()) 
@@ -117,16 +123,16 @@ public class HitlResource {
     private Response handleException(String taskId, Exception e) {
         if (e.getMessage() != null && e.getMessage().contains("No pending")) {
             return Response.status(Response.Status.NOT_FOUND)
-                .entity(Map.of("error", "No pending approval found", "taskId", taskId))
+                .entity(new ArcClawErrorResponse("No pending approval found", "taskId: " + taskId))
                 .build();
         }
         if (e.getMessage() != null && e.getMessage().contains("already resolved")) {
             return Response.status(Response.Status.CONFLICT)
-                .entity(Map.of("error", "Already resolved", "taskId", taskId))
+                .entity(new ArcClawErrorResponse("Already resolved", "taskId: " + taskId))
                 .build();
         }
         return Response.serverError()
-            .entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Unknown error"))
+            .entity(new ArcClawErrorResponse("System Error", e.getMessage() != null ? e.getMessage() : "Unknown error"))
             .build();
     }
 }

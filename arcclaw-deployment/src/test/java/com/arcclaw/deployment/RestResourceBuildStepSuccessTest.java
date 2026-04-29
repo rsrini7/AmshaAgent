@@ -12,8 +12,6 @@ import jakarta.ws.rs.Path;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentDetector;
-import com.arcclaw.persistence.sqlite.AuditSchemaEnforcer;
-import com.arcclaw.persistence.sqlite.FtsConnectionInterceptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -34,18 +32,14 @@ public class RestResourceBuildStepSuccessTest {
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
         .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-            .addClasses(ValidResource.class, NonJpaResource.class, TestProducers.class,
-                FtsConnectionInterceptor.class,
-                AuditSchemaEnforcer.class))
-        .overrideConfigKey("quarkus.datasource.db-kind", "sqlite")
-        .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:sqlite::memory:")
-        .overrideConfigKey("quarkus.hibernate-orm.schema-management.strategy", "update")
-        .overrideConfigKey("quarkus.hibernate-orm.dialect", "com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect")
+            .addClasses(ValidResource.class, NonJpaResource.class, TestProducers.class))
         .overrideConfigKey("arcclaw.vault.pepper", "dummy-pepper-for-test-purposes-123")
         .overrideConfigKey("arcclaw.data-dir", ":memory:")
         .overrideConfigKey("arcclaw.auto-seed-secrets", "false")
         .overrideConfigKey("arcclaw.llm.gemini.api-key", "dummy-gemini-key")
-        .overrideConfigKey("quarkus.langchain4j.timeout", "10s");
+        .overrideConfigKey("quarkus.langchain4j.timeout", "10s")
+        .overrideConfigKey("quarkus.hibernate-orm.active", "false")
+        .overrideConfigKey("quarkus.arc.exclude-types", "com.arcclaw.core.**,com.arcclaw.persistence.sqlite.**");
 
     @Test
     public void testBuildSucceeds() {
@@ -133,6 +127,14 @@ public class RestResourceBuildStepSuccessTest {
         @ApplicationScoped
         public EmbeddingModel embeddingModel() {
             return mock(EmbeddingModel.class);
+        }
+
+        @Produces
+        @ApplicationScoped
+        @Alternative
+        @Priority(1)
+        public EntityManager entityManager() {
+            return mock(EntityManager.class);
         }
 
         private <T> T mock(Class<T> clazz) {

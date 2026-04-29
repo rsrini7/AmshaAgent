@@ -9,7 +9,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import org.jboss.logging.Logger;
 
 /**
- * Handles the "store" and "remember" commands.
+ * Handles the "store" and "remember" reflexs.
  * Implements code-side parsing for KEY=VALUE pairs to prevent LLM confusion
  * when values contain equal signs (e.g. JWT tokens).
  */
@@ -19,7 +19,7 @@ public class StoreReflex implements AgentReflex {
 
     private static final Logger log = Logger.getLogger(StoreReflex.class);
 
-    // Matches commands like "store FOO=bar" or "remember my name is Alice"
+    // Matches reflexs like "store FOO=bar" or "remember my name is Alice"
     private static final Pattern STORE_REMEMBER_PATTERN =
             Pattern.compile("^(store|remember)\\s+(.+)$", Pattern.CASE_INSENSITIVE);
 

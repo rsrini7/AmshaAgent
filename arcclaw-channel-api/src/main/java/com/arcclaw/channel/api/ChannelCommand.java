@@ -34,6 +34,8 @@ public sealed interface ChannelCommand
             Pattern.CASE_INSENSITIVE
     );
 
+    Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+
     /**
      * Returns {@code true} for commands that alter agent state or authorise tool
      * execution (Approve, Deny, Halt, Reset). Returns {@code false} for read-only
@@ -57,7 +59,7 @@ public sealed interface ChannelCommand
         if (text == null || text.isBlank()) {
             return new Unknown(text == null ? "" : text);
         }
-        
+
         // Strip surrounding backticks - Telegram MarkdownV2 inline code formatting
         // causes copy-pasted commands to arrive as `/approve <id>` with backticks
         String trimmed = text.trim();
@@ -65,9 +67,12 @@ public sealed interface ChannelCommand
             trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
         }
 
-        var matcher = CMD_PATTERN.matcher(trimmed);
+        // Normalize double-slash prefix (e.g. //approve -> /approve)
+        String input = trimmed.startsWith("//") ? trimmed.substring(1) : trimmed;
+
+        var matcher = CMD_PATTERN.matcher(input);
         if (!matcher.matches()) {
-            return new Unknown(text);
+            return new Unknown(input);
         }
         String cmd = matcher.group(1).toLowerCase();
         String arg = matcher.group(2); // may be null
@@ -77,14 +82,12 @@ public sealed interface ChannelCommand
 
         return switch (cmd) {
             case "approve" -> new Approve(
-                parseCronId(optArg),
+                parseTargetId(optArg),
                 parseToolName(optArg),
-                parseTargetSessionId(optArg),
                 optReason);
             case "deny"    -> new Deny(
-                parseCronId(optArg),
+                parseTargetId(optArg),
                 parseToolName(optArg),
-                parseTargetSessionId(optArg),
                 optReason);
             case "status"  -> new Status();
             case "halt"    -> new Halt();
@@ -93,7 +96,7 @@ public sealed interface ChannelCommand
             case "crons"   -> new CronTasks();
             case "start"   -> new Start(optArg);
             case "cron" -> {
-                String[] parts = text.trim().split("\\s+");
+                String[] parts = WHITESPACE_PATTERN.split(input.trim());
                 if ("delete".equalsIgnoreCase(arg)) {
                     String cronId = parts.length > 2 ? parts[2].strip() : null;
                     yield new DeleteCron(
@@ -104,22 +107,21 @@ public sealed interface ChannelCommand
             }
             case "deletecron" -> new DeleteCron(optArg);
             case "listtask", "listtasks", "crontask", "crontasks" -> new CronTasks();
-            default -> new Unknown(text);
+            default -> new Unknown(input);
         };
     }
 
-    private static Optional<String> parseCronId(Optional<String> argOpt) {
-        // Exclude session IDs (numeric-hyphen-numeric) from cronId matching §75-B2
-        return argOpt.filter(arg -> arg.contains("-") && !arg.matches("\\d+-\\d+"));
+    static final Pattern UUID_PATTERN = Pattern.compile(
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    );
+
+    private static Optional<String> parseTargetId(Optional<String> argOpt) {
+        // IDs are either UUIDs or hyphenated strings (cron segment IDs)
+        return argOpt.filter(arg -> arg.contains("-"));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
         return argOpt.filter(arg -> !arg.contains("-") && !arg.isBlank());
-    }
-
-    private static Optional<String> parseTargetSessionId(Optional<String> argOpt) {
-        // Session IDs match pattern: digits-digits (e.g. 12345-1711234567890)
-        return argOpt.filter(arg -> arg.matches("\\d+-\\d+"));
     }
 
     // ------------------------------------------------------------------
@@ -129,29 +131,26 @@ public sealed interface ChannelCommand
     /**
      * Approves a pending tool execution.
      *
-     * @param cronId   if present, targets a specific cron-session approval;
+     * @param targetId if present, targets a specific session or cron task ID;
      * @param toolName if present, targets a specific tool in a parallel batch
      * @param reason   optional human-provided reason for approval
      */
     record Approve(
-        Optional<String> cronId,
+        Optional<String> targetId,
         Optional<String> toolName,
-        Optional<String> targetSessionId,
         Optional<String> reason
     ) implements ChannelCommand {}
 
     /**
      * Denies a pending tool execution.
      *
-     * @param cronId   if present, targets a specific cron-session approval;
+     * @param targetId if present, targets a specific session or cron task ID;
      * @param toolName if present, targets a specific tool in a parallel batch
-     * @param targetSessionId if present, targets a specific session for delegation (§7.33)
      * @param reason   optional human-provided reason for denial
      */
     record Deny(
-        Optional<String> cronId,
+        Optional<String> targetId,
         Optional<String> toolName,
-        Optional<String> targetSessionId,
         Optional<String> reason
     ) implements ChannelCommand {}
 

@@ -1,11 +1,14 @@
 package com.arcclaw.core.util;
 
+import java.util.regex.Pattern;
+
 /**
  * Intelligent string matching utility using Damerau-Levenshtein Distance.
  * Useful for autocorrecting user typos in commands without hardcoding every combination.
  * Handles insertions, deletions, substitutions, and transpositions (swaps).
  */
 public class FuzzyMatcher {
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
 
     /**
      * Checks if the input string is "close enough" to the target string.
@@ -64,7 +67,7 @@ public class FuzzyMatcher {
      */
     public static boolean containsFuzzy(String sentence, String target) {
         if (sentence == null || target == null) return false;
-        String[] words = sentence.split("\\s+");
+        String[] words = WHITESPACE_PATTERN.split(sentence);
         for (String word : words) {
             if (isClose(word, target)) return true;
         }

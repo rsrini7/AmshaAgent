@@ -43,7 +43,7 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                 d.channelPlatformId(), d.channelType(), d.originalGoal(), d.failedAt(), d.completedAt(),
                 d.failReason(), d.pendingToolName(), d.batchToolDecisions(), d.pendingToolParametersJson(),
                 d.preExecutedResults(), d.maxIterations(), d.iterationsUsed(), d.retryAfterMs(), d.systemNote(),
-                d.errorCode(), d.traceId(), d.rootCauseClass(), d.createdAt() == null ? Instant.now() : d.createdAt(),
+                d.contextDataJson(), d.errorCode(), d.traceId(), d.rootCauseClass(), d.createdAt() == null ? Instant.now() : d.createdAt(),
                 Instant.now());
     }
 
@@ -82,8 +82,8 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     existing.channelType(), existing.originalGoal(), existing.failedAt(), existing.completedAt(),
                     existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
                     existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
-                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.errorCode(),
-                    existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
+                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(), 
+                    existing.errorCode(), existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
             store.put(id, updated);
         }
     }
@@ -181,7 +181,7 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
-    public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, String stateJson, String autonomy, int iterationsUsed, String originalGoal) {
+    public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         if (existing.isPresent()) {
             CheckpointDto e = existing.get();
@@ -189,19 +189,19 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     e.channelPlatformId(), e.channelType(), e.originalGoal() != null ? e.originalGoal() : originalGoal, e.failedAt(), e.completedAt(),
                     e.failReason(), e.pendingToolName(), e.batchToolDecisions(), e.pendingToolParametersJson(),
                     e.preExecutedResults(), e.maxIterations(), iterationsUsed, e.retryAfterMs(), e.systemNote(),
-                    e.errorCode(), e.traceId(), e.rootCauseClass(), e.createdAt(), Instant.now());
+                    contextDataJson, e.errorCode(), e.traceId(), e.rootCauseClass(), e.createdAt(), Instant.now());
             store.put(e.id(), updated);
             return new CheckpointUpsertResult(updated, false);
         } else {
             CheckpointDto created = save(new CheckpointDto(null, sessionId, agentRole, "IN_PROGRESS", autonomy, stateJson,
-                    null, null, originalGoal, null, null, null, null, null, null, null, null, iterationsUsed, null, null, null, null, null, Instant.now(), Instant.now()));
+                    null, null, originalGoal, null, null, null, null, null, null, null, null, iterationsUsed, null, null, contextDataJson, null, null, null, Instant.now(), Instant.now()));
             return new CheckpointUpsertResult(created, true);
         }
     }
 
     @Override
-    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal) {
-        CheckpointUpsertResult result = upsertWithSteps(sessionId, agentRole, stateJson, "SUPERVISED", 0, originalGoal);
+    public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
+        CheckpointUpsertResult result = upsertWithSteps(sessionId, agentRole, stateJson, "SUPERVISED", 0, originalGoal, contextDataJson);
         
         // Finalize state and timestamps
         CheckpointDto existing = result.checkpoint();
@@ -213,8 +213,8 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                 existing.channelType(), existing.originalGoal() != null ? existing.originalGoal() : originalGoal, failedAt, completedAt,
                 existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
                 existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
-                existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.errorCode(),
-                existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
+                existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(), 
+                existing.errorCode(), existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
         
         store.put(updated.id(), updated);
         saveSteps(updated.id(), steps);
@@ -241,8 +241,8 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     existing.channelType(), existing.originalGoal(), Instant.now(), existing.completedAt(),
                     failReason, existing.pendingToolName(), existing.batchToolDecisions(),
                     existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
-                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), errorCode,
-                    traceId, rootCauseClass, existing.createdAt(), Instant.now());
+                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(), 
+                    errorCode, traceId, rootCauseClass, existing.createdAt(), Instant.now());
             store.put(checkpointId, updated);
         }
     }
@@ -273,7 +273,7 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
                     existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
                     existing.iterationsUsed(), null, // clear retryAfterMs
-                    existing.systemNote(), existing.errorCode(),
+                    existing.systemNote(), existing.contextDataJson(), existing.errorCode(),
                     existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
             store.put(id, updated);
             return true;

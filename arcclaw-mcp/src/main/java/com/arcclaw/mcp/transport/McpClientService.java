@@ -33,6 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.eclipse.microprofile.faulttolerance.Retry;
@@ -334,12 +335,16 @@ public class McpClientService {
         try {
             OutputStream out = processWriters.remove(serverName);
             if (out != null) out.close();
-        } catch (IOException ignored) {}
+        } catch (IOException e) {
+            log.debugf("Failed to close MCP writer for %s: %s", serverName, ExceptionUtils.getRootCauseMessage(e));
+        }
         
         try {
             BufferedReader reader = processReaders.remove(serverName);
             if (reader != null) reader.close();
-        } catch (IOException ignored) {}
+        } catch (IOException e) {
+            log.debugf("Failed to close MCP reader for %s: %s", serverName, ExceptionUtils.getRootCauseMessage(e));
+        }
         
         Process p = processes.remove(serverName);
         if (p != null) {

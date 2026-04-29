@@ -11,6 +11,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import io.quarkus.runtime.StartupEvent;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -80,7 +81,9 @@ public class CronSchemaEnforcer {
                 em.createNativeQuery(
                         "ALTER TABLE agent_cron ADD COLUMN runOnce INTEGER NOT NULL DEFAULT 0"
                 ).executeUpdate();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         if (!hasColumn("agent_cron", "lastDeliveryId")) {
@@ -88,7 +91,9 @@ public class CronSchemaEnforcer {
                 em.createNativeQuery(
                         "ALTER TABLE agent_cron ADD COLUMN lastDeliveryId TEXT"
                 ).executeUpdate();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         if (!hasColumn("agent_cron", "channelType")) {
@@ -96,7 +101,9 @@ public class CronSchemaEnforcer {
                 em.createNativeQuery(
                         "ALTER TABLE agent_cron ADD COLUMN channelType TEXT"
                 ).executeUpdate();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         if (!hasColumn("agent_cron", "channelPlatformId")) {
@@ -104,7 +111,9 @@ public class CronSchemaEnforcer {
                 em.createNativeQuery(
                         "ALTER TABLE agent_cron ADD COLUMN channelPlatformId TEXT"
                 ).executeUpdate();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         if (!hasColumn("agent_cron", "executionRole")) {
@@ -112,7 +121,9 @@ public class CronSchemaEnforcer {
                 em.createNativeQuery(
                         "ALTER TABLE agent_cron ADD COLUMN executionRole TEXT"
                 ).executeUpdate();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         if (!hasColumn("agent_cron", "updatedAt")) {
@@ -120,7 +131,9 @@ public class CronSchemaEnforcer {
                 em.createNativeQuery(
                         "ALTER TABLE agent_cron ADD COLUMN updatedAt TEXT"
                 ).executeUpdate();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         log.info("CronSchemaEnforcer: agent_cron table, indexes, and migrations verified.");

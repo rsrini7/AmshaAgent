@@ -43,6 +43,9 @@ public class ToolInvoker {
             ToolResponse response = toolRegistry.invokeTool(toolName, params);
             String rawObservation = response.output();
             String sanitizedObservation = observationSanitizer.sanitize(toolName, rawObservation);
+            if (!response.success()) {
+                log.errorf("Tool '%s' execution failed in session %s: %s (exitCode=%d)", toolName, sessionId, sanitizedObservation, response.exitCode());
+            }
             return new ToolResponse(response.exitCode(), sanitizedObservation, response.success(), response.isInfraFailure(),
                     response.errorCode(), response.traceId(), response.rootCauseClass());
         } catch (RequiresApprovalException e) {

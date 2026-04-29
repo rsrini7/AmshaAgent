@@ -17,12 +17,14 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.skill.SkillDefinitionParser;
 import com.arcclaw.core.skill.SkillLoader;
 import com.arcclaw.core.skill.SkillRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 
 @ApplicationScoped
 @Path("/skills")
@@ -44,6 +46,7 @@ public class SkillResource {
     SkillDefinitionParser parser;
 
     @GET
+    @Operation(summary = "List all active agent skills")
     public List<SkillDto> listSkills() {
         return registry.getAll().stream()
             .map(e -> new SkillDto(
@@ -59,6 +62,7 @@ public class SkillResource {
     @POST
     @Consumes(MediaType.TEXT_PLAIN)
     @Transactional
+    @Operation(summary = "Create or update a skill from YAML definition")
     public Response upsertSkill(String rawYamlDoc) {
         try {
             // Pre-validate that it parses correctly before saving
@@ -92,7 +96,7 @@ public class SkillResource {
 
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                           .entity(new MessageResponse("Invalid skill definition: " + e.getMessage()))
+                           .entity(new ArcClawErrorResponse("Invalid skill definition", e.getMessage()))
                            .build();
         }
     }
@@ -100,11 +104,12 @@ public class SkillResource {
     @DELETE
     @Path("/{name}")
     @Transactional
+    @Operation(summary = "Delete a skill and reload registry")
     public Response deleteSkill(@PathParam("name") String name) {
         var existing = repository.findByName(name);
         if (existing.isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND)
-                           .entity(new MessageResponse("Database skill not found: " + name))
+                           .entity(new ArcClawErrorResponse("Database skill not found", "name: " + name))
                            .build();
         }
 
@@ -116,6 +121,7 @@ public class SkillResource {
 
     @GET
     @Path("/refresh")
+    @Operation(summary = "Force reload of all skills from filesystem and database")
     public Response refresh() {
         skillLoader.reloadAll(true);
         return Response.ok(new MessageResponse("Skill registry refreshed")).build();

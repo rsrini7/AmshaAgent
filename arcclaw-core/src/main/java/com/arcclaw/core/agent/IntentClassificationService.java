@@ -12,7 +12,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class IntentClassificationService {
 
-    // Matches goals that indicate a desire to persist or store information
     private static final Pattern WRITE_INTENT_PATTERN = Pattern.compile(
         "\\b(save|store|ingest|remember|add to memory|note that|call me|my name is|refer to me as|address me as)\\b",
         Pattern.CASE_INSENSITIVE
@@ -38,9 +37,15 @@ public class IntentClassificationService {
     );
 
     private static final Pattern IDENTITY_QUERY_PATTERN = Pattern.compile(
-        "\\b(who am i|my name|do you know me|user name|user identity)\\b",
+        "\\b(who am i|my name|do you know me|user name|user identity|what i love|my hobby|my hobbies|my preference|my interests|about me)\\b",
         Pattern.CASE_INSENSITIVE
     );
+
+    private static final Pattern SCHEDULE_INTENT_PATTERN = Pattern.compile(
+        "\\b(schedule|cron|run at|run every|run daily|run hourly|every\\s+(hour|minute|day|week|month|\\d+)|daily|hourly|weekly|monthly)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
 
     /**
      * returns true if the text indicates a "write intent" - specifically 
@@ -48,7 +53,14 @@ public class IntentClassificationService {
      */
     public boolean isWriteIntent(String text) {
         if (text == null || text.isBlank()) return false;
-        return WRITE_INTENT_PATTERN.matcher(text).find();
+        // §Hardening: Interrogative phrases (ending with '?') are recall intents, not write intents.
+        // e.g. "you still remember?" vs "remember that I am Srini"
+        // Check the FIRST LINE only — system corrections may be appended after newlines.
+        String firstLine = text.contains("\n") ? text.substring(0, text.indexOf('\n')).trim() : text.trim();
+        if (firstLine.endsWith("?")) {
+            return false;
+        }
+        return WRITE_INTENT_PATTERN.matcher(firstLine).find();
     }
 
     /**
@@ -66,6 +78,15 @@ public class IntentClassificationService {
         if (text == null || text.isBlank()) return false;
         return IDENTITY_QUERY_PATTERN.matcher(text).find();
     }
+
+    /**
+     * Returns true if the goal inherently requires task scheduling.
+     */
+    public boolean isScheduleIntent(String text) {
+        if (text == null || text.isBlank()) return false;
+        return SCHEDULE_INTENT_PATTERN.matcher(text).find();
+    }
+
 
     /**
      * Returns true for short messages that lack any verbs suggesting tool usage.

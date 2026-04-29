@@ -44,6 +44,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -290,6 +291,10 @@ class CheckpointResumeHandlerTest {
         field = engine.getClass().getDeclaredField("intentClassifier");
         field.setAccessible(true);
         field.set(engine, intentClassifier);
+
+        field = engine.getClass().getDeclaredField("textPatternUtils");
+        field.setAccessible(true);
+        field.set(engine, new TextPatternUtils());
 
         field = engine.getClass().getDeclaredField("governanceLayer");
         field.setAccessible(true);

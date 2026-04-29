@@ -44,6 +44,7 @@ public class AgentOtelContext implements AgentObserver {
                 .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
                 .startSpan();
         rootSpans.put(sessionId, span);
+        // §OTel Fix: Spans must be made current to be visible to child builders
         rootScopes.put(sessionId, span.makeCurrent());
         return span;
     }
@@ -56,13 +57,13 @@ public class AgentOtelContext implements AgentObserver {
     public void endSessionSpan(String sessionId) {
         if (sessionId == null)
             return;
-        Span span = rootSpans.remove(sessionId);
-        if (span != null) {
-            span.end();
-        }
         Scope scope = rootScopes.remove(sessionId);
         if (scope != null) {
             scope.close();
+        }
+        Span span = rootSpans.remove(sessionId);
+        if (span != null) {
+            span.end();
         }
         totalInputTokens.remove(sessionId);
         totalOutputTokens.remove(sessionId);

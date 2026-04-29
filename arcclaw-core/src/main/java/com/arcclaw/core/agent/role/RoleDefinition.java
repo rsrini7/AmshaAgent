@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.role;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -57,6 +58,15 @@ public record RoleDefinition(
         return capabilities.stream()
                 .map(ToolCapability::toolName)
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Helper for unit testing and dynamic grants. Returns a copy with additional capabilities.
+     */
+    public RoleDefinition withCapabilities(Set<ToolCapability> additional) {
+        Set<ToolCapability> all = new HashSet<>(this.capabilities);
+        all.addAll(additional);
+        return new RoleDefinition(canonicalName, displayName, intentDescription, maxIterations, requiresApproval, codeCapable, all, aliases);
     }
 
     /** Returns true if this role is permitted to generate or fix source code blocks. */

@@ -1,5 +1,7 @@
 package com.arcclaw.tool.playwright;
 
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.HashMap;
@@ -31,6 +33,7 @@ import com.microsoft.playwright.options.ScreenshotScale;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -48,17 +51,17 @@ public class PlaywrightPageRunner {
     @ConfigProperty(name = "arcclaw.tools.playwright.selector-wait-ms", defaultValue = "2000")
     int selectorWaitMs;
 
+    @ConfigProperty(name = "arcclaw.tools.playwright.max-screenshot-bytes", defaultValue = "1048576")
+    int maxScreenshotBytes;
+
+    @ConfigProperty(name = "arcclaw.tools.playwright.network-idle-ratio", defaultValue = "0.30")
+    double networkIdleRatio;
+
+    @ConfigProperty(name = "arcclaw.tools.playwright.run-future-buffer-ms", defaultValue = "5000")
+    long runFutureBufferMs;
+
     private static final Pattern SAFE_URL_PATTERN =
         Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
-
-    private static final int MAX_SCREENSHOT_BYTES = 1_048_576; // 1 MB
-
-    /**
-     * NETWORKIDLE budget = 30% of caller timeoutMs.
-     * Keeps NETWORKIDLE from eating the entire budget on JS-heavy SPAs.
-     * Example: timeoutMs=30000 → 9000ms NETWORKIDLE, 4500ms LOAD fallback.
-     */
-    private static final double NETWORK_IDLE_RATIO = 0.30;
 
     /**
      * LOAD fallback budget = 15% of caller timeoutMs.
@@ -66,12 +69,8 @@ public class PlaywrightPageRunner {
      */
     private static final double LOAD_FALLBACK_RATIO = 0.15;
 
-    /**
-     * Extra buffer added to the caller-supplied timeoutMs when waiting for the
-     * playwrightThread future - gives Playwright time to throw its own timeout
-     * before the outer Future.get() fires.
-     */
-    private static final long RUN_FUTURE_BUFFER_MS = 5_000L;
+    private static final Pattern NEWLINE_CONSOLIDATION_PATTERN = Pattern.compile("\n{3,}");
+    private static final Pattern LINE_BREAK_PATTERN = Pattern.compile("\n");
 
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
     boolean enabled;
@@ -139,10 +138,8 @@ public class PlaywrightPageRunner {
         playwrightThread.submit(() -> {
             closeBrowserQuietly(browser, "destroy");
             browser = null;
-            if (playwright != null) {
-                try { playwright.close(); } catch (Exception ignored) {}
-                playwright = null;
-            }
+            closePlaywrightQuietly(playwright, "destroy");
+            playwright = null;
         });
         playwrightThread.shutdown();
         try {
@@ -191,7 +188,7 @@ public class PlaywrightPageRunner {
         try {
             return playwrightThread
                 .submit(() -> doRun(url, action, selector, timeoutMs))
-                .get(timeoutMs + RUN_FUTURE_BUFFER_MS, TimeUnit.MILLISECONDS);
+                .get(timeoutMs + runFutureBufferMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (cause instanceof PlaywrightException pe) throw pe;
@@ -200,7 +197,7 @@ public class PlaywrightPageRunner {
                 (cause != null ? cause.getMessage() : e.getMessage()));
         } catch (TimeoutException e) {
             throw new PlaywrightException(
-                "Playwright run timed out after " + (timeoutMs + RUN_FUTURE_BUFFER_MS) + "ms for: " + url);
+                "Playwright run timed out after " + (timeoutMs + runFutureBufferMs) + "ms for: " + url);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new PlaywrightException("Playwright run interrupted for: " + url);
@@ -215,7 +212,7 @@ public class PlaywrightPageRunner {
 
         // Derive proportional sub-budgets from the caller's total timeoutMs.
         // This prevents NETWORKIDLE from eating the entire budget on JS-heavy SPAs.
-        int networkIdleTimeoutMs = (int) (timeoutMs * NETWORK_IDLE_RATIO);
+        int networkIdleTimeoutMs = (int) (timeoutMs * networkIdleRatio);
         int loadFallbackTimeoutMs = (int) (timeoutMs * LOAD_FALLBACK_RATIO);
 
         long t0 = System.currentTimeMillis();
@@ -251,7 +248,9 @@ public class PlaywrightPageRunner {
                 Thread.sleep(500); 
                 page.evaluate("window.scrollBy(0, window.innerHeight)");
                 Thread.sleep(500);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.debugf("Failed human-like interaction for %s: %s", url, ExceptionUtils.getRootCauseMessage(e));
+            }
 
             String result = switch (action) {
                 case "screenshot" -> captureScreenshot(page);
@@ -347,7 +346,7 @@ public class PlaywrightPageRunner {
 
     private String captureScreenshot(Page page) {
         byte[] png = page.screenshot(new Page.ScreenshotOptions().setFullPage(false));
-        if (png.length > MAX_SCREENSHOT_BYTES) {
+        if (png.length > maxScreenshotBytes) {
             png = page.screenshot(new Page.ScreenshotOptions().setFullPage(false).setScale(ScreenshotScale.CSS));
         }
         return Base64.getEncoder().encodeToString(png);
@@ -394,10 +393,12 @@ public class PlaywrightPageRunner {
         return env;
     }
 
+    private static final Object ERR_LOCK = new Object();
+
     private void handleInitFailure(Exception e) {
         String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         if (msg.contains("Executable doesn't exist")) {
-            String summary = msg.split("\n")[0].trim();
+            String summary = LINE_BREAK_PATTERN.split(msg)[0].trim();
             log.warnf("[Playwright] Chromium binary not found - initialization skipped. " +
                      "(Run 'npx playwright install chromium'). Details: %s", summary);
         } else {
@@ -405,36 +406,73 @@ public class PlaywrightPageRunner {
         }
         closeBrowserQuietly(browser, "init-failure");
         browser = null;
-        if (playwright != null) {
-            try { playwright.close(); } catch (Exception ignored) {}
-            playwright = null;
-        }
+        closePlaywrightQuietly(playwright, "init-failure");
+        playwright = null;
     }
 
     private void closeBrowserQuietly(Browser browserRef, String phase) {
         if (browserRef == null) return;
-        try {
-            browserRef.close();
-        } catch (Exception e) {
-            if (isBenignCloseError(e)) {
-                log.debugf("[Playwright] Browser close skipped benign error during %s: %s",
-                        phase, safeMessage(e));
-            } else {
-                log.warnf("[Playwright] Browser close failed during %s: %s", phase, safeMessage(e));
+        synchronized (ERR_LOCK) {
+            PrintStream originalErr = System.err;
+            try {
+                // Internal Playwright threads often print "Pipe closed" to System.err
+                // even when we catch the exception. We temporarily redirect to silence them.
+                System.setErr(new PrintStream(OutputStream.nullOutputStream()));
+                browserRef.close();
+            } catch (Throwable t) {
+                if (System.err != originalErr) System.setErr(originalErr);
+                if (isBenignCloseError(t)) {
+                    log.debugf("[Playwright] Browser close skipped benign error during %s: %s",
+                            phase, safeMessage(t));
+                } else {
+                    log.warnf("[Playwright] Browser close failed during %s: %s", phase, safeMessage(t));
+                }
+            } finally {
+                if (System.err != originalErr) {
+                    System.setErr(originalErr);
+                }
+            }
+        }
+    }
+
+    private void closePlaywrightQuietly(Playwright playwrightRef, String phase) {
+        if (playwrightRef == null) return;
+        synchronized (ERR_LOCK) {
+            PrintStream originalErr = System.err;
+            try {
+                System.setErr(new PrintStream(OutputStream.nullOutputStream()));
+                playwrightRef.close();
+            } catch (Throwable t) {
+                if (System.err != originalErr) System.setErr(originalErr);
+                if (isBenignCloseError(t)) {
+                    log.debugf("[Playwright] Playwright close skipped benign error during %s: %s",
+                            phase, safeMessage(t));
+                } else {
+                    log.warnf("[Playwright] Playwright close failed during %s: %s", phase, safeMessage(t));
+                }
+            } finally {
+                if (System.err != originalErr) {
+                    System.setErr(originalErr);
+                }
             }
         }
     }
 
     private boolean isBenignCloseError(Throwable t) {
+        if (t == null) return false;
         String msg = safeMessage(t).toLowerCase();
-        return msg.contains("stream closed")
+        boolean matches = msg.contains("stream closed")
             || msg.contains("pipe closed")
             || msg.contains("pipe is being closed")
+            || msg.contains("broken pipe")
+            || msg.contains("connection closed")
             || msg.contains("target page, context or browser has been closed");
+        
+        return matches || isBenignCloseError(t.getCause());
     }
 
     private String normalizeWhitespace(String text) {
-        return text == null ? "" : text.replaceAll("\n{3,}", "\n\n").trim();
+        return text == null ? "" : NEWLINE_CONSOLIDATION_PATTERN.matcher(text).replaceAll("\n\n").trim();
     }
 
     private String safeMessage(Throwable t) {

@@ -1,6 +1,7 @@
 package com.arcclaw.core.state;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -19,6 +20,7 @@ import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -165,8 +167,31 @@ public class CompactionService {
         }
 
         int size = nonSystemMessages.size();
-        List<ChatMessage> toCompact = nonSystemMessages.subList(0, size - keepRecent);
-        List<ChatMessage> toKeep   = nonSystemMessages.subList(size - keepRecent, size);
+        List<ChatMessage> toCompact = new ArrayList<>(nonSystemMessages.subList(0, size - keepRecent));
+        List<ChatMessage> toKeep   = new ArrayList<>(nonSystemMessages.subList(size - keepRecent, size));
+
+        // §Bug-1 Fix: Preserve the last code block so it survives at least one follow-up turn
+        // for fast-path execution to find it.
+        for (int i = toCompact.size() - 1; i >= 0; i--) {
+            ChatMessage msg = toCompact.get(i);
+            String content = msg instanceof AiMessage ? ((AiMessage) msg).text() :
+                             msg instanceof SystemMessage ? ((SystemMessage) msg).text() :
+                             msg.toString();
+            
+            if (content != null && content.contains("```")) {
+                int end = content.lastIndexOf("```");
+                if (end > 0) {
+                    int start = content.lastIndexOf("```", end - 1);
+                    if (start != -1) {
+                        String snippet = content.substring(start, end + 3);
+                        ChatMessage synthetic = SystemMessage.from("[Preserved code block for fast-path]\n" + snippet);
+                        toCompact.remove(i);
+                        toKeep.add(0, synthetic);
+                        break;
+                    }
+                }
+            }
+        }
 
         String prompt = buildCompactionPrompt(sessionId, toCompact);
         String newSummary = executeCompactionTurn(sessionId, prompt);

@@ -42,6 +42,8 @@ import org.jboss.logging.Logger;
  */
 public abstract class AbstractDecisionReflex implements AgentReflex {
 
+    public static final String MSG_RESUMING_TASK = "Resuming task...";
+
     @Inject protected Logger log;
     @Inject protected StatefulAgentStore statefulAgentStore;
     @Inject protected AgentCronRepository cronRepository;
@@ -85,8 +87,33 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
-                if (d.targetSid.isPresent()) return handleDelegatePath(d.targetSid.get(), userId, chatId, reason, context);
-                if (d.cronId.isPresent()) return handleCronDecision(d.cronId.get(), userId, chatId, reason, context);
+                if (d.targetId.isPresent()) {
+                    String targetId = d.targetId.get();
+
+                    // Runtime disambiguation: probe session first, then cron.
+                    // 1. Session pending? → requires delegate role for cross-session approval
+                    Optional<AgentCheckpoint> targetPending = statefulAgentStore.findLatestAwaitingApproval(targetId);
+                    if (targetPending.isPresent()) {
+                        if (!delegateGuard.isDelegate(userId)) {
+                            log.warnf("[%s-DELEGATE-DENIED] user=%s attempted session decision for id=%s",
+                                    getActionName(), userId, targetId);
+                            return getNotAuthorizedMessage();
+                        }
+                        return handleDelegateDecision(targetId, userId, chatId, reason, context);
+                    }
+
+                    // 2. Not a session — try as cron task (owner can approve their own tasks)
+                    try {
+                        String cronRes = handleCronDecision(targetId, userId, chatId, reason, context);
+                        if (cronRes != null) return cronRes;
+                    } catch (Exception e) {
+                        log.debugf("Cron resolution failed for %s: %s", targetId, e.getMessage());
+                    }
+
+                    // 3. Nothing found
+                    if (statefulAgentStore.isSessionActive(targetId)) return getTargetNotAwaitingMessage();
+                    return "Target session not found or has no pending approval.";
+                }
                 if (d.toolName.isPresent()) return handlePerToolDecision(d.toolName.get(), sessionId, userId, chatId, reason, context);
 
                 Optional<AgentCheckpoint> latestPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
@@ -110,32 +137,26 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
                 return pollForBridgeResult(sessionId);
             });
-            return ReflexResult.respond(response, context);
+            return response != null ? ReflexResult.respond(response, context) : ReflexResult.forward(context);
         } catch (Exception e) {
             log.errorf("Failed to process %s for session %s: %s", getActionName(), sessionId, ExceptionUtils.getRootCauseMessage(e));
             return ReflexResult.respond(getErrorMessage() + ": " + ExceptionUtils.getRootCauseMessage(e), context);
         }
     }
 
-    private record DecisionParams(Optional<String> cronId, Optional<String> targetSid, Optional<String> toolName, Optional<String> reasonOpt) {}
+    private record DecisionParams(Optional<String> targetId, Optional<String> toolName, Optional<String> reasonOpt) {}
 
     private DecisionParams extractDecisionParams(ChannelCommand cmd) {
         if (cmd instanceof ChannelCommand.Approve a) {
-            return new DecisionParams(a.cronId(), a.targetSessionId(), a.toolName(), a.reason());
+            return new DecisionParams(a.targetId(), a.toolName(), a.reason());
         } else if (cmd instanceof ChannelCommand.Deny d) {
-            return new DecisionParams(d.cronId(), d.targetSessionId(), d.toolName(), d.reason());
+            return new DecisionParams(d.targetId(), d.toolName(), d.reason());
         }
         return null;
     }
 
-    private String handleDelegatePath(String targetSid, String userId, String chatId, String reason, MessageContext context) throws Exception {
-        if (!delegateGuard.isDelegate(userId)) {
-            log.warnf("[%s-DELEGATE-DENIED] admin=%s attempted decision for session=%s",
-                    getActionName(), userId, targetSid);
-            return getNotAuthorizedMessage();
-        }
-        return handleDelegateDecision(targetSid, userId, chatId, reason, context);
-    }
+    // handleDelegatePath removed — authorization gate is now inline in execute().
+    // handleDelegateDecision is called directly after the delegate check passes.
 
     private String handleAmbiguityDetection(Optional<AgentCheckpoint> latestPending, List<AgentCronEntity> pendingCrons) {
         if (latestPending.isPresent() && !pendingCrons.isEmpty()) {
@@ -146,7 +167,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 sb.append("• `/%s %s` - (Background) ".formatted(getActionName().toLowerCase(), c.id))
                   .append(c.goal).append("\n");
             }
-            sb.append("\nPlease reply with the specific command.");
+            sb.append("\nPlease reply with the specific reflex.");
             return sb.toString();
         }
         return null;
@@ -165,7 +186,12 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 if (ChannelType.CLI.id().equalsIgnoreCase(context.getUser().channel().id())) {
                     return runSynchronousDecision(sessionId, activeRole, userId, chatId);
                 } else {
-                    checkpointApprovalService.triggerResume(cp);
+                    // §Resume-Fix: If applyDecisionToAll returned null (e.g. no batchToolDecisions),
+                    // use the already-loaded checkpoint to trigger resume.
+                    AgentCheckpoint resumeTarget = cp != null ? cp : latestPending.get();
+                    log.infof("[%sReflex] Triggering resume for session %s (cp=%s, fallback=%s)",
+                            getActionName(), sessionId, cp != null, cp == null);
+                    checkpointApprovalService.triggerResume(resumeTarget);
                     return "";
                 }
             } catch (CheckpointResolutionException e) {
@@ -202,9 +228,10 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         log.infof("[DELEGATE-%s] admin=%s decision for session=%s", getActionName(), adminId, targetSid);
         
         Optional<AgentCheckpoint> latestPending = statefulAgentStore.findLatestAwaitingApproval(targetSid);
-        String activeRole = latestPending.map(AgentCheckpoint::getAgentRole).orElse(null);
-
-        if (activeRole == null) return getTargetNotAwaitingMessage();
+        if (latestPending.isEmpty()) {
+            return "Target session not found or has no pending approval.";
+        }
+        String activeRole = latestPending.get().getAgentRole();
 
         AgentCheckpoint cp = latestPending.get();
         if (cp.hasBatchToolDecisions()) {
@@ -215,10 +242,16 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         auditService.logSecurityEvent(SecurityEventType.DELEGATE_APPROVAL, adminId, auditMsg);
 
         checkpointResumeHandler.resumeAfterBatchDecision(targetSid, activeRole, adminId, adminChatId, context.getUser().channel().name());
-        return "Resuming task...";
+        return MSG_RESUMING_TASK;
     }
 
     private String handleCronDecision(String cronId, String userId, String chatId, String reason, MessageContext context) throws Exception {
+        // §Regression Fix: If this is an active session ID (main chat), it belongs to 
+        // the session approval path, not the cron path.
+        if (statefulAgentStore.isSessionActive(cronId)) {
+            return null;
+        }
+
         AgentCheckpoint pendingCheckpoint = applyDecisionToAll(cronId, reason);
         String cronSessionId = pendingCheckpoint.getSessionId();
         String cronRole = pendingCheckpoint.getAgentRole();
@@ -230,6 +263,20 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         }
 
         AgentCronEntity cron = cronRepository.findById(resolvedJobId);
+        if (cron == null) {
+            // §UX: If user provided the execution suffix (UUID) or a segment instead of the job ID,
+            // resolve it from the full session ID in the checkpoint.
+            // Format: "cron-<jobId>-<executionUuid>"
+            if (cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+                String sub = cronSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+                // Job IDs (UUIDs) are always 36 chars.
+                if (sub.length() >= 36) {
+                    resolvedJobId = sub.substring(0, 36);
+                    cron = cronRepository.findById(resolvedJobId);
+                }
+            }
+        }
+        
         if (cron == null) return "❌ Cron task not found.";
 
         if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) return getAlreadyProcessingMessage();
@@ -242,7 +289,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
             int budget = pendingCheckpoint.getMaxIterations() != null ? Math.max(3, pendingCheckpoint.getMaxIterations()) : 3;
 
-            result = WorkspaceContext.run(cronSessionId, cron.userId, cron.chatId, AutonomyLevel.BACKGROUND, cronRole,
+            result = WorkspaceContext.run(cronSessionId, cron.userId, cron.chatId, AutonomyLevel.SUPERVISED, cronRole,
                     () -> agentLoop.run(cronSessionId, cronRole, goal, pendingCheckpoint.getSystemNote(), reasoningEngine, budget, context));
 
             if (result == null) {

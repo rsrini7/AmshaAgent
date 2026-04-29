@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +16,7 @@ import java.util.Optional;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
@@ -31,6 +33,11 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.TextPatternUtils;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -65,6 +72,7 @@ class AgentLoopTest {
                 setField(engine, "promptBuilder", promptBuilder);
                 setField(engine, "historyAssembler", historyAssembler);
                 setField(engine, "stepParser", stepParser);
+                setField(engine, "textPatternUtils", new TextPatternUtils());
         }
 
         private void setField(Object target, String name, Object value) throws Exception {
@@ -105,6 +113,11 @@ class AgentLoopTest {
                 CheckpointResumeCoordinator checkpointResumeCoordinator = mock(CheckpointResumeCoordinator.class);
                 ObservabilityManager observabilityManager = mock(ObservabilityManager.class);
                 AgentSseService agentSseService = mock(AgentSseService.class);
+                MeterRegistry meterRegistry = mock(MeterRegistry.class);
+                Counter counter = mock(Counter.class);
+                when(meterRegistry.counter(anyString(), any(String[].class))).thenReturn(counter);
+                
+                IntentClassificationService intentClassificationService = mock(IntentClassificationService.class);
 
                 when(sessionLifecycleCoordinator.setupMdc(any(), any())).thenReturn("user");
                 when(checkpointResumeCoordinator.resolveResumePath(any(), any(), any(), any()))
@@ -115,9 +128,16 @@ class AgentLoopTest {
                 setField(loop, "checkpointResumeHandler", checkpointResumeHandler);
                 setField(loop, "hashUtil", hashUtil);
                 setField(loop, "sessionLifecycleCoordinator", sessionLifecycleCoordinator);
+                Span span = mock(Span.class);
+                Scope scope = mock(Scope.class);
+                when(span.makeCurrent()).thenReturn(scope);
+                when(observabilityManager.beginSession(any())).thenReturn(span);
+
                 setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
                 setField(loop, "observabilityManager", observabilityManager);
                 setField(loop, "agentSseService", agentSseService);
+                setField(loop, "meterRegistry", meterRegistry);
+                setField(loop, "intentClassificationService", intentClassificationService);
 
                 ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
                 ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "h", "foo", Instant.now());

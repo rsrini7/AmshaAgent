@@ -61,6 +61,8 @@ public class EngineStepHandler {
     private final StatefulAgentStore agentStore;
     private final int schemaMaxRetriesStrict;
     private final int schemaMaxRetriesLenient;
+    private final int rateLimitMaxAutoRetrySeconds;
+    private final int rateLimitDefaultRetrySeconds;
 
     @Inject
     @Identifier("agent-output-mode")
@@ -93,6 +95,8 @@ public class EngineStepHandler {
         this.agentStore = null;
         this.schemaMaxRetriesStrict = 0;
         this.schemaMaxRetriesLenient = 0;
+        this.rateLimitMaxAutoRetrySeconds = 0;
+        this.rateLimitDefaultRetrySeconds = 0;
     }
 
     @Inject
@@ -102,7 +106,9 @@ public class EngineStepHandler {
                              RateLimitTracker rateLimitTracker,
                              StatefulAgentStore agentStore,
                              @ConfigProperty(name = "arcclaw.agent.schema-correction.max-retries-strict", defaultValue = "4") int schemaMaxRetriesStrict,
-                             @ConfigProperty(name = "arcclaw.agent.schema-correction.max-retries-lenient", defaultValue = "6") int schemaMaxRetriesLenient) {
+                             @ConfigProperty(name = "arcclaw.agent.schema-correction.max-retries-lenient", defaultValue = "6") int schemaMaxRetriesLenient,
+                             @ConfigProperty(name = "arcclaw.agent.rate-limit.max-auto-retry-seconds", defaultValue = "15") int rateLimitMaxAutoRetrySeconds,
+                             @ConfigProperty(name = "arcclaw.agent.rate-limit.default-retry-seconds", defaultValue = "10") int rateLimitDefaultRetrySeconds) {
         this.governanceLayer = governanceLayer;
         this.observers = observers;
         this.objectMapper = objectMapper;
@@ -110,6 +116,8 @@ public class EngineStepHandler {
         this.agentStore = agentStore;
         this.schemaMaxRetriesStrict = schemaMaxRetriesStrict;
         this.schemaMaxRetriesLenient = schemaMaxRetriesLenient;
+        this.rateLimitMaxAutoRetrySeconds = rateLimitMaxAutoRetrySeconds;
+        this.rateLimitDefaultRetrySeconds = rateLimitDefaultRetrySeconds;
     }
 
     StepDecision processEngineStep(AgentExecutionContext context, ReasoningEngine engine,
@@ -351,7 +359,7 @@ public class EngineStepHandler {
                         2. Pass exactly TWO flat string parameters only:
                         {"agent": "<name>", "goal": "<self-contained task>"}
                         3. Do NOT wrap in an array []. Do NOT nest under "parameters" or any other key.
-                        4. Valid agent names (one at a time): brahma, shiva, saraswati, brihaspati, dattatreya. 
+                        4. Valid agent names (one at a time): brahma, xiva, saraswati, brihaspati, dattatreya. 
                         Retry now with a single flat call - one agent, one goal string.""";
 
                 } else {
@@ -373,8 +381,8 @@ public class EngineStepHandler {
         if (classified instanceof LlmRateLimitException) {
             log.warnf("[STATE-MACHINE] Rate limit hit session=%s cause=%s", context.sessionId(), ExceptionUtils.getRootCauseMessage(e));
 
-            int retryAfterSeconds = extractRetryAfter(classified.getMessage(), 10);
-            if (retryAfterSeconds <= 15) { // only auto-retry for short waits
+            int retryAfterSeconds = extractRetryAfter(classified.getMessage(), rateLimitDefaultRetrySeconds);
+            if (retryAfterSeconds <= rateLimitMaxAutoRetrySeconds) { // only auto-retry for short waits
                 log.warnf("[STATE-MACHINE] Rate limit session=%s - sleeping %ds then retrying",
                         context.sessionId(), retryAfterSeconds);
                 try { Thread.sleep(retryAfterSeconds * 1000L); }

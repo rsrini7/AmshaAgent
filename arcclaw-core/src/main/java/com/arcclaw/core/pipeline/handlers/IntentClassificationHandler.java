@@ -95,8 +95,15 @@ public class IntentClassificationHandler implements MessageHandler {
             if (isFollowUpHeuristic && previousRole != null && 
                (AgentRoleEnum.CODER.toScopedName().equals(previousRole) || 
                 AgentRoleEnum.DEBUGGER.toScopedName().equals(previousRole))) {
-                log.infof("Short follow-up detected for chat %s - preserving sticky role: %s", context.getChatId(), previousRole);
-                role = previousRole;
+                
+                // §Bug-2 Fix: Tool-availability gate. If goal implies scheduling, coder role lacks the tool.
+                if (intentDetector.isScheduleIntent(classificationInput)) {
+                    log.infof("Goal requires scheduling, overriding sticky role %s to coordinator for chat %s", previousRole, context.getChatId());
+                    role = AgentRoleEnum.COORDINATOR.toScopedName();
+                } else {
+                    log.infof("Short follow-up detected for chat %s - preserving sticky role: %s", context.getChatId(), previousRole);
+                    role = previousRole;
+                }
             } else {
                 role = classifier.classify(classificationInput);
             }

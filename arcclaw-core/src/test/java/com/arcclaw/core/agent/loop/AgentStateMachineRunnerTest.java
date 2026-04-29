@@ -47,6 +47,7 @@ import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
@@ -110,12 +111,13 @@ class AgentStateMachineRunnerTest {
         codePolicy            = mock(CodeGenerationPolicy.class);
         correctionStrategy    = mock(CorrectionStrategy.class);
         objectMapper = mock(ObjectMapper.class);
+        TextPatternUtils textPatternUtils = new TextPatternUtils();
 
-        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper);
+        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper, textPatternUtils);
 
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager(agentStore, agentSseService, new ObjectMapper());
 
-        EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, new ObjectMapper(), rateLimitTracker, agentStore, 4, 6);
+        EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, new ObjectMapper(), rateLimitTracker, agentStore, 4, 6, 15, 10);
 
         ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor);
 
@@ -259,14 +261,17 @@ class AgentStateMachineRunnerTest {
     }
 
     @Test
-    void testCircuitBreakerTripsAfter2Failures() {
+    void testCircuitBreakerTripsAfter3Failures() {
         ReasoningStep toolStep1 = ReasoningStep.pending(
                 "thought1", "broken-tool", Map.of("arg", 1), 100, 100);
         ReasoningStep toolStep2 = ReasoningStep.pending(
                 "thought2", "broken-tool", Map.of("arg", 2), 100, 100);
+        ReasoningStep toolStep3 = ReasoningStep.pending(
+                "thought3", "broken-tool", Map.of("arg", 3), 100, 100);
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep1)
-                .thenReturn(toolStep2);
+                .thenReturn(toolStep2)
+                .thenReturn(toolStep3);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
                 anyList(), anyString(), anyList()))
@@ -280,7 +285,7 @@ class AgentStateMachineRunnerTest {
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
-        verify(invoker, times(2)).invoke(anyString(), anyMap(), anyString());
+        verify(invoker, times(3)).invoke(anyString(), anyMap(), anyString());
     }
 
     @Test

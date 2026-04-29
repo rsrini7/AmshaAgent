@@ -14,6 +14,7 @@ import com.arcclaw.mcp.bridge.McpToolBridge;
 import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 
 @ApplicationScoped
 @Path("/mcp")
@@ -33,6 +34,7 @@ public class McpAdminResource {
     @GET
     @Path("/tools")
     @Produces(MediaType.APPLICATION_JSON)
+    @Operation(summary = "List all tools currently exposed or registered via MCP")
     public Map<String, Object> listAllTools() {
         checkEnabled();
         return Map.of(
@@ -44,6 +46,7 @@ public class McpAdminResource {
     @GET
     @Path("/status")
     @Produces(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Get current MCP server status and dynamic tool counts")
     public Map<String, Object> getStatus() {
         checkEnabled();
         return Map.of(

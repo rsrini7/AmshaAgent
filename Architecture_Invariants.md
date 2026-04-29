@@ -1192,3 +1192,20 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - External MCP calls MUST operate within isolated sessions linked to specific client IDs. Hardware sharing or default/synthetic session identifiers (like "mcp-external") are strictly prohibited.
 - Role assignment for MCP requests MUST dynamically reflect capability headers to preserve least-privilege principles, rather than defaulting to max-privilege roles like `COORDINATOR`.
 - Any external request tunneling into the workspace via the bridge MUST generate unique audit telemetry tying the payload execution to the specific source client and its requested capabilities, completely avoiding budget crossover or blind file-access scenarios across concurrent clients.
+
+---
+
+## 22. JDK Feature Policy (CRITICAL)
+
+ONLY use JDK features FULLY FINALIZED (non-preview) in their respective release.
+
+FORBIDDEN - preview or unfinalized:
+- ❌ StructuredTaskScope / Structured Concurrency (still preview in JDK 25)
+- ❌ Flexible Constructor Bodies (treat as FORBIDDEN until confirmed final)
+- ❌ Any feature requiring `--enable-preview` compiler flag
+- ❌ value classes / primitive types (preview in JDK 25)
+
+Do NOT add `--enable-preview` to any `pom.xml` compiler or surefire configuration.
+`StructuredTaskScope` is FORBIDDEN. Use `ManagedExecutor` + virtual threads instead.
+Every new or modified class MUST compile cleanly under JDK 25 standard without preview flags.
+

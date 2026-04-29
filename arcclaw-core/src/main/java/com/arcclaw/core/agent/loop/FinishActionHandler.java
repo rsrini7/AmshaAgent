@@ -110,6 +110,7 @@ public class FinishActionHandler {
     private final Instance<AgentObserver> observers;
     private final CorrectionStrategy correctionStrategy;
     private final ObjectMapper objectMapper;
+    private final TextPatternUtils textPatternUtils;
 
     @Inject
     public FinishActionHandler(AnswerGuardStrategy qualityGuard,
@@ -117,13 +118,15 @@ public class FinishActionHandler {
                                RateLimitTracker rateLimitTracker,
                                Instance<AgentObserver> observers,
                                CorrectionStrategy correctionStrategy,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               TextPatternUtils textPatternUtils) {
         this.qualityGuard = qualityGuard;
         this.codePolicy = codePolicy;
         this.rateLimitTracker = rateLimitTracker;
         this.observers = observers;
         this.correctionStrategy = correctionStrategy;
         this.objectMapper = objectMapper;
+        this.textPatternUtils = textPatternUtils;
     }
 
     /**
@@ -434,6 +437,6 @@ public class FinishActionHandler {
     }
 
     private boolean looksLikeJson(String text) {
-        return TextPatternUtils.looksLikeJson(text);
+        return textPatternUtils.looksLikeJson(text);
     }
 }

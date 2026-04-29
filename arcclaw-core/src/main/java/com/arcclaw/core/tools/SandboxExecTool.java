@@ -16,51 +16,34 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
  * SandboxExecTool - executes user-submitted code inside an isolated Podman container.
- *
- * ┌─────────────────────────────────────────────────────────────────────┐
- * │  Java execution architecture (WHY we compile on host, run in JRE)  │
- * │                                                                     │
- * │  Option A - java --source 21 inside container (REJECTED):          │
- * │    Requires JDK inside the container image. JEP 330 (--source) is  │
- * │    a "source launcher" that internally calls javax.tools.JavaCompiler│
- * │    before running. Even though no .class files land on disk, the   │
- * │    compiler API must be present - it ships only with the JDK, not  │
- * │    the JRE. Using openjdk21-jdk adds ~200MB to the sandbox image   │
- * │    with no security or runtime benefit.                             │
- * │                                                                     │
- * │  Option B - compile on host, run .class in JRE (CHOSEN):           │
- * │    ArcClaw always runs on a full JDK (Quarkus requires it).        │
- * │    We use the host's javac (from java.home) to compile .java →     │
- * │    .class into the workspace dir. The container mounts that dir     │
- * │    read-only and runs: java -cp /workspace ClassName               │
- * │    The JRE is sufficient for this - no compiler needed in image.   │
- * │    Compiler errors surface immediately as tool failures with the    │
- * │    real javac output, not a cryptic container error.                │
- * │                                                                     │
- * │  WHY NOT openjdk25 in Dockerfile:                                  │
- * │    JDK 25 is not yet packaged for Alpine stable (3.21). It is only │
- * │    available on Alpine edge, which is the rolling-release branch   │
- * │    - too unstable for a security-sensitive sandbox image. JDK 21   │
- * │    is the current LTS and the correct choice.                       │
- * └─────────────────────────────────────────────────────────────────────┘
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "sandbox_exec",
+    description = "Execute code in an isolated sandbox",
+    defaultRoles = {"coder", "debugger"}
+)
 public class SandboxExecTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(SandboxExecTool.class);
     private static final int MAX_OUTPUT_CHARS = 8192;
     private static final String TRUNCATION_SUFFIX = "[output truncated at 8192 chars]";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // ── Container-side mount point for the workspace directory.
     // ProcessIsolationExecutor mounts workspaceRoot here read-only.
@@ -115,6 +98,15 @@ public class SandboxExecTool implements AgentTool {
     @Override public boolean requiresSandbox() { return true; }
     public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
 
+    @Override
+    public JsonObjectSchema parametersSchema() {
+        return JsonObjectSchema.builder()
+                .addStringProperty("code", "The source code to execute")
+                .addStringProperty("language", "The programming language (python, java, go, node, bash)")
+                .required("code", "language")
+                .build();
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // sandboxCommand() - returns the command that runs INSIDE the Podman container.
     //
@@ -125,10 +117,12 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public List<String> sandboxCommand(Map<String, Object> params) {
+        ensureUnwrapped(params);
         String code = (String) params.get("code");
         String lang = (String) params.get("language");
         if (code == null) throw new IllegalArgumentException("Parameter 'code' is required.");
         if (lang == null) throw new IllegalArgumentException("Parameter 'language' is required.");
+
         lang = lang.toLowerCase();
 
         String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
@@ -164,6 +158,7 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {
+        ensureUnwrapped(params);
         String lang = (String) params.get("language");
         String code = (String) params.get("code");
         if (lang == null || code == null) return;
@@ -485,5 +480,25 @@ public class SandboxExecTool implements AgentTool {
         int endIndex = output.offsetByCodePoints(
                 0, Math.min(output.codePointCount(0, output.length()), MAX_OUTPUT_CHARS));
         return output.substring(0, endIndex) + TRUNCATION_SUFFIX;
+    }
+
+    private void ensureUnwrapped(Map<String, Object> params) {
+        if (params == null) return;
+        Object codeObj = params.get("code");
+        if (!(codeObj instanceof String code)) return;
+
+        if (code.trim().startsWith("{") && code.contains("\"code\"") && code.contains("\"language\"")) {
+            try {
+                JsonNode node = MAPPER.readTree(code);
+                if (node.has("code")) {
+                    params.put("code", node.get("code").asText());
+                }
+                if (node.has("language")) {
+                    params.put("language", node.get("language").asText());
+                }
+            } catch (Exception e) {
+                // ignore and proceed with raw code if parsing fails
+            }
+        }
     }
 }

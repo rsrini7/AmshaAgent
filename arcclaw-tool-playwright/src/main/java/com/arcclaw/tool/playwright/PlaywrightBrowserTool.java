@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -19,6 +20,11 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "browser_navigate",
+    description = "Headless browser navigation (Playwright)",
+    defaultRoles = {"researcher", "synthesizer"}
+)
 public class PlaywrightBrowserTool implements AgentTool {
 
     private static final int MAX_CONTENT_CHARS = 9092;

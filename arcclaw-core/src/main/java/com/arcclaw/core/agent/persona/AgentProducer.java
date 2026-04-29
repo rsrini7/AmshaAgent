@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.role.AgentPersona;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.structured.StructuredOutputEngine;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,43 +54,43 @@ public class AgentProducer {
 
     @Produces
     @ApplicationScoped
-    @AgentRole("coordinator")
+    @AgentRole(AgentRoleEnum.COORDINATOR_ID)
     public Agent coordinator() {
-        return new DefaultAgent(AgentRoleEnum.COORDINATOR, () -> coordinatorTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.VISHNU, () -> coordinatorTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("coder")
+    @AgentRole(AgentRoleEnum.CODER_ID)
     public Agent coder() {
-        return new DefaultAgent(AgentRoleEnum.CODER, () -> coderTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.BRAHMA, () -> coderTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("debugger")
+    @AgentRole(AgentRoleEnum.DEBUGGER_ID)
     public Agent debugger() {
-        return new DefaultAgent(AgentRoleEnum.DEBUGGER, () -> debuggerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.SHIVA, () -> debuggerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("researcher")
+    @AgentRole(AgentRoleEnum.RESEARCHER_ID)
     public Agent researcher() {
-        return new DefaultAgent(AgentRoleEnum.RESEARCHER, () -> researcherTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.SARASWATI, () -> researcherTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("architect")
+    @AgentRole(AgentRoleEnum.ARCHITECT_ID)
     public Agent architect() {
-        return new DefaultAgent(AgentRoleEnum.ARCHITECT, () -> architectTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.BRIHASPATI, () -> architectTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 
     @Produces
     @ApplicationScoped
-    @AgentRole("synthesizer")
+    @AgentRole(AgentRoleEnum.SYNTHESIZER_ID)
     public Agent synthesizer() {
-        return new DefaultAgent(AgentRoleEnum.SYNTHESIZER, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.DATTATREYA, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
     }
 }

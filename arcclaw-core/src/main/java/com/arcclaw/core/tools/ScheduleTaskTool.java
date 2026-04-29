@@ -15,6 +15,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.CronTaskScheduled;
@@ -59,7 +60,14 @@ import org.jboss.logging.Logger;
  *         schema parse correction. Boolean schema makes LLMs emit the JSON literal.
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "schedule_task",
+    description = "Schedule future or continuous background tasks",
+    defaultRoles = {"coordinator", "synthesizer"}
+)
 public class ScheduleTaskTool implements AgentTool {
+
+    private static final Logger log = Logger.getLogger(ScheduleTaskTool.class);
 
     public static final String NAME = ToolCapability.SCHEDULE_TASK.toolName();
 
@@ -67,9 +75,12 @@ public class ScheduleTaskTool implements AgentTool {
      * Rejects vague goals with unresolved references (zero LLM cost - pure regex).
      */
     private static final Pattern NAKED_PRONOUN = Pattern.compile(
-            "\\b(this|that|the code|the file|the thing|the result)\\b",
+            "\\b(this|that|the code|the file|the thing)\\b",
             Pattern.CASE_INSENSITIVE
     );
+
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+    private static final Pattern IT_PRONOUN_PATTERN = Pattern.compile(".*\\bit\\b.*", Pattern.CASE_INSENSITIVE);
 
     @Inject AgentCronRepository cronRepository;
     @Inject AuditService auditService;
@@ -149,6 +160,7 @@ public class ScheduleTaskTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
+        log.infof("[ScheduleTaskTool] Executing with params: %s", params);
         String userId;
         String chatId;
         String sessionId;
@@ -185,9 +197,12 @@ public class ScheduleTaskTool implements AgentTool {
             default        -> false;
         };
 
+        // NPE-SAFE: executionRole can be null. CronJobRunner.resolveRole()
+        // handles null by falling back to keyword-based resolution (e.g. "write python" -> "coder").
+        // Do NOT add a hardcoded default here as it overrides the runner's specialist detection.
         String executionRole = (String) params.get("executionRole");
-        if (executionRole == null || executionRole.isBlank()) {
-            executionRole = AgentRoleEnum.RESEARCHER.toScopedName();
+        if (executionRole != null && executionRole.isBlank()) {
+            executionRole = null;
         }
 
         // Step 1 - Validate cronExpression or absolute time trigger
@@ -220,7 +235,9 @@ public class ScheduleTaskTool implements AgentTool {
 
         // We require AT LEAST a cronExpression OR an absolute fire time (for runOnce)
         if ((cronExpression == null || cronExpression.isBlank()) 
-                && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())) {
+                && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())
+                && !runOnce) {
+            log.warnf("[ScheduleTaskTool] Rejecting: no cron and no suggested fire time for recurring task.");
             return ToolResponse.failure(400, "Missing required parameter: cronExpression. " +
                     "For recurring tasks (runOnce=false), you must supply a valid 5-field UNIX cron expression. " +
                     "Examples: '*/1 * * * *' for every minute, '0 * * * *' for every hour, " +
@@ -232,10 +249,11 @@ public class ScheduleTaskTool implements AgentTool {
         }
 
         // Step 2 - Naked pronoun guard
-        boolean hasNakedIt = goal.split("\\s+").length < 6
-                && goal.toLowerCase().matches(".*\\bit\\b.*");
+        boolean hasNakedIt = WHITESPACE_PATTERN.split(goal).length < 6
+                && IT_PRONOUN_PATTERN.matcher(goal).matches();
         boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
         if (hasNakedPronoun) {
+            log.warnf("[ScheduleTaskTool] Rejecting goal due to naked pronouns: %s", goal);
             return ToolResponse.failure(422,
                     "Goal contains unresolved references (e.g., 'it', 'the code'). " +
                     "Rewrite with explicit technical context before scheduling. " +
@@ -248,7 +266,7 @@ public class ScheduleTaskTool implements AgentTool {
         // runOnce=true already guarantees single-fire - dom/month are always redundant
         // and dangerous (task silently never fires if the cron tick crosses midnight).
         if (runOnce && cronExpression != null) {
-            String[] fields = cronExpression.trim().split("\\s+");
+            String[] fields = WHITESPACE_PATTERN.split(cronExpression.trim());
             if (fields.length == 5) {
                 cronExpression = fields[0] + " " + fields[1] + " * * *";
             }
@@ -264,12 +282,21 @@ public class ScheduleTaskTool implements AgentTool {
                 Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Failed to parse suggestedNextFireTime '%s' - falling back to cron", suggestedNextFireTime);
                 nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
             }
+        } else if (runOnce && (cronExpression == null || cronExpression.isBlank())) {
+            // §Fix: Default one-shot to "now" if no time was suggested and no cron provided.
+            // We add a 10s buffer to allow for persistence ingestion and initial polling.
+            // This case typically fires when an agent (e.g., in a cron-resumed session) calls
+            // schedule_task without a TimeContextInjector in scope to provide a fire time hint.
+            nextFireTime = Instant.now().plusSeconds(10); 
+            Logger.getLogger(ScheduleTaskTool.class).infof("[ScheduleTaskTool] No time suggested for one-shot task - defaulting to 'now' (+10s): %s", nextFireTime);
         } else {
             nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
         }
 
         if (nextFireTime == null) {
-            return ToolResponse.failure(400, "Could not determine next fire time for '" + cronExpression + "'. Use 5-field UNIX format.");
+            log.warnf("[ScheduleTaskTool] Rejecting: could not determine next fire time (cron='%s', suggested='%s')", 
+                cronExpression, suggestedNextFireTime);
+            return ToolResponse.failure(400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
         }
 
         // Step 5 - Build and persist entity

@@ -45,6 +45,9 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     @Inject
     ToolRegistry toolRegistry;
 
+    @Inject
+    TextPatternUtils textPatternUtils;
+
     private Pattern nakedFunctionCallPattern;
 
     @PostConstruct
@@ -163,7 +166,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
                 || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find()
                 || MISTRAL_TOOL_CALL_PATTERN.matcher(answer).find()
                 || (nakedFunctionCallPattern != null && nakedFunctionCallPattern.matcher(answer).find())
-                || TextPatternUtils.looksLikeJson(answer);
+                || textPatternUtils.looksLikeJson(answer);
     }
 
     /**
@@ -234,7 +237,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
 
         if (answer.contains("delegatetoagent")) return "delegatetoagent";
         
-        if (TextPatternUtils.looksLikeJson(answer)) {
+        if (textPatternUtils.looksLikeJson(answer)) {
             return "a structured JSON block";
         }
         

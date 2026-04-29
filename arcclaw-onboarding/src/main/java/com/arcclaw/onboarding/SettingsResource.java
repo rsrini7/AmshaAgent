@@ -16,6 +16,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
@@ -25,6 +26,7 @@ import com.arcclaw.onboarding.dto.ProviderUpdateRequest;
 import com.arcclaw.onboarding.dto.SettingsDto;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 
 @Path("/settings")
 @Produces(MediaType.APPLICATION_JSON)
@@ -45,12 +47,13 @@ public class SettingsResource {
         if (key == null || !key.equals(internalApiKey)) {
             throw new WebApplicationException(
                 Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(Map.of("error", "Unauthorized: Invalid or missing API Key"))
+                    .entity(new ArcClawErrorResponse("Unauthorized", "Invalid or missing API Key"))
                     .build());
         }
     }
 
     @GET
+    @Operation(summary = "Get current system settings and LLM configuration")
     public SettingsDto getSettings(@HeaderParam("X-ArcClaw-API-Key") String key) {
         checkAuth(key);
         String provider = readVaultString(VaultConstants.LLM_PROVIDER_KEY, "");
@@ -67,6 +70,7 @@ public class SettingsResource {
 
     @GET
     @Path("/prompt")
+    @Operation(summary = "Get the full system prompt from vault")
     public Response getPrompt(@HeaderParam("X-ArcClaw-API-Key") String key) {
         checkAuth(key);
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
@@ -77,11 +81,12 @@ public class SettingsResource {
     @Path("/provider")
     @Consumes(MediaType.APPLICATION_JSON)
     @RunOnVirtualThread
+    @Operation(summary = "Update LLM provider and validate credentials")
     public Response updateProvider(@HeaderParam("X-ArcClaw-API-Key") String key, ProviderUpdateRequest req) {
         checkAuth(key);
         if (req.provider() == null || req.provider().isBlank()) {
             return Response.status(400)
-                .entity(Map.of("error", "provider is required")).build();
+                .entity(new ArcClawErrorResponse("provider is required")).build();
         }
 
         boolean isClaudeCode = "claude-code".equals(req.provider());
@@ -90,18 +95,18 @@ public class SettingsResource {
         if (!isClaudeCode && !isOllama) {
             if (req.apiKey() == null || req.apiKey().isBlank()) {
                 return Response.status(400)
-                    .entity(Map.of("error", "apiKey is required for " + req.provider())).build();
+                    .entity(new ArcClawErrorResponse("apiKey is required for " + req.provider())).build();
             }
             try {
                 boolean valid = llmValidationGateway.validate(req.provider(), req.model(), req.apiKey());
                 if (!valid) {
                     return Response.status(422)
-                        .entity(Map.of("error", "API key validation failed for " + req.provider()))
+                        .entity(new ArcClawErrorResponse("API key validation failed", "provider: " + req.provider()))
                         .build();
                 }
             } catch (Exception e) {
                 return Response.status(422)
-                    .entity(Map.of("error", e.getMessage())).build();
+                    .entity(new ArcClawErrorResponse("Validation error", e.getMessage())).build();
             }
         }
 
@@ -117,11 +122,12 @@ public class SettingsResource {
     @PATCH
     @Path("/prompt")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Update the global system prompt")
     public Response updatePrompt(@HeaderParam("X-ArcClaw-API-Key") String key, PromptUpdateRequest req) {
         checkAuth(key);
         if (req.systemPrompt() == null || req.systemPrompt().isBlank()) {
             return Response.status(400)
-                .entity(Map.of("error", "systemPrompt is required")).build();
+                .entity(new ArcClawErrorResponse("systemPrompt is required")).build();
         }
         vault.storeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY, req.systemPrompt().getBytes(StandardCharsets.UTF_8));
         return Response.ok(Map.of("updated", true)).build();
@@ -129,6 +135,7 @@ public class SettingsResource {
 
     @POST
     @Path("/reset")
+    @Operation(summary = "Nuke all settings and keys to force re-onboarding")
     public Response reset(@HeaderParam("X-ArcClaw-API-Key") String key) {
         checkAuth(key);
         registry.invalidateAll();

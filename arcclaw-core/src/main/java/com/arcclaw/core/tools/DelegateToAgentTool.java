@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -31,6 +32,11 @@ import org.jboss.logging.Logger;
  * to domain expert sub-agents (e.g., Shiva, Brahma).
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "delegate_to_agent",
+    description = "Delegate a task to a domain expert sub-agent",
+    defaultRoles = {"architect", "coordinator", "researcher", "coder", "debugger", "synthesizer"}
+)
 public class DelegateToAgentTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(DelegateToAgentTool.class);

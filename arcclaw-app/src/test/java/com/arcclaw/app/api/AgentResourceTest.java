@@ -95,7 +95,7 @@ class AgentResourceTest {
                                 .extract().path("sessionId");
 
                 // 2. Sync Run (Should use the DefaultReasoningEngine stub returning FINISH)
-                RunAgentRequest request = new RunAgentRequest("Hello, World!", "COORDINATOR", 3);
+                RunAgentRequest request = new RunAgentRequest("Hello, World!", "coordinator", 3);
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -160,7 +160,7 @@ class AgentResourceTest {
                                 .statusCode(201)
                                 .extract().path("sessionId");
 
-                RunAgentRequest request = new RunAgentRequest("Async task", "CODER", 5);
+                RunAgentRequest request = new RunAgentRequest("Async task", "coder", 5);
 
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
@@ -192,11 +192,11 @@ class AgentResourceTest {
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .body(new RunAgentRequest("goal", "coordinator", 3))
                                 .when().post("/api/v1/sessions/test-id/run")
                                 .then()
                                 .statusCode(451)
-                                .body("code", equalTo("COMPLIANCE"));
+                                .body("detail", equalTo("COMPLIANCE"));
         }
 
         @Test
@@ -209,11 +209,11 @@ class AgentResourceTest {
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .body(new RunAgentRequest("goal", "coordinator", 3))
                                 .when().post("/api/v1/sessions/test-id/run")
                                 .then()
                                 .statusCode(429)
-                                .body("code", equalTo("BUDGET"));
+                                .body("detail", equalTo("BUDGET"));
         }
 
         @Test
@@ -226,11 +226,11 @@ class AgentResourceTest {
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .body(new RunAgentRequest("goal", "coordinator", 3))
                                 .when().post("/api/v1/sessions/test-id/run")
                                 .then()
                                 .statusCode(422)
-                                .body("code", equalTo("USER_DENIED"));
+                                .body("detail", equalTo("USER_DENIED"));
         }
 
         @Test
@@ -243,11 +243,11 @@ class AgentResourceTest {
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .body(new RunAgentRequest("goal", "coordinator", 3))
                                 .when().post("/api/v1/sessions/test-id/run")
                                 .then()
                                 .statusCode(422)
-                                .body("code", equalTo("SCHEMA"));
+                                .body("detail", equalTo("SCHEMA"));
         }
 
         @Test
@@ -260,11 +260,11 @@ class AgentResourceTest {
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .body(new RunAgentRequest("goal", "coordinator", 3))
                                 .when().post("/api/v1/sessions/test-id/run")
                                 .then()
                                 .statusCode(500)
-                                .body("code", equalTo("SYSTEM"));
+                                .body("detail", equalTo("SYSTEM"));
         }
 
         @Test
@@ -275,11 +275,11 @@ class AgentResourceTest {
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .body(new RunAgentRequest("goal", "COORDINATOR", 5))
+                                .body(new RunAgentRequest("goal", "coordinator", 5))
                                 .when().post("/api/v1/sessions/test-id/run")
                                 .then()
                                 .statusCode(408)
-                                .body("code", equalTo("LOOP_EXCEEDED"));
+                                .body("detail", equalTo("LOOP_EXCEEDED"));
         }
 
         @Test
@@ -291,7 +291,7 @@ class AgentResourceTest {
                 given()
                                 .header("X-ArcClaw-API-Key", "test-key")
                                 .contentType(ContentType.JSON)
-                                .body(new RunAgentRequest("goal", "COORDINATOR", 3))
+                                .body(new RunAgentRequest("goal", "coordinator", 3))
                                 .when().post("/api/v1/sessions/test-id/run")
                                 .then()
                                 .statusCode(202)

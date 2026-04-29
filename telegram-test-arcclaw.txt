@@ -60,9 +60,9 @@ Should I use SQLite WAL mode or PostgreSQL for an AI agent kernel handling concu
 
 store abc=xzy
 
-vault ARCCLAW_BRAVE_API_KEY=sk-test-12345
+vault ARCCLAW_TOOLS_BRAVE_API_KEY=sk-test-12345
 
-vault ARCCLAW_BRAVE_API_KEY=sk-test-12345 -force
+vault ARCCLAW_TOOLS_BRAVE_API_KEY=sk-test-12345 -force
 
 
 

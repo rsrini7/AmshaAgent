@@ -24,6 +24,9 @@ arcclaw:
     telegram:
       enabled: false
       bot-token: "mock-telegram-token"
+  tools:
+    playwright:
+      enabled: false
   vault:
     pepper: "test-pepper"
     master-key: "test-master-key-32-chars-padded!"
@@ -128,3 +131,5 @@ quarkus:
         level: "OFF"
       "com.arcclaw.app.channel.telegram.TelegramAgentHandler":
         level: "OFF"
+      "com.arcclaw.app.session.SessionRegistry":
+        level: "WARN"

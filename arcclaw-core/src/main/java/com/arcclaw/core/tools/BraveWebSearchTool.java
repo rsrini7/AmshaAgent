@@ -14,6 +14,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -29,6 +30,11 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
  * Allows agents to search the web using the Brave Search API.
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "brave_web_search",
+    description = "Search the web for real-time information using the Brave API",
+    defaultRoles = {"researcher", "synthesizer"}
+)
 public class BraveWebSearchTool implements AgentTool {
 
     @ConfigProperty(name = "arcclaw.tools.brave.api-key", defaultValue = "none")

@@ -1,18 +1,24 @@
 package com.arcclaw.core.util;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 /**
  * Shared text pattern recognition and validation utilities.
  */
-public final class TextPatternUtils {
+@ApplicationScoped
+public class TextPatternUtils {
 
-    private static final int JSON_SALVAGE_MAX_LINES = 20;
+    @ConfigProperty(name = "arcclaw.core.util.json-salvage-max-lines", defaultValue = "20")
+    int jsonSalvageMaxLines = 20;
 
-    private TextPatternUtils() {}
+    public TextPatternUtils() {}
 
     /**
      * Returns true if the original goal requested execution.
      */
-    public static boolean goalRequestsExecution(String goal) {
+    public boolean goalRequestsExecution(String goal) {
         if (goal == null) return false;
         String lower = goal.toLowerCase();
         return lower.contains("execute")
@@ -35,7 +41,7 @@ public final class TextPatternUtils {
      * Extracts a normalized language name if mentioned in the goal.
      * Uses word boundaries to avoid false positives (e.g. "government" matching "go").
      */
-    public static String goalMentionsLanguage(String goal) {
+    public String goalMentionsLanguage(String goal) {
         if (goal == null) return null;
         String lower = " " + goal.toLowerCase().replaceAll("[^a-z0-9]", " ") + " ";
         
@@ -50,7 +56,7 @@ public final class TextPatternUtils {
     /**
      * Infers the programming language from a code snippet if a specifier is missing.
      */
-    public static String inferLanguage(String code) {
+    public String inferLanguage(String code) {
         if (code == null) return null;
         if (code.contains("public class") || code.contains("import java")) return "java";
         if (code.contains("def ") || code.contains("#!/usr/bin/env python")) return "python";
@@ -65,14 +71,14 @@ public final class TextPatternUtils {
      * Includes a line-count guard to avoid false positives on multi-line prose
      * that happens to end with a closing brace.
      */
-    public static boolean looksLikeJson(String text) {
+    public boolean looksLikeJson(String text) {
         if (text == null) return false;
         String trimmed = text.strip();
         
         // Only flag single-block JSON - multi-line prose ending with } is valid.
         // 20 lines covers all realistic tool-call JSON echoes.
         long lineCount = trimmed.lines().count();
-        if (lineCount > JSON_SALVAGE_MAX_LINES) return false;
+        if (lineCount > jsonSalvageMaxLines) return false;
 
         return (trimmed.startsWith("{") && trimmed.endsWith("}"))
                 || (trimmed.startsWith("[") && trimmed.endsWith("]"));

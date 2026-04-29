@@ -17,6 +17,7 @@ import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.apache.camel.component.telegram.model.OutgoingTextMessage;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -28,6 +29,9 @@ public class TelegramChannelSender implements ChannelSender {
     private final ProducerTemplate producerTemplate;
     private final TelegramMarkdownV2Renderer renderer;
     private static final Logger log = Logger.getLogger(TelegramChannelSender.class);
+
+    @ConfigProperty(name = "arcclaw.channel.telegram.max-length", defaultValue = "4096")
+    int maxLength;
 
     @Inject
     public TelegramChannelSender(ProducerTemplate producerTemplate,
@@ -149,8 +153,6 @@ public class TelegramChannelSender implements ChannelSender {
         }
     }
 
-    private static final int TELEGRAM_MAX_LENGTH = 4096;
-
     /**
      * Internal helper to send a message to a specific chat ID, handling chunking if needed.
      */
@@ -159,11 +161,11 @@ public class TelegramChannelSender implements ChannelSender {
             log.warn("Attempted to send empty message to " + chatId + " - skipping");
             return;
         }
-        if (text.length() <= TELEGRAM_MAX_LENGTH) {
+        if (text.length() <= maxLength) {
             producerTemplate.sendBodyAndHeader(
                 "telegram:bots", text, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
         } else {
-            List<String> chunks = splitAtWordBoundary(text, TELEGRAM_MAX_LENGTH);
+            List<String> chunks = splitAtWordBoundary(text, maxLength);
             log.infof("TELEGRAM-SEND splitting %d-char response into %d chunks for %s",
                 text.length(), chunks.size(), chatId);
             for (String chunk : chunks) {

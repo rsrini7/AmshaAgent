@@ -27,6 +27,7 @@ import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.TextPatternUtils;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -85,6 +86,7 @@ class LangChainReasoningEnginePersonaTest {
         injectField(engine, "historyAssembler", mockHistoryAssembler);
         injectField(engine, "stepParser", mockStepParser);
         injectField(engine, "intentClassifier", mockIntentDetector);
+        injectField(engine, "textPatternUtils", new TextPatternUtils());
         injectField(engine, "governanceLayer", mockGovernanceLayer);
         injectField(engine, "rateLimitTracker", mockRateLimitTracker);
         injectField(engine, "otelContext", mockOtelContext);

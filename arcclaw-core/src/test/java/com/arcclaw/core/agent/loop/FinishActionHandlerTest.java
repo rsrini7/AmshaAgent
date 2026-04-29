@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import jakarta.enterprise.inject.Instance;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,7 @@ class FinishActionHandlerTest {
     private RateLimitTracker rateLimitTracker;
     private Instance<AgentObserver> observers;
     private CorrectionStrategy correctionStrategy;
+    private TextPatternUtils textPatternUtils;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -36,13 +39,15 @@ class FinishActionHandlerTest {
         rateLimitTracker = mock(RateLimitTracker.class);
         observers = mock(Instance.class);
         correctionStrategy = mock(CorrectionStrategy.class);
+        textPatternUtils = mock(TextPatternUtils.class);
 
-        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, new ObjectMapper());
+        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, new ObjectMapper(), textPatternUtils);
 
         // Default mock behaviors
         when(qualityGuard.isRawToolCallLeak(anyString())).thenReturn(false);
         when(qualityGuard.guard(anyString(), any())).thenAnswer(invocation -> 
             new AnswerGuardStrategy.AnswerGuardResult(invocation.getArgument(0), false, null));
+        when(textPatternUtils.looksLikeJson(anyString())).thenReturn(false);
     }
 
     @Test
@@ -189,6 +194,10 @@ class FinishActionHandlerTest {
         String leakedJson = "{\"tool\":\"github\",\"parameters\":{}}";
         when(qualityGuard.isRawToolCallLeak(leakedJson)).thenReturn(true);
         when(qualityGuard.stripRawToolJson(leakedJson)).thenReturn(leakedJson);
+        when(textPatternUtils.looksLikeJson(leakedJson)).thenReturn(true);
+        
+        // Ensure correctionStrategy says we are NOT within budget to trigger the final salvage/fail path
+        when(correctionStrategy.withinBudget(anyInt())).thenReturn(false);
         
         ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH, 
                 Map.of("answer", leakedJson), 0, 0);

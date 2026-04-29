@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
@@ -110,11 +111,28 @@ public class ToolRegistry {
         log.infof("Invoking tool '%s' (operation=%s)", toolName, tool.requiredOperation());
 
         // 2. Param stripping
-        Map<String, Object> sanitizedParams = tool.shouldStripNullParams()
-                ? params.entrySet().stream()
-                        .filter(e -> e.getValue() != null)
-                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
-                : new HashMap<>(params);
+        Map<String, Object> sanitizedParams;
+        if (tool.shouldStripNullParams()) {
+            sanitizedParams = params.entrySet().stream()
+                    .filter(e -> e.getValue() != null)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        } else {
+            sanitizedParams = new HashMap<>(params);
+        }
+
+        // §Fix: Strictly strip parameters NOT defined in the tool's schema.
+        // LLMs frequently hallucinate extra parameters. While ScheduleTaskTool now supports 
+        // 'executionRole', other tools might crash or return a 400 if they receive unknown keys.
+        if (tool.parametersSchema() != null && tool.parametersSchema().properties() != null) {
+            Set<String> allowedKeys = tool.parametersSchema().properties().keySet();
+            sanitizedParams.keySet().removeIf(key -> {
+                boolean remove = !allowedKeys.contains(key);
+                if (remove) {
+                    log.warnf("[ToolRegistry] Stripping unknown param '%s' from tool '%s'", key, toolName);
+                }
+                return remove;
+            });
+        }
 
         // 3. Execution Path
         if (tool.requiresSandbox()) {

@@ -12,12 +12,21 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper.AgentResponse;
 import com.arcclaw.core.api.AgentResponseMapper.ApprovalRequiredResponse;
-import com.arcclaw.core.api.AgentResponseMapper.ErrorResponse;
+import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class AgentResponseMapperTest {
 
     private final AgentResponseMapper mapper = new AgentResponseMapper();
+    private final AuditService auditService = Mockito.mock(AuditService.class);
+
+    @BeforeEach
+    void setUp() {
+        mapper.auditService = auditService;
+    }
 
     @Test
     void testMapResult_finished_sync_returns200() {
@@ -56,9 +65,9 @@ class AgentResponseMapperTest {
         AgentResult result = AgentResult.loopExceeded(5, List.of());
         Response response = mapper.mapResult(result, false);
         assertEquals(408, response.getStatus());
-        ErrorResponse entity = (ErrorResponse) response.getEntity();
-        assertTrue(entity.reason().contains("5"));
-        assertEquals("LOOP_EXCEEDED", entity.code());
+        ArcClawErrorResponse entity = (ArcClawErrorResponse) response.getEntity();
+        assertTrue(entity.error().contains("5"));
+        assertEquals("LOOP_EXCEEDED", entity.detail());
     }
 
     @Test
@@ -66,8 +75,8 @@ class AgentResponseMapperTest {
         AgentResult result = AgentResult.failed("Violation", AgentResult.FailureCategory.COMPLIANCE_VIOLATION, List.of());
         Response response = mapper.mapResult(result, false);
         assertEquals(451, response.getStatus());
-        ErrorResponse entity = (ErrorResponse) response.getEntity();
-        assertEquals("COMPLIANCE", entity.code());
+        ArcClawErrorResponse entity = (ArcClawErrorResponse) response.getEntity();
+        assertEquals("COMPLIANCE", entity.detail());
     }
 
     @Test
@@ -75,8 +84,8 @@ class AgentResponseMapperTest {
         AgentResult result = AgentResult.failed("Broke", AgentResult.FailureCategory.BUDGET_EXCEEDED, List.of());
         Response response = mapper.mapResult(result, false);
         assertEquals(429, response.getStatus());
-        ErrorResponse entity = (ErrorResponse) response.getEntity();
-        assertEquals("BUDGET", entity.code());
+        ArcClawErrorResponse entity = (ArcClawErrorResponse) response.getEntity();
+        assertEquals("BUDGET", entity.detail());
     }
 
     @Test
@@ -84,8 +93,8 @@ class AgentResponseMapperTest {
         AgentResult result = AgentResult.failed("No", AgentResult.FailureCategory.USER_DENIED, List.of());
         Response response = mapper.mapResult(result, false);
         assertEquals(422, response.getStatus());
-        ErrorResponse entity = (ErrorResponse) response.getEntity();
-        assertEquals("USER_DENIED", entity.code());
+        ArcClawErrorResponse entity = (ArcClawErrorResponse) response.getEntity();
+        assertEquals("USER_DENIED", entity.detail());
     }
 
     @Test
@@ -93,8 +102,8 @@ class AgentResponseMapperTest {
         AgentResult result = AgentResult.failed("Bad shape", AgentResult.FailureCategory.SCHEMA_ERROR, List.of());
         Response response = mapper.mapResult(result, false);
         assertEquals(422, response.getStatus());
-        ErrorResponse entity = (ErrorResponse) response.getEntity();
-        assertEquals("SCHEMA", entity.code());
+        ArcClawErrorResponse entity = (ArcClawErrorResponse) response.getEntity();
+        assertEquals("SCHEMA", entity.detail());
     }
 
     @Test
@@ -102,8 +111,8 @@ class AgentResponseMapperTest {
         AgentResult result = AgentResult.failed("Crash", AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
         Response response = mapper.mapResult(result, false);
         assertEquals(500, response.getStatus());
-        ErrorResponse entity = (ErrorResponse) response.getEntity();
-        assertEquals("SYSTEM", entity.code());
+        ArcClawErrorResponse entity = (ArcClawErrorResponse) response.getEntity();
+        assertEquals("SYSTEM", entity.detail());
     }
 
     @Test
@@ -111,7 +120,7 @@ class AgentResponseMapperTest {
         AgentResult result = AgentResult.failed("Slow down", AgentResult.FailureCategory.RATE_LIMIT, List.of());
         Response response = mapper.mapResult(result, false);
         assertEquals(429, response.getStatus());
-        ErrorResponse entity = (ErrorResponse) response.getEntity();
-        assertEquals("RATE_LIMIT", entity.code());
+        ArcClawErrorResponse entity = (ArcClawErrorResponse) response.getEntity();
+        assertEquals("RATE_LIMIT", entity.detail());
     }
 }

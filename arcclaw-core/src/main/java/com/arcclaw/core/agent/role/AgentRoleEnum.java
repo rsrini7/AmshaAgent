@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.role;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import io.quarkus.qute.TemplateData;
@@ -13,12 +14,19 @@ import io.quarkus.qute.TemplateData;
 @TemplateData
 public record AgentRoleEnum(String id) {
 
-    public static final AgentRoleEnum ARCHITECT   = new AgentRoleEnum("architect");
-    public static final AgentRoleEnum COORDINATOR = new AgentRoleEnum("coordinator");
-    public static final AgentRoleEnum RESEARCHER  = new AgentRoleEnum("researcher");
-    public static final AgentRoleEnum CODER       = new AgentRoleEnum("coder");
-    public static final AgentRoleEnum DEBUGGER    = new AgentRoleEnum("debugger");
-    public static final AgentRoleEnum SYNTHESIZER = new AgentRoleEnum("synthesizer");
+    public static final String ARCHITECT_ID   = "architect";
+    public static final String COORDINATOR_ID = "coordinator";
+    public static final String RESEARCHER_ID  = "researcher";
+    public static final String CODER_ID       = "coder";
+    public static final String DEBUGGER_ID    = "debugger";
+    public static final String SYNTHESIZER_ID = "synthesizer";
+
+    public static final AgentRoleEnum ARCHITECT   = new AgentRoleEnum(ARCHITECT_ID);
+    public static final AgentRoleEnum COORDINATOR = new AgentRoleEnum(COORDINATOR_ID);
+    public static final AgentRoleEnum RESEARCHER  = new AgentRoleEnum(RESEARCHER_ID);
+    public static final AgentRoleEnum CODER       = new AgentRoleEnum(CODER_ID);
+    public static final AgentRoleEnum DEBUGGER    = new AgentRoleEnum(DEBUGGER_ID);
+    public static final AgentRoleEnum SYNTHESIZER = new AgentRoleEnum(SYNTHESIZER_ID);
 
     private static final List<AgentRoleEnum> BUILT_IN = List.of(
         CODER, DEBUGGER, RESEARCHER, COORDINATOR, ARCHITECT, SYNTHESIZER);
@@ -26,50 +34,62 @@ public record AgentRoleEnum(String id) {
     public static final String SKILL_PREFIX = "skill:";
 
     private static final Map<String, RoleDefinition> DEFINITIONS = Map.of(
-        "architect", new RoleDefinition(
-            "architect",
-            "Brihaspati (System Designer)",
+        AgentPersona.BRIHASPATI.roleId(), new RoleDefinition(
+            AgentPersona.BRIHASPATI.roleId(),
+            AgentPersona.BRIHASPATI.displayName(),
             "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
-            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.DELEGATE_TO_AGENT), Set.of("brihaspati", "brahaspati")
+            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.DELEGATE_TO_AGENT), 
+            AgentPersona.BRIHASPATI.aliases()
         ),
-        "coordinator", new RoleDefinition(
-            "coordinator",
-            "Vishnu (Coordinator)",
+        AgentPersona.VISHNU.roleId(), new RoleDefinition(
+            AgentPersona.VISHNU.roleId(),
+            AgentPersona.VISHNU.displayName(),
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
-            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT, ToolCapability.DELEGATE_TO_AGENT), Set.of("vishnu")
+            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT, ToolCapability.DELEGATE_TO_AGENT), 
+            AgentPersona.VISHNU.aliases()
         ),
-        "researcher", new RoleDefinition(
-            "researcher",
-            "Saraswati (Researcher)",
+        AgentPersona.SARASWATI.roleId(), new RoleDefinition(
+            AgentPersona.SARASWATI.roleId(),
+            AgentPersona.SARASWATI.displayName(),
             "Perform information retrieval, web searches, and documentation lookups.",
-            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.BROWSER_NAVIGATE, ToolCapability.DELEGATE_TO_AGENT), Set.of("saraswati")
+            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.BROWSER_NAVIGATE, ToolCapability.DELEGATE_TO_AGENT), 
+            AgentPersona.SARASWATI.aliases()
         ),
-        "coder", new RoleDefinition(
-            "coder",
-            "Brahma (Creator)",
+        AgentPersona.BRAHMA.roleId(), new RoleDefinition(
+            AgentPersona.BRAHMA.roleId(),
+            AgentPersona.BRAHMA.displayName(),
             "Writes new architectural code, features from scratch, and logic implementations.",
-            15, false, true, Set.of(ToolCapability.SANDBOX_EXEC, ToolCapability.DELEGATE_TO_AGENT), Set.of("brahma")
+            15, false, true, Set.of(ToolCapability.SANDBOX_EXEC, ToolCapability.DELEGATE_TO_AGENT), 
+            AgentPersona.BRAHMA.aliases()
         ),
-        "debugger", new RoleDefinition(
-            "debugger",
-            "Shiva (Destroyer/Debugger)",
+        AgentPersona.SHIVA.roleId(), new RoleDefinition(
+            AgentPersona.SHIVA.roleId(),
+            AgentPersona.SHIVA.displayName(),
             "Analyzes stack traces, finds bugs, and fixes broken code.",
-            15, false, true, Set.of(ToolCapability.GITHUB, ToolCapability.SANDBOX_EXEC, ToolCapability.DELEGATE_TO_AGENT), Set.of("shiva")
+            15, false, true, Set.of(ToolCapability.GITHUB, ToolCapability.SANDBOX_EXEC, ToolCapability.DELEGATE_TO_AGENT), 
+            AgentPersona.SHIVA.aliases()
         ),
-        "synthesizer", new RoleDefinition(
-            "synthesizer",
-            "Dattatreya (Synthesizer)",
+        AgentPersona.DATTATREYA.roleId(), new RoleDefinition(
+            AgentPersona.DATTATREYA.roleId(),
+            AgentPersona.DATTATREYA.displayName(),
             "Cross-domain synthesis tasks requiring code, debug, research, and architecture " +
             "simultaneously. Activated when a single task spans multiple specialist domains " +
             "and their outputs need integration or conflict resolution.",
-            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.DELEGATE_TO_AGENT), Set.of("dattatreya", "datta")
+            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.DELEGATE_TO_AGENT), 
+            AgentPersona.DATTATREYA.aliases()
         )
-
     );
 
     /** Preserves all existing toScopedName() call sites with no change. */
     public String toScopedName() {
         return id;
+    }
+
+    /**
+     * @return the persona mapped to this role, if it is a built-in role.
+     */
+    public Optional<AgentPersona> persona() {
+        return AgentPersona.fromString(this.id);
     }
 
     /**

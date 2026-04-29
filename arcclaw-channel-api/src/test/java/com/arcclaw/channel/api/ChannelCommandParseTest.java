@@ -22,14 +22,14 @@ class ChannelCommandParseTest {
     void parseApproveWithNoCronId() {
         ChannelCommand cmd = ChannelCommand.parse("/approve");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
-        assertTrue(((ChannelCommand.Approve) cmd).cronId().isEmpty());
+        assertTrue(((ChannelCommand.Approve) cmd).targetId().isEmpty());
     }
 
     @Test
     void parseApproveWithCronId() {
         ChannelCommand cmd = ChannelCommand.parse("/approve abc-123");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
-        assertEquals(Optional.of("abc-123"), ((ChannelCommand.Approve) cmd).cronId());
+        assertEquals(Optional.of("abc-123"), ((ChannelCommand.Approve) cmd).targetId());
         assertTrue(((ChannelCommand.Approve) cmd).toolName().isEmpty());
     }
 
@@ -37,7 +37,7 @@ class ChannelCommandParseTest {
     void parseApproveWithToolName() {
         ChannelCommand cmd = ChannelCommand.parse("/approve github");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
-        assertTrue(((ChannelCommand.Approve) cmd).cronId().isEmpty());
+        assertTrue(((ChannelCommand.Approve) cmd).targetId().isEmpty());
         assertEquals(Optional.of("github"), ((ChannelCommand.Approve) cmd).toolName());
     }
 
@@ -45,7 +45,7 @@ class ChannelCommandParseTest {
     void parseDenyWithNoCronId() {
         ChannelCommand cmd = ChannelCommand.parse("/deny");
         assertInstanceOf(ChannelCommand.Deny.class, cmd);
-        assertTrue(((ChannelCommand.Deny) cmd).cronId().isEmpty());
+        assertTrue(((ChannelCommand.Deny) cmd).targetId().isEmpty());
         assertTrue(((ChannelCommand.Deny) cmd).toolName().isEmpty());
     }
 
@@ -53,7 +53,7 @@ class ChannelCommandParseTest {
     void parseDenyWithCronId() {
         ChannelCommand cmd = ChannelCommand.parse("/deny cron-42");
         assertInstanceOf(ChannelCommand.Deny.class, cmd);
-        assertEquals(Optional.of("cron-42"), ((ChannelCommand.Deny) cmd).cronId());
+        assertEquals(Optional.of("cron-42"), ((ChannelCommand.Deny) cmd).targetId());
         assertTrue(((ChannelCommand.Deny) cmd).toolName().isEmpty());
     }
 
@@ -61,7 +61,7 @@ class ChannelCommandParseTest {
     void parseDenyWithToolName() {
         ChannelCommand cmd = ChannelCommand.parse("/deny manage_schedule");
         assertInstanceOf(ChannelCommand.Deny.class, cmd);
-        assertTrue(((ChannelCommand.Deny) cmd).cronId().isEmpty());
+        assertTrue(((ChannelCommand.Deny) cmd).targetId().isEmpty());
         assertEquals(Optional.of("manage_schedule"), ((ChannelCommand.Deny) cmd).toolName());
     }
 
@@ -128,17 +128,16 @@ class ChannelCommandParseTest {
     @Test
     void parseInjectionPayloadFallsToUnknown() {
         String injection = "/approve; DROP TABLE agent_checkpoints; --";
-        // The regex only captures the first whitespace-delimited token as cronId,
-        // so the full payload is harmless - the cronId is just the second token.
+        // The regex only captures the first whitespace-delimited token as targetId,
+        // so the full payload is harmless - the targetId is just the second token.
         ChannelCommand cmd = ChannelCommand.parse(injection);
         // Regardless of whether it matches Approve or Unknown, the raw SQL
         // must NOT be treated as a real cronId that reaches the DB.
-        // Approve.cronId contains only the second whitespace-delimited token.
         if (cmd instanceof ChannelCommand.Approve a) {
-            // cronId is "; DROP TABLE..." - handler must sanitise before DB lookup
-            assertTrue(a.cronId().isPresent());
+            // targetId is "; DROP TABLE..." - handler must sanitise before DB lookup
+            assertTrue(a.targetId().isPresent());
             // Verify it is a bounded string, not the entire injection tail
-            assertFalse(a.cronId().get().contains(" "), "cronId must be a single token");
+            assertFalse(a.targetId().get().contains(" "), "targetId must be a single token");
         } else {
             assertInstanceOf(ChannelCommand.Unknown.class, cmd);
         }
@@ -149,8 +148,8 @@ class ChannelCommandParseTest {
     // ------------------------------------------------------------------
     @Test
     void controlCommandsShouldBeIdentified() {
-        assertTrue(new ChannelCommand.Approve(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
-        assertTrue(new ChannelCommand.Deny(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Approve(Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
+        assertTrue(new ChannelCommand.Deny(Optional.empty(), Optional.empty(), Optional.empty()).isControlCommand());
         assertTrue(new ChannelCommand.Halt().isControlCommand());
         assertTrue(new ChannelCommand.Reset().isControlCommand());
 
@@ -176,22 +175,63 @@ class ChannelCommandParseTest {
 
     @Test
     void parseApproveWithSessionId() {
-        ChannelCommand cmd = ChannelCommand.parse("/approve 12345-1711234567890");
+        ChannelCommand cmd = ChannelCommand.parse("/approve b2ada049-88e1-474d-9589-783a82190d46");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
         ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
-        assertEquals(Optional.of("12345-1711234567890"), a.targetSessionId());
-        assertTrue(a.cronId().isEmpty());
+        assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), a.targetId());
     }
 
     @Test
     void parseApproveWithSessionIdAndTool() {
-        ChannelCommand cmd = ChannelCommand.parse("/approve 12345-1711234567890 github");
+        ChannelCommand cmd = ChannelCommand.parse("/approve b2ada049-88e1-474d-9589-783a82190d46 github");
         assertInstanceOf(ChannelCommand.Approve.class, cmd);
         ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
-        assertEquals(Optional.of("12345-1711234567890"), a.targetSessionId());
-        // Since it contains digits and a hyphen, it does NOT match parseCronId anymore §75-B2
-        assertTrue(a.cronId().isEmpty()); 
+        assertEquals(Optional.of("b2ada049-88e1-474d-9589-783a82190d46"), a.targetId());
         // Parser only captures the first argument as targetSessionId, github is in 'rest' of arg
         assertTrue(a.toolName().isEmpty()); 
+    }
+
+    @Test
+    void parseApproveWithCronStyleArg_notParsedAsSessionId() {
+        ChannelCommand cmd = ChannelCommand.parse("/approve cron-abc123");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertTrue(a.targetId().isPresent());
+        assertEquals("cron-abc123", a.targetId().get());
+    }
+
+    @Test
+    void parseApprove_doubleSlashNormalizedToSingle() {
+        ChannelCommand cmd = ChannelCommand.parse("//approve");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+    }
+
+    @Test
+    void parseApproveWithSessionId_doubleSlashNormalized() {
+        ChannelCommand cmd = ChannelCommand.parse("//approve b2ada049-88e1-474d-9589-783a82190d46");
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertTrue(a.targetId().isPresent());
+        assertEquals("b2ada049-88e1-474d-9589-783a82190d46", a.targetId().get());
+    }
+
+    @Test
+    void parseApproveWithCronId_doubleSlashNormalized() {
+        ChannelCommand cmd = ChannelCommand.parse("//approve cron-abc123");
+        ChannelCommand.Approve a = (ChannelCommand.Approve) cmd;
+        assertTrue(a.targetId().isPresent());
+        assertEquals("cron-abc123", a.targetId().get());
+    }
+
+    @Test
+    void parseApprove_tripleSlash_isUnknown() {
+        // Only one level of normalization — ///approve is treated as malformed
+        ChannelCommand cmd = ChannelCommand.parse("///approve");
+        assertInstanceOf(ChannelCommand.Unknown.class, cmd);
+    }
+
+    @Test
+    void parseApprove_doubleSlashWithBackticks_normalized() {
+        ChannelCommand cmd = ChannelCommand.parse("`//approve`");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
     }
 }

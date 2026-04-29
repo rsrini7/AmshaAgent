@@ -78,5 +78,7 @@ quarkus:
         level: "OFF"
       "org.jboss.threads.errors":
         level: "OFF"
+      "com.arcclaw.app.session.SessionRegistry":
+        level: "WARN"
   native:
     additional-build-args: --enable-native-access=ALL-UNNAMED
