@@ -107,9 +107,9 @@ public class AgentCronEntity {
         }
 
         return String.format(
-                "ID: %s | Cron: %s | TZ: %s | RunOnce: %s | Goal: %s | Next fire: %s | Status: %s",
-                id, cronExpression, timezone, runOnce,
-                displayGoal, nextFire, status
+                "ID: `%s`\nCron: `%s` (%s) | Status: %s\nGoal: %s\nNext: %s",
+                id, cronExpression, timezone, status,
+                displayGoal, nextFire
         );
     }
 

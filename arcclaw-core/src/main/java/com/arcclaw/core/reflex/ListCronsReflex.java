@@ -68,9 +68,9 @@ public class ListCronsReflex implements AgentReflex {
                           || (j.updatedAt != null && j.updatedAt.isAfter(threshold)))
                 .toList();
 
-        String output = "```\n" + filtered.stream()
+        String output = filtered.stream()
                 .map(AgentCronEntity::toDisplayString)
-                .collect(Collectors.joining("\n---\n")) + "\n```";
+                .collect(Collectors.joining("\n---\n"));
 
         int hidden = jobs.size() - filtered.size();
         if (hidden > 0) {
