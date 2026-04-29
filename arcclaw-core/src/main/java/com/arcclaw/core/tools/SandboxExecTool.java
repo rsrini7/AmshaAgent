@@ -25,6 +25,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -96,6 +97,15 @@ public class SandboxExecTool implements AgentTool {
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
     @Override public boolean requiresSandbox() { return true; }
     public ToolCapability capability()         { return ToolCapability.SANDBOX_EXEC; }
+
+    @Override
+    public JsonObjectSchema parametersSchema() {
+        return JsonObjectSchema.builder()
+                .addStringProperty("code", "The source code to execute")
+                .addStringProperty("language", "The programming language (python, java, go, node, bash)")
+                .required("code", "language")
+                .build();
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // sandboxCommand() - returns the command that runs INSIDE the Podman container.

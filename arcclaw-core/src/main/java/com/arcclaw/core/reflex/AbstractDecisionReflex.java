@@ -289,7 +289,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
             int budget = pendingCheckpoint.getMaxIterations() != null ? Math.max(3, pendingCheckpoint.getMaxIterations()) : 3;
 
-            result = WorkspaceContext.run(cronSessionId, cron.userId, cron.chatId, AutonomyLevel.BACKGROUND, cronRole,
+            result = WorkspaceContext.run(cronSessionId, cron.userId, cron.chatId, AutonomyLevel.SUPERVISED, cronRole,
                     () -> agentLoop.run(cronSessionId, cronRole, goal, pendingCheckpoint.getSystemNote(), reasoningEngine, budget, context));
 
             if (result == null) {
