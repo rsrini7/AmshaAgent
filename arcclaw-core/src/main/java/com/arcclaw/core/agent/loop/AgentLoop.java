@@ -192,7 +192,7 @@ public class AgentLoop {
                     mode,
                     maxIterations,
                     decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
-                    context != null && context.getUser() != null ? context.getUser().channel().name() : null,
+                    context != null ? context.getChannelType().name() : WorkspaceContext.channelType().orElse(null),
                     context != null && context.getUser() != null ? context.getUser().platformId() : null,
                     systemNote,
                     mergedData
@@ -201,16 +201,25 @@ public class AgentLoop {
             final AgentExecutionContext finalCtx = agentExecutionContext;
             final List<ReasoningStep> finalHistory = resumedHistory;
 
-            result = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
-                    .call(() -> {
+            var scopeResult = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
+                    .where(WorkspaceContext.SESSION_ID, sessionId)
+                    .where(WorkspaceContext.USER_ID, capturedUserId)
+                    .where(WorkspaceContext.CHAT_ID, agentExecutionContext.chatId())
+                    .where(WorkspaceContext.AUTONOMY, agentExecutionContext.autonomyLevel())
+                    .where(WorkspaceContext.AGENT_ROLE, canonicalRole);
+
+            if (agentExecutionContext.channelType() != null) {
+                scopeResult = scopeResult.where(WorkspaceContext.CHANNEL_TYPE, agentExecutionContext.channelType());
+            }
+            if (agentExecutionContext.channelPlatformId() != null) {
+                scopeResult = scopeResult.where(WorkspaceContext.CHANNEL_PLATFORM_ID, agentExecutionContext.channelPlatformId());
+            }
+
+            result = scopeResult.call(() -> {
                         AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context, stateMachineRunner);
                         if (resumeResult != null) {
                             return resumeResult;
                         } else if (context != null && context.isResumeSignal() && hasApprovedToolPending(sessionId, canonicalRole)) {
-                            // If we are resuming and there's already an approved tool, 
-                            // DO NOT call nextStep/fastPath again. Procedural resumption is 
-                            // handled by stateMachineRunner or already handled by checkpointResumeHandler.
-                            // However, we need to ensure the state machine starts at the correct point.
                             return stateMachineRunner.run(finalCtx, engine, finalHistory);
                         } else {
                             return tryDelegateFinishFastPath(sessionId, finalHistory, context)

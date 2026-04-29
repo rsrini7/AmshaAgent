@@ -167,7 +167,7 @@ public class MemorySearchTool implements AgentTool {
         String lower = query.toLowerCase().strip();
         // Self-referential identity queries
         if (intentService.isIdentityQuery(lower)) {
-            return "user name identity";
+            return "user name identity preference hobby interest";
         }
         // Self-referential work queries
         if (WORK_QUERY_PATTERN.matcher(lower).matches()) {

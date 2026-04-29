@@ -172,7 +172,7 @@ public class CheckpointResumeHandler {
 
             return WorkspaceContext.runWithFullAutonomy(
                 cp.getSessionId(), context.getUser().platformId(), context.getChatId(), cp.getAgentRole(),
-                context.getUser().channel().id(),
+                context.getUser().channel().id(), context.getUser().platformId(),
                 () -> agentLoop.run(
                     cp.getSessionId(), cp.getAgentRole(), goal,
                     cp.getSystemNote(), reasoningEngine, budget, context));
@@ -286,7 +286,7 @@ public class CheckpointResumeHandler {
                     sessionId, budget, original, used);
 
             return WorkspaceContext.runWithFullAutonomy(
-                sessionId, userId, chatId, agentRole, cType.id(),
+                sessionId, userId, chatId, agentRole, cType.id(), userId,
                 () -> agentLoop.run(
                     sessionId, agentRole, resumeGoal,
                     checkpoint.getSystemNote(),
@@ -398,7 +398,7 @@ public class CheckpointResumeHandler {
         try {
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                     sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
-                    channelType,
+                    channelType, context.channelPlatformId(),
                     () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
             if (response.isInfraFailure()) return handleInfraFailure(history);
@@ -546,7 +546,7 @@ public class CheckpointResumeHandler {
             String effectiveRole = cp.getPendingToolRole() != null ? cp.getPendingToolRole() : ctx.agentRole();
             ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                 ctx.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
-                channelType,
+                channelType, ctx.channelPlatformId(),
                 () -> toolRegistry.invokeTool(call.toolName(), call.paramsJson(), ctx.sessionId()));
             completed.add(call.withResult(response.output(), response.success()));
         } catch (Exception e) {

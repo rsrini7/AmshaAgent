@@ -87,13 +87,13 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(AutonomyLevel.FULL);
         
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), eq(AutonomyLevel.FULL), anyString(), anyString(), any(Callable.class)))
+                anyString(), anyString(), anyString(), eq(AutonomyLevel.FULL), anyString(), anyString(), anyString(), any(Callable.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)));
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)));
     }
 
     @Test
@@ -102,13 +102,13 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(AutonomyLevel.READONLY);
         
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), eq(AutonomyLevel.READONLY), anyString(), anyString(), any(Callable.class)))
+                anyString(), anyString(), anyString(), eq(AutonomyLevel.READONLY), anyString(), anyString(), anyString(), any(Callable.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)));
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)));
     }
 
     @Test
@@ -117,13 +117,13 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(null); // No autonomy in context
         
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)))
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
         handler.handle(context);
 
         mockedContext.verify(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)));
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)));
     }
 
     @Test
@@ -132,7 +132,7 @@ class AgentDispatchHandlerTest {
         MessageContext context = createTestContext(AutonomyLevel.FULL);
         
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)))
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
                 .thenThrow(new BudgetExceededException("Budget exceeded for sess123"));
 
         assertThrows(BudgetExceededException.class, () -> handler.handle(context));
@@ -152,8 +152,8 @@ class AgentDispatchHandlerTest {
                 .thenReturn(AgentResult.finished("ok", List.of()));
 
         mockedContext.when(() -> WorkspaceContext.run(
-                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), any(Callable.class)))
-                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(6)).call());
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(7)).call());
 
         handler.handle(context);
 

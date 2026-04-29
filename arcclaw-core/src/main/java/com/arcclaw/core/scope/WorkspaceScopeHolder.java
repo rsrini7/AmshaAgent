@@ -170,10 +170,11 @@ public final class WorkspaceScopeHolder {
         AutonomyLevel autonomy = WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : null;
         String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
         String channelType = WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null;
+        String platformId = WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
 
         return () -> {
             if (channelType != null) {
-                WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, runnable);
+                WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, channelType, platformId, runnable);
             } else if (autonomy != null && agentRole != null) {
                 WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, runnable);
             } else {
@@ -200,6 +201,7 @@ public final class WorkspaceScopeHolder {
         AutonomyLevel autonomy = WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : null;
         String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
         String channelType = WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null;
+        String platformId = WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null;
 
         return () -> {
             if (channelType != null) {
@@ -211,7 +213,7 @@ public final class WorkspaceScopeHolder {
                             Logger.getLogger(WorkspaceScopeHolder.class).warnf("Unrecognized channel type '%s' requested for session %s, defaulting to UNKNOWN", channelType, sessionId);
                             return "UNKNOWN";
                         });
-                return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, validatedChannel, callable);
+                return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, validatedChannel, platformId, callable);
             } else if (autonomy != null && agentRole != null) {
                 return WorkspaceContext.run(sessionId, finalUserId, finalChatId, autonomy, agentRole, callable);
             } else {

@@ -318,13 +318,13 @@ public class ToolStepHandler {
             String toolName, Map<String, Object> params) {
         try {
             final String suggestedCron = (context != null && context.data() != null)
-                ? (String) context.data().get("SUGGESTED_CRON")
+                ? String.valueOf(context.data().get("SUGGESTED_CRON"))
                 : null;
             final String suggestedNextFireTime = (context != null && context.data() != null)
-                ? (String) context.data().get("SUGGESTED_NEXT_FIRE_TIME")
+                ? String.valueOf(context.data().get("SUGGESTED_NEXT_FIRE_TIME"))
                 : null;
             final String suggestedCronSource = (context != null && context.data() != null)
-                ? (String) context.data().get("SUGGESTED_CRON_SOURCE")
+                ? String.valueOf(context.data().get("SUGGESTED_CRON_SOURCE"))
                 : null;
 
             return WorkspaceContext.run(context.sessionId(), context.userId(), context.chatId(), 

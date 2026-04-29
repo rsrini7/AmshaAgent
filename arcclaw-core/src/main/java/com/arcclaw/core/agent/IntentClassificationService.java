@@ -37,7 +37,7 @@ public class IntentClassificationService {
     );
 
     private static final Pattern IDENTITY_QUERY_PATTERN = Pattern.compile(
-        "\\b(who am i|my name|do you know me|user name|user identity)\\b",
+        "\\b(who am i|my name|do you know me|user name|user identity|what i love|my hobby|my hobbies|my preference|my interests|about me)\\b",
         Pattern.CASE_INSENSITIVE
     );
 

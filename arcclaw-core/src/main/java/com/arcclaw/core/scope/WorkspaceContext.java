@@ -28,6 +28,7 @@ public final class WorkspaceContext {
     public static final ScopedValue<Boolean> IS_WRITE_INTENT = ScopedValue.newInstance();
     public static final ScopedValue<Boolean> IS_COMPACT = ScopedValue.newInstance();
     public static final ScopedValue<String> RAW_USER_GOAL = ScopedValue.newInstance();
+    public static final ScopedValue<String> CHANNEL_PLATFORM_ID = ScopedValue.newInstance();
 
 
     private WorkspaceContext() {
@@ -50,9 +51,8 @@ public final class WorkspaceContext {
         );
     }
 
-
     public static <T> T run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, String channelType, Callable<T> task) throws Exception {
+            AutonomyLevel autonomy, String role, String channelType, String platformId, Callable<T> task) throws Exception {
         return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
             ScopedValue.where(SESSION_ID, sessionId)
                 .where(USER_ID, userId)
@@ -60,8 +60,15 @@ public final class WorkspaceContext {
                 .where(AUTONOMY, autonomy)
                 .where(AGENT_ROLE, role)
                 .where(CHANNEL_TYPE, channelType)
+                .where(CHANNEL_PLATFORM_ID, platformId)
                 .call(() -> task.call())
         );
+    }
+
+
+    public static <T> T run(String sessionId, String userId, String chatId,
+            AutonomyLevel autonomy, String role, String channelType, Callable<T> task) throws Exception {
+        return run(sessionId, userId, chatId, autonomy, role, channelType, null, task);
     }
 
 
@@ -81,9 +88,9 @@ public final class WorkspaceContext {
 
 
     public static void run(String sessionId, String userId, String chatId,
-            AutonomyLevel autonomy, String role, String channelType, Runnable task) {
+            AutonomyLevel autonomy, String role, String channelType, String platformId, Runnable task) {
         try {
-            run(sessionId, userId, chatId, autonomy, role, channelType, () -> {
+            run(sessionId, userId, chatId, autonomy, role, channelType, platformId, () -> {
                 task.run();
                 return null;
             });
@@ -92,6 +99,12 @@ public final class WorkspaceContext {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+
+    public static void run(String sessionId, String userId, String chatId,
+            AutonomyLevel autonomy, String role, String channelType, Runnable task) {
+        run(sessionId, userId, chatId, autonomy, role, channelType, null, task);
     }
 
 
@@ -105,6 +118,11 @@ public final class WorkspaceContext {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
     }
 
+    public static <T> T runWithFullAutonomy(String sessionId, String userId,
+            String chatId, String role, String channelType, String platformId, Callable<T> task) throws Exception {
+        return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, platformId, task);
+    }
+
 
     public static void runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, Runnable task) {
@@ -113,7 +131,21 @@ public final class WorkspaceContext {
 
     public static void runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, String channelType, Runnable task) {
-        run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
+        runWithFullAutonomy(sessionId, userId, chatId, role, channelType, null, task);
+    }
+
+    public static void runWithFullAutonomy(String sessionId, String userId,
+            String chatId, String role, String channelType, String platformId, Runnable task) {
+        try {
+            run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, platformId, () -> {
+                task.run();
+                return null;
+            });
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
@@ -195,6 +227,10 @@ public final class WorkspaceContext {
                 "CHANNEL_TYPE not bound - violates Architecture_Invariants.md §1.4. " +
                 "Ensure all channel entry points bind ChannelType via " +
                 "WorkspaceContext.run(..., channelType, ...)."));
+    }
+
+    public static String channelPlatformId() {
+        return CHANNEL_PLATFORM_ID.isBound() ? CHANNEL_PLATFORM_ID.get() : null;
     }
 
     public static String suggestedCron() {

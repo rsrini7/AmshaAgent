@@ -43,7 +43,6 @@ import org.jboss.logging.Logger;
 public class AgentDispatchHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AgentDispatchHandler.class);
     private static final Pattern MARKDOWN_LINK_PATTERN = Pattern.compile("\\[([^\\]]+)]\\(([^)]+)\\)");
-
     private static final int DEFAULT_MAX_ITERATIONS = 5;
 
     @Inject
@@ -142,13 +141,16 @@ public class AgentDispatchHandler implements MessageHandler {
 
         // getChatId() can be null on some Telegram paths - fall back to channelId
         String chatId = context.getChatId();
-        if (chatId == null || chatId.isBlank()) {
+        if ((chatId == null || chatId.isBlank()) && context.getUser() != null) {
             chatId = context.getUser().channelId();
             log.debugf("[AgentDispatch] getChatId() was null - falling back to channelId=%s", chatId);
         }
-        final String resolvedChatId = chatId;
+        final String resolvedChatId = chatId != null ? chatId : "unknown";
 
         final String resolvedGoal = goal;
+        final String capturedUserId = context.getUser() != null ? context.getUser().platformId() : "unknown";
+        final String canonicalRole = role;
+
         AgentResult result;
         try {
             if (!agentStore.markResuming(sessionId)) {
@@ -163,7 +165,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 String channel = context.getChannelType().name();
                 Callable<AgentResult> op = () -> agentLoop.run(
                         sessionId,
-                        role,
+                        canonicalRole,
                         resolvedGoal,
                         reasoningEngine,
                         resolvedMaxIterations,
@@ -171,11 +173,12 @@ public class AgentDispatchHandler implements MessageHandler {
                     );
                 result = WorkspaceContext.<AgentResult>run(
                     sessionId,
-                    context.getUser().platformId(),
+                    capturedUserId,
                     resolvedChatId,
                     finalLevel,
-                    role,
+                    canonicalRole,
                     channel,
+                    context.getUser() != null ? context.getUser().platformId() : null,
                     op
                 );
             } finally {

@@ -67,13 +67,15 @@ import org.jboss.logging.Logger;
 )
 public class ScheduleTaskTool implements AgentTool {
 
+    private static final Logger log = Logger.getLogger(ScheduleTaskTool.class);
+
     public static final String NAME = ToolCapability.SCHEDULE_TASK.toolName();
 
     /**
      * Rejects vague goals with unresolved references (zero LLM cost - pure regex).
      */
     private static final Pattern NAKED_PRONOUN = Pattern.compile(
-            "\\b(this|that|the code|the file|the thing|the result)\\b",
+            "\\b(this|that|the code|the file|the thing)\\b",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -158,6 +160,7 @@ public class ScheduleTaskTool implements AgentTool {
 
     @Override
     public ToolResponse execute(Map<String, Object> params) {
+        log.infof("[ScheduleTaskTool] Executing with params: %s", params);
         String userId;
         String chatId;
         String sessionId;
@@ -231,6 +234,7 @@ public class ScheduleTaskTool implements AgentTool {
         if ((cronExpression == null || cronExpression.isBlank()) 
                 && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())
                 && !runOnce) {
+            log.warnf("[ScheduleTaskTool] Rejecting: no cron and no suggested fire time for recurring task.");
             return ToolResponse.failure(400, "Missing required parameter: cronExpression. " +
                     "For recurring tasks (runOnce=false), you must supply a valid 5-field UNIX cron expression. " +
                     "Examples: '*/1 * * * *' for every minute, '0 * * * *' for every hour, " +
@@ -246,6 +250,7 @@ public class ScheduleTaskTool implements AgentTool {
                 && IT_PRONOUN_PATTERN.matcher(goal).matches();
         boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
         if (hasNakedPronoun) {
+            log.warnf("[ScheduleTaskTool] Rejecting goal due to naked pronouns: %s", goal);
             return ToolResponse.failure(422,
                     "Goal contains unresolved references (e.g., 'it', 'the code'). " +
                     "Rewrite with explicit technical context before scheduling. " +
@@ -286,6 +291,8 @@ public class ScheduleTaskTool implements AgentTool {
         }
 
         if (nextFireTime == null) {
+            log.warnf("[ScheduleTaskTool] Rejecting: could not determine next fire time (cron='%s', suggested='%s')", 
+                cronExpression, suggestedNextFireTime);
             return ToolResponse.failure(400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
         }
 
