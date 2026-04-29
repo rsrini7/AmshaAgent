@@ -261,14 +261,17 @@ class AgentStateMachineRunnerTest {
     }
 
     @Test
-    void testCircuitBreakerTripsAfter2Failures() {
+    void testCircuitBreakerTripsAfter3Failures() {
         ReasoningStep toolStep1 = ReasoningStep.pending(
                 "thought1", "broken-tool", Map.of("arg", 1), 100, 100);
         ReasoningStep toolStep2 = ReasoningStep.pending(
                 "thought2", "broken-tool", Map.of("arg", 2), 100, 100);
+        ReasoningStep toolStep3 = ReasoningStep.pending(
+                "thought3", "broken-tool", Map.of("arg", 3), 100, 100);
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep1)
-                .thenReturn(toolStep2);
+                .thenReturn(toolStep2)
+                .thenReturn(toolStep3);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
                 anyList(), anyString(), anyList()))
@@ -282,7 +285,7 @@ class AgentStateMachineRunnerTest {
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
-        verify(invoker, times(2)).invoke(anyString(), anyMap(), anyString());
+        verify(invoker, times(3)).invoke(anyString(), anyMap(), anyString());
     }
 
     @Test
