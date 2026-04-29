@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
@@ -146,7 +147,7 @@ public class ChatModelProducer {
 
     @Produces
     @Identifier("agent-output-mode")
-    @ApplicationScoped
+    @Dependent
     public StructuredOutputMode structuredOutputMode() {
         StructuredOutputMode primaryMode = findProvider().structuredOutputMode();
         

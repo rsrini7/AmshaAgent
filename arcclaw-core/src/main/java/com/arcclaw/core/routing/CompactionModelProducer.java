@@ -3,6 +3,7 @@ package com.arcclaw.core.routing;
 import java.time.Duration;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
@@ -71,7 +72,7 @@ public class CompactionModelProducer {
 
     @Produces
     @Identifier("compaction-mode")
-    @ApplicationScoped
+    @Dependent
     public StructuredOutputMode compactionMode() {
         return structuredOutputMode;
     }

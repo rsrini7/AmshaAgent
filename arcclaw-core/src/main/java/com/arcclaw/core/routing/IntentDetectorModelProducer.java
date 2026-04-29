@@ -3,6 +3,7 @@ package com.arcclaw.core.routing;
 import java.time.Duration;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
@@ -74,7 +75,7 @@ public class IntentDetectorModelProducer {
 
     @Produces
     @Identifier("intent-classifier-mode")
-    @ApplicationScoped
+    @Dependent
     public StructuredOutputMode intentDetectorMode() {
         return structuredOutputMode;
     }
