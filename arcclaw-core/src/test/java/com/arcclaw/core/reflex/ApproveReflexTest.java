@@ -77,6 +77,9 @@ class ApproveReflexTest {
     @InjectMock
     WorkspaceManager workspaceManager;
 
+    @InjectMock
+    DelegateApprovalGuard delegateGuard;
+
     @SuppressWarnings("unchecked")
     Event<AgentJobCompleted> jobCompletedEventMock = mock(Event.class);
 
@@ -96,6 +99,8 @@ class ApproveReflexTest {
  
         when(checkpointResumeHandler.resolveResumeGoal(anyString(), anyString()))
                 .thenReturn("Resume Goal");
+
+        when(delegateGuard.isDelegate(anyString())).thenReturn(true);
                 
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
@@ -177,6 +182,7 @@ class ApproveReflexTest {
     void testSessionCheckpointWinsOverPendingCron() {
         String userId = "user-1";
         AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
@@ -185,7 +191,7 @@ class ApproveReflexTest {
         cron.status = CronStatus.AWAITING_APPROVAL;
 
         // Session CP exists
-        when(statefulAgentStore.findLatestAwaitingApproval(anyString()))
+        when(statefulAgentStore.findLatestAwaitingApproval(eq("session-1")))
                 .thenReturn(Optional.of(cp));
         
         MessageContext ctx = createContext("/approve");
@@ -199,11 +205,15 @@ class ApproveReflexTest {
     void testResumeGuardBlocksDuplicateCall() {
         String userId = "user-1";
         AgentCheckpoint cp = new AgentCheckpoint();
+        cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
-        when(statefulAgentStore.findLatestAwaitingApproval(anyString()))
+        // Only "session-1" has a pending checkpoint; "cron-123" is a cron task
+        when(statefulAgentStore.findLatestAwaitingApproval(eq("session-1")))
                 .thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApproval(eq("cron-123")))
+                .thenReturn(Optional.empty());
         
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
         when(statefulAgentStore.markBatchResuming(anyString(), anyString())).thenReturn(false);
