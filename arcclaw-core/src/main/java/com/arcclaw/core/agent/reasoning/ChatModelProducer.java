@@ -146,7 +146,8 @@ public class ChatModelProducer {
 
     @Produces
     @Identifier("agent-output-mode")
-    public String structuredOutputMode() {
+    @ApplicationScoped
+    public StructuredOutputMode structuredOutputMode() {
         StructuredOutputMode primaryMode = findProvider().structuredOutputMode();
         
         // Resolve fallback mode from config
@@ -159,10 +160,10 @@ public class ChatModelProducer {
 
         // Effective logic: if EITHER needs a prompt directive, we include it.
         if (primaryMode == StructuredOutputMode.PROMPT_DIRECTIVE || fbMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
-            return StructuredOutputMode.PROMPT_DIRECTIVE.name();
+            return StructuredOutputMode.PROMPT_DIRECTIVE;
         }
         
-        return primaryMode.name();
+        return primaryMode;
     }
 
     private AgentChatModelProvider findProvider() {

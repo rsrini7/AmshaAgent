@@ -71,7 +71,8 @@ public class CompactionModelProducer {
 
     @Produces
     @Identifier("compaction-mode")
-    public String compactionMode() {
-        return structuredOutputMode.name();
+    @ApplicationScoped
+    public StructuredOutputMode compactionMode() {
+        return structuredOutputMode;
     }
 }

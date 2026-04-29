@@ -12,6 +12,7 @@ import jakarta.ws.rs.Path;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.IntentDetector;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -82,24 +83,24 @@ public class RestResourceBuildStepFailureTest {
         @Identifier("compaction-mode")
         @Alternative
         @Priority(1)
-        public String compactionMode() {
-            return "NATIVE";
+        public StructuredOutputMode compactionMode() {
+            return StructuredOutputMode.NATIVE;
         }
 
         @Produces
         @Identifier("intent-classifier-mode")
         @Alternative
         @Priority(1)
-        public String intentClassifierMode() {
-            return "NATIVE";
+        public StructuredOutputMode intentClassifierMode() {
+            return StructuredOutputMode.NATIVE;
         }
 
         @Produces
         @Identifier("agent-output-mode")
         @Alternative
         @Priority(1)
-        public String agentOutputMode() {
-            return "NATIVE";
+        public StructuredOutputMode agentOutputMode() {
+            return StructuredOutputMode.NATIVE;
         }
 
         @Produces

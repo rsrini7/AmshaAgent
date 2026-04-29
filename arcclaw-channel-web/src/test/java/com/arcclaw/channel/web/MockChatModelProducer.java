@@ -6,6 +6,7 @@ import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
 
 import com.arcclaw.core.agent.reasoning.AgentChatModelProvider;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.smallrye.common.annotation.Identifier;
@@ -42,24 +43,24 @@ public class MockChatModelProducer implements AgentChatModelProvider {
     @Identifier("compaction-mode")
     @Alternative
     @Priority(1)
-    public String compactionMode() {
-        return "NATIVE";
+    public StructuredOutputMode compactionMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces
     @Identifier("intent-classifier-mode")
     @Alternative
     @Priority(1)
-    public String intentClassifierMode() {
-        return "NATIVE";
+    public StructuredOutputMode intentClassifierMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces
     @Identifier("agent-output-mode")
     @Alternative
     @Priority(1)
-    public String agentOutputMode() {
-        return "NATIVE";
+    public StructuredOutputMode agentOutputMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces

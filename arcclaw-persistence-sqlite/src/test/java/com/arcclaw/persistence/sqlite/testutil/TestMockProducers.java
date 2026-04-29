@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.persona.Agent;
 import com.arcclaw.core.agent.persona.AgentRole;
 import com.arcclaw.core.agent.reasoning.PromptTemplateEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.routing.LlmModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
@@ -65,24 +66,24 @@ public class TestMockProducers {
     @Identifier("compaction-mode")
     @Alternative
     @Priority(1)
-    public String compactionMode() {
-        return "NATIVE";
+    public StructuredOutputMode compactionMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces
     @Identifier("intent-classifier-mode")
     @Alternative
     @Priority(1)
-    public String intentClassifierMode() {
-        return "NATIVE";
+    public StructuredOutputMode intentClassifierMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces
     @Identifier("agent-output-mode")
     @Alternative
     @Priority(1)
-    public String agentOutputMode() {
-        return "NATIVE";
+    public StructuredOutputMode agentOutputMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces

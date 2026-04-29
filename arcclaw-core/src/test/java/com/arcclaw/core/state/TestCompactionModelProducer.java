@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
+import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.test.Mock;
 import io.smallrye.common.annotation.Identifier;
@@ -26,19 +27,19 @@ public class TestCompactionModelProducer {
 
     @Produces
     @Identifier("compaction-mode")
-    public String compactionMode() {
-        return "NATIVE";
+    public StructuredOutputMode compactionMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces
     @Identifier("intent-classifier-mode")
-    public String intentClassifierMode() {
-        return "NATIVE";
+    public StructuredOutputMode intentClassifierMode() {
+        return StructuredOutputMode.NATIVE;
     }
 
     @Produces
     @Identifier("agent-output-mode")
-    public String agentOutputMode() {
-        return "NATIVE";
+    public StructuredOutputMode agentOutputMode() {
+        return StructuredOutputMode.NATIVE;
     }
 }

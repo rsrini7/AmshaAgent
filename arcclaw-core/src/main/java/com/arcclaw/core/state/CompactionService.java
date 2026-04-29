@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -62,14 +61,7 @@ public class CompactionService {
 
     @Inject
     @Identifier("compaction-mode")
-    String structuredOutputModeStr;
-
-    private StructuredOutputMode structuredOutputMode;
-
-    @PostConstruct
-    void init() {
-        this.structuredOutputMode = StructuredOutputMode.valueOf(structuredOutputModeStr.toUpperCase());
-    }
+    StructuredOutputMode compactionMode;
 
     @Inject
     RateLimitTracker rateLimitTracker;
@@ -220,9 +212,9 @@ public class CompactionService {
 
         String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
 
-        if (structuredOutputMode == StructuredOutputMode.NATIVE) {
+        if (compactionMode == StructuredOutputMode.NATIVE) {
             prompt = "Respond with valid JSON. Include the merged summary in a field named 'summary'.\n\n" + prompt;
-        } else if (structuredOutputMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
+        } else if (compactionMode == StructuredOutputMode.PROMPT_DIRECTIVE) {
             prompt = "CRITICAL: You MUST respond ONLY with the summary. Do not wrap your response in JSON, markdown, or code blocks.\n\n" + prompt;
         }
         return prompt;
@@ -238,7 +230,7 @@ public class CompactionService {
                 
                 if (responseText == null || responseText.isBlank()) {
                     newSummary = "";
-                } else if (structuredOutputMode == StructuredOutputMode.NATIVE) {
+                } else if (compactionMode == StructuredOutputMode.NATIVE) {
                     try {
                         JsonNode node = objectMapper.readTree(responseText);
                         JsonNode summaryNode = node.get("summary");

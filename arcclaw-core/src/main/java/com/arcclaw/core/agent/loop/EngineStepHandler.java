@@ -66,7 +66,7 @@ public class EngineStepHandler {
 
     @Inject
     @Identifier("agent-output-mode")
-    String structuredOutputModeStr;
+    StructuredOutputMode structuredOutputMode;
 
     private static final Pattern NATURAL_LANGUAGE_GATE =
         Pattern.compile("^([A-Za-z*#\\[]).*\\s.*[.!?]\\s*$", Pattern.DOTALL);

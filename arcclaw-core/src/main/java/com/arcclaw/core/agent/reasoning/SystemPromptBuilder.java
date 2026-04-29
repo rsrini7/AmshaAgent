@@ -8,7 +8,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -52,18 +51,7 @@ public class SystemPromptBuilder {
 
     @Inject
     @Identifier("agent-output-mode")
-    String structuredOutputModeStr;
-
-    private StructuredOutputMode structuredOutputMode;
-
-    @PostConstruct
-    void init() {
-        if (structuredOutputModeStr != null) {
-            this.structuredOutputMode = StructuredOutputMode.valueOf(structuredOutputModeStr.toUpperCase());
-        } else {
-            this.structuredOutputMode = StructuredOutputMode.NATIVE;
-        }
-    }
+    StructuredOutputMode structuredOutputMode;
 
     private final AgentPersonaRegistry agentPersonaRegistry;
     private final PromptTemplateEngine promptTemplateEngine;

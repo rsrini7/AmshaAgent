@@ -2,7 +2,6 @@ package com.arcclaw.core.agent.loop;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,7 +88,7 @@ public class AgentLoop {
 
     @Inject
     @Identifier("agent-output-mode")
-    String structuredOutputModeStr;
+    StructuredOutputMode structuredOutputMode;
 
     @Inject
     MeterRegistry meterRegistry;
@@ -164,10 +163,7 @@ public class AgentLoop {
                 }
             }
 
-            StructuredOutputMode mode = Arrays.stream(StructuredOutputMode.values())
-                .filter(m -> m.name().equalsIgnoreCase(structuredOutputModeStr))
-                .findFirst()
-                .orElse(StructuredOutputMode.NATIVE);
+            StructuredOutputMode mode = structuredOutputMode != null ? structuredOutputMode : StructuredOutputMode.NATIVE;
 
             Map<String, Object> mergedData = new HashMap<>();
             if (context != null) {
