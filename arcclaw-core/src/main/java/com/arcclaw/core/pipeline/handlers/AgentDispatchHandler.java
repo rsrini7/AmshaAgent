@@ -98,7 +98,8 @@ public class AgentDispatchHandler implements MessageHandler {
         
         String rawMessageText = context.getMessage() != null ? context.getMessage().text() : "";
         String restoredGoal = null;
-        boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText);
+        boolean isContinuity = intentClassifier.isContinuityCommand(rawMessageText)
+                || intentClassifier.isFollowUpHeuristic(rawMessageText);
 
         if (isContinuity) {
             // We search for the most recent non-archived checkpoint that has a MEANINGFUL originalGoal.

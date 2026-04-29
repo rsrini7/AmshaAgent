@@ -206,8 +206,8 @@ public class PlaywrightPageRunner {
 
     private String doRun(String url, String action, String selector, int timeoutMs) {
         if (browser == null) {
-            throw new PlaywrightException("Playwright is not correctly initialized. " +
-                "Check if Chromium browser binary is installed properly.");
+            throw new PlaywrightException("Playwright browser (Chromium) is not initialized. " +
+                "The browser binary may be missing or incompatible with this system.");
         }
 
         // Derive proportional sub-budgets from the caller's total timeoutMs.
@@ -362,13 +362,17 @@ public class PlaywrightPageRunner {
             initFuture.get(60, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            throw new IllegalStateException("Playwright init failed: " +
-                (cause != null ? cause.getMessage() : e.getMessage()), e);
+            String msg = (cause != null ? cause.getMessage() : e.getMessage());
+            if (msg != null && msg.contains("Executable doesn't exist")) {
+                throw new PlaywrightException("Playwright Chromium binary not found. " +
+                    "Browser tools are unavailable until the binary is installed.");
+            }
+            throw new PlaywrightException("Playwright initialization failed: " + msg);
         } catch (TimeoutException e) {
-            throw new IllegalStateException("Playwright init timed out after 60s", e);
+            throw new PlaywrightException("Playwright initialization timed out after 60s");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Playwright init interrupted", e);
+            throw new PlaywrightException("Playwright initialization interrupted");
         }
     }
 

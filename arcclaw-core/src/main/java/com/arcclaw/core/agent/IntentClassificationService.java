@@ -17,10 +17,6 @@ public class IntentClassificationService {
         Pattern.CASE_INSENSITIVE
     );
 
-    private static final Set<String> FOLLOWUP_SIGNALS = Set.of(
-        "same", "again", "retry", "execute", "run", "use sandbox", 
-        "in java", "in go", "in python", "in typescript", "in kotlin", "in rust"
-    );
 
     private static final Pattern CONTINUITY_PATTERN = Pattern.compile(
         "(?i)^\\s*(try\\s+again|retry|do\\s+it\\s+again|once\\s+more|redo|go\\s+ahead|proceed|continue)(\\s+.*)?$"
@@ -104,15 +100,24 @@ public class IntentClassificationService {
         return !TOOL_VERB_PATTERN.matcher(text).find();
     }
 
+    private static final Pattern FOLLOWUP_PATTERN = Pattern.compile(
+        "(?i)^\\s*(do\\s+)?(same|again|retry|execute|run|use\\s+sandbox|in\\s+(java|go|python|typescript|kotlin|rust|bash))\\b.*"
+    );
+
+    private static final Pattern CHITCHAT_EXCLUSION_PATTERN = Pattern.compile(
+        "(?i)^\\s*(thanks|thank\\s+you|ok|okay|cancel|stop|bye|hello|hi|hey)[.!?]?\\s*$"
+    );
+
     /**
-     * Returns true for short messages containing follow-up keywords,
+     * Returns true for short messages containing specific follow-up signals,
      * indicating a desire to continue with the current agent/context.
+     * §Refinement: Uses a stricter pattern to avoid false positives on general chitchat.
      */
     public boolean isFollowUpHeuristic(String text) {
         if (text == null || text.isBlank()) return false;
-        String lower = text.toLowerCase();
-        return lower.length() < 150 && 
-               FOLLOWUP_SIGNALS.stream().anyMatch(lower::contains);
+        if (CHITCHAT_EXCLUSION_PATTERN.matcher(text).matches()) return false;
+        
+        return text.length() < 150 && FOLLOWUP_PATTERN.matcher(text).matches();
     }
 
     /**

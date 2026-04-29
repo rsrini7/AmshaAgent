@@ -26,6 +26,8 @@ import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 
 /**
  * Allows the coordinator to delegate specialized tasks (like coding or debugging)
@@ -65,6 +67,19 @@ public class DelegateToAgentTool implements AgentTool {
     @Override
     public ToolOperation requiredOperation() {
         return ToolOperation.DELEGATE_AUTONOMOUS;
+    }
+
+    @Override
+    public JsonObjectSchema parametersSchema() {
+        return JsonObjectSchema.builder()
+            .addProperty("agent", JsonStringSchema.builder()
+                .description("The name of the specialist sub-agent (e.g., shiva, brahma, saraswati, brihaspati, dattatreya, coordinator).")
+                .build())
+            .addProperty("goal", JsonStringSchema.builder()
+                .description("The self-contained task description for the sub-agent.")
+                .build())
+            .required("agent", "goal")
+            .build();
     }
 
     @Override
