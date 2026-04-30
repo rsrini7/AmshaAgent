@@ -352,8 +352,13 @@ public class FinishActionHandler {
         if (isLeak && rateLimitTracker.isBackingOff("primary")) {
             log.warnf("FINISH-HANDLER rate-limited - stripping leak instead of retrying for session %s", sessionId);
             String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
-            AgentResult result = AgentResult.finished(stripped, List.copyOf(history));
-            return new FinishOutcome.Completed(result, stripped);
+            
+            // Re-guard the stripped result
+            AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(stripped, history);
+            String finalAnswer = guardResult.answer();
+            
+            AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
+            return new FinishOutcome.Completed(result, finalAnswer);
         }
 
         String cleanThought = qualityGuard.stripRawToolJson(candidateAnswer);
@@ -394,8 +399,13 @@ public class FinishActionHandler {
 
             log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s - clean thought is usable",   
                     llmSchemaErrorCount, sessionId);
+            
+            // Re-guard the stripped result
+            AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(cleanThought, history);
+            String finalAnswer = guardResult.answer();
+            
             return new FinishOutcome.Completed(
-                    AgentResult.finished(cleanThought, List.copyOf(history)), cleanThought);
+                    AgentResult.finished(finalAnswer, List.copyOf(history)), finalAnswer);
         }
 
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {

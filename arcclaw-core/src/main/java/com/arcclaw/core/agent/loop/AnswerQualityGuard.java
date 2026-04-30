@@ -198,17 +198,24 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         
         // Remove {"type": "function", ...} - greedy to handle nested objects
         stripped = stripped.replaceAll("(?s)\\{[^{}]*\"type\"\\s*:\\s*\"function\"[^{}]*}", "");
+        
+        // Remove {"tool_calls": [...]} or {"calls": [...]} entirely
+        stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?calls\"\\s*:.*?}", "");
+        
         // Remove {"name": ..., "parameters": ...} or {"tool_name": ..., "parameters": ...}
         stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?name\"\\s*:.*?\"parameters\"\\s*:.*?}", "");
         
-        // Remove NVIDIA and Mistral styles
-        stripped = NVIDIA_STRIP_PATTERN.matcher(stripped).replaceAll("");
-        stripped = MISTRAL_STRIP_PATTERN.matcher(stripped).replaceAll("");
-        if (nakedFunctionCallPattern != null) {
-            stripped = nakedFunctionCallPattern.matcher(stripped).replaceAll("");
-        }
-        // Final catch-all: if the entire remaining text is a single JSON object, remove it
+        // Final catch-all for any trailing JSON fragment or punctuation-only remnants
         String trimmed = stripped.strip();
+        if (trimmed.length() < 10) {
+             // If very short and consists only of JSON/markdown punctuation, clear it
+             if (trimmed.matches("^[\\s\\{\\}\\[\\]\\\":\\,`\\-]*$")) {
+                 stripped = "";
+             }
+        }
+
+        // Final catch-all: if the entire remaining text is a single JSON object, remove it
+        trimmed = stripped.strip();
         if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
             // Check if it contains tool-related keys
             if (trimmed.contains("\"name\"") || trimmed.contains("\"action\"") 
