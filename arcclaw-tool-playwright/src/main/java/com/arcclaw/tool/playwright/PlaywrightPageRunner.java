@@ -35,6 +35,7 @@ import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -109,6 +110,12 @@ public class PlaywrightPageRunner {
     }
 
     void onStart(@Observes StartupEvent ev) {
+        if (ImageInfo.inImageRuntimeCode()) {
+            log.warn("[PlaywrightPageRunner] GraalVM native image detected - browser_navigate disabled " +
+                     "(Playwright Java bindings are incompatible with native image).");
+            this.enabled = false;
+        }
+
         if (!enabled) {
             log.info("Playwright is disabled - skipping browser warmup.");
             initFuture.complete(null);

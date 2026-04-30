@@ -114,6 +114,18 @@ public class ToolInvocationGuard {
                 String cachedObs = pastObservation + "\n\n[DEDUP]";
                 return new GuardDecision.Deduplicate(cachedObs);
             }
+
+            // Fallback: check history directly if not in index (e.g. if recordToolCall was missed or types differed slightly in JSON)
+            int scanLimit = Math.min(history.size(), 10);
+            for (int i = history.size() - 1; i >= history.size() - scanLimit; i--) {
+                ReasoningStep past = history.get(i);
+                if (past.observation() != null && !past.observation().isBlank() 
+                        && toolName.equals(past.action()) && Objects.equals(params, past.actionInput())) {
+                    String pastObs = past.observation();
+                    log.infof("GUARD: Caught duplicate tool call for '%s' in history for session %s", toolName, sessionId);
+                    return new GuardDecision.Deduplicate(pastObs + "\n\n[DEDUP-HISTORY]");
+                }
+            }
         }
 
         boolean isInternalTool = toolRegistry.findTool(toolName).isPresent();
