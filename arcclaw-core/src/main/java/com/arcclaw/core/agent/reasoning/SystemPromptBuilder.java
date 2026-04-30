@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -631,7 +632,8 @@ public class SystemPromptBuilder {
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
         return roleEnum.definition().toolNames()
                 .stream()
-                .filter(name -> toolRegistry.findTool(name).isPresent())
+                .filter(name -> toolRegistry.findTool(name)
+                        .map(AgentTool::isEnabled).orElse(false))
                 .filter(name -> !isBackground ||
                         (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
                 .toList();

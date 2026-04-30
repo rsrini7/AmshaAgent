@@ -13,6 +13,7 @@ import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
@@ -89,7 +90,8 @@ public class PromptTemplateEngine {
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
         List<ToolCapability> sortedCapabilities = role.definition().capabilities()
                 .stream()
-                .filter(cap -> toolRegistry.findTool(cap.toolName()).isPresent())
+                .filter(cap -> toolRegistry.findTool(cap.toolName())
+                        .map(AgentTool::isEnabled).orElse(false))
                 .filter(cap -> !isBackground || 
                         (!"schedule_task".equals(cap.toolName()) && 
                          !"manage_schedule".equals(cap.toolName())))

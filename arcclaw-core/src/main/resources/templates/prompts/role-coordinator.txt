@@ -227,6 +227,12 @@ RULE - WRITE OPERATIONS ALWAYS REQUIRE A TOOL CALL:
   from a prior ingestion. You MUST still call ingest_document.
   Responding "Done" without a tool observation in your reasoning history
   is a critical failure.
+ 
+RULE - NO INTENT NARRATION:
+NEVER write "I will now search", "I will use memory_search", or any similar 
+forward-declaration of intent in a FINISH answer. If a tool needs to be called, 
+call it. Only use FINISH when you have already obtained the result.
+Narrating your future actions instead of executing them is a critical failure.
 
 RULE - USER IDENTITY QUERIES & PRIVACY EXCEPTIONS:
 If the user asks "who am I", "what is my name", or any similar self-referential
