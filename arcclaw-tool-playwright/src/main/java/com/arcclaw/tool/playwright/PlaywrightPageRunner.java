@@ -74,10 +74,12 @@ public class PlaywrightPageRunner {
     private static final Pattern LINE_BREAK_PATTERN = Pattern.compile("\n");
 
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
-    boolean enabled;
+    boolean configEnabled;
 
     @ConfigProperty(name = "arcclaw.tools.playwright.headless", defaultValue = "true")
     boolean headless;
+
+    private boolean runtimeEnabled;
 
     // All Playwright objects MUST be accessed exclusively on playwrightThread.
     private Playwright playwright;
@@ -102,7 +104,7 @@ public class PlaywrightPageRunner {
     private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
 
     public boolean isEnabled() {
-        return enabled;
+        return runtimeEnabled;
     }
 
     public boolean isInitialized() {
@@ -110,13 +112,15 @@ public class PlaywrightPageRunner {
     }
 
     void onStart(@Observes StartupEvent ev) {
+        this.runtimeEnabled = configEnabled;
+
         if (ImageInfo.inImageRuntimeCode()) {
             log.warn("[PlaywrightPageRunner] GraalVM native image detected - browser_navigate disabled " +
                      "(Playwright Java bindings are incompatible with native image).");
-            this.enabled = false;
+            this.runtimeEnabled = false;
         }
 
-        if (!enabled) {
+        if (!runtimeEnabled) {
             log.info("Playwright is disabled - skipping browser warmup.");
             initFuture.complete(null);
             return;
@@ -160,7 +164,7 @@ public class PlaywrightPageRunner {
 
     @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
-        if (!enabled || !initFuture.isDone() || initFuture.isCompletedExceptionally()) return;
+        if (!runtimeEnabled || !initFuture.isDone() || initFuture.isCompletedExceptionally()) return;
         playwrightThread.submit(() -> {
             log.info("Playwright browser refresh");
             closeBrowserQuietly(browser, "refresh");
@@ -185,7 +189,7 @@ public class PlaywrightPageRunner {
      */
     public String run(String url, String action, String selector, int timeoutMs) {
         log.infof("[PlaywrightPageRunner] run() ENTER enabled=%s initDone=%s initFailed=%s browser=%s",
-        enabled, initFuture.isDone(), initFuture.isCompletedExceptionally(),
+        runtimeEnabled, initFuture.isDone(), initFuture.isCompletedExceptionally(),
         browser != null ? "OK" : "NULL");
 
         awaitReady();
@@ -364,7 +368,7 @@ public class PlaywrightPageRunner {
      * This avoids Future.get() overhead on every hot-path invocation after startup.
      */
     private void awaitReady() {
-        if (!enabled || (initFuture.isDone() && !initFuture.isCompletedExceptionally())) return;
+        if (!runtimeEnabled || (initFuture.isDone() && !initFuture.isCompletedExceptionally())) return;
         try {
             initFuture.get(60, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
