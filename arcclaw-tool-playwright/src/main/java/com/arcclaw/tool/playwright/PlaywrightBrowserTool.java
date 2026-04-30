@@ -75,7 +75,7 @@ public class PlaywrightBrowserTool implements AgentTool {
 
     @Override
     public boolean isEnabled() {
-        return enabled;
+        return enabled && pageRunner.isEnabled();
     }
 
     @Override

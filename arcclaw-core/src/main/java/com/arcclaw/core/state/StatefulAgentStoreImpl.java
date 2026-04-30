@@ -149,6 +149,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         // Emit audit-only: status is already baked into the checkpoint by
         // upsertAndFinalize above.
         transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id(), saved.createdAt());
+        if (finalStatus == CheckpointStatus.COMPLETED) {
+            storeAdapter.archive(saved.id());
+        }
         return CheckpointMapper.toEntity(saved);
     }
 

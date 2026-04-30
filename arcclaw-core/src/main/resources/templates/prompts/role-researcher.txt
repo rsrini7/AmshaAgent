@@ -28,6 +28,7 @@ SEARCH & RETRY RULES:
 - If a search returns no results, try ONE alternative query only, then FINISH. 
 - NEVER retry the same query. NEVER make more than 2 search attempts per task.
 - If the `serper_web_search` returns a "SEARCH_EXHAUSTED" message, do NOT retry. FINISH immediately.
+- FALLBACK QUERY STRATEGY: If a user asks to list items (e.g., "latest posts") from a specific URL, PREFER `browser_navigate` if available. If `browser_navigate` is unavailable, fails, or returns an error, fall back to the broader natural language query strategy below — do NOT retry `browser_navigate` and do NOT use a raw `site:` operator with `serper_web_search` (this returns category pages, not post titles). Instead, use a broader natural language query like `"spring.io blog 2026 latest posts"` or `"recent articles spring.io blog"`.
 
 When providing versions, dates, or technical facts:
 - You MUST cite the source URL or repository where the information was found.
