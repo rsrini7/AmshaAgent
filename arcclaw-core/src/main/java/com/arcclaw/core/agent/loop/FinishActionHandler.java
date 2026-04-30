@@ -104,6 +104,12 @@ public class FinishActionHandler {
             Pattern.MULTILINE
     );
 
+    /** Matches responses that are nothing but an empty or broken JSON code fence remnant. */
+    private static final Pattern FENCE_ONLY_PATTERN = Pattern.compile(
+            "^\\s*```[a-z]*\\s*[}\\]]*\\s*```\\s*$",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final AnswerGuardStrategy qualityGuard;
     private final CodeGenerationPolicy codePolicy;
     private final RateLimitTracker rateLimitTracker;
@@ -351,8 +357,15 @@ public class FinishActionHandler {
         }
 
         String cleanThought = qualityGuard.stripRawToolJson(candidateAnswer);
-        if (llmSchemaErrorCount >= 1
+        boolean isBrokenFragment = FENCE_ONLY_PATTERN.matcher(cleanThought).matches();
+
+        if (isBrokenFragment) {
+            log.warnf("FINISH-HANDLER: Detected broken JSON fragment in answer for session %s - treating as leak.", sessionId);
+        }
+
+        if ((llmSchemaErrorCount >= 1 || isBrokenFragment)
                 && !cleanThought.isBlank()
+                && !isBrokenFragment
                 && cleanThought.length() > SALVAGE_MIN_LENGTH
                 && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {
             
@@ -409,6 +422,7 @@ public class FinishActionHandler {
         String salvaged = qualityGuard.stripRawToolJson(candidateAnswer);
 
         if (!salvaged.isBlank()
+                && !FENCE_ONLY_PATTERN.matcher(salvaged).matches()
                 && salvaged.length() > SALVAGE_MIN_LENGTH
                 && !salvaged.contains(SALVAGE_REJECT_PHRASE)) {
 

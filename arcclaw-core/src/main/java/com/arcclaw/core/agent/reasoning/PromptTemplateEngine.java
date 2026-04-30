@@ -98,20 +98,22 @@ public class PromptTemplateEngine {
                 .sorted(Comparator.comparing(ToolCapability::toolName))
                 .toList();
 
-            String timeString = "";
-            if (systemTimeUtc != null) {
-                ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
-                timeString = String.format(
-                    "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
-                    zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
-                    zdt.getHour(), zdt.getMinute(),
-                    zdt.getHour(), zdt.getMinute()
-                );
-            }
+        log.debugf("Building system prompt for role %s. Enabled capabilities: %s", 
+                role.id(), sortedCapabilities.stream().map(ToolCapability::toolName).toList());
+
+        String timeString = "";
+        if (systemTimeUtc != null) {
+            ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
+            timeString = String.format(
+                "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
+                zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
+                zdt.getHour(), zdt.getMinute(),
+                zdt.getHour(), zdt.getMinute()
+            );
+        }
 
         boolean hasSandboxExec = sortedCapabilities.stream()
                 .anyMatch(c -> ToolCapability.SANDBOX_EXEC.toolName().equals(c.toolName()));
-
 
         var request = templateFor(role)
                 .data("roleDef", role.definition())

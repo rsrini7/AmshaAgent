@@ -395,42 +395,57 @@ public class CheckpointResumeHandler {
         log.infof("[AgentLoop] Resuming session %s executing pending tool %s as role %s", 
                 sessionId, toolName, effectiveRole);
 
-        try {
-            ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                    sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
-                    channelType, context.channelPlatformId(),
-                    () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
+        int retryCount = 0;
+        int maxRetries = 2;
+        
+        while (true) {
+            try {
+                ToolResponse response = WorkspaceContext.runWithFullAutonomy(
+                        sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
+                        channelType, context.channelPlatformId(),
+                        () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
-            if (response.isInfraFailure()) return handleInfraFailure(history);
+                if (response.isInfraFailure()) return handleInfraFailure(history);
 
-            recordReasoningStep(toolName, paramsJson, response.output(), response.success(), history, sessionId);
-            
-            // §Issue 4: Force summarization turn for ingest_document
-            if (ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)) {
-                history.add(ReasoningStep.systemMessage(
-                        "The document has been ingested successfully. " +
-                        "Summarize what was stored for the user in a natural conversational tone."));
-            }
-            
-            completeInProgressCheckpoint(checkpoint);
-
-            // 🟢 §Bug-2 Fix: Perform a direct terminal synthesis pass instead of re-entering 
-            // the full state machine loop, BUT only if the execution succeeded.
-            // If it failed (e.g. compilation error), return null to fall back to the 
-            // standard loop so the LLM can analyze the error and retry.
-            if (response.success()) {
-                if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
-                    // Double response fix: return result directly without coordinator synthesis
-                    log.infof("[AgentLoop] Skipping coordinator synthesis for successful delegate completion in session %s", sessionId);
-                    return AgentResult.finished(response.output(), List.copyOf(history));
+                recordReasoningStep(toolName, paramsJson, response.output(), response.success(), history, sessionId);
+                
+                // §Issue 4: Force summarization turn for ingest_document
+                if (ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)) {
+                    history.add(ReasoningStep.systemMessage(
+                            "The document has been ingested successfully. " +
+                            "Summarize what was stored for the user in a natural conversational tone."));
                 }
-                return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
-            } else {
-                log.warnf("[AgentLoop] Tool execution failed for session %s. Falling back to standard loop for self-correction.", sessionId);
-                return null;
+                
+                completeInProgressCheckpoint(checkpoint);
+
+                // 🟢 §Bug-2 Fix: Perform a direct terminal synthesis pass instead of re-entering 
+                // the full state machine loop, BUT only if the execution succeeded.
+                if (response.success()) {
+                    if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
+                        log.infof("[AgentLoop] Skipping coordinator synthesis for successful delegate completion in session %s", sessionId);
+                        return AgentResult.finished(response.output(), List.copyOf(history));
+                    }
+                    return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+                } else {
+                    log.warnf("[AgentLoop] Tool execution failed for session %s. Falling back to standard loop for self-correction.", sessionId);
+                    return null;
+                }
+            } catch (Exception e) {
+                long retryAfter = AgentErrorMessageUtil.parseRetryAfterMillis(e);
+                if (retryAfter > 0 && retryAfter < 5000 && retryCount < maxRetries) {
+                    retryCount++;
+                    log.warnf("[AgentLoop] Transient rate limit detected for session %s (retry %d/%d). Backing off for %dms.", 
+                            sessionId, retryCount, maxRetries, retryAfter);
+                    try {
+                        Thread.sleep(retryAfter + 100); // add small buffer
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Resume interrupted during backoff", ie);
+                    }
+                    continue; // Retry execution
+                }
+                return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
             }
-        } catch (Exception e) {
-            return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
         }
     }
 

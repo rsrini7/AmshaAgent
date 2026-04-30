@@ -123,7 +123,9 @@ public class ToolRegistry {
         // §Fix: Strictly strip parameters NOT defined in the tool's schema.
         // LLMs frequently hallucinate extra parameters. While ScheduleTaskTool now supports 
         // 'executionRole', other tools might crash or return a 400 if they receive unknown keys.
-        if (tool.parametersSchema() != null && tool.parametersSchema().properties() != null) {
+        if (tool.parametersSchema() != null 
+                && tool.parametersSchema().properties() != null
+                && !tool.parametersSchema().properties().isEmpty()) {
             Set<String> allowedKeys = tool.parametersSchema().properties().keySet();
             sanitizedParams.keySet().removeIf(key -> {
                 boolean remove = !allowedKeys.contains(key);
