@@ -14,6 +14,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -44,7 +45,7 @@ class CompactionServiceTest {
         service.summaryRepository = mockPort;
         service.auditService = mockAudit;
         service.compactionModel = mockModel;
-        service.objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        service.objectMapper = new ObjectMapper();
         
         service.enabled = true;
         service.threshold = 10;
