@@ -31,7 +31,7 @@ class PlaywrightBrowserToolTest {
     @BeforeEach
     void setUp() {
         tool = new PlaywrightBrowserTool();
-        tool.enabled = true;
+        when(pageRunner.isEnabled()).thenReturn(true);
         tool.timeoutMs = 5000;
         tool.pageRunner = pageRunner;
         tool.auditService = auditService;
@@ -47,12 +47,12 @@ class PlaywrightBrowserToolTest {
 
     // ── Disabled state ────────────────────────────────────────────────────────
     @Test void isEnabled_returnsFalse_whenConfigFalse() {
-        tool.enabled = false;
+        when(pageRunner.isEnabled()).thenReturn(false);
         Assertions.assertFalse(tool.isEnabled());
     }
 
     @Test void execute_returns503_whenToolDisabled() {
-        tool.enabled = false;
+        when(pageRunner.isEnabled()).thenReturn(false);
         Map<String, Object> params = Map.of("url", "https://example.com");
         ToolResponse res = runWithContext(params);
         Assertions.assertFalse(res.success());
