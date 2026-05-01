@@ -67,8 +67,12 @@ public sealed interface ChannelCommand
             trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
         }
 
-        // Normalize double-slash prefix (e.g. //approve -> /approve)
-        String input = trimmed.startsWith("//") ? trimmed.substring(1) : trimmed;
+        // Normalize double slash prefix (e.g. //approve -> /approve)
+        // §Hardening: Only collapse exactly two slashes. Triple slashes (///) 
+        // are treated as literal text/unknown per test contract.
+        String input = (trimmed.startsWith("//") && !trimmed.startsWith("///")) 
+                ? trimmed.substring(1) 
+                : trimmed;
 
         var matcher = CMD_PATTERN.matcher(input);
         if (!matcher.matches()) {

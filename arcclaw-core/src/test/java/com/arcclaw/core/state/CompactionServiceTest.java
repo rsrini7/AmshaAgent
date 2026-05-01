@@ -14,6 +14,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -44,6 +45,7 @@ class CompactionServiceTest {
         service.summaryRepository = mockPort;
         service.auditService = mockAudit;
         service.compactionModel = mockModel;
+        service.objectMapper = new ObjectMapper();
         
         service.enabled = true;
         service.threshold = 10;
@@ -76,7 +78,7 @@ class CompactionServiceTest {
         when(mockChatStore.getMessages("session1")).thenReturn(msgs);
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
         when(mockModel.chat(any(UserMessage.class))).thenReturn(ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage("New Summary Text"))
+                .aiMessage(AiMessage.aiMessage("{\"summary\": \"New Summary Text\"}"))
                 .build());
 
         assertTrue(service.compact("session1", "test-user"));

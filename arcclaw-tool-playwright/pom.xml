@@ -35,6 +35,13 @@ allowing agents to read JavaScript-rendered pages that are inaccessible to plain
     </dependency>
 
     <dependency>
+      <groupId>org.graalvm.sdk</groupId>
+      <artifactId>graal-sdk</artifactId>
+      <version>24.1.0</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-opentelemetry</artifactId>
     </dependency>

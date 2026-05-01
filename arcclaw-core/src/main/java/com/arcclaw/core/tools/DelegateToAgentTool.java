@@ -24,6 +24,8 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -65,6 +67,19 @@ public class DelegateToAgentTool implements AgentTool {
     @Override
     public ToolOperation requiredOperation() {
         return ToolOperation.DELEGATE_AUTONOMOUS;
+    }
+
+    @Override
+    public JsonObjectSchema parametersSchema() {
+        return JsonObjectSchema.builder()
+            .addProperty("agent", JsonStringSchema.builder()
+                .description("The name of the specialist sub-agent (e.g., shiva, brahma, saraswati, brihaspati, dattatreya, coordinator).")
+                .build())
+            .addProperty("goal", JsonStringSchema.builder()
+                .description("The self-contained task description for the sub-agent.")
+                .build())
+            .required("agent", "goal")
+            .build();
     }
 
     @Override
@@ -204,6 +219,7 @@ public class DelegateToAgentTool implements AgentTool {
         } catch (BudgetExceededException e) {
             throw e; // MUST propagate to top level
         } catch (Exception e) {
+            log.errorf(e, "[DELEGATE] Failed to delegate to agent %s", targetRole.toScopedName());
             return ToolResponse.failure(500,
                 delegationFailed(targetRole.toScopedName(), e.getMessage()));
         }

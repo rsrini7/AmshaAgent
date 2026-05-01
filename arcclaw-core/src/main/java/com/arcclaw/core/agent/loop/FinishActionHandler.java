@@ -104,6 +104,12 @@ public class FinishActionHandler {
             Pattern.MULTILINE
     );
 
+    /** Matches responses that are nothing but an empty or broken JSON code fence remnant. */
+    private static final Pattern FENCE_ONLY_PATTERN = Pattern.compile(
+            "^\\s*```[a-z]*\\s*[}\\]]*\\s*```\\s*$",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final AnswerGuardStrategy qualityGuard;
     private final CodeGenerationPolicy codePolicy;
     private final RateLimitTracker rateLimitTracker;
@@ -346,13 +352,25 @@ public class FinishActionHandler {
         if (isLeak && rateLimitTracker.isBackingOff("primary")) {
             log.warnf("FINISH-HANDLER rate-limited - stripping leak instead of retrying for session %s", sessionId);
             String stripped = qualityGuard.stripRawToolJson(candidateAnswer);
-            AgentResult result = AgentResult.finished(stripped, List.copyOf(history));
-            return new FinishOutcome.Completed(result, stripped);
+            
+            // Re-guard the stripped result
+            AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(stripped, history);
+            String finalAnswer = guardResult.answer();
+            
+            AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
+            return new FinishOutcome.Completed(result, finalAnswer);
         }
 
         String cleanThought = qualityGuard.stripRawToolJson(candidateAnswer);
-        if (llmSchemaErrorCount >= 1
+        boolean isBrokenFragment = FENCE_ONLY_PATTERN.matcher(cleanThought).matches();
+
+        if (isBrokenFragment) {
+            log.warnf("FINISH-HANDLER: Detected broken JSON fragment in answer for session %s - treating as leak.", sessionId);
+        }
+
+        if ((llmSchemaErrorCount >= 1 || isBrokenFragment)
                 && !cleanThought.isBlank()
+                && !isBrokenFragment
                 && cleanThought.length() > SALVAGE_MIN_LENGTH
                 && !cleanThought.contains(SALVAGE_REJECT_PHRASE)) {
             
@@ -381,8 +399,13 @@ public class FinishActionHandler {
 
             log.warnf("FINISH-HANDLER early salvage after %d leaks for session %s - clean thought is usable",   
                     llmSchemaErrorCount, sessionId);
+            
+            // Re-guard the stripped result
+            AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(cleanThought, history);
+            String finalAnswer = guardResult.answer();
+            
             return new FinishOutcome.Completed(
-                    AgentResult.finished(cleanThought, List.copyOf(history)), cleanThought);
+                    AgentResult.finished(finalAnswer, List.copyOf(history)), finalAnswer);
         }
 
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
@@ -409,6 +432,7 @@ public class FinishActionHandler {
         String salvaged = qualityGuard.stripRawToolJson(candidateAnswer);
 
         if (!salvaged.isBlank()
+                && !FENCE_ONLY_PATTERN.matcher(salvaged).matches()
                 && salvaged.length() > SALVAGE_MIN_LENGTH
                 && !salvaged.contains(SALVAGE_REJECT_PHRASE)) {
 

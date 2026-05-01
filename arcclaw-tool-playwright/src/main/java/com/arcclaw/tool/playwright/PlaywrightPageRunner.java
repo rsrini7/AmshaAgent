@@ -35,6 +35,7 @@ import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -73,10 +74,12 @@ public class PlaywrightPageRunner {
     private static final Pattern LINE_BREAK_PATTERN = Pattern.compile("\n");
 
     @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
-    boolean enabled;
+    boolean configEnabled;
 
     @ConfigProperty(name = "arcclaw.tools.playwright.headless", defaultValue = "true")
     boolean headless;
+
+    private boolean runtimeEnabled;
 
     // All Playwright objects MUST be accessed exclusively on playwrightThread.
     private Playwright playwright;
@@ -101,7 +104,7 @@ public class PlaywrightPageRunner {
     private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
 
     public boolean isEnabled() {
-        return enabled;
+        return runtimeEnabled;
     }
 
     public boolean isInitialized() {
@@ -109,7 +112,15 @@ public class PlaywrightPageRunner {
     }
 
     void onStart(@Observes StartupEvent ev) {
-        if (!enabled) {
+        this.runtimeEnabled = configEnabled;
+
+        if (ImageInfo.inImageRuntimeCode()) {
+            log.warn("[PlaywrightPageRunner] GraalVM native image detected - browser_navigate disabled " +
+                     "(Playwright Java bindings are incompatible with native image).");
+            this.runtimeEnabled = false;
+        }
+
+        if (!runtimeEnabled) {
             log.info("Playwright is disabled - skipping browser warmup.");
             initFuture.complete(null);
             return;
@@ -153,7 +164,7 @@ public class PlaywrightPageRunner {
 
     @Scheduled(every = "6h", delayed = "PT5M")
     void refreshBrowser() {
-        if (!enabled || !initFuture.isDone() || initFuture.isCompletedExceptionally()) return;
+        if (!runtimeEnabled || !initFuture.isDone() || initFuture.isCompletedExceptionally()) return;
         playwrightThread.submit(() -> {
             log.info("Playwright browser refresh");
             closeBrowserQuietly(browser, "refresh");
@@ -178,7 +189,7 @@ public class PlaywrightPageRunner {
      */
     public String run(String url, String action, String selector, int timeoutMs) {
         log.infof("[PlaywrightPageRunner] run() ENTER enabled=%s initDone=%s initFailed=%s browser=%s",
-        enabled, initFuture.isDone(), initFuture.isCompletedExceptionally(),
+        runtimeEnabled, initFuture.isDone(), initFuture.isCompletedExceptionally(),
         browser != null ? "OK" : "NULL");
 
         awaitReady();
@@ -206,8 +217,8 @@ public class PlaywrightPageRunner {
 
     private String doRun(String url, String action, String selector, int timeoutMs) {
         if (browser == null) {
-            throw new PlaywrightException("Playwright is not correctly initialized. " +
-                "Check if Chromium browser binary is installed properly.");
+            throw new PlaywrightException("Playwright browser (Chromium) is not initialized. " +
+                "The browser binary may be missing or incompatible with this system.");
         }
 
         // Derive proportional sub-budgets from the caller's total timeoutMs.
@@ -357,18 +368,22 @@ public class PlaywrightPageRunner {
      * This avoids Future.get() overhead on every hot-path invocation after startup.
      */
     private void awaitReady() {
-        if (!enabled || (initFuture.isDone() && !initFuture.isCompletedExceptionally())) return;
+        if (!runtimeEnabled || (initFuture.isDone() && !initFuture.isCompletedExceptionally())) return;
         try {
             initFuture.get(60, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            throw new IllegalStateException("Playwright init failed: " +
-                (cause != null ? cause.getMessage() : e.getMessage()), e);
+            String msg = (cause != null ? cause.getMessage() : e.getMessage());
+            if (msg != null && msg.contains("Executable doesn't exist")) {
+                throw new PlaywrightException("Playwright Chromium binary not found. " +
+                    "Browser tools are unavailable until the binary is installed.");
+            }
+            throw new PlaywrightException("Playwright initialization failed: " + msg);
         } catch (TimeoutException e) {
-            throw new IllegalStateException("Playwright init timed out after 60s", e);
+            throw new PlaywrightException("Playwright initialization timed out after 60s");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Playwright init interrupted", e);
+            throw new PlaywrightException("Playwright initialization interrupted");
         }
     }
 

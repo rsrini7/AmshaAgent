@@ -337,8 +337,10 @@ class LangChainReasoningEngineTest {
         // Mock ToolRegistry to return available tools
         AgentTool github = Mockito.mock(AgentTool.class);
         when(github.name()).thenReturn("github");
+        when(github.isEnabled()).thenReturn(true);
         AgentTool memorySearch = Mockito.mock(AgentTool.class);
         when(memorySearch.name()).thenReturn("memory_search");
+        when(memorySearch.isEnabled()).thenReturn(true);
         
         when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search", "schedule_task", "manage_schedule"));
         when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));
@@ -420,10 +422,13 @@ class LangChainReasoningEngineTest {
         // Mock ToolRegistry to return available tools
         AgentTool github = Mockito.mock(AgentTool.class);
         when(github.name()).thenReturn("github");
+        when(github.isEnabled()).thenReturn(true);
         AgentTool sched = Mockito.mock(AgentTool.class);
         when(sched.name()).thenReturn("schedule_task");
+        when(sched.isEnabled()).thenReturn(true);
         AgentTool manage = Mockito.mock(AgentTool.class);
         when(manage.name()).thenReturn("manage_schedule");
+        when(manage.isEnabled()).thenReturn(true);
         
         when(toolRegistry.listTools()).thenReturn(List.of("github", "schedule_task", "manage_schedule"));
         when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));

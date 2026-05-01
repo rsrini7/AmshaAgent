@@ -114,10 +114,10 @@ class ScheduleTaskToolTest {
         ScheduleTaskTool tool = createTool();
 
         ToolResponse result = executeInScope("0 9 * * 1", () -> tool.execute(Map.of(
-                "goal", "Deploy it to production"
+                "goal", "Deploy this to production"
         )));
 
-        assertFalse(result.success(), "Naked pronoun 'it' should be rejected");
+        assertFalse(result.success(), "Naked pronoun 'this' should be rejected");
         assertEquals(422, result.exitCode());
         assertTrue(result.output().contains("unresolved references"));
 

@@ -75,12 +75,11 @@ public class ScheduleTaskTool implements AgentTool {
      * Rejects vague goals with unresolved references (zero LLM cost - pure regex).
      */
     private static final Pattern NAKED_PRONOUN = Pattern.compile(
-            "\\b(this|that|the code|the file|the thing)\\b",
+            "\\b(this|the code|the file|the thing)\\b",
             Pattern.CASE_INSENSITIVE
     );
 
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
-    private static final Pattern IT_PRONOUN_PATTERN = Pattern.compile(".*\\bit\\b.*", Pattern.CASE_INSENSITIVE);
 
     @Inject AgentCronRepository cronRepository;
     @Inject AuditService auditService;
@@ -249,9 +248,7 @@ public class ScheduleTaskTool implements AgentTool {
         }
 
         // Step 2 - Naked pronoun guard
-        boolean hasNakedIt = WHITESPACE_PATTERN.split(goal).length < 6
-                && IT_PRONOUN_PATTERN.matcher(goal).matches();
-        boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find() || hasNakedIt;
+        boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find();
         if (hasNakedPronoun) {
             log.warnf("[ScheduleTaskTool] Rejecting goal due to naked pronouns: %s", goal);
             return ToolResponse.failure(422,

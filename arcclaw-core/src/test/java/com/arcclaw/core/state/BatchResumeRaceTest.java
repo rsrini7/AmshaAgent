@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class BatchResumeRaceTest {
 
     @Test
-    void markBatchResuming_isExclusiveAndClears() {
+    void claimForResume_isExclusiveAndClears() {
         StatefulAgentStoreImpl store = new StatefulAgentStoreImpl();
         store.resumeGuard = new ResumeCoordinationGuard();
         store.storeAdapter = mock(CheckpointStorePort.class);
@@ -29,18 +29,18 @@ class BatchResumeRaceTest {
         String role = "coordinator";
 
         // First call success
-        assertTrue(store.markBatchResuming(sessionId, role), "First call should succeed");
+        assertTrue(store.claimForResume(sessionId, role), "First call should succeed");
         
         // Parallel call fail
-        assertFalse(store.markBatchResuming(sessionId, role), "Second concurrent call should fail");
+        assertFalse(store.claimForResume(sessionId, role), "Second concurrent call should fail");
 
         // Clear works
         store.clearBatchResuming(sessionId);
-        assertTrue(store.markBatchResuming(sessionId, role), "Call after clearing should succeed again");
+        assertTrue(store.claimForResume(sessionId, role), "Call after clearing should succeed again");
     }
 
     @Test
-    void markBatchResuming_isConcurrentThreadSafe() throws InterruptedException {
+    void claimForResume_isConcurrentThreadSafe() throws InterruptedException {
         StatefulAgentStoreImpl store = new StatefulAgentStoreImpl();
         store.resumeGuard = new ResumeCoordinationGuard();
         store.storeAdapter = mock(CheckpointStorePort.class);
@@ -62,7 +62,7 @@ class BatchResumeRaceTest {
             executor.submit(() -> {
                 try {
                     startLatch.await();
-                    if (store.markBatchResuming(sessionId, role)) {
+                    if (store.claimForResume(sessionId, role)) {
                         successCount.incrementAndGet();
                     }
                 } catch (InterruptedException e) {

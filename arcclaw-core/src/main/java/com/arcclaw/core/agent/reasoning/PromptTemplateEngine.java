@@ -13,6 +13,7 @@ import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
@@ -89,27 +90,30 @@ public class PromptTemplateEngine {
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
         List<ToolCapability> sortedCapabilities = role.definition().capabilities()
                 .stream()
-                .filter(cap -> toolRegistry.findTool(cap.toolName()).isPresent())
+                .filter(cap -> toolRegistry.findTool(cap.toolName())
+                        .map(AgentTool::isEnabled).orElse(false))
                 .filter(cap -> !isBackground || 
                         (!"schedule_task".equals(cap.toolName()) && 
                          !"manage_schedule".equals(cap.toolName())))
                 .sorted(Comparator.comparing(ToolCapability::toolName))
                 .toList();
 
-            String timeString = "";
-            if (systemTimeUtc != null) {
-                ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
-                timeString = String.format(
-                    "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
-                    zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
-                    zdt.getHour(), zdt.getMinute(),
-                    zdt.getHour(), zdt.getMinute()
-                );
-            }
+        log.debugf("Building system prompt for role %s. Enabled capabilities: %s", 
+                role.id(), sortedCapabilities.stream().map(ToolCapability::toolName).toList());
+
+        String timeString = "";
+        if (systemTimeUtc != null) {
+            ZonedDateTime zdt = systemTimeUtc.atZone(ZoneOffset.UTC);
+            timeString = String.format(
+                "%04d-%02d-%02dT%02d:%02dZ (UTC hour=%d, minute=%d)",
+                zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth(),
+                zdt.getHour(), zdt.getMinute(),
+                zdt.getHour(), zdt.getMinute()
+            );
+        }
 
         boolean hasSandboxExec = sortedCapabilities.stream()
                 .anyMatch(c -> ToolCapability.SANDBOX_EXEC.toolName().equals(c.toolName()));
-
 
         var request = templateFor(role)
                 .data("roleDef", role.definition())

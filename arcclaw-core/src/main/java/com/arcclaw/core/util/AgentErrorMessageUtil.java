@@ -21,6 +21,8 @@ public final class AgentErrorMessageUtil {
     private static final Pattern JVM_INTERNALS_PATTERN = Pattern.compile(
             "^(For input string:|null|Cannot invoke|NullPointerException|NumberFormatException)");
 
+    private static final Pattern RETRY_AFTER_HEADER_PATTERN = Pattern.compile("(?i)retry-after:\\s*(\\d+)");
+
     private AgentErrorMessageUtil() {}
  
     /**
@@ -200,5 +202,33 @@ public final class AgentErrorMessageUtil {
         Matcher m = Pattern.compile("model [`'\"]?([^ `'\"]+)[`'\"]?").matcher(message);
         if (m.find()) return m.group(1);
         return "unknown";
+    }
+
+    /**
+     * Extracts a retry-after delay in milliseconds from an exception message
+     * or cause hierarchy. Returns 0 if no retry-after hint is found.
+     */
+    public static long parseRetryAfterMillis(Throwable t) {
+        if (t == null) return 0;
+        String msg = t.getMessage();
+        if (msg != null) {
+            Matcher m = RETRY_AFTER_HEADER_PATTERN.matcher(msg);
+            if (m.find()) {
+                try {
+                    return Long.parseLong(m.group(1)) * 1000L;
+                } catch (NumberFormatException ignored) {}
+            }
+            // Also check for "try again in X.Ys" format
+            Matcher m2 = RETRY_AFTER_PATTERN.matcher(msg);
+            if (m2.find()) {
+                String wait = m2.group(1);
+                if (wait.endsWith("s")) {
+                    try {
+                        return (long) (Double.parseDouble(wait.substring(0, wait.length() - 1)) * 1000L);
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        }
+        return parseRetryAfterMillis(t.getCause());
     }
 }

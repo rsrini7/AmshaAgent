@@ -91,7 +91,7 @@ public interface AgentTool {
     ToolResponse execute(Map<String, Object> params);
 
     default JsonObjectSchema parametersSchema() {
-        return JsonObjectSchema.builder().build(); // no-op default for tools without parameters
+        return null;
     }
 
     /**

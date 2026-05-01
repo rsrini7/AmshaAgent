@@ -64,7 +64,6 @@ public class TelegramCallbackHandler {
 
         BatchHitlKeyboardBuilder.BatchCallbackEvent event = BatchHitlKeyboardBuilder.parseCallback(data).orElse(null);
         if (event == null) {
-            answerCallback(query.getId());
             return;
         }
 
@@ -83,11 +82,14 @@ public class TelegramCallbackHandler {
             toolName = d.toolName();
             decision = ApprovalDecision.REJECT;
         } else {
-            answerCallback(query.getId());
             return;
         }
 
         try {
+            // Acknowledge callback immediately to stop the spinning icon and prevent Telegram retries
+            // during potentially long-running approvalGate.decide/resume paths §7.35
+            answerCallback(query.getId());
+
             // Resolve full sessionId from 8-char prefix to stay under 64-byte limit §7.25
             if (sessionId.length() < 36) {
                 sessionId = approvalGateway.resolveSessionIdPrefix(sessionId);
@@ -102,7 +104,6 @@ public class TelegramCallbackHandler {
                 case EXPIRED -> popupText = "⏱ Approval expired";
                 case NOT_FOUND -> {
                     log.debugf("Stale callback for session %s, ignoring", sessionId);
-                    answerCallback(query.getId());
                     return;
                 }
                 case ALREADY_DECIDED -> popupText = "Already decided";
@@ -110,16 +111,16 @@ public class TelegramCallbackHandler {
 
             // If completely done, we can remove the keyboard entirely
             if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
-                // Clear the keyboard by editing the message, but keep the original text
                 String originalText = query.getMessage().getText();
                 sender.editMessage(chatId, messageId, originalText, null);
             }
 
-            answerCallback(query.getId(), popupText);
+            if (popupText != null) {
+                answerCallback(query.getId(), popupText);
+            }
         } catch (Exception e) {
             log.error("Failed to process callback", e);
             sender.sendRaw(user, "❌ Failed to process callback");
-            answerCallback(query.getId());
         }
     }
 

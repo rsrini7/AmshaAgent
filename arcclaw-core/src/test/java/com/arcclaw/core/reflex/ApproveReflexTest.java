@@ -94,7 +94,7 @@ class ApproveReflexTest {
         instance.jobCompletedEvent = jobCompletedEventMock;
         
         // §7.29 guard: allow tests to proceed by default
-        when(statefulAgentStore.markBatchResuming(anyString(), anyString()))
+        when(statefulAgentStore.claimForResume(anyString(), anyString()))
                 .thenReturn(true);
  
         when(checkpointResumeHandler.resolveResumeGoal(anyString(), anyString()))
@@ -216,7 +216,7 @@ class ApproveReflexTest {
                 .thenReturn(Optional.empty());
         
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
-        when(statefulAgentStore.markBatchResuming(anyString(), anyString())).thenReturn(false);
+        when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(false);
 
         // test for cron approval
         MessageContext ctx = createContext("/approve cron-123");

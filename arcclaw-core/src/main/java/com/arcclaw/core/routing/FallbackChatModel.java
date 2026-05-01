@@ -1,8 +1,14 @@
 package com.arcclaw.core.routing;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 import com.arcclaw.core.scope.WorkspaceContext;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -49,7 +55,7 @@ public class FallbackChatModel implements ChatModel {
                 log.warnf("[ArcClaw] Primary failed on write-intent, using fallback '%s': %s",
                         fallbackName, pe.getMessage());
                 try {
-                    return fallback.chat(chatRequest);
+                    return fallback.chat(sanitizeRequest(chatRequest));
                 } catch (Exception fe) {
                     log.errorf("[ArcClaw] ❌ Fallback model '%s' also failed on write-intent: %s", 
                             fallbackName, fe.getMessage());
@@ -63,7 +69,7 @@ public class FallbackChatModel implements ChatModel {
         if (isCompact) {
             triedFallback = true;
             try {
-                return fallback.chat(chatRequest);
+                return fallback.chat(sanitizeRequest(chatRequest));
             } catch (Exception fe) {
                 log.warnf("[ArcClaw] Fallback failed on compact turn, promoting to primary: %s", 
                         fe.getMessage());
@@ -77,7 +83,7 @@ public class FallbackChatModel implements ChatModel {
             log.warnf("[ArcClaw] ⚠️ History is large (%d), preemptively using fallback model '%s' to avoid safety filters.",
                     chatRequest.messages().size(), fallbackName);
             try {
-                return fallback.chat(chatRequest);
+                return fallback.chat(sanitizeRequest(chatRequest));
             } catch (Exception fe) {
                 log.errorf("[ArcClaw] ❌ Fallback model '%s' failed on large history: %s", fallbackName, fe.getMessage());
                 // Let it fall through to primary
@@ -93,7 +99,7 @@ public class FallbackChatModel implements ChatModel {
                 log.warnf("[ArcClaw] ⚠️ Primary model '%s' failed, falling back to '%s'. Cause: %s", 
                          primaryName, fallbackName, t.getMessage());
                 try {
-                    return fallback.chat(chatRequest);
+                    return fallback.chat(sanitizeRequest(chatRequest));
                 } catch (Exception fe) {
                     log.errorf("[ArcClaw] ❌ Fallback model '%s' also failed: %s", fallbackName, fe.getMessage());
                     throw fe;
@@ -102,6 +108,36 @@ public class FallbackChatModel implements ChatModel {
             if (t instanceof RuntimeException re) throw re;
             throw new RuntimeException(t);
         }
+    }
+
+    private ChatRequest sanitizeRequest(ChatRequest request) {
+        if (request == null || request.messages() == null) return request;
+
+        List<ChatMessage> original = request.messages();
+        List<ChatMessage> sanitized = new ArrayList<>();
+
+        for (int i = 0; i < original.size(); i++) {
+            ChatMessage current = original.get(i);
+            sanitized.add(current);
+
+            // Adjacency check: if current is Tool result and next is User turn, inject Ai synthesis
+            if (current instanceof ToolExecutionResultMessage && i < original.size() - 1) {
+                ChatMessage next = original.get(i + 1);
+                if (next instanceof UserMessage) {
+                    log.debug("[ArcClaw] Sanitizing history: injecting synthetic assistant message between tool result and user turn.");
+                    sanitized.add(AiMessage.from("I have completed the requested tool operations."));
+                }
+            }
+        }
+
+        if (sanitized.size() == original.size()) {
+            return request;
+        }
+
+        return ChatRequest.builder()
+                .messages(sanitized)
+                .parameters(request.parameters())
+                .build();
     }
 
     private boolean isRetriableOnFallback(Throwable e) {
@@ -153,3 +189,4 @@ public class FallbackChatModel implements ChatModel {
         return isRetriableOnFallback(e.getCause());
     }
 }
+

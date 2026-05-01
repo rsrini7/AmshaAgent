@@ -72,13 +72,17 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     static final Pattern RAW_TOOL_CALL_PATTERN =
             Pattern.compile("\"type\"\\s*:\\s*\"function\"", Pattern.DOTALL);
 
+    /** Detects tool_calls array: {"tool_calls": [...]} */
+    static final Pattern RAW_TOOL_CALLS_ARRAY_PATTERN =
+            Pattern.compile("\"tool_calls\"\\s*:\\s*\\[", Pattern.DOTALL);
+
     /** Detects markdown-wrapped delegatetoagent or m-delegate call. */
     static final Pattern RAW_DELEGATE_CALL_PATTERN =
             Pattern.compile("```?m?delegatetoagent|agent", Pattern.CASE_INSENSITIVE);
 
-    /** Detects bare {"name":..., "parameters":...} JSON tool invocations. */
+    /** Detects bare {"name":..., "parameters":...} or {"tool_name":..., "parameters":...} JSON tool invocations. */
     static final Pattern RAW_TOOL_JSON_PATTERN =
-            Pattern.compile("\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"", Pattern.DOTALL);
+            Pattern.compile("\"(?:tool_)?name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"parameters\"", Pattern.DOTALL);
 
     /** Detects NVIDIA-style TOOLCALLS prefix leaking into FINISH text. */
     static final Pattern NVIDIA_TOOL_CALL_PATTERN =
@@ -161,6 +165,7 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         }
 
         return RAW_TOOL_CALL_PATTERN.matcher(answer).find()
+                || RAW_TOOL_CALLS_ARRAY_PATTERN.matcher(answer).find()
                 || RAW_DELEGATE_CALL_PATTERN.matcher(answer).find()
                 || RAW_TOOL_JSON_PATTERN.matcher(answer).find()
                 || NVIDIA_TOOL_CALL_PATTERN.matcher(answer).find()
@@ -186,20 +191,36 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     public String stripRawToolJson(String answer) {
         if (answer == null) return "";
         String stripped = answer;
-        // Remove JSON tool-call blocks: ```json {...}```
-        stripped = stripped.replaceAll("(?s)```json\\s*\\{.*?}\\s*```", "");
+        
+        // Remove markdown JSON code blocks entirely if they appear to be tool leaks
+        // Handles nested braces correctly by matching until the closing fence.
+        stripped = stripped.replaceAll("(?s)```json\\s*.*?\\s*```", "");
+        
         // Remove {"type": "function", ...} - greedy to handle nested objects
         stripped = stripped.replaceAll("(?s)\\{[^{}]*\"type\"\\s*:\\s*\"function\"[^{}]*}", "");
-        // Remove {"name": ..., "parameters": ...} - use greedy dotall to handle nested JSON
-        stripped = stripped.replaceAll("(?s)\\{\\s*\"name\"\\s*:.*?\"parameters\"\\s*:.*}", "");
-        // §9.1 fix: was compiled inline - now uses static final NVIDIA_STRIP_PATTERN
-        stripped = NVIDIA_STRIP_PATTERN.matcher(stripped).replaceAll("");
-        stripped = MISTRAL_STRIP_PATTERN.matcher(stripped).replaceAll("");
+        
+        // Remove {"tool_calls": [...]} or {"calls": [...]} entirely
+        stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?calls\"\\s*:.*?}", "");
+        
+        // Remove {"name": ..., "parameters": ...} or {"tool_name": ..., "parameters": ...}
+        stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?name\"\\s*:.*?\"parameters\"\\s*:.*?}", "");
+        
+        // Remove naked function calls: tool_name(param="value")
         if (nakedFunctionCallPattern != null) {
             stripped = nakedFunctionCallPattern.matcher(stripped).replaceAll("");
         }
-        // Final catch-all: if the entire remaining text is a single JSON object, remove it
+
+        // Final catch-all for any trailing JSON fragment or punctuation-only remnants
         String trimmed = stripped.strip();
+        if (trimmed.length() < 10) {
+             // If very short and consists only of JSON/markdown punctuation, clear it
+             if (trimmed.matches("^[\\s\\{\\}\\[\\]\\\":\\,`\\-]*$")) {
+                 stripped = "";
+             }
+        }
+
+        // Final catch-all: if the entire remaining text is a single JSON object, remove it
+        trimmed = stripped.strip();
         if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
             // Check if it contains tool-related keys
             if (trimmed.contains("\"name\"") || trimmed.contains("\"action\"") 

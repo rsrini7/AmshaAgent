@@ -88,19 +88,19 @@ class FtsConnectionInterceptorTest {
         // Step 2a: pragma_module_list check
         Statement moduleCheckStmt = mock(Statement.class);
         ResultSet moduleRs        = mock(ResultSet.class);
-        when(moduleRs.next()).thenReturn(vec0AlreadyLoaded);
-        when(moduleCheckStmt.executeQuery(contains("pragma_module_list")))
+        lenient().when(moduleRs.next()).thenReturn(vec0AlreadyLoaded);
+        lenient().when(moduleCheckStmt.executeQuery(contains("pragma_module_list")))
                 .thenReturn(moduleRs);
 
         // Step 2b: load_extension Statement
         Statement vecStmt = mock(Statement.class);
         if (loadExtensionFails) {
-            when(vecStmt.execute(contains("load_extension")))
+            lenient().when(vecStmt.execute(contains("load_extension")))
                     .thenThrow(new SQLException(
                             "no such file or directory: ./lib/vec0-test"));
         }
 
-        when(conn.createStatement())
+        lenient().when(conn.createStatement())
                 .thenReturn(pragmaStmt)
                 .thenReturn(moduleCheckStmt)
                 .thenReturn(vecStmt);
@@ -111,8 +111,8 @@ class FtsConnectionInterceptorTest {
         if (!vec0AlreadyLoaded) {
             SQLiteConnection sqliteConn = mock(SQLiteConnection.class);
             DB db = mock(DB.class);
-            when(conn.unwrap(SQLiteConnection.class)).thenReturn(sqliteConn);
-            when(sqliteConn.getDatabase()).thenReturn(db);
+            lenient().when(conn.unwrap(SQLiteConnection.class)).thenReturn(sqliteConn);
+            lenient().when(sqliteConn.getDatabase()).thenReturn(db);
         }
 
         return new ConnBundle(conn, vecStmt);

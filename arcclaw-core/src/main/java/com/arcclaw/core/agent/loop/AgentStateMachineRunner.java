@@ -255,7 +255,7 @@ public class AgentStateMachineRunner {
             // =====================================================================
             // Main iteration loop
             // =====================================================================
-            while (iteration < context.maxIterations()) {
+            while (iteration < context.maxIterations() || (iteration == context.maxIterations() && context.isForceFinishRetry())) {
                 iteration++;
                 Span iterSpan = agentOtelContext.startIterationSpan(
                         context.sessionId(), iteration, context.agentRole());

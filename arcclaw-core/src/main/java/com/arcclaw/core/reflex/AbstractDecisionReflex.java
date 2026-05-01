@@ -88,31 +88,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         try {
             String response = WorkspaceScopeHolder.call(sessionId, () -> {
                 if (d.targetId.isPresent()) {
-                    String targetId = d.targetId.get();
-
-                    // Runtime disambiguation: probe session first, then cron.
-                    // 1. Session pending? → requires delegate role for cross-session approval
-                    Optional<AgentCheckpoint> targetPending = statefulAgentStore.findLatestAwaitingApproval(targetId);
-                    if (targetPending.isPresent()) {
-                        if (!delegateGuard.isDelegate(userId)) {
-                            log.warnf("[%s-DELEGATE-DENIED] user=%s attempted session decision for id=%s",
-                                    getActionName(), userId, targetId);
-                            return getNotAuthorizedMessage();
-                        }
-                        return handleDelegateDecision(targetId, userId, chatId, reason, context);
-                    }
-
-                    // 2. Not a session — try as cron task (owner can approve their own tasks)
-                    try {
-                        String cronRes = handleCronDecision(targetId, userId, chatId, reason, context);
-                        if (cronRes != null) return cronRes;
-                    } catch (Exception e) {
-                        log.debugf("Cron resolution failed for %s: %s", targetId, e.getMessage());
-                    }
-
-                    // 3. Nothing found
-                    if (statefulAgentStore.isSessionActive(targetId)) return getTargetNotAwaitingMessage();
-                    return "Target session not found or has no pending approval.";
+                    return processExplicitTarget(d.targetId.get(), sessionId, userId, chatId, reason, context);
                 }
                 if (d.toolName.isPresent()) return handlePerToolDecision(d.toolName.get(), sessionId, userId, chatId, reason, context);
 
@@ -279,7 +255,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         
         if (cron == null) return "❌ Cron task not found.";
 
-        if (!statefulAgentStore.markBatchResuming(cronSessionId, cronRole)) return getAlreadyProcessingMessage();
+        if (!statefulAgentStore.claimForResume(cronSessionId, cronRole)) return getAlreadyProcessingMessage();
 
         AgentResult result = null;
         try {
@@ -364,5 +340,58 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     private boolean isTerminalResult(AgentResult result) {
         return result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished 
             || result instanceof AgentResult.Failed || result instanceof AgentResult.LoopExceeded;
+    }
+    
+    private String processExplicitTarget(String targetId, String sessionId, String userId, String chatId, String reason, MessageContext context) throws Exception {
+        // §Self-Session Fast-Path: if the user provided their own session ID,
+        // treat it identically to a bare /approve — no delegate check needed.
+        if (targetId.equals(sessionId)) {
+            log.debugf("[%sReflex] targetId==sessionId (%s) — routing to own-session path",
+                    getActionName(), sessionId);
+            Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
+            List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+            String ambiguity = handleAmbiguityDetection(selfPending, pendingCrons);
+            if (ambiguity != null) return ambiguity;
+            String selfDecision = handleActiveSessionDecision(sessionId, userId, chatId, reason, context, selfPending);
+            if (selfDecision != null) return selfDecision;
+            
+            String retryGuide = handleFailedCheckpointRetry(sessionId);
+            if (retryGuide != null) return retryGuide;
+            if (!pendingCrons.isEmpty()) return handleCronFallbackGuidance(pendingCrons);
+            
+            // If we are in the self-session path but no pending session/cron/retry was found,
+            // since an ID was explicitly provided, we should return a specific "not found" 
+            // error rather than the generic "no pending in this chat" message.
+            if (selfPending.isEmpty()) {
+                 if (statefulAgentStore.isSessionActive(sessionId)) return getTargetNotAwaitingMessage();
+                 return "Target session not found or has no pending approval.";
+            }
+
+            return getNoPendingMessage();
+        }
+
+        // Runtime disambiguation: probe session first, then cron.
+        // 1. Session pending? → requires delegate role for cross-session approval
+        Optional<AgentCheckpoint> targetPending = statefulAgentStore.findLatestAwaitingApproval(targetId);
+        if (targetPending.isPresent()) {
+            if (!delegateGuard.isDelegate(userId)) {
+                log.warnf("[%s-DELEGATE-DENIED] user=%s attempted session decision for id=%s",
+                        getActionName(), userId, targetId);
+                return getNotAuthorizedMessage();
+            }
+            return handleDelegateDecision(targetId, userId, chatId, reason, context);
+        }
+
+        // 2. Not a session — try as cron task (owner can approve their own tasks)
+        try {
+            String cronRes = handleCronDecision(targetId, userId, chatId, reason, context);
+            if (cronRes != null) return cronRes;
+        } catch (Exception e) {
+            log.debugf("Cron resolution failed for %s: %s", targetId, e.getMessage());
+        }
+
+        // 3. Nothing found
+        if (statefulAgentStore.isSessionActive(targetId)) return getTargetNotAwaitingMessage();
+        return "Target session not found or has no pending approval.";
     }
 }

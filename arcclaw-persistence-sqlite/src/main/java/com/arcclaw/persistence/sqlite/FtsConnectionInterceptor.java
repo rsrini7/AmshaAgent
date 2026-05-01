@@ -100,6 +100,10 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             //         exactly which modules are registered on THIS handle.
             // ----------------------------------------------------------------
             try {
+                if (warnedUnavailable.get()) {
+                    return; 
+                }
+
                 boolean alreadyLoaded = false;
                 try (Statement checkStmt = connection.createStatement();
                      ResultSet moduleRs = checkStmt.executeQuery(
@@ -134,9 +138,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                               "path '%s' - vector search degraded to FTS5-only. " +
                               "Root cause: %s",
                               vecExtensionPath, ExceptionUtils.getRootCauseMessage(e));
+                    log.debugf("Full stacktrace for vector load failure: %s",
+                               ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
                 }
-                log.debugf("Full stacktrace for vector load failure: %s",
-                           ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
             }
 
         } catch (Exception e) {

@@ -31,6 +31,7 @@ import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.TextPatternUtils;
@@ -278,6 +279,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     .filter(name -> !isBackgroundSession || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
                             && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
                     .map(name -> toolRegistry.findTool(name).orElseThrow())
+                    .filter(AgentTool::isEnabled)
                     .map(tool -> ToolSpecification.builder()
                             .name(tool.name())
                             .description(tool.description())

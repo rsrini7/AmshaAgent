@@ -148,8 +148,14 @@ public class EngineStepHandler {
                 // Fast-path sandbox_exec (reusing code from history) also has 0 tokens.
                 if (!ReasoningStep.OBSERVE.equals(step.action()) && !step.isFastPath() 
                         && (step.outputTokens() <= 1 || isBlankFinish)) {
-                    log.warnf("[STATE-MACHINE] session %s: detected degraded %d-token response (action=%s) - injecting recovery hint",
+                    log.warnf("[STATE-MACHINE] session %s: detected degraded %d-token response (action=%s) - injecting recovery hint and escalating to compact prompt mode",
                             context.sessionId(), step.outputTokens(), step.action());
+                    // §Issue-4: Escalate to compact prompt mode on degraded response.
+                    // The full system prompt may exhaust the reasoning budget of smaller models
+                    // (e.g. llama-3.1-8b). Incrementing truncationRetryCount causes
+                    // LangChainReasoningEngine → SystemPromptBuilder to use the compact path
+                    // on the retry, giving the model more output token headroom.
+                    context.incrementTruncationRetry();
                     return StepDecision.retryEngine(
                         "System: Your last response was empty, contained only one token, or lacked a FINISH answer. " +
                         "This often happens due to infrastructure limits or model collapse after a rate-limit hit. " +

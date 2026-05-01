@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -349,6 +350,14 @@ public class SystemPromptBuilder {
             JSON tool call for `ingest_document`. Outputting a prose answer like 
             "Information stored" before the tool observation is a CRITICAL FAILURE.
 
+            ANTI-PARALLEL STORAGE RULE:
+            NEVER call `ingest_document` more than ONCE per turn, even if the user
+            provides multiple facts (e.g. name AND alias in the same message).
+            Combine ALL facts into a single call by concatenating them:
+            WRONG: two parallel calls — ingest_document(text="user_name=Srini") AND ingest_document(text="user_alias=Vasan")
+            RIGHT: ONE call — ingest_document(text="user_name=Srini, user_alias=Vasan", label="user_identity")
+            Parallel or batched ingest_document calls are a CRITICAL ORCHESTRATION FAILURE.
+
             RULE - PII REDACTION FEEDBACK:
             DO NOT output "Done" or any confirmation text without first calling `ingest_document`.
             Outputting "Done" without calling the tool is a critical failure - the information
@@ -423,10 +432,8 @@ public class SystemPromptBuilder {
 
     private static final String EXECUTION_BOUNDARY_NO_SANDBOX = """
             EXECUTION BOUNDARY:
-            You cannot execute, run, or compile code on any system, container, or
-            sandbox. If a user asks you to "execute", "run", "just do it", or
-            "compile and run" any code, respond: "I can write and explain code,
-            but I cannot execute it. Please run it in your own environment."
+            You cannot execute, run, or compile code directly in this role. If a user asks you to "execute", "run", "just do it", or
+            "compile and run" any code, you MUST use `delegate_to_agent(agent=coordinator)` to handle the execution.
             IMPORTANT: If a tool fails (e.g. web search), do NOT attempt to write a python/bash script as a workaround. You are NOT permitted to write code in this role. Just tell the user the tool failed.
             """;
 
@@ -437,7 +444,7 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = """
             EXECUTION BOUNDARY:
-            Do not claim to run code. Explain that execution is unavailable in this role. Do NOT write scripts as a workaround for failed tools.
+            You cannot run code directly. Delegate to 'coordinator' for execution. Do NOT write scripts as a workaround for failed tools.
             """;
 
     private static final String COMPACT_BROWSER_RETRY_RULE = """
@@ -454,9 +461,12 @@ public class SystemPromptBuilder {
             3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
             4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> "*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself - store it as the goal text for the cron runner.
             4b. For scheduling requests, NEVER batch `schedule_task` with `delegate_to_agent` or any other tool in the same turn.
+            4c. ANTI-PARALLEL STORAGE: NEVER call `ingest_document` more than once per turn. If the user provides
+               multiple facts, combine them ALL into a single call (e.g. text="user_name=Srini, user_alias=Vasan").
+               Parallel or batched ingest_document calls are a CRITICAL ORCHESTRATION FAILURE.
             5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"):
                - If you have `sandbox_exec`, use it DIRECTLY. 
-               - If you LACK `sandbox_exec`, delegate to 'brahma'.
+               - If you LACK `sandbox_exec`, delegate to 'coordinator' to handle the execution.
             6. For general world knowledge, versions, or comparisons, use `delegate_to_agent(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.
             7. Use `memory_search` only for past-session recall not in the current conversation or summary.
             8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
@@ -631,7 +641,8 @@ public class SystemPromptBuilder {
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
         return roleEnum.definition().toolNames()
                 .stream()
-                .filter(name -> toolRegistry.findTool(name).isPresent())
+                .filter(name -> toolRegistry.findTool(name)
+                        .map(AgentTool::isEnabled).orElse(false))
                 .filter(name -> !isBackground ||
                         (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
                 .toList();

@@ -31,9 +31,6 @@ public class PlaywrightBrowserTool implements AgentTool {
     private static final Pattern SAFE_URL_PATTERN =
         Pattern.compile("^https?://.*", Pattern.CASE_INSENSITIVE);
 
-    @ConfigProperty(name = "arcclaw.tools.playwright.enabled", defaultValue = "false")
-    boolean enabled;
-
     @ConfigProperty(name = "arcclaw.tools.playwright.timeout-ms", defaultValue = "30000")
     int timeoutMs;
 
@@ -75,7 +72,7 @@ public class PlaywrightBrowserTool implements AgentTool {
 
     @Override
     public boolean isEnabled() {
-        return enabled;
+        return pageRunner.isEnabled();
     }
 
     @Override
@@ -107,7 +104,7 @@ public class PlaywrightBrowserTool implements AgentTool {
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         // Guard 1: tool disabled
-        if (!enabled) {
+        if (!isEnabled()) {
             return ToolResponse.failure(503, "Playwright browser tool is not enabled. " +
                 "Set arcclaw.tools.playwright.enabled=true to activate.");
         }
