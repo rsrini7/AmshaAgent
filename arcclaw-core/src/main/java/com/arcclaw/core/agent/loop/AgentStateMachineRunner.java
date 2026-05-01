@@ -21,6 +21,7 @@ import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
@@ -86,6 +87,7 @@ public class AgentStateMachineRunner {
     private final FinishActionHandler finishActionHandler;
     private final CorrectionStrategy correctionStrategy;
     private final int maxRateLimitRetries;
+    private final MeterRegistry meterRegistry;
 
     @Inject
     public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
@@ -98,7 +100,8 @@ public class AgentStateMachineRunner {
                                    LoopExitPublisher loopExitPublisher,
                                    FinishActionHandler finishActionHandler,
                                    CorrectionStrategy correctionStrategy,
-                                   @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries) {
+                                   @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries,
+                                   MeterRegistry meterRegistry) {
         this.engineStepHandler = engineStepHandler;
         this.toolStepHandler = toolStepHandler;
         this.writer = writer;
@@ -110,6 +113,7 @@ public class AgentStateMachineRunner {
         this.finishActionHandler = finishActionHandler;
         this.correctionStrategy = correctionStrategy;
         this.maxRateLimitRetries = maxRateLimitRetries;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -504,6 +508,11 @@ public class AgentStateMachineRunner {
         } finally {
             AgentResult res = finalResult;
             
+            // Record iteration distribution metric
+            int totalIterations = iteration - context.startingIteration();
+            meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole())
+                    .record(totalIterations);
+
             log.debugf("Loop complete for role %s", context.agentRole());
 
             loopExitPublisher.publish(context, res);

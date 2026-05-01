@@ -70,6 +70,11 @@ public class SqliteRetryTemplate {
                 if (!SqliteErrorStrings.isBusy(e)) throw e;
                 lastException = e;
 
+                if (meterRegistry != null && !meterRegistry.isUnsatisfied()) {
+                    meterRegistry.get().counter("arcclaw.persistence.sqlite.retry.attempt", 
+                        "operation", operationName).increment();
+                }
+
                 // Bounded Exponential Backoff: base * 2^attempt
                 // capped at MAX_DELAY_MS (2s)
                 long expDelay = Math.min(MAX_DELAY_MS, baseDelay * (1L << attempt));

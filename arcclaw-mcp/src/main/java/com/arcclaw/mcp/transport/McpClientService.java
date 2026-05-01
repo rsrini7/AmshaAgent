@@ -31,6 +31,7 @@ import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -50,7 +51,7 @@ public class McpClientService {
 
     @Inject DynamicToolCapabilityRegistry registry;
     @Inject ObjectMapper objectMapper;
-
+    @Inject MeterRegistry meterRegistry;
     @Inject Instance<ManagedExecutor> managedExecutors;
 
     private ManagedExecutor getExecutor() {
@@ -88,6 +89,9 @@ public class McpClientService {
             ObjectNode initParams = createInitParams();
             HttpResponse<String> initResp = postJsonRpc(serverUrl, "initialize", initParams, null);
             if (initResp.statusCode() != 200) {
+                if (meterRegistry != null) {
+                    meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "initialize").increment();
+                }
                 throw new McpConnectionException(
                     "MCP initialize failed [" + initResp.statusCode() + "] for: " + serverName);
             }
@@ -100,6 +104,9 @@ public class McpClientService {
             HttpResponse<String> toolsResp = postJsonRpc(
                 serverUrl, "tools/list", objectMapper.createObjectNode(), sessionId);
             if (toolsResp.statusCode() != 200) {
+                if (meterRegistry != null) {
+                    meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "list").increment();
+                }
                 throw new McpConnectionException(
                     "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
             }
@@ -113,6 +120,9 @@ public class McpClientService {
         } catch (McpConnectionException e) {
             throw e;
         } catch (Exception e) {
+            if (meterRegistry != null) {
+                meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "connect_exception").increment();
+            }
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new McpConnectionException(
                 "Failed to connect to HTTP MCP server: " + serverName, e);
@@ -155,6 +165,9 @@ public class McpClientService {
                     .filter(t -> t.mcpServerName().equals(serverName)).count());
 
         } catch (Exception e) {
+            if (meterRegistry != null) {
+                meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "stdio_connect").increment();
+            }
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new McpConnectionException("Failed to connect to local MCP server via STDIO: " + serverName, e);
         }
