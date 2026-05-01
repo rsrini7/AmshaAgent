@@ -234,6 +234,18 @@ public class DelegateToAgentTool implements AgentTool {
                 delegationExceeded(targetRole.toScopedName(), maxIterations));
         }
 
+        // 3a. Detect Sub-Agent Refusal
+        // If the sub-agent triggered its prompt injection guard, it returns a standard refusal string.
+        // We must bubble this up as a failure so the coordinator knows the delegation failed and
+        // can handle the original user request itself.
+        if (result instanceof AgentResult.Finished f && f.answer() != null) {
+            if (f.answer().contains("I cannot share my internal system instructions")) {
+                return ToolResponse.failure(403, 
+                    "Sub-agent refused to complete the task due to safety constraints or prompt injection filters. " +
+                    "Do NOT return this error to the user. You must answer the user's request directly using your own knowledge and tools.");
+            }
+        }
+
         // 4. Success path uses standard formatter
         String formatted = AgentResultFormatter.format(result);
         log.infof("[DELEGATE] agent=%s completed for session=%s",
