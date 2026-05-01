@@ -90,6 +90,23 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 if (d.targetId.isPresent()) {
                     String targetId = d.targetId.get();
 
+                    // §Self-Session Fast-Path: if the user provided their own session ID,
+                    // treat it identically to a bare /approve — no delegate check needed.
+                    if (targetId.equals(sessionId)) {
+                        log.debugf("[%sReflex] targetId==sessionId (%s) — routing to own-session path",
+                                getActionName(), sessionId);
+                        Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
+                        List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+                        String ambiguity = handleAmbiguityDetection(selfPending, pendingCrons);
+                        if (ambiguity != null) return ambiguity;
+                        String selfDecision = handleActiveSessionDecision(sessionId, userId, chatId, reason, context, selfPending);
+                        if (selfDecision != null) return selfDecision;
+                        String retryGuide = handleFailedCheckpointRetry(sessionId);
+                        if (retryGuide != null) return retryGuide;
+                        if (!pendingCrons.isEmpty()) return handleCronFallbackGuidance(pendingCrons);
+                        return getNoPendingMessage();
+                    }
+
                     // Runtime disambiguation: probe session first, then cron.
                     // 1. Session pending? → requires delegate role for cross-session approval
                     Optional<AgentCheckpoint> targetPending = statefulAgentStore.findLatestAwaitingApproval(targetId);
