@@ -22,6 +22,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
@@ -40,13 +41,14 @@ class CheckpointResumeHandlerPreExecTest {
     @Mock StatefulAgentStore agentStore;
     @Mock ToolRegistry toolRegistry;
     @Mock AgentStateMachineRunner stateMachineRunner;
+    @Mock AgentCronRepository cronRepository;
     ObjectMapper objectMapper = new ObjectMapper();
 
     CheckpointResumeHandler handler;
 
     @BeforeEach
     void setup() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, null, null, null);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, null, null, null, cronRepository);
     }
 
     @Test

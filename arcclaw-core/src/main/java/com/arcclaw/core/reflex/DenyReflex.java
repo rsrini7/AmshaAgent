@@ -59,6 +59,9 @@ public class DenyReflex extends AbstractDecisionReflex {
 
     @Override
     protected void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result) {
+        // §Direct Cron Path: handleCronDecision runs synchronously. This preserves
+        // the user's /deny <reason> text as the failure message — markTerminal()
+        // would lose it since it uses AgentResult.Failed.reason() instead.
         if (result instanceof AgentResult.AwaitingRetry) {
             return; // No-op - retry handled by RateLimitRetryScheduler (#736)
         }

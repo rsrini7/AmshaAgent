@@ -59,6 +59,10 @@ public class ApproveReflex extends AbstractDecisionReflex {
 
     @Override
     protected void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result) {
+        // §Direct Cron Path: handleCronDecision runs synchronously and never reaches
+        // CheckpointResumeHandler.dispatchResumeResult(). This is the only place
+        // terminal state is set for direct /approve <cronId> commands.
+        // syncCronTerminalStatus in CheckpointResumeHandler covers the async delegation path.
         switch (result) {
             case AgentResult.Finished _ -> {
                 if (cron.runOnce) cronRepository.markCompleted(cron.id, Instant.now());
