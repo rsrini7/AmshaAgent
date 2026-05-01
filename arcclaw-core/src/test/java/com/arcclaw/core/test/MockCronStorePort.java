@@ -106,6 +106,14 @@ public class MockCronStorePort implements CronStorePort {
         }
     }
 
+    @Override
+    public void markRunning(String id) {
+        AgentCronDto c = store.get(id);
+        if (c != null) {
+            store.put(id, copyWithStatus(c, "RUNNING"));
+        }
+    }
+
     @Override 
     public void setDeliveryId(String id, String deliveryId) {
         AgentCronDto c = store.get(id);

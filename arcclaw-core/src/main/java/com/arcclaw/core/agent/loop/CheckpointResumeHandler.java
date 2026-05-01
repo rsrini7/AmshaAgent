@@ -25,6 +25,7 @@ import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
@@ -50,6 +51,7 @@ public class CheckpointResumeHandler {
     private final ReasoningEngine reasoningEngine;
     private final ChannelPluginRegistry channelPluginRegistry;
     private final CliResultBridge cliResultBridge;
+    private final AgentCronRepository cronRepository;
 
     protected CheckpointResumeHandler() {
         this.agentStore = null;
@@ -59,6 +61,7 @@ public class CheckpointResumeHandler {
         this.reasoningEngine = null;
         this.channelPluginRegistry = null;
         this.cliResultBridge = null;
+        this.cronRepository = null;
     }
 
     @Inject
@@ -68,7 +71,8 @@ public class CheckpointResumeHandler {
                                    AgentLoop agentLoop,
                                    ReasoningEngine reasoningEngine,
                                    ChannelPluginRegistry channelPluginRegistry,
-                                   CliResultBridge cliResultBridge) {
+                                   CliResultBridge cliResultBridge,
+                                   AgentCronRepository cronRepository) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
@@ -76,6 +80,7 @@ public class CheckpointResumeHandler {
         this.reasoningEngine = reasoningEngine;
         this.channelPluginRegistry = channelPluginRegistry;
         this.cliResultBridge = cliResultBridge;
+        this.cronRepository = cronRepository;
     }
 
     @Inject
@@ -109,6 +114,10 @@ public class CheckpointResumeHandler {
             log.infof("[BATCH-RESUME-GUARD] session=%s already resuming - skipping duplicate.", sessionId);
             return;
         }
+
+        // §Synchronize Cron Status: if this is a cron session, mark the cron task as RUNNING
+        // so it no longer appears in the "Awaiting Approval" list for ambiguity detection.
+        syncCronStatus(sessionId);
 
         executor.execute(() -> {
             MessageContext context = null;
@@ -203,6 +212,10 @@ public class CheckpointResumeHandler {
 
     private void dispatchResumeResult(MessageContext context, AgentResult result, ChannelType cType, ChannelUser user, String sessionId) {
         // Interactive /approve paths depend on the resume handler to deliver the final result.
+        
+        // §Synchronize Cron Status (Terminal): transition task from RUNNING to its final state.
+        syncCronTerminalStatus(sessionId, result);
+
         // CLI uses the synchronous resume path and must not receive an extra async notification.
         if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
             log.debugf("CheckpointResumeHandler: skipping async CLI notification for session %s", sessionId);
@@ -235,6 +248,34 @@ public class CheckpointResumeHandler {
         }
     }
 
+    private void syncCronStatus(String sessionId) {
+        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+            if (sub.length() >= 36) {
+                String jobId = sub.substring(0, 36);
+                try {
+                    cronRepository.markRunning(jobId);
+                } catch (Exception e) {
+                    log.warnf("Failed to sync cron status for job %s: %s", jobId, e.getMessage());
+                }
+            }
+        }
+    }
+
+    private void syncCronTerminalStatus(String sessionId, AgentResult result) {
+        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+            if (sub.length() >= 36) {
+                String jobId = sub.substring(0, 36);
+                try {
+                    cronRepository.markTerminal(jobId, result);
+                } catch (Exception e) {
+                    log.warnf("Failed to sync terminal cron status for job %s: %s", jobId, e.getMessage());
+                }
+            }
+        }
+    }
+
     public AgentResult resumeAfterBatchDecisionSync(
             String sessionId,
             String agentRole,
@@ -246,6 +287,9 @@ public class CheckpointResumeHandler {
             log.infof("BATCH-RESUME-SYNC-GUARD: session %s already resuming", sessionId);
             return null;
         }
+
+        // §Synchronize Cron Status
+        syncCronStatus(sessionId);
 
         try {
             AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);

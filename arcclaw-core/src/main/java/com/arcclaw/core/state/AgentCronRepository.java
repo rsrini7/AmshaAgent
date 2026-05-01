@@ -9,6 +9,8 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.util.CronScheduleUtil;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import io.quarkus.arc.Unremovable;
@@ -83,6 +85,11 @@ public class AgentCronRepository {
     }
 
     @Transactional(TxType.REQUIRED)
+    public void markRunning(String id) {
+        cronStore.markRunning(id);
+    }
+
+    @Transactional(TxType.REQUIRED)
     public void setDeliveryId(String id, String deliveryId) {
         cronStore.setDeliveryId(id, deliveryId);
     }
@@ -124,6 +131,32 @@ public class AgentCronRepository {
     @Transactional(TxType.REQUIRES_NEW)
     public long deleteAllBySessionId(String sessionId) {
         return cronStore.deleteAllBySessionId(sessionId);
+    }
+
+    /**
+     * Unified terminal status synchronization for cron tasks.
+     * Transitions the task from RUNNING to its final state based on the agent result.
+     */
+    @Transactional(TxType.REQUIRED)
+    public void markTerminal(String id, AgentResult result) {
+        AgentCronEntity cron = findById(id);
+        if (cron == null || result == null) return;
+
+        switch (result) {
+            case AgentResult.Finished _ -> {
+                if (cron.runOnce) markCompleted(cron.id, Instant.now());
+                else markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
+            }
+            case AgentResult.StructuredFinished _ -> {
+                if (cron.runOnce) markCompleted(cron.id, Instant.now());
+                else markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
+            }
+            case AgentResult.Failed f -> markFailed(cron.id, f.reason());
+            case AgentResult.AwaitingApproval _ -> markAwaitingApproval(cron.id);
+            case AgentResult.AwaitingRetry _ -> {} // No-op - retry handled by RateLimitRetryScheduler
+            case AgentResult.LoopExceeded _ -> markFailed(cron.id, "Loop exceeded");
+            default -> {}
+        }
     }
 
     private AgentCronEntity toEntity(AgentCronDto dto) {

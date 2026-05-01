@@ -40,6 +40,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -72,11 +73,14 @@ class CheckpointResumeHandlerTest {
     @Mock
     AgentStateMachineRunner stateMachineRunner;
 
+    @Mock
+    AgentCronRepository cronRepository;
+
     CheckpointResumeHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry, new ObjectMapper(), null, null, null, null);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, new ObjectMapper(), null, null, null, null, cronRepository);
     }
 
     private MessageContext createContext(String input, boolean resume) {

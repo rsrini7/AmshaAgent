@@ -1,5 +1,8 @@
 hey  i am Srini and love to Study a lot.... who are you what you do
 
+hey i am Srini and love to Study a lot and teach kids.. who are you what you do
+
+
 Hey claw i am Srini
 
 i like to study a lot
@@ -7,6 +10,11 @@ i like to study a lot
 ur capabilities ?
 
 who r u and your priorities and your helpers ?
+
+schedule to write python program Factorial of 10 and execute then share the result after 2 mins
+
+store my phone as 9884691847 and my hobby is walking
+
 
 List 5 most star public repos of user rsrini7 using the github tool.
 

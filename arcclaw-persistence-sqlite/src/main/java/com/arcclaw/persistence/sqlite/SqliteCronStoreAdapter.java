@@ -185,6 +185,18 @@ public class SqliteCronStoreAdapter implements CronStorePort {
 
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
+    public void markRunning(String id) {
+        if (id == null || id.isBlank()) return;
+        em.createNativeQuery(
+                "UPDATE agent_cron SET status = :running, updatedAt = :now WHERE id = :id"
+        ).setParameter("running", CronStatus.RUNNING.name())
+         .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
+         .setParameter("id", id)
+         .executeUpdate();
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void setDeliveryId(String id, String deliveryId) {
         if (id == null || id.isBlank()) return;
         em.createNativeQuery(

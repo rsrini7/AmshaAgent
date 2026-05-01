@@ -20,6 +20,7 @@ public interface CronStorePort {
     void markFired(String id, Instant lastFireTime, Instant nextFireTime);
     void markCompleted(String id, Instant lastFireTime);
     void markAwaitingApproval(String id);
+    void markRunning(String id);
     void setDeliveryId(String id, String deliveryId);
     void markFailed(String id, String errorReason);
     void markSkipped(String id, Instant nextFireTime, Instant now);
