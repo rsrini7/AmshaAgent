@@ -355,17 +355,18 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             String selfDecision = handleActiveSessionDecision(sessionId, userId, chatId, reason, context, selfPending);
             if (selfDecision != null) return selfDecision;
             
-            // If we are in the self-session path but no pending was found, 
-            // since an ID was explicitly provided, we should return a "not found" 
+            String retryGuide = handleFailedCheckpointRetry(sessionId);
+            if (retryGuide != null) return retryGuide;
+            if (!pendingCrons.isEmpty()) return handleCronFallbackGuidance(pendingCrons);
+            
+            // If we are in the self-session path but no pending session/cron/retry was found,
+            // since an ID was explicitly provided, we should return a specific "not found" 
             // error rather than the generic "no pending in this chat" message.
             if (selfPending.isEmpty()) {
                  if (statefulAgentStore.isSessionActive(sessionId)) return getTargetNotAwaitingMessage();
                  return "Target session not found or has no pending approval.";
             }
 
-            String retryGuide = handleFailedCheckpointRetry(sessionId);
-            if (retryGuide != null) return retryGuide;
-            if (!pendingCrons.isEmpty()) return handleCronFallbackGuidance(pendingCrons);
             return getNoPendingMessage();
         }
 
