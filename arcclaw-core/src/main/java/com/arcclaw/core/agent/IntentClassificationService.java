@@ -1,6 +1,5 @@
 package com.arcclaw.core.agent;
 
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;

@@ -101,14 +101,13 @@ public class CheckpointResumeHandler {
             return;
         }
 
-        // §7.29: Atomic guard to prevent double-resumption for parallel batches.
-        // We only use the lock for parallel batches (size > 1) to avoid race conditions.
-        // Single-tool approvals (sequential) don't need the guard and can proceed directly.
-        if (checkpoint.isParallelBatch()) {
-            if (!agentStore.markBatchResuming(sessionId, agentRole, checkpoint.hasBrowserTool())) {
-                log.infof("[BATCH-RESUME-GUARD] parallel batch for session=%s already resuming - skipping duplicate.", sessionId);
-                return;
-            }
+        // §7.29-fix: Atomic guard to prevent double-resumption for ALL approval types.
+        // This also performs the DB transition (AWAITING_APPROVAL → RESUMING) which
+        // protects the checkpoint from being archived as "stale" if a new user message
+        // arrives before the executor thread starts.
+        if (!agentStore.claimForResume(sessionId, agentRole, checkpoint.hasBrowserTool())) {
+            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming - skipping duplicate.", sessionId);
+            return;
         }
 
         executor.execute(() -> {
@@ -128,9 +127,7 @@ public class CheckpointResumeHandler {
             } catch (Exception e) {
                 handleResumeFailure(sessionId, context, e);
             } finally {
-                if (checkpoint.isParallelBatch()) {
-                    agentStore.clearBatchResuming(sessionId);
-                }
+                agentStore.clearBatchResuming(sessionId);
             }
         });
     }
@@ -245,7 +242,7 @@ public class CheckpointResumeHandler {
             String chatId,
             String channelType) throws Exception {
 
-        if (!agentStore.markBatchResuming(sessionId, agentRole)) {
+        if (!agentStore.claimForResume(sessionId, agentRole)) {
             log.infof("BATCH-RESUME-SYNC-GUARD: session %s already resuming", sessionId);
             return null;
         }

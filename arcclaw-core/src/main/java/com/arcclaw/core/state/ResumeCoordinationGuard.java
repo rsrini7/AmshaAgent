@@ -27,7 +27,7 @@ import org.jboss.logging.Logger;
  *
  * <p><strong>Public API contract (§3.4 / §7.29 - MUST):</strong>
  * External callers MUST NOT inject this class directly. They must always call
- * through {@link StatefulAgentStore#markBatchResuming(String)},
+ * through {@link StatefulAgentStore#claimForResume(String, String)},
  * {@link StatefulAgentStore#isBatchResuming(String)}, and
  * {@link StatefulAgentStore#clearBatchResuming(String)}.
  * {@link StatefulAgentStoreImpl} is the only legitimate injector of this guard.

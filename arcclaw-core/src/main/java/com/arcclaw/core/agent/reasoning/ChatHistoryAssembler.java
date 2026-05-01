@@ -211,9 +211,17 @@ public class ChatHistoryAssembler {
                 String obs = step.observation();
                 if (obs != null && !obs.isBlank()) {
                     ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
-                    // Use UserMessage if last was AiMessage to "flip" the turn, 
-                    // otherwise keep as SystemMessage.
-                    if (last instanceof AiMessage) {
+                    
+                    if (last instanceof ToolExecutionResultMessage toolRes) {
+                        // 🟢 FIX: 'Unexpected role 'user' after role 'tool''
+                        // Providers like OpenAI/OpenRouter reject User/System messages immediately
+                        // following a Tool result before the AI has answered. 
+                        // Instead of adding a new message, append the directive to the tool's output.
+                        String updatedText = toolRes.text() + "\n\n[SYSTEM DIRECTIVE]:\n" + obs;
+                        messages.set(messages.size() - 1, 
+                            ToolExecutionResultMessage.toolExecutionResultMessage(toolRes.id(), toolRes.toolName(), updatedText));
+                    } else if (last instanceof AiMessage) {
+                        // Use UserMessage if last was AiMessage to "flip" the turn
                         messages.add(UserMessage.userMessage(obs));
                     } else {
                         messages.add(SystemMessage.systemMessage(obs));
@@ -233,19 +241,17 @@ public class ChatHistoryAssembler {
             int start = goal.indexOf("System: ");
             String correctionHint = goal.substring(start);
             
-             // §4.11: Always prefix with the hard stop so LLM cannot retry a raw tool call.
+            // §4.11: Always prefix with the hard stop so LLM cannot retry a raw tool call.
             String fullHint = "Do NOT attempt another tool call.\n\n" + correctionHint;
             ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
 
-            // We use UserMessage instead of SystemMessage to "flip" the turn 
-            // ONLY if the last message was from the Assistant (AiMessage).
-            // This prevents "add_generation_prompt" failures while maintaining 
-            // valid turn-order (no User turns immediately after ToolResults).
-            // §7.31/7.35
-            if (last instanceof AiMessage) {
+            if (last instanceof ToolExecutionResultMessage toolRes) {
+                String updatedText = toolRes.text() + "\n\n[SYSTEM DIRECTIVE]:\n" + fullHint;
+                messages.set(messages.size() - 1, 
+                    ToolExecutionResultMessage.toolExecutionResultMessage(toolRes.id(), toolRes.toolName(), updatedText));
+            } else if (last instanceof AiMessage) {
                 messages.add(UserMessage.userMessage(fullHint));
             } else {
-                // Otherwise keep it as a SystemMessage (will be moved to head prompt)
                 messages.add(SystemMessage.from(fullHint));
             }
         }

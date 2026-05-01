@@ -205,6 +205,11 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         // Remove {"name": ..., "parameters": ...} or {"tool_name": ..., "parameters": ...}
         stripped = stripped.replaceAll("(?s)\\{\\s*\"(?:tool_)?name\"\\s*:.*?\"parameters\"\\s*:.*?}", "");
         
+        // Remove naked function calls: tool_name(param="value")
+        if (nakedFunctionCallPattern != null) {
+            stripped = nakedFunctionCallPattern.matcher(stripped).replaceAll("");
+        }
+
         // Final catch-all for any trailing JSON fragment or punctuation-only remnants
         String trimmed = stripped.strip();
         if (trimmed.length() < 10) {

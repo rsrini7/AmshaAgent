@@ -128,17 +128,14 @@ public class CheckpointApprovalService {
         if (cp == null) return;
 
         String sessionId = cp.getSessionId();
-        String agentRole = cp.getAgentRole();
 
-        // §7.29 / §T5-4: Synchronously transition AWAITING_APPROVAL -> RESUMING in the DB.
-        // This prevents CheckpointResumeCoordinator from archiving the checkpoint as "stale"
-        // if a new user message arrives in the millisecond gap before the executor
-        // thread picks up the task.
-        boolean claimed = agentStore.claimForResume(sessionId, agentRole);
-        if (!claimed) {
-             log.infof("[RESUME-DB-CLAIM] session=%s already claimed - skipping trigger.", sessionId);
-             return;
-        }
+        // §7.29-fix: DO NOT call claimForResume() here. The DB-level transition
+        // (AWAITING_APPROVAL → RESUMING) is now owned exclusively by
+        // CheckpointResumeHandler.resumeAfterBatchDecision() via claimForResume().
+        // Previously, this method pre-claimed the DB lock, causing claimForResume()
+        // to fail (checkpoint was already RESUMING), which triggered the
+        // BATCH-RESUME-GUARD and silently aborted the resume — leaving the session
+        // permanently stuck in RESUMING state.
 
         try {
             // findLatestNonArchivedCheckpoint instead of findLatestAwaitingApproval 

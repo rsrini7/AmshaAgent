@@ -39,7 +39,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
  * </ol>
  *
  * <p><strong>§3.4 / §7.29 (MUST):</strong> The public API for the double-resume guard
- * ({@link #markBatchResuming}, {@link #isBatchResuming}, {@link #clearBatchResuming})
+ * ({@link #claimForResume}, {@link #isBatchResuming}, {@link #clearBatchResuming})
  * remains on THIS class and THIS interface. External callers (WorkspaceManager,
  * CheckpointResumeHandler) MUST call through {@link StatefulAgentStore}, never
  * inject {@link ResumeCoordinationGuard} directly.
@@ -187,10 +187,6 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public void archive(Long checkpointId)
         { storeAdapter.archive(checkpointId); }
 
-    @Override
-    public boolean claimForResume(String sessionId, String agentRole) {
-        return storeAdapter.claimForResume(sessionId, agentRole);
-    }
 
     // ── Resume guard (§3.4 / §7.29 - all delegated, public API stays here) ───
 
@@ -200,12 +196,12 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
      * instance-local backpressure.
      */
     @Override
-    public boolean markBatchResuming(String sessionId, String agentRole) {
-        return markBatchResuming(sessionId, agentRole, false);
+    public boolean claimForResume(String sessionId, String agentRole) {
+        return claimForResume(sessionId, agentRole, false);
     }
 
     @Override
-    public boolean markBatchResuming(String sessionId, String agentRole, boolean hasBrowserTool) {
+    public boolean claimForResume(String sessionId, String agentRole, boolean hasBrowserTool) {
         // 1. Instance-local check (fast path)
         if (resumeGuard.isResuming(sessionId)) {
             return false;

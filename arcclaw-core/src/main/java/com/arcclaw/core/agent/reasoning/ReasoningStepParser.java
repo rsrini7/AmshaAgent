@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.reasoning;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -148,6 +149,27 @@ public class ReasoningStepParser {
                         return ReasoningStep.pending(aiMessage.text(), scheduleRequest.name(),
                                 actionInput, inputTokens, outputTokens);
                     }
+                }
+
+                // §Anti-Parallel-Storage: Code-level enforcement.
+                if (requests.stream().allMatch(r -> ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))) {
+                    log.warnf("[PARALLEL-TOOLS] session=%s: LLM violated anti-parallel storage rule. Merging.", sessionId);
+                    String mergedText = requests.stream()
+                        .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
+                        .filter(p -> !p.containsKey("__error"))
+                        .map(p -> p.get("text") != null ? p.get("text") : (p.get("content") != null ? p.get("content") : p.get("value")))
+                        .filter(Objects::nonNull)
+                        .map(Object::toString)
+                        .collect(Collectors.joining(", "));
+                    String mergedLabel = requests.stream()
+                        .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
+                        .filter(p -> !p.containsKey("__error"))
+                        .map(p -> p.get("label") != null ? p.get("label") : p.get("category"))
+                        .filter(Objects::nonNull)
+                        .map(Object::toString)
+                        .findFirst().orElse("user_facts");
+                    Map<String, Object> mergedParams = Map.of("label", mergedLabel, "text", mergedText);
+                    return ReasoningStep.pending(aiMessage.text(), ToolCapability.INGEST_DOCUMENT.toolName(), mergedParams, inputTokens, outputTokens);
                 }
 
                 for (int i = 0; i < requests.size(); i++) {
