@@ -8,6 +8,11 @@ ur capabilities ?
 
 who r u and your priorities and your helpers ?
 
+schedule to write python program Factorial of 10 and execute then share the result after 2 mins
+
+store my phone as 9884691847 and my hobby is walking
+
+
 List 5 most star public repos of user rsrini7 using the github tool.
 
 your subagents ?
