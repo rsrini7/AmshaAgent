@@ -25,7 +25,8 @@ public interface AutonomyPolicy {
                 case SUPERVISED -> operation == ToolOperation.READ_FS
                         || operation == ToolOperation.SCHEDULE_AUTONOMOUS;
                 case BACKGROUND -> operation == ToolOperation.READ_FS
-                        || operation == ToolOperation.NETWORK_OUTBOUND;
+                        || operation == ToolOperation.NETWORK_OUTBOUND
+                        || operation == ToolOperation.DELEGATE_AUTONOMOUS;
                 case READONLY -> operation == ToolOperation.READ_FS;
             };
         }

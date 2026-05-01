@@ -16,6 +16,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -181,6 +182,7 @@ public class ToolRegistry {
         } catch (SecurityException e) {
             return ToolResponse.failure(1, "Security violation: " + e.getMessage());
         } catch (Exception e) {
+            if (e instanceof ComplianceViolationException cve) throw cve;
             return handleExecutionException(toolName, e);
         }
     }
@@ -196,6 +198,7 @@ public class ToolRegistry {
             }
             return response;
         } catch (Exception e) {
+            if (e instanceof ComplianceViolationException cve) throw cve;
             return handleExecutionException(toolName, e);
         }
     }

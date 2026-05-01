@@ -433,7 +433,7 @@ public class SystemPromptBuilder {
     private static final String EXECUTION_BOUNDARY_NO_SANDBOX = """
             EXECUTION BOUNDARY:
             You cannot execute, run, or compile code directly in this role. If a user asks you to "execute", "run", "just do it", or
-            "compile and run" any code, you MUST use `delegate_to_agent(agent=coordinator)` to handle the execution.
+            "compile and run" any code, you MUST use `delegate_to_agent(agent=coder)` to handle the execution.
             IMPORTANT: If a tool fails (e.g. web search), do NOT attempt to write a python/bash script as a workaround. You are NOT permitted to write code in this role. Just tell the user the tool failed.
             """;
 

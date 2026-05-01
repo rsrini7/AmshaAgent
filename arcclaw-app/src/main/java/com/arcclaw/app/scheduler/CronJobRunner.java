@@ -281,14 +281,16 @@ public class CronJobRunner {
             return AgentRoleEnum.RESEARCHER.toScopedName();
         } else if (normalized.contains("coder task") || normalized.contains("write code") || normalized.contains("write python")
                 || normalized.contains("write script") || normalized.contains("write program")
-                || normalized.contains("fix bug") || normalized.contains("refactor")) {
+                || normalized.contains("fix bug") || normalized.contains("refactor")
+                || normalized.contains("echo ") || normalized.contains("bash ") || normalized.contains("python ")
+                || normalized.contains("run ") || normalized.contains("execute ")) {
             // NOTE: "write program" is intentionally broad — false positives (e.g. "write program spec")
             // are acceptable since CODER will delegate or fail gracefully rather than silently mismatch.
             return AgentRoleEnum.CODER.toScopedName();
         }
         
-        // Default to researcher for cron tasks as most involve retrieval/monitoring
-        return AgentRoleEnum.RESEARCHER.toScopedName();
+        // Default to coordinator for cron tasks to allow accurate delegation if specialist is unclear
+        return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 
     private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal, ChannelType channelType) {

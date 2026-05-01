@@ -61,7 +61,10 @@ public enum SecurityEventType {
     DELEGATE_APPROVAL,  // Admin approved on behalf of another user. §7.33
 
     // Session isolation (Per-key isolation)
-    UNAUTHORIZED_ACCESS; // Cross-key session access attempt blocked
+    UNAUTHORIZED_ACCESS, // Cross-key session access attempt blocked
+    
+    // RAG and Memory writes
+    MEMORY_INGESTED;       // IngestDocumentTool indexed content
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -73,7 +76,7 @@ public enum SecurityEventType {
             case VAULT_ACCESS, TOOL_INVOKED, TOOL_EXECUTED, BUDGET_EXCEEDED,
                  PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
                  CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED, DELEGATE_APPROVAL,
-                 UNAUTHORIZED_ACCESS -> true;
+                 UNAUTHORIZED_ACCESS, MEMORY_INGESTED -> true;
             default -> false;
         };
     }
