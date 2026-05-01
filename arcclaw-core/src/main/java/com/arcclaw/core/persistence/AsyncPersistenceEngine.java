@@ -106,7 +106,9 @@ public class AsyncPersistenceEngine {
             throw new IllegalArgumentException("submitCritical requires a CRITICAL event");
         }
 
+        inFlightCritical.incrementAndGet();
         if (!criticalQueue.offer(event)) {
+            inFlightCritical.decrementAndGet();
             log.warn("Critical audit queue at capacity - persisting synchronously to avoid data loss");
             registry.counter("arcclaw.audit.queue.overflow", "tier", "critical").increment();
             try {
@@ -116,8 +118,6 @@ public class AsyncPersistenceEngine {
             }
             return;
         }
-
-        inFlightCritical.incrementAndGet();
 
         try {
             event.getFuture().join();
@@ -133,11 +133,11 @@ public class AsyncPersistenceEngine {
             throw new IllegalArgumentException("submitTelemetry requires a TELEMETRY event");
         }
 
+        inFlightTelemetry.incrementAndGet();
         if (!telemetryQueue.offer(event)) {
+            inFlightTelemetry.decrementAndGet();
             log.debug("Telemetry audit queue at capacity - dropping event (acceptable)");
             registry.counter("arcclaw.audit.queue.overflow", "tier", "telemetry").increment();
-        } else {
-            inFlightTelemetry.incrementAndGet();
         }
     }
 
@@ -184,6 +184,10 @@ public class AsyncPersistenceEngine {
     void clearForTest() {
         criticalQueue.clear();
         telemetryQueue.clear();
+    }
+
+    int getCriticalQueueSize() {
+        return criticalQueue.size();
     }
 
     private void drainCritical() {

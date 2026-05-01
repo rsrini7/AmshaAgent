@@ -158,8 +158,12 @@ class AsyncPersistenceEngineTest {
             });
         }
         
-        // Wait for them to hit the queue
-        Thread.sleep(200);
+        // Wait for them to hit the queue (saturation). 
+        // We can't access inFlightCritical directly, so we'll wait for the queue to actually fill.
+        long start = System.currentTimeMillis();
+        while (engine.getCriticalQueueSize() < 500 && (System.currentTimeMillis() - start) < 5000) {
+            Thread.sleep(10);
+        }
         
         // 3. Submit the 501st from the main test thread
         // The queue is full (size 500 + 1 processing). This should NOT queue, it should persist synchronously on THIS thread.
