@@ -120,7 +120,7 @@ class AgentStateMachineRunnerTest {
 
         EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, new ObjectMapper(), rateLimitTracker, agentStore, 4, 6, 15, 10);
 
-        ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor);
+        ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor, new SimpleMeterRegistry());
 
         runner = new AgentStateMachineRunner(
                 engineStepHandler,

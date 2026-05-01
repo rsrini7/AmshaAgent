@@ -19,4 +19,9 @@ public interface AdvisoryLockPort {
      * Releases the lock.
      */
     void unlock(String lockKey);
+
+    /**
+     * Checks if the lock is currently held by anyone and is not expired.
+     */
+    boolean isLocked(String lockKey);
 }

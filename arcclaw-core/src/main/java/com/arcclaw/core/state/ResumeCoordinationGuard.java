@@ -5,7 +5,10 @@ import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
+import com.arcclaw.persistence.api.AdvisoryLockPort;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -57,6 +60,12 @@ public class ResumeCoordinationGuard {
     @ConfigProperty(name = "arcclaw.resumption.playwright-stale-mark-seconds", defaultValue = "300")
     long playwrightStaleMarkSeconds;
 
+    @ConfigProperty(name = "arcclaw.resume-lock.db-advisory", defaultValue = "false")
+    boolean dbAdvisoryEnabled;
+
+    @Inject
+    Instance<AdvisoryLockPort> lockPort;
+
     /**
      * Atomically marks the session as RESUMING.
      *
@@ -72,6 +81,10 @@ public class ResumeCoordinationGuard {
      * Overloaded to store the browser-tool flag.
      */
     public boolean markResuming(String sessionId, boolean hasBrowserTool) {
+        if (dbAdvisoryEnabled && !lockPort.isUnsatisfied()) {
+            int ttl = (int) (hasBrowserTool ? playwrightStaleMarkSeconds : staleResumeSeconds);
+            return lockPort.get().tryLock("RESUME:" + sessionId, ttl);
+        }
         return resumingBatches.putIfAbsent(sessionId, new ResumeMark(Instant.now(), hasBrowserTool)) == null;
     }
 
@@ -82,6 +95,10 @@ public class ResumeCoordinationGuard {
      * permanently blocked sessions after a crash.
      */
     public boolean isResuming(String sessionId) {
+        if (dbAdvisoryEnabled && !lockPort.isUnsatisfied()) {
+            return lockPort.get().isLocked("RESUME:" + sessionId);
+        }
+
         ResumeMark mark = resumingBatches.get(sessionId);
         if (mark == null) return false;
 
@@ -105,6 +122,9 @@ public class ResumeCoordinationGuard {
      * Never suppress or swallow the call.
      */
     public void clearResuming(String sessionId) {
+        if (dbAdvisoryEnabled && !lockPort.isUnsatisfied()) {
+            lockPort.get().unlock("RESUME:" + sessionId);
+        }
         resumingBatches.remove(sessionId);
     }
 }

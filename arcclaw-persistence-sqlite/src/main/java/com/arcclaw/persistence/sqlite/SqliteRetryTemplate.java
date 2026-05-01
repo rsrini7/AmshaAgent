@@ -1,14 +1,13 @@
 package com.arcclaw.persistence.sqlite;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.util.AgentGuards;
+import com.arcclaw.core.util.BackoffRetryExecutor;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -53,64 +52,56 @@ public class SqliteRetryTemplate {
                          Callable<T> action) throws Exception {
         
         // 0. Shutdown Guard: skip ONLY if the CDI container is actively stopping.
-        // Allow execution if container is null (unit tests) or running.
         if (AgentGuards.isShuttingDown()) {
             log.debugf("CDI container shutting down - aborting persistence operation [%s]", operationName);
             return null;
         }
 
-        int limit = maxAttempts > 0 ? Math.min(maxAttempts, DEFAULT_MAX_ATTEMPTS) : DEFAULT_MAX_ATTEMPTS;
-        long baseDelay = initialBackoffMs > 0 ? initialBackoffMs : MIN_DELAY_MS;
-        
-        Exception lastException = null;
-        for (int attempt = 1; attempt <= limit; attempt++) {
-            try {
-                return action.call();
-            } catch (Exception e) {
-                if (!SqliteErrorStrings.isBusy(e)) throw e;
-                lastException = e;
+        BackoffRetryExecutor.Strategy strategy = new BackoffRetryExecutor.Strategy(
+            maxAttempts > 0 ? Math.min(maxAttempts, DEFAULT_MAX_ATTEMPTS) : DEFAULT_MAX_ATTEMPTS,
+            initialBackoffMs > 0 ? initialBackoffMs : MIN_DELAY_MS,
+            MAX_DELAY_MS,
+            0.25 // Jitter factor
+        );
 
+        try {
+            return BackoffRetryExecutor.execute(
+                operationName,
+                strategy,
+                e -> {
+                    boolean retriable = SqliteErrorStrings.isBusy(e);
+                    if (retriable) {
+                        if (meterRegistry != null && !meterRegistry.isUnsatisfied()) {
+                            meterRegistry.get().counter("arcclaw.persistence.sqlite.retry.attempt", 
+                                "operation", operationName).increment();
+                        }
+                    }
+                    return retriable;
+                },
+                () -> {
+                    try {
+                        return action.call();
+                    } catch (Exception e) {
+                        // Log cause chain for debugging SR-12 refinements
+                        if (log.isTraceEnabled()) {
+                            log.tracef("Persistence attempt failed for [%s]: %s", 
+                                      operationName, ExceptionUtils.getStackTrace(e));
+                        }
+                        throw e;
+                    }
+                }
+            );
+        } catch (Exception e) {
+            if (SqliteErrorStrings.isBusy(e)) {
                 if (meterRegistry != null && !meterRegistry.isUnsatisfied()) {
-                    meterRegistry.get().counter("arcclaw.persistence.sqlite.retry.attempt", 
+                    meterRegistry.get().counter("arcclaw.persistence.sqlite.retry.exhausted", 
                         "operation", operationName).increment();
                 }
-
-                // Bounded Exponential Backoff: base * 2^attempt
-                // capped at MAX_DELAY_MS (2s)
-                long expDelay = Math.min(MAX_DELAY_MS, baseDelay * (1L << attempt));
-                
-                // Jitter: ±25% of the calculated delay
-                long jitter = (long) (expDelay * 0.25);
-                long delay = expDelay + ThreadLocalRandom.current().nextLong(-jitter, jitter + 1);
-                
-                // Final safety clamp
-                delay = Math.max(MIN_DELAY_MS, delay);
-
-                String compactTrace = ExceptionUtils.getThrowableList(e).stream()
-                        .map(t -> t.getClass().getSimpleName() + ": " + t.getMessage())
-                        .collect(Collectors.joining("\n  -> "));
-                
-                log.warnf("SQLite BUSY on [%s], attempt %d/%d - retrying in %dms.\nCause Chain:\n%s",
-                          operationName, attempt, limit, delay, compactTrace);
-                
-                if (attempt < limit) {
-                    Thread.sleep(delay);
-                }
+                throw new RuntimeException(String.format("SQLite BUSY after %d attempts on [%s]", 
+                    strategy.maxAttempts(), operationName), e);
             }
+            throw e;
         }
-
-        // Terminal exhaustion
-        log.errorf("CRITICAL: SQLite BUSY exhaustion on [%s] after %d attempts. Giving up.", 
-                  operationName, limit);
-        
-        if (meterRegistry != null && !meterRegistry.isUnsatisfied()) {
-            meterRegistry.get().counter("arcclaw.persistence.sqlite.retry.exhausted", 
-                "operation", operationName).increment();
-        }
-
-        throw new RuntimeException(
-            "SQLite BUSY after " + limit + " attempts on [" + operationName + "]",
-            lastException);
     }
 
     public void executeVoid(String operationName, int maxAttempts, long backoffMs,

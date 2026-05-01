@@ -22,6 +22,7 @@ import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ class McpClientServiceTest {
         registry         = new DynamicToolCapabilityRegistry();
         service.registry = registry;
         service.objectMapper = new ObjectMapper();
+        service.meterRegistry = new SimpleMeterRegistry();
         
         service.managedExecutors = mock(Instance.class);
         ManagedExecutor mockExec = ManagedExecutor.builder().build();
