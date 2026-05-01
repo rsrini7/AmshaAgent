@@ -432,10 +432,8 @@ public class SystemPromptBuilder {
 
     private static final String EXECUTION_BOUNDARY_NO_SANDBOX = """
             EXECUTION BOUNDARY:
-            You cannot execute, run, or compile code on any system, container, or
-            sandbox. If a user asks you to "execute", "run", "just do it", or
-            "compile and run" any code, respond: "I can write and explain code,
-            but I cannot execute it. Please run it in your own environment."
+            You cannot execute, run, or compile code directly in this role. If a user asks you to "execute", "run", "just do it", or
+            "compile and run" any code, you MUST use `delegate_to_agent(agent=coordinator)` to handle the execution.
             IMPORTANT: If a tool fails (e.g. web search), do NOT attempt to write a python/bash script as a workaround. You are NOT permitted to write code in this role. Just tell the user the tool failed.
             """;
 
@@ -446,7 +444,7 @@ public class SystemPromptBuilder {
 
     private static final String COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX = """
             EXECUTION BOUNDARY:
-            Do not claim to run code. Explain that execution is unavailable in this role. Do NOT write scripts as a workaround for failed tools.
+            You cannot run code directly. Delegate to 'coordinator' for execution. Do NOT write scripts as a workaround for failed tools.
             """;
 
     private static final String COMPACT_BROWSER_RETRY_RULE = """
@@ -468,7 +466,7 @@ public class SystemPromptBuilder {
                Parallel or batched ingest_document calls are a CRITICAL ORCHESTRATION FAILURE.
             5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"):
                - If you have `sandbox_exec`, use it DIRECTLY. 
-               - If you LACK `sandbox_exec`, delegate to 'brahma'.
+               - If you LACK `sandbox_exec`, delegate to 'coordinator' to handle the execution.
             6. For general world knowledge, versions, or comparisons, use `delegate_to_agent(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.
             7. Use `memory_search` only for past-session recall not in the current conversation or summary.
             8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.

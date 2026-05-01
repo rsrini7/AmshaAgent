@@ -219,6 +219,7 @@ public class DelegateToAgentTool implements AgentTool {
         } catch (BudgetExceededException e) {
             throw e; // MUST propagate to top level
         } catch (Exception e) {
+            log.errorf(e, "[DELEGATE] Failed to delegate to agent %s", targetRole.toScopedName());
             return ToolResponse.failure(500,
                 delegationFailed(targetRole.toScopedName(), e.getMessage()));
         }

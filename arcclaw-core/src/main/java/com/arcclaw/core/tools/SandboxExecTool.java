@@ -206,15 +206,8 @@ public class SandboxExecTool implements AgentTool {
     private void compileJavaOnHost(Path javaFile, Path outputDir) throws IOException {
         Path javacExe = resolveHostJavac();
         if (javacExe == null) {
-            // In native GraalVM binary mode, java.home points to the embedded JRE (no javac).
-            // This is expected and harmless since compilation usually happens in the container.
-            // We only warn if NOT in native mode, as it suggests a missing host JDK.
-            boolean isNative = System.getProperty("org.graalvm.nativeimage.imagecode") != null;
-            if (!isNative) {
-                log.warnf("[SandboxExecTool] javac not found at java.home - skipping host compilation. " +
-                          "The sandbox container will likely fail. Verify the host has a full JDK.");
-            }
-            return;
+            throw new IOException("Java compilation failed: 'javac' compiler not found on the host system. " +
+                                  "Please ensure a full JDK is installed and 'javac' is on the PATH.");
         }
 
         ProcessBuilder pb = new ProcessBuilder(
@@ -246,15 +239,27 @@ public class SandboxExecTool implements AgentTool {
     }
 
     /**
-     * Finds javac from the running JVM's java.home.
-     * The host always runs on a JDK when running Quarkus (dev or native build mode).
-     * Returns null only if somehow on a JRE-only host - should never happen.
+     * Finds javac from the running JVM's java.home, or falls back to 'javac' on PATH.
      */
     private Path resolveHostJavac() {
         String javaHome = System.getProperty("java.home");
-        if (javaHome == null) return null;
-        Path javac = Path.of(javaHome, "bin", IS_WINDOWS ? "javac.exe" : "javac");
-        return Files.exists(javac) ? javac : null;
+        if (javaHome != null) {
+            Path javac = Path.of(javaHome, "bin", IS_WINDOWS ? "javac.exe" : "javac");
+            if (Files.exists(javac)) return javac;
+        }
+        
+        // Fallback for GraalVM native image mode where java.home is synthetic
+        // or any case where JDK is on PATH but not in java.home
+        return isCommandAvailable("javac") ? Path.of("javac") : null;
+    }
+
+    private boolean isCommandAvailable(String cmd) {
+        try {
+            Process process = new ProcessBuilder(IS_WINDOWS ? "where" : "which", cmd).start();
+            return process.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override
