@@ -135,44 +135,13 @@ public class ParallelToolStepExecutor {
                   calls.stream().map(ParallelToolCall::toolName)
                        .collect(Collectors.joining(", ")));
 
-        List<ParallelToolCall> allowedCalls  = new ArrayList<>();
-        List<ParallelToolCall> dedupCalls    = new ArrayList<>();
-
-        for (ParallelToolCall call : calls) {
-            ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                context.sessionId(), context.agentRole(),
-                call.toolName(), call.params(), history,
-                context.goal(), List.of());
-            if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval) {
-                log.infof("[PARALLEL-HITL] session=%s tool=%s requires approval " +
-                          "- evaluating pre-execution for remaining %d tools.",
-                          context.sessionId(), call.toolName(), calls.size());
-                return handleHitlBatch(context, history, batchStep, calls);
-            }
-
-            if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked blocked) {
-                log.warnf("[PARALLEL-BLOCKED] session=%s tool=%s blocked: %s",
-                           context.sessionId(), call.toolName(), blocked.observation());
-                String blockedObs = String.format(
-                    "[PARALLEL-BATCH-BLOCKED] Tool '%s' was blocked: %s",
-                    call.toolName(), blocked.observation());
-                ReasoningStep failedStep = batchStep.withObservation(blockedObs, false);
-                history.add(failedStep);
-                return StepDecision.retryValidation(consecutiveFailures + 1);
-            }
-
-            if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate dedup) {
-                log.infof("[PARALLEL-DEDUP] session=%s tool=%s is duplicate - " +
-                          "using cached observation, continuing with remaining %d tools.",
-                          context.sessionId(), call.toolName(),
-                          calls.size() - 1);
-                dedupCalls.add(call.withResult(
-                    "[DEDUP] " + dedup.cachedObservation(), true));
-                continue; 
-            }
-
-            allowedCalls.add(call);
+        GuardEvaluationResult guardRes = evaluateGuardForCalls(context, history, batchStep, calls, consecutiveFailures);
+        if (guardRes.hitlOrBlockedDecision != null) {
+            return guardRes.hitlOrBlockedDecision;
         }
+
+        List<ParallelToolCall> allowedCalls = guardRes.allowedCalls;
+        List<ParallelToolCall> dedupCalls = guardRes.dedupCalls;
 
         if (allowedCalls.isEmpty()) {
             log.infof("[PARALLEL-DEDUP] session=%s all %d tools were duplicates " +
@@ -207,51 +176,120 @@ public class ParallelToolStepExecutor {
             allowedCalls.stream().map(ParallelToolCall::toolName)
                  .collect(Collectors.joining(",")));
 
-        List<ParallelToolCall> allowedCompleted = new ArrayList<>();
-        
+        List<ParallelToolCall> allowedCompleted;
         try {
-            List<CompletableFuture<ParallelToolCall>> futures = allowedCalls.stream()
-                .map(call -> {
-                    ManagedExecutor executor = isExternalTool(call.toolName()) ? getExternalExecutor() : getInternalExecutor();
-                    return CompletableFuture.supplyAsync(() -> 
-                        sequentialToolExecutor.execute(context, call, otelContext), 
-                        executor);
-                })
-                .toList();
-
-            for (int i = 0; i < futures.size(); i++) {
-                CompletableFuture<ParallelToolCall> future = futures.get(i);
-                try {
-                    allowedCompleted.add(future.get(toolTimeoutSeconds, TimeUnit.SECONDS));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return StepDecision.terminal(AgentResult.failed(
-                        "Parallel tool execution interrupted.",
-                        AgentResult.FailureCategory.SYSTEM_ERROR,
-                        List.copyOf(history)));
-                } catch (TimeoutException e) {
-                    future.cancel(true);
-                    ParallelToolCall timedOut = allowedCalls.get(i);
-                    log.warnf("[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",
-                              context.sessionId(), timedOut.toolName(), toolTimeoutSeconds);
-                    meterRegistry.counter("arcclaw.agent.tool.timeout",
-                            "tool", timedOut.toolName()).increment();
-                    allowedCompleted.add(timedOut.withResult(
-                        String.format("Tool timed out after %ds.", toolTimeoutSeconds),
-                        false));
-                } catch (ExecutionException e) {
-                    log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s",
-                               e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
-                    allowedCompleted.add(allowedCalls.get(i)
-                        .withResult("Unexpected execution failure.", false));
-                }
+            allowedCompleted = runAllowedCallsAsync(context, history, allowedCalls, otelContext);
+        } catch (RuntimeException re) {
+            if ("Interrupted".equals(re.getMessage())) {
+                return StepDecision.terminal(AgentResult.failed(
+                    "Parallel tool execution interrupted.",
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(history)));
             }
+            throw re;
         } finally {
             MdcCleaner.clear(MdcKeys.PARALLEL_BATCH_SIZE, MdcKeys.PARALLEL_TOOLS);
         }
 
+        List<ParallelToolCall> allCompleted = mergeCompletedCalls(calls, dedupCalls, allowedCompleted);
+
+        return buildCompletedBatchDecision(
+            context, history, batchStep, allCompleted, consecutiveFailures);
+    }
+
+    private static class GuardEvaluationResult {
+        StepDecision hitlOrBlockedDecision;
+        List<ParallelToolCall> allowedCalls = new ArrayList<>();
+        List<ParallelToolCall> dedupCalls = new ArrayList<>();
+    }
+
+    private GuardEvaluationResult evaluateGuardForCalls(
+            AgentExecutionContext context, List<ReasoningStep> history, ReasoningStep batchStep,
+            List<ParallelToolCall> calls, int consecutiveFailures) {
+
+        GuardEvaluationResult r = new GuardEvaluationResult();
+        for (ParallelToolCall call : calls) {
+            ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                context.sessionId(), context.agentRole(),
+                call.toolName(), call.params(), history,
+                context.goal(), List.of());
+            if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval) {
+                log.infof("[PARALLEL-HITL] session=%s tool=%s requires approval " +
+                          "- evaluating pre-execution for remaining %d tools.",
+                          context.sessionId(), call.toolName(), calls.size());
+                r.hitlOrBlockedDecision = handleHitlBatch(context, history, batchStep, calls);
+                return r;
+            }
+
+            if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked blocked) {
+                log.warnf("[PARALLEL-BLOCKED] session=%s tool=%s blocked: %s",
+                           context.sessionId(), call.toolName(), blocked.observation());
+                String blockedObs = String.format(
+                    "[PARALLEL-BATCH-BLOCKED] Tool '%s' was blocked: %s",
+                    call.toolName(), blocked.observation());
+                ReasoningStep failedStep = batchStep.withObservation(blockedObs, false);
+                history.add(failedStep);
+                r.hitlOrBlockedDecision = StepDecision.retryValidation(consecutiveFailures + 1);
+                return r;
+            }
+
+            if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate dedup) {
+                log.infof("[PARALLEL-DEDUP] session=%s tool=%s is duplicate - " +
+                          "using cached observation, continuing with remaining %d tools.",
+                          context.sessionId(), call.toolName(),
+                          calls.size() - 1);
+                r.dedupCalls.add(call.withResult("[DEDUP] " + dedup.cachedObservation(), true));
+                continue; 
+            }
+
+            r.allowedCalls.add(call);
+        }
+        return r;
+    }
+
+    private List<ParallelToolCall> runAllowedCallsAsync(
+            AgentExecutionContext context, List<ReasoningStep> history, List<ParallelToolCall> allowedCalls, Context otelContext) {
+
+        List<ParallelToolCall> allowedCompleted = new ArrayList<>();
+        List<CompletableFuture<ParallelToolCall>> futures = allowedCalls.stream()
+            .map(call -> {
+                ManagedExecutor executor = isExternalTool(call.toolName()) ? getExternalExecutor() : getInternalExecutor();
+                return CompletableFuture.supplyAsync(() -> 
+                    sequentialToolExecutor.execute(context, call, otelContext), 
+                    executor);
+            })
+            .toList();
+
+        for (int i = 0; i < futures.size(); i++) {
+            CompletableFuture<ParallelToolCall> future = futures.get(i);
+            try {
+                allowedCompleted.add(future.get(toolTimeoutSeconds, TimeUnit.SECONDS));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted");
+            } catch (TimeoutException e) {
+                future.cancel(true);
+                ParallelToolCall timedOut = allowedCalls.get(i);
+                log.warnf("[PARALLEL-TIMEOUT] session=%s tool=%s timed out after %ds",
+                          context.sessionId(), timedOut.toolName(), toolTimeoutSeconds);
+                meterRegistry.counter("arcclaw.agent.tool.timeout",
+                        "tool", timedOut.toolName()).increment();
+                allowedCompleted.add(timedOut.withResult(
+                    String.format("Tool timed out after %ds.", toolTimeoutSeconds),
+                    false));
+            } catch (ExecutionException e) {
+                log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s",
+                           e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                allowedCompleted.add(allowedCalls.get(i).withResult("Unexpected execution failure.", false));
+            }
+        }
+        return allowedCompleted;
+    }
+
+    private List<ParallelToolCall> mergeCompletedCalls(
+            List<ParallelToolCall> originalCalls, List<ParallelToolCall> dedupCalls, List<ParallelToolCall> allowedCompleted) {
         List<ParallelToolCall> allCompleted = new ArrayList<>();
-        for (ParallelToolCall original : calls) {
+        for (ParallelToolCall original : originalCalls) {
             Optional<ParallelToolCall> dedup = dedupCalls.stream()
                 .filter(d -> Objects.equals(d.callId(), original.callId()))
                 .findFirst();
@@ -264,9 +302,7 @@ public class ParallelToolStepExecutor {
                     .ifPresent(allCompleted::add);
             }
         }
-
-        return buildCompletedBatchDecision(
-            context, history, batchStep, allCompleted, consecutiveFailures);
+        return allCompleted;
     }
 
     private StepDecision buildCompletedBatchDecision(

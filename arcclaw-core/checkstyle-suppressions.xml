@@ -5,25 +5,6 @@
 <suppressions>
     <!-- Baseline suppressions for pre-existing MethodLength violations -->
 
-     <!-- ═══════════════════════════════════════════════════════════
-         LLM Model
-         ═══════════════════════════════════════════════════════════ -->
-     <suppress checks="MethodLength" files="NvidiaMessageSanitizer\.java"/>
-     
-   
-      <!-- ═══════════════════════════════════════════════════════════
-         agent/loop - scheduled for T2-7 deep conditional extraction
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="FileLength|MethodLength" files="AgentLoop\.java"/>
-    <suppress checks="FileLength|MethodLength" files="AgentStateMachineRunner\.java"/>
-    <suppress checks="FileLength|MethodLength" files="CheckpointResumeHandler\.java"/>
-    <suppress checks="FileLength|MethodLength" files="EngineStepHandler\.java"/>
-    <suppress checks="FileLength|MethodLength" files="ParallelToolStepExecutor\.java"/>
-    <suppress checks="MethodLength" files="ToolInvocationGuard\.java"/>
-    <suppress checks="FileLength" files="ToolStepHandler\.java"/>
-    <suppress checks="FileLength" files="FinishActionHandler\.java"/>
-        
-
     <!-- ═══════════════════════════════════════════════════════════
          agent/reasoning - scheduled for reasoning-layer refactor
          ═══════════════════════════════════════════════════════════ -->

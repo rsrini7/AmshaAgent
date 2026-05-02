@@ -187,103 +187,131 @@ public class AgentStateMachineRunner {
         AgentResult finalResult = null;
 
         try {
-            // Browser Pre-flight
-            if (history.isEmpty()) {
-                buildBrowserPreflightStep(context).ifPresent(preflightStep -> {
-                    try {
-                        ToolResponse response = WorkspaceContext.run(
-                                context.sessionId(), context.userId(), context.chatId(),
-                                context.autonomyLevel(), context.agentRole(), context.channelType(),
-                                () -> toolInvoker.invoke(preflightStep.action(), preflightStep.actionInput(), context.sessionId()));
-
-                        ReasoningStep completed = preflightStep.withObservation(
-                                response.success() ? response.output() : "Browser navigation failed: " + response.output(),
-                                response.success());
-                        history.add(completed);
-                    } catch (Exception e) {
-                        log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), e.getMessage());
-                    }
-                });
-            }
+            runBrowserPreflight(context, history);
 
             while (iteration < context.maxIterations() || (iteration == context.maxIterations() && context.isForceFinishRetry())) {
                 iteration++;
-                Span iterSpan = agentOtelContext.startIterationSpan(context.sessionId(), iteration, context.agentRole());
-                try (Scope scope = iterSpan.makeCurrent()) {
+                IterationResult iterRes = processSingleIteration(context, engine, history, iteration, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount, transientError);
 
-                    if (history.isEmpty() && intentDetector.isWriteIntent(context.goal())) {
-                        transientError = "The user wants to store data. Call ingest_document immediately.";
-                    }
-
-                    StepDecision engineDecision;
-                    try {
-                        engineDecision = engineStepHandler.processEngineStep(context, engine, history, transientError, llmSchemaErrorCount, iteration);
-
-                        if (engineDecision.isRateLimitHit()) {
-                            if (++rateLimitRetryCount > maxRateLimitRetries) {
-                                finalResult = AgentResult.failed("Repeated rate limits.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-                                break;
-                            }
-                            iteration--;
-                        }
-                    } catch (StructuredOutputException soe) {
-                        if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {
-                            return AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
-                        }
-                        llmSchemaErrorCount++;
-                        transientError = correctionStrategy.buildCorrectionHint(llmSchemaErrorCount, soe.getMessage());
-                        continue;
-                    }
-
-                    if (engineDecision.type() == DecisionType.TERMINAL) {
-                        finalResult = engineDecision.result();
-                        return finalResult;
-                    }
-                    if (engineDecision.type() == DecisionType.CONTINUE) {
-                        transientError = engineDecision.transientError();
-                        llmSchemaErrorCount = engineDecision.llmSchemaErrorCount();
-                        continue;
-                    }
-
-                    ReasoningStep step = engineDecision.step();
-                    transientError = null;
-
-                    var outcome = stepDecisionRouter.route(context, history, step, llmSchemaErrorCount, consecutiveFailures, skillRegistry.currentSnapshot());
-
-                    if (outcome.isTerminal()) {
-                        finalResult = outcome.result();
-                        return finalResult;
-                    }
-                    if (outcome.retryEngine()) {
-                        transientError = outcome.transientError();
-                        llmSchemaErrorCount = outcome.llmSchemaErrorCount();
-                        continue;
-                    }
-                    
-                    consecutiveFailures = outcome.consecutiveFailures();
-
-                } catch (Exception e) {
-                    iterSpan.recordException(e);
-                    throw e;
-                } finally {
-                    iterSpan.end();
+                if (iterRes.isTerminal()) {
+                    finalResult = iterRes.result();
+                    return finalResult;
                 }
+
+                if (iterRes.rateLimitRetryCount() > rateLimitRetryCount) {
+                    iteration--;
+                }
+
+                transientError = iterRes.transientError();
+                llmSchemaErrorCount = iterRes.llmSchemaErrorCount();
+                consecutiveFailures = iterRes.consecutiveFailures();
+                rateLimitRetryCount = iterRes.rateLimitRetryCount();
             }
 
             finalResult = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
             return finalResult;
 
         } catch (BudgetExceededException e) {
-            return AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history));
+            finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history));
+            return finalResult;
         } catch (Exception e) {
             log.errorf("StateMachine terminal failure for session %s: %s", context.sessionId(), e.getMessage());
-            return AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-        }
- finally {
+            finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+            return finalResult;
+        } finally {
             AgentResult res = finalResult;
             meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole()).record(iteration - context.startingIteration());
             loopExitPublisher.publish(context, res);
             observers.forEach(o -> o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
+        }
+    }
+
+    private void runBrowserPreflight(AgentExecutionContext context, List<ReasoningStep> history) {
+        if (history.isEmpty()) {
+            buildBrowserPreflightStep(context).ifPresent(preflightStep -> {
+                try {
+                    ToolResponse response = WorkspaceContext.run(
+                            context.sessionId(), context.userId(), context.chatId(),
+                            context.autonomyLevel(), context.agentRole(), context.channelType(),
+                            () -> toolInvoker.invoke(preflightStep.action(), preflightStep.actionInput(), context.sessionId()));
+
+                    ReasoningStep completed = preflightStep.withObservation(
+                            response.success() ? response.output() : "Browser navigation failed: " + response.output(),
+                            response.success());
+                    history.add(completed);
+                } catch (Exception e) {
+                    log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), e.getMessage());
+                }
+            });
+        }
+    }
+
+    private record IterationResult(
+            AgentResult result,
+            String transientError,
+            int llmSchemaErrorCount,
+            int consecutiveFailures,
+            int rateLimitRetryCount,
+            boolean isTerminal
+    ) {
+        public static IterationResult terminal(AgentResult result) {
+            return new IterationResult(result, null, 0, 0, 0, true);
+        }
+        public static IterationResult proceed(String transientError, int llmSchemaErrorCount, int consecutiveFailures, int rateLimitRetryCount) {
+            return new IterationResult(null, transientError, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount, false);
+        }
+    }
+
+    private IterationResult processSingleIteration(
+            AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> history,
+            int iteration, int llmSchemaErrorCount, int consecutiveFailures, int rateLimitRetryCount, String transientError) {
+        
+        Span iterSpan = agentOtelContext.startIterationSpan(context.sessionId(), iteration, context.agentRole());
+        try (Scope scope = iterSpan.makeCurrent()) {
+            if (history.isEmpty() && intentDetector.isWriteIntent(context.goal())) {
+                transientError = "The user wants to store data. Call ingest_document immediately.";
+            }
+
+            StepDecision engineDecision;
+            try {
+                engineDecision = engineStepHandler.processEngineStep(context, engine, history, transientError, llmSchemaErrorCount, iteration);
+
+                if (engineDecision.isRateLimitHit()) {
+                    if (rateLimitRetryCount + 1 > maxRateLimitRetries) {
+                        return IterationResult.terminal(AgentResult.failed("Repeated rate limits.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+                    }
+                    return IterationResult.proceed(transientError, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount + 1);
+                }
+            } catch (StructuredOutputException soe) {
+                if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {
+                    return IterationResult.terminal(AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history)));
+                }
+                return IterationResult.proceed(correctionStrategy.buildCorrectionHint(llmSchemaErrorCount + 1, soe.getMessage()), llmSchemaErrorCount + 1, consecutiveFailures, rateLimitRetryCount);
+            }
+
+            if (engineDecision.type() == DecisionType.TERMINAL) {
+                return IterationResult.terminal(engineDecision.result());
+            }
+            if (engineDecision.type() == DecisionType.CONTINUE) {
+                return IterationResult.proceed(engineDecision.transientError(), engineDecision.llmSchemaErrorCount(), consecutiveFailures, rateLimitRetryCount);
+            }
+
+            ReasoningStep step = engineDecision.step();
+            var outcome = stepDecisionRouter.route(context, history, step, llmSchemaErrorCount, consecutiveFailures, skillRegistry.currentSnapshot());
+
+            if (outcome.isTerminal()) {
+                return IterationResult.terminal(outcome.result());
+            }
+            if (outcome.retryEngine()) {
+                return IterationResult.proceed(outcome.transientError(), outcome.llmSchemaErrorCount(), consecutiveFailures, rateLimitRetryCount);
+            }
+
+            return IterationResult.proceed(null, llmSchemaErrorCount, outcome.consecutiveFailures(), rateLimitRetryCount);
+        } catch (Exception e) {
+            iterSpan.recordException(e);
+            throw e;
+        } finally {
+            iterSpan.end();
         }
     }
 

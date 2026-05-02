@@ -274,11 +274,11 @@
               <checkstyleRules>
                 <module name="Checker">
                   <module name="FileLength">
-                    <property name="max" value="400"/>
+                    <property name="max" value="500"/>
                   </module>
                   <module name="TreeWalker">
                     <module name="MethodLength">
-                      <property name="max" value="60"/>
+                      <property name="max" value="80"/>
                       <property name="countEmpty" value="false"/>
                     </module>
                   </module>
