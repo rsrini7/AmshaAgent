@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
@@ -28,6 +29,7 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
@@ -79,6 +81,7 @@ public class CheckpointResumeHandler {
     @Inject
     ManagedExecutor executor;
 
+    @ActivateRequestContext
     public void resumeAfterBatchDecision(
             String sessionId,
             String agentRole,
@@ -106,6 +109,7 @@ public class CheckpointResumeHandler {
         syncCronStatus(sessionId);
 
         executor.execute(() -> {
+            Arc.container().requestContext().activate();
             MessageContext context = null;
             try {
                 String resumeGoal = strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
@@ -126,6 +130,7 @@ public class CheckpointResumeHandler {
                 handleResumeFailure(sessionId, context, e);
             } finally {
                 agentStore.clearBatchResuming(sessionId);
+                Arc.container().requestContext().deactivate();
             }
         });
     }
@@ -245,6 +250,7 @@ public class CheckpointResumeHandler {
         }
     }
 
+    @ActivateRequestContext
     public AgentResult resumeAfterBatchDecisionSync(
             String sessionId,
             String agentRole,
