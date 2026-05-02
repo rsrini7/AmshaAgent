@@ -588,25 +588,42 @@ public class AgentStateMachineRunner {
      * exempted from "degraded response" token checks downstream.
      */
     private Optional<ReasoningStep> buildBrowserPreflightStep(AgentExecutionContext context) {
+        log.infof("[BrowserPreflight] Attempting pre-flight check for session=%s, role=%s, goal='%s'",
+                context.sessionId(), context.agentRole(), context.goal());
+
         // Guard 1: researcher only
-        if (!AgentRoleEnum.RESEARCHER.toScopedName().equals(context.agentRole())) {
+        if (!AgentRoleEnum.RESEARCHER.toScopedName().equalsIgnoreCase(context.agentRole())) {
+            log.infof("[BrowserPreflight] Guard 1 failed: role '%s' != '%s'",
+                    context.agentRole(), AgentRoleEnum.RESEARCHER.toScopedName());
             return Optional.empty();
         }
 
         // Guard 2: browser_navigate must be available and enabled
-        boolean browserEnabled = toolRegistry
-                .findTool(ToolCapability.BROWSER_NAVIGATE.toolName())
-                .map(AgentTool::isEnabled)
-                .orElse(false);
+        var toolOpt = toolRegistry.findTool(ToolCapability.BROWSER_NAVIGATE.toolName());
+        if (toolOpt.isEmpty()) {
+            log.infof("[BrowserPreflight] Guard 2 failed: tool '%s' not found in registry",
+                    ToolCapability.BROWSER_NAVIGATE.toolName());
+            return Optional.empty();
+        }
+
+        boolean browserEnabled = toolOpt.map(AgentTool::isEnabled).orElse(false);
         if (!browserEnabled) {
+            log.infof("[BrowserPreflight] Guard 2 failed: tool '%s' is present but disabled",
+                    ToolCapability.BROWSER_NAVIGATE.toolName());
             return Optional.empty();
         }
 
         // Guard 3: goal must contain a URL
         String goal = context.goal();
-        if (goal == null) return Optional.empty();
+        if (goal == null) {
+            log.infof("[BrowserPreflight] Guard 3 failed: goal is null");
+            return Optional.empty();
+        }
         Matcher m = URL_PATTERN.matcher(goal);
-        if (!m.find()) return Optional.empty();
+        if (!m.find()) {
+            log.infof("[BrowserPreflight] Guard 3 failed: no URL matched in goal '%s'", goal);
+            return Optional.empty();
+        }
 
         String url = m.group();
         log.infof("[BrowserPreflight] URL detected in goal for session %s, injecting browser_navigate for: %s",
