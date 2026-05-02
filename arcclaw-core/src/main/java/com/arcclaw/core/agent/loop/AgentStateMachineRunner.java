@@ -599,6 +599,7 @@ public class AgentStateMachineRunner {
         }
 
         // Guard 2: browser_navigate must be available and enabled
+        log.infof("[BrowserPreflight] Registered tool names: %s", toolRegistry.listTools());
         var toolOpt = toolRegistry.findTool(ToolCapability.BROWSER_NAVIGATE.toolName());
         if (toolOpt.isEmpty()) {
             log.infof("[BrowserPreflight] Guard 2 failed: tool '%s' not found in registry",
