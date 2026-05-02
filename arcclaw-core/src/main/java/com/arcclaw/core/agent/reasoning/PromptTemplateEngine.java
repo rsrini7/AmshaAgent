@@ -114,11 +114,15 @@ public class PromptTemplateEngine {
 
         boolean hasSandboxExec = sortedCapabilities.stream()
                 .anyMatch(c -> ToolCapability.SANDBOX_EXEC.toolName().equals(c.toolName()));
+                
+        boolean hasBrowserNavigate = sortedCapabilities.stream()
+                .anyMatch(c -> ToolCapability.BROWSER_NAVIGATE.toolName().equals(c.toolName()));
 
         var request = templateFor(role)
                 .data("roleDef", role.definition())
                 .data("sortedCapabilities", sortedCapabilities)
                 .data("hasSandboxExec", hasSandboxExec)
+                .data("hasBrowserNavigate", hasBrowserNavigate)
                 .data("compactionSummary", compactionSummary)
                 .data("systemTimeUtc", timeString);
 
