@@ -267,10 +267,6 @@ public class SandboxExecTool implements AgentTool {
         return truncate(rawOutput);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // execute() - host-side fallback when Podman is unavailable.
-    // Only called when requiresSandbox() is false or via insecure-fallback.
-    // ─────────────────────────────────────────────────────────────────────────
     @Override
     public ToolResponse execute(Map<String, Object> params) {
         String sessionId;
@@ -326,11 +322,6 @@ public class SandboxExecTool implements AgentTool {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // executeJavaFallback() - host-only path when Podman is offline.
-    // Compile on host with javac, then run .class directly - same flow as
-    // the Podman path but without container isolation.
-    // ─────────────────────────────────────────────────────────────────────────
     private ToolResponse executeJavaFallback(String sessionId, Path workspaceRoot,
             String code, Map<String, String> secrets) throws Exception {
 
@@ -411,10 +402,6 @@ public class SandboxExecTool implements AgentTool {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────────
-
     List<String> buildCommand(String lang, String code) {
         return switch (lang) {
             // Python, node, and bash are now file-based via prepareWorkspace + sandboxCommand.
@@ -456,16 +443,6 @@ public class SandboxExecTool implements AgentTool {
         return FS_ILLEGAL_CHARS.matcher(sessionId).replaceAll("_");
     }
 
-    /**
-     * Extracts the public class name from Java source to derive the correct filename.
-     * Prefers the public class; falls back to first class found; defaults to "Main".
-     * Package-private for unit tests.
-     */
-    /**
-     * Extracts the primary type name (class, record, enum, interface) from Java source.
-     * Prefers public types to ensure correct file mapping for javac.
-     * Falls back to "Main" if no type is found.
-     */
     String extractJavaClassName(String code) {
         Matcher m = PUBLIC_TYPE_PATTERN.matcher(code);
         if (m.find()) return m.group(1);

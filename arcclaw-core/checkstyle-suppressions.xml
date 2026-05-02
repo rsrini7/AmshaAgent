@@ -3,34 +3,5 @@
     "-//Checkstyle//DTD SuppressionFilter  Config 1.2//EN"
     "https://checkstyle.org/dtds/suppressions_1_2.dtd">
 <suppressions>
-    <!-- Baseline suppressions for pre-existing MethodLength violations -->
-
-    <!-- ═══════════════════════════════════════════════════════════
-         reflex - scheduled for reflex decomposition
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="FileLength|MethodLength" files="ApproveReflex\.java"/>
-    <suppress checks="MethodLength" files="DenyReflex\.java"/>
-
-    <!-- ═══════════════════════════════════════════════════════════
-         sandbox
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="MethodLength" files="PodmanContainerExecutor\.java"/>
-
-    <!-- ═══════════════════════════════════════════════════════════
-         state - AgentCheckpoint is 1 line over; trivial to fix later
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="FileLength" files="AgentCheckpoint\.java"/>
-
-    <!-- ═══════════════════════════════════════════════════════════
-         tools - scheduled for tool-layer refactor
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="FileLength|MethodLength" files="SandboxExecTool\.java"/>
-    <suppress checks="FileLength|MethodLength" files="GithubTool\.java"/>
-    <suppress checks="MethodLength" files="ScheduleTaskTool\.java"/>
-    <suppress checks="MethodLength" files="BraveWebSearchTool\.java"/>
-    <suppress checks="MethodLength" files="CheckListTool\.java"/>
-    <suppress checks="MethodLength" files="DelegateToAgentTool\.java"/>
-    <suppress checks="MethodLength" files="SerperWebSearchTool\.java"/>
-    <suppress checks="MethodLength" files="PodmanHealthCheck\.java"/>
-    <suppress checks="MethodLength" files="PodmanImageHealthCheck\.java"/>   
+  
 </suppressions>

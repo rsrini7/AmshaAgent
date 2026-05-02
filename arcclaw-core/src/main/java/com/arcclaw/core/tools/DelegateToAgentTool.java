@@ -90,13 +90,11 @@ public class DelegateToAgentTool implements AgentTool {
         String chatId;
 
         try {
-            // NS2: Fail fast on missing context
             currentRoleName = WorkspaceContext.requireAgentRole();
             outerSessionId  = WorkspaceContext.requireSessionId();
             userId          = WorkspaceContext.requireUserId();
             chatId          = WorkspaceContext.requireChatId();
         } catch (IllegalStateException e) {
-            // NS2 backward compatibility: convert missing context into 403 ToolResponse
             if (e.getMessage() != null && e.getMessage().contains("unbound")) {
                 return ToolResponse.failure(403, "Security violation: tenant context not bound.");
             }
@@ -105,7 +103,6 @@ public class DelegateToAgentTool implements AgentTool {
 
         Object agentObj = params.get("agent");
         Object goalObj = params.get("goal");
-
         String delegatableList = getDelegatableAgentList();
 
         if (agentObj == null || String.valueOf(agentObj).isBlank()) {
@@ -117,10 +114,8 @@ public class DelegateToAgentTool implements AgentTool {
 
         String agentName = String.valueOf(agentObj);
         String goal = String.valueOf(goalObj);
-
         String normalized = agentName.trim().toLowerCase();
 
-        // 0. Recursion Guard: Prevent infinite delegation loops
         int depth = outerSessionId.split(Pattern.quote(AgentSentinels.DELEGATE_SESSION_SENTINEL)).length - 1;
         if (depth >= maxDelegationDepth) {
             log.warnf("[DELEGATE] Hard block: delegation depth limit (%d) reached for session %s", maxDelegationDepth, outerSessionId);
@@ -129,21 +124,15 @@ public class DelegateToAgentTool implements AgentTool {
                 "You cannot delegate further to prevent infinite loops.", maxDelegationDepth));
         }
 
-        // 1. Self-delegation guard using registry metadata
         if (isSelfDelegation(normalized, currentRoleName)) {
-            return ToolResponse.failure(400,
-                delegationSelfGuard(normalized, delegatableList));
+            return ToolResponse.failure(400, delegationSelfGuard(normalized, delegatableList));
         }
 
-        // 2. Role validation
         if (!AgentRoleEnum.isKnownRole(agentName)) {
-            return ToolResponse.failure(400,
-                delegationUnknownAgent(agentName, delegatableList));
+            return ToolResponse.failure(400, delegationUnknownAgent(agentName, delegatableList));
         }
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
-
-        // 2a. Governance Guard: Capability Escalation Check (§4.10)
         AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
 
         if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
@@ -164,80 +153,53 @@ public class DelegateToAgentTool implements AgentTool {
                 );
             }
         }
-        
-        // AgentExecutionContext constructor throws on maxIterations <= 0
-        int maxIterations = Math.max(1, targetRole.definition().maxIterations());
 
-        // NOTE: Inner sessions bypass SessionRegistry intentionally.
-        // StatefulAgentStore.save() must not require a session_registry entry.
-        // Verified: save() is keyed only on (sessionId, agentRole) - no FK constraint.
+        AgentResult result;
+        try {
+            result = runSubAgent(outerSessionId, agentName, goal, targetRole, userId, chatId);
+        } catch (BudgetExceededException e) {
+            throw e;
+        } catch (Exception e) {
+            return handleRunSubAgentException(targetRole, e);
+        }
+
+        return handleSubAgentResult(result, targetRole, outerSessionId);
+    }
+
+    private AgentResult runSubAgent(String outerSessionId, String agentName, String goal, AgentRoleEnum targetRole, String userId, String chatId) throws Exception {
+        int maxIterations = Math.max(1, targetRole.definition().maxIterations());
         String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + agentName + ":" + System.currentTimeMillis();
 
-        log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s",
-                  agentName, goal, outerSessionId);
+        log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s", agentName, goal, outerSessionId);
 
-        // Resolve inner autonomy level (§Invariant-Sub-Governance)
         AutonomyLevel outerLevel = WorkspaceContext.requireAutonomyOrSupervised();
         AutonomyLevel innerLevel = switch (outerLevel) {
             case READONLY -> AutonomyLevel.READONLY;
-            default -> AutonomyLevel.FULL; // SUPERVISED/FULL -> FULL to avoid unresumable synchronous pauses
+            default -> AutonomyLevel.FULL;
         };
 
-        // CRITICAL: Rebind WorkspaceContext with resolved level for inner loop.
-        // ToolInvocationGuard.evaluate() line 120 reads WorkspaceContext.autonomy()
-        // - if SUPERVISED, all inner tool calls pause for HITL approval, creating
-        // unresumable checkpoint corruption. FULL permits all operations.
-        //
-        // NOTE ON COMPACTION:
-        // The inner loop does NOT go through the MessagePipeline (AgentDispatchHandler,
-        // CompactionHandler, etc.) - it enters AgentLoop.runWithRole() directly.
-        // Compaction is NOT triggered because the inner history bypasses the pipeline.
-        // The inner loop DOES persist a checkpoint to DB under (innerSessionId, role).
-        // This is intentional - it enables crash recovery if delegation is interrupted.
-        // Do NOT "fix" this by routing through the pipeline.
-        AgentResult result;
-        try {
-            result = WorkspaceContext.run(
-                innerSessionId,
-                userId,
-                chatId,
-                innerLevel,
-                targetRole.toScopedName(),
-                () -> agentLoop.get().run(
-                    innerSessionId,
-                    targetRole.toScopedName(),
-                    goal,
-                    reasoningEngine,
-                    maxIterations
-                )
-            );
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
-        } catch (BudgetExceededException e) {
-            throw e; // MUST propagate to top level
-        } catch (Exception e) {
-            log.errorf(e, "[DELEGATE] Failed to delegate to agent %s", targetRole.toScopedName());
-            return ToolResponse.failure(500,
-                delegationFailed(targetRole.toScopedName(), e.getMessage()));
-        }
+        return WorkspaceContext.run(
+            innerSessionId, userId, chatId, innerLevel, targetRole.toScopedName(),
+            () -> agentLoop.get().run(innerSessionId, targetRole.toScopedName(), goal, reasoningEngine, maxIterations)
+        );
+    }
 
-        // 3. Handle specific terminal subtypes BEFORE formatting
+    private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, Exception e) {
+        if (e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("unbound")) {
+            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+        }
+        log.errorf(e, "[DELEGATE] Failed to delegate to agent %s", targetRole.toScopedName());
+        return ToolResponse.failure(500, delegationFailed(targetRole.toScopedName(), e.getMessage()));
+    }
+
+    private ToolResponse handleSubAgentResult(AgentResult result, AgentRoleEnum targetRole, String outerSessionId) {
         if (result instanceof AgentResult.AwaitingApproval aa) {
-            return ToolResponse.failure(409,
-                delegationPaused(targetRole.toScopedName(), aa.toolName(), aa.sessionId()));
+            return ToolResponse.failure(409, delegationPaused(targetRole.toScopedName(), aa.toolName(), aa.sessionId()));
         }
         if (result instanceof AgentResult.LoopExceeded) {
-            return ToolResponse.failure(500,
-                delegationExceeded(targetRole.toScopedName(), maxIterations));
+            return ToolResponse.failure(500, delegationExceeded(targetRole.toScopedName(), Math.max(1, targetRole.definition().maxIterations())));
         }
 
-        // 3a. Detect Sub-Agent Refusal
-        // If the sub-agent triggered its prompt injection guard, it returns a standard refusal string.
-        // We must bubble this up as a failure so the coordinator knows the delegation failed and
-        // can handle the original user request itself.
         if (result instanceof AgentResult.Finished f && f.answer() != null) {
             if (f.answer().contains("I cannot share my internal system instructions")) {
                 return ToolResponse.failure(403, 
@@ -246,10 +208,8 @@ public class DelegateToAgentTool implements AgentTool {
             }
         }
 
-        // 4. Success path uses standard formatter
         String formatted = AgentResultFormatter.format(result);
-        log.infof("[DELEGATE] agent=%s completed for session=%s",
-                  targetRole.toScopedName(), outerSessionId);
+        log.infof("[DELEGATE] agent=%s completed for session=%s", targetRole.toScopedName(), outerSessionId);
         return ToolResponse.success(formatted);
     }
 

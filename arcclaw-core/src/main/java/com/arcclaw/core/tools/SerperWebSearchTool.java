@@ -134,13 +134,10 @@ public class SerperWebSearchTool implements AgentTool {
         String agentRole;
 
         try {
-            // Step 1 - Extract and validate tenant context
-            // NS2: Fail fast on missing context
             userId    = WorkspaceContext.requireUserId();
             sessionId = WorkspaceContext.requireSessionId();
             agentRole = WorkspaceContext.requireAgentRole();
         } catch (IllegalStateException e) {
-            // NS2 backward compatibility: convert missing context into 403 ToolResponse
             if (e.getMessage() != null && e.getMessage().contains("unbound")) {
                 return ToolResponse.failure(403, "Security violation: tenant context not bound.");
             }
@@ -156,127 +153,127 @@ public class SerperWebSearchTool implements AgentTool {
             return ToolResponse.failure(503, "Serper Search is not configured. Set ARCCLAW_TOOLS_SERPER_API_KEY.");
         }
 
-        int count = 5;
-        if (params.containsKey("count")) {
-            Object cObj = params.get("count");
-            if (cObj instanceof Number n) {
-                count = Math.min(10, Math.max(1, n.intValue()));
-            } else if (cObj instanceof String s) {
-                try {
-                    count = Math.min(10, Math.max(1, Integer.parseInt(s)));
-                } catch (NumberFormatException ignored) {}
-            }
-        }
-
-        String type = "search";
-        if (params.containsKey("type")) {
-            String t = (String) params.get("type");
-            if ("news".equals(t)) {
-                type = "news";
-            }
-        }
+        int count = parseCount(params);
+        String type = parseType(params);
 
         try {
-            ObjectNode bodyNode = objectMapper.createObjectNode();
-            bodyNode.put("q", query);
-            bodyNode.put("num", count);
-
-            String requestBody = objectMapper.writeValueAsString(bodyNode);
-            // Path-based routing for search type (Fix C2)
-            URI endpoint = URI.create(resolveEndpoint(type));
-
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(endpoint)
-                .header("Content-Type", "application/json")
-                .header("X-API-KEY", getApiKey())
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                .timeout(Duration.ofSeconds(15))
-                .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            
+            HttpResponse<String> response = fetchSerperResponse(query, count, type);
             if (response.statusCode() != 200) {
                  return ToolResponse.failure(response.statusCode(), "Serper Search API failed: " + response.body());
             }
 
-            // Audit successful search - NS2: Fail fast on missing role
-            auditService.record(sessionId, userId, agentRole, 
-                SecurityEventType.TOOL_EXECUTED, "Serper search: " + query);
-
-            JsonNode root = objectMapper.readTree(response.body());
-            StringBuilder sb = new StringBuilder();
-
-            // A. answerBox
-            if (root.has("answerBox")) {
-                JsonNode ab = root.get("answerBox");
-                String answer = ab.has("answer") ? ab.get("answer").asText() :
-                               ab.has("snippet") ? ab.get("snippet").asText() :
-                               ab.has("snippetHighlighted") && ab.get("snippetHighlighted").isArray() && ab.get("snippetHighlighted").size() > 0 ?
-                               ab.get("snippetHighlighted").get(0).asText() : null;
-                if (answer != null) {
-                    sb.append("## Direct Answer\n").append(answer).append("\n\n");
-                }
-            }
-
-            // B. knowledgeGraph
-            if (root.has("knowledgeGraph")) {
-                JsonNode kg = root.get("knowledgeGraph");
-                String kgTitle = kg.path("title").asText(null);
-                if (kgTitle != null) {
-                    sb.append("## Knowledge Graph\n");
-                    sb.append("**").append(kgTitle).append("**");
-                    if (kg.has("type")) sb.append(" (").append(kg.get("type").asText()).append(")");
-                    sb.append("\n");
-                    if (kg.has("description")) sb.append(kg.get("description").asText()).append("\n");
-                    sb.append("\n");
-                }
-            }
-
-            // C. organic / news
-            JsonNode results = root.has("news") ? root.path("news") : root.path("organic");
-            if (results.isArray() && results.size() > 0) {
-                sb.append(root.has("news") ? "## News Results\n\n" : "## Web Results\n\n");
-                for (JsonNode res : results) {
-                    sb.append("Title: ").append(res.path("title").asText("Untitled")).append("\n");
-                    sb.append("URL:   ").append(res.path("link").asText("Unknown URL")).append("\n");
-                    sb.append("Snippet: ").append(res.path("snippet").asText("No snippet available.")).append("\n");
-                    if (res.has("date")) {
-                        sb.append("Date: ").append(res.get("date").asText()).append("\n");
-                    }
-                    sb.append("\n");
-                }
-            }
-
-            // D. peopleAlsoAsk
-            JsonNode paa = root.path("peopleAlsoAsk");
-            if (paa.isArray() && paa.size() >= 2) {
-                sb.append("## People Also Ask\n");
-                for (int i = 0; i < Math.min(3, paa.size()); i++) {
-                    JsonNode p = paa.get(i);
-                    sb.append("- ").append(p.path("question").asText()).append(": ")
-                      .append(p.path("snippet").asText()).append("\n");
-                }
-                sb.append("\n");
-            }
-
-            String fullResult = sb.toString().trim();
-            if (fullResult.length() < 50) { 
-                 return ToolResponse.success("SEARCH_EXHAUSTED: No relevant web or news results were found for the query: '" + query + 
-                     "'. Do not retry with similar queries. FINISH with an apology.");
-            }
-
-            // Response truncation (at 4096 chars)
-            if (fullResult.length() > 4096) {
-                int lastNewline = fullResult.lastIndexOf("\n\n", 4096);
-                fullResult = (lastNewline > 0 ? fullResult.substring(0, lastNewline) : fullResult.substring(0, 4096))
-                             + "\n[results truncated]";
-            }
-
-            return ToolResponse.success(fullResult);
-
+            auditService.record(sessionId, userId, agentRole, SecurityEventType.TOOL_EXECUTED, "Serper search: " + query);
+            return parseSearchResponse(response.body(), query);
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             return ToolResponse.failure(502, "Serper search request failed: " + e.getMessage());
         }
+    }
+
+    private int parseCount(Map<String, Object> params) {
+        if (!params.containsKey("count")) return 5;
+        Object cObj = params.get("count");
+        if (cObj instanceof Number n) {
+            return Math.min(10, Math.max(1, n.intValue()));
+        } else if (cObj instanceof String s) {
+            try {
+                return Math.min(10, Math.max(1, Integer.parseInt(s)));
+            } catch (NumberFormatException ignored) {}
+        }
+        return 5;
+    }
+
+    private String parseType(Map<String, Object> params) {
+        if (params.containsKey("type") && "news".equals(params.get("type"))) {
+            return "news";
+        }
+        return "search";
+    }
+
+    private HttpResponse<String> fetchSerperResponse(String query, int count, String type) throws Exception {
+        ObjectNode bodyNode = objectMapper.createObjectNode();
+        bodyNode.put("q", query);
+        bodyNode.put("num", count);
+
+        String requestBody = objectMapper.writeValueAsString(bodyNode);
+        URI endpoint = URI.create(resolveEndpoint(type));
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(endpoint)
+            .header("Content-Type", "application/json")
+            .header("X-API-KEY", getApiKey())
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .timeout(Duration.ofSeconds(15))
+            .build();
+
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private ToolResponse parseSearchResponse(String responseBody, String query) throws Exception {
+        JsonNode root = objectMapper.readTree(responseBody);
+        StringBuilder sb = new StringBuilder();
+
+        if (root.has("answerBox")) {
+            JsonNode ab = root.get("answerBox");
+            String answer = ab.has("answer") ? ab.get("answer").asText() :
+                           ab.has("snippet") ? ab.get("snippet").asText() :
+                           ab.has("snippetHighlighted") && ab.get("snippetHighlighted").isArray() && ab.get("snippetHighlighted").size() > 0 ?
+                           ab.get("snippetHighlighted").get(0).asText() : null;
+            if (answer != null) {
+                sb.append("## Direct Answer\n").append(answer).append("\n\n");
+            }
+        }
+
+        if (root.has("knowledgeGraph")) {
+            JsonNode kg = root.get("knowledgeGraph");
+            String kgTitle = kg.path("title").asText(null);
+            if (kgTitle != null) {
+                sb.append("## Knowledge Graph\n");
+                sb.append("**").append(kgTitle).append("**");
+                if (kg.has("type")) sb.append(" (").append(kg.get("type").asText()).append(")");
+                sb.append("\n");
+                if (kg.has("description")) sb.append(kg.get("description").asText()).append("\n");
+                sb.append("\n");
+            }
+        }
+
+        JsonNode results = root.has("news") ? root.path("news") : root.path("organic");
+        if (results.isArray() && results.size() > 0) {
+            sb.append(root.has("news") ? "## News Results\n\n" : "## Web Results\n\n");
+            for (JsonNode res : results) {
+                sb.append("Title: ").append(res.path("title").asText("Untitled")).append("\n");
+                sb.append("URL:   ").append(res.path("link").asText("Unknown URL")).append("\n");
+                sb.append("Snippet: ").append(res.path("snippet").asText("No snippet available.")).append("\n");
+                if (res.has("date")) {
+                    sb.append("Date: ").append(res.get("date").asText()).append("\n");
+                }
+                sb.append("\n");
+            }
+        }
+
+        JsonNode paa = root.path("peopleAlsoAsk");
+        if (paa.isArray() && paa.size() >= 2) {
+            sb.append("## People Also Ask\n");
+            for (int i = 0; i < Math.min(3, paa.size()); i++) {
+                JsonNode p = paa.get(i);
+                sb.append("- ").append(p.path("question").asText()).append(": ")
+                  .append(p.path("snippet").asText()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        String fullResult = sb.toString().trim();
+        if (fullResult.length() < 50) { 
+             return ToolResponse.success("SEARCH_EXHAUSTED: No relevant web or news results were found for the query: '" + query + 
+                 "'. Do not retry with similar queries. FINISH with an apology.");
+        }
+
+        if (fullResult.length() > 4096) {
+            int lastNewline = fullResult.lastIndexOf("\n\n", 4096);
+            fullResult = (lastNewline > 0 ? fullResult.substring(0, lastNewline) : fullResult.substring(0, 4096))
+                         + "\n[results truncated]";
+        }
+
+        return ToolResponse.success(fullResult);
     }
 }
