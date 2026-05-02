@@ -2,6 +2,10 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -17,10 +21,15 @@ import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.structured.StructuredOutputException;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
@@ -75,6 +84,13 @@ public class AgentStateMachineRunner {
     private static final int LOG_GOAL_MAX = 80;
     private static final String GOAL_LOG_FMT = "StateMachine starting session=%s goal='%s' maxIterations=%d";
 
+    /**
+     * Pre-flight URL pattern: matches http(s) URLs in the user goal.
+     * Used by the browser pre-flight interceptor to bypass LLM tool selection.
+     */
+    private static final Pattern URL_PATTERN = Pattern.compile(
+            "https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+");
+
     private final EngineStepHandler engineStepHandler;
     private final ToolStepHandler toolStepHandler;
     private final ChatMemoryWriter writer;
@@ -86,6 +102,9 @@ public class AgentStateMachineRunner {
     private final FinishActionHandler finishActionHandler;
     private final CorrectionStrategy correctionStrategy;
     private final int maxRateLimitRetries;
+    private final MeterRegistry meterRegistry;
+    private final ToolRegistry toolRegistry;
+    private final ToolInvoker toolInvoker;
 
     @Inject
     public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
@@ -98,7 +117,10 @@ public class AgentStateMachineRunner {
                                    LoopExitPublisher loopExitPublisher,
                                    FinishActionHandler finishActionHandler,
                                    CorrectionStrategy correctionStrategy,
-                                   @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries) {
+                                   @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries,
+                                   MeterRegistry meterRegistry,
+                                   ToolRegistry toolRegistry,
+                                   ToolInvoker toolInvoker) {
         this.engineStepHandler = engineStepHandler;
         this.toolStepHandler = toolStepHandler;
         this.writer = writer;
@@ -110,6 +132,9 @@ public class AgentStateMachineRunner {
         this.finishActionHandler = finishActionHandler;
         this.correctionStrategy = correctionStrategy;
         this.maxRateLimitRetries = maxRateLimitRetries;
+        this.meterRegistry = meterRegistry;
+        this.toolRegistry = toolRegistry;
+        this.toolInvoker = toolInvoker;
     }
 
     /**
@@ -252,6 +277,32 @@ public class AgentStateMachineRunner {
         AgentResult finalResult = null;
 
         try {
+            // =====================================================================
+            // Pre-flight: URL-aware browser injection (bypasses LLM tool selection)
+            // =====================================================================
+            if (history.isEmpty()) {
+                buildBrowserPreflightStep(context).ifPresent(preflightStep -> {
+                    try {
+                        ToolResponse response = WorkspaceContext.run(
+                                context.sessionId(), context.userId(), context.chatId(),
+                                context.autonomyLevel(), context.agentRole(), context.channelType(),
+                                () -> toolInvoker.invoke(
+                                        preflightStep.action(), preflightStep.actionInput(), context.sessionId()));
+
+                        String observation = response.success() ? response.output()
+                                : "Browser navigation failed: " + response.output();
+                        ReasoningStep completed = preflightStep.withObservation(observation, response.success());
+                        history.add(completed);
+                        log.infof("[BrowserPreflight] Completed for session %s. Success=%s, observation=%d chars",
+                                context.sessionId(), response.success(), observation.length());
+                    } catch (Exception e) {
+                        log.warnf("[BrowserPreflight] Failed for session %s: %s - falling back to LLM tool selection",
+                                context.sessionId(), e.getMessage());
+                        // Swallow: fall through to normal LLM loop
+                    }
+                });
+            }
+
             // =====================================================================
             // Main iteration loop
             // =====================================================================
@@ -504,6 +555,11 @@ public class AgentStateMachineRunner {
         } finally {
             AgentResult res = finalResult;
             
+            // Record iteration distribution metric
+            int totalIterations = iteration - context.startingIteration();
+            meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole())
+                    .record(totalIterations);
+
             log.debugf("Loop complete for role %s", context.agentRole());
 
             loopExitPublisher.publish(context, res);
@@ -511,5 +567,72 @@ public class AgentStateMachineRunner {
                 o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res);
             });
         }
+    }
+
+    // ── Pre-flight browser interceptor ──
+
+    /**
+     * Detects a URL in the researcher's goal and builds a fast-path
+     * {@code browser_navigate} step. This completely bypasses LLM tool selection
+     * for the common "browse this URL" pattern, which small models (8B) cannot
+     * reliably route to the correct tool.
+     *
+     * <p>Only activates when ALL conditions are met:
+     * <ol>
+     *   <li>The active role is {@code researcher}</li>
+     *   <li>{@code browser_navigate} is registered AND enabled in the registry</li>
+     *   <li>The goal contains an {@code http(s)://} URL</li>
+     * </ol>
+     *
+     * <p>The returned step uses {@link ReasoningStep#fastPath} so it is
+     * exempted from "degraded response" token checks downstream.
+     */
+    private Optional<ReasoningStep> buildBrowserPreflightStep(AgentExecutionContext context) {
+        log.infof("[BrowserPreflight] Attempting pre-flight check for session=%s, role=%s, goal='%s'",
+                context.sessionId(), context.agentRole(), context.goal());
+
+        // Guard 1: researcher only
+        if (!AgentRoleEnum.RESEARCHER.toScopedName().equalsIgnoreCase(context.agentRole())) {
+            log.infof("[BrowserPreflight] Guard 1 failed: role '%s' != '%s'",
+                    context.agentRole(), AgentRoleEnum.RESEARCHER.toScopedName());
+            return Optional.empty();
+        }
+
+        // Guard 2: browser_navigate must be available and enabled
+        log.infof("[BrowserPreflight] Registered tool names: %s", toolRegistry.listTools());
+        var toolOpt = toolRegistry.findTool(ToolCapability.BROWSER_NAVIGATE.toolName());
+        if (toolOpt.isEmpty()) {
+            log.infof("[BrowserPreflight] Guard 2 failed: tool '%s' not found in registry",
+                    ToolCapability.BROWSER_NAVIGATE.toolName());
+            return Optional.empty();
+        }
+
+        boolean browserEnabled = toolOpt.map(AgentTool::isEnabled).orElse(false);
+        if (!browserEnabled) {
+            log.infof("[BrowserPreflight] Guard 2 failed: tool '%s' is present but disabled",
+                    ToolCapability.BROWSER_NAVIGATE.toolName());
+            return Optional.empty();
+        }
+
+        // Guard 3: goal must contain a URL
+        String goal = context.goal();
+        if (goal == null) {
+            log.infof("[BrowserPreflight] Guard 3 failed: goal is null");
+            return Optional.empty();
+        }
+        Matcher m = URL_PATTERN.matcher(goal);
+        if (!m.find()) {
+            log.infof("[BrowserPreflight] Guard 3 failed: no URL matched in goal '%s'", goal);
+            return Optional.empty();
+        }
+
+        String url = m.group();
+        log.infof("[BrowserPreflight] URL detected in goal for session %s, injecting browser_navigate for: %s",
+                context.sessionId(), url);
+
+        return Optional.of(ReasoningStep.fastPath(
+                "Pre-flight: URL detected in goal, navigating directly.",
+                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                Map.of("url", url, "action", "extract_text")));
     }
 }

@@ -24,6 +24,8 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.jboss.logging.Logger;
 
 /**
@@ -67,6 +69,7 @@ public class ToolStepHandler {
     private final Instance<DynamicToolLookup> dynamicToolLookup;
     private final ApprovalCheckpointManager checkpointManager;
     private final ParallelToolStepExecutor parallelExecutor;
+    private final MeterRegistry meterRegistry;
 
     @Inject
     public ToolStepHandler(ToolRegistry toolRegistry,
@@ -76,7 +79,8 @@ public class ToolStepHandler {
                            ChatMemoryWriter writer,
                            Instance<DynamicToolLookup> dynamicToolLookup,
                            ApprovalCheckpointManager checkpointManager,
-                           ParallelToolStepExecutor parallelExecutor) {
+                           ParallelToolStepExecutor parallelExecutor,
+                           MeterRegistry meterRegistry) {
         this.toolRegistry = toolRegistry;
         this.observers = observers;
         this.guard = guard;
@@ -85,6 +89,7 @@ public class ToolStepHandler {
         this.dynamicToolLookup = dynamicToolLookup;
         this.checkpointManager = checkpointManager;
         this.parallelExecutor = parallelExecutor;
+        this.meterRegistry = meterRegistry;
     }
 
     // ── Validation
@@ -322,6 +327,16 @@ public class ToolStepHandler {
     private InvokeResult invokeTool(AgentExecutionContext context,
             List<ReasoningStep> history, ReasoningStep step,
             String toolName, Map<String, Object> params) {
+        
+        var timer = Timer.builder("arcclaw.tool.invocation")
+                .description("Duration of tool execution")
+                .tag("tool", toolName)
+                .tag("role", context.agentRole())
+                .publishPercentiles(0.5, 0.95);
+
+        var sample = Timer.start(meterRegistry);
+        String exceptionClass = "none";
+        
         try {
             final String suggestedCron = (context != null && context.data() != null)
                 ? String.valueOf(context.data().get("SUGGESTED_CRON"))
@@ -345,14 +360,18 @@ public class ToolStepHandler {
                         invoker.invoke(toolName, params, context.sessionId())));
             });
         } catch (RequiresApprovalException e) {
+            exceptionClass = e.getClass().getSimpleName();
             List<ReasoningStep> historyAtPause = appendPendingStep(history, step);
             return new InvokeResult.ShortCircuit(StepDecision.terminal(
                     checkpointManager.persist(context,
                         e.getToolName(), e.getToolParametersJson(), historyAtPause,
                         context.channelType(), context.channelPlatformId())));
         } catch (Exception e) {
+            exceptionClass = e.getClass().getSimpleName();
             log.errorf("Tool invocation failed for '%s': %s", toolName, e.getMessage());
             return new InvokeResult.Responded(ToolResponse.failure(1, e.getMessage()));
+        } finally {
+            sample.stop(timer.tag("exception", exceptionClass).register(meterRegistry));
         }
     }
 

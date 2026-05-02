@@ -235,7 +235,7 @@ public class EngineStepHandler {
                 }
             }
         } catch (Exception e) {
-            return handleEngineException(e, context, llmSchemaErrorCount, iteration, history);      
+            return handleEngineException(e, context, llmSchemaErrorCount, iteration, history, transientError);      
         }
 
         if (step == null) {
@@ -256,7 +256,7 @@ public class EngineStepHandler {
     }
 
     private StepDecision handleEngineException(Exception e, AgentExecutionContext context,
-            int llmSchemaErrorCount, int iteration, List<ReasoningStep> history) {
+            int llmSchemaErrorCount, int iteration, List<ReasoningStep> history, String transientError) {
 
         LlmProviderException classified =
             LlmExceptionClassifier.classify(e);
@@ -337,6 +337,17 @@ public class EngineStepHandler {
 
                 llmSchemaErrorCount++;
                 int schemaRetryBudget = resolveSchemaRetryBudget(context.structuredOutputMode());
+                
+                String currentToolName = extractToolNameFromFailedGen(failedGen);
+                if (currentToolName != null && transientError != null && transientError.contains(currentToolName)) {
+                    log.errorf("[STATE-MACHINE] session %s repeatedly failed on deterministic tool %s - short-circuiting", 
+                            context.sessionId(), currentToolName);
+                    return StepDecision.terminal(AgentResult.failed(
+                            "The agent could not complete this request due to repeated tool schema errors with '" + currentToolName + "'. " +  
+                            "Try rephrasing your goal.",
+                            AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
+                }
+                
                 if (llmSchemaErrorCount >= schemaRetryBudget) {
                     log.errorf("[STATE-MACHINE] session %s exceeded schema self-correction limit (%d)", 
                             context.sessionId(), schemaRetryBudget);  
@@ -347,8 +358,10 @@ public class EngineStepHandler {
                 }
 
                 String correction;
+                String toolRef = currentToolName != null ? "to '" + currentToolName + "' " : "";
+                
                 if (rawError.contains("expected string, but got null")) {
-                    correction = "System: Your previous tool call failed because you included an " +
+                    correction = "System: Your previous tool call " + toolRef + "failed because you included an " +
                             "optional field with a null value. " +
                             "RULE: Omit optional fields entirely when you have no value for them. " +
                             "Retry now with only the fields that have real values.";
@@ -365,7 +378,7 @@ public class EngineStepHandler {
                         Retry now with a single flat call - one agent, one goal string.""";
 
                 } else {
-                    correction = "System: Your previous tool call was rejected due to a schema validation error: "
+                    correction = "System: Your previous tool call " + toolRef + "was rejected due to a schema validation error: "
                             + rawError
                             + ". Review the tool schema carefully, correct the invalid fields, and retry.";     
                 }
@@ -470,6 +483,17 @@ public class EngineStepHandler {
             log.debugf("extractFailedGeneration parse failed: %s", e.getMessage());
             return null;
         }
+    }
+
+    private static final Pattern TOOL_NAME_PATTERN = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"");
+
+    private String extractToolNameFromFailedGen(String failedGen) {
+        if (failedGen == null) return null;
+        Matcher m = TOOL_NAME_PATTERN.matcher(failedGen);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return null;
     }
 
     private String extractFinishAnswer(String failedGeneration) {

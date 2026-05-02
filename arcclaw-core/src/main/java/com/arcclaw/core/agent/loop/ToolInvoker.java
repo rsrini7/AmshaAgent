@@ -9,6 +9,8 @@ import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
@@ -25,6 +27,7 @@ public class ToolInvoker {
     @Inject ToolRegistry toolRegistry;
     @Inject ToolObservationSanitizer observationSanitizer;
     @Inject AgentOtelContext agentOtelContext;
+    @Inject MeterRegistry registry;
 
     /**
      * Invokes a tool and wraps exceptions into a {@link ToolResponse}.
@@ -39,6 +42,7 @@ public class ToolInvoker {
      */
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
         Span toolSpan = agentOtelContext.startToolSpan(sessionId, toolName, "invoke");
+        Timer.Sample sample = (registry != null) ? Timer.start(registry) : null;
         try (Scope scope = toolSpan.makeCurrent()) {
             ToolResponse response = toolRegistry.invokeTool(toolName, params);
             String rawObservation = response.output();
@@ -65,6 +69,9 @@ public class ToolInvoker {
             return ToolResponse.failure(1, "Tool execution error: " + e.getMessage());
         } finally {
             toolSpan.end();
+            if (sample != null && registry != null) {
+                sample.stop(registry.timer("arcclaw.tool.execution.time", "tool", toolName));
+            }
         }
     }
 }

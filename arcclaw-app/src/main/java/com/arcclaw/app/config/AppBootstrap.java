@@ -67,6 +67,7 @@ public class AppBootstrap {
         validateAndAutoFixLlmConfig(binaryDir);
         validateAndAutoFixEmbeddingConfig(binaryDir);
         validateSandboxTools(binaryDir);
+        validateMandatoryConfig();
         interactiveSetupIfNeeded(binaryDir, args);
         promptPlaywrightSetupIfNeeded(binaryDir);
         
@@ -1205,6 +1206,40 @@ public class AppBootstrap {
         } catch (Exception e) {
             log.debugf("Command %s check failed: %s", (cmd.length > 0 ? cmd[0] : "unknown"), ExceptionUtils.getRootCauseMessage(e));
             return false;
+        }
+    }
+    
+    private static void validateMandatoryConfig() {
+        String mainKey = System.getProperty("ARCCLAW_LLM_API_KEY", System.getenv("ARCCLAW_LLM_API_KEY"));
+        String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", System.getenv("ARCCLAW_LLM_PROVIDER"));
+
+        validateKey("ARCCLAW_LLM_API_KEY", mainKey, "LLM provider: " + provider);
+        
+        if (!"ollama".equalsIgnoreCase(provider)) {
+            validateKey("ARCCLAW_LLM_API_KEY", mainKey, "LLM provider: " + provider);
+        }
+
+        String braveKey = System.getProperty("BRAVE_SEARCH_API_KEY", System.getenv("BRAVE_SEARCH_API_KEY"));
+        validateKey("BRAVE_SEARCH_API_KEY", braveKey, "Web search capabilities");
+
+        String githubKey = System.getProperty("GITHUB_TOKEN", System.getenv("GITHUB_TOKEN"));
+        validateKey("GITHUB_TOKEN", githubKey, "GitHub integration tools");
+    }
+
+    private static void validateKey(String keyName, String value, String context) {
+        if (value != null && value.startsWith("changeme-")) {
+            System.err.println();
+            System.err.println("  ┌─ CRITICAL CONFIGURATION ERROR");
+            System.err.println("  │  The " + keyName + " contains a placeholder value ('" + value + "').");
+            System.err.println("  │  Purpose: " + context);
+            System.err.println("  │");
+            System.err.println("  │  Action required:");
+            System.err.println("  │  1. Open your environment configuration (e.g. .env file).");
+            System.err.println("  │  2. Replace the placeholder value with your actual API key.");
+            System.err.println("  │  3. Restart the application.");
+            System.err.println("  └──────────────────────────────");
+            System.err.println();
+            System.exit(1);
         }
     }
 }

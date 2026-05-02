@@ -3,7 +3,6 @@ package com.arcclaw.core.agent.reasoning;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.util.Comparator;
 import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -95,7 +94,11 @@ public class PromptTemplateEngine {
                 .filter(cap -> !isBackground || 
                         (!"schedule_task".equals(cap.toolName()) && 
                          !"manage_schedule".equals(cap.toolName())))
-                .sorted(Comparator.comparing(ToolCapability::toolName))
+                .sorted((c1, c2) -> {
+                    if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(c1.toolName())) return -1;
+                    if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(c2.toolName())) return 1;
+                    return c1.toolName().compareTo(c2.toolName());
+                })
                 .toList();
 
         log.debugf("Building system prompt for role %s. Enabled capabilities: %s", 
@@ -114,11 +117,15 @@ public class PromptTemplateEngine {
 
         boolean hasSandboxExec = sortedCapabilities.stream()
                 .anyMatch(c -> ToolCapability.SANDBOX_EXEC.toolName().equals(c.toolName()));
+                
+        boolean hasBrowserNavigate = sortedCapabilities.stream()
+                .anyMatch(c -> ToolCapability.BROWSER_NAVIGATE.toolName().equals(c.toolName()));
 
         var request = templateFor(role)
                 .data("roleDef", role.definition())
                 .data("sortedCapabilities", sortedCapabilities)
                 .data("hasSandboxExec", hasSandboxExec)
+                .data("hasBrowserNavigate", hasBrowserNavigate)
                 .data("compactionSummary", compactionSummary)
                 .data("systemTimeUtc", timeString);
 

@@ -144,14 +144,20 @@ public class ToolInvocationGuard {
         AgentRoleEnum resolvedRole = AgentRoleEnum.fromString(agentRole);
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
+        boolean isDelegationTool = ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName);
+        AutonomyLevel level = WorkspaceContext.requireAutonomyOrSupervised();
 
         boolean toolRequiresApproval = toolRegistry.findTool(toolName)
                 .map(tool -> tool.requiresManualApproval(params))
                 .orElse(false);
 
+        boolean isExempt = isSchedulingTool || isDelegationTool
+                || (level == AutonomyLevel.BACKGROUND && (ToolCapability.MEMORY_SEARCH.toolName().equals(toolName)
+                    || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)));
+
         if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
-                && !isSchedulingTool
-                && !AutonomyLevel.FULL.equals(WorkspaceContext.requireAutonomyOrSupervised())) {
+                && !isExempt
+                && !AutonomyLevel.FULL.equals(level)) {
 
             try {
                 String paramsJson = objectMapper.writeValueAsString(params);

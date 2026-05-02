@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.reflex.PiiScanReflex;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -114,6 +115,13 @@ public class IngestDocumentTool implements AgentTool {
         if (sessionId == null) sessionId = "no-session";
 
         IngestResult result = memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
+
+        auditService.recordMandatory(
+            WorkspaceContext.requireSessionId(), userId, WorkspaceContext.requireAgentRole(),
+            SecurityEventType.MEMORY_INGESTED,
+            String.format("label=%s length=%d snippet=%s", 
+                label, text.length(), (text.length() > 50 ? text.substring(0, 50) + "..." : text))
+        );
 
         if (result.isGlobalFallback()) {
             return ToolResponse.success(

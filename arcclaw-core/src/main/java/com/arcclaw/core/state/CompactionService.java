@@ -25,6 +25,7 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -43,6 +44,9 @@ public class CompactionService {
 
     @ConfigProperty(name = "arcclaw.memory.compaction.max-chars", defaultValue = "96000")
     long maxCharsBeforeCompaction;
+
+    @ConfigProperty(name = "arcclaw.memory.compaction.max-tokens", defaultValue = "32000")
+    int maxTokensBeforeCompaction;
 
     @Inject
     PersistentChatMemoryStore chatMemoryStore;
@@ -66,6 +70,9 @@ public class CompactionService {
 
     @Inject
     RateLimitTracker rateLimitTracker;
+
+    @Inject
+    MeterRegistry meterRegistry;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.enabled", defaultValue = "true")
     boolean enabled;
@@ -124,8 +131,7 @@ public class CompactionService {
                 .count();
         if (count > threshold) return true;
 
-        // Token-volume guard: ~4 chars per token; 96000 chars ≈ 24K tokens.
-        // Catches single-turn bloat before the message-count threshold is reached.
+        // Character-volume guard (historical fallback)
         long totalChars = allMessages.stream()
                 .mapToLong(m -> m.toString().length())
                 .sum();
@@ -134,6 +140,15 @@ public class CompactionService {
                     sessionId, totalChars);
             return true;
         }
+
+        // Token-volume guard (Heuristic: ~4 chars per token)
+        long estimatedTokens = totalChars / 4;
+        if (estimatedTokens > maxTokensBeforeCompaction) {
+            log.debugf("CompactionService token threshold exceeded for session %s: %d tokens (est)",
+                    sessionId, estimatedTokens);
+            return true;
+        }
+
         return false;
     }
 
@@ -151,6 +166,23 @@ public class CompactionService {
         if (!enabled) return false;
 
         List<ChatMessage> allMessages = chatMemoryStore.getMessages(sessionId);
+        long totalChars = allMessages.stream()
+                .mapToLong(m -> m.toString().length())
+                .sum();
+        long estimatedTokens = totalChars / 4;
+        
+        // Record context stuffing ratio
+        if (meterRegistry != null) {
+                double ratio = (double) estimatedTokens / maxTokensBeforeCompaction;
+                String tier = getRatioTier(ratio);
+                meterRegistry.summary("arcclaw.compaction.context.ratio", "tier", tier)
+                             .record(ratio);
+            }
+
+        if (log.isInfoEnabled()) {
+            log.infof("CompactionService starting for session %s (est %d tokens, ratio %.2f)",
+                    sessionId, estimatedTokens, (double) estimatedTokens / maxTokensBeforeCompaction);
+        }
         List<ChatMessage> nonSystemMessages = allMessages.stream()
                 .filter(m -> !(m instanceof SystemMessage))
                 .toList();
@@ -271,11 +303,13 @@ public class CompactionService {
                     }
                     String errorType = isRateLimit(e) ? "rate-limited" : "JSON validation failed";
                     if (i < maxRetries) {
-                        long backoffMs = (long) Math.pow(2, i) * 1000L;
+                        // Exponential Backoff: base * 2^attempt
+                        // Safety: attempt is capped by Strategy.maxAttempts (clamped to 10), so no overflow risk.
+                        long expDelay = Math.min(60000, 1000L * (1L << i));
                         log.warnf("CompactionService: %s for session %s (attempt %d/%d). Retrying in %d ms...",
-                                errorType, sessionId, i, maxRetries, backoffMs);
+                                errorType, sessionId, i, maxRetries, expDelay);
                         try {
-                            Thread.sleep(backoffMs);
+                            Thread.sleep(expDelay);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
                             throw new CompactionAbortedException("Interrupted during compaction backoff", ie);
@@ -335,6 +369,13 @@ public class CompactionService {
         String msg = e.getMessage();
         if (msg != null && (msg.contains("rate_limit_exceeded") || msg.contains("429"))) return true;
         return isRateLimit(e.getCause());  // walk the cause chain
+    }
+
+    private String getRatioTier(double ratio) {
+        if (ratio < 0.5) return "low";
+        if (ratio < 0.9) return "medium";
+        if (ratio < 1.1) return "high";
+        return "critical";
     }
 
     private String truncateSafely(String text) {

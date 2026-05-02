@@ -31,6 +31,8 @@ import com.arcclaw.mcp.tool.McpTransportType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -50,7 +52,7 @@ public class McpClientService {
 
     @Inject DynamicToolCapabilityRegistry registry;
     @Inject ObjectMapper objectMapper;
-
+    @Inject MeterRegistry meterRegistry;
     @Inject Instance<ManagedExecutor> managedExecutors;
 
     private ManagedExecutor getExecutor() {
@@ -88,6 +90,9 @@ public class McpClientService {
             ObjectNode initParams = createInitParams();
             HttpResponse<String> initResp = postJsonRpc(serverUrl, "initialize", initParams, null);
             if (initResp.statusCode() != 200) {
+                if (meterRegistry != null) {
+                    meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "initialize").increment();
+                }
                 throw new McpConnectionException(
                     "MCP initialize failed [" + initResp.statusCode() + "] for: " + serverName);
             }
@@ -100,6 +105,9 @@ public class McpClientService {
             HttpResponse<String> toolsResp = postJsonRpc(
                 serverUrl, "tools/list", objectMapper.createObjectNode(), sessionId);
             if (toolsResp.statusCode() != 200) {
+                if (meterRegistry != null) {
+                    meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "list").increment();
+                }
                 throw new McpConnectionException(
                     "MCP tools/list failed [" + toolsResp.statusCode() + "] for: " + serverName);
             }
@@ -113,6 +121,9 @@ public class McpClientService {
         } catch (McpConnectionException e) {
             throw e;
         } catch (Exception e) {
+            if (meterRegistry != null) {
+                meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "connect_exception").increment();
+            }
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new McpConnectionException(
                 "Failed to connect to HTTP MCP server: " + serverName, e);
@@ -155,6 +166,9 @@ public class McpClientService {
                     .filter(t -> t.mcpServerName().equals(serverName)).count());
 
         } catch (Exception e) {
+            if (meterRegistry != null) {
+                meterRegistry.counter("arcclaw.mcp.tool.load.failure", "server", serverName, "phase", "stdio_connect").increment();
+            }
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new McpConnectionException("Failed to connect to local MCP server via STDIO: " + serverName, e);
         }
@@ -174,29 +188,36 @@ public class McpClientService {
     @Timeout(10000)
     @Retry(maxRetries = 2, delay = 1000, retryOn = {IOException.class})
     public String invoke(String serverName, String toolName, String paramsJson) {
-        // N3: Guard reconnection logic with per-server lock to prevent race where 
-        // parallel calls strike a dead server and all try to connectStdio simultaneously.
-        ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
-        lock.lock();
-        try {
-            if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
-                log.infof("reconnecting dead MCP server: %s", serverName);
-                StdioConfig cfg = stdioConfigs.get(serverName);
-                connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
-            }
-        } finally {
-            lock.unlock();
-        }
+        var timer = Timer.builder("arcclaw.mcp.tool.invocation")
+                .tag("server", serverName)
+                .tag("tool", toolName);
+        var sample = Timer.start(meterRegistry);
+        String exceptionClass = "none";
 
-        if (processes.containsKey(serverName)) {
-            return invokeStdio(serverName, toolName, paramsJson);
-        }
-        String url = serverUrls.get(serverName);
-        if (url == null) {
-            throw new McpConnectionException(
-                "No URL registered for HTTP MCP server: " + serverName);
-        }
         try {
+            // N3: Guard reconnection logic with per-server lock to prevent race where 
+            // parallel calls strike a dead server and all try to connectStdio simultaneously.
+            ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+            lock.lock();
+            try {
+                if (!processes.containsKey(serverName) && stdioConfigs.containsKey(serverName)) {
+                    log.infof("reconnecting dead MCP server: %s", serverName);
+                    StdioConfig cfg = stdioConfigs.get(serverName);
+                    connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
+                }
+            } finally {
+                lock.unlock();
+            }
+
+            if (processes.containsKey(serverName)) {
+                return invokeStdio(serverName, toolName, paramsJson);
+            }
+            String url = serverUrls.get(serverName);
+            if (url == null) {
+                throw new McpConnectionException(
+                    "No URL registered for HTTP MCP server: " + serverName);
+            }
+
             ObjectNode callParams = createCallParams(toolName, paramsJson);
 
             HttpResponse<String> resp = postJsonRpc(
@@ -206,12 +227,17 @@ public class McpClientService {
                     "tools/call failed [" + resp.statusCode() + "] for: " + toolName);
             }
             return extractTextResult(resp.body());
+
         } catch (RuntimeException e) {
+            exceptionClass = e.getClass().getSimpleName();
             throw e;
         } catch (Exception e) {
+            exceptionClass = e.getClass().getSimpleName();
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new RuntimeException(
                 "Failed to invoke tool '" + toolName + "' on server: " + serverName, e);
+        } finally {
+            sample.stop(timer.tag("exception", exceptionClass).register(meterRegistry));
         }
     }
 

@@ -80,4 +80,23 @@ public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
           .setParameter("owner", ownerId)
           .executeUpdate();
     }
+
+    @Override
+    public boolean isLocked(String lockKey) {
+        try {
+            return retryTemplate.execute("is-locked-" + lockKey, 3, 50, () -> self.doIsLocked(lockKey));
+        } catch (Exception e) {
+            return false; // Safest fallback
+        }
+    }
+
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public boolean doIsLocked(String lockKey) {
+        Instant now = Instant.now();
+        Long count = em.createQuery("SELECT COUNT(l) FROM AdvisoryLockEntity l WHERE l.lockKey = :key AND l.expiresAt > :now", Long.class)
+          .setParameter("key", lockKey)
+          .setParameter("now", now)
+          .getSingleResult();
+        return count != null && count > 0;
+    }
 }

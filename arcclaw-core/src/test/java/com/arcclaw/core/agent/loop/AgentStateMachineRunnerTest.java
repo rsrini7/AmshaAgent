@@ -51,6 +51,7 @@ import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.exception.InvalidRequestException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -119,7 +120,7 @@ class AgentStateMachineRunnerTest {
 
         EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, new ObjectMapper(), rateLimitTracker, agentStore, 4, 6, 15, 10);
 
-        ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor);
+        ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor, new SimpleMeterRegistry());
 
         runner = new AgentStateMachineRunner(
                 engineStepHandler,
@@ -132,7 +133,10 @@ class AgentStateMachineRunnerTest {
                 loopExitPublisher,
                 finishActionHandler,
                 correctionStrategy,
-                3
+                3,
+                new SimpleMeterRegistry(),
+                toolRegistry,
+                invoker
         );
 
         lenient().when(observers.iterator()).thenReturn(Collections.emptyIterator());

@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import com.arcclaw.core.tools.ToolRegistry;
 
 /**
  * Producer for Agent persona beans.
@@ -52,45 +53,48 @@ public class AgentProducer {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    ToolRegistry toolRegistry;
+
     @Produces
     @ApplicationScoped
     @AgentRole(AgentRoleEnum.COORDINATOR_ID)
     public Agent coordinator() {
-        return new DefaultAgent(AgentPersona.VISHNU, () -> coordinatorTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.VISHNU, () -> coordinatorTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole(AgentRoleEnum.CODER_ID)
     public Agent coder() {
-        return new DefaultAgent(AgentPersona.BRAHMA, () -> coderTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.BRAHMA, () -> coderTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole(AgentRoleEnum.DEBUGGER_ID)
     public Agent debugger() {
-        return new DefaultAgent(AgentPersona.SHIVA, () -> debuggerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.SHIVA, () -> debuggerTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole(AgentRoleEnum.RESEARCHER_ID)
     public Agent researcher() {
-        return new DefaultAgent(AgentPersona.SARASWATI, () -> researcherTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.SARASWATI, () -> researcherTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole(AgentRoleEnum.ARCHITECT_ID)
     public Agent architect() {
-        return new DefaultAgent(AgentPersona.BRIHASPATI, () -> architectTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.BRIHASPATI, () -> architectTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
     }
 
     @Produces
     @ApplicationScoped
     @AgentRole(AgentRoleEnum.SYNTHESIZER_ID)
     public Agent synthesizer() {
-        return new DefaultAgent(AgentPersona.DATTATREYA, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper);
+        return new DefaultAgent(AgentPersona.DATTATREYA, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
     }
 }

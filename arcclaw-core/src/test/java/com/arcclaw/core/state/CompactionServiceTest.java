@@ -21,6 +21,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,6 +47,7 @@ class CompactionServiceTest {
         service.auditService = mockAudit;
         service.compactionModel = mockModel;
         service.objectMapper = new ObjectMapper();
+        service.meterRegistry = new SimpleMeterRegistry();
         
         service.enabled = true;
         service.threshold = 10;

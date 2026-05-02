@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.util.BackoffRetryExecutor;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -260,37 +261,30 @@ public class AsyncPersistenceEngine {
             return;
         }
 
-        int hmacRetry = 0;
-        while (true) {
-            try {
-                WorkspaceScopeHolder.run(event.getSessionId(),
+        try {
+            BackoffRetryExecutor.executeVoid(
+                "audit-drain-" + event.getEventType(),
+                new BackoffRetryExecutor.Strategy(3, 100, 500, 0.0), // Fixed delay-like for HMAC wait
+                e -> e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("HMAC key unavailable"),
+                () -> {
+                    WorkspaceScopeHolder.run(event.getSessionId(),
                         () -> persistenceAdapter.execute(
                                 event.getSessionId(),
                                 event.getEventType().toString(),
                                 event.getDbAction()));
-                if (event.getFuture() != null) event.getFuture().complete(null);
-                break;
-            } catch (IllegalStateException e) {
-                boolean isHmacFailure = e.getMessage() != null && e.getMessage().contains("HMAC key unavailable");
-                if (isHmacFailure && hmacRetry++ < 3) {
-                    log.warnf("Audit HMAC key not yet available, retry %d/3 in 100ms", hmacRetry);
-                    sleepQuietly(100);
-                    continue;
                 }
-                
-                // RESTORED: Increment failure counter on HMAC exhaustion
-                if (isHmacFailure) {
-                    registry.counter("arcclaw.audit.drain.hmac_failure").increment();
-                }
-
-                ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
-                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
-                throw cve;
-            } catch (Exception e) {
-                ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
-                if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
-                throw cve;
+            );
+            if (event.getFuture() != null) event.getFuture().complete(null);
+        } catch (Exception e) {
+            // Check if it was an HMAC failure that exhausted retries
+            boolean isHmacFailure = e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("HMAC key unavailable");
+            if (isHmacFailure) {
+                registry.counter("arcclaw.audit.drain.hmac_failure").increment();
             }
+
+            ComplianceViolationException cve = new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+            if (event.getFuture() != null) event.getFuture().completeExceptionally(cve);
+            throw cve;
         }
     }
 }

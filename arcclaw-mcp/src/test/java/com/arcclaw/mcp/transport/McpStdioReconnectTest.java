@@ -16,6 +16,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.AnnotationLiteral;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,7 @@ public class McpStdioReconnectTest {
     void setup() {
         service = new McpClientService();
         service.objectMapper = mapper;
+        service.meterRegistry = new SimpleMeterRegistry();
         
         service.managedExecutors = mock(Instance.class);
         ManagedExecutor mockExec = mock(ManagedExecutor.class);

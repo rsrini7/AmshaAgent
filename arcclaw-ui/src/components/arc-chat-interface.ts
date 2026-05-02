@@ -4,6 +4,7 @@ import { WsManager } from '../api/websocket';
 import { marked } from 'marked';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import DOMPurify from 'dompurify';
+import '@lit-labs/virtualizer';
 
 interface ChatMessage {
   id: string;
@@ -28,10 +29,13 @@ export class ArcChatInterface extends LitElement {
   @state() private _denyReason = '';
   @state() private _showDenyReason = false;
   @state() private _isTyping = false;
+  @state() private _markdownCache = new Map<string, string>();
 
   private _ws: WsManager | null = null;
   private _connecting = false;
   private _intentionalClose = false;
+  private _reconnectAttempts = 0;
+  private _reconnectTimeoutId: any = null;
 
   static styles = css`
     :host { 
@@ -52,7 +56,7 @@ export class ArcChatInterface extends LitElement {
     .status-badge {
        font-size: 10px; padding: 2px 8px; border-radius: 4px;
        text-transform: uppercase;
-    }
+     }
     .status-open { background: rgba(0,212,170,0.1); color: var(--accent-secondary); }
     .status-connecting { background: rgba(245,158,11,0.1); color: #f59e0b; }
     .status-error { background: rgba(239,68,68,0.1); color: #ef4444; }
@@ -70,8 +74,17 @@ export class ArcChatInterface extends LitElement {
     }
 
     .messages {
-      flex: 1; overflow-y: auto; display: flex; flex-direction: column;
-      gap: 20px; padding: 24px; scroll-behavior: smooth;
+      flex: 1; display: flex; flex-direction: column;
+      padding: 0; scroll-behavior: smooth;
+      /* Lit virtualizer needs a defined height or flex parent */
+      height: 100%;
+    }
+    
+    lit-virtualizer {
+      height: 100%;
+      width: 100%;
+      padding: 24px;
+      box-sizing: border-box;
     }
     
     .msg-group {
@@ -242,6 +255,8 @@ export class ArcChatInterface extends LitElement {
   }
 
   private async _connect() {
+    if (this._intentionalClose) return;
+
     let token = '';
     if (this.apiKey) {
       try {
@@ -271,16 +286,37 @@ export class ArcChatInterface extends LitElement {
           bubbles: true,
           composed: true
         }));
-        if (status === 'open' && token) {
-          this._ws?.send({ type: 'AUTH', token });
+        if (status === 'open') {
+          this._reconnectAttempts = 0;
+          if (token) this._ws?.send({ type: 'AUTH', token });
         }
         if (status === 'closed' || status === 'error') {
           this._ws = null;
+          this._scheduleReconnect();
         }
       }
     );
     this._connecting = false;
     this._ws.connect();
+  }
+
+  private _scheduleReconnect() {
+    if (this._intentionalClose || this._connecting) return;
+    
+    // Exponential backoff with jitter
+    const baseDelay = 1000;
+    const maxDelay = 30000;
+    const delay = Math.min(maxDelay, baseDelay * Math.pow(2, this._reconnectAttempts));
+    const jitter = delay * 0.2 * (Math.random() - 0.5);
+    const finalDelay = delay + jitter;
+
+    console.log(`ArcClaw: Reconnecting in ${Math.round(finalDelay)}ms (attempt ${this._reconnectAttempts + 1})`);
+    
+    if (this._reconnectTimeoutId) clearTimeout(this._reconnectTimeoutId);
+    this._reconnectTimeoutId = setTimeout(() => {
+        this._reconnectAttempts++;
+        this._connect();
+    }, finalDelay);
   }
 
   private _handleFrame(frame: any) {
@@ -315,7 +351,11 @@ export class ArcChatInterface extends LitElement {
         targetSessionId: frame.sessionId || null
       }];
       if (isApproval) this._awaitingApproval = true;
-      this._scrollToBottom();
+      // Scroll to bottom after new message
+      this.updateComplete.then(() => {
+        const virtualizer = this.shadowRoot?.querySelector('lit-virtualizer') as any;
+        if (virtualizer) virtualizer.scrollToIndex(this._messages.length - 1, 'smooth');
+      });
     }
   }
 
@@ -326,7 +366,10 @@ export class ArcChatInterface extends LitElement {
     this._ws?.send({ type: 'message', text });
     this._input = '';
     this._isTyping = true;
-    this._scrollToBottom();
+    this.updateComplete.then(() => {
+      const virtualizer = this.shadowRoot?.querySelector('lit-virtualizer') as any;
+      if (virtualizer) virtualizer.scrollToIndex(this._messages.length - 1, 'smooth');
+    });
   }
   
   private _sendApprove(msg: ChatMessage) {
@@ -367,11 +410,24 @@ export class ArcChatInterface extends LitElement {
     });
   }
   
-  private _renderMarkdown(text: string) {
+  private _renderMarkdown(messageId: string, text: string) {
     if (!text) return nothing;
-    // Sanitized markdown for security (XSS prevention)
+    
+    // SR-14: Cache rendered markdown
+    if (this._markdownCache.has(messageId)) {
+      return unsafeHTML(this._markdownCache.get(messageId)!);
+    }
+
     const rawHtml = marked.parse(text) as string;
     const cleanHtml = DOMPurify.sanitize(rawHtml);
+    
+    // Update cache (limit size to 200 items)
+    if (this._markdownCache.size > 200) {
+      const firstKey = this._markdownCache.keys().next().value;
+      if (firstKey !== undefined) this._markdownCache.delete(firstKey);
+    }
+    this._markdownCache.set(messageId, cleanHtml);
+    
     return unsafeHTML(cleanHtml);
   }
 
@@ -389,31 +445,46 @@ export class ArcChatInterface extends LitElement {
   render() {
     return html`
       <div class="messages">
-        ${this._messages.map(m => m.role === 'system' ? html`
-          <div class="msg-group msg-group-system">
-             <div class="bubble bubble-system">${m.text}</div>
-          </div>
-        ` : html`
-          <div class="msg-group msg-group-${m.role === 'user' ? 'user' : 'assistant'}">
-             <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
-               ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> ArcClaw Agent` : 'You'}
-             </div>
-             ${m.isApprovalPrompt && !m.historic ? html`
-                <div class="approval-card">
-                   <div class="approval-body">${this._renderMarkdown(m.text)}</div>
-                   <div class="approval-actions">
-                      <button class="btn-approve" @click="${() => this._sendApprove(m)}">Approve Task</button>
-                      <button class="btn-deny" @click="${() => this._sendDeny(m)}">Deny</button>
+        <lit-virtualizer
+          .items=${this._messages}
+          .renderItem=${(m: ChatMessage) => m.role === 'system' ? html`
+            <div class="msg-group msg-group-system">
+               <div class="bubble bubble-system">${m.text}</div>
+            </div>
+          ` : html`
+            <div class="msg-group msg-group-${m.role === 'user' ? 'user' : 'assistant'}">
+               <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
+                 ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> ArcClaw Agent` : 'You'}
+               </div>
+               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">
+                 ${m.role === 'user' ? m.text : this._renderMarkdown(m.id, m.text)}
+                 
+                 ${m.isApprovalPrompt && this._awaitingApproval ? html`
+                   <div class="approval-card">
+                     <div class="approval-body">
+                       <strong>Action Requires Approval</strong>
+                       <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
+                         This session has paused to wait for your permission.
+                       </p>
+                     </div>
+                     <div class="approval-actions">
+                        ${this._showDenyReason ? html`
+                          <textarea class="deny-reason" .value=${this._denyReason} 
+                            @input=${(e: any) => this._denyReason = e.target.value}
+                            placeholder="Reason for denial (optional)..."></textarea>
+                        ` : nothing}
+                        <button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button>
+                        <button class="btn-deny" @click=${() => this._sendDeny(m)}>
+                          ${this._showDenyReason ? 'Send Feedback' : 'Deny'}
+                        </button>
+                     </div>
                    </div>
-                </div>
-             ` : html`
-                <div class="bubble bubble-${m.role}">
-                  ${m.role === 'user' ? m.text : this._renderMarkdown(m.text)}
-                </div>
-             `}
-             <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
-          </div>
-        `)}
+                 ` : nothing}
+               </div>
+               <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
+            </div>
+          `}
+        ></lit-virtualizer>
         
         ${this._isTyping ? html`
           <div class="typing">

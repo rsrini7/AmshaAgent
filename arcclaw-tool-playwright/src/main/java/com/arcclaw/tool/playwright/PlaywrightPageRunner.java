@@ -15,6 +15,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -35,7 +36,6 @@ import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -103,6 +103,11 @@ public class PlaywrightPageRunner {
      */
     private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
 
+    @PostConstruct
+    void init() {
+        this.runtimeEnabled = configEnabled;
+    }
+
     public boolean isEnabled() {
         return runtimeEnabled;
     }
@@ -112,9 +117,9 @@ public class PlaywrightPageRunner {
     }
 
     void onStart(@Observes StartupEvent ev) {
-        this.runtimeEnabled = configEnabled;
 
-        if (ImageInfo.inImageRuntimeCode()) {
+        String imageCode = System.getProperty("org.graalvm.nativeimage.imagecode");
+        if ("runtime".equals(imageCode)) {
             log.warn("[PlaywrightPageRunner] GraalVM native image detected - browser_navigate disabled " +
                      "(Playwright Java bindings are incompatible with native image).");
             this.runtimeEnabled = false;
