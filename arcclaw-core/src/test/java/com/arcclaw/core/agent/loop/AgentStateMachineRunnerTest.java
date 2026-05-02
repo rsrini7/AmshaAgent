@@ -134,7 +134,9 @@ class AgentStateMachineRunnerTest {
                 finishActionHandler,
                 correctionStrategy,
                 3,
-                new SimpleMeterRegistry()
+                new SimpleMeterRegistry(),
+                toolRegistry,
+                invoker
         );
 
         lenient().when(observers.iterator()).thenReturn(Collections.emptyIterator());
