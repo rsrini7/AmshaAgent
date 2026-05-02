@@ -2,6 +2,7 @@ package com.arcclaw.tool.playwright;
 
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.HashMap;
@@ -136,6 +137,38 @@ public class PlaywrightPageRunner {
                         System.currentTimeMillis() - t0, headless);
                 initFuture.complete(null);
             } catch (Exception e) {
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                if (msg.contains("Executable doesn't exist") || msg.contains("Chromium binary not found") || msg.contains("Failed to create Playwright")) {
+                    try {
+                        String bPath = System.getProperty("PLAYWRIGHT_BROWSERS_PATH", System.getenv("PLAYWRIGHT_BROWSERS_PATH"));
+                        if (bPath != null && !bPath.isBlank()) {
+                            Path resolvedPath = Path.of(bPath).toAbsolutePath().normalize();
+                            try {
+                                Class<?> clazz = Class.forName("com.arcclaw.app.config.PlaywrightBrowserInstaller");
+                                Method m = clazz.getMethod("installChromium", Path.class);
+                                m.invoke(null, resolvedPath);
+                            } catch (Exception ex) {
+                                log.warnf("[PlaywrightPageRunner] Could not invoke PlaywrightBrowserInstaller: %s", ex.getMessage());
+                            }
+                        }
+                            
+                            long t0 = System.currentTimeMillis();
+                            Map<String, String> env = resolvePlaywrightEnv();
+                            if (playwright != null) {
+                                try { playwright.close(); } catch (Exception ignored) {}
+                            }
+                            playwright = Playwright.create(new Playwright.CreateOptions().setEnv(env));
+                            browser = playwright.chromium().launch(
+                                new BrowserType.LaunchOptions().setHeadless(headless)
+                            );
+                            log.infof("Playwright Chromium ready after auto-install in %dms (headless=%s)",
+                                    System.currentTimeMillis() - t0, headless);
+                            initFuture.complete(null);
+                            return;
+                    } catch (Exception ex) {
+                        log.error("Programmatic installation/launch retry failed", ex);
+                    }
+                }
                 handleInitFailure(e);
                 initFuture.completeExceptionally(e);
             }
