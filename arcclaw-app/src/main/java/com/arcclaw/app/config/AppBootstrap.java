@@ -1130,6 +1130,12 @@ public class AppBootstrap {
             } else if (tr.startsWith("n")) {
                 patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
                 System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+                System.err.println();
+                System.err.println("  ✓ Playwright has been disabled. It will not ask again.");
+                System.err.println("    To enable it manually in the future, set in your .env:");
+                System.err.println("      ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true");
+                System.err.println("  ✓ Moving forward with normal boot - starting ArcClaw...");
+                System.err.println();
             }
         } else if (tr.startsWith("y")) {
             patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
