@@ -57,29 +57,92 @@ public class ReasoningStepParser {
 
         if (aiMessage.hasToolExecutionRequests()) {
             List<ToolExecutionRequest> requests = aiMessage.toolExecutionRequests();
-
             if (requests.size() == 1) {
-                ToolExecutionRequest req = requests.getFirst();
-                log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
+                return handleSingleToolCall(sessionId, aiMessage, requests.getFirst(), inputTokens, outputTokens);
+            }
+            if (requests.size() > 1) {
+                return handleMultipleToolCalls(sessionId, agentRole, aiMessage, requests, inputTokens, outputTokens);
+            }
+        }
+        
+        return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH,
+                Map.of("answer", aiMessage.text() != null ? aiMessage.text() : ""),
+                inputTokens, outputTokens);
+    }
 
-                String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
+    private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
+        log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
+
+        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
+                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+
+        if (ToolCapability.SANDBOX_EXEC.toolName().equals(req.name()) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
+            String code = recoverCodeForDisplay(req.arguments());
+            if (code != null && !code.isBlank()) {
+                log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
+                String language = textPatternUtils.inferLanguage(code);
+                String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
+                return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, 
+                        Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
+            }
+        }
+
+        Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
+        if (actionInput.containsKey("__error")) {
+            return ReasoningStep.schemaError(
+                    "System: Your previous response contained invalid JSON. " +
+                            "Correct the format and retry. Error: " + actionInput.get("__error"),
+                    inputTokens, outputTokens
+            );
+        }
+
+        if (ToolCapability.MEMORY_SEARCH.toolName().equals(req.name())) {
+            String query = (String) actionInput.get("query");
+            if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
+                String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
                         ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-
-                // ── Execution-Follow-Up Interception (§Bug-Fix-1) ──
-                // If the tool is sandbox_exec, but the user DID NOT ask to execute or run code,
-                // convert this call into a FINISH step with the code from params.
-                if (ToolCapability.SANDBOX_EXEC.toolName().equals(req.name()) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
-                    String code = recoverCodeForDisplay(req.arguments());
-                    if (code != null && !code.isBlank()) {
-                        log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
-                        String language = textPatternUtils.inferLanguage(code);
-                        String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
-                        return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, 
-                                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
-                    }
+                if (rawGoalUpdated != null && !rawGoalUpdated.isBlank()) {
+                    log.infof("Issue 7: Replacing garbled memory_search query '%s' with raw user goal", query);
+                    actionInput.put("query", rawGoalUpdated);
+                    query = rawGoalUpdated;
                 }
+            }
 
-                Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
+            if (query == null || query.isBlank()) {
+                log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", req.name(), sessionId);
+                return ReasoningStep.schemaError(
+                    "System: The 'query' parameter for '" + req.name() + "' cannot be blank. " +
+                    "Please provide factual keywords for the search.",
+                    inputTokens, outputTokens
+                );
+            }
+        }
+
+        return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
+    }
+
+    private ReasoningStep handleMultipleToolCalls(String sessionId, String agentRole, AiMessage aiMessage, List<ToolExecutionRequest> requests, int inputTokens, int outputTokens) {
+        log.infof("[PARALLEL-TOOLS] session=%s role=%s: LLM issued %d parallel " +
+                  "tool calls: %s - routing to ParallelToolStepExecutor.",
+                  sessionId, agentRole, requests.size(),
+                  requests.stream()
+                      .map(ToolExecutionRequest::name)
+                      .collect(Collectors.joining(", ")));
+
+        List<ParallelToolCall> calls = new ArrayList<>();
+        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound()
+                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+
+        if (isSchedulingGoal(rawGoal)) {
+            ToolExecutionRequest scheduleRequest = requests.stream()
+                    .filter(r -> ToolCapability.SCHEDULE_TASK.toolName().equals(r.name()))
+                    .findFirst()
+                    .orElse(null);
+            if (scheduleRequest != null) {
+                log.warnf("[PARALLEL-TOOLS] session=%s scheduling goal emitted mixed parallel tools; " +
+                          "collapsing to schedule_task only.", sessionId);
+                Map<String, Object> actionInput = deserializeParams(sessionId, scheduleRequest.name(),
+                        scheduleRequest.arguments());
                 if (actionInput.containsKey("__error")) {
                     return ReasoningStep.schemaError(
                             "System: Your previous response contained invalid JSON. " +
@@ -87,134 +150,56 @@ public class ReasoningStepParser {
                             inputTokens, outputTokens
                     );
                 }
-
-                // §Bug4: Validation for blank required parameters
-                if (ToolCapability.MEMORY_SEARCH.toolName().equals(req.name())) {
-                    String query = (String) actionInput.get("query");
-                    
-                    // §Issue 7: Fallback to raw user goal if query looks garbled or empty
-                    if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
-                        String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
-                                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-                        
-                        if (rawGoalUpdated != null && !rawGoalUpdated.isBlank()) {
-                            log.infof("Issue 7: Replacing garbled memory_search query '%s' with raw user goal", query);
-                            actionInput.put("query", rawGoalUpdated);
-                            query = rawGoalUpdated;
-                        }
-                    }
-
-                    if (query == null || query.isBlank()) {
-                        log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", req.name(), sessionId);
-                        return ReasoningStep.schemaError(
-                            "System: The 'query' parameter for '" + req.name() + "' cannot be blank. " +
-                            "Please provide factual keywords for the search.",
-                            inputTokens, outputTokens
-                        );
-                    }
-                }
-
-                return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
-            }
-
-            if (requests.size() > 1) {
-                log.infof("[PARALLEL-TOOLS] session=%s role=%s: LLM issued %d parallel " +
-                          "tool calls: %s - routing to ParallelToolStepExecutor.",
-                          sessionId, agentRole, requests.size(),
-                          requests.stream()
-                              .map(ToolExecutionRequest::name)
-                              .collect(Collectors.joining(", ")));
-
-                List<ParallelToolCall> calls = new ArrayList<>();
-                String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound()
-                        ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-
-                if (isSchedulingGoal(rawGoal)) {
-                    ToolExecutionRequest scheduleRequest = requests.stream()
-                            .filter(r -> ToolCapability.SCHEDULE_TASK.toolName().equals(r.name()))
-                            .findFirst()
-                            .orElse(null);
-                    if (scheduleRequest != null) {
-                        log.warnf("[PARALLEL-TOOLS] session=%s scheduling goal emitted mixed parallel tools; " +
-                                  "collapsing to schedule_task only.", sessionId);
-                        Map<String, Object> actionInput = deserializeParams(sessionId, scheduleRequest.name(),
-                                scheduleRequest.arguments());
-                        if (actionInput.containsKey("__error")) {
-                            return ReasoningStep.schemaError(
-                                    "System: Your previous response contained invalid JSON. " +
-                                            "Correct the format and retry. Error: " + actionInput.get("__error"),
-                                    inputTokens, outputTokens
-                            );
-                        }
-                        return ReasoningStep.pending(aiMessage.text(), scheduleRequest.name(),
-                                actionInput, inputTokens, outputTokens);
-                    }
-                }
-
-                // §Anti-Parallel-Storage: Code-level enforcement.
-                if (requests.stream().allMatch(r -> ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))) {
-                    log.warnf("[PARALLEL-TOOLS] session=%s: LLM violated anti-parallel storage rule. Merging.", sessionId);
-                    String mergedText = requests.stream()
-                        .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
-                        .filter(p -> !p.containsKey("__error"))
-                        .map(p -> p.get("text") != null ? p.get("text") : (p.get("content") != null ? p.get("content") : p.get("value")))
-                        .filter(Objects::nonNull)
-                        .map(Object::toString)
-                        .collect(Collectors.joining(", "));
-                    String mergedLabel = requests.stream()
-                        .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
-                        .filter(p -> !p.containsKey("__error"))
-                        .map(p -> p.get("label") != null ? p.get("label") : p.get("category"))
-                        .filter(Objects::nonNull)
-                        .map(Object::toString)
-                        .findFirst().orElse("user_facts");
-                    Map<String, Object> mergedParams = Map.of("label", mergedLabel, "text", mergedText);
-                    return ReasoningStep.pending(aiMessage.text(), ToolCapability.INGEST_DOCUMENT.toolName(), mergedParams, inputTokens, outputTokens);
-                }
-
-                for (int i = 0; i < requests.size(); i++) {
-                    ToolExecutionRequest req = requests.get(i);
-                    // §7.19: callId must be non-null for merge loop correctness.
-                    // Ollama does not provide tool call IDs - generate stable fallback.
-                    String callId = req.id() != null
-                        ? req.id()
-                        : req.name() + "-" + UUID.randomUUID();
-                    Map<String, Object> params = deserializeParams(sessionId, req.name(), req.arguments());
-                    String paramsJson = "{}";
-                    try {
-                        paramsJson = objectMapper.writeValueAsString(params);
-                    } catch (Exception e) {
-                        log.warnf("Failed to serialize params for tool %s: %s", req.name(), e.getMessage());
-                    }
-                    calls.add(ParallelToolCall.pending(callId, req.name(), params, paramsJson));
-                }
-
-                Map<String, Object> batchPayload;
-                try {
-                    String batchJson = objectMapper.writeValueAsString(calls);
-                    batchPayload = Map.of("batch", batchJson);
-                } catch (Exception e) {
-                    log.errorf("Failed to serialize parallel batch for session %s: %s",
-                               sessionId, e.getMessage());
-                    log.warnf("[PARALLEL-TOOLS] Serialization failure - " +
-                              "falling back to first tool '%s' only.", requests.getFirst().name());
-                    ToolExecutionRequest req = requests.getFirst();
-                    Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
-                    return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
-                }
-
-                return ReasoningStep.parallelBatch(
-                    aiMessage.text(),
-                    batchPayload,
-                    inputTokens,
-                    outputTokens
-                );
+                return ReasoningStep.pending(aiMessage.text(), scheduleRequest.name(),
+                        actionInput, inputTokens, outputTokens);
             }
         }
-        
-        return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH,
-                Map.of("answer", aiMessage.text() != null ? aiMessage.text() : ""),
-                inputTokens, outputTokens);
+
+        if (requests.stream().allMatch(r -> ToolCapability.INGEST_DOCUMENT.toolName().equals(r.name()))) {
+            log.warnf("[PARALLEL-TOOLS] session=%s: LLM violated anti-parallel storage rule. Merging.", sessionId);
+            String mergedText = requests.stream()
+                .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
+                .filter(p -> !p.containsKey("__error"))
+                .map(p -> p.get("text") != null ? p.get("text") : (p.get("content") != null ? p.get("content") : p.get("value")))
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
+            String mergedLabel = requests.stream()
+                .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
+                .filter(p -> !p.containsKey("__error"))
+                .map(p -> p.get("label") != null ? p.get("label") : p.get("category"))
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .findFirst().orElse("user_facts");
+            Map<String, Object> mergedParams = Map.of("label", mergedLabel, "text", mergedText);
+            return ReasoningStep.pending(aiMessage.text(), ToolCapability.INGEST_DOCUMENT.toolName(), mergedParams, inputTokens, outputTokens);
+        }
+
+        for (int i = 0; i < requests.size(); i++) {
+            ToolExecutionRequest req = requests.get(i);
+            String callId = req.id() != null ? req.id() : req.name() + "-" + UUID.randomUUID();
+            Map<String, Object> params = deserializeParams(sessionId, req.name(), req.arguments());
+            String paramsJson = "{}";
+            try {
+                paramsJson = objectMapper.writeValueAsString(params);
+            } catch (Exception e) {
+                log.warnf("Failed to serialize params for tool %s: %s", req.name(), e.getMessage());
+            }
+            calls.add(ParallelToolCall.pending(callId, req.name(), params, paramsJson));
+        }
+
+        Map<String, Object> batchPayload;
+        try {
+            String batchJson = objectMapper.writeValueAsString(calls);
+            batchPayload = Map.of("batch", batchJson);
+        } catch (Exception e) {
+            log.errorf("Failed to serialize parallel batch for session %s: %s", sessionId, e.getMessage());
+            ToolExecutionRequest req = requests.getFirst();
+            Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
+            return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
+        }
+
+        return ReasoningStep.parallelBatch(aiMessage.text(), batchPayload, inputTokens, outputTokens);
     }
 
     private Map<String, Object> deserializeParams(String sessionId, String toolName, String argsJson) {

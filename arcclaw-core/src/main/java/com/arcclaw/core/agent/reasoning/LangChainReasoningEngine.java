@@ -92,6 +92,43 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 : history;
 
         String targetLanguage = textPatternUtils.goalMentionsLanguage(context.goal());
+
+        ReasoningStep fastPathStep = tryFastPath(context, agentRole, history, cappedHistory, targetLanguage, sessionId);
+        if (fastPathStep != null) return fastPathStep;
+
+        boolean isTruncationRecovery = context.getTruncationRetryCount() > 0;
+        String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal, isTruncationRecovery);
+
+        String finalGoal = buildFinalGoal(context, agentRole, goal, cappedHistory);
+
+        boolean isWriteIntent = intentClassifier.isWriteIntent(goal);
+        boolean isSimpleChitchat = intentClassifier.isSimpleConversational(goal);
+        boolean isHistoryQuery = intentClassifier.isHistoryQuery(goal);
+        if (isWriteIntent || isHistoryQuery || AgentRoleEnum.CODER.id().equalsIgnoreCase(agentRole)
+                || AgentRoleEnum.RESEARCHER.id().equalsIgnoreCase(agentRole) || AgentRoleEnum.DEBUGGER.id().equalsIgnoreCase(agentRole)) {
+            isSimpleChitchat = false;
+        }
+
+        Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
+        ReasoningMessageAssembler.AssembledMessages assembled = messageAssembler.assemble(
+                context, agentRole, finalGoal, cappedHistory, systemPrompt, allowedTools,
+                isWriteIntent, isSimpleChitchat, isHistoryQuery);
+
+        ChatRequest request = assembled.tools().isEmpty()
+                ? ChatRequest.builder().messages(assembled.messages()).build()
+                : ChatRequest.builder().messages(assembled.messages()).toolSpecifications(assembled.tools()).build();
+
+        ChatResponse response;
+        try {
+            response = executeLlmStep(isSimpleChitchat, context, isWriteIntent, request);
+        } catch (Exception e) {
+            return handleLlmException(e, history, sessionId, targetLanguage, context, goal, isWriteIntent, agentRole);
+        }
+
+        return parseAndValidateStep(response, sessionId, agentRole, history, context, isWriteIntent, targetLanguage);
+    }
+
+    private ReasoningStep tryFastPath(AgentExecutionContext context, String agentRole, List<ReasoningStep> history, List<ReasoningStep> cappedHistory, String targetLanguage, String sessionId) {
         boolean hasRecentExecution = history != null && history.stream().anyMatch(s ->
                 ToolCapability.SANDBOX_EXEC.toolName().equals(s.action()) && Boolean.TRUE.equals(s.success()));
 
@@ -110,130 +147,109 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                 }
             }
         }
+        return null;
+    }
 
-        boolean isTruncationRecovery = context.getTruncationRetryCount() > 0;
-        String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal, isTruncationRecovery);
-
+    private String buildFinalGoal(AgentExecutionContext context, String agentRole, String goal, List<ReasoningStep> cappedHistory) {
         String finalGoal = goal;
         if (AgentRoleEnum.CODER.id().equals(agentRole) && textPatternUtils.goalRequestsExecution(context.goal()) && !context.isForceFinishRetry()) {
              long observeCount = cappedHistory == null ? 0 : cappedHistory.stream()
                      .skip(context.getCheckpointRestoreOffset()).filter(s -> ReasoningStep.OBSERVE.equals(s.action())).count();
              if (observeCount == 0) finalGoal = goal + "\n\nSTRICT: You MUST execute code via sandbox_exec. Do NOT just write prose.";
         }
+        return finalGoal;
+    }
 
-        boolean isWriteIntent = intentClassifier.isWriteIntent(goal);
-        boolean isSimpleChitchat = intentClassifier.isSimpleConversational(goal);
-        boolean isHistoryQuery = intentClassifier.isHistoryQuery(goal);
-        
-        if (isWriteIntent || isHistoryQuery 
-                || AgentRoleEnum.CODER.id().equalsIgnoreCase(agentRole)
-                || AgentRoleEnum.RESEARCHER.id().equalsIgnoreCase(agentRole)
-                || AgentRoleEnum.DEBUGGER.id().equalsIgnoreCase(agentRole)) {
-            isSimpleChitchat = false;
-        }
-        
-        Set<String> allowedTools = roleRegistry.permittedTools(AgentRoleEnum.fromString(agentRole));
-        ReasoningMessageAssembler.AssembledMessages assembled = messageAssembler.assemble(
-                context, agentRole, finalGoal, cappedHistory, systemPrompt, allowedTools,
-                isWriteIntent, isSimpleChitchat, isHistoryQuery);
+    private ChatResponse executeLlmStep(boolean isSimpleChitchat, AgentExecutionContext context, boolean isWriteIntent, ChatRequest request) {
+        boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
+        return ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
+                .where(WorkspaceContext.IS_COMPACT, isCompact)
+                .call(() -> llmProviderPort.nextStep(request));
+    }
 
-        ChatRequest request = assembled.tools().isEmpty()
-                ? ChatRequest.builder().messages(assembled.messages()).build()
-                : ChatRequest.builder().messages(assembled.messages()).toolSpecifications(assembled.tools()).build();
+    private ReasoningStep handleLlmException(Exception e, List<ReasoningStep> history, String sessionId, String targetLanguage, AgentExecutionContext context, String goal, boolean isWriteIntent, String agentRole) {
+        Throwable effective = (e.getClass() == Exception.class && e.getCause() != null) ? e.getCause() : e;
+        if (effective instanceof LlmMalformedResponseException ex) throw ex;
 
-        ChatResponse response;
-        try {
-            boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
-            try {
-                response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
-                        .where(WorkspaceContext.IS_COMPACT, isCompact)
-                        .call(() -> llmProviderPort.nextStep(request));
-            } catch (Exception e) {
-                throw e;
-            }
+        if (effective instanceof LlmToolCallException ex) {
+            String msg = ex.getMessage();
+            if (recoveryProcessor.isProseGenerationFailure(msg)) {
+                String extractedProse = recoveryProcessor.extractProseFromFailedGeneration(msg);
+                int truncationRetryCount = validator.countTruncationAttempts(history);
 
-        } catch (Exception e) {
-            Throwable effective = (e.getClass() == Exception.class && e.getCause() != null) ? e.getCause() : e;
-            if (effective instanceof LlmMalformedResponseException ex) throw ex;
+                if (extractedProse != null && (recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse) || truncationRetryCount >= 2)) {
+                    String partialCode = recoveryProcessor.extractPartialCodeFromTruncatedJson(extractedProse);
+                    if (partialCode == null && truncationRetryCount >= 2) partialCode = extractedProse.strip();
 
-            if (effective instanceof LlmToolCallException ex) {
-                String msg = ex.getMessage();
-                if (recoveryProcessor.isProseGenerationFailure(msg)) {
-                    String extractedProse = recoveryProcessor.extractProseFromFailedGeneration(msg);
-                    int truncationRetryCount = validator.countTruncationAttempts(history);
-
-                    if (extractedProse != null && (recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse) || truncationRetryCount >= 2)) {
-                        String partialCode = recoveryProcessor.extractPartialCodeFromTruncatedJson(extractedProse);
-                        if (partialCode == null && truncationRetryCount >= 2) partialCode = extractedProse.strip();
-
-                        if (partialCode != null && !partialCode.isBlank()) {
-                            String lang = textPatternUtils.inferLanguage(partialCode);
-                            boolean looksLikeCode = partialCode.contains("func ") || partialCode.contains("package ") || partialCode.contains("def ") || partialCode.contains("public class ");
-                            if (targetLanguage == null || targetLanguage.equalsIgnoreCase(lang) || (lang == null && looksLikeCode)) {
-                                log.infof("[LangChainReasoningEngine] Recovered partial code from truncation for session %s", sessionId);
-                                RecoveryProcessor.CodeBlock extracted = recoveryProcessor.extractCodeBlockFromText(partialCode);
-                                if (extracted != null && extracted.code() != null) {
-                                    partialCode = extracted.code();
-                                    lang = extracted.language();
-                                }
-                                String markdown = String.format("```%s\n%s\n```", lang != null ? lang : "", partialCode);
-                                return ReasoningStep.pending("Extracted code after repeated truncation attempts.",
-                                        ReasoningStep.FINISH, Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), 0, 0);
+                    if (partialCode != null && !partialCode.isBlank()) {
+                        String lang = textPatternUtils.inferLanguage(partialCode);
+                        boolean looksLikeCode = partialCode.contains("func ") || partialCode.contains("package ") || partialCode.contains("def ") || partialCode.contains("public class ");
+                        if (targetLanguage == null || targetLanguage.equalsIgnoreCase(lang) || (lang == null && looksLikeCode)) {
+                            log.infof("[LangChainReasoningEngine] Recovered partial code from truncation for session %s", sessionId);
+                            RecoveryProcessor.CodeBlock extracted = recoveryProcessor.extractCodeBlockFromText(partialCode);
+                            if (extracted != null && extracted.code() != null) {
+                                partialCode = extracted.code();
+                                lang = extracted.language();
                             }
+                            String markdown = String.format("```%s\n%s\n```", lang != null ? lang : "", partialCode);
+                            return ReasoningStep.pending("Extracted code after repeated truncation attempts.",
+                                    ReasoningStep.FINISH, Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), 0, 0);
                         }
                     }
-
-                    if (extractedProse != null && recoveryProcessor.looksLikeTruncatedOrPartialCode(extractedProse)) {
-                        log.warnf("[LangChainReasoningEngine] Truncated/partial code detected for session %s", sessionId);
-                        context.incrementTruncationRetry();
-                        return ReasoningStep.pending("Response was truncated", "OBSERVE", Map.of(), 0, 0)
-                                .withTruncationRecovery(true)
-                                .withObservation("Your previous response was cut off. provide the code using a FINISH answer first.");
-                    }
-
-                    if (extractedProse != null && !extractedProse.isBlank()) {
-                        if (recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse)) {
-                            return ReasoningStep.pending("Embedded sandbox_exec call", "OBSERVE", Map.of(), 0, 0)
-                                    .withObservation("CORRECTION: Call sandbox_exec DIRECTLY as your only output.");
-                        }
-
-                        if (textPatternUtils.goalRequestsExecution(goal)) {
-                            String errorObs = history.stream().filter(s -> Boolean.FALSE.equals(s.success()) && s.observation() != null)
-                                    .map(ReasoningStep::observation).reduce((_, second) -> second).orElse(null);
-                            String hint = "STOP. EXECUTE the code - not explain it. Call sandbox_exec RIGHT NOW.";
-                            if (errorObs != null) hint = "Previous execution failed:\n" + errorObs + "\n\n" + hint;
-                            return ReasoningStep.pending("LLM returned prose instead of executing", "OBSERVE", Map.of(), 0, 0).withObservation(hint);
-                        }
-
-                        if (isWriteIntent && !validator.historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {
-                            return ReasoningStep.pending("LLM wrote prose for write-intent", "OBSERVE", Map.of(), 0, 0)
-                                    .withObservation("CORRECTION: The user wants to STORE data. Call ingest_document RIGHT NOW.");
-                        }
-
-                        if (AgentRoleEnum.COORDINATOR.id().equals(agentRole)) {
-                            return ReasoningStep.pending("LLM generated valid prose", "FINISH", Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, extractedProse), 0, 0);
-                        }
-
-                        if (AgentRoleEnum.CODER.id().equals(agentRole) && textPatternUtils.goalRequestsExecution(goal) && recoveryProcessor.proseIsUnexecutedCodePlan(extractedProse)) {
-                            return ReasoningStep.systemMessage("STOP. You must EXECUTE code. Call sandbox_exec RIGHT NOW.");
-                        }
-                    }
-
-                    return ReasoningStep.pending("Generated raw text instead of FINISH", "OBSERVE", Map.of(), 0, 0)
-                            .withObservation("You must respond using FINISH[answer=<content>].");
                 }
-                throw ex;
-            }
 
-            if (effective instanceof LlmRateLimitException) {
-                meterRegistry.counter("arcclaw.llm.rate_limit.hit").increment();
-                rateLimitTracker.recordHit("primary");
-                throw (LlmRateLimitException) effective;
+                if (extractedProse != null && recoveryProcessor.looksLikeTruncatedOrPartialCode(extractedProse)) {
+                    log.warnf("[LangChainReasoningEngine] Truncated/partial code detected for session %s", sessionId);
+                    context.incrementTruncationRetry();
+                    return ReasoningStep.pending("Response was truncated", "OBSERVE", Map.of(), 0, 0)
+                            .withTruncationRecovery(true)
+                            .withObservation("Your previous response was cut off. provide the code using a FINISH answer first.");
+                }
+
+                if (extractedProse != null && !extractedProse.isBlank()) {
+                    if (recoveryProcessor.containsEmbeddedSandboxToolCall(extractedProse)) {
+                        return ReasoningStep.pending("Embedded sandbox_exec call", "OBSERVE", Map.of(), 0, 0)
+                                .withObservation("CORRECTION: Call sandbox_exec DIRECTLY as your only output.");
+                    }
+
+                    if (textPatternUtils.goalRequestsExecution(goal)) {
+                        String errorObs = history.stream().filter(s -> Boolean.FALSE.equals(s.success()) && s.observation() != null)
+                                .map(ReasoningStep::observation).reduce((_, second) -> second).orElse(null);
+                        String hint = "STOP. EXECUTE the code - not explain it. Call sandbox_exec RIGHT NOW.";
+                        if (errorObs != null) hint = "Previous execution failed:\n" + errorObs + "\n\n" + hint;
+                        return ReasoningStep.pending("LLM returned prose instead of executing", "OBSERVE", Map.of(), 0, 0).withObservation(hint);
+                    }
+
+                    if (isWriteIntent && !validator.historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {
+                        return ReasoningStep.pending("LLM wrote prose for write-intent", "OBSERVE", Map.of(), 0, 0)
+                                .withObservation("CORRECTION: The user wants to STORE data. Call ingest_document RIGHT NOW.");
+                    }
+
+                    if (AgentRoleEnum.COORDINATOR.id().equals(agentRole)) {
+                        return ReasoningStep.pending("LLM generated valid prose", "FINISH", Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, extractedProse), 0, 0);
+                    }
+
+                    if (AgentRoleEnum.CODER.id().equals(agentRole) && textPatternUtils.goalRequestsExecution(goal) && recoveryProcessor.proseIsUnexecutedCodePlan(extractedProse)) {
+                        return ReasoningStep.systemMessage("STOP. You must EXECUTE code. Call sandbox_exec RIGHT NOW.");
+                    }
+                }
+
+                return ReasoningStep.pending("Generated raw text instead of FINISH", "OBSERVE", Map.of(), 0, 0)
+                        .withObservation("You must respond using FINISH[answer=<content>].");
             }
-            if (effective instanceof RuntimeException re) throw re;
-            throw new RuntimeException(effective);
+            throw ex;
         }
 
+        if (effective instanceof LlmRateLimitException) {
+            meterRegistry.counter("arcclaw.llm.rate_limit.hit").increment();
+            rateLimitTracker.recordHit("primary");
+            throw (LlmRateLimitException) effective;
+        }
+        if (effective instanceof RuntimeException re) throw re;
+        throw new RuntimeException(effective);
+    }
+
+    private ReasoningStep parseAndValidateStep(ChatResponse response, String sessionId, String agentRole, List<ReasoningStep> history, AgentExecutionContext context, boolean isWriteIntent, String targetLanguage) {
         ReasoningStep parsedStep = stepParser.parse(sessionId, agentRole, response);
 
         if (ReasoningStep.FINISH.equals(parsedStep.action()) && isWriteIntent && !validator.historyAlreadyContains(history, ToolCapability.INGEST_DOCUMENT.toolName())) {

@@ -79,27 +79,10 @@ public class CommandDispatchHandler implements MessageHandler {
                 yield HandleResult.STOP;
             }     
             case ChannelCommand.Start s -> {
-                // Telegram sends /start on first open and after the user presses the Start button.
-                // Deep-link payload (e.g. /start approve_xyz) is forwarded to the reflex chain
-                // so future inline-button flows work without any further changes.
                 if (s.payload().isPresent()) {
-                    String payloadInput = s.payload().get();
-                    log.debugf("[CommandDispatch] /start with deep-link payload '%s' - routing to reflexes",
-                            payloadInput);
-                    dispatch(context, payloadInput);  // reuse existing dispatch → reflex chain
+                    dispatch(context, s.payload().get());
                 } else {
-                    channelPluginRegistry.find(context.getChannelType())
-                        .map(ChannelPlugin::sender)
-                        .ifPresent(sender -> sender.sendRaw(context.getUser(),
-                            "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
-                            + "Just type your question or task in plain text.\n\n"
-                            + "*Commands:*\n"
-                            + "/cron - list scheduled tasks\n"
-                            + "/status - session state\n"
-                            + "/history - conversation history\n"
-                            + "/reset - clear this session\n"
-                            + "/halt - stop current task\n"
-                            + "/approve · /deny - HITL approvals"));
+                    sendWelcomeMessage(context);
                 }
                 yield HandleResult.STOP;
             }
@@ -108,86 +91,87 @@ public class CommandDispatchHandler implements MessageHandler {
                 yield HandleResult.STOP;
             }
             case ChannelCommand.DeleteCron dc -> {
-                String input = dc.cronId()
-                        .map(id -> "deletecron " + id)
-                        .orElse("deletecron");
+                String input = dc.cronId().map(id -> "deletecron " + id).orElse("deletecron");
                 dispatch(context, input);
                 yield HandleResult.STOP;
             }
-            case ChannelCommand.Unknown u -> {
-                // Centralized time resolution for scheduling hints
-                TimeContextInjector.inject(context, context.getMessage().text(), defaultTimezone);
-
-                // Check reflexes for ALL unknown inputs, not just slashes.
-                // This allows 'store FOO=bar' to be pre-parsed by reflexes.
-                String sessionId = context.getSessionId().orElse("");
-                String userId = context.getUser().platformId();
-                String chatId = context.getChatId();
-
-                ReflexResult result = null;
-                try {
-                    result = WorkspaceContext.run(
-                        sessionId, userId, chatId, 
-                        AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
-                        () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
-                    );
-                        
-                        //  - Capture sanitized input for the Agent loop even if it's not a direct reply.
-                        if (result != null && result.sanitizedInput() != null) {
-                            context.setGoal(result.sanitizedInput());
-                        }
-                    } catch (Exception e) {
-                        log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
-                        log.debug("Full command dispatch failure stack trace:", e);
-                        
-                        channelPluginRegistry.find(context.getChannelType())
-                            .map(ChannelPlugin::sender)
-                            .ifPresentOrElse(
-                                s -> s.sendRaw(context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
-                                () -> log.warnf("CommandDispatchHandler: no sender for type %s - error reply dropped", context.getChannelType())
-                            );
-                        yield HandleResult.STOP;
-                    }
-                    
-                    if (result != null && result.commandResponse().isPresent()) {
-                        String response = result.commandResponse().get();
-                        channelPluginRegistry.find(context.getChannelType())
-                            .map(ChannelPlugin::sender)
-                            .ifPresentOrElse(
-                                s -> s.sendRaw(context.getUser(), response),
-                                () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
-                            );
-                        yield HandleResult.STOP;
-                    }
-    
-                    if (u.raw().startsWith("/cron")) {
-                        channelPluginRegistry.find(context.getChannelType())
-                            .map(ChannelPlugin::sender)
-                            .ifPresentOrElse(
-                                s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
-                                () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
-                            );
-                        yield HandleResult.STOP;
-                    }
-
-                    if ("/start".equalsIgnoreCase(u.raw().trim())) {
-                        channelPluginRegistry.find(context.getChannelType())
-                            .map(ChannelPlugin::sender)
-                            .ifPresent(s -> s.sendRaw(context.getUser(),
-                                "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
-                                + "Just type your question or task in plain text.\n\n"
-                                + "*Commands:*\n"
-                                + "/cron - list scheduled tasks\n"
-                                + "/status - session state\n"
-                                + "/history - conversation history\n"
-                                + "/reset - clear this session\n"
-                                + "/halt - stop current task\n"
-                                + "/approve · /deny - HITL approvals"));
-                        yield HandleResult.STOP;
-                    }
-                yield HandleResult.CONTINUE;
-            }
+            case ChannelCommand.Unknown u -> handleUnknownCommand(context, u);
         };
+    }
+
+    private void sendWelcomeMessage(MessageContext context) {
+        channelPluginRegistry.find(context.getChannelType())
+            .map(ChannelPlugin::sender)
+            .ifPresent(sender -> sender.sendRaw(context.getUser(),
+                "👋 Hello! I'm *ArcClaw*, your AI agent.\n\n"
+                + "Just type your question or task in plain text.\n\n"
+                + "*Commands:*\n"
+                + "/cron - list scheduled tasks\n"
+                + "/status - session state\n"
+                + "/history - conversation history\n"
+                + "/reset - clear this session\n"
+                + "/halt - stop current task\n"
+                + "/approve · /deny - HITL approvals"));
+    }
+
+    private HandleResult handleUnknownCommand(MessageContext context, ChannelCommand.Unknown u) {
+        TimeContextInjector.inject(context, context.getMessage().text(), defaultTimezone);
+
+        String sessionId = context.getSessionId().orElse("");
+        String userId = context.getUser().platformId();
+        String chatId = context.getChatId();
+
+        ReflexResult result = null;
+        try {
+            result = WorkspaceContext.run(
+                sessionId, userId, chatId, 
+                AutonomyLevel.FULL, AgentRoleEnum.COORDINATOR.toScopedName(),
+                () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, u.raw(), context)
+            );
+                
+            if (result != null && result.sanitizedInput() != null) {
+                context.setGoal(result.sanitizedInput());
+            }
+        } catch (Exception e) {
+            log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
+            log.debug("Full command dispatch failure stack trace:", e);
+            
+            channelPluginRegistry.find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresentOrElse(
+                    s -> s.sendRaw(context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
+                    () -> log.warnf("CommandDispatchHandler: no sender for type %s - error reply dropped", context.getChannelType())
+                );
+            return HandleResult.STOP;
+        }
+        
+        if (result != null && result.commandResponse().isPresent()) {
+            String response = result.commandResponse().get();
+            channelPluginRegistry.find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresentOrElse(
+                    s -> s.sendRaw(context.getUser(), response),
+                    () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
+                );
+            return HandleResult.STOP;
+        }
+
+        if (u.raw().startsWith("/cron")) {
+            channelPluginRegistry.find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresentOrElse(
+                    s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
+                    () -> log.warnf("CommandDispatchHandler: no sender for type %s", context.getChannelType())
+                );
+            return HandleResult.STOP;
+        }
+
+        if ("/start".equalsIgnoreCase(u.raw().trim())) {
+            sendWelcomeMessage(context);
+            return HandleResult.STOP;
+        }
+
+        return HandleResult.CONTINUE;
     }
 
     private void dispatch(MessageContext context, String input) {

@@ -6,33 +6,6 @@
     <!-- Baseline suppressions for pre-existing MethodLength violations -->
 
     <!-- ═══════════════════════════════════════════════════════════
-         agent/reasoning - scheduled for reasoning-layer refactor
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="MethodLength" files="ChatHistoryAssembler\.java"/>
-    <suppress checks="FileLength|MethodLength" files="LangChainReasoningEngine\.java"/>
-    <suppress checks="MethodLength" files="ReasoningStepParser\.java"/>
-    <suppress checks="FileLength|MethodLength" files="SystemPromptBuilder\.java"/>
-    <suppress checks="MethodLength" files="ChatModelProducer\.java"/>
-    <suppress checks="MethodLength" files="LlmExceptionClassifier\.java"/>
-    
-    <!-- ═══════════════════════════════════════════════════════════
-         api - scheduled for AgentSessionService decomposition
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="FileLength|MethodLength" files="AgentSessionService\.java"/>
-
-    <!-- ═══════════════════════════════════════════════════════════
-         persistence
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="FileLength" files="AsyncPersistenceEngine\.java"/>
-
-    <!-- ═══════════════════════════════════════════════════════════
-         pipeline/handlers - scheduled for handler decomposition
-         ═══════════════════════════════════════════════════════════ -->
-    <suppress checks="MethodLength" files="AgentDispatchHandler\.java"/>
-    <suppress checks="MethodLength" files="CommandDispatchHandler\.java"/>
-    <suppress checks="MethodLength" files="IntentClassificationHandler\.java"/>
-
-    <!-- ═══════════════════════════════════════════════════════════
          reflex - scheduled for reflex decomposition
          ═══════════════════════════════════════════════════════════ -->
     <suppress checks="FileLength|MethodLength" files="ApproveReflex\.java"/>
