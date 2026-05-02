@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
@@ -44,6 +45,7 @@ public class MessagePipeline {
     /**
      * Executes the pipeline for a message.
      */
+    @ActivateRequestContext
     public void process(MessageContext context) {
         log.debugf("Executing message pipeline for chat %s", context.getChatId());
         for (MessageHandler handler : handlers) {
