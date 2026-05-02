@@ -187,24 +187,24 @@ public class ToolStepHandler {
     private StepDecision handleUnknownTool(AgentExecutionContext context, List<ReasoningStep> history,
                                          ReasoningStep step, String toolName, int consecutiveFailures) {        
         if (REACT_KEYWORDS.contains(toolName.toUpperCase(Locale.ROOT))) {
-            return StepDecision.retryEngine(String.format(
+            return StepDecision.continueLoop(String.format(
                     "System: '%s' is a ReAct reasoning keyword. Available tools: %s.",
                     toolName, toolRegistry.listTools()), 0);
-            // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
         }
 
-        String errorObs = String.format("Tool '%s' does not exist. Available tools: %s.",
+            String errorObs = String.format("Tool '%s' does not exist. Available tools: %s.",
                 toolName, toolRegistry.listTools());
-        ReasoningStep completedStep = step.withObservation(errorObs, false);
-        history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));      
+            ReasoningStep completedStep = step.withObservation(errorObs, false);
+            history.add(completedStep);
+            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));
 
-        int failures = consecutiveFailures + 1;
-        if (failures >= 2) {
+            int failures = consecutiveFailures + 1;
+            if (failures >= 2) {
             return StepDecision.terminal(AgentResult.finished(
-                    "❌ I encountered repeated errors. Please rephrase your request.", List.copyOf(history)));  
-        }
-        return StepDecision.retryValidation(failures);
+                    "❌ I encountered repeated errors. Please rephrase your request.", List.copyOf(history)));
+            }
+            return StepDecision.continueLoop(null, 0);
+
         // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
     }
 
@@ -280,7 +280,7 @@ public class ToolStepHandler {
             history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(
                 context.sessionId(), context.agentRole(), blockedStep));
-            return StepDecision.retryValidation(0);
+            return StepDecision.continueLoop(null, 0);
             // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
         }
 
@@ -311,7 +311,7 @@ public class ToolStepHandler {
                 return StepDecision.terminal(
                     AgentResult.finished(b.observation(), List.copyOf(history)));
             }
-            return StepDecision.retryValidation(0);
+            return StepDecision.continueLoop(null, 0);
             // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
         }
 

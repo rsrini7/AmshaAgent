@@ -18,14 +18,22 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
+import com.arcclaw.core.agent.reasoning.CompactionSummaryCache;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningMessageAssembler;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
+import com.arcclaw.core.agent.reasoning.ReasoningValidator;
+import com.arcclaw.core.agent.reasoning.RecoveryProcessor;
+import com.arcclaw.core.agent.reasoning.StructuredOutputProcessor;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -34,6 +42,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
@@ -60,19 +69,27 @@ class AgentLoopTest {
                 promptBuilder = mock(SystemPromptBuilder.class);
                 historyAssembler = mock(ChatHistoryAssembler.class);
                 stepParser = mock(ReasoningStepParser.class);
+                CompactionSummaryCache summaryCache = mock(CompactionSummaryCache.class);
+                AgentOtelContext otelContext = mock(AgentOtelContext.class);
+                GovernanceStrategy governanceLayer = mock(GovernanceStrategy.class);
+                RateLimitTracker rateLimitTracker = mock(RateLimitTracker.class);
+                IntentClassificationService intentClassifier = mock(IntentClassificationService.class);
 
                 when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("MOCK SYSTEM PROMPT");
 
-                engine = new LangChainReasoningEngine();
+                // Setup Collaborators
+                ReasoningMessageAssembler messageAssembler = new ReasoningMessageAssembler(historyAssembler, toolRegistry);
+                RecoveryProcessor recoveryProcessor = new RecoveryProcessor(new ObjectMapper(), new TextPatternUtils());
+                ReasoningValidator reasoningValidator = new ReasoningValidator(summaryCache);
+                StructuredOutputProcessor structuredOutputProcessor = new StructuredOutputProcessor(promptBuilder, model, governanceLayer, otelContext);
 
-                // Use reflection to set private fields
-                setField(engine, "llmProviderPort", model);
-                setField(engine, "toolRegistry", toolRegistry);
-                setField(engine, "roleRegistry", roleRegistry);
-                setField(engine, "promptBuilder", promptBuilder);
-                setField(engine, "historyAssembler", historyAssembler);
-                setField(engine, "stepParser", stepParser);
-                setField(engine, "textPatternUtils", new TextPatternUtils());
+                // Instantiate engine using full constructor
+                engine = new LangChainReasoningEngine(
+                    model, roleRegistry, promptBuilder,
+                    rateLimitTracker, intentClassifier,
+                    mock(MeterRegistry.class), new TextPatternUtils(),
+                    stepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator
+                );
         }
 
         private void setField(Object target, String name, Object value) throws Exception {

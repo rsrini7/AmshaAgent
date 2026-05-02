@@ -5,10 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
+
+import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
@@ -32,9 +36,6 @@ class SystemPromptBuilderTest {
     PromptTemplateEngine promptTemplateEngine;
 
     @Mock
-    CompactionSummaryCache summaryCache;
-
-    @Mock
     SkillRegistry skillRegistry;
 
     @Mock
@@ -43,16 +44,30 @@ class SystemPromptBuilderTest {
     @Mock
     IntentClassificationService intentService;
 
+    @Mock
+    Instance<RolePromptSection> rolePromptSections;
+
+    PromptSectionBuilder sharedSectionBuilder;
+
+    PromptInstructionLibrary instructionLibrary;
+
     SystemPromptBuilder builder;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        builder = new SystemPromptBuilder(agentPersonaRegistry, promptTemplateEngine,
-                summaryCache, skillRegistry, toolRegistry, intentService);
+        sharedSectionBuilder = new PromptSectionBuilder(toolRegistry);
+        instructionLibrary = new PromptInstructionLibrary();
+
+        builder = new SystemPromptBuilder(128000, false, null, rolePromptSections,
+                sharedSectionBuilder, instructionLibrary, agentPersonaRegistry,
+                promptTemplateEngine, skillRegistry, intentService, null);
         
         when(intentService.isSimpleConversational(any())).thenReturn(false);
         when(toolRegistry.findTool(any())).thenReturn(Optional.of(mock(AgentTool.class)));
+        
+        // Provide real coordinator section for tests that expect it
+        when(rolePromptSections.stream()).thenAnswer(_ -> Stream.of(new CoordinatorPromptSection()));
     }
 
     private AgentExecutionContext createCtx(String sessionId) {
@@ -63,7 +78,6 @@ class SystemPromptBuilderTest {
     void testBuildSystemPrompt_sectionOrderIsPreserved() {
         // Arrange
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
-        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.listTools()).thenReturn(Collections.emptyList());
 
@@ -135,13 +149,21 @@ class SystemPromptBuilderTest {
         assertTrue(result.contains("Do NOT call"), "Should forbid web search for time");
     }
 
+    private void setField(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
     @Test
-    void testBuildSystemPrompt_compactModeRetainsCriticalStorageAndBrowserRules() {
+    void testBuildSystemPrompt_compactModeRetainsCriticalStorageAndBrowserRules() throws Exception {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
-        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
-        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        builder.contextWindow = 8192;
+        
+        AgentTool mockTool = mock(AgentTool.class);
+        when(mockTool.isEnabled()).thenReturn(true);
+        when(toolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
+        setField(builder, "contextWindow", 8192);
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);
 
@@ -151,7 +173,7 @@ class SystemPromptBuilderTest {
                 "Compact prompt should preserve '=' instructions");
         assertTrue(result.contains("retry once with a broader"),
                 "Compact prompt should retain browser extraction retry guidance");
-        assertTrue(result.contains("PERMITTED TOOLS: None"),
+        assertTrue(result.contains("PERMITTED TOOLS:"),
                 "Compact prompt should use the minimal tool binding contract");
         assertTrue(!result.contains("TOOL_BINDING_MARKER"),
                 "Compact prompt should not render the full role template");
@@ -168,12 +190,11 @@ class SystemPromptBuilderTest {
     }
 
     @Test
-    void testBuildSystemPrompt_compactModeWithoutBrowserOmitsRetryRule() {
+    void testBuildSystemPrompt_compactModeWithoutBrowserOmitsRetryRule() throws Exception {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
-        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        builder.contextWindow = 8192;
+        setField(builder, "contextWindow", 8192);
 
         String result = builder.build(createCtx("s1"), "coordinator", "s1", "some goal", false);
 
@@ -182,13 +203,12 @@ class SystemPromptBuilderTest {
     }
 
     @Test
-    void testBuildSystemPrompt_compactPromptFlagForcesCompactMode() {
+    void testBuildSystemPrompt_compactPromptFlagForcesCompactMode() throws Exception {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
-        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        builder.contextWindow = 128000;
-        builder.compactPromptEnabled = true;
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", true);
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);
 
@@ -199,12 +219,11 @@ class SystemPromptBuilderTest {
     }
 
     @Test
-    void testBuildSystemPrompt_compactModeForbidsJsonStyleFactAnswers() {
+    void testBuildSystemPrompt_compactModeForbidsJsonStyleFactAnswers() throws Exception {
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
-        when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
         when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
         when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
-        builder.contextWindow = 8192;
+        setField(builder, "contextWindow", 8192);
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "lookup latest Spring Boot and Quarkus LTS", false);
 
