@@ -39,11 +39,23 @@ public class PlaywrightBrowserInstaller {
 
     private static final String PLAYWRIGHT_DRIVER_LOCATION = ".playwright-driver";
 
-    /**
-     * Checks if Chromium is already installed in the specified path.
-     * Looks for any directory starting with 'chromium-' in the browsers path.
-     */
     public static boolean isChromiumInstalled(Path browsersPath) {
+        Path sentinel = browsersPath.resolve(".arcclaw-playwright-version");
+        String currentVersion = detectPlaywrightVersion();
+        if (Files.exists(sentinel)) {
+            try {
+                String cachedVersion = Files.readString(sentinel).trim();
+                if (!currentVersion.equals(cachedVersion)) {
+                    log.warnf("[PlaywrightBrowserInstaller] Playwright upgraded %s → %s, wiping browser cache",
+                              cachedVersion, currentVersion);
+                    deleteDirectory(browsersPath);
+                    return false;
+                }
+            } catch (IOException e) {
+                log.warnf("[PlaywrightBrowserInstaller] Could not read sentinel file: %s", e.getMessage());
+            }
+        }
+
         if (!Files.exists(browsersPath)) return false;
         String expectedRevision = readExpectedRevision(browsersPath.getParent());
         try (Stream<Path> files = Files.list(browsersPath)) {
@@ -96,53 +108,57 @@ public class PlaywrightBrowserInstaller {
         System.err.println();
 
         try {
-            // FIRST: use extracted driver - guarantees version match with driver-bundle
-            // binaryDir is parent of .playwright-browsers
-            Path binaryDir = browsersPath.getParent();
-            Path driverDir = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION).resolve(detectPlatform());
-            Path nodeExe   = driverDir.resolve(isWindows() ? "node.exe" : "node");
-            Path cliJs     = driverDir.resolve("package").resolve("cli.js");
+            try {
+                // FIRST: use extracted driver - guarantees version match with driver-bundle
+                // binaryDir is parent of .playwright-browsers
+                Path binaryDir = browsersPath.getParent();
+                Path driverDir = binaryDir.resolve(PLAYWRIGHT_DRIVER_LOCATION).resolve(detectPlatform());
+                Path nodeExe   = driverDir.resolve(isWindows() ? "node.exe" : "node");
+                Path cliJs     = driverDir.resolve("package").resolve("cli.js");
 
-            if (Files.exists(nodeExe) && Files.exists(cliJs)) {
-                try {
-                    log.info("Installing Chromium via extracted driver (version-matched)");
-                    List<String> command = new ArrayList<>();
-                    command.add(nodeExe.toAbsolutePath().toString());
-                    command.add(cliJs.toAbsolutePath().toString());
-                    command.add("install");
-                    command.add("chromium");
-                    ProcessBuilder pb = new ProcessBuilder(command);
-                    pb.environment().put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
-                    pb.environment().put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
-                    pb.inheritIO();
-                    int exit = pb.start().waitFor();
-                    if (exit == 0) {
-                        System.err.println();
-                        System.err.println("  ✓ Playwright Chromium installed successfully.");
-                        System.err.println();
-                        System.err.println("  ─────────────────────────────────────────────────────");
-                        System.err.println("  ✓ Browser ready - starting ArcClaw...");
-                        System.err.println("  ─────────────────────────────────────────────────────");
-                        System.err.println();
-                        return;
+                if (Files.exists(nodeExe) && Files.exists(cliJs)) {
+                    try {
+                        log.info("Installing Chromium via extracted driver (version-matched)");
+                        List<String> command = new ArrayList<>();
+                        command.add(nodeExe.toAbsolutePath().toString());
+                        command.add(cliJs.toAbsolutePath().toString());
+                        command.add("install");
+                        command.add("chromium");
+                        ProcessBuilder pb = new ProcessBuilder(command);
+                        pb.environment().put("PLAYWRIGHT_BROWSERS_PATH", browsersPath.toString());
+                        pb.environment().put("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
+                        pb.inheritIO();
+                        int exit = pb.start().waitFor();
+                        if (exit == 0) {
+                            System.err.println();
+                            System.err.println("  ✓ Playwright Chromium installed successfully.");
+                            System.err.println();
+                             System.err.println("  ─────────────────────────────────────────────────────");
+                             System.err.println("  ✓ Browser ready - ArcClaw is ready to use!");
+                             System.err.println("  ─────────────────────────────────────────────────────");
+                            System.err.println();
+                            return;
+                        }
+                    } catch (Exception e) {
+                        log.warnf("Driver-based install failed (%s) - falling back...", safeMessage(e));
                     }
-                } catch (Exception e) {
-                    log.warnf("Driver-based install failed (%s) - falling back...", safeMessage(e));
                 }
-            }
 
-            // FALLBACK: mvnw (source tree) or npx/system (binary distribution)
-            Path cwd  = Path.of(System.getProperty("user.dir"));
-            Path mvnw = findMvnw(cwd);
-            if (mvnw != null) {
-                runMavenInstaller(mvnw, browsersPath);
-            } else {
-                runBinaryInstaller(browsersPath);
+                // FALLBACK: mvnw (source tree) or npx/system (binary distribution)
+                Path cwd  = Path.of(System.getProperty("user.dir"));
+                Path mvnw = findMvnw(cwd);
+                if (mvnw != null) {
+                    runMavenInstaller(mvnw, browsersPath);
+                } else {
+                    runBinaryInstaller(browsersPath);
+                }
+            } catch (Exception e) {
+                System.err.println();
+                System.err.println("  ✗ Playwright Chromium installation failed: " + e.getMessage());
+                log.error("Playwright installation failure", e);
             }
-        } catch (Exception e) {
-            System.err.println();
-            System.err.println("  ✗ Playwright Chromium installation failed: " + e.getMessage());
-            log.error("Playwright installation failure", e);
+        } finally {
+            writeSentinelFile(browsersPath);
         }
     }
 
@@ -456,7 +472,25 @@ public class PlaywrightBrowserInstaller {
     }
 
     private static String detectPlaywrightVersion() {
-        // 1. Try MANIFEST.MF in playwright JAR on classpath
+        // 1. Try to fetch version dynamically from the Playwright class URL location
+        try {
+            URL u = Playwright.class.getResource("/com/microsoft/playwright/Playwright.class");
+            if (u != null) {
+                String path = u.toString();
+                var m = Pattern.compile("(?i)playwright-(?:driver-bundle-)?(\\d+\\.\\d+\\.\\d+)").matcher(path);
+                if (m.find()) return m.group(1);
+            }
+        } catch (Exception e) {
+            log.debugf("Failed to read Playwright version dynamically from class URL: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
+
+        // 2. Try getting version from the package's implementation version
+        try {
+            String ver = Playwright.class.getPackage().getImplementationVersion();
+            if (ver != null && ver.matches("\\d+\\.\\d+\\.\\d+")) return ver;
+        } catch (Exception ignored) {}
+
+        // 3. Fallback: Try MANIFEST.MF on classpath
         try {
             Enumeration<URL> resources = PlaywrightBrowserInstaller.class
                 .getClassLoader().getResources("META-INF/MANIFEST.MF");
@@ -473,7 +507,7 @@ public class PlaywrightBrowserInstaller {
             log.debugf("Failed to list Playwright manifest resources: %s", ExceptionUtils.getRootCauseMessage(e));
         }
 
-        // 3. Fallback: scan current directory for driver-bundle-*.jar
+        // 4. Fallback: scan current directory for driver-bundle-*.jar
         try (Stream<Path> files = Files.list(Path.of(System.getProperty("user.dir")))) {
             Optional<String> found = files.map(p -> p.getFileName().toString())
                 .filter(name -> name.startsWith("driver-bundle-") && name.endsWith(".jar"))
@@ -484,7 +518,7 @@ public class PlaywrightBrowserInstaller {
             if (found.isPresent()) return found.get();
         } catch (IOException ignored) {}
 
-        return "1.58.0"; // Final fallback matching project pom.xml
+        return "1.56.0"; // Final fallback matching project pom.xml and quarkus-playwright 2.2.1
     }
 
     private static Path findDriverBundleJar(String version) {
@@ -543,5 +577,33 @@ public class PlaywrightBrowserInstaller {
 
     private static void makeExecutable(Path file) {
         if (Files.exists(file)) file.toFile().setExecutable(true);
+    }
+
+    private static void deleteDirectory(Path dir) {
+        if (!Files.exists(dir)) return;
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder())
+                .forEach(p -> {
+                    try {
+                        Files.delete(p);
+                    } catch (IOException e) {
+                        log.debugf("Benign delete error: %s", e.getMessage());
+                    }
+                });
+        } catch (IOException e) {
+            log.debugf("Failed to delete directory %s: %s", dir, e.getMessage());
+        }
+    }
+
+    private static void writeSentinelFile(Path browsersPath) {
+        try {
+            Files.createDirectories(browsersPath);
+            Path sentinel = browsersPath.resolve(".arcclaw-playwright-version");
+            String currentVersion = detectPlaywrightVersion();
+            Files.writeString(sentinel, currentVersion);
+            log.infof("[PlaywrightBrowserInstaller] Successfully wrote version sentinel file with version %s", currentVersion);
+        } catch (IOException e) {
+            log.warnf("[PlaywrightBrowserInstaller] Could not write sentinel file: %s", e.getMessage());
+        }
     }
 }

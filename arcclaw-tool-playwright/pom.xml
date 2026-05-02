@@ -27,11 +27,11 @@ allowing agents to read JavaScript-rendered pages that are inaccessible to plain
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-arc</artifactId>
     </dependency>
-    <!-- Playwright Java 1.58.0 -->
+    <!-- Playwright Java via Quarkiverse extension — supports native image -->
     <dependency>
-      <groupId>com.microsoft.playwright</groupId>
-      <artifactId>playwright</artifactId>
-      <version>1.58.0</version>
+      <groupId>io.quarkiverse.playwright</groupId>
+      <artifactId>quarkus-playwright</artifactId>
+      <version>2.2.1</version>
     </dependency>
 
     <dependency>

@@ -1127,12 +1127,21 @@ public class AppBootstrap {
         if (playwrightEnabled) {
             if (tr.isEmpty() || tr.startsWith("y")) {
                 PlaywrightBrowserInstaller.installChromium(browsersPath);
+            } else if (tr.startsWith("n")) {
+                patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+                System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "false");
+                System.err.println();
+                System.err.println("  ✓ Playwright has been disabled. It will not ask again.");
+                System.err.println("    To enable it manually in the future, set in your .env:");
+                System.err.println("      ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true");
+                System.err.println("  ✓ Moving forward with normal boot - starting ArcClaw...");
+                System.err.println();
             }
         } else if (tr.startsWith("y")) {
             patchEnvFile(envFile, "ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             System.setProperty("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED", "true");
             initEnvFile(envFile, "PLAYWRIGHT_BROWSERS_PATH", browsersPath.toAbsolutePath().toString());
-            initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1");
+            initEnvFile(envFile, "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
             if (!PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
                 System.err.println("  │");
                 System.err.println("  │  Chromium browser binary is not installed.");
@@ -1149,6 +1158,7 @@ public class AppBootstrap {
     }
 
     private static void normalizePlaywrightPath(Path binaryDir) {
+        System.setProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
         String path = System.getProperty("PLAYWRIGHT_BROWSERS_PATH");
         if (path != null && !path.isBlank()) {
             Path p = Path.of(path);
