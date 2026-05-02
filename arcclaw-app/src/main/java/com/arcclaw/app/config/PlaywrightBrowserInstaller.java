@@ -456,7 +456,25 @@ public class PlaywrightBrowserInstaller {
     }
 
     private static String detectPlaywrightVersion() {
-        // 1. Try MANIFEST.MF in playwright JAR on classpath
+        // 1. Try to fetch version dynamically from the Playwright class URL location
+        try {
+            URL u = Playwright.class.getResource("/com/microsoft/playwright/Playwright.class");
+            if (u != null) {
+                String path = u.toString();
+                var m = Pattern.compile("(?i)playwright-(?:driver-bundle-)?(\\d+\\.\\d+\\.\\d+)").matcher(path);
+                if (m.find()) return m.group(1);
+            }
+        } catch (Exception e) {
+            log.debugf("Failed to read Playwright version dynamically from class URL: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
+
+        // 2. Try getting version from the package's implementation version
+        try {
+            String ver = Playwright.class.getPackage().getImplementationVersion();
+            if (ver != null && ver.matches("\\d+\\.\\d+\\.\\d+")) return ver;
+        } catch (Exception ignored) {}
+
+        // 3. Fallback: Try MANIFEST.MF on classpath
         try {
             Enumeration<URL> resources = PlaywrightBrowserInstaller.class
                 .getClassLoader().getResources("META-INF/MANIFEST.MF");
@@ -473,7 +491,7 @@ public class PlaywrightBrowserInstaller {
             log.debugf("Failed to list Playwright manifest resources: %s", ExceptionUtils.getRootCauseMessage(e));
         }
 
-        // 3. Fallback: scan current directory for driver-bundle-*.jar
+        // 4. Fallback: scan current directory for driver-bundle-*.jar
         try (Stream<Path> files = Files.list(Path.of(System.getProperty("user.dir")))) {
             Optional<String> found = files.map(p -> p.getFileName().toString())
                 .filter(name -> name.startsWith("driver-bundle-") && name.endsWith(".jar"))

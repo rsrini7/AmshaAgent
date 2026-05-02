@@ -7,11 +7,11 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.AgentPersona;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.structured.StructuredOutputEngine;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import com.arcclaw.core.tools.ToolRegistry;
 
 /**
  * Producer for Agent persona beans.
