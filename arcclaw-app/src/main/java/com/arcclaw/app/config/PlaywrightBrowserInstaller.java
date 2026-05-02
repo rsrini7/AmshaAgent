@@ -484,7 +484,7 @@ public class PlaywrightBrowserInstaller {
             if (found.isPresent()) return found.get();
         } catch (IOException ignored) {}
 
-        return "1.58.0"; // Final fallback matching project pom.xml
+        return "1.56.0"; // Final fallback matching project pom.xml and quarkus-playwright 2.2.1
     }
 
     private static Path findDriverBundleJar(String version) {
