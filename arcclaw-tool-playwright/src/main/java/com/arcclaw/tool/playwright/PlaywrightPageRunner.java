@@ -118,13 +118,6 @@ public class PlaywrightPageRunner {
 
     void onStart(@Observes StartupEvent ev) {
 
-        String imageCode = System.getProperty("org.graalvm.nativeimage.imagecode");
-        if ("runtime".equals(imageCode)) {
-            log.warn("[PlaywrightPageRunner] GraalVM native image detected - browser_navigate disabled " +
-                     "(Playwright Java bindings are incompatible with native image).");
-            this.runtimeEnabled = false;
-        }
-
         if (!runtimeEnabled) {
             log.info("Playwright is disabled - skipping browser warmup.");
             initFuture.complete(null);
