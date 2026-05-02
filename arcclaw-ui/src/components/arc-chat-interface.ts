@@ -56,7 +56,7 @@ export class ArcChatInterface extends LitElement {
     .status-badge {
        font-size: 10px; padding: 2px 8px; border-radius: 4px;
        text-transform: uppercase;
-    }
+     }
     .status-open { background: rgba(0,212,170,0.1); color: var(--accent-secondary); }
     .status-connecting { background: rgba(245,158,11,0.1); color: #f59e0b; }
     .status-error { background: rgba(239,68,68,0.1); color: #ef4444; }
@@ -457,7 +457,7 @@ export class ArcChatInterface extends LitElement {
                  ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> ArcClaw Agent` : 'You'}
                </div>
                <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">
-                 ${this._renderMarkdown(m.id, m.text)}
+                 ${m.role === 'user' ? m.text : this._renderMarkdown(m.id, m.text)}
                  
                  ${m.isApprovalPrompt && this._awaitingApproval ? html`
                    <div class="approval-card">
@@ -479,15 +479,12 @@ export class ArcChatInterface extends LitElement {
                         </button>
                      </div>
                    </div>
-                </div>
-             ` : html`
-                <div class="bubble bubble-${m.role}">
-                  ${m.role === 'user' ? m.text : this._renderMarkdown(m.text)}
-                </div>
-             `}
-             <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
-          </div>
-        `)}
+                 ` : nothing}
+               </div>
+               <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
+            </div>
+          `}
+        ></lit-virtualizer>
         
         ${this._isTyping ? html`
           <div class="typing">

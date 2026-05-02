@@ -453,28 +453,33 @@ public class SystemPromptBuilder {
             such as `article` or `body` before concluding the content is unavailable.
             """;
 
-    private static final String COMPACT_TOOL_PRIORITY_RULES = """
-            TOOL PRIORITY RULES:
-            1. If information can be inferred from conversation, summary, or the CURRENT SYSTEM TIME provided above, answer directly. Do NOT call external tools (like web search) or write code to check the time.
-            1b. EXCEPTION: If the user asks for code generation or execution in a DIFFERENT language (e.g. "do same in bash"), you MUST call the tool (e.g. sandbox_exec). Do NOT answer from memory.
-            2. If the user wants to STORE or REMEMBER something (e.g. "remember me", "save my name", "call me X", "my phone is Y"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.
-            3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.
-            4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. "every minute" -> "*/1 * * * *"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself - store it as the goal text for the cron runner.
-            4b. For scheduling requests, NEVER batch `schedule_task` with `delegate_to_agent` or any other tool in the same turn.
-            4c. ANTI-PARALLEL STORAGE: NEVER call `ingest_document` more than once per turn. If the user provides
-               multiple facts, combine them ALL into a single call (e.g. text="user_name=Srini, user_alias=Vasan").
-               Parallel or batched ingest_document calls are a CRITICAL ORCHESTRATION FAILURE.
-            5. If the user explicitly asks to "execute" or "run" code (e.g. "execute and share result"):
-               - If you have `sandbox_exec`, use it DIRECTLY. 
-               - If you LACK `sandbox_exec`, delegate to 'coordinator' to handle the execution.
-            6. For general world knowledge, versions, or comparisons, use `delegate_to_agent(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.
-            7. Use `memory_search` only for past-session recall not in the current conversation or summary.
-            8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.
-            9. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.
-            10. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.
-            11. A denied or failed tool call does not block a different valid tool on the next user message.
-            12. If you encounter a request you cannot fulfill, use `delegate_to_agent` (set agent to persona name) to handoff. If you are 'coordinator', do NOT delegate to 'coordinator'; call tools directly.
-            """;
+    private String buildCompactToolPriorityRules(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        List<String> available = getAvailableToolNames(context, roleEnum);
+        StringBuilder sb = new StringBuilder();
+        sb.append("TOOL PRIORITY RULES:\n");
+        sb.append("1. If information can be inferred from conversation, summary, or the CURRENT SYSTEM TIME provided above, answer directly. Do NOT call external tools (like web search) or write code to check the time.\n");
+        sb.append("1b. EXCEPTION: If the user asks for code generation or execution in a DIFFERENT language (e.g. \"do same in bash\"), you MUST call the tool (e.g. sandbox_exec). Do NOT answer from memory.\n");
+        sb.append("2. If the user wants to STORE or REMEMBER something (e.g. \"remember me\", \"save my name\", \"call me X\", \"my phone is Y\"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.\n");
+        sb.append("3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.\n");
+        sb.append("4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. \"every minute\" -> \"*/1 * * * *\"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself - store it as the goal text for the cron runner.\n");
+        sb.append("4b. For scheduling requests, NEVER batch `schedule_task` with `delegate_to_agent` or any other tool in the same turn.\n");
+        sb.append("4c. ANTI-PARALLEL STORAGE: NEVER call `ingest_document` more than once per turn. If the user provides\n");
+        sb.append("   multiple facts, combine them ALL into a single call (e.g. text=\"user_name=Srini, user_alias=Vasan\").\n");
+        sb.append("   Parallel or batched ingest_document calls are a CRITICAL ORCHESTRATION FAILURE.\n");
+        sb.append("5. If the user explicitly asks to \"execute\" or \"run\" code (e.g. \"execute and share result\"):\n");
+        sb.append("   - If you have `sandbox_exec`, use it DIRECTLY. \n");
+        sb.append("   - If you LACK `sandbox_exec`, delegate to 'coordinator' to handle the execution.\n");
+        sb.append("6. For general world knowledge, versions, or comparisons, use `delegate_to_agent(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.\n");
+        sb.append("7. Use `memory_search` only for past-session recall not in the current conversation or summary.\n");
+        if (available.contains(ToolCapability.BROWSER_NAVIGATE.toolName())) {
+            sb.append("8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.\n");
+        }
+        sb.append("9. Use `delegate_to_agent` only for complex specialist work, not for simple direct tool calls.\n");
+        sb.append("10. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.\n");
+        sb.append("11. A denied or failed tool call does not block a different valid tool on the next user message.\n");
+        sb.append("12. If you encounter a request you cannot fulfill, use `delegate_to_agent` (set agent to persona name) to handoff. If you are 'coordinator', do NOT delegate to 'coordinator'; call tools directly.\n");
+        return sb.toString();
+    }
 
     public String build(AgentExecutionContext context, String agentRole, String sessionId, String goal, boolean isTruncationRecovery) {
         String detectionGoal = (context != null) ? context.goal() : goal;
@@ -549,7 +554,7 @@ public class SystemPromptBuilder {
         // 4. Operational rules (static)
         String securityPrompt = (isCompact || isSimpleChitchat) ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
         if (isCompact && !isSimpleChitchat) {
-            securityPrompt += "\n" + COMPACT_TOOL_PRIORITY_RULES;
+            securityPrompt += "\n" + buildCompactToolPriorityRules(context, roleEnum);
         }
 
         // 5. Dynamic Rules (Execution Boundary + Tool Contamination Guard)
@@ -557,7 +562,7 @@ public class SystemPromptBuilder {
         String dynamicRules = "";
         if (!isSimpleChitchat) {
             dynamicRules += isCompact ? buildCompactExecutionBoundaryRule(roleEnum) : buildExecutionBoundaryRule(roleEnum);
-            dynamicRules += "\n" + (isCompact ? buildCompactBrowserRetryRule(roleEnum) : buildBrowserRetryRule(roleEnum));
+            dynamicRules += "\n" + (isCompact ? buildCompactBrowserRetryRule(context, roleEnum) : buildBrowserRetryRule(context, roleEnum));
             dynamicRules += "\n" + (isCompact ? buildCompactToolContaminationGuard(context, roleEnum) : buildToolContaminationGuard(context, roleEnum));
         }
 
@@ -693,8 +698,8 @@ public class SystemPromptBuilder {
         return "Only these tools may be called in this turn: " + toolList + ".\n";
     }
 
-    private String buildBrowserRetryRule(AgentRoleEnum roleEnum) {
-        boolean hasBrowser = roleEnum.definition().toolNames().contains(ToolCapability.BROWSER_NAVIGATE.toolName());
+    private String buildBrowserRetryRule(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        boolean hasBrowser = getAvailableToolNames(context, roleEnum).contains(ToolCapability.BROWSER_NAVIGATE.toolName());
         if (!hasBrowser) return "";
         return """
                 BROWSER EXTRACTION RETRY RULE:
@@ -707,8 +712,8 @@ public class SystemPromptBuilder {
                 """;
     }
 
-    private String buildCompactBrowserRetryRule(AgentRoleEnum roleEnum) {
-        boolean hasBrowser = roleEnum.definition().toolNames().contains(ToolCapability.BROWSER_NAVIGATE.toolName());
+    private String buildCompactBrowserRetryRule(AgentExecutionContext context, AgentRoleEnum roleEnum) {
+        boolean hasBrowser = getAvailableToolNames(context, roleEnum).contains(ToolCapability.BROWSER_NAVIGATE.toolName());
         return hasBrowser ? COMPACT_BROWSER_RETRY_RULE : "";
     }
 }

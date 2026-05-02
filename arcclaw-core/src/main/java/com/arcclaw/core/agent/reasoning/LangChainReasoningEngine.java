@@ -485,18 +485,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
                     );
                 }
 
-                log.warnf("[LangChainReasoningEngine] LLM called unavailable tool - " +
-                        "injecting inline correction: %s", msg);
-                return ReasoningStep.pending(
-                        "Attempted to call a tool not available in this context",
-                        "OBSERVE",
-                        Map.of(),
-                        0, 0
-                ).withObservation(
-                        "That tool is not available in the current execution context. " +
-                        "Use only the tools listed in PERMITTED TOOLS. " +
-                        "If no tool is needed, output your answer directly and call FINISH."
-                );
+                // Let EngineStepHandler handle the exception (it has specialized logic for 
+                // hallucinated tools, malformed arguments, etc.)
+                throw ex;
             }
 
             if (e instanceof LlmRateLimitException) {

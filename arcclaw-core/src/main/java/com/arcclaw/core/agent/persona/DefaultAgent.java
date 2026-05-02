@@ -15,6 +15,8 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentPersona;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.structured.StructuredOutputEngine;
+import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
@@ -33,18 +35,21 @@ public class DefaultAgent implements Agent {
     private final String defaultTimezone;
     private final StructuredOutputEngine structuredOutputEngine;
     private final ObjectMapper objectMapper;
+    private final ToolRegistry toolRegistry;
 
     public DefaultAgent(
             AgentPersona persona,
             Supplier<Template> templateSupplier,
             String defaultTimezone,
             StructuredOutputEngine structuredOutputEngine,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ToolRegistry toolRegistry) {
         this.persona = persona;
         this.templateSupplier = templateSupplier;
         this.defaultTimezone = defaultTimezone;
         this.structuredOutputEngine = structuredOutputEngine;
         this.objectMapper = objectMapper;
+        this.toolRegistry = toolRegistry;
     }
 
     @Override
@@ -56,7 +61,14 @@ public class DefaultAgent implements Agent {
     public String systemPrompt(AgentExecutionContext context) {
         TemplateInstance instance = templateSupplier.get().instance();
         AgentRoleEnum roleEnum = new AgentRoleEnum(persona.roleId());
-        instance.data("tools", String.join(", ", roleEnum.definition().toolNames()));
+        
+        List<String> enabledToolDescriptions = roleEnum.definition().toolNames().stream()
+                .map(name -> toolRegistry.findTool(name).orElse(null))
+                .filter(tool -> tool != null && tool.isEnabled())
+                .map(tool -> "- `" + tool.name() + "`: " + tool.description())
+                .toList();
+                
+        instance.data("tools", "\n" + String.join("\n", enabledToolDescriptions));
 
         // Injection §7.38: hydrated at render-time for deterministic relative scheduling.
         instance.data("CURRENT_UTC_ISO", Instant.now().toString());
