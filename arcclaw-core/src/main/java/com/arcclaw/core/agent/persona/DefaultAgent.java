@@ -14,8 +14,8 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentPersona;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.structured.StructuredOutputEngine;
-import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.Template;
@@ -65,6 +65,11 @@ public class DefaultAgent implements Agent {
         List<String> enabledToolDescriptions = roleEnum.definition().toolNames().stream()
                 .map(name -> toolRegistry.findTool(name).orElse(null))
                 .filter(tool -> tool != null && tool.isEnabled())
+                .sorted((t1, t2) -> {
+                    if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(t1.name())) return -1;
+                    if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(t2.name())) return 1;
+                    return t1.name().compareTo(t2.name());
+                })
                 .map(tool -> "- `" + tool.name() + "`: " + tool.description())
                 .toList();
                 
