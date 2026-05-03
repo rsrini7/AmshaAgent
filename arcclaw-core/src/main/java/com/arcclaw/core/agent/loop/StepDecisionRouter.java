@@ -79,8 +79,8 @@ public class StepDecisionRouter {
                 return RoutingOutcome.proceedToNextTurn(consecutiveFailures);
             }
 
-            if (ReasoningStep.FINISH.equals(currentStep.action())) {
-                Optional<RoutingOutcome> finishOutcome = handleFinishOutcome(context, history, currentStep, llmSchemaErrorCount);
+            if (currentStep instanceof ReasoningStep.FinishStep finish) {
+                Optional<RoutingOutcome> finishOutcome = handleFinishOutcome(context, history, finish, llmSchemaErrorCount);
                 if (finishOutcome.isPresent()) return finishOutcome.get();
             }
 
@@ -102,7 +102,7 @@ public class StepDecisionRouter {
 
             currentStep = validationDecision.step();
 
-            if (ReasoningStep.FINISH.equals(currentStep.action())) {
+            if (currentStep instanceof ReasoningStep.FinishStep) {
                 continue; 
             }
 
@@ -112,7 +112,7 @@ public class StepDecisionRouter {
 
     private Optional<RoutingOutcome> handleFinishOutcome(AgentExecutionContext context,
                                                          List<ReasoningStep> history,
-                                                         ReasoningStep currentStep,
+                                                         ReasoningStep.FinishStep currentStep,
                                                          int llmSchemaErrorCount) {
         if (currentStep.isParallelBatch()) {
             log.errorf("PARALLEL INVARIANT VIOLATION: session %s parallel batch step reached FINISH handler.", context.sessionId());

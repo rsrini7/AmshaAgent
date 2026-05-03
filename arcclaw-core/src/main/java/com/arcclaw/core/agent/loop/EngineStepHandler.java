@@ -110,30 +110,30 @@ public class EngineStepHandler {
                     Collections.unmodifiableList(history));
 
             if (step != null) {
-                boolean isBlankFinish = ReasoningStep.FINISH.equals(step.action()) 
-                        && (step.actionInput() == null || step.actionInput().get("answer") == null 
-                            || step.actionInput().get("answer").toString().isBlank());
+                boolean isBlankFinish = step instanceof ReasoningStep.FinishStep finish
+                        && (finish.actionInput() == null || finish.actionInput().get("answer") == null 
+                            || finish.actionInput().get("answer").toString().isBlank());
 
-                if (!ReasoningStep.OBSERVE.equals(step.action()) && !step.isFastPath() 
+                if (!(step instanceof ReasoningStep.ObservationStep) && !step.isFastPath() 
                         && (step.outputTokens() <= 1 || isBlankFinish)) {
                     log.warnf("[STATE-MACHINE] session %s: detected degraded %d-token response - injecting hint", context.sessionId(), step.outputTokens());
                     context.incrementTruncationRetry();
                     return StepDecision.retryEngine(hintBuilder.buildDegradedResponseHint(), llmSchemaErrorCount);
                 }
 
-                if (ReasoningStep.FINISH.equals(step.action())) {
-                    String answer = step.actionInput() != null ? String.valueOf(step.actionInput().get("answer")) : "";
+                if (step instanceof ReasoningStep.FinishStep finish) {
+                    String answer = finish.actionInput() != null ? String.valueOf(finish.actionInput().get("answer")) : "";
                     if (RawJsonGuard.looksLikeRawToolJson(answer)) {
                         return StepDecision.retryEngine(hintBuilder.buildRawJsonInAnswerHint(), llmSchemaErrorCount);
                     }
                 }
 
-                if (ReasoningStep.OBSERVE.equals(step.action())) {
-                    if (Boolean.TRUE.equals(step.success())) {
-                        return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
+                if (step instanceof ReasoningStep.ObservationStep observation) {
+                    if (Boolean.TRUE.equals(observation.success())) {
+                        return StepDecision.retryEngine(observation.observation(), llmSchemaErrorCount);
                     }
                     
-                    if (!step.isTruncationRecovery()) llmSchemaErrorCount++;
+                    if (!observation.isTruncationRecovery()) llmSchemaErrorCount++;
                     int schemaRetryBudget = resolveSchemaRetryBudget(context.structuredOutputMode());
 
                     if (llmSchemaErrorCount >= schemaRetryBudget) {
@@ -141,7 +141,7 @@ public class EngineStepHandler {
                                 "The agent could not complete this request due to repeated formatting errors.", 
                                 AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(history)));
                     }
-                    return StepDecision.retryEngine(step.observation(), llmSchemaErrorCount);
+                    return StepDecision.retryEngine(observation.observation(), llmSchemaErrorCount);
                 }
 
                 try {

@@ -42,7 +42,11 @@ public class CheckpointSerializer {
      */
     public String serializeSteps(List<ReasoningStep> steps) {
         if (steps == null || steps.isEmpty()) return "[]";
-        return serialize(steps);
+        try {
+            return objectMapper.writerFor(STEPS_TYPE).writeValueAsString(steps);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Checkpoint serialization failed", e);
+        }
     }
 
     /**

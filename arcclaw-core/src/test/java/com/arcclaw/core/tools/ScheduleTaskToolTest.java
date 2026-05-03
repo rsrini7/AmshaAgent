@@ -12,26 +12,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.util.Map;
-import java.util.concurrent.Callable;
 
 import jakarta.enterprise.event.Event;
 
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.CronTaskScheduled;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import org.junit.jupiter.api.Test;
 
-/**
- * Unit tests for {@link ScheduleTaskTool}.
- * Uses WorkspaceScopeHolder.run() (not call()) because call() does not bind CHAT_ID.
- */
 class ScheduleTaskToolTest {
 
     private final AgentCronRepository cronRepository = mock(AgentCronRepository.class);
@@ -59,26 +52,17 @@ class ScheduleTaskToolTest {
         return tool;
     }
 
-    // Add a helper to your test class
-    private <T> T executeInScope(String suggestedCron, Callable<T> task) throws Exception {
-        Callable<T> op = () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, suggestedCron).call(task::call);
-        return WorkspaceContext.<T>run(
-                "test-session-id",
-                "test-user",
-                "test-chat",
-                AutonomyLevel.SUPERVISED,
-                "coordinator",
-                ChannelType.TELEGRAM.name(),
-                op);
-    }
-
     @Test
     void testValidCronSchedulesSuccessfully() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope("0 9 * * 1", () -> tool.execute(Map.of(
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "test-session-id", "test-user", "test-chat", "coordinator",
+                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "0 9 * * 1", null, "UTC");
+
+        ToolResponse result = tool.execute(ctx, Map.of(
                 "goal", "Send weekly status report to the team via Telegram"
-        )));
+        ));
 
         assertTrue(result.success(), "Valid cron should schedule successfully: " + result.output());
         assertTrue(result.output().contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE));
@@ -96,11 +80,13 @@ class ScheduleTaskToolTest {
     void testInvalidCronExpressionReturnsFailure() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        // Note: With the new architecture, the tool doesn't see 'invalid-cron' 
-        // from the params. It uses whatever is in suggestedCron.
-        ToolResponse result = executeInScope(null, () -> tool.execute(Map.of(
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "test-session-id", "test-user", "test-chat", "coordinator",
+                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", null, null, null);
+
+        ToolResponse result = tool.execute(ctx, Map.of(
                 "goal", "Send status report"
-        )));
+        ));
 
         assertFalse(result.success());
         assertEquals(400, result.exitCode());
@@ -113,9 +99,13 @@ class ScheduleTaskToolTest {
     void testNakedPronounGoalRejected() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        ToolResponse result = executeInScope("0 9 * * 1", () -> tool.execute(Map.of(
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "test-session-id", "test-user", "test-chat", "coordinator",
+                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "0 9 * * 1", null, "UTC");
+
+        ToolResponse result = tool.execute(ctx, Map.of(
                 "goal", "Deploy this to production"
-        )));
+        ));
 
         assertFalse(result.success(), "Naked pronoun 'this' should be rejected");
         assertEquals(422, result.exitCode());
@@ -128,17 +118,13 @@ class ScheduleTaskToolTest {
     void testMissingUserIdReturnsFailure403() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        Callable<ToolResponse> op = () -> ScopedValue.where(WorkspaceContext.SUGGESTED_CRON, "0 9 * * 1").call(() -> tool.execute(Map.of(
-                        "goal", "Send report"
-                )));
-        ToolResponse result = WorkspaceContext.<ToolResponse>run(
-                "test-session-id",
-                "",          // ← blank userId triggers the 403
-                "test-chat",
-                AutonomyLevel.SUPERVISED,
-                "coordinator",
-                ChannelType.TELEGRAM.name(),
-                op);
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "test-session-id", "", "test-chat", "coordinator",
+                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "0 9 * * 1", null, "UTC");
+
+        ToolResponse result = tool.execute(ctx, Map.of(
+                "goal", "Send report"
+        ));
 
         assertFalse(result.success());
         assertEquals(403, result.exitCode());
@@ -157,10 +143,14 @@ class ScheduleTaskToolTest {
     void testRunOnceTruePassedThrough() throws Exception {
         ScheduleTaskTool tool = createTool();
 
-        executeInScope("30 14 15 3 *", () -> tool.execute(Map.of(
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "test-session-id", "test-user", "test-chat", "coordinator",
+                AutonomyLevel.SUPERVISED, "trace", "TELEGRAM", "platform1", "raw goal", "30 14 15 3 *", null, "UTC");
+
+        tool.execute(ctx, Map.of(
                 "goal", "Send one-time reminder to check deployment status",
                 "runOnce", true
-        )));
+        ));
 
         verify(cronRepository).persist(argThat(entity -> {
             AgentCronEntity e = (AgentCronEntity) entity;

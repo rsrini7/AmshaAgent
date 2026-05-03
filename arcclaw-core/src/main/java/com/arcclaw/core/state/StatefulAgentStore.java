@@ -17,16 +17,11 @@ import com.arcclaw.core.security.AutonomyLevel;
  */
 public interface StatefulAgentStore extends PendingApprovalChecker {
 
-    /**
-     * Save or update a checkpoint with the current reasoning steps.
-     *
-     * @param sessionId The workspace session ID.
-     * @param agentRole The agent role identifier.
-     * @param steps     The current reasoning history to serialize.
-     * @param goal      The original user goal for continuity tracking.
-     * @return The persisted checkpoint.
-     */
-    AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal);
+    AgentCheckpoint save(String sessionId, String agentRole, String userId, AutonomyLevel autonomy, List<ReasoningStep> steps, String goal);
+
+    default AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal) {
+        return save(sessionId, agentRole, "unknown", AutonomyLevel.FULL, steps, goal);
+    }
 
     /**
      * Update an existing checkpoint directly.
@@ -111,15 +106,22 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      *
      * @param sessionId   The workspace session ID.
      * @param agentRole   The agent role identifier.
+     * @param userId      The user ID.
+     * @param autonomy    The autonomy level.
      * @param steps       The final reasoning history to persist.
-     * @param finalStatus The final status (COMPLETED or FAILED).
+     * @param finalStatus The terminal status to set.
      * @param goal        The original user goal for continuity tracking.
      * @return The finalized checkpoint.
      */
-    AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
+    AgentCheckpoint saveAndFinalize(String sessionId, String agentRole, String userId, AutonomyLevel autonomy,
                                     List<ReasoningStep> steps,
                                     CheckpointStatus finalStatus,
                                     String goal);
+
+    default AgentCheckpoint saveAndFinalize(String sessionId, String agentRole, List<ReasoningStep> steps,
+                                            CheckpointStatus finalStatus, String goal) {
+        return saveAndFinalize(sessionId, agentRole, "unknown", AutonomyLevel.FULL, steps, finalStatus, goal);
+    }
 
     /**
      * Load reasoning steps for a specific checkpoint from the granular

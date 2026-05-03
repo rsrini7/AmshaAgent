@@ -1,21 +1,23 @@
 package com.arcclaw.core.agent.loop;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 
+import jakarta.enterprise.inject.Instance;
+
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -23,14 +25,22 @@ public class CheckpointApprovalServiceTest {
 
     @Mock StatefulAgentStore agentStore;
     @Mock CheckpointResumeHandler resumeHandler;
+    @Mock Instance<CheckpointResumeHandler> resumeHandlerInstance;
     @Mock AsyncPersistenceEngine asyncEngine;
     @Mock AgentSseService agentSseService;
-    @InjectMocks CheckpointApprovalService checkpointApprovalService;
+    CheckpointApprovalService checkpointApprovalService;
 
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
-        // persistAndWait mock removed: method deleted in Tier 3 refactor.
+        checkpointApprovalService = new CheckpointApprovalService(
+                agentStore,
+                agentSseService,
+                new ObjectMapper(),
+                resumeHandlerInstance
+        );
+        when(resumeHandlerInstance.isResolvable()).thenReturn(true);
+        when(resumeHandlerInstance.get()).thenReturn(resumeHandler);
     }
 
     @Test
@@ -44,8 +54,7 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", ToolDecision.APPROVED.name());
-        // resumeHandler verification removed: approveTool now returns CP, triggerResume handles activation.
+        verify(agentStore).save(any(AgentCheckpoint.class));
     }
 
     @Test
@@ -59,21 +68,18 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", ToolDecision.APPROVED.name());
-        verify(resumeHandler, never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
+        verify(agentStore).save(any(AgentCheckpoint.class));
     }
 
     @Test
     void test_approveTool_throwsWhenNoCheckpoint() {
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.empty());
 
-        Assertions.assertThrows(
-            CheckpointResolutionException.class, 
-            () -> checkpointApprovalService.approveTool("s1", "github", "test")
-        );
+        Assertions.assertThrows(CheckpointResolutionException.class, () -> {
+            checkpointApprovalService.approveTool("s1", "github", "test");
+        });
 
-        verify(agentStore, never()).updateBatchToolDecision(any(), any(), any(), any());
-        verify(resumeHandler, never()).resumeAfterBatchDecision(any(), any(), any(), any(), any());
+        verify(agentStore, never()).save(any());
     }
 
     @Test
@@ -86,12 +92,9 @@ public class CheckpointApprovalServiceTest {
         
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 
-        checkpointApprovalService.objectMapper = new ObjectMapper();
-
         checkpointApprovalService.approveAll("s1", "bulk approve");
 
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "github", ToolDecision.APPROVED.name());
-        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "sandboxexec", ToolDecision.APPROVED.name());
+        verify(agentStore).save(any(AgentCheckpoint.class));
     }
 
     @Test

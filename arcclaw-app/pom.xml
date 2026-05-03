@@ -357,6 +357,47 @@
               </target>
             </configuration>
           </execution>
+          <execution>
+            <id>ensure-openapi-yaml</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <echo file="${project.build.directory}/openapi.yaml" append="false">openapi: 3.0.3
+info:
+  title: ArcClaw Agent API
+  version: 1.0.0
+paths: {}</echo>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.openapitools</groupId>
+        <artifactId>openapi-generator-maven-plugin</artifactId>
+        <version>7.11.0</version>
+        <executions>
+          <execution>
+            <id>generate-ts-dto</id>
+            <phase>package</phase>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <inputSpec>${project.basedir}/target/openapi.yaml</inputSpec>
+              <generatorName>typescript-fetch</generatorName>
+              <output>${project.basedir}/../arcclaw-ui/src/api/generated</output>
+              <configOptions>
+                <modelPropertyNaming>original</modelPropertyNaming>
+                <supportsES6>true</supportsES6>
+                <typescriptThreePlus>true</typescriptThreePlus>
+              </configOptions>
+              <skipIfSpecIsUnchanged>true</skipIfSpecIsUnchanged>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>

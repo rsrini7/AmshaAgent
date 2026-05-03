@@ -11,10 +11,10 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
+import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -41,7 +41,6 @@ public class PlaywrightBrowserTool implements AgentTool {
     AuditService auditService;
 
     // NOTE: WorkspaceContext is a pure static utility (ScopedValue-backed), NOT a CDI bean.
-    // Use WorkspaceContext.userId(), WorkspaceContext.requireSessionId(), etc. - all static calls.
 
     @Override
     public String name() {
@@ -76,6 +75,17 @@ public class PlaywrightBrowserTool implements AgentTool {
     }
 
     @Override
+    public ToolResponse healthCheck() {
+        if (!isEnabled()) {
+            return ToolResponse.failure(503, "Playwright browser tool is disabled via configuration.");
+        }
+        if (!pageRunner.isInitialized()) {
+            return ToolResponse.failure(503, "Playwright browser tool is not yet initialized or failed to start.");
+        }
+        return ToolResponse.success("Playwright browser tool is healthy and browser instance is running.");
+    }
+
+    @Override
     public String description() {
         return "Navigates to a URL using a real headless browser (Playwright/Chromium) and " +
                "returns the visible page text content. Use for reading web pages that require " +
@@ -102,23 +112,15 @@ public class PlaywrightBrowserTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         // Guard 1: tool disabled
         if (!isEnabled()) {
             return ToolResponse.failure(503, "Playwright browser tool is not enabled. " +
                 "Set arcclaw.tools.playwright.enabled=true to activate.");
         }
 
-        // Guard 2: userId from WorkspaceContext (static, never from params - see BraveWebSearchTool)
-        String userId;
-        try {
-            userId = WorkspaceContext.requireUserId();
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "No active user session.");
-            }
-            throw e;
-        }
+        // Guard 2: userId from ctx
+        String userId = ctx.userId();
 
         if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403, "No active user session.");
@@ -149,8 +151,8 @@ public class PlaywrightBrowserTool implements AgentTool {
 
             // Audit with URL only - NEVER log page content.
             // AuditService.record() 5-arg signature: (sessionId, userId, agentRole, type, detail)
-            String sessionId = WorkspaceContext.requireSessionId();
-            auditService.record(sessionId, userId, WorkspaceContext.requireAgentRole(),
+            String sessionId = ctx.sessionId();
+            auditService.record(sessionId, userId, ctx.agentRole(),
                 SecurityEventType.TOOL_EXECUTED, "Browser navigate: " + url);
 
             return ToolResponse.success(result);

@@ -12,9 +12,9 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
+import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.mcp.transport.McpClientService;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -79,18 +79,15 @@ public class McpSelfRegisterTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         String userId;
         String sessionId;
 
-        try {
-            userId = WorkspaceContext.requireUserId();
-            sessionId = WorkspaceContext.requireSessionId();
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
+        userId = ctx.userId();
+        sessionId = ctx.sessionId();
+
+        if (userId == null || userId.isBlank() || sessionId == null) {
+            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
 
         String name = (String) params.get("name");
@@ -137,7 +134,7 @@ public class McpSelfRegisterTool implements AgentTool {
                 return ToolResponse.failure(400, "Unsupported transport: " + transportStr);
             }
 
-            auditService.record(sessionId, userId, WorkspaceContext.requireAgentRole(), 
+            auditService.record(sessionId, userId, ctx.agentRole(), 
                 SecurityEventType.TOOL_EXECUTED, "MCP server registered: " + name);
 
             return ToolResponse.success("MCP server '" + name + "' registered successfully. tools/list handshake completed.");

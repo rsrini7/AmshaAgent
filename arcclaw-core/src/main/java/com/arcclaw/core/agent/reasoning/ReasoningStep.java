@@ -3,30 +3,73 @@ package com.arcclaw.core.agent.reasoning;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import io.quarkus.qute.TemplateData;
 
 /**
- * One tick of the Thought-Plan-Act-Observe reasoning loop.
+ * A single step in the agent's reasoning process.
  * <p>
- * Each step captures the agent's internal reasoning ({@code thought}),
- * the chosen action ({@code action} - a tool name or {@code "FINISH"}),
- * the parameters for that action ({@code actionInput}), and the
- * result observed after execution ({@code observation}).
- *
- * @param thought         The agent's internal reasoning for this step.
- * @param action          Tool name to invoke, or {@code "FINISH"} to end the loop.
- * @param actionInput     Parameters for the tool (may be empty for FINISH).
- * @param observation     The result of executing the action (filled by the loop).
- * @param inputTokens     LLM input tokens consumed in this step.
- * @param outputTokens    LLM output tokens generated in this step.
- * @param success         Optional: True if the tool execution succeeded.
- * @param errorCode       Optional: Categorized error code for diagnostics.
- * @param traceId         Optional: OTel traceId for log correlation.
- * @param rootCauseClass  Optional: Simple name of the Java exception causing a failure.
+ * This sealed hierarchy represents the different types of steps an agent can take:
+ * <ul>
+ *   <li>{@link ToolCallStep} - Calling a tool.</li>
+ *   <li>{@link ObservationStep} - Recording an observation or system directive.</li>
+ *   <li>{@link FinishStep} - Concluding the task with an answer.</li>
+ *   <li>{@link ParallelStep} - Executing multiple tools in parallel.</li>
+ * </ul>
  */
 @TemplateData
-public record ReasoningStep(
+@JsonTypeInfo(
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "stepType",
+    defaultImpl = ReasoningStep.ToolCallStep.class
+)
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = ReasoningStep.ToolCallStep.class, name = "TOOL_CALL"),
+    @JsonSubTypes.Type(value = ReasoningStep.ObservationStep.class, name = "OBSERVATION"),
+    @JsonSubTypes.Type(value = ReasoningStep.FinishStep.class, name = "FINISH"),
+    @JsonSubTypes.Type(value = ReasoningStep.ParallelStep.class, name = "PARALLEL")
+})
+public sealed interface ReasoningStep permits 
+    ReasoningStep.ToolCallStep, 
+    ReasoningStep.ObservationStep, 
+    ReasoningStep.FinishStep, 
+    ReasoningStep.ParallelStep {
+
+    String thought();
+    String action();
+    Map<String, Object> actionInput();
+    String observation();
+    int inputTokens();
+    int outputTokens();
+    Boolean success();
+    String errorCode();
+    String traceId();
+    String rootCauseClass();
+    boolean isFastPath();
+    boolean isTruncationRecovery();
+
+    // Sentinel constants
+    String FINISH = "FINISH";
+    String OBSERVE = "OBSERVE";
+    String PARALLEL_SENTINEL_DUNDER = "__parallel__";
+    String PARALLEL_SENTINEL_PIPE_PREFIX = "parallel|";
+    String ACTION_INPUT_ANSWER_KEY = "answer";
+
+    @JsonIgnore
+    default boolean isParallelBatch() {
+        return this instanceof ParallelStep;
+    }
+
+    /** Tool invocation step. */
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
+    @JsonTypeName("TOOL_CALL")
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ToolCallStep(
         String thought,
         String action,
         Map<String, Object> actionInput,
@@ -38,133 +81,146 @@ public record ReasoningStep(
         String traceId,
         String rootCauseClass,
         boolean isFastPath,
-        // Jackson defaults missing primitive boolean fields to 'false' during deserialization.
-        @JsonProperty(defaultValue = "false")
-        boolean isTruncationRecovery) {
+        @JsonProperty(defaultValue = "false") boolean isTruncationRecovery
+    ) implements ReasoningStep {}
 
-    /** Action value indicating the loop should terminate with a final answer. */
-    public static final String FINISH = "FINISH";
-
-    /** Action value indicating a system-level observation (e.g. error) needs LLM correction. */
-    public static final String OBSERVE = "OBSERVE";
-
-    public static final String ACTION_INPUT_ANSWER_KEY = "answer";
-
-    /**
-     * Sentinel action for a parallel LLM turn (N tool calls in one response).
-     * actionInput.get("batch") contains the JSON-serialized List<ParallelToolCall>
-     * with fields: callId, toolName, params (pre-execution), observation (post-execution).
-     * See Architecture_Invariants.md §7.1.
-     */
-    public static final String PARALLEL_SENTINEL_DUNDER = "__parallel__";
-
-    public static final String PARALLEL_SENTINEL_PIPE_PREFIX = "parallel|";
-
-    /** Convenience: true if this step represents a parallel tool batch. */
-    @JsonIgnore
-    public boolean isParallelBatch() {
-        return PARALLEL_SENTINEL_DUNDER.equals(this.action);
+    /** Observation or system directive step. */
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
+    @JsonTypeName("OBSERVATION")
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ObservationStep(
+        String thought,
+        String observation,
+        int inputTokens,
+        int outputTokens,
+        Boolean success,
+        String errorCode,
+        String traceId,
+        String rootCauseClass,
+        @JsonProperty(defaultValue = "false") boolean isTruncationRecovery
+    ) implements ReasoningStep {
+        @Override public String action() { return OBSERVE; }
+        @Override public Map<String, Object> actionInput() { return Map.of(); }
+        @Override public boolean isFastPath() { return false; }
     }
 
-    /**
-     * Creates a fast-path tool call step that bypasses the LLM.
-     * These steps are exempted from "degraded response" token checks.
-     */
-    public static ReasoningStep fastPath(String thought, String action, Map<String, Object> actionInput) {
-        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null, null, null, null, true, false);
+    /** Final conclusion step. */
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
+    @JsonTypeName("FINISH")
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record FinishStep(
+        String thought,
+        Map<String, Object> actionInput,
+        int inputTokens,
+        int outputTokens,
+        @JsonProperty(defaultValue = "false") boolean isTruncationRecovery
+    ) implements ReasoningStep {
+        @Override public String action() { return FINISH; }
+        @Override public String observation() { return null; }
+        @Override public Boolean success() { return true; }
+        @Override public String errorCode() { return null; }
+        @Override public String traceId() { return null; }
+        @Override public String rootCauseClass() { return null; }
+        @Override public boolean isFastPath() { return false; }
     }
 
-
-    /**
-     * Creates a pre-execution parallel batch step.
-     * observation is empty until ParallelToolStepExecutor completes.
-     */
-    public static ReasoningStep parallelBatch(
-            String thought,
-            Map<String, Object> batchPayload,
-            int inputTokens,
-            int outputTokens) {
-        return new ReasoningStep(
-            thought,
-            PARALLEL_SENTINEL_DUNDER,
-            batchPayload,
-            null,          // observation filled in after execution
-            inputTokens,
-            outputTokens,
-            null, null, null, null, false, false
-        );
+    /** Parallel tool execution batch. */
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
+    @JsonTypeName("PARALLEL")
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ParallelStep(
+        String thought,
+        Map<String, Object> actionInput,
+        String observation,
+        int inputTokens,
+        int outputTokens,
+        @JsonProperty(defaultValue = "false") boolean isTruncationRecovery
+    ) implements ReasoningStep {
+        @Override public String action() { return PARALLEL_SENTINEL_DUNDER; }
+        @Override public Boolean success() { return null; }
+        @Override public String errorCode() { return null; }
+        @Override public String traceId() { return null; }
+        @Override public String rootCauseClass() { return null; }
+        @Override public boolean isFastPath() { return false; }
     }
 
-    /**
-     * Create a step with no observation yet (pre-execution). Tokens are typically 0
-     * until known.
-     */
-    public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput) {
-        return new ReasoningStep(thought, action, actionInput, null, 0, 0, null, null, null, null, false, false);
+    // --- Static Factories ---
+
+    static ReasoningStep fastPath(String thought, String action, Map<String, Object> actionInput) {
+        return new ToolCallStep(thought, action, actionInput, null, 0, 0, null, null, null, null, true, false);
     }
 
-    /** Create a step with tokens explicitly provided. */
-    public static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput, int inputTk,
-            int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, null, inputTk, outputTk, null, null, null, null, false, false);
+    static ReasoningStep parallelBatch(String thought, Map<String, Object> batchPayload, int inputTokens, int outputTokens) {
+        return new ParallelStep(thought, batchPayload, null, inputTokens, outputTokens, false);
     }
 
-    /** Create a step representing a schema/parsing error to trigger LLM retry. */
-    public static ReasoningStep schemaError(String observation, int inputTk, int outputTk) {
-        return new ReasoningStep("Parsing Error", OBSERVE, Map.of(), observation, inputTk, outputTk, false, "SCHEMA_ERROR", null, null, false, false);
+    static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput) {
+        if (FINISH.equals(action)) return new FinishStep(thought, actionInput, 0, 0, false);
+        return new ToolCallStep(thought, action, actionInput, null, 0, 0, null, null, null, null, false, false);
     }
 
-    /**
-     * Create a step representing a system-level directive injected into history.
-     */
-    public static ReasoningStep systemMessage(String observation) {
-        return new ReasoningStep("System Directive", OBSERVE, Map.of(), observation, 0, 0, true, null, null, null, false, false);
+    static ReasoningStep pending(String thought, String action, Map<String, Object> actionInput, int inputTk, int outputTk) {
+        if (FINISH.equals(action)) return new FinishStep(thought, actionInput, inputTk, outputTk, false);
+        return new ToolCallStep(thought, action, actionInput, null, inputTk, outputTk, null, null, null, null, false, false);
     }
 
-    /** Create a step representing an observation of an action result. */
-    public static ReasoningStep observe(String action, String observation, String thought) {
-        return new ReasoningStep(thought, action, Map.of(), observation, 0, 0, true, null, null, null, false, false);
+    static ReasoningStep schemaError(String observation, int inputTk, int outputTk) {
+        return new ObservationStep("Parsing Error", observation, inputTk, outputTk, false, "SCHEMA_ERROR", null, null, false);
     }
 
-    /** Create a copy of this step with the observation filled in, without success metadata. */
-    public ReasoningStep withObservation(String observation) {
-        return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, this.success, this.errorCode, this.traceId, this.rootCauseClass, this.isFastPath, this.isTruncationRecovery);
+    static ReasoningStep systemMessage(String observation) {
+        return new ObservationStep("System Directive", observation, 0, 0, true, null, null, null, false);
     }
 
-    /** Create a copy of this step with the observation and success metadata filled in. */
-    public ReasoningStep withObservation(String observation, Boolean success) {
-        return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, success, this.errorCode, this.traceId, this.rootCauseClass, this.isFastPath, this.isTruncationRecovery);
+    static ReasoningStep observe(String action, String observation, String thought) {
+        return new ToolCallStep(thought, action, Map.of(), observation, 0, 0, true, null, null, null, false, false);
     }
 
-    /** Create a copy of this step with full diagnostics metadata. */
-    public ReasoningStep withDiagnostics(String observation, Boolean success, String errorCode, String traceId, String rootCauseClass) {
-        return new ReasoningStep(this.thought, this.action, this.actionInput, observation, this.inputTokens,
-                this.outputTokens, success, errorCode, traceId, rootCauseClass, this.isFastPath, this.isTruncationRecovery);
+    static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation, int inputTk, int outputTk) {
+        return of(thought, action, actionInput, observation, inputTk, outputTk, null, null, null, null);
     }
 
-    /** Create a copy of this step with truncation recovery flag. */
-    public ReasoningStep withTruncationRecovery(boolean truncationRecovery) {
-        return new ReasoningStep(this.thought, this.action, this.actionInput, this.observation, this.inputTokens,
-                this.outputTokens, this.success, this.errorCode, this.traceId, this.rootCauseClass, this.isFastPath, truncationRecovery);
+    static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation, int inputTk, int outputTk, Boolean success) {
+        return of(thought, action, actionInput, observation, inputTk, outputTk, success, null, null, null);
     }
 
-    /** Mapping factory: constructs a ReasoningStep from all its constituent fields (legacy). */
-    public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
-            int inputTk, int outputTk) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, null, null, null, null, false, false);
+    static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation, int inputTk, int outputTk, Boolean success, String errorCode, String traceId, String rootCauseClass) {
+        if (FINISH.equals(action)) return new FinishStep(thought, actionInput, inputTk, outputTk, false);
+        if (PARALLEL_SENTINEL_DUNDER.equals(action)) return new ParallelStep(thought, actionInput, observation, inputTk, outputTk, false);
+        if (OBSERVE.equals(action)) return new ObservationStep(thought, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass, false);
+        return new ToolCallStep(thought, action, actionInput, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass, false, false);
     }
 
-    /** Mapping factory: constructs a ReasoningStep from all its constituent fields. */
-    public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
-            int inputTk, int outputTk, Boolean success) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, null, null, null, false, false);
+    // --- Copy Methods ---
+
+    default ReasoningStep withObservation(String observation) {
+        return withObservation(observation, success());
     }
 
-    /** Mapping factory: constructs a ReasoningStep with diagnostics. */
-    public static ReasoningStep of(String thought, String action, Map<String, Object> actionInput, String observation,
-            int inputTk, int outputTk, Boolean success, String errorCode, String traceId, String rootCauseClass) {
-        return new ReasoningStep(thought, action, actionInput, observation, inputTk, outputTk, success, errorCode, traceId, rootCauseClass, false, false);
+    default ReasoningStep withObservation(String observation, Boolean success) {
+        return switch (this) {
+            case ToolCallStep s -> new ToolCallStep(s.thought, s.action, s.actionInput, observation, s.inputTokens, s.outputTokens, success, s.errorCode, s.traceId, s.rootCauseClass, s.isFastPath, s.isTruncationRecovery);
+            case ObservationStep s -> new ObservationStep(s.thought, observation, s.inputTokens, s.outputTokens, success, s.errorCode, s.traceId, s.rootCauseClass, s.isTruncationRecovery);
+            case FinishStep s -> s;
+            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, observation, s.inputTokens, s.outputTokens, s.isTruncationRecovery);
+        };
+    }
+
+    default ReasoningStep withDiagnostics(String observation, Boolean success, String errorCode, String traceId, String rootCauseClass) {
+         return switch (this) {
+            case ToolCallStep s -> new ToolCallStep(s.thought, s.action, s.actionInput, observation, s.inputTokens, s.outputTokens, success, errorCode, traceId, rootCauseClass, s.isFastPath, s.isTruncationRecovery);
+            case ObservationStep s -> new ObservationStep(s.thought, observation, s.inputTokens, s.outputTokens, success, errorCode, traceId, rootCauseClass, s.isTruncationRecovery);
+            case FinishStep s -> s;
+            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, observation, s.inputTokens, s.outputTokens, s.isTruncationRecovery);
+        };
+    }
+
+    default ReasoningStep withTruncationRecovery(boolean truncationRecovery) {
+        return switch (this) {
+            case ToolCallStep s -> new ToolCallStep(s.thought, s.action, s.actionInput, s.observation, s.inputTokens, s.outputTokens, s.success, s.errorCode, s.traceId, s.rootCauseClass, s.isFastPath, truncationRecovery);
+            case ObservationStep s -> new ObservationStep(s.thought, s.observation, s.inputTokens, s.outputTokens, s.success, s.errorCode, s.traceId, s.rootCauseClass, truncationRecovery);
+            case FinishStep s -> new FinishStep(s.thought, s.actionInput, s.inputTokens, s.outputTokens, truncationRecovery);
+            case ParallelStep s -> new ParallelStep(s.thought, s.actionInput, s.observation, s.inputTokens, s.outputTokens, truncationRecovery);
+        };
     }
 }

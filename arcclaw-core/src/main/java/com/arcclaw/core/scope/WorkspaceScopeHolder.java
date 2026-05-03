@@ -138,12 +138,7 @@ public final class WorkspaceScopeHolder {
                 scope = scope.where(CHAT_ID, chatId);
             }
 
-            return scope.call(new ScopedValue.CallableOp<T, Exception>() {
-                @Override
-                public T call() throws Exception {
-                    return callable.call();
-                }
-            });
+            return scope.call(() -> callable.call());
         } finally {
             if (requestContext != null && !wasActive) requestContext.deactivate();
             MDC.remove(MdcKeys.SESSION_ID);

@@ -48,7 +48,7 @@ public class RagContextEnricher implements ContextEnricher {
     );
 
     @Override
-    public String enrich(String sessionId, String goal, String basePrompt) {
+    public String enrich(String sessionId, String userId, String goal, String basePrompt) {
         if (goal == null || goal.isBlank()) return basePrompt;
 
         // §7.45: Skip RAG for cron sessions to prevent scheduling context from
@@ -64,7 +64,6 @@ public class RagContextEnricher implements ContextEnricher {
             return basePrompt;
         }
 
-        String userId = WorkspaceContext.requireUserId();
         if (userId == null || userId.isBlank()) {
             userId = sessionId;
         }

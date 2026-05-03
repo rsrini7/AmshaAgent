@@ -7,7 +7,6 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import org.jboss.logging.Logger;
@@ -70,18 +69,18 @@ public class CheckpointTransitionService {
 
     /** Marks a checkpoint FAILED with a reason only. */
     public void markFailed(Long checkpointId, String reason) {
-        markFailed(checkpointId, reason, null, null, null);
+        markFailed(checkpointId, reason, null, null, null, "unknown");
     }
 
     /** Marks a checkpoint FAILED by entity reference (reason only). */
     public void markFailed(AgentCheckpoint checkpoint, String reason) {
-        markFailed(checkpoint.getId(), reason, null, null, null);
+        markFailed(checkpoint.getId(), reason, null, null, null, "unknown");
     }
 
     /** Marks a checkpoint FAILED with full diagnostic context. */
     public void markFailed(AgentCheckpoint checkpoint, String reason,
                            String errorCode, String traceId, String rootCauseClass) {
-        markFailed(checkpoint.getId(), reason, errorCode, traceId, rootCauseClass);
+        markFailed(checkpoint.getId(), reason, errorCode, traceId, rootCauseClass, "unknown");
     }
 
     /**
@@ -92,10 +91,9 @@ public class CheckpointTransitionService {
      * to re-check those statuses itself.
      */
     public void markFailed(Long checkpointId, String reason,
-                           String errorCode, String traceId, String rootCauseClass) {
+                           String errorCode, String traceId, String rootCauseClass, String userId) {
         storeAdapter.markFailed(checkpointId, reason, errorCode, traceId, rootCauseClass);
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_FAILED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
             String details = String.format("reason=%s errorCode=%s traceId=%s",
                     reason, errorCode, traceId);
@@ -111,10 +109,9 @@ public class CheckpointTransitionService {
     /**
      * Marks a checkpoint ORPHANED (scheduler abandoned or process crash) and emits audit.
      */
-    public void markOrphaned(Long checkpointId, String reason) {
+    public void markOrphaned(Long checkpointId, String reason, String userId) {
         storeAdapter.markOrphaned(checkpointId, reason);
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_ORPHANED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
             auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
                     SecurityEventType.CHECKPOINT_ORPHANED, reason, idempotencyKey);
@@ -128,18 +125,15 @@ public class CheckpointTransitionService {
     /**
      * Marks a checkpoint COMPLETED, emits audit, and archives it to prevent reuse.
      */
-    public void markCompleted(Long checkpointId) {
+    public void markCompleted(Long checkpointId, String userId) {
         storeAdapter.markCompleted(checkpointId);
         storeAdapter.findById(checkpointId).ifPresent(dto -> {
-            String userId = WorkspaceContext.resolveUserId();
             String idempotencyKey = "CP_COMPLETED:" + checkpointId + ":" + dto.createdAt().toEpochMilli();
             auditService.recordWithIdempotency(dto.sessionId(), userId, dto.agentRole(),
                     SecurityEventType.CHECKPOINT_COMPLETED, null, idempotencyKey);
             log.infof("Checkpoint %d marked COMPLETED for session %s",
                     checkpointId, dto.sessionId());
 
-            // §7.31: Immediately archive COMPLETED checkpoints so findLatestNonArchived
-            // correctly ignores them in the next turn's FreshStart check.
             storeAdapter.archive(checkpointId);
         });
     }

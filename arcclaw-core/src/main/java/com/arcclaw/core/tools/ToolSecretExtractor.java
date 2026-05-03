@@ -33,22 +33,44 @@ public class ToolSecretExtractor {
                 || actualClass.getName().contains("_Subclass")) {
             actualClass = actualClass.getSuperclass();
         }
+        if (actualClass != toolClass) {
+            log.debugf("Unwrapped proxy %s to actual class %s", 
+                toolClass.getSimpleName(), actualClass.getSimpleName());
+        }
 
-        try {
-            Method method = actualClass.getMethod(methodName, Map.class);
-            var container = method.getAnnotation(RequiresSecrets.class);
-            if (container != null) {
-                for (var rs : container.value()) {
-                    secrets.put(rs.envVar(), rs.vaultKey());
+        for (Method m : actualClass.getDeclaredMethods()) {
+            if (m.getName().equals(methodName)) {
+                var container = m.getAnnotation(RequiresSecrets.class);
+                if (container != null) {
+                    for (var rs : container.value()) {
+                        secrets.put(rs.envVar(), rs.vaultKey());
+                    }
+                }
+                var single = m.getAnnotation(RequiresSecret.class);
+                if (single != null) {
+                    secrets.put(single.envVar(), single.vaultKey());
                 }
             }
-            var single = method.getAnnotation(RequiresSecret.class);
-            if (single != null && container == null) {
-                secrets.put(single.envVar(), single.vaultKey());
+        }
+        if (secrets.isEmpty()) {
+            for (Method m : actualClass.getMethods()) {
+                if (m.getName().equals(methodName)) {
+                    var container = m.getAnnotation(RequiresSecrets.class);
+                    if (container != null) {
+                        for (var rs : container.value()) {
+                            secrets.put(rs.envVar(), rs.vaultKey());
+                        }
+                    }
+                    var single = m.getAnnotation(RequiresSecret.class);
+                    if (single != null) {
+                        secrets.put(single.envVar(), single.vaultKey());
+                    }
+                }
             }
-        } catch (NoSuchMethodException _) {
-            log.warnf("Tool %s has no %s(Map) method - no secrets extracted",
-                    actualClass.getName(), methodName);
+        }
+        if (!secrets.isEmpty()) {
+            log.debugf("Extracted %d required secrets from %s.%s", 
+                secrets.size(), actualClass.getSimpleName(), methodName);
         }
         return Collections.unmodifiableMap(secrets);
     }

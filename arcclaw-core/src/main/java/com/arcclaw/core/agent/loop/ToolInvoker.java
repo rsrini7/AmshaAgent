@@ -43,15 +43,24 @@ public class ToolInvoker {
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
         Span toolSpan = agentOtelContext.startToolSpan(sessionId, toolName, "invoke");
         Timer.Sample sample = (registry != null) ? Timer.start(registry) : null;
-        try (Scope scope = toolSpan.makeCurrent()) {
+        try (Scope _ = toolSpan.makeCurrent()) {
             ToolResponse response = toolRegistry.invokeTool(toolName, params);
             String rawObservation = response.output();
             String sanitizedObservation = observationSanitizer.sanitize(toolName, rawObservation);
-            if (!response.success()) {
-                log.errorf("Tool '%s' execution failed in session %s: %s (exitCode=%d)", toolName, sessionId, sanitizedObservation, response.exitCode());
+            
+            if (response instanceof ToolResponse.ToolFailure failure) {
+                log.errorf("Tool '%s' execution failed in session %s: %s (exitCode=%d)", 
+                        toolName, sessionId, sanitizedObservation, failure.exitCode());
             }
-            return new ToolResponse(response.exitCode(), sanitizedObservation, response.success(), response.isInfraFailure(),
-                    response.errorCode(), response.traceId(), response.rootCauseClass());
+
+            return switch (response) {
+                case ToolResponse.ToolSuccess _ -> ToolResponse.success(sanitizedObservation);
+                case ToolResponse.ToolFailure failure -> new ToolResponse.ToolFailure(
+                        failure.exitCode(), sanitizedObservation, failure.isInfraFailure(),
+                        failure.errorCode(), failure.traceId(), failure.rootCauseClass());
+                case ToolResponse.ToolPending pending -> new ToolResponse.ToolPending(
+                        sanitizedObservation, pending.approvalToken());
+            };
         } catch (RequiresApprovalException e) {
             // Re-throw for runner checkpoint persistence
             throw e;

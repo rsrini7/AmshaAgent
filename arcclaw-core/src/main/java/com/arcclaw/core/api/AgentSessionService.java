@@ -11,14 +11,16 @@ import java.util.concurrent.ExecutorService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -118,13 +120,16 @@ public class AgentSessionService {
         this.maxResumeIterations = maxResumeIterations;
     }
 
+    @Context
+    SecurityContext securityContext;
+
     public String createSession(AutonomyLevel autonomyLevel) {
         String sessionId = UUID.randomUUID().toString();
         AutonomyLevel level = (autonomyLevel != null) ? autonomyLevel : AutonomyLevel.SUPERVISED;
         log.infof("Creating new session: %s (autonomy=%s)", sessionId, level);
         heartbeatTracker.recordHeartbeat(sessionId, level);
 
-        String requestingKey = WorkspaceContext.resolveUserId();
+        String requestingKey = resolveUserId();
         if (requestingKey != null && !requestingKey.isBlank()) {
             heartbeatTracker.tryBindOwner(sessionId, requestingKey);
         }
@@ -132,11 +137,18 @@ public class AgentSessionService {
     }
 
     public Map<String, Instant> listSessions() {
-        String requestingKey = WorkspaceContext.resolveUserId();
+        String requestingKey = resolveUserId();
         if (requestingKey == null || requestingKey.isBlank()) {
             return Map.of();
         }
         return heartbeatTracker.activeSessionsByOwner(requestingKey);
+    }
+
+    private String resolveUserId() {
+        if (securityContext != null && securityContext.getUserPrincipal() != null) {
+            return securityContext.getUserPrincipal().getName();
+        }
+        return WorkspaceContext.resolveUserId();
     }
 
     public Response runSync(String sessionId, RunAgentRequest request) {
@@ -343,7 +355,7 @@ public class AgentSessionService {
         // Guard 2: per-key session ownership
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
-            String requestingKey = WorkspaceContext.resolveUserId();
+            String requestingKey = resolveUserId();
             if (requestingKey != null && !owner.get().equals(requestingKey)) {
                 log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
                           requestingKey, sessionId, owner.get());

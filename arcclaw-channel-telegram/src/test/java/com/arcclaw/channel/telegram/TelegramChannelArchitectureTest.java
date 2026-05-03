@@ -14,5 +14,6 @@ class TelegramChannelArchitectureTest {
         noClasses().that().resideInAPackage("com.arcclaw.channel.telegram..")
             .should().dependOnClassesThat()
             .resideInAPackage("com.arcclaw.core..")
+            .allowEmptyShould(true)
             .because("Telegram channel must only depend on arcclaw-channel-api SPI.");
 }

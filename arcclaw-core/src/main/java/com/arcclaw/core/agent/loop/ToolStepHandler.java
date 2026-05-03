@@ -211,10 +211,10 @@ public class ToolStepHandler {
         }
         response = ((InvokeResult.Responded) invokeResult).response();
 
-        if (response != null && response.isInfraFailure()) {
+        if (response instanceof ToolResponse.ToolFailure failure && failure.isInfraFailure()) {
             log.errorf("[TOOL-STEP] Infrastructure failure for tool '%s' session=%s: %s",
-                    toolName, context.sessionId(), response.output());
-            history.add(step.withObservation("INFRA_FAILURE: " + response.output()));
+                    toolName, context.sessionId(), failure.output());
+            history.add(step.withObservation("INFRA_FAILURE: " + failure.output()));
             return StepDecision.terminal(AgentResult.failed(
                     "⚠️ The sandbox execution environment is currently offline. " +
                     "Your code was not executed. Please try again later.",
@@ -224,11 +224,11 @@ public class ToolStepHandler {
 
         // Phase 3 - Observe
         String observation = buildObservation(response);
-        final ReasoningStep completedStep = step.withObservation(observation, response != null ? response.success() : false);
+        final ReasoningStep completedStep = step.withObservation(observation, response instanceof ToolResponse.ToolSuccess);
         history.add(completedStep);
 
         // Record for future O(1) deduplication in this turn
-        if (response != null && response.success()) {
+        if (response instanceof ToolResponse.ToolSuccess) {
             guard.recordToolCall(context.sessionId(), toolName, params, observation);
         }
 
@@ -262,7 +262,7 @@ public class ToolStepHandler {
         }
 
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                context.sessionId(), context.agentRole(), step.action(),
+                context.sessionId(), context.agentRole(), context.autonomyLevel(), step.action(),
                 step.actionInput() != null ? step.actionInput() : Map.of(),
                 history, context.goal(), skillSnapshot);
 
@@ -295,7 +295,7 @@ public class ToolStepHandler {
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
             List<ReasoningStep> historyAtPause = appendPendingStep(history, step);
             return StepDecision.terminal(
-                    checkpointManager.persist(context, p.toolName(), p.paramsJson(), historyAtPause,
+                    checkpointManager.persist(context, p.frame(), historyAtPause,
                                               context.channelType(), context.channelPlatformId()));
         }
         return null; // PROCEED
@@ -341,7 +341,7 @@ public class ToolStepHandler {
             List<ReasoningStep> historyAtPause = appendPendingStep(history, step);
             return new InvokeResult.ShortCircuit(StepDecision.terminal(
                     checkpointManager.persist(context,
-                        e.getToolName(), e.getToolParametersJson(), historyAtPause,
+                        e.getFrame(), historyAtPause,
                         context.channelType(), context.channelPlatformId())));
         } catch (Exception e) {
             exceptionClass = e.getClass().getSimpleName();
@@ -359,16 +359,19 @@ public class ToolStepHandler {
     }
 
     private String buildObservation(ToolResponse response) {
-        if (response == null) {
-            return "Tool invocation returned no response.";
-        }
-        if (response.success()) return response.output();
-        String out = response.output();
-        if (out == null) {
-            return "Tool invocation returned no response.";
-        }
-        if (out.startsWith("Tool execution failed:")) return out;
-        return "Tool execution failed: " + out + " (exit=" + response.exitCode() + ")";
+        return switch (response) {
+            case null -> "Tool invocation returned no response.";
+            case ToolResponse.ToolSuccess success -> success.output();
+            case ToolResponse.ToolFailure failure -> {
+                String out = failure.output();
+                if (out == null || out.isEmpty()) {
+                    yield "Tool execution failed: No output (exit=" + failure.exitCode() + ")";
+                }
+                if (out.startsWith("Tool execution failed:")) yield out;
+                yield "Tool execution failed: " + out + " (exit=" + failure.exitCode() + ")";
+            }
+            case ToolResponse.ToolPending pending -> pending.output();
+        };
     }
 
     /**

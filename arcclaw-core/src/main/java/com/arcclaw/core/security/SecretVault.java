@@ -18,6 +18,8 @@ public interface SecretVault {
      */
     void store(String keyName, byte[] secret);
 
+    void store(String keyName, byte[] secret, String userId);
+
     /**
      * Retrieves a decrypted secret.
      * 
@@ -25,6 +27,8 @@ public interface SecretVault {
      * @return An Optional containing the secret bytes (wrapped in VaultKey).
      */
     Optional<VaultKey> get(String keyName);
+
+    Optional<VaultKey> get(String keyName, String userId);
 
     // rotateSecrets removed as per key-rotation policy deferral
     /**

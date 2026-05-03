@@ -214,7 +214,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
                     if (textPatternUtils.goalRequestsExecution(goal)) {
                         String errorObs = history.stream().filter(s -> Boolean.FALSE.equals(s.success()) && s.observation() != null)
-                                .map(ReasoningStep::observation).reduce((_, second) -> second).orElse(null);
+                                .map(ReasoningStep::observation).reduce((first, second) -> second).orElse(null);
                         String hint = "STOP. EXECUTE the code - not explain it. Call sandbox_exec RIGHT NOW.";
                         if (errorObs != null) hint = "Previous execution failed:\n" + errorObs + "\n\n" + hint;
                         return ReasoningStep.pending("LLM returned prose instead of executing", "OBSERVE", Map.of(), 0, 0).withObservation(hint);

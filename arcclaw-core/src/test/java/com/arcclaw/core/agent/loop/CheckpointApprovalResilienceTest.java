@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.state.StatefulAgentStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +17,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CheckpointApprovalResilienceTest {
 
     @Mock StatefulAgentStore agentStore;
+    @Mock com.arcclaw.core.agent.sse.AgentSseService sseService;
+    @Mock com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Mock jakarta.enterprise.inject.Instance<com.arcclaw.core.agent.loop.CheckpointResumeHandler> resumeHandlerInstance;
     @InjectMocks CheckpointApprovalService service;
 
     @Test

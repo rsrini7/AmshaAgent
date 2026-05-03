@@ -75,7 +75,7 @@ class CheckpointResumeHandlerPreExecTest {
         
         // Mock pre-executed result for 'safe'
         Map<String, String> preResults = Map.of(
-            "safe", objectMapper.writeValueAsString(ToolResponse.success("pre-exec-output"))
+            "safe", objectMapper.writerFor(ToolResponse.class).writeValueAsString(ToolResponse.success("pre-exec-output"))
         );
         cp.setPreExecutedResults(objectMapper.writeValueAsString(preResults));
         

@@ -137,8 +137,9 @@ public class SystemPromptBuilder {
         String finalPrompt = baseSystemPrompt + strictBinding + "\n" + securityPrompt + (dynamicRules.isEmpty() ? "" : "\n" + dynamicRules);
 
         if (contextEnrichers != null) {
+            String userId = context != null ? context.userId() : null;
             for (ContextEnricher enricher : contextEnrichers) {
-                finalPrompt = enricher.enrich(sessionId, goal, finalPrompt);
+                finalPrompt = enricher.enrich(sessionId, userId, goal, finalPrompt);
             }
         }
 

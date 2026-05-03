@@ -11,7 +11,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.Fts5QueryUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
@@ -94,14 +93,18 @@ public class MemorySearchTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         String userId;
         String sessionId;
 
         try {
             // NS2: Extract and validate tenant context
-            userId    = WorkspaceContext.requireUserId();
-            sessionId = WorkspaceContext.requireSessionId();
+            userId    = ctx.userId();
+            sessionId = ctx.sessionId();
+            
+            if (userId == null || userId.isBlank()) {
+                 return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+            }
         } catch (IllegalStateException e) {
             if (e.getMessage() != null && e.getMessage().contains("unbound")) {
                 return ToolResponse.failure(403, "Security violation: tenant context not bound.");

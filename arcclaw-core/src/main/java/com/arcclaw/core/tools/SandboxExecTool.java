@@ -21,7 +21,6 @@ import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -92,6 +91,14 @@ public class SandboxExecTool implements AgentTool {
     @ConfigProperty(name = "arcclaw.sandbox.java-executable")
     Optional<String> configuredJavaExe;
 
+    @Override
+    public ToolResponse healthCheck() {
+        if (isolationExecutor == null) {
+            return ToolResponse.failure(503, "Sandbox isolation executor is not initialized.");
+        }
+        return ToolResponse.success("Sandbox execution environment is initialized.");
+    }
+
     @Override public String name()             { return ToolCapability.SANDBOX_EXEC.toolName(); }
     @Override public String description()      { return ToolCapability.SANDBOX_EXEC.description(); }
     @Override public ToolOperation requiredOperation() { return ToolOperation.EXECUTE_SHELL; }
@@ -116,7 +123,7 @@ public class SandboxExecTool implements AgentTool {
     //            See class-level Javadoc for why we chose this over java --source.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
-    public List<String> sandboxCommand(Map<String, Object> params) {
+    public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
         ensureUnwrapped(params);
         String code = (String) params.get("code");
         String lang = (String) params.get("language");
@@ -128,7 +135,7 @@ public class SandboxExecTool implements AgentTool {
         String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
         if (violation != null) {
             log.warnf("[SandboxExecTool] Blocked dangerous pattern in session %s: %s",
-                    WorkspaceContext.requireSessionId(), violation);
+                    ctx.sessionId(), violation);
             throw new IllegalArgumentException("🚫 Execution blocked: " + violation);
         }
 
@@ -268,16 +275,8 @@ public class SandboxExecTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
-        String sessionId;
-        try {
-            sessionId = WorkspaceContext.requireSessionId();
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
-        }
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        String sessionId = ctx.sessionId();
 
         try {
             String code = (String) params.get("code");

@@ -114,10 +114,12 @@ class ToolStepHandlerGuardTest {
         AgentExecutionContext ctx = createCtx("researcher", "list gists");
         ReasoningStep step = ReasoningStep.pending("thought", "github", Map.of("target", "rsrini7"));
 
-        when(guard.evaluate(anyString(), anyString(), anyString(), any(), anyList(), anyString(), anyList()))
-                .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
-                        "github", "{\"target\":\"rsrini7\"}"));
-        when(checkpointManager.persist(any(), anyString(), anyString(), anyList(), any(), any()))
+        Mockito.lenient().doReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
+                        "github", "{\"target\":\"rsrini7\"}"))
+                .when(guard).evaluate(
+                        anyString(), anyString(), any(AutonomyLevel.class), anyString(), 
+                        any(), anyList(), anyString(), anyList());
+        when(checkpointManager.persist(any(), any(), anyList(), any(), any()))
                 .thenReturn(AgentResult.awaitingApproval("github", "{\"target\":\"rsrini7\"}", "sess1", List.of()));
 
         StepDecision decision = handler.invokeToolAndObserve(ctx, List.of(), step, 0, List.of());
@@ -125,7 +127,7 @@ class ToolStepHandlerGuardTest {
         assertEquals(DecisionType.TERMINAL, decision.type());
 
         ArgumentCaptor<List<ReasoningStep>> historyCaptor = ArgumentCaptor.forClass(List.class);
-        verify(checkpointManager).persist(any(), anyString(), anyString(), historyCaptor.capture(), any(), any());
+        verify(checkpointManager).persist(any(), any(), historyCaptor.capture(), any(), any());
         assertEquals(1, historyCaptor.getValue().size());
         assertEquals("github", historyCaptor.getValue().getFirst().action());
     }

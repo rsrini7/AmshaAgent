@@ -31,6 +31,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.governance.ApprovalFrame;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
@@ -165,6 +166,8 @@ class AgentStateMachineRunnerTest {
         // Fix NPE: stub sanitizers to return input by default
         lenient().when(piiTransformer.transform(any(), anyString())).thenAnswer(inv -> inv.getArgument(1));
         lenient().when(piiScanReflex.sanitize(anyString())).thenAnswer(inv -> inv.getArgument(0));
+        
+        lenient().when(agentStore.saveWithSteps(any(), anyList())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -188,7 +191,7 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(toolStep);
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(), anyList(), anyString(), anyList()))
+        when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
                 .thenReturn(ToolResponse.success("output"));
@@ -250,10 +253,10 @@ class AgentStateMachineRunnerTest {
                     .thenReturn(toolStep);
             when(toolRegistry.findTool("protected-tool"))
                     .thenReturn(Optional.of(mock(AgentTool.class)));
-            when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
+            when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(),
                     anyList(), anyString(), anyList()))
                     .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
-                            "protected-tool", "{}"));
+                            new ApprovalFrame("protected-tool", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
             when(agentStore.load(anyString(), anyString()))
                     .thenReturn(Optional.of(new AgentCheckpoint()));
 
@@ -261,6 +264,9 @@ class AgentStateMachineRunnerTest {
                     "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE, 5, 0, "telegram", "platform-1", null, null);
             AgentResult result = runner.run(ctx, engine, List.of());
 
+            if (result instanceof AgentResult.Failed f) {
+                System.out.println("DEBUG Failure: " + f.reason() + ", category: " + f.category());
+            }
             assertInstanceOf(AgentResult.AwaitingApproval.class, result);
             assertEquals("protected-tool",
                     ((AgentResult.AwaitingApproval) result).toolName());
@@ -281,7 +287,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(toolStep2)
                 .thenReturn(toolStep3);
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
+        when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(),
                 anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))
@@ -321,7 +327,7 @@ class AgentStateMachineRunnerTest {
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(scheduleStep);
         when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(mock(AgentTool.class)));
-        when(guard.evaluate(anyString(), anyString(), anyString(), anyMap(),
+        when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(),
                 anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(invoker.invoke(anyString(), anyMap(), anyString()))

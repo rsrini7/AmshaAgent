@@ -101,11 +101,26 @@ public class ToolRegistry {
         var tool = findTool(toolName)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
 
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                WorkspaceContext.requireSessionId(),
+                WorkspaceContext.resolveUserId(),
+                WorkspaceContext.requireChatIdOrUserId(),
+                WorkspaceContext.requireAgentRole(),
+                WorkspaceContext.requireAutonomyOrSupervised(),
+                Span.current().getSpanContext().getTraceId(),
+                WorkspaceContext.channelType().orElse(null),
+                WorkspaceContext.channelPlatformId(),
+                WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null,
+                WorkspaceContext.suggestedCron(),
+                WorkspaceContext.suggestedNextFireTime(),
+                WorkspaceContext.suggestedCronSource()
+        );
+
         // 1. Governance checks
         try {
-            governanceGuard.verifyRoleCapability(toolName, WorkspaceContext.requireAgentRole());
-            governanceGuard.verifyAutonomy(toolName, tool.requiredOperation(), params);
-        } catch (SecurityException e) {
+            governanceGuard.verifyRoleCapability(ctx, toolName);
+            governanceGuard.verifyAutonomy(ctx, toolName, tool.requiredOperation(), params);
+        } catch (SecurityException | IllegalArgumentException e) {
             return ToolResponse.failure(403, e.getMessage());
         }
 
@@ -139,18 +154,18 @@ public class ToolRegistry {
 
         // 3. Execution Path
         if (tool.requiresSandbox()) {
-            return invokeSandboxed(tool, sanitizedParams);
+            return invokeSandboxed(ctx, tool, sanitizedParams);
         } else {
-            return invokeDirect(tool, sanitizedParams);
+            return invokeDirect(ctx, tool, sanitizedParams);
         }
     }
 
-    private ToolResponse invokeSandboxed(AgentTool tool, Map<String, Object> params) {
+    private ToolResponse invokeSandboxed(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {
         String toolName = tool.name();
-        governanceGuard.recordToolAudit(toolName);
+        governanceGuard.recordToolAudit(ctx, toolName);
         var requiredSecrets = secretExtractor.extractRequiredSecrets(tool.getClass(), "sandboxCommand");
 
-        String safeDir = toSafeDirName(WorkspaceContext.requireSessionId());
+        String safeDir = toSafeDirName(ctx.sessionId());
         var workspaceRoot = Path.of(workspaceRootDir, safeDir);
 
         try {
@@ -159,10 +174,10 @@ public class ToolRegistry {
             }
 
             tool.prepareWorkspace(workspaceRoot, params);
-            var command = tool.sandboxCommand(params);
+            var command = tool.sandboxCommand(ctx, params);
 
             SandboxResult result = isolationExecutor.executeSandboxed(
-                    WorkspaceContext.requireSessionId(), workspaceRoot,
+                    ctx.sessionId(), workspaceRoot,
                     command, requiredSecrets);
 
             if (result.isInfraFailure()) {
@@ -183,27 +198,27 @@ public class ToolRegistry {
             return ToolResponse.failure(1, "Security violation: " + e.getMessage());
         } catch (Exception e) {
             if (e instanceof ComplianceViolationException cve) throw cve;
-            return handleExecutionException(toolName, e);
+            return handleExecutionException(ctx, toolName, e);
         }
     }
-
-    private ToolResponse invokeDirect(AgentTool tool, Map<String, Object> params) {
+    private ToolResponse invokeDirect(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {
         String toolName = tool.name();
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
-        governanceGuard.recordToolAudit(toolName);
+        governanceGuard.recordToolAudit(ctx, toolName);
+
         try {
-            ToolResponse response = tool.execute(params);
-            if (!response.success()) {
-                governanceGuard.recordToolFailureAudit(toolName, response);
+            ToolResponse response = tool.execute(ctx, params);
+            if (response instanceof ToolResponse.ToolFailure failure) {
+                governanceGuard.recordToolFailureAudit(ctx, toolName, failure);
             }
             return response;
         } catch (Exception e) {
             if (e instanceof ComplianceViolationException cve) throw cve;
-            return handleExecutionException(toolName, e);
+            return handleExecutionException(ctx, toolName, e);
         }
     }
 
-    private ToolResponse handleExecutionException(String toolName, Exception e) {
+    private ToolResponse handleExecutionException(ToolExecutionContext ctx, String toolName, Exception e) {
         String raw = e.getMessage() != null ? e.getMessage() : ClassUtils.getCleanName(e);
         String traceId = Span.current().getSpanContext().getTraceId();
         
@@ -216,7 +231,7 @@ public class ToolRegistry {
 
         log.errorf("Tool '%s' execution failed: %s", toolName, raw);
         ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, ClassUtils.getCleanName(e));
-        governanceGuard.recordToolFailureAudit(toolName, response);
+        governanceGuard.recordToolFailureAudit(ctx, toolName, response);
         return response;
     }
 

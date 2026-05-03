@@ -11,7 +11,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -77,25 +76,15 @@ public class CheckListTool implements AgentTool {
 
     @Override
     @SuppressWarnings("unchecked")
-    public ToolResponse execute(Map<String, Object> params) {
-        String userId;
-        String sessionId;
-        String agentRole;
-
-        try {
-            // Step 1 - Extract and validate tenant context
-            // NS2: Fail fast on missing context
-            userId    = WorkspaceContext.requireUserId();
-            sessionId = WorkspaceContext.requireSessionId();
-            agentRole = WorkspaceContext.requireAgentRole();
-        } catch (IllegalStateException e) {
-            // NS2 backward compatibility: convert missing context into 403 ToolResponse
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
-        }
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        String userId = ctx.userId();
+        String sessionId = ctx.sessionId();
+        String agentRole = ctx.agentRole();
  
+        if (userId == null || userId.isBlank()) {
+            return ToolResponse.failure(403, "Forbidden: userId is required for checklist management.");
+        }
+
         Object checkListRaw = params.get("checkList");
         if (checkListRaw == null) {
             throw new IllegalArgumentException("checkList must not be null or empty.");

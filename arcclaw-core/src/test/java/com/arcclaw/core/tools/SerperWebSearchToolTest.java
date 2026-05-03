@@ -60,8 +60,12 @@ class SerperWebSearchToolTest {
     void testBlankUserIdFails() throws Exception {
         Map<String, Object> params = Map.of("query", "test");
 
-        ToolResponse resp = WorkspaceContext.run("session-1", "", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+        ToolExecutionContext ctx = new ToolExecutionContext(
+            "session-1", "", "chat-1", "researcher", AutonomyLevel.FULL,
+            "trace-1", null, null, null, null, null, null
+        );
+
+        ToolResponse resp = tool.execute(ctx, params);
 
         assertEquals(403, resp.exitCode());
     }

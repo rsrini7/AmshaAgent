@@ -122,7 +122,7 @@ public class PodmanContainerExecutor {
             span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
 
             activeContainerNames.add(containerName);
-            try (Scope _ = span.makeCurrent()) {
+            try (Scope scope = span.makeCurrent()) {
                 List<String> podmanCmd = buildPodmanCmd(containerName, transportArgs, workspaceRoot, command);
                 var process = prepareAndStartProcess(sessionId, podmanCmd, transport);
                 String result = readSandboxOutputAndGetResult(process, command);

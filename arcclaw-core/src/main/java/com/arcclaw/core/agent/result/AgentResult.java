@@ -1,9 +1,15 @@
 package com.arcclaw.core.agent.result;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.governance.ApprovalFrame;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.TemplateData;
 
 /**
@@ -50,13 +56,26 @@ public sealed interface AgentResult
 
     @TemplateData
     record AwaitingApproval(
-            String toolName,
-            String paramsJson,
+            ApprovalFrame frame,
             String sessionId,
             List<ReasoningStep> steps,
             int totalInputTokens,
             int totalOutputTokens
-    ) implements AgentResult {}
+    ) implements AgentResult {
+        
+        @JsonIgnore
+        public String toolName() { return frame.tool(); }
+
+        @JsonIgnore
+        public String paramsJson() {
+            try {
+                // Ideally we'd use a shared ObjectMapper, but for this DTO compatibility
+                // we use a fresh one if not provided. In production, this DTO
+                // should be refactored to NOT expose paramsJson.
+                return new ObjectMapper().writeValueAsString(frame.params());
+            } catch (Exception e) { return "{}"; }
+        }
+    }
 
     @TemplateData
     record LoopExceeded(
@@ -95,7 +114,15 @@ public sealed interface AgentResult
     }
 
     static AgentResult awaitingApproval(String toolName, String paramsJson, String sessionId, List<ReasoningStep> steps) {
-        return new AwaitingApproval(toolName, paramsJson, sessionId, steps, sumIn(steps), sumOut(steps));
+        Map<String, Object> params = Collections.emptyMap();
+        try {
+            params = new ObjectMapper().readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ignored) {}
+        return awaitingApproval(new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM), sessionId, steps);
+    }
+
+    static AgentResult awaitingApproval(ApprovalFrame frame, String sessionId, List<ReasoningStep> steps) {
+        return new AwaitingApproval(frame, sessionId, steps, sumIn(steps), sumOut(steps));
     }
 
     static AgentResult loopExceeded(int maxIterations, List<ReasoningStep> steps) {

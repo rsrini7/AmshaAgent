@@ -20,8 +20,12 @@ public class SystemEnvironmentContextEnricher implements ContextEnricher {
     @Inject
     ToolRegistry toolRegistry;
 
-    @Override
     public String enrich(String sessionId, String goal, String basePrompt) {
+        return enrich(sessionId, "unknown", goal, basePrompt);
+    }
+
+    @Override
+    public String enrich(String sessionId, String userId, String goal, String basePrompt) {
         StringBuilder sb = new StringBuilder();
         sb.append("\n## Host Environment Context\n");
         sb.append("- **Working Directory**: `")

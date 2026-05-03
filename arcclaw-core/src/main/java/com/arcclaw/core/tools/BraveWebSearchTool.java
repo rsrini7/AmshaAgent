@@ -17,7 +17,6 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -116,26 +115,15 @@ public class BraveWebSearchTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
-        String userId;
-        String sessionId;
-        String agentRole;
-
-        try {
-            // Step 1 - Extract and validate tenant context
-            // NS2: Fail fast on missing context
-            userId    = WorkspaceContext.requireUserId();
-            sessionId = WorkspaceContext.requireSessionId();
-            agentRole = WorkspaceContext.requireAgentRole();
-        } catch (IllegalStateException e) {
-            // NS2 backward compatibility: convert missing context into 403 ToolResponse
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
-        }
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        String userId = ctx.userId();
+        String sessionId = ctx.sessionId();
+        String agentRole = ctx.agentRole();
  
         String query = (String) params.get("query");
+        if (userId == null || userId.isBlank()) {
+            return ToolResponse.failure(403, "Forbidden: userId is required for Brave web search.");
+        }
         if (query == null || query.isBlank()) {
             return ToolResponse.failure(400, "query parameter is required.");
         }

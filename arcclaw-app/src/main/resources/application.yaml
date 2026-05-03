@@ -214,6 +214,9 @@ smallrye:
     info-title: "ArcClaw Agent API"
     info-version: "1.0.0"
     info-description: "Autonomous multi-agent framework - Java 21 + Quarkus + LangChain4J"
+    store-schema-directory: target
+    schema-filename: openapi
+    open-api-version: 3.0.3
 
 
   # ---------------------------------------------------------------------------

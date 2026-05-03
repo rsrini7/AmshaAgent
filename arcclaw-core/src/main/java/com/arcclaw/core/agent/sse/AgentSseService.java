@@ -75,6 +75,7 @@ public class AgentSseService {
             HitlEventType.AWAITING_APPROVAL.wireValue(),
             toolName,
             toolParams,
+            null, // riskLevel
             null,
             Instant.now()
         ));
@@ -99,6 +100,7 @@ public class AgentSseService {
         String type,        // AWAITING_APPROVAL, APPROVED, DENIED, RESUMED
         String toolName,
         String toolParams,
+        String riskLevel,
         String reason,
         Instant timestamp
     ) implements SseEvent {}

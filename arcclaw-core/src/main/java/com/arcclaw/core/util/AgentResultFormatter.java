@@ -51,7 +51,7 @@ public class AgentResultFormatter {
                 boolean isCron = a.sessionId() != null && a.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX);
                 yield formatHitlMessage(a.toolName(), a.paramsJson(), a.sessionId(), isCron);
             }
-            case AgentResult.LoopExceeded _   -> "⏱ I ran out of steps. Try rephrasing your request.";
+            case AgentResult.LoopExceeded _ -> "⏱ I ran out of steps. Try rephrasing your request.";
             case AgentResult.AwaitingRetry r -> "⏳ Rate limit hit. Automatically retrying in " + (r.retryAfterMs() / 1000) + "s...";
             case AgentResult.Failed f         -> {
                 String msg = AgentErrorMessageUtil.sanitizeErrorMessage(f.reason());

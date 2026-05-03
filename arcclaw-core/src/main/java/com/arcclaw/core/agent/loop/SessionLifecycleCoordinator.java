@@ -95,22 +95,20 @@ public class SessionLifecycleCoordinator {
      *         {@code "unknown"} if the workspace context is not yet bound
      */
     public String setupMdc(String sessionId, String canonicalRole) {
+        // §Issue-5 Fix: resolve userId from context instead of hard-coding "unknown"
+        String userId = WorkspaceContext.resolveUserId();
+        if (userId == null || userId.isBlank()) userId = "unknown";
+        setupMdc(sessionId, canonicalRole, userId);
+        return userId;
+    }
+
+    public String setupMdc(String sessionId, String canonicalRole, String userId) {
         MDC.put(MdcKeys.SESSION_ID, sessionId);
         MDC.put(MdcKeys.AGENT_ROLE, canonicalRole);
-
-        // §2.3 - WorkspaceContext, not WorkspaceScopeHolder
-        String userId = WorkspaceContext.resolveUserId();
         MDC.put(MdcKeys.USER_ID, userId);
         return userId;
     }
 
-    /**
-     * Removes the MDC keys that were set by {@link #setupMdc}.
-     *
-     * <p>Safe to call from a {@code finally} block - catches and logs all
-     * exceptions rather than re-throwing, so that the original loop result
-     * is never masked by an MDC cleanup failure.
-     */
     public void teardownMdc() {
         try {
             MDC.remove(MdcKeys.SESSION_ID);
@@ -122,42 +120,14 @@ public class SessionLifecycleCoordinator {
         }
     }
 
-    // ── Role resolution (§4.4 - alias handling stays inside this method) ──────
-
-    /**
-     * Resolves and canonicalizes the supplied {@code agentRole} string.
-     *
-     * <p><strong>Resolution rules (in order):</strong>
-     * <ol>
-     *   <li><em>Unknown role</em> - falls back to {@code COORDINATOR}, emits
-     *       an audit security event (§2.3 via {@code WorkspaceContext}), and
-     *       increments the {@code arcclaw.agent.role.unknown} Micrometer
-     *       counter.</li>
-     *   <li><em>Skill role</em> (prefix {@code skill:}) - returned verbatim.
-     *       The full {@code skill:X} string IS the canonical key used for
-     *       checkpoint storage, MDC, and system-prompt selection (§4.4).</li>
-     *   <li><em>Standard role</em> - resolved via
-     *       {@link AgentRoleEnum#fromString(String)} and canonicalised via
-     *       {@link AgentRoleEnum#toScopedName()}.</li>
-     * </ol>
-     *
-     * <p><strong>Alias handling (§4.4):</strong> all alias expansion happens
-     * <em>inside this method only</em>. No other method in this class may
-     * inspect or branch on role aliases.
-     *
-     * @param sessionId workspace session identifier (for audit correlation)
-     * @param agentRole raw role string received from the caller
-     * @return canonical role name; never {@code null}
-     */
-    public String resolveCanonicalRole(String sessionId, String agentRole) {
+    public String resolveCanonicalRole(String sessionId, String agentRole, String userId) {
         if (!AgentRoleEnum.isKnownRole(agentRole)) {
             log.warnf("SessionLifecycleCoordinator: unknown agentRole '%s' for session %s - defaulting to COORDINATOR",
                     agentRole, sessionId);
 
-            // §2.3 - WorkspaceContext, not WorkspaceScopeHolder
             auditService.record(
                     sessionId,
-                    WorkspaceContext.requireUserId(),
+                    userId,
                     agentRole,
                     SecurityEventType.INVALID_ROLE_FALLBACK,
                     "Unknown agentRole [" + agentRole + "] defaulted to COORDINATOR");

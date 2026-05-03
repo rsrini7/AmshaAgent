@@ -109,7 +109,7 @@ public class AgentStateMachineRunner {
                 .filter(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
                         && s.observation() != null
                         && !s.observation().isBlank())
-                .reduce((_, second) -> second)
+                .reduce((first, second) -> second)
                 .orElse(null);
 
         boolean currentTurnHasSandboxAttempt = history.stream()
@@ -125,13 +125,15 @@ public class AgentStateMachineRunner {
 
         try {
             ReasoningStep step = engine.nextStep(context, context.agentRole(), context.goal(), history);
-            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(context, history, step, 0);
+            if (step instanceof ReasoningStep.FinishStep finish) {
+                FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(context, history, finish, 0);
 
-            if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
-                if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
-                    writer.saveAnswer(context.sessionId(), c.answer());
+                if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
+                    if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
+                        writer.saveAnswer(context.sessionId(), c.answer());
+                    }
+                    return c.result();
                 }
-                return c.result();
             }
             
             log.warnf("StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.", context.sessionId());
@@ -140,13 +142,15 @@ public class AgentStateMachineRunner {
             
             try {
                 ReasoningStep retryStep = engine.nextStep(context, context.agentRole(), context.goal(), history);
-                FinishActionHandler.FinishOutcome retryOutcome = finishActionHandler.handle(context, history, retryStep, 0);
+                if (retryStep instanceof ReasoningStep.FinishStep retryFinish) {
+                    FinishActionHandler.FinishOutcome retryOutcome = finishActionHandler.handle(context, history, retryFinish, 0);
 
-                if (retryOutcome instanceof FinishActionHandler.FinishOutcome.Completed rc) {
-                    if (context.sessionId() != null && rc.answer() != null && !rc.answer().isBlank()) {
-                        writer.saveAnswer(context.sessionId(), rc.answer());
+                    if (retryOutcome instanceof FinishActionHandler.FinishOutcome.Completed rc) {
+                        if (context.sessionId() != null && rc.answer() != null && !rc.answer().isBlank()) {
+                            writer.saveAnswer(context.sessionId(), rc.answer());
+                        }
+                        return rc.result();
                     }
-                    return rc.result();
                 }
             } finally {
                 if (history.size() > historySizeBeforeHint) {

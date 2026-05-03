@@ -53,7 +53,8 @@ class StatefulAgentStoreTest {
      */
     @Test
     void testSaveAndLoadCheckpoint() {
-        WorkspaceScopeHolder.run(SESSION, () -> {
+        String session = SESSION + "-" + System.nanoTime();
+        WorkspaceScopeHolder.run(session, () -> {
             var steps = List.of(
                     ReasoningStep.of("Analyzing the repo", "github",
                             Map.of("repo", "test/repo"), "Repository has 10 files", 0, 0),
@@ -61,9 +62,9 @@ class StatefulAgentStoreTest {
                             Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
 
             // Save
-            var checkpoint = store.save(SESSION, ROLE, steps, "Analyzing the repo");
+            var checkpoint = store.save(session, ROLE, steps, "Analyzing the repo");
             assertNotNull(checkpoint.getId(), "Checkpoint should have a generated ID");
-            assertEquals(SESSION, checkpoint.getSessionId());
+            assertEquals(session, checkpoint.getSessionId());
             assertEquals(ROLE, checkpoint.getAgentRole());
             assertEquals("Analyzing the repo", checkpoint.getOriginalGoal());
             assertEquals(CheckpointStatus.IN_PROGRESS, checkpoint.getStatus());
@@ -71,12 +72,14 @@ class StatefulAgentStoreTest {
             assertNotNull(checkpoint.getCreatedAt());
 
             // Load
-            var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(SESSION, ROLE));
+            var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(session, ROLE));
             assertTrue(loaded.isPresent(), "Checkpoint should be loadable");
             assertEquals(checkpoint.getId(), loaded.get().getId());
 
             // Deserialize
             var deserializedSteps = store.deserializeSteps(loaded.get());
+            System.out.println("DEBUG: step class: " + deserializedSteps.get(1).getClass().getName());
+            System.out.println("DEBUG: step action: " + deserializedSteps.get(1).action());
             assertEquals(2, deserializedSteps.size());
             assertEquals("Analyzing the repo", deserializedSteps.get(0).thought());
             assertEquals("github", deserializedSteps.get(0).action());

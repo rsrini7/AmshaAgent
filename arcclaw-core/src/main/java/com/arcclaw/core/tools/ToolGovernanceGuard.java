@@ -7,12 +7,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.governance.ApprovalFrame;
 import com.arcclaw.core.governance.RequiresApprovalException;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.ToolOperation;
@@ -21,44 +20,51 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 /**
- * Enforces role-capability, autonomy policy, and approval requirements for tool invocation.
+ * Validates role-based capability and autonomy-based execution permission.
  */
 @ApplicationScoped
 public class ToolGovernanceGuard {
 
     private static final Logger log = Logger.getLogger(ToolGovernanceGuard.class);
 
+    @Inject AutonomyPolicy autonomyPolicy;
     @Inject AuditService auditService;
-    @Inject RoleRegistry roleRegistry;
     @Inject ObjectMapper objectMapper;
 
-    private final AutonomyPolicy autonomyPolicy = new AutonomyPolicy.Standard();
+    /**
+     * Verifies if the active agent role is allowed to execute the given tool.
+     * 
+     * @param ctx      Execution context.
+     * @param toolName Tool name to check.
+     * @throws SecurityException if role does not have the required capability.
+     */
+    public void verifyRoleCapability(ToolExecutionContext ctx, String toolName) {
+        String roleName = ctx.agentRole();
+        AgentRoleEnum role = AgentRoleEnum.fromString(roleName);
+        Set<ToolCapability> capabilities = role.definition().capabilities();
+        boolean allowed = capabilities.stream()
+                .anyMatch(cap -> cap.toolName().equals(toolName));
 
-    public void verifyRoleCapability(String toolName, String agentRole) {
-        if (agentRole == null) return;
-
-        if (!AgentRoleEnum.isKnownRole(agentRole)) {
-            log.warnf("SECURITY: Unknown agentRole=%s - blocking tool=%s", agentRole, toolName);
-            throw new SecurityException("Unknown agent role: " + agentRole);
-        }
-
-        AgentRoleEnum role = AgentRoleEnum.fromString(agentRole);
-        Set<String> allowedTools = roleRegistry.permittedTools(role);
-        if (!allowedTools.contains(toolName)) {
-            log.warnf("SECURITY: role=%s attempted tool=%s - not in capability set. Blocked.",
-                    agentRole, toolName);
-            auditService.record(
-                    WorkspaceContext.requireSessionId(), resolveUserId(), agentRole,
-                    SecurityEventType.TOOL_BLOCKED,
-                    "tool=" + toolName + " reason=ROLE_CAPABILITY_MISMATCH role=" + agentRole);
-            throw new SecurityException(
-                    "Tool '" + toolName + "' is not available for role '" + agentRole + "'. "
-                    + "This action requires a different agent role.");
+        if (!allowed) {
+            log.warnf("Role '%s' (session=%s) attempt to call unauthorized tool: %s",
+                    roleName, ctx.sessionId(), toolName);
+            recordToolBlockedAudit(ctx, toolName, "unauthorized_for_role=" + roleName);
+            throw new SecurityException("Agent role '" + roleName + "' is not permitted to use tool '" + toolName + "'");
         }
     }
 
-    public void verifyAutonomy(String toolName, ToolOperation requiredOp, Map<String, Object> params) {
-        AutonomyLevel level = WorkspaceContext.requireAutonomyOrSupervised();
+    /**
+     * Verifies if the current autonomy level allows the operation.
+     * 
+     * @param ctx        Execution context.
+     * @param toolName   Tool name.
+     * @param requiredOp Operation category.
+     * @param params     Parameters (for HITL frame).
+     * @throws SecurityException if blocked by hard policy.
+     * @throws RequiresApprovalException if in SUPERVISED mode and operation requires human approval.
+     */
+    public void verifyAutonomy(ToolExecutionContext ctx, String toolName, ToolOperation requiredOp, Map<String, Object> params) {
+        AutonomyLevel level = ctx.autonomyLevel();
 
         // 1. HARD BLOCK check: if the policy says "not allowed" (e.g., READONLY level),
         // we throw SecurityException (403).
@@ -82,46 +88,52 @@ public class ToolGovernanceGuard {
                             || requiredOp == ToolOperation.WRITE_FS)) {
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)",
                           toolName, level, requiredOp);
-                try {
-                    String paramsJson = objectMapper.writeValueAsString(params);
-                    throw new RequiresApprovalException(
-                        toolName, paramsJson, WorkspaceContext.requireSessionId());
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException("Failed to serialize tool parameters", e);
-                }
+                
+                ApprovalFrame frame = new ApprovalFrame(toolName, params, requiredOp.riskLevel());
+                throw new RequiresApprovalException(frame, ctx.sessionId());
             }
 
             log.warnf("Tool '%s' blocked: operation %s not allowed at autonomy level %s",
                     toolName, requiredOp, level);
-            auditService.record(
-                    WorkspaceContext.requireSessionId(), resolveUserId(),
-                    WorkspaceContext.requireAgentRole(),
-                    SecurityEventType.TOOL_BLOCKED,
-                    "tool=" + toolName + " op=" + requiredOp);
+            recordToolBlockedAudit(ctx, toolName, "op=" + requiredOp);
             throw new SecurityException(
                     "Operation " + requiredOp + " not permitted at autonomy level " + level);
         }
     }
 
-    public void recordToolAudit(String toolName) {
+    public void recordToolAudit(ToolExecutionContext ctx, String toolName) {
         auditService.record(
-                WorkspaceContext.requireSessionId(), resolveUserId(),
-                WorkspaceContext.requireAgentRole(),
-                SecurityEventType.TOOL_INVOKED,
+                ctx.sessionId(), ctx.userId(),
+                ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
                 "tool=" + toolName);
     }
 
-    public void recordToolFailureAudit(String toolName, ToolResponse response) {
+    public void recordToolFailureAudit(ToolExecutionContext ctx, String toolName, ToolResponse response) {
+        String errorCode = null;
+        String traceId = null;
+        String rootCause = null;
+
+        if (response instanceof ToolResponse.ToolFailure failure) {
+            errorCode = failure.errorCode();
+            traceId = failure.traceId();
+            rootCause = failure.rootCauseClass();
+        }
+
         String details = String.format("tool=%s errorCode=%s traceId=%s rootCause=%s",
-                toolName, response.errorCode(), response.traceId(), response.rootCauseClass());
+                toolName, errorCode, traceId, rootCause);
         auditService.record(
-                WorkspaceContext.requireSessionId(), resolveUserId(),
-                WorkspaceContext.requireAgentRole(),
+                ctx.sessionId(), ctx.userId(),
+                ctx.agentRole(),
                 SecurityEventType.TOOL_FAILED,
                 details);
     }
 
-    private String resolveUserId() {
-        return WorkspaceContext.resolveUserId();
+    public void recordToolBlockedAudit(ToolExecutionContext ctx, String toolName, String reason) {
+        auditService.record(
+                ctx.sessionId(), ctx.userId(),
+                ctx.agentRole(),
+                SecurityEventType.TOOL_BLOCKED,
+                "tool=" + toolName + " " + reason);
     }
 }
