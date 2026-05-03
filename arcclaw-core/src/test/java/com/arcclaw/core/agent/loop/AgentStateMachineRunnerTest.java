@@ -118,13 +118,16 @@ class AgentStateMachineRunnerTest {
 
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager(agentStore, agentSseService, new ObjectMapper());
 
-        EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, new ObjectMapper(), rateLimitTracker, agentStore, 4, 6, 15, 10);
+        LlmExceptionRouter exceptionRouter = new LlmExceptionRouter(new ObjectMapper());
+
+        EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, agentStore, new ResponseRecoveryHintBuilder(), exceptionRouter, 4, 6, 15, 10);
 
         ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor, new SimpleMeterRegistry());
 
+        StepDecisionRouter stepDecisionRouter = new StepDecisionRouter(finishActionHandler, toolStepHandler, writer, engineStepHandler);
+
         runner = new AgentStateMachineRunner(
                 engineStepHandler,
-                toolStepHandler,
                 writer,
                 observers,
                 skillRegistry,
@@ -136,7 +139,8 @@ class AgentStateMachineRunnerTest {
                 3,
                 new SimpleMeterRegistry(),
                 toolRegistry,
-                invoker
+                invoker,
+                stepDecisionRouter
         );
 
         lenient().when(observers.iterator()).thenReturn(Collections.emptyIterator());

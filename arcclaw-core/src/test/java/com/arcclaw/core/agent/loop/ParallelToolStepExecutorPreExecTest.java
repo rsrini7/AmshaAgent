@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -46,16 +47,26 @@ class ParallelToolStepExecutorPreExecTest {
     ParallelToolStepExecutor executor;
 
     @BeforeEach
-    void setup() {
+    void setup() throws Exception {
         executor = new ParallelToolStepExecutor();
-        executor.objectMapper = objectMapper;
-        executor.guard = guard;
-        executor.toolInvoker = toolInvoker;
-        executor.checkpointManager = checkpointManager;
-        executor.governanceLayer = governanceLayer;
-        executor.rateLimitTracker = rateLimitTracker;
-        executor.observers = observers;
-        executor.preExecutableTools = Optional.of(List.of("safe_read"));
+        setField(executor, "objectMapper", objectMapper);
+        setField(executor, "guard", guard);
+        setField(executor, "checkpointManager", checkpointManager);
+        setField(executor, "governanceLayer", governanceLayer);
+        setField(executor, "rateLimitTracker", rateLimitTracker);
+        setField(executor, "observers", observers);
+        setField(executor, "preExecutableTools", Optional.of(List.of("safe_read")));
+
+        SequentialToolExecutor sequentialToolExecutor = new SequentialToolExecutor();
+        setField(sequentialToolExecutor, "toolInvoker", toolInvoker);
+        setField(sequentialToolExecutor, "guard", guard);
+        setField(executor, "sequentialToolExecutor", sequentialToolExecutor);
+    }
+
+    private void setField(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     @Test

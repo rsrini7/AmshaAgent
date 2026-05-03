@@ -165,55 +165,25 @@ public class ScheduleTaskTool implements AgentTool {
         String sessionId;
 
         try {
-            // Step 1 - Extract and validate tenant context
-            // NS2: Fail fast on missing context
             userId    = WorkspaceContext.requireUserId();
-            chatId    = WorkspaceContext.requireChatIdOrUserId(); // REST/CLI fallback 
+            chatId    = WorkspaceContext.requireChatIdOrUserId();
             sessionId = WorkspaceContext.requireSessionId();
         } catch (IllegalStateException e) {
-            // NS2 backward compatibility: convert missing context into 403 ToolResponse
             if (e.getMessage() != null && e.getMessage().contains("unbound")) {
                 return ToolResponse.failure(403, "Security violation: tenant context not bound.");
             }
             throw e;
         }
 
-        String goal           = (String) params.get("goal");
-
-        //  §1: parseTimezone() - normalize blank/null/invalid to UTC.
-        // ZoneId.of("") throws DateTimeException: "Invalid ID for ZoneOffset, invalid format: "
-        // OpenRouter free-tier models frequently emit "timezone": "" when they don't know
-        // the timezone. The old code passed the raw value directly to ZoneId.of() and the
-        // resulting exception propagated as a 400 failure that was incorrectly fast-pathed
-        // to a terminal answer instead of retried. Now we default gracefully to UTC.
+        String goal = (String) params.get("goal");
         ZoneId zone = parseTimezone(params);
+        boolean runOnce = parseRunOnce(params);
+        String executionRole = parseExecutionRole(params);
 
-        Object runOnceRaw = params.get("runOnce");
-        boolean runOnce = switch (runOnceRaw) {
-            case Boolean b -> b;
-            case String s  -> Boolean.parseBoolean(s);
-            case null      -> false;
-            default        -> false;
-        };
-
-        // NPE-SAFE: executionRole can be null. CronJobRunner.resolveRole()
-        // handles null by falling back to keyword-based resolution (e.g. "write python" -> "coder").
-        // Do NOT add a hardcoded default here as it overrides the runner's specialist detection.
-        String executionRole = (String) params.get("executionRole");
-        if (executionRole != null && executionRole.isBlank()) {
-            executionRole = null;
-        }
-
-        // Step 1 - Validate cronExpression or absolute time trigger
-        String cronExpression = (String) params.get("cronExpression");
-        // Also accept 'cron' as an alias (the compact prompt uses cron= syntax)
-        if (cronExpression == null || cronExpression.isBlank()) {
-            cronExpression = (String) params.get("cron");
-        }
+        String cronExpression = resolveCron(params);
         String suggestedNextFireTime = WorkspaceContext.suggestedNextFireTime();
-        boolean cronFromJavaSide = false;
         
-        // If LLM didn't provide one, try the suggested one from context
+        boolean cronFromJavaSide = false;
         if (cronExpression == null || cronExpression.isBlank()) {
             cronExpression = WorkspaceContext.suggestedCron();
             if (cronExpression != null && !cronExpression.isBlank()) {
@@ -221,18 +191,10 @@ public class ScheduleTaskTool implements AgentTool {
             }
         }
 
-        // FIX: When the cron was pre-resolved to UTC by Java-side arithmetic
-        // (CommandDispatchHandler / ChatCommand), override the LLM-provided
-        // timezone to UTC. Otherwise, the scheduler would interpret a UTC cron
-        // expression in the user's local timezone, causing double conversion.
-        // e.g. "9 AM IST" → Java resolves to UTC 03:30 → cron "30 3 * * *"
-        //   Without fix: stored as cron="30 3 * * *" + TZ=Asia/Kolkata → fires 3:30 AM IST (wrong)
-        //   With fix:    stored as cron="30 3 * * *" + TZ=UTC → fires 9:00 AM IST (correct)
         if (cronFromJavaSide || "UTC".equals(WorkspaceContext.suggestedCronSource())) {
             zone = ZoneId.of("UTC");
         }
 
-        // We require AT LEAST a cronExpression OR an absolute fire time (for runOnce)
         if ((cronExpression == null || cronExpression.isBlank()) 
                 && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())
                 && !runOnce) {
@@ -243,11 +205,11 @@ public class ScheduleTaskTool implements AgentTool {
                     "'0 9 * * *' for daily at 9 AM UTC. " +
                     "For one-time tasks (runOnce=true), the system will compute the fire time automatically.");
         }
+
         if (goal == null || goal.isBlank()) {
             return ToolResponse.failure(400, "goal is required.");
         }
 
-        // Step 2 - Naked pronoun guard
         boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find();
         if (hasNakedPronoun) {
             log.warnf("[ScheduleTaskTool] Rejecting goal due to naked pronouns: %s", goal);
@@ -258,10 +220,6 @@ public class ScheduleTaskTool implements AgentTool {
                     "to production via gh workflow run deploy.yml'.");
         }
 
-        // Step 3 - RunOnce normalization: strip dom/month pinning.
-        // LLM sometimes generates "54 15 3 3 *" for one-shot tasks.
-        // runOnce=true already guarantees single-fire - dom/month are always redundant
-        // and dangerous (task silently never fires if the cron tick crosses midnight).
         if (runOnce && cronExpression != null) {
             String[] fields = WHITESPACE_PATTERN.split(cronExpression.trim());
             if (fields.length == 5) {
@@ -269,34 +227,66 @@ public class ScheduleTaskTool implements AgentTool {
             }
         }
 
-        // Step 4 - Validate and compute nextFireTime via cron-utils
-        Instant nextFireTime;
-        if (runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank()) {
-            try {
-                nextFireTime = Instant.parse(suggestedNextFireTime);
-                Logger.getLogger(ScheduleTaskTool.class).infof("[ScheduleTaskTool] Using absolute one-shot trigger: %s", nextFireTime);
-            } catch (Exception e) {
-                Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Failed to parse suggestedNextFireTime '%s' - falling back to cron", suggestedNextFireTime);
-                nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
-            }
-        } else if (runOnce && (cronExpression == null || cronExpression.isBlank())) {
-            // §Fix: Default one-shot to "now" if no time was suggested and no cron provided.
-            // We add a 10s buffer to allow for persistence ingestion and initial polling.
-            // This case typically fires when an agent (e.g., in a cron-resumed session) calls
-            // schedule_task without a TimeContextInjector in scope to provide a fire time hint.
-            nextFireTime = Instant.now().plusSeconds(10); 
-            Logger.getLogger(ScheduleTaskTool.class).infof("[ScheduleTaskTool] No time suggested for one-shot task - defaulting to 'now' (+10s): %s", nextFireTime);
-        } else {
-            nextFireTime = (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
-        }
-
+        Instant nextFireTime = resolveNextFireTime(runOnce, suggestedNextFireTime, cronExpression, zone);
         if (nextFireTime == null) {
             log.warnf("[ScheduleTaskTool] Rejecting: could not determine next fire time (cron='%s', suggested='%s')", 
                 cronExpression, suggestedNextFireTime);
             return ToolResponse.failure(400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
         }
 
-        // Step 5 - Build and persist entity
+        AgentCronEntity entity = createAndPersistCron(sessionId, userId, chatId, cronExpression, zone, runOnce, executionRole, goal, nextFireTime);
+
+        auditAndSchedule(sessionId, userId, cronExpression, entity, runOnce, executionRole);
+
+        return ToolResponse.success("Task scheduled successfully. " +
+                "ID: " + entity.id + " | Next fire: " +
+                TemporalUtils.formatIsoLex(nextFireTime) +
+                "\n\nCRITICAL DIRECTIVE: The task is now safely handed off to the background cron system. " +
+                "You MUST NOT execute the goal yourself right now. " +
+                "Reply to the user with a plain text confirmation of the schedule and FINISH immediately.");
+    }
+
+    private boolean parseRunOnce(Map<String, Object> params) {
+        Object runOnceRaw = params.get("runOnce");
+        return switch (runOnceRaw) {
+            case Boolean b -> b;
+            case String s  -> Boolean.parseBoolean(s);
+            case null      -> false;
+            default        -> false;
+        };
+    }
+
+    private String parseExecutionRole(Map<String, Object> params) {
+        String executionRole = (String) params.get("executionRole");
+        if (executionRole != null && executionRole.isBlank()) {
+            executionRole = null;
+        }
+        return executionRole;
+    }
+
+    private String resolveCron(Map<String, Object> params) {
+        String cronExpression = (String) params.get("cronExpression");
+        if (cronExpression == null || cronExpression.isBlank()) {
+            cronExpression = (String) params.get("cron");
+        }
+        return cronExpression;
+    }
+
+    private Instant resolveNextFireTime(boolean runOnce, String suggestedNextFireTime, String cronExpression, ZoneId zone) {
+        if (runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank()) {
+            try {
+                return Instant.parse(suggestedNextFireTime);
+            } catch (Exception e) {
+                return (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
+            }
+        } else if (runOnce && (cronExpression == null || cronExpression.isBlank())) {
+            return Instant.now().plusSeconds(10); 
+        } else {
+            return (cronExpression != null && !cronExpression.isBlank()) ? computeNextFromCron(cronExpression, zone) : null;
+        }
+    }
+
+    private AgentCronEntity createAndPersistCron(String sessionId, String userId, String chatId, String cronExpression, ZoneId zone, boolean runOnce, String executionRole, String goal, Instant nextFireTime) {
         AgentCronEntity entity = new AgentCronEntity();
         entity.id             = UUID.randomUUID().toString();
         entity.sessionId      = sessionId;
@@ -304,7 +294,7 @@ public class ScheduleTaskTool implements AgentTool {
         entity.chatId         = chatId;
         entity.channelType    = WorkspaceContext.requireChannelType();
         entity.cronExpression = cronExpression;
-        entity.timezone       = zone.getId(); // persist the resolved zone, not the raw input
+        entity.timezone       = zone.getId();
         entity.runOnce        = runOnce;
         entity.executionRole  = executionRole;
         entity.goal           = AgentSentinels.CRON_PREFIX + goal;
@@ -313,8 +303,10 @@ public class ScheduleTaskTool implements AgentTool {
         entity.createdAt      = Instant.now();
 
         cronRepository.persist(entity);
+        return entity;
+    }
 
-        // Step 6 - Audit (The actor role is COORDINATOR, the creator of the task).
+    private void auditAndSchedule(String sessionId, String userId, String cronExpression, AgentCronEntity entity, boolean runOnce, String executionRole) {
         auditService.record(sessionId, userId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.CRONCREATED,
@@ -322,13 +314,6 @@ public class ScheduleTaskTool implements AgentTool {
                 + " tz=" + entity.timezone + " runOnce=" + runOnce + " role=" + executionRole);
 
         cronScheduledEvent.fire(new CronTaskScheduled(entity.id));
-
-        return ToolResponse.success("Task scheduled successfully. " +
-                "ID: " + entity.id + " | Next fire: " +
-                TemporalUtils.formatIsoLex(nextFireTime) +
-                "\n\nCRITICAL DIRECTIVE: The task is now safely handed off to the background cron system. " +
-                "You MUST NOT execute the goal yourself right now. " +
-                "Reply to the user with a plain text confirmation of the schedule and FINISH immediately.");
     }
 
     /**

@@ -145,86 +145,29 @@ public class AgentLoop {
         List<ReasoningStep> resumedHistory = new ArrayList<>();
 
         Span span = observabilityManager.beginSession(sessionId);
-        try (Scope scope = span.makeCurrent()) {
-
-            var decision = checkpointResumeCoordinator.resolveResumePath(
-                    sessionId, canonicalRole, capturedUserId, context);
+        try (Scope _ = span.makeCurrent()) {
+            try {
+                var decision = checkpointResumeCoordinator.resolveResumePath(
+                        sessionId, canonicalRole, capturedUserId, context);
 
             String effectiveRole = canonicalRole;
             if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-                // §Issue 6: Only restore history if it's a continuity command (follow-up).
-                // Fresh goals should start with a clean history to avoid task confusion.
                 if (intentClassificationService.isContinuityCommand(goal)) {
                     resumedHistory.addAll(r.history());
                     effectiveRole = r.checkpointRole();
                 } else {
                     log.infof("[AgentLoop] Fresh goal detected for session %s - skipping history restoration from %s turn and resetting to canonical role %s to avoid task confusion.", 
                             sessionId, r.checkpointRole(), canonicalRole);
-                    // effectiveRole remains canonicalRole
                 }
             }
 
             StructuredOutputMode mode = (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied()) 
                 ? structuredOutputModeInstance.get() : StructuredOutputMode.NATIVE;
 
-            Map<String, Object> mergedData = new HashMap<>();
-            if (context != null) {
-                mergedData.putAll(context.getData());
-            }
-            if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r && r.contextDataJson() != null) {
-                Map<String, Object> restored = agentStore.deserializeContextData(r.contextDataJson());
-                if (restored != null) {
-                    // §Issue 4.2: Prioritize restored context data (especially for cron metadata)
-                    // during resumption to ensure scheduling continuity.
-                    mergedData.putAll(restored);
-                }
-            }
+            AgentExecutionContext agentExecutionContext = createExecutionContext(
+                    sessionId, capturedUserId, effectiveRole, goal, systemNote, maxIterations, context, decision, mode);
 
-            AgentExecutionContext agentExecutionContext = new AgentExecutionContext(
-                    sessionId,
-                    capturedUserId,
-                    WorkspaceContext.requireChatId(),
-                    effectiveRole,
-                    goal,
-                    WorkspaceContext.requireAutonomyOrSupervised(),
-                    mode,
-                    maxIterations,
-                    decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
-                    context != null ? context.getChannelType().name() : WorkspaceContext.channelType().orElse(null),
-                    context != null && context.getUser() != null ? context.getUser().platformId() : null,
-                    systemNote,
-                    mergedData
-            );
-
-            final AgentExecutionContext finalCtx = agentExecutionContext;
-            final List<ReasoningStep> finalHistory = resumedHistory;
-
-            var scopeResult = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
-                    .where(WorkspaceContext.SESSION_ID, sessionId)
-                    .where(WorkspaceContext.USER_ID, capturedUserId)
-                    .where(WorkspaceContext.CHAT_ID, agentExecutionContext.chatId())
-                    .where(WorkspaceContext.AUTONOMY, agentExecutionContext.autonomyLevel())
-                    .where(WorkspaceContext.AGENT_ROLE, canonicalRole);
-
-            if (agentExecutionContext.channelType() != null) {
-                scopeResult = scopeResult.where(WorkspaceContext.CHANNEL_TYPE, agentExecutionContext.channelType());
-            }
-            if (agentExecutionContext.channelPlatformId() != null) {
-                scopeResult = scopeResult.where(WorkspaceContext.CHANNEL_PLATFORM_ID, agentExecutionContext.channelPlatformId());
-            }
-
-            result = scopeResult.call(() -> {
-                        AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context, stateMachineRunner);
-                        if (resumeResult != null) {
-                            return resumeResult;
-                        } else if (context != null && context.isResumeSignal() && hasApprovedToolPending(sessionId, canonicalRole)) {
-                            return stateMachineRunner.run(finalCtx, engine, finalHistory);
-                        } else {
-                            return tryDelegateFinishFastPath(sessionId, finalHistory, context)
-                                    .orElseGet(() -> stateMachineRunner.run(
-                                            finalCtx, engine, finalHistory));
-                        }
-                    });
+            result = executeWithinScopes(agentExecutionContext, resumedHistory, context, engine, goal, sessionId, canonicalRole, capturedUserId);
 
             if (result instanceof AgentResult.AwaitingApproval) {
                 tryStampChannelInfo(sessionId, canonicalRole, context);
@@ -247,7 +190,7 @@ public class AgentLoop {
                     "role", canonicalRole != null ? canonicalRole : "unknown",
                     "exception", ClassUtils.getCleanName(e)).increment();
             throw e;
- 
+
         } catch (BudgetWarningException e) {
             throw e;
 
@@ -271,6 +214,75 @@ public class AgentLoop {
                 sessionLifecycleCoordinator.teardownMdc();
             }
         }
+    }
+}
+
+    private AgentExecutionContext createExecutionContext(
+            String sessionId, String capturedUserId, String effectiveRole, String goal,
+            String systemNote, int maxIterations, MessageContext context, CheckpointResumeCoordinator.ResumeDecision decision,
+            StructuredOutputMode mode) {
+
+        Map<String, Object> mergedData = new HashMap<>();
+        if (context != null) {
+            mergedData.putAll(context.getData());
+        }
+        if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r && r.contextDataJson() != null) {
+            Map<String, Object> restored = agentStore.deserializeContextData(r.contextDataJson());
+            if (restored != null) {
+                mergedData.putAll(restored);
+            }
+        }
+
+        return new AgentExecutionContext(
+                sessionId,
+                capturedUserId,
+                WorkspaceContext.requireChatId(),
+                effectiveRole,
+                goal,
+                WorkspaceContext.requireAutonomyOrSupervised(),
+                mode,
+                maxIterations,
+                decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
+                context != null ? context.getChannelType().name() : WorkspaceContext.channelType().orElse(null),
+                context != null && context.getUser() != null ? context.getUser().platformId() : null,
+                systemNote,
+                mergedData
+        );
+    }
+
+    private AgentResult executeWithinScopes(
+            AgentExecutionContext agentExecutionContext, List<ReasoningStep> resumedHistory,
+            MessageContext context, ReasoningEngine engine, String goal, String sessionId, String canonicalRole, String capturedUserId) {
+
+        final AgentExecutionContext finalCtx = agentExecutionContext;
+        final List<ReasoningStep> finalHistory = resumedHistory;
+
+        var scopeResult = ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, goal)
+                .where(WorkspaceContext.SESSION_ID, sessionId)
+                .where(WorkspaceContext.USER_ID, capturedUserId)
+                .where(WorkspaceContext.CHAT_ID, agentExecutionContext.chatId())
+                .where(WorkspaceContext.AUTONOMY, agentExecutionContext.autonomyLevel())
+                .where(WorkspaceContext.AGENT_ROLE, canonicalRole);
+
+        if (agentExecutionContext.channelType() != null) {
+            scopeResult = scopeResult.where(WorkspaceContext.CHANNEL_TYPE, agentExecutionContext.channelType());
+        }
+        if (agentExecutionContext.channelPlatformId() != null) {
+            scopeResult = scopeResult.where(WorkspaceContext.CHANNEL_PLATFORM_ID, agentExecutionContext.channelPlatformId());
+        }
+
+        return scopeResult.call(() -> {
+                    AgentResult resumeResult = checkpointResumeHandler.handle(finalCtx, finalHistory, context, stateMachineRunner);
+                    if (resumeResult != null) {
+                        return resumeResult;
+                    } else if (context != null && context.isResumeSignal() && hasApprovedToolPending(sessionId, canonicalRole)) {
+                        return stateMachineRunner.run(finalCtx, engine, finalHistory);
+                    } else {
+                        return tryDelegateFinishFastPath(sessionId, finalHistory, context)
+                                .orElseGet(() -> stateMachineRunner.run(
+                                        finalCtx, engine, finalHistory));
+                    }
+                });
     }
 
     private void updateStoreForRetry(String sessionId, String canonicalRole,

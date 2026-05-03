@@ -5,29 +5,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Field;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.reasoning.ChatHistoryAssembler;
+import com.arcclaw.core.agent.reasoning.CompactionSummaryCache;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
+import com.arcclaw.core.agent.reasoning.ReasoningMessageAssembler;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.ReasoningStepParser;
-import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
+import com.arcclaw.core.agent.reasoning.ReasoningValidator;
+import com.arcclaw.core.agent.reasoning.RecoveryProcessor;
+import com.arcclaw.core.agent.reasoning.StructuredOutputProcessor;
 import com.arcclaw.core.agent.reasoning.SystemPromptBuilder;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class LangChainReasoningEnginePersonaTest {
 
@@ -50,8 +52,6 @@ class LangChainReasoningEnginePersonaTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        engine = new LangChainReasoningEngine();
-
         // 1. Create mocks
         mockLlmProviderPort = mock(LlmProviderPort.class);
         ToolRegistry mockToolRegistry = mock(ToolRegistry.class);
@@ -78,73 +78,96 @@ class LangChainReasoningEnginePersonaTest {
         ReasoningStep expectedStep = ReasoningStep.pending("mock thought", ReasoningStep.FINISH, Collections.emptyMap(), 0, 0);
         when(mockStepParser.parse(any(), any(), any())).thenReturn(expectedStep);
 
-        // 3. Inject mocks via reflection
-        injectField(engine, "llmProviderPort", mockLlmProviderPort);
-        injectField(engine, "toolRegistry", mockToolRegistry);
-        injectField(engine, "roleRegistry", mockRoleRegistry);
-        injectField(engine, "promptBuilder", mockPromptBuilder);
-        injectField(engine, "historyAssembler", mockHistoryAssembler);
-        injectField(engine, "stepParser", mockStepParser);
-        injectField(engine, "intentClassifier", mockIntentDetector);
-        injectField(engine, "textPatternUtils", new TextPatternUtils());
-        injectField(engine, "governanceLayer", mockGovernanceLayer);
-        injectField(engine, "rateLimitTracker", mockRateLimitTracker);
-        injectField(engine, "otelContext", mockOtelContext);
-        injectField(engine, "meterRegistry", mockMeterRegistry);
-    }
+        // 3. Setup Collaborators
+        ReasoningMessageAssembler messageAssembler = new ReasoningMessageAssembler(mockHistoryAssembler, mockToolRegistry);
+        RecoveryProcessor recoveryProcessor = new RecoveryProcessor(new ObjectMapper(), new TextPatternUtils());
+        ReasoningValidator reasoningValidator = new ReasoningValidator(mock(CompactionSummaryCache.class));
+        StructuredOutputProcessor structuredOutputProcessor = new StructuredOutputProcessor(mockPromptBuilder, mockLlmProviderPort, mockGovernanceLayer, mockOtelContext);
 
-    private void injectField(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
-    private AgentExecutionContext createCtx(String sessionId) {
-        return new AgentExecutionContext(sessionId, "user-1", "chat-1", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
+        // 4. Instantiate engine using full constructor
+        engine = new LangChainReasoningEngine(
+            mockLlmProviderPort, mockRoleRegistry, mockPromptBuilder,
+            mockRateLimitTracker, mockIntentDetector,
+            mockMeterRegistry, new TextPatternUtils(),
+            mockStepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator
+        );
     }
 
     @Test
-    void testDebuggerRoleDoesNotSayCoordinator() {
+    void testNextStepUsesSystemPromptFromBuilder() {
+        // Arrange
+        String expectedPrompt = "Custom test persona";
+        // Use any() for all String arguments because sessionId might be null in mock context
+        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn(expectedPrompt);
+
+        AgentExecutionContext context = mock(AgentExecutionContext.class);
+        when(context.sessionId()).thenReturn("s1");
+
+        // Act
+        engine.nextStep(context, "coordinator", "test goal", Collections.emptyList());
+
+        // Assert
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
+        
+        String actualPrompt = findSystemMessageText(captor.getValue());
+        assertTrue(expectedPrompt.equals(actualPrompt), "System prompt should match the one from builder");
+    }
+
+    @Test
+    void testCoordinatorPersonaPromptContainsVishnuAndArchitecture() {
+        // Arrange
+        String persona = "You are Vishnu, the Coordinator. You are the main orchestrator...";
+        String architecture = "YOUR INTERNAL ARCHITECTURE (THE TRIMURTI...):";
+        String prompt = persona + "\n\n" + architecture;
+        
+        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn(prompt);
+
+        AgentExecutionContext context = mock(AgentExecutionContext.class);
+        when(context.sessionId()).thenReturn("s1");
+
+        // Act
+        engine.nextStep(context, "coordinator", "Hello", Collections.emptyList());
+
+        // Assert
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
+        
+        String actualPrompt = findSystemMessageText(captor.getValue());
+        assertTrue(actualPrompt != null && !actualPrompt.isBlank(), "Should have a non-blank system message");
+        assertTrue(actualPrompt.contains("You are Vishnu"), "Should contain Vishnu persona");
+        assertTrue(actualPrompt.contains("THE TRIMURTI"), "Coordinator should receive architecture context");
+    }
+
+    @Test
+    void testSpecialistPersonaDoesNotContainArchitectureContextByDefaultUnlessCoordinator() {
         // Arrange
         String persona = "You are Shiva, the Debugger and Code Analyst.";
-        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
+        when(mockPromptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
+
+        AgentExecutionContext context = mock(AgentExecutionContext.class);
+        when(context.sessionId()).thenReturn("s1");
 
         // Act
-        engine.nextStep(createCtx("sess-1"), "debugger", "fix this bug", Collections.emptyList());
+        engine.nextStep(context, "debugger", "Fix this", Collections.emptyList());
 
         // Assert
         ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        verify(mockLlmProviderPort).nextStep(captor.capture());
-
-        ChatRequest request = captor.getValue();
-        List<ChatMessage> messages = request.messages();
-        SystemMessage sysMsg = (SystemMessage) messages.get(0);
-        String promptText = sysMsg.text();
-
-        assertTrue(promptText.contains("You are Shiva"), "Should contain Shiva persona");
-        assertFalse(promptText.contains("Always identify as ArcClaw, specifically acting as the Coordinator"),
-                "Debugger should NOT claim to be the Coordinator");
+        Mockito.verify(mockLlmProviderPort).nextStep(captor.capture());
+        
+        String actualPrompt = findSystemMessageText(captor.getValue());
+        assertTrue(actualPrompt != null && !actualPrompt.isBlank(), "Should have a non-blank system message");
+        assertTrue(actualPrompt.contains("You are Shiva"), "Should contain Shiva persona");
+        assertFalse(actualPrompt.contains("THE TRIMURTI"), "Specialist should NOT receive architecture context unless explicitly added");
     }
 
-    @Test
-    void testCoordinatorRoleContainsTrimurtiContext() {
-        // Arrange
-        String persona = "You are Vishnu, the Coordinator. THE TRIMURTI";
-        when(mockPromptBuilder.build(any(), anyString(), anyString(), anyString(), ArgumentMatchers.anyBoolean())).thenReturn(persona);
-
-        // Act
-        engine.nextStep(createCtx("sess-2"), "coordinator", "plan tasks", Collections.emptyList());
-
-        // Assert
-        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
-        verify(mockLlmProviderPort).nextStep(captor.capture());
-
-        ChatRequest request = captor.getValue();
-        List<ChatMessage> messages = request.messages();
-        SystemMessage sysMsg = (SystemMessage) messages.get(0);
-        String promptText = sysMsg.text();
-
-        assertTrue(promptText.contains("You are Vishnu"), "Should contain Vishnu persona");
-        assertTrue(promptText.contains("THE TRIMURTI"), "Coordinator should receive architecture context");
+    private String findSystemMessageText(ChatRequest request) {
+        if (request == null || request.messages() == null) return null;
+        for (ChatMessage m : request.messages()) {
+            if (m instanceof SystemMessage sm) {
+                return sm.text();
+            }
+        }
+        return null;
     }
 }

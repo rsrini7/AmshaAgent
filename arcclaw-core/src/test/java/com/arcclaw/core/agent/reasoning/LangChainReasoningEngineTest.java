@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +25,6 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
-import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
@@ -77,6 +75,9 @@ class LangChainReasoningEngineTest {
 
     @InjectMock
     CompactionSummaryCache summaryCache;
+
+    @InjectMock
+    StructuredOutputProcessor structuredOutputProcessor;
 
     @BeforeEach
     void setUp() {
@@ -539,7 +540,7 @@ class LangChainReasoningEngineTest {
         // Assert
         // Should be intercepted and turned into an OBSERVE step with a correction hint
         assertEquals("OBSERVE", resultStep.action());
-        assertTrue(resultStep.observation().contains("CORRECTION: The user wants to STORE data. You MUST call ingest_document"));
+        assertTrue(resultStep.observation().contains("CORRECTION: The user wants to STORE data. Call ingest_document RIGHT NOW."));
     }
 
     @Test
@@ -562,7 +563,7 @@ class LangChainReasoningEngineTest {
 
         // Assert
         assertEquals("OBSERVE", step.action());
-        assertTrue(step.observation().contains("STOP. The user asked you to EXECUTE the code"), "Hint should match actual code");
+        assertTrue(step.observation().contains("STOP. EXECUTE the code - not explain it."), "Hint should match actual code");
         assertTrue(step.observation().contains("Call sandbox_exec RIGHT NOW"));
     }
 
@@ -734,7 +735,7 @@ class LangChainReasoningEngineTest {
         // Assert
         assertEquals("OBSERVE", step.action());
         assertTrue(step.observation().contains("cannot find symbol: Collectors.reverse()"), "Hint should quote the compiler error");
-        assertTrue(step.observation().contains("STOP. The user asked you to EXECUTE"), "Should still include the hard correction");
+        assertTrue(step.observation().contains("STOP. EXECUTE the code - not explain it."), "Should still include the hard correction");
     }
 
     @InjectMock
@@ -742,23 +743,11 @@ class LangChainReasoningEngineTest {
 
     @Test
     void structuredOutputPathPropagatesBudgetWarning() throws Exception {
-        ChatResponse mockResponse = ChatResponse.builder()
-                .aiMessage(AiMessage.aiMessage("result"))
-                .tokenUsage(new TokenUsage(100, 100))
-                .build();
-        when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
-        when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("sys prompt");
-        
-        Mockito.doThrow(new BudgetWarningException("budget low"))
-            .when(governanceLayer).recordLlmCall(anyString(), any(Integer.class), any(Integer.class));
-            
-        AgentOtelContext mockOtelContext = Mockito.mock(AgentOtelContext.class);
-        Field field = LangChainReasoningEngine.class.getDeclaredField("otelContext");
-        field.setAccessible(true);
-        field.set(reasoningEngine, mockOtelContext);
+        when(structuredOutputProcessor.chatForStructuredOutput(anyString(), anyString(), anyString()))
+            .thenThrow(new BudgetWarningException("budget low"));
 
         assertThrows(BudgetWarningException.class, () ->
-            ((LangChainReasoningEngine) reasoningEngine).chatForStructuredOutput("test-session", "coordinator", "{}"));
+            reasoningEngine.chatForStructuredOutput("test-session", "coordinator", "{}"));
     }
 }
 

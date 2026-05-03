@@ -3,6 +3,7 @@ package com.arcclaw.persistence.sqlite;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.Map;
 
@@ -33,8 +34,24 @@ class StatefulAgentStoreConcurrencyTest {
     SqliteCheckpointStoreAdapter adapter;
 
     @BeforeEach
-    void setup() {
-        adapter.self = adapter;
+    void setup() throws Exception {
+        setField(adapter, "self", adapter);
+        
+        CheckpointRepository checkpointRepo = new CheckpointRepository(em);
+        ReasoningStepRepository stepRepo = new ReasoningStepRepository(em);
+        CheckpointBatchOperations batchOps = new CheckpointBatchOperations(em, objectMapper);
+        CheckpointUpsertService upsertService = new CheckpointUpsertService(checkpointRepo, stepRepo, batchOps);
+
+        setField(adapter, "checkpointRepo", checkpointRepo);
+        setField(adapter, "batchOps", batchOps);
+        setField(adapter, "upsertService", upsertService);
+        setField(adapter, "retryTemplate", retryTemplate);
+    }
+
+    private void setField(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     @Test

@@ -18,12 +18,10 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
-import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -31,50 +29,12 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
  * Orchestrates the Thought-Plan-Act-Observe loop.
- *
- * <p>This class is now a <strong>thin coordination shell</strong>. All domain
- * logic previously embedded here has been extracted to focused collaborators:
- *
- * <ul>
- *   <li>{@link AnswerGuardStrategy} - leak detection, echo stripping, answer
- *       validation</li>
- *   <li>{@link FinishActionHandler} - FINISH step processing, salvage,
- *       code-gen policy</li>
- *   <li>{@link CorrectionStrategy} - schema self-correction budget</li>
- *   <li>{@link CodeGenerationPolicy} - code-block capability enforcement</li>
- *   <li>{@link EngineStepHandler} - LLM step execution</li>
- *   <li>{@link ToolStepHandler} - tool validation and invocation</li>
- * </ul>
- *
- * <h2>Loop-variable ownership</h2>
- * <p>{@code transientError} and {@code llmSchemaErrorCount} remain loop-scoped
- * here because:
- * <ul>
- *   <li>{@code transientError} is written by the write-intent injection on
- *       iteration 1 AND by the schema/leak correction paths.</li>
- *   <li>{@code llmSchemaErrorCount} must not be an AtomicInteger (§3.7
- *       CAS-ordering risk); it is a plain {@code int} incremented
- *       synchronously in the single-threaded loop.</li>
- * </ul>
- *
- * <h2>Persistence</h2>
- * <p>This class MUST NOT call {@code agentStore.save()} for
- * {@link ReasoningStep} history. {@link AgentLoop} owns all persistence
- * (§7.14).
- *
- * <h2>ChatMemoryWriter ownership</h2>
- * <p>{@code writer.saveAnswer()} is called HERE after receiving a
- * {@link FinishActionHandler.FinishOutcome.Completed} result - NOT inside
- * {@link FinishActionHandler} (§3.6).
- *
- * <p>Refactored to constructor injection as part of T4-1.
  */
 @ApplicationScoped
 public class AgentStateMachineRunner {
@@ -84,15 +44,10 @@ public class AgentStateMachineRunner {
     private static final int LOG_GOAL_MAX = 80;
     private static final String GOAL_LOG_FMT = "StateMachine starting session=%s goal='%s' maxIterations=%d";
 
-    /**
-     * Pre-flight URL pattern: matches http(s) URLs in the user goal.
-     * Used by the browser pre-flight interceptor to bypass LLM tool selection.
-     */
     private static final Pattern URL_PATTERN = Pattern.compile(
             "https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+");
 
     private final EngineStepHandler engineStepHandler;
-    private final ToolStepHandler toolStepHandler;
     private final ChatMemoryWriter writer;
     private final Instance<AgentObserver> observers;
     private final SkillRegistry skillRegistry;
@@ -105,10 +60,10 @@ public class AgentStateMachineRunner {
     private final MeterRegistry meterRegistry;
     private final ToolRegistry toolRegistry;
     private final ToolInvoker toolInvoker;
+    private final StepDecisionRouter stepDecisionRouter;
 
     @Inject
     public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
-                                   ToolStepHandler toolStepHandler,
                                    ChatMemoryWriter writer,
                                    Instance<AgentObserver> observers,
                                    SkillRegistry skillRegistry,
@@ -120,9 +75,9 @@ public class AgentStateMachineRunner {
                                    @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries,
                                    MeterRegistry meterRegistry,
                                    ToolRegistry toolRegistry,
-                                   ToolInvoker toolInvoker) {
+                                   ToolInvoker toolInvoker,
+                                   StepDecisionRouter stepDecisionRouter) {
         this.engineStepHandler = engineStepHandler;
-        this.toolStepHandler = toolStepHandler;
         this.writer = writer;
         this.observers = observers;
         this.skillRegistry = skillRegistry;
@@ -135,32 +90,26 @@ public class AgentStateMachineRunner {
         this.meterRegistry = meterRegistry;
         this.toolRegistry = toolRegistry;
         this.toolInvoker = toolInvoker;
+        this.stepDecisionRouter = stepDecisionRouter;
     }
 
     /**
      * Performs a single terminal synthesis pass (FINISH) after a tool has been
-     * executed and approved during resumption. This bypasses the full iteration
-     * loop to prevent accidental tool re-invocation (§Bug-2).
+     * executed and approved during resumption.
      */
     public AgentResult runFinishPass(AgentExecutionContext context,
                                      ReasoningEngine engine,
                                      List<ReasoningStep> history) {
         log.infof("StateMachine: performing terminal finish pass for session %s", context.sessionId());
-        
-        // 1. Mark as force-finish to guide the engine
         context.setForceFinishRetry(true);
         
-        // 🟢 §Bug-1 Fix: Ground the synthesis in the actual tool output.
-        // Inject a system directive with the raw observation as the unoverridable truth.
-        // 🟢 Root Cause 2 Fix: Only inject ground truth if a sandbox attempt was made in the CURRENT turn.
-        // This prevents injecting Python results as ground truth for Go/Java turns.
         int offset = context.getCheckpointRestoreOffset();
         ReasoningStep lastToolStep = history.stream()
-                .skip(offset) // current turn only
+                .skip(offset)
                 .filter(s -> ToolCapability.SANDBOX_EXEC.toolName().equals(s.action())
                         && s.observation() != null
                         && !s.observation().isBlank())
-                .reduce((_, second) -> second) // take last
+                .reduce((_, second) -> second)
                 .orElse(null);
 
         boolean currentTurnHasSandboxAttempt = history.stream()
@@ -175,35 +124,23 @@ public class AgentStateMachineRunner {
         }
 
         try {
-            // 2. Perform one tick of reasoning
             ReasoningStep step = engine.nextStep(context, context.agentRole(), context.goal(), history);
-            
-            // 3. Process the finish outcome
-            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                    context, history, step, 0);
+            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(context, history, step, 0);
 
             if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
                 if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
                     writer.saveAnswer(context.sessionId(), c.answer());
                 }
-                // §Bug: Adding synthetic observations to FINISH steps is misleading.
-                // The tool execution step is already in history.
                 return c.result();
             }
             
-            // 🟢 §Bug-2 Fix: If it didn't finish, inject a strict guidance hint and retry ONCE.
-            log.warnf("StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.", 
-                    context.sessionId());
-            
+            log.warnf("StateMachine: terminal pass did not result in FINISH for session %s; retrying with guidance hint.", context.sessionId());
             int historySizeBeforeHint = history.size();
-            history.add(ReasoningStep.systemMessage("You have already executed the tool. " +
-                    "Summarize the result and provide your final answer using the FINISH action now. " +
-                    "Do NOT attempt to call any more tools."));
+            history.add(ReasoningStep.systemMessage("You have already executed the tool. Summarize the result and provide your final answer using the FINISH action now."));
             
             try {
                 ReasoningStep retryStep = engine.nextStep(context, context.agentRole(), context.goal(), history);
-                FinishActionHandler.FinishOutcome retryOutcome = finishActionHandler.handle(
-                        context, history, retryStep, 0);
+                FinishActionHandler.FinishOutcome retryOutcome = finishActionHandler.handle(context, history, retryStep, 0);
 
                 if (retryOutcome instanceof FinishActionHandler.FinishOutcome.Completed rc) {
                     if (context.sessionId() != null && rc.answer() != null && !rc.answer().isBlank()) {
@@ -212,424 +149,183 @@ public class AgentStateMachineRunner {
                     return rc.result();
                 }
             } finally {
-                // 🟢 §Bug-2 Fix: Strip the guidance hint AND any partial steps from the failed retry attempt.
-                // Callers relying on history mutation from finishActionHandler during retry
-                // will not see those steps - they're cleaned up here to keep history consistent
-                // before handing off to the standard loop.
                 if (history.size() > historySizeBeforeHint) {
                     history.subList(historySizeBeforeHint, history.size()).clear();
                 }
             }
 
-            // If it STILL didn't finish, fall back to the standard loop as a safety net
-            log.errorf("StateMachine: terminal retry failed for session %s; falling back to standard loop.", 
-                    context.sessionId());
+            log.errorf("StateMachine: terminal retry failed for session %s; falling back to standard loop.", context.sessionId());
             return run(context, engine, history);
         } finally {
             context.setForceFinishRetry(false);
         }
     }
 
-    /**
-     * Executes the Thought-Plan-Act-Observe loop for the given execution context.
-     *
-     * <p><strong>§3.5 / §8.6:</strong> {@link BudgetExceededException} and
-     * {@link BudgetWarningException} are never caught here - they propagate to
-     * {@link AgentLoop}.
-     *
-     * @param context         the immutable execution context
-     * @param engine          the reasoning engine (LLM abstraction)
-     * @param resumedHistory  previously loaded history steps (may be empty)
-     * @return the final {@link AgentResult} - never {@code null}
-     */
     public AgentResult run(AgentExecutionContext context,
                            ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
         context.setCheckpointRestoreOffset(resumedHistory.size());
         List<ReasoningStep> history = new ArrayList<>(resumedHistory);
 
-        // Loop-scoped variables - must NOT be delegated to collaborators
         int iteration = context.startingIteration();
-        int llmSchemaErrorCount = 0;   // plain int - NEVER AtomicInteger (§3.7)
+        int llmSchemaErrorCount = 0;
         int consecutiveFailures = 0;
         int rateLimitRetryCount = 0;
-        String transientError = null;  // written by write-intent injection AND correction paths
+        String transientError = null;
 
-        // --- 1. Goal Preparation ---
         String goal = context.goal() != null ? context.goal() : "unknown";
         String goalHash = AgentErrorMessageUtil.hashGoal(goal);
 
         if (log.isInfoEnabled()) {
-            String preview = goal.length() > LOG_GOAL_MAX
-                    ? goal.substring(0, LOG_GOAL_MAX) : goal;
+            String preview = goal.length() > LOG_GOAL_MAX ? goal.substring(0, LOG_GOAL_MAX) : goal;
             log.infof(GOAL_LOG_FMT, context.sessionId(), preview, context.maxIterations());
         }
 
-        // Fire initial status event (§7.8)
         loopExitPublisher.publishStart(context);
-
-        // Privacy-first (§7.35): saves the PII-redacted goal to ChatMemory.
-        // REDACTED-* placeholder tokens will appear in reconstructed conversation
-        // history. The original unredacted goal is preserved in context.goal
-        // for internal use only and is never written to ChatMemory.
         writer.saveGoal(context.sessionId(), goal);
 
         AgentResult finalResult = null;
 
         try {
-            // =====================================================================
-            // Pre-flight: URL-aware browser injection (bypasses LLM tool selection)
-            // =====================================================================
-            if (history.isEmpty()) {
-                buildBrowserPreflightStep(context).ifPresent(preflightStep -> {
-                    try {
-                        ToolResponse response = WorkspaceContext.run(
-                                context.sessionId(), context.userId(), context.chatId(),
-                                context.autonomyLevel(), context.agentRole(), context.channelType(),
-                                () -> toolInvoker.invoke(
-                                        preflightStep.action(), preflightStep.actionInput(), context.sessionId()));
+            runBrowserPreflight(context, history);
 
-                        String observation = response.success() ? response.output()
-                                : "Browser navigation failed: " + response.output();
-                        ReasoningStep completed = preflightStep.withObservation(observation, response.success());
-                        history.add(completed);
-                        log.infof("[BrowserPreflight] Completed for session %s. Success=%s, observation=%d chars",
-                                context.sessionId(), response.success(), observation.length());
-                    } catch (Exception e) {
-                        log.warnf("[BrowserPreflight] Failed for session %s: %s - falling back to LLM tool selection",
-                                context.sessionId(), e.getMessage());
-                        // Swallow: fall through to normal LLM loop
-                    }
-                });
-            }
-
-            // =====================================================================
-            // Main iteration loop
-            // =====================================================================
             while (iteration < context.maxIterations() || (iteration == context.maxIterations() && context.isForceFinishRetry())) {
                 iteration++;
-                Span iterSpan = agentOtelContext.startIterationSpan(
-                        context.sessionId(), iteration, context.agentRole());
-                try (Scope scope = iterSpan.makeCurrent()) {
+                IterationResult iterRes = processSingleIteration(context, engine, history, iteration, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount, transientError);
 
-                    log.debugf("StateMachine iteration %d/%d", iteration, context.maxIterations());
-
-                    // --- Write-intent hint injection (initial start only) ---
-                    // §7.45: Only inject the hint if history is empty. If we are resuming,
-                    // history contains the tool call/result already.
-                    if (history.isEmpty() && intentDetector.isWriteIntent(context.goal())) {
-                        transientError = "The user wants to store data. Call ingest_document immediately. "
-                                + "Pass REDACTED-* placeholders as-is. No explanation needed.";
-                    }
-
-                    // --- Engine step ---
-                    StepDecision engineDecision;
-                    try {
-                        engineDecision = engineStepHandler.processEngineStep(
-                                context, engine, history, transientError, llmSchemaErrorCount, iteration);
-
-                        // §Issue 3: Rate-limit retries are "free" iterations (up to a limit)
-                        if (engineDecision.isRateLimitHit()) {
-                            if (++rateLimitRetryCount > maxRateLimitRetries) {
-                                log.warnf("StateMachine rate limit retries exhausted (%d) for session %s", 
-                                        maxRateLimitRetries, context.sessionId());
-                                finalResult = AgentResult.failed("I hit repeated rate limits and cannot continue.", 
-                                        AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-                                break;
-                            }
-                            iteration--;
-                        }
-                    } catch (StructuredOutputException soe) {
-                        // Delegate schema-error handling to CorrectionStrategy
-                        if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {
-                            log.warnf("StateMachine schema self-correction exhausted for session %s", context.sessionId());
-                            finalResult = AgentResult.loopExceeded(
-                                    context.maxIterations(), List.copyOf(history));
-                            // loopExitPublisher fires in finally - see first TERMINAL comment above.
-                            return finalResult;
-                        }
-
-                        llmSchemaErrorCount++;
-                        transientError = correctionStrategy.buildCorrectionHint(llmSchemaErrorCount, soe.getMessage());
-                        // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
-                        log.warnf("StateMachine schema self-correction attempt %d for session %s",
-                                llmSchemaErrorCount, context.sessionId());
-                        continue;
-                    }
-
-                    // --- Terminal decision ---
-                    // loopExitPublisher.publish() is called unconditionally in the finally
-                    // block below - do not call it here. The publisher is idempotent for the
-                    // same context+result pair (see LoopExitPublisher contract): publishing
-                    // twice for the same session is safe but the finally path is the single
-                    // authoritative publish point in this runner.
-                    if (engineDecision.type() == DecisionType.TERMINAL) {
-                        finalResult = engineDecision.result();
-                        return finalResult;
-                    }
-
-                    // --- Continue (schema retry without a step) ---
-                    if (engineDecision.type() == DecisionType.CONTINUE) {
-                        transientError = engineDecision.transientError();
-                        llmSchemaErrorCount = engineDecision.llmSchemaErrorCount();
-                        continue;
-                    }
-
-                    // --- Proceed with a real step ---
-                    ReasoningStep step = engineDecision.step();
-                    transientError = null;  // clear after a successful engine step
-
-                    // Validation Loop (to support Deduplication retries without using a turn)
-                    while (true) {
-                        // --- FINISH action ---
-                        if (ReasoningStep.FINISH.equals(step.action())) {
-                            if (step.isParallelBatch()) {
-                                log.errorf("PARALLEL INVARIANT VIOLATION: session %s parallel batch step reached "      
-                                        + "FINISH handler.", context.sessionId());
-                            }
-                            
-                            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                                    context, history, step, llmSchemaErrorCount);
-
-                            if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
-                                context.setForceFinishRetry(false); // clear - no longer needed
-                                // §3.6: writer.saveAnswer() belongs here, NOT inside FinishActionHandler
-                                if (context.sessionId() != null && c.answer() != null && !c.answer().isBlank()) {
-                                    writer.saveAnswer(context.sessionId(), c.answer());
-                                }
-                                history.add(step.withObservation("Task completed."));
-                                
-                                AgentResult res = c.result();
-                                if (AgentRoleEnum.SYNTHESIZER.toScopedName().equals(context.agentRole())) {
-                                    // Synthesizer has useful prior observations
-                                    res = AgentResult.finished(c.answer(), List.copyOf(history));
-                                } else if (res instanceof AgentResult.Finished f) {
-                                    res = AgentResult.finished(f.answer(), List.copyOf(history));
-                                }
-                                finalResult = res;
-                                // loopExitPublisher fires in finally - see first TERMINAL comment above.
-                                return finalResult;
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.Correction correction) {
-                                log.warnf("STATE-MACHINE correction required in session %s - retrying with hint",
-                                        context.sessionId());
-                                history.add(correction.correctedStep());
-                                transientError = correction.correctionHint();
-                                llmSchemaErrorCount++;
-                                break; // exit validation loop to retry engine
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
-                                log.warnf("STATE-MACHINE raw tool-call leak detected in session %s - retrying with hint",
-                                        context.sessionId());
-                                history.add(rl.correctedStep());
-                                transientError = rl.correctionHint();
-                                llmSchemaErrorCount++;
-                                break; // exit validation loop to retry engine
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed sf) {
-                                history.add(step.withObservation("Salvage failed."));
-                                AgentResult failedResult = (sf.result() instanceof AgentResult.Failed f)
-                                    ? AgentResult.failed(f.reason(), f.category(), List.copyOf(history))
-                                    : sf.result();
-                                finalResult = failedResult;
-                                // loopExitPublisher fires in finally - see first TERMINAL comment above.
-                                return finalResult;
-                            }
-                        }
-
-                        // --- Tool validation ---
-                        StepDecision validationDecision = toolStepHandler.validateTool(
-                                context, history, step, consecutiveFailures);
-
-                        // loopExitPublisher.publish() is called unconditionally in the finally
-                        // block below - do not call it here. The publisher is idempotent for the
-                        // same context+result pair (see LoopExitPublisher contract): publishing
-                        // twice for the same session is safe but the finally path is the single
-                        // authoritative publish point in this runner.
-                        if (validationDecision.type() == DecisionType.TERMINAL) {
-                            finalResult = validationDecision.result();
-                            return finalResult;
-                        }
-                        
-                        if (validationDecision.isRetryValidation()) {
-                            consecutiveFailures = validationDecision.consecutiveFailures();
-                            // Deduplication logic: validationDecision added the dedup step to history
-                            // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
-                            break; // exit validation loop to retry engine
-                        }
-
-                        if (validationDecision.type() == DecisionType.CONTINUE) {
-                             consecutiveFailures = validationDecision.consecutiveFailures();
-                             // Hallucinated tool or ReAct keyword
-                             break;
-                        }
-
-                        step = validationDecision.step();
-
-                        // Re-dispatch if validateTool rewrote a hallucinated tool to FINISH
-                        if (ReasoningStep.FINISH.equals(step.action())) {
-                            FinishActionHandler.FinishOutcome outcome = finishActionHandler.handle(
-                                    context, history, step, llmSchemaErrorCount);
-                            if (outcome instanceof FinishActionHandler.FinishOutcome.Completed c) {
-                                finalResult = c.result();
-                                // loopExitPublisher fires in finally - see first TERMINAL comment above.
-                                return finalResult;
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.Correction correction) {
-                                history.add(correction.correctedStep());
-                                transientError = correction.correctionHint();
-                                llmSchemaErrorCount++;
-                            } else if (outcome instanceof FinishActionHandler.FinishOutcome.RetryLeak rl) {
-                                history.add(rl.correctedStep());
-                                transientError = rl.correctionHint();
-                                llmSchemaErrorCount++;
-                            }
-                            // Other outcomes (leak, salvage) follow same retry/terminal path as above
-                            break; 
-                        }
-
-                        // Validation passed, proceed to invocation
-                        // --- Tool invocation ---
-                        // Fetch skill snapshot lazily
-                        var skillSnapshot = skillRegistry.currentSnapshot();
-
-                        // HITL State Check
-                        if (context.isStatusDirty()) {
-                            var cpOpt = engineStepHandler.loadCheckpointStatus(context);
-                            context.setLastCheckpointStatus(cpOpt.orElse(null));
-                            if (context.lastCheckpointStatus() == CheckpointStatus.AWAITING_APPROVAL) {                                log.warnf("Session %s is still AWAITING_APPROVAL. Refusing to invoke tool "
-                                        + "until state is flushed as IN_PROGRESS.", context.sessionId());
-                                finalResult = AgentResult.failed("State corrupted - tool execution attempted before approval persistence completed.",
-                                        AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-                                // loopExitPublisher fires in finally - see first TERMINAL comment above.
-                                return finalResult;
-                            }
-                        }
-
-                        // NOTE: ToolStepHandler.invokeToolAndObserve() is responsible for adding
-                        // the completed step to history. Do NOT add step to history here.
-                        StepDecision invocationDecision = toolStepHandler.invokeToolAndObserve(
-                                context, history, step, consecutiveFailures, skillSnapshot);
-
-                        if (invocationDecision.type() == DecisionType.TERMINAL) {
-                            finalResult = invocationDecision.result();
-                            // loopExitPublisher fires in finally - see first TERMINAL comment above.
-                            return finalResult;
-                        }
-
-                        if (invocationDecision.result() instanceof AgentResult.AwaitingApproval) {
-                            context.markStatusDirty();
-                            finalResult = invocationDecision.result();
-                            // loopExitPublisher fires in finally - see first TERMINAL comment above.
-                            return finalResult;
-                        }
-
-                        consecutiveFailures = invocationDecision.consecutiveFailures();
-                        break; // Move to next iteration of iteration loop
-                    }
-
-                    if (transientError != null) continue;
-
-                } catch (Exception e) {
-                    iterSpan.recordException(e);
-                    iterSpan.setStatus(StatusCode.ERROR, AgentErrorMessageUtil.safeMessage(e));
-                    throw e;
-                } finally {
-                    iterSpan.end();
+                if (iterRes.isTerminal()) {
+                    finalResult = iterRes.result();
+                    return finalResult;
                 }
+
+                if (iterRes.rateLimitRetryCount() > rateLimitRetryCount) {
+                    iteration--;
+                }
+
+                transientError = iterRes.transientError();
+                llmSchemaErrorCount = iterRes.llmSchemaErrorCount();
+                consecutiveFailures = iterRes.consecutiveFailures();
+                rateLimitRetryCount = iterRes.rateLimitRetryCount();
             }
 
-            // Loop exhausted
-            log.warnf("StateMachine exceeded %d iterations for session %s", context.maxIterations(), context.sessionId());
             finalResult = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
-            // loopExitPublisher fires in finally - see first TERMINAL comment above.
             return finalResult;
 
-        // finalResult is set before return. The finally block below calls
-        // loopExitPublisher.publish(context, res) exactly once - no explicit
-        // publish needed here. finally always executes before the return exits
-        // this method (JLS §14.20.2).
         } catch (BudgetExceededException e) {
             finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history));
             return finalResult;
         } catch (Exception e) {
             log.errorf("StateMachine terminal failure for session %s: %s", context.sessionId(), e.getMessage());
             finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-            throw e;
+            return finalResult;
         } finally {
             AgentResult res = finalResult;
-            
-            // Record iteration distribution metric
-            int totalIterations = iteration - context.startingIteration();
-            meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole())
-                    .record(totalIterations);
-
-            log.debugf("Loop complete for role %s", context.agentRole());
-
+            meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole()).record(iteration - context.startingIteration());
             loopExitPublisher.publish(context, res);
-            observers.forEach(o -> {
-                o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res);
+            observers.forEach(o -> o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
+        }
+    }
+
+    private void runBrowserPreflight(AgentExecutionContext context, List<ReasoningStep> history) {
+        if (history.isEmpty()) {
+            buildBrowserPreflightStep(context).ifPresent(preflightStep -> {
+                try {
+                    ToolResponse response = WorkspaceContext.run(
+                            context.sessionId(), context.userId(), context.chatId(),
+                            context.autonomyLevel(), context.agentRole(), context.channelType(),
+                            () -> toolInvoker.invoke(preflightStep.action(), preflightStep.actionInput(), context.sessionId()));
+
+                    ReasoningStep completed = preflightStep.withObservation(
+                            response.success() ? response.output() : "Browser navigation failed: " + response.output(),
+                            response.success());
+                    history.add(completed);
+                } catch (Exception e) {
+                    log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), e.getMessage());
+                }
             });
         }
     }
 
-    // ── Pre-flight browser interceptor ──
+    private record IterationResult(
+            AgentResult result,
+            String transientError,
+            int llmSchemaErrorCount,
+            int consecutiveFailures,
+            int rateLimitRetryCount,
+            boolean isTerminal
+    ) {
+        public static IterationResult terminal(AgentResult result) {
+            return new IterationResult(result, null, 0, 0, 0, true);
+        }
+        public static IterationResult proceed(String transientError, int llmSchemaErrorCount, int consecutiveFailures, int rateLimitRetryCount) {
+            return new IterationResult(null, transientError, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount, false);
+        }
+    }
 
-    /**
-     * Detects a URL in the researcher's goal and builds a fast-path
-     * {@code browser_navigate} step. This completely bypasses LLM tool selection
-     * for the common "browse this URL" pattern, which small models (8B) cannot
-     * reliably route to the correct tool.
-     *
-     * <p>Only activates when ALL conditions are met:
-     * <ol>
-     *   <li>The active role is {@code researcher}</li>
-     *   <li>{@code browser_navigate} is registered AND enabled in the registry</li>
-     *   <li>The goal contains an {@code http(s)://} URL</li>
-     * </ol>
-     *
-     * <p>The returned step uses {@link ReasoningStep#fastPath} so it is
-     * exempted from "degraded response" token checks downstream.
-     */
+    private IterationResult processSingleIteration(
+            AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> history,
+            int iteration, int llmSchemaErrorCount, int consecutiveFailures, int rateLimitRetryCount, String transientError) {
+        
+        Span iterSpan = agentOtelContext.startIterationSpan(context.sessionId(), iteration, context.agentRole());
+        try (Scope scope = iterSpan.makeCurrent()) {
+            if (history.isEmpty() && intentDetector.isWriteIntent(context.goal())) {
+                transientError = "The user wants to store data. Call ingest_document immediately.";
+            }
+
+            StepDecision engineDecision;
+            try {
+                engineDecision = engineStepHandler.processEngineStep(context, engine, history, transientError, llmSchemaErrorCount, iteration);
+
+                if (engineDecision.isRateLimitHit()) {
+                    if (rateLimitRetryCount + 1 > maxRateLimitRetries) {
+                        return IterationResult.terminal(AgentResult.failed("Repeated rate limits.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+                    }
+                    return IterationResult.proceed(transientError, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount + 1);
+                }
+            } catch (StructuredOutputException soe) {
+                if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {
+                    return IterationResult.terminal(AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history)));
+                }
+                return IterationResult.proceed(correctionStrategy.buildCorrectionHint(llmSchemaErrorCount + 1, soe.getMessage()), llmSchemaErrorCount + 1, consecutiveFailures, rateLimitRetryCount);
+            }
+
+            if (engineDecision.type() == DecisionType.TERMINAL) {
+                return IterationResult.terminal(engineDecision.result());
+            }
+            if (engineDecision.type() == DecisionType.CONTINUE) {
+                return IterationResult.proceed(engineDecision.transientError(), engineDecision.llmSchemaErrorCount(), consecutiveFailures, rateLimitRetryCount);
+            }
+
+            ReasoningStep step = engineDecision.step();
+            var outcome = stepDecisionRouter.route(context, history, step, llmSchemaErrorCount, consecutiveFailures, skillRegistry.currentSnapshot());
+
+            if (outcome.isTerminal()) {
+                return IterationResult.terminal(outcome.result());
+            }
+            if (outcome.retryEngine()) {
+                return IterationResult.proceed(outcome.transientError(), outcome.llmSchemaErrorCount(), consecutiveFailures, rateLimitRetryCount);
+            }
+
+            return IterationResult.proceed(null, llmSchemaErrorCount, outcome.consecutiveFailures(), rateLimitRetryCount);
+        } catch (Exception e) {
+            iterSpan.recordException(e);
+            throw e;
+        } finally {
+            iterSpan.end();
+        }
+    }
+
     private Optional<ReasoningStep> buildBrowserPreflightStep(AgentExecutionContext context) {
-        log.infof("[BrowserPreflight] Attempting pre-flight check for session=%s, role=%s, goal='%s'",
-                context.sessionId(), context.agentRole(), context.goal());
-
-        // Guard 1: researcher only
-        if (!AgentRoleEnum.RESEARCHER.toScopedName().equalsIgnoreCase(context.agentRole())) {
-            log.infof("[BrowserPreflight] Guard 1 failed: role '%s' != '%s'",
-                    context.agentRole(), AgentRoleEnum.RESEARCHER.toScopedName());
-            return Optional.empty();
-        }
-
-        // Guard 2: browser_navigate must be available and enabled
-        log.infof("[BrowserPreflight] Registered tool names: %s", toolRegistry.listTools());
+        if (!AgentRoleEnum.RESEARCHER.toScopedName().equalsIgnoreCase(context.agentRole())) return Optional.empty();
         var toolOpt = toolRegistry.findTool(ToolCapability.BROWSER_NAVIGATE.toolName());
-        if (toolOpt.isEmpty()) {
-            log.infof("[BrowserPreflight] Guard 2 failed: tool '%s' not found in registry",
-                    ToolCapability.BROWSER_NAVIGATE.toolName());
-            return Optional.empty();
-        }
+        if (toolOpt.isEmpty() || !toolOpt.map(AgentTool::isEnabled).orElse(false)) return Optional.empty();
 
-        boolean browserEnabled = toolOpt.map(AgentTool::isEnabled).orElse(false);
-        if (!browserEnabled) {
-            log.infof("[BrowserPreflight] Guard 2 failed: tool '%s' is present but disabled",
-                    ToolCapability.BROWSER_NAVIGATE.toolName());
-            return Optional.empty();
-        }
-
-        // Guard 3: goal must contain a URL
         String goal = context.goal();
-        if (goal == null) {
-            log.infof("[BrowserPreflight] Guard 3 failed: goal is null");
-            return Optional.empty();
-        }
+        if (goal == null) return Optional.empty();
         Matcher m = URL_PATTERN.matcher(goal);
-        if (!m.find()) {
-            log.infof("[BrowserPreflight] Guard 3 failed: no URL matched in goal '%s'", goal);
-            return Optional.empty();
-        }
+        if (!m.find()) return Optional.empty();
 
         String url = m.group();
-        log.infof("[BrowserPreflight] URL detected in goal for session %s, injecting browser_navigate for: %s",
-                context.sessionId(), url);
-
         return Optional.of(ReasoningStep.fastPath(
                 "Pre-flight: URL detected in goal, navigating directly.",
                 ToolCapability.BROWSER_NAVIGATE.toolName(),

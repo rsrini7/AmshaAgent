@@ -52,7 +52,7 @@ class AppBootstrapTest {
             "KEY_E=\"quoted#value\""
         ));
 
-        AppBootstrap.loadDotEnv(tempDir);
+        EnvConfigInitializer.loadDotEnv(tempDir);
 
         assertEquals("hello", System.getProperty("KEY_A"));
         assertEquals("world", System.getProperty("KEY_B"));
@@ -67,14 +67,14 @@ class AppBootstrapTest {
         Path envFile = tempDir.resolve(".env");
         Files.write(envFile, List.of("KEY_A=overridden"));
 
-        AppBootstrap.loadDotEnv(tempDir);
+        EnvConfigInitializer.loadDotEnv(tempDir);
 
         assertEquals("original", System.getProperty("KEY_A"));
     }
 
     @Test
     void testLoadDotEnv_missingFile_doesNotThrow() {
-        AppBootstrap.loadDotEnv(Path.of("/nonexistent/path/at/all/ever"));
+        EnvConfigInitializer.loadDotEnv(Path.of("/nonexistent/path/at/all/ever"));
     }
 
     @Test
@@ -110,7 +110,7 @@ class AppBootstrapTest {
     }
 
     private static void invokeValidateAndAutoFixLlmConfig(Path binaryDir) throws Exception {
-        Method method = AppBootstrap.class.getDeclaredMethod("validateAndAutoFixLlmConfig", Path.class);
+        Method method = LlmConfigAutoFixer.class.getDeclaredMethod("validateAndAutoFixLlmConfig", Path.class);
         method.setAccessible(true);
         try {
             method.invoke(null, binaryDir);

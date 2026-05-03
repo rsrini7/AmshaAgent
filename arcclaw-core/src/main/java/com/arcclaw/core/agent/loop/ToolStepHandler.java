@@ -52,11 +52,6 @@ public class ToolStepHandler {
             "OBSERVE", "THINK", "ACT", "PLAN", "REASON", "THOUGHT"
     );
 
-    private static final Set<String> MUTATING_GOAL_KEYWORDS = Set.of(
-            "delete", "remove", "cancel", "stop", "modify", "change",
-            "update", "edit", "pause", "resume", "clear", "disable"
-    );
-
     private static final Pattern GITHUB_RESOURCE_PATTERN = Pattern.compile(
             "(?i)(github\\.com|[a-zA-Z0-9_.-]{2,}/[a-zA-Z0-9_.-]{2,}(?!\\/)" +
             "|gh\\s+repo|gist\\.github\\.com)");
@@ -103,9 +98,8 @@ public class ToolStepHandler {
 
         String toolName = step.action();
 
-        // 1. Rescue hallucinated finish
-        if (isHallucinatedFinish(step)) {
-            return StepDecision.proceed(rescueFinish(step, context.sessionId()));
+        if (ToolStepResolutionUtils.isHallucinatedFinish(step)) {
+            return StepDecision.proceed(ToolStepResolutionUtils.rescueFinish(step, context.sessionId()));
         }
 
         // 2. Coordinator-Github Redirect (§1 & §2)
@@ -139,24 +133,12 @@ public class ToolStepHandler {
         }
 
         // 3. Known or Dynamic Tool check
-        if (isKnownTool(toolName)) {
+        if (ToolStepResolutionUtils.isKnownTool(toolName, toolRegistry, dynamicToolLookup)) {
             return StepDecision.proceedWithFailures(step, consecutiveFailures);
         }
 
         // 4. ReAct keyword or Hallucination
         return handleUnknownTool(context, history, step, toolName, consecutiveFailures);
-    }
-
-    private boolean isHallucinatedFinish(ReasoningStep step) {
-        return ReasoningStep.FINISH.equalsIgnoreCase(step.action())
-                && step.actionInput() != null
-                && step.actionInput().containsKey(ReasoningStep.ACTION_INPUT_ANSWER_KEY);
-    }
-
-    private ReasoningStep rescueFinish(ReasoningStep step, String sessionId) {
-        log.infof("[ToolStepHandler] Rescued hallucinated 'finish' tool for session %s", sessionId);
-        return ReasoningStep.pending(step.thought(), ReasoningStep.FINISH, Map.copyOf(step.actionInput()),      
-                step.inputTokens(), step.outputTokens());
     }
 
     private boolean isCoordinatorGithubViolation(AgentExecutionContext context, String toolName, ReasoningStep step) {
@@ -174,37 +156,32 @@ public class ToolStepHandler {
 
     private ReasoningStep redirectToDelegate(ReasoningStep step, String sessionId, String agent) {
         log.warnf("[TOOL-GUARD] Coordinator %s auto-redirect for session %s to agent %s", step.action(), sessionId, agent);
-        String delegateGoal = buildDelegateGoal(step.action(), step.actionInput() != null ? step.actionInput() : Map.of());
+        String delegateGoal = ToolStepResolutionUtils.buildDelegateGoal(step.action(), step.actionInput() != null ? step.actionInput() : Map.of());
         return ReasoningStep.pending(step.thought(), ToolCapability.DELEGATE_TO_AGENT.toolName(),
             Map.of("agent", agent, "goal", delegateGoal), 0, 0);
-    }
-
-    private boolean isKnownTool(String toolName) {
-        if (toolRegistry.findTool(toolName).isPresent()) return true;
-        return !dynamicToolLookup.isUnsatisfied() && dynamicToolLookup.get().isDynamicToolAllowed(toolName);    
     }
 
     private StepDecision handleUnknownTool(AgentExecutionContext context, List<ReasoningStep> history,
                                          ReasoningStep step, String toolName, int consecutiveFailures) {        
         if (REACT_KEYWORDS.contains(toolName.toUpperCase(Locale.ROOT))) {
-            return StepDecision.retryEngine(String.format(
+            return StepDecision.continueLoop(String.format(
                     "System: '%s' is a ReAct reasoning keyword. Available tools: %s.",
                     toolName, toolRegistry.listTools()), 0);
-            // → re-invokes LLM for a new thought on the next iteration (isRetryValidation=false)
         }
 
-        String errorObs = String.format("Tool '%s' does not exist. Available tools: %s.",
+            String errorObs = String.format("Tool '%s' does not exist. Available tools: %s.",
                 toolName, toolRegistry.listTools());
-        ReasoningStep completedStep = step.withObservation(errorObs, false);
-        history.add(completedStep);
-        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));      
+            ReasoningStep completedStep = step.withObservation(errorObs, false);
+            history.add(completedStep);
+            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));
 
-        int failures = consecutiveFailures + 1;
-        if (failures >= 2) {
+            int failures = consecutiveFailures + 1;
+            if (failures >= 2) {
             return StepDecision.terminal(AgentResult.finished(
-                    "❌ I encountered repeated errors. Please rephrase your request.", List.copyOf(history)));  
-        }
-        return StepDecision.retryValidation(failures);
+                    "❌ I encountered repeated errors. Please rephrase your request.", List.copyOf(history)));
+            }
+            return StepDecision.continueLoop(null, 0);
+
         // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
     }
 
@@ -280,7 +257,7 @@ public class ToolStepHandler {
             history.add(blockedStep);
             observers.forEach(o -> o.onStepComplete(
                 context.sessionId(), context.agentRole(), blockedStep));
-            return StepDecision.retryValidation(0);
+            return StepDecision.continueLoop(null, 0);
             // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
         }
 
@@ -311,7 +288,7 @@ public class ToolStepHandler {
                 return StepDecision.terminal(
                     AgentResult.finished(b.observation(), List.copyOf(history)));
             }
-            return StepDecision.retryValidation(0);
+            return StepDecision.continueLoop(null, 0);
             // → skips LLM; re-enters inner validation loop immediately (isRetryValidation=true)
         }
 
@@ -441,7 +418,7 @@ public class ToolStepHandler {
             writer.saveAnswer(ctx.sessionId(), finalAnswer);
             return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
         }
-        if (isListOnlyGoal(ctx.goal())) {
+        if (ToolStepResolutionUtils.isListOnlyGoal(ctx.goal())) {
             writer.saveAnswer(ctx.sessionId(), obs);
             return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
         }
@@ -496,28 +473,6 @@ public class ToolStepHandler {
                 "❌ I encountered repeated errors (" + newFailures + "). Please rephrase your request or check the tool parameters.", List.copyOf(history)));      
         }
         return StepDecision.proceedWithFailures(step, newFailures);
-    }
-
-    private String buildDelegateGoal(String toolName, Map<String, Object> args) {
-        if (args == null || args.isEmpty()) {
-            return "Use the " + toolName + " tool and return the complete results.";
-        }
-        String action  = String.valueOf(args.getOrDefault("action",  "")).strip();
-        String command = String.valueOf(args.getOrDefault("command", "")).strip();
-        String target  = String.valueOf(args.getOrDefault("target",  "")).strip();
-
-        StringBuilder sb = new StringBuilder("Use the ").append(toolName).append(" tool");
-        if (!action.isBlank()  && !"null".equals(action))  sb.append(" with action=").append(action);
-        if (!command.isBlank() && !"null".equals(command)) sb.append(" command=").append(command);
-        if (!target.isBlank()  && !"null".equals(target))  sb.append(" for user/resource=").append(target);     
-        sb.append(" and return the complete results.");
-        return sb.toString();
-    }
-
-    private boolean isListOnlyGoal(String goal) {
-        if (goal == null || goal.isBlank()) return true;
-        String lower = goal.toLowerCase();
-        return MUTATING_GOAL_KEYWORDS.stream().noneMatch(lower::contains);
     }
 
     /** Sealed result of the invokeTool phase. */

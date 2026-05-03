@@ -53,7 +53,7 @@ public class TelegramChannelRoute extends RouteBuilder {
 
         log.info("Telegram Route initializing endpoint");
 
-        from("telegram:bots?timeout=10")
+        from("telegram:bots?timeout=10&backoffErrorThreshold=3&backoffMultiplier=2")
                 .routeId("telegram-bot")
                 .choice()
                     .when(body().isInstanceOf(IncomingCallbackQuery.class))

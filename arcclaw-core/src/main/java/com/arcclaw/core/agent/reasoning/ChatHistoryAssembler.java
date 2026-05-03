@@ -84,102 +84,71 @@ public class ChatHistoryAssembler {
             });
         }
 
-        // STEP A - persistent chat history
-        if (sessionId != null) {
-            List<ChatMessage> chatHistory = chatMemoryStore.getMessages(sessionId);
-            if (chatHistory != null && !chatHistory.isEmpty()) {
-                for (ChatMessage msg : chatHistory) {
-                    boolean skip = false;
-                    String msgString = msg.toString();
+        appendChatHistory(messages, sessionId);
+        appendReActHistory(messages, history);
+        handleGoalAndHints(messages, goal);
 
-                    if (msg instanceof SystemMessage) {
-                        skip = true;
-                    } else if (msg instanceof ToolExecutionResultMessage) {
-                        // 🟢 FIX 5: Scrub tool results from persistent history. 
-                        // Current turn tools are reconstructed from ReAct 'history' parameter.
-                        // Persistent history tools are from PRIOR turns and cause hallucinations.
-                        skip = true;
-                    } else if (msg instanceof AiMessage ai) {
-                        String aiText = ai.text();
-                        if (MessageTag.isTagged(aiText)) {
-                            skip = true;
-                        } else if (aiText != null && aiText.length() <= 4_000 && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
-                            skip = true;
-                        } else if (ai.hasToolExecutionRequests()) {
-                            // 🟢 FIX 1.1: Scrub tool calls from persistent history.
-                            // If we kept the AiMessage but scrubbed the ToolExecutionResultMessage,
-                            // the LLM would see an unfulfilled tool call and re-issue it.
-                            skip = true;
-                        }
-                    } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_TOOL_APPROVED)) {
-                        skip = true;
-                    } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_RESUME_APPROVED)) {
-                        skip = true;
-                    }
+        return messages;
+    }
 
-                    if (!skip) {
-                        if (msg instanceof AiMessage ai && ai.text() != null && ai.text().length() > 2000) {
-                            String truncated = ai.text().substring(0, 1997) + "...";
-                            if (ai.hasToolExecutionRequests()) {
-                                messages.add(AiMessage.aiMessage(truncated, ai.toolExecutionRequests()));
-                            } else {
-                                messages.add(AiMessage.aiMessage(truncated));
-                            }
-                        } else if (msg instanceof UserMessage um && um.singleText() != null && um.singleText().length() > 2000) {
-                            String truncated = um.singleText().substring(0, 1997) + "...";
-                            messages.add(UserMessage.userMessage(truncated));
-                        } else {
-                            messages.add(msg);
-                        }
+    private void appendChatHistory(List<ChatMessage> messages, String sessionId) {
+        if (sessionId == null) return;
+        List<ChatMessage> chatHistory = chatMemoryStore.getMessages(sessionId);
+        if (chatHistory == null || chatHistory.isEmpty()) return;
+
+        for (ChatMessage msg : chatHistory) {
+            boolean skip = false;
+            String msgString = msg.toString();
+
+            if (msg instanceof SystemMessage) {
+                skip = true;
+            } else if (msg instanceof ToolExecutionResultMessage) {
+                skip = true;
+            } else if (msg instanceof AiMessage ai) {
+                String aiText = ai.text();
+                if (MessageTag.isTagged(aiText)) {
+                    skip = true;
+                } else if (aiText != null && aiText.length() <= 4_000 && COMPLIANCE_OVERRIDE_PATTERN.matcher(aiText).find()) {
+                    skip = true;
+                } else if (ai.hasToolExecutionRequests()) {
+                    skip = true;
+                }
+            } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_TOOL_APPROVED)) {
+                skip = true;
+            } else if (msg instanceof UserMessage && msgString.contains(AgentSentinels.GOAL_RESUME_APPROVED)) {
+                skip = true;
+            }
+
+            if (!skip) {
+                if (msg instanceof AiMessage ai && ai.text() != null && ai.text().length() > 2000) {
+                    String truncated = ai.text().substring(0, 1997) + "...";
+                    if (ai.hasToolExecutionRequests()) {
+                        messages.add(AiMessage.aiMessage(truncated, ai.toolExecutionRequests()));
+                    } else {
+                        messages.add(AiMessage.aiMessage(truncated));
                     }
+                } else if (msg instanceof UserMessage um && um.singleText() != null && um.singleText().length() > 2000) {
+                    String truncated = um.singleText().substring(0, 1997) + "...";
+                    messages.add(UserMessage.userMessage(truncated));
+                } else {
+                    messages.add(msg);
                 }
             }
         }
+    }
 
-        // STEP B - ReAct loop steps
+    private void appendReActHistory(List<ChatMessage> messages, List<ReasoningStep> history) {
         int totalSteps = history.size();
         for (int i = 0; i < totalSteps; i++) {
             ReasoningStep step = history.get(i);
-            
-            // 🟢 TOKEN OPTIMIZATION: Only send full details for the last 2 steps.
-            // Older steps get truncated thoughts and observations to save context space.
-            // This prevents hitting low TPM limits (e.g. 30k on Groq Free/Tier1).
             boolean isRecent = (i >= totalSteps - 2);
             String thought = step.thought() != null ? step.thought() : "";
             if (!isRecent && thought.length() > 200) {
                 thought = thought.substring(0, 197) + "... [summary]";
             }
 
-            // NEW: Handle parallel batch step (§7.3)
             if (step.isParallelBatch()) {
-                List<ParallelToolCall> calls = deserializeBatch(step);
-                if (calls != null && !calls.isEmpty()) {
-                    List<ToolExecutionRequest> allRequests = calls.stream()
-                        .map(call -> {
-                            String argsJson;
-                            try {
-                                argsJson = objectMapper.writeValueAsString(call.params());
-                            } catch (Exception e) { argsJson = "{}"; }
-                            return ToolExecutionRequest.builder()
-                                .id(call.callId()).name(call.toolName()).arguments(argsJson).build();
-                        })
-                        .toList();
-
-                    messages.add(AiMessage.aiMessage(thought, allRequests));
-
-                    for (ParallelToolCall call : calls) {
-                        String obs = call.observation();
-                        if (!isRecent && obs != null && obs.length() > 500) {
-                            obs = obs.substring(0, 497) + "... [truncated]";
-                        }
-                        String safeObs = truncateObservation(obs, call.toolName());
-                        messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(
-                            call.callId(), call.toolName(), safeObs));
-                    }
-                } else {
-                    log.warnf("ChatHistoryAssembler: failed to deserialize parallel batch at index %d", i);
-                    messages.add(AiMessage.aiMessage("[PARALLEL-BATCH-ERROR]"));
-                }
+                handleParallelBatch(messages, step, isRecent, thought, i);
                 continue;
             }
 
@@ -211,17 +180,11 @@ public class ChatHistoryAssembler {
                 String obs = step.observation();
                 if (obs != null && !obs.isBlank()) {
                     ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
-                    
                     if (last instanceof ToolExecutionResultMessage toolRes) {
-                        // 🟢 FIX: 'Unexpected role 'user' after role 'tool''
-                        // Providers like OpenAI/OpenRouter reject User/System messages immediately
-                        // following a Tool result before the AI has answered. 
-                        // Instead of adding a new message, append the directive to the tool's output.
                         String updatedText = toolRes.text() + "\n\n[SYSTEM DIRECTIVE]:\n" + obs;
                         messages.set(messages.size() - 1, 
                             ToolExecutionResultMessage.toolExecutionResultMessage(toolRes.id(), toolRes.toolName(), updatedText));
                     } else if (last instanceof AiMessage) {
-                        // Use UserMessage if last was AiMessage to "flip" the turn
                         messages.add(UserMessage.userMessage(obs));
                     } else {
                         messages.add(SystemMessage.systemMessage(obs));
@@ -233,15 +196,45 @@ public class ChatHistoryAssembler {
                 }
             }
         }
+    }
 
-        // STEP C - special goal injection or correction hints (§7.31 turn-flipping)
+    private void handleParallelBatch(List<ChatMessage> messages, ReasoningStep step, boolean isRecent, String thought, int i) {
+        List<ParallelToolCall> calls = deserializeBatch(step);
+        if (calls != null && !calls.isEmpty()) {
+            List<ToolExecutionRequest> allRequests = calls.stream()
+                .map(call -> {
+                    String argsJson;
+                    try {
+                        argsJson = objectMapper.writeValueAsString(call.params());
+                    } catch (Exception e) { argsJson = "{}"; }
+                    return ToolExecutionRequest.builder()
+                        .id(call.callId()).name(call.toolName()).arguments(argsJson).build();
+                })
+                .toList();
+
+            messages.add(AiMessage.aiMessage(thought, allRequests));
+
+            for (ParallelToolCall call : calls) {
+                String obs = call.observation();
+                if (!isRecent && obs != null && obs.length() > 500) {
+                    obs = obs.substring(0, 497) + "... [truncated]";
+                }
+                String safeObs = truncateObservation(obs, call.toolName());
+                messages.add(ToolExecutionResultMessage.toolExecutionResultMessage(
+                    call.callId(), call.toolName(), safeObs));
+            }
+        } else {
+            log.warnf("ChatHistoryAssembler: failed to deserialize parallel batch at index %d", i);
+            messages.add(AiMessage.aiMessage("[PARALLEL-BATCH-ERROR]"));
+        }
+    }
+
+    private void handleGoalAndHints(List<ChatMessage> messages, String goal) {
         if (goal != null && goal.equals(AgentSentinels.GOAL_TOOL_APPROVED)) {
             messages.add(UserMessage.userMessage(goal));
         } else if (goal != null && goal.contains("System: ")) {
             int start = goal.indexOf("System: ");
             String correctionHint = goal.substring(start);
-            
-            // §4.11: Always prefix with the hard stop so LLM cannot retry a raw tool call.
             String fullHint = "Do NOT attempt another tool call.\n\n" + correctionHint;
             ChatMessage last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
 
@@ -255,10 +248,7 @@ public class ChatHistoryAssembler {
                 messages.add(SystemMessage.from(fullHint));
             }
         }
-
-        return messages;
     }
-
     private List<ParallelToolCall> deserializeBatch(ReasoningStep step) {
         try {
             Object raw = step.actionInput() != null

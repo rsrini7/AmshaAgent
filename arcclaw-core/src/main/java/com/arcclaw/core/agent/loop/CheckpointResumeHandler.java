@@ -1,12 +1,10 @@
 package com.arcclaw.core.agent.loop;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
@@ -16,11 +14,9 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.AgentSentinels;
-import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -28,40 +24,40 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
+/**
+ * Handles the orchestration of session resumption after human-in-the-loop approval.
+ * Delegates specific resumption strategies to ResumeStrategyDispatcher.
+ */
 @ApplicationScoped
 public class CheckpointResumeHandler {
 
     private static final Logger log = Logger.getLogger(CheckpointResumeHandler.class);
 
     private final StatefulAgentStore agentStore;
-    private final ToolRegistry toolRegistry;
-    private final ObjectMapper objectMapper;
     private final AgentLoop agentLoop;
     private final ReasoningEngine reasoningEngine;
     private final ChannelPluginRegistry channelPluginRegistry;
     private final CliResultBridge cliResultBridge;
     private final AgentCronRepository cronRepository;
+    private final ResumeStrategyDispatcher strategyDispatcher;
 
     protected CheckpointResumeHandler() {
         this.agentStore = null;
-        this.toolRegistry = null;
-        this.objectMapper = null;
         this.agentLoop = null;
         this.reasoningEngine = null;
         this.channelPluginRegistry = null;
         this.cliResultBridge = null;
         this.cronRepository = null;
+        this.strategyDispatcher = null;
     }
 
     @Inject
@@ -74,18 +70,18 @@ public class CheckpointResumeHandler {
                                    CliResultBridge cliResultBridge,
                                    AgentCronRepository cronRepository) {
         this.agentStore = agentStore;
-        this.toolRegistry = toolRegistry;
-        this.objectMapper = objectMapper;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
         this.channelPluginRegistry = channelPluginRegistry;
         this.cliResultBridge = cliResultBridge;
         this.cronRepository = cronRepository;
+        this.strategyDispatcher = new ResumeStrategyDispatcher(agentStore, toolRegistry, objectMapper, reasoningEngine);
     }
 
     @Inject
     ManagedExecutor executor;
 
+    @ActivateRequestContext
     public void resumeAfterBatchDecision(
             String sessionId,
             String agentRole,
@@ -98,32 +94,29 @@ public class CheckpointResumeHandler {
             return;
         }
 
-        // 1. Load checkpoint synchronously to check if it's parallel
-        AgentCheckpoint checkpoint = loadCheckpointForResume(sessionId, agentRole);
+        AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
         if (checkpoint == null) {
             log.warnf("[RESUME-GUARD] checkpoint null after claim for session=%s - releasing DB state.", sessionId);
             agentStore.releaseResumeClaim(sessionId, agentRole); 
             return;
         }
 
-        // §7.29-fix: Atomic guard to prevent double-resumption for ALL approval types.
-        // This also performs the DB transition (AWAITING_APPROVAL → RESUMING) which
-        // protects the checkpoint from being archived as "stale" if a new user message
-        // arrives before the executor thread starts.
         if (!agentStore.claimForResume(sessionId, agentRole, checkpoint.hasBrowserTool())) {
             log.infof("[BATCH-RESUME-GUARD] session=%s already resuming - skipping duplicate.", sessionId);
             return;
         }
 
-        // §Synchronize Cron Status: if this is a cron session, mark the cron task as RUNNING
-        // so it no longer appears in the "Awaiting Approval" list for ambiguity detection.
         syncCronStatus(sessionId);
 
         executor.execute(() -> {
+            Arc.container().requestContext().activate();
             MessageContext context = null;
             try {
-                String resumeGoal = resolveResumeGoal(checkpoint);
-                if (isGoalInvalid(resumeGoal, sessionId, agentRole)) return;
+                String resumeGoal = strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
+                if (resumeGoal == null || resumeGoal.isBlank()) {
+                    log.warnf("resumeAfterBatchDecision: no resume goal found for session %s role %s", sessionId, agentRole);
+                    return;
+                }
      
                 ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.WEBSOCKET);
                 ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
@@ -137,24 +130,9 @@ public class CheckpointResumeHandler {
                 handleResumeFailure(sessionId, context, e);
             } finally {
                 agentStore.clearBatchResuming(sessionId);
+                Arc.container().requestContext().deactivate();
             }
         });
-    }
-
-    private AgentCheckpoint loadCheckpointForResume(String sessionId, String agentRole) {
-        AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
-        if (checkpoint == null) {
-            log.warnf("resumeAfterBatchDecision: no checkpoint found for session %s role %s", sessionId, agentRole);
-        }
-        return checkpoint;
-    }
-
-    private boolean isGoalInvalid(String resumeGoal, String sessionId, String agentRole) {
-        if (resumeGoal == null || resumeGoal.isBlank()) {
-            log.warnf("resumeAfterBatchDecision: no resume goal found for session %s role %s", sessionId, agentRole);
-            return true;
-        }
-        return false;
     }
 
     private MessageContext prepareResumeMessageContext(String chatId, ChannelUser user, ChannelType cType, String goal) {
@@ -211,12 +189,8 @@ public class CheckpointResumeHandler {
     }
 
     private void dispatchResumeResult(MessageContext context, AgentResult result, ChannelType cType, ChannelUser user, String sessionId) {
-        // Interactive /approve paths depend on the resume handler to deliver the final result.
-        
-        // §Synchronize Cron Status (Terminal): transition task from RUNNING to its final state.
         syncCronTerminalStatus(sessionId, result);
 
-        // CLI uses the synchronous resume path and must not receive an extra async notification.
         if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
             log.debugf("CheckpointResumeHandler: skipping async CLI notification for session %s", sessionId);
             return;
@@ -276,6 +250,7 @@ public class CheckpointResumeHandler {
         }
     }
 
+    @ActivateRequestContext
     public AgentResult resumeAfterBatchDecisionSync(
             String sessionId,
             String agentRole,
@@ -288,7 +263,6 @@ public class CheckpointResumeHandler {
             return null;
         }
 
-        // §Synchronize Cron Status
         syncCronStatus(sessionId);
 
         try {
@@ -298,33 +272,24 @@ public class CheckpointResumeHandler {
                 return null;
             }
 
-            String resumeGoal = resolveResumeGoal(checkpoint);
+            String resumeGoal = strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
             if (resumeGoal == null || resumeGoal.isBlank()) {
                 log.warnf("resumeAfterBatchDecisionSync: no resume goal found for session %s role %s",
                     sessionId, agentRole);
                 return null;
             }
 
-            ChannelType cType = ChannelType.fromString(channelType)
-                    .orElse(ChannelType.CLI);
-
-            ChannelUser user = new ChannelUser(
-                userId, chatId, "Operator", cType);
+            ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.CLI);
+            ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
 
             MessageContext context = new MessageContext(chatId, user, 
                 new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now()));
             context.setResumeSignal(true);
             context.setGoal(resumeGoal);
 
-            // Fetch budget for the resume.
-            int maxResumeIterations = 5;
-            int original = checkpoint.getMaxIterations() != null ? checkpoint.getMaxIterations() : maxResumeIterations;
-            int used = checkpoint.getIterationsUsed();
-            int remaining = Math.max(0, original - used);
-            int budget = Math.max(3, Math.min(remaining, maxResumeIterations));
+            int budget = calculateResumeBudget(checkpoint);
 
-            log.infof("Synchronously resuming session=%s budget=%d (original=%d, used=%d)",
-                    sessionId, budget, original, used);
+            log.infof("Synchronously resuming session=%s budget=%d", sessionId, budget);
 
             return WorkspaceContext.runWithFullAutonomy(
                 sessionId, userId, chatId, agentRole, cType.id(), userId,
@@ -339,29 +304,7 @@ public class CheckpointResumeHandler {
     }
 
     public String resolveResumeGoal(String sessionId, String agentRole) {
-        return agentStore.load(sessionId, agentRole)
-            .map(this::resolveResumeGoal)
-            .orElse(AgentSentinels.GOAL_RESUME_APPROVED);
-    }
-
-    public String resolveResumeGoal(AgentCheckpoint cp) {
-        // If all decisions in the batch are DENIED, route to the denial handler
-        if (cp.hasBatchToolDecisions()) {
-            try {
-                Map<String, ToolDecision> decisions = objectMapper.readValue(
-                    cp.getBatchToolDecisions(),
-                    new TypeReference<Map<String, ToolDecision>>() {}
-                );
-                boolean allDenied = !decisions.isEmpty() &&
-                    decisions.values().stream()
-                        .allMatch(ToolDecision.DENIED::equals);
-                if (allDenied) return AgentSentinels.GOAL_DENY_APPROVED;
-            } catch (Exception e) {
-                log.warnf("resolveResumeGoal: failed to parse batch decisions for session %s", cp.getSessionId());
-            }
-        }
-        String og = cp.getOriginalGoal();
-        return og != null && !og.isBlank() ? og : AgentSentinels.GOAL_RESUME_APPROVED;
+        return strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
     }
 
     public AgentResult handle(AgentExecutionContext context,
@@ -380,270 +323,6 @@ public class CheckpointResumeHandler {
             return null;
         }
 
-        if (AgentSentinels.GOAL_DENY_APPROVED.equals(context.goal())) {
-            return performDenialCleanup(context, history, checkpoint);
-        }
-
-        // §Issue 6: Strict Goal Isolation
-        // If the user provided a specific goal during resumption (e.g., "use Python instead"),
-        // use THAT goal instead of the original goal stored in the checkpoint.
-        String resumeGoal = (messageContext.getGoal() != null && !messageContext.getGoal().isBlank() && !AgentSentinels.GOAL_RESUME_APPROVED.equals(messageContext.getGoal()))
-                ? messageContext.getGoal()
-                : resolveResumeGoal(checkpoint);
-        
-        // Ensure the execution context reflects this goal isolation
-        if (!context.goal().equals(resumeGoal)) {
-            log.infof("[AgentLoop] Isolated specific resumption goal for session %s: %s", context.sessionId(), resumeGoal);
-            context = new AgentExecutionContext(
-                    context.sessionId(), context.userId(), context.chatId(), context.agentRole(),
-                    resumeGoal, context.autonomyLevel(), context.structuredOutputMode(), context.maxIterations(),
-                    context.startingIteration(), context.channelType(), context.channelPlatformId(),
-                    context.systemNote(), context.data()
-            );
-        }
-
-        String resolvedChannelType = resolveChannelType(context, messageContext);
-
-        if (checkpoint.isParallelBatch()) {
-            return resumeParallelBatch(context, history, checkpoint, resolvedChannelType);
-        }
-
-        return executePendingTool(context, history, checkpoint, resolvedChannelType, stateMachineRunner);
-    }
-
-    private AgentResult performDenialCleanup(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint) {
-        log.infof("[AgentLoop] User denied tool execution for session %s", context.sessionId());
-        checkpoint.setStatus(CheckpointStatus.FAILED);
-        checkpoint.setFailReason("User denied tool execution.");
-        checkpoint.setPendingToolName(null);
-        checkpoint.setPendingToolParametersJson(null);
-        agentStore.save(checkpoint);
-
-        return AgentResult.finished("❌ Tool execution was denied and the task has been cancelled.", List.copyOf(history));
-    }
-
-    private AgentResult executePendingTool(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint, String channelType, AgentStateMachineRunner stateMachineRunner) {
-        context.setCheckpointRestoreOffset(history.size());
-        String toolName = checkpoint.getPendingToolName();
-        String paramsJson = checkpoint.getPendingToolParametersJson();
-        String sessionId = context.sessionId();
-        
-        // Ensure we use the role that originally called the tool §7.31
-        String effectiveRole = checkpoint.getPendingToolRole() != null 
-                ? checkpoint.getPendingToolRole() 
-                : context.agentRole();
-
-        log.infof("[AgentLoop] Resuming session %s executing pending tool %s as role %s", 
-                sessionId, toolName, effectiveRole);
-
-        int retryCount = 0;
-        int maxRetries = 2;
-        
-        while (true) {
-            try {
-                ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                        sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
-                        channelType, context.channelPlatformId(),
-                        () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
-
-                if (response.isInfraFailure()) return handleInfraFailure(history);
-
-                recordReasoningStep(toolName, paramsJson, response.output(), response.success(), history, sessionId);
-                
-                // §Issue 4: Force summarization turn for ingest_document
-                if (ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)) {
-                    history.add(ReasoningStep.systemMessage(
-                            "The document has been ingested successfully. " +
-                            "Summarize what was stored for the user in a natural conversational tone."));
-                }
-                
-                completeInProgressCheckpoint(checkpoint);
-
-                // 🟢 §Bug-2 Fix: Perform a direct terminal synthesis pass instead of re-entering 
-                // the full state machine loop, BUT only if the execution succeeded.
-                if (response.success()) {
-                    if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
-                        log.infof("[AgentLoop] Skipping coordinator synthesis for successful delegate completion in session %s", sessionId);
-                        return AgentResult.finished(response.output(), List.copyOf(history));
-                    }
-                    return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
-                } else {
-                    log.warnf("[AgentLoop] Tool execution failed for session %s. Falling back to standard loop for self-correction.", sessionId);
-                    return null;
-                }
-            } catch (Exception e) {
-                long retryAfter = AgentErrorMessageUtil.parseRetryAfterMillis(e);
-                if (retryAfter > 0 && retryAfter < 5000 && retryCount < maxRetries) {
-                    retryCount++;
-                    log.warnf("[AgentLoop] Transient rate limit detected for session %s (retry %d/%d). Backing off for %dms.", 
-                            sessionId, retryCount, maxRetries, retryAfter);
-                    try {
-                        Thread.sleep(retryAfter + 100); // add small buffer
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("Resume interrupted during backoff", ie);
-                    }
-                    continue; // Retry execution
-                }
-                return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
-            }
-        }
-    }
-
-    private AgentResult handleInfraFailure(List<ReasoningStep> history) {
-        return AgentResult.failed("⚠️ The sandbox execution environment is currently offline.",
-                AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-    }
-
-    private void recordReasoningStep(String tool, String paramsJson, String output, boolean success, List<ReasoningStep> history, String sessionId) {
-        Map<String, Object> params = Map.of();
-        try {
-            if (paramsJson != null && !paramsJson.isBlank()) {
-                params = objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-            }
-        } catch (Exception e) {
-            log.warnf("Failed to parse params for session %s", sessionId);
-        }
-        history.add(ReasoningStep.pending("Executing " + tool + " after human approval.", tool, params, 0, 0)
-                .withObservation(output, success));
-    }
-
-    private void completeInProgressCheckpoint(AgentCheckpoint checkpoint) {
-        checkpoint.setPendingToolName(null);
-        checkpoint.setPendingToolParametersJson(null);
-        checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-        agentStore.save(checkpoint);
-    }
-
-    private AgentResult handleResumeExecutionError(AgentCheckpoint cp, String tool, String sid, List<ReasoningStep> history, Exception e) {
-        cp.setStatus(CheckpointStatus.FAILED);
-        cp.setPendingToolName(null);
-        cp.setPendingToolParametersJson(null);
-        agentStore.save(cp);
-        String msg = AgentErrorMessageUtil.safeMessage(e);
-        log.errorf("Resume tool execution failed session=%s tool=%s: %s", sid, tool, msg);
-        return AgentResult.failed("TOOL_EXECUTION_FAILED: " + msg, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-    }
-
-    private AgentResult resumeParallelBatch(
-            AgentExecutionContext context,
-            List<ReasoningStep> history,
-            AgentCheckpoint checkpoint,
-            String channelType) {
-
-        String sessionId = context.sessionId();
-        log.infof("[PARALLEL-HITL-RESUME] session=%s resuming batch", sessionId);
-
-        List<ParallelToolCall> calls = parseParallelCalls(checkpoint);
-        if (calls == null) return handleCorruptBatch(checkpoint, history);
-
-        Map<String, ToolDecision> decisions = loadDecisions(checkpoint);
-        Map<String, String> preExecuted = loadPreExecutedResults(checkpoint);
-
-        List<ParallelToolCall> completed = new ArrayList<>();
-        for (ParallelToolCall call : calls) {
-            if (tryRestorePreExecuted(call, preExecuted, completed, sessionId)) continue;
-
-            if (decisions.getOrDefault(call.toolName(), ToolDecision.PENDING) == ToolDecision.DENIED) {
-                completed.add(call.withResult("User denied this tool execution.", false));
-                continue;
-            }
-
-            executeBatchCall(call, context, completed, checkpoint, channelType);
-        }
-
-        return finalizeParallelBatch(checkpoint, history, completed);
-    }
-
-    private List<ParallelToolCall> parseParallelCalls(AgentCheckpoint cp) {
-        try {
-            return objectMapper.readValue(cp.getPendingToolParametersJson(), new TypeReference<List<ParallelToolCall>>() {});
-        } catch (Exception e) {
-            log.errorf("[PARALLEL-HITL-RESUME] session=%s: failed to parse batch", cp.getSessionId());
-            return null;
-        }
-    }
-
-    private Map<String, ToolDecision> loadDecisions(AgentCheckpoint cp) {
-        if (!cp.hasBatchToolDecisions()) return Map.of();
-        try {
-            return objectMapper.readValue(cp.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
-        } catch (Exception e) {
-            log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load decisions", cp.getSessionId());
-            return Map.of();
-        }
-    }
-
-    private Map<String, String> loadPreExecutedResults(AgentCheckpoint cp) {
-        if (!cp.hasPreExecutedResults()) return Map.of();
-        try {
-            return objectMapper.readValue(cp.getPreExecutedResults(), new TypeReference<Map<String, String>>() {});
-        } catch (Exception e) {
-            log.warnf("[PARALLEL-HITL-RESUME] session=%s failed to load results", cp.getSessionId());
-            return Map.of();
-        }
-    }
-
-    private boolean tryRestorePreExecuted(ParallelToolCall call, Map<String, String> preExecuted, List<ParallelToolCall> completed, String sessionId) {
-        if (preExecuted.containsKey(call.toolName())) {
-            try {
-                ToolResponse stored = objectMapper.readValue(preExecuted.get(call.toolName()), ToolResponse.class);
-                completed.add(call.withResult(stored.output(), stored.success()));
-                return true;
-            } catch (Exception e) {
-                log.warnf("[PRE-EXEC-RESTORE] session=%s could not restore %s", sessionId, call.toolName());
-            }
-        }
-        return false;
-    }
-
-    private void executeBatchCall(ParallelToolCall call, AgentExecutionContext ctx, List<ParallelToolCall> completed, AgentCheckpoint cp, String channelType) {
-        try {
-            String effectiveRole = cp.getPendingToolRole() != null ? cp.getPendingToolRole() : ctx.agentRole();
-            ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                ctx.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
-                channelType, ctx.channelPlatformId(),
-                () -> toolRegistry.invokeTool(call.toolName(), call.paramsJson(), ctx.sessionId()));
-            completed.add(call.withResult(response.output(), response.success()));
-        } catch (Exception e) {
-            completed.add(call.withResult("Tool execution failed on resume: " + AgentErrorMessageUtil.safeMessage(e), false));
-        }
-    }
-
-    private String resolveChannelType(AgentExecutionContext context, MessageContext messageContext) {
-        if (messageContext != null
-                && messageContext.getUser() != null
-                && messageContext.getUser().channel() != null
-                && messageContext.getUser().channel().id() != null
-                && !messageContext.getUser().channel().id().isBlank()) {
-            return messageContext.getUser().channel().id();
-        }
-        if (context != null && context.channelType() != null && !context.channelType().isBlank()) {
-            return context.channelType();
-        }
-        return WorkspaceContext.channelType().orElseGet(() -> {
-            log.warn("CheckpointResumeHandler: channelType missing during resume; using 'unknown' fallback");
-            return "unknown";
-        });
-    }
-
-    private AgentResult finalizeParallelBatch(AgentCheckpoint checkpoint, List<ReasoningStep> history, List<ParallelToolCall> completed) {
-        try {
-            String completedJson = objectMapper.writeValueAsString(completed);
-            String summary = completed.stream().map(c -> c.toolName() + "→" + (c.success() ? "OK" : "FAIL")).collect(Collectors.joining(", "));
-            history.add(ReasoningStep.parallelBatch("Human Approved (batch)", Map.of("batch", completedJson), 0, 0).withObservation(summary));
-            completeInProgressCheckpoint(checkpoint);
-
-            // §7.32: Return null to allow the StateMachine to continue for one final synthesis turn.
-            return null;
-        } catch (Exception e) {
-            return handleCorruptBatch(checkpoint, history);
-        }
-    }
-
-    private AgentResult handleCorruptBatch(AgentCheckpoint cp, List<ReasoningStep> history) {
-        cp.setStatus(CheckpointStatus.FAILED);
-        agentStore.save(cp);
-        return AgentResult.failed("Failed to finalize parallel tool batch.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+        return strategyDispatcher.handle(context, history, messageContext, stateMachineRunner, checkpoint);
     }
 }

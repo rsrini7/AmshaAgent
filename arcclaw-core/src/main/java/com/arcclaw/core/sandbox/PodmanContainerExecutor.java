@@ -113,8 +113,6 @@ public class PodmanContainerExecutor {
         try (var transport = new TmpfsSecretTransport(sessionId)) {
             List<String> transportArgs = transport.prepare(resolvedSecrets);
 
-            // Deterministic container name for tracking + graceful stop on shutdown.
-            // Format: zc-<sessionId truncated to 8 chars>-<nonce> to stay within 64-char limit.
             String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
                     + "-" + Long.toHexString(System.nanoTime());
 
@@ -123,151 +121,139 @@ public class PodmanContainerExecutor {
             span.setAttribute("container.name", containerName);
             span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
 
-
-            // Track before start - avoids race on early failure.
             activeContainerNames.add(containerName);
             try (Scope _ = span.makeCurrent()) {
-                var podmanCmd = new ArrayList<>(List.of(
-                        podmanPath, "run", "--rm",
-                        "--name", containerName,
-                        "--pull", "never",
-                        "--network=" + containerNetwork,
-                        "--read-only",
-                        "--tmpfs", "/tmp:rw,nosuid,size=128m",
-                        "--security-opt=no-new-privileges",
-                        "--cap-drop=ALL",
-                        "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
-                        "--user=" + toolRunnerUser + ":" + toolRunnerUser,
-                        "--env", "GOCACHE=/tmp/go-cache",
-                        "--env", "GOPATH=/tmp/go-path",
-                        "--env", "GOMAXPROCS=1",
-                        "--env", "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
-                        "--env", "GH_CONFIG_DIR=/tmp/gh-config",     // redirect config to writable tmpfs
-                        "--env", "GH_NO_UPDATE_NOTIFIER=1",           // skip update check
-                        "--env", "GH_PROMPT_DISABLED=1",              // no interactive prompts
-                        "--pids-limit=" + CONTAINER_PIDS_LIMIT, // block fork bombs
-                        "--ulimit=nofile=256:256"              // limit open file descriptors
-                ));
-
-                if (containerMemoryLimit != null && !containerMemoryLimit.isBlank()) {
-                    podmanCmd.add("--memory=" + containerMemoryLimit);
-                }
-                if (containerCpuLimit != null && !containerCpuLimit.isBlank()) {
-                    podmanCmd.add("--cpus=" + containerCpuLimit);
-                }
-
-                podmanCmd.addAll(transportArgs);
-
-                podmanCmd.add(sandboxImage);
-                podmanCmd.addAll(command);
-
-                log.infof("[Sandbox] Executing: %s", String.join(" ", podmanCmd));
-
-                var pb = new ProcessBuilder(podmanCmd);
-
-                // check mkdirs() return value - silent failure leaves ProcessBuilder
-                // pointing at a non-existent directory, producing a confusing OS error.
-                File workspaceDir = Path.of(workspaceRootDir, sessionId).toFile();
-                if (!workspaceDir.exists()) {
-                    boolean created = workspaceDir.mkdirs();
-                    if (!created) {
-                        throw new IOException(
-                            "Failed to create workspace directory: " + workspaceDir.getAbsolutePath());
-                    }
-                    log.warnf("PIE Workspace dir missing - recreated: %s",
-                              workspaceDir.getAbsolutePath());
-                }
-
-                pb.directory(workspaceDir);
-
-                var process = pb.start();
-                transport.deliver(process);
-
-                // START reading stdout/stderr in background BEFORE waitFor() -
-                // prevents pipe buffer deadlock when output exceeds ~64KB
-                var stdoutFuture = CompletableFuture.supplyAsync(() -> {
-                    try {
-                        return new String(process.getInputStream().readAllBytes());
-                    } catch (IOException e) {
-                        log.warnf("Failed to drain sandbox stdout: %s", e.getMessage());
-                        return "";
-                    }
-                });
-                var stderrFuture = CompletableFuture.supplyAsync(() -> {
-                    try {
-                        return new String(process.getErrorStream().readAllBytes());
-                    } catch (IOException e) {
-                        log.warnf("Failed to drain sandbox stderr: %s", e.getMessage());
-                        return "";
-                    }
-                });
-
-                long effectiveTimeout = resolveTimeout(command);
-                boolean finished = process.waitFor(effectiveTimeout, TimeUnit.SECONDS);
-
-                if (!finished) {
-                    process.destroyForcibly();
-                    stdoutFuture.cancel(true);
-                    stderrFuture.cancel(true);
-                    throw new ToolExecutionException("Tool timed out after " + effectiveTimeout + "s");
-                }
-
-                // Safe to get now - process has exited and stdout is fully drained
-                String stdout = "";
-                String stderr = "";
-                try {
-                    stdout = stdoutFuture.get(5, TimeUnit.SECONDS);
-                    stderr = stderrFuture.get(5, TimeUnit.SECONDS);
-                } catch (Exception e) {
-                    log.errorf("Error retrieving sandbox output: %s", e.getMessage());
-                }
-
-                int exitCode = process.exitValue();
-
-                if (exitCode != 0) {
-                    // Specific exit code for tool logic failure (standard for LLM tools)
-                    String raw = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
-
-                    // Intercept the "Image Not Found" case.
-                    // use sandboxImage field instead of hardcoded literal
-                    // so the warning stays accurate if the image name is overridden in config.
-                    if (raw != null && (raw.contains("not known") || raw.contains("not found"))) {
-                        log.warnf("**====================================================================**");
-                        log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.",
-                                  sandboxImage);
-                        log.warnf("To use the secure Podman sandbox, please build the runner image:");
-                        log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
-                        log.warnf("**====================================================================**");
-                        throw new SandboxImageMissingException("Missing sandbox image: " + sandboxImage);
-                    }
-
-                    // Handle other infrastructure failures (exit 125)
-                    if (exitCode == 125) {
-                        throw new IOException("Podman engine failure (exit 125): " + raw);
-                    }
-
-                    String cleanOutput = (raw == null || raw.isBlank())
-                            ? "(tool returned no output)"
-                            : raw.trim();
-                    throw new ToolExecutionException(cleanOutput, exitCode);
-                }
-
+                List<String> podmanCmd = buildPodmanCmd(containerName, transportArgs, workspaceRoot, command);
+                var process = prepareAndStartProcess(sessionId, podmanCmd, transport);
+                String result = readSandboxOutputAndGetResult(process, command);
                 span.setStatus(StatusCode.OK);
-                String result = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
-                return (result == null || result.isBlank()) ? "(tool returned no output)" : result;
-
+                return result;
             } catch (Exception e) {
                 span.recordException(e);
-                // null-guard e.getMessage() - some exception types (e.g. NullPointerException)
-                // return null from getMessage(), which causes OpenTelemetry to throw internally.
-                span.setStatus(StatusCode.ERROR,
-                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                span.setStatus(StatusCode.ERROR, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 throw e;
             } finally {
                 span.end();
-                activeContainerNames.remove(containerName); // deregister on normal exit or exception
+                activeContainerNames.remove(containerName);
             }
         }
+    }
+
+    private List<String> buildPodmanCmd(String containerName, List<String> transportArgs, Path workspaceRoot, List<String> command) {
+        var podmanCmd = new ArrayList<>(List.of(
+                podmanPath, "run", "--rm",
+                "--name", containerName,
+                "--pull", "never",
+                "--network=" + containerNetwork,
+                "--read-only",
+                "--tmpfs", "/tmp:rw,nosuid,size=128m",
+                "--security-opt=no-new-privileges",
+                "--cap-drop=ALL",
+                "-v", workspaceRoot.toAbsolutePath() + ":/workspace:ro",
+                "--user=" + toolRunnerUser + ":" + toolRunnerUser,
+                "--env", "GOCACHE=/tmp/go-cache",
+                "--env", "GOPATH=/tmp/go-path",
+                "--env", "GOMAXPROCS=1",
+                "--env", "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp",
+                "--env", "GH_CONFIG_DIR=/tmp/gh-config",
+                "--env", "GH_NO_UPDATE_NOTIFIER=1",
+                "--env", "GH_PROMPT_DISABLED=1",
+                "--pids-limit=" + CONTAINER_PIDS_LIMIT,
+                "--ulimit=nofile=256:256"
+        ));
+
+        if (containerMemoryLimit != null && !containerMemoryLimit.isBlank()) {
+            podmanCmd.add("--memory=" + containerMemoryLimit);
+        }
+        if (containerCpuLimit != null && !containerCpuLimit.isBlank()) {
+            podmanCmd.add("--cpus=" + containerCpuLimit);
+        }
+
+        podmanCmd.addAll(transportArgs);
+        podmanCmd.add(sandboxImage);
+        podmanCmd.addAll(command);
+        return podmanCmd;
+    }
+
+    private Process prepareAndStartProcess(String sessionId, List<String> podmanCmd, TmpfsSecretTransport transport) throws IOException {
+        log.infof("[Sandbox] Executing: %s", String.join(" ", podmanCmd));
+        var pb = new ProcessBuilder(podmanCmd);
+
+        File workspaceDir = Path.of(workspaceRootDir, sessionId).toFile();
+        if (!workspaceDir.exists()) {
+            boolean created = workspaceDir.mkdirs();
+            if (!created) {
+                throw new IOException("Failed to create workspace directory: " + workspaceDir.getAbsolutePath());
+            }
+            log.warnf("PIE Workspace dir missing - recreated: %s", workspaceDir.getAbsolutePath());
+        }
+
+        pb.directory(workspaceDir);
+        var process = pb.start();
+        transport.deliver(process);
+        return process;
+    }
+
+    private String readSandboxOutputAndGetResult(Process process, List<String> command) throws Exception {
+        var stdoutFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return new String(process.getInputStream().readAllBytes());
+            } catch (IOException e) {
+                log.warnf("Failed to drain sandbox stdout: %s", e.getMessage());
+                return "";
+            }
+        });
+        var stderrFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return new String(process.getErrorStream().readAllBytes());
+            } catch (IOException e) {
+                log.warnf("Failed to drain sandbox stderr: %s", e.getMessage());
+                return "";
+            }
+        });
+
+        long effectiveTimeout = resolveTimeout(command);
+        boolean finished = process.waitFor(effectiveTimeout, TimeUnit.SECONDS);
+
+        if (!finished) {
+            process.destroyForcibly();
+            stdoutFuture.cancel(true);
+            stderrFuture.cancel(true);
+            throw new ToolExecutionException("Tool timed out after " + effectiveTimeout + "s");
+        }
+
+        String stdout = "";
+        String stderr = "";
+        try {
+            stdout = stdoutFuture.get(5, TimeUnit.SECONDS);
+            stderr = stderrFuture.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.errorf("Error retrieving sandbox output: %s", e.getMessage());
+        }
+
+        int exitCode = process.exitValue();
+        if (exitCode != 0) {
+            String raw = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
+
+            if (raw != null && (raw.contains("not known") || raw.contains("not found"))) {
+                log.warnf("**====================================================================**");
+                log.warnf("[SANDBOX-WARNING] Sandbox image '%s' is missing from local storage.", sandboxImage);
+                log.warnf("To use the secure Podman sandbox, please build the runner image:");
+                log.warnf("  podman build -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .");
+                log.warnf("**====================================================================**");
+                throw new SandboxImageMissingException("Missing sandbox image: " + sandboxImage);
+            }
+
+            if (exitCode == 125) {
+                throw new IOException("Podman engine failure (exit 125): " + raw);
+            }
+
+            String cleanOutput = (raw == null || raw.isBlank()) ? "(tool returned no output)" : raw.trim();
+            throw new ToolExecutionException(cleanOutput, exitCode);
+        }
+
+        String result = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
+        return (result == null || result.isBlank()) ? "(tool returned no output)" : result;
     }
 
     private long resolveTimeout(List<String> command) {

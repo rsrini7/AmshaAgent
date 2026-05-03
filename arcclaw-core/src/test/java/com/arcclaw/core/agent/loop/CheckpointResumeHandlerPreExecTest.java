@@ -17,6 +17,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -42,13 +43,14 @@ class CheckpointResumeHandlerPreExecTest {
     @Mock ToolRegistry toolRegistry;
     @Mock AgentStateMachineRunner stateMachineRunner;
     @Mock AgentCronRepository cronRepository;
+    @Mock ReasoningEngine reasoningEngine;
     ObjectMapper objectMapper = new ObjectMapper();
 
     CheckpointResumeHandler handler;
 
     @BeforeEach
     void setup() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, null, null, null, cronRepository);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, reasoningEngine, null, null, cronRepository);
     }
 
     @Test
