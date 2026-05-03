@@ -13,11 +13,15 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ReasoningStepEntity;
+import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
+import java.util.Map;
 
 /**
  * PostgreSQL implementation of CheckpointStorePort.
@@ -28,6 +32,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     private static final Logger log = Logger.getLogger(PostgresCheckpointStoreAdapter.class);
 
     @Inject EntityManager em;
+    @Inject ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -385,8 +390,46 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
-        // Complex JSON update, omitted for now
-        return true;
+        log.infof("[Postgres] Updating tool decision for session=%s role=%s tool=%s -> %s",
+                sessionId, agentRole, toolName, decision);
+
+        List<AgentCheckpoint> results = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role " +
+                "ORDER BY c.id DESC",
+                AgentCheckpoint.class)
+                .setParameter("sid", sessionId)
+                .setParameter("role", agentRole)
+                .setMaxResults(1)
+                .getResultList();
+        if (results.isEmpty()) {
+            log.warnf("[Postgres] No checkpoint found for session=%s role=%s", sessionId, agentRole);
+            return false;
+        }
+
+        AgentCheckpoint cp = results.get(0);
+        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL || cp.getBatchToolDecisions() == null) {
+            log.warnf("[Postgres] Checkpoint session=%s not in AWAITING_APPROVAL or no batch decisions", sessionId);
+            return false;
+        }
+
+        try {
+            Map<String, ToolDecision> map = objectMapper.readValue(
+                cp.getBatchToolDecisions(),
+                new TypeReference<Map<String, ToolDecision>>() {});
+            if (!map.containsKey(toolName)) {
+                log.warnf("[Postgres] Tool '%s' not found in batch for session %s", toolName, sessionId);
+                return false;
+            }
+            map.put(toolName, ToolDecision.valueOf(decision));
+            cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
+            em.merge(cp);
+            log.infof("[Postgres] Successfully updated decision for tool '%s'", toolName);
+            return true;
+        } catch (Exception e) {
+            log.errorf("Failed to update batch tool decision for session=%s tool=%s: %s",
+                       sessionId, toolName, e.getMessage());
+            return false;
+        }
     }
 
     private void updateEntity(AgentCheckpoint entity, CheckpointDto dto) {

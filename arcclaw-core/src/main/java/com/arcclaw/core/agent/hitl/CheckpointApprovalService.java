@@ -52,7 +52,7 @@ public class CheckpointApprovalService {
         this.resumeHandlerInstance = resumeHandlerInstance;
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void approve(String sessionId, String agentRole, Map<String, ToolDecision> decisions) {
         Optional<AgentCheckpoint> cpOpt = agentStore.load(sessionId, agentRole);
         if (cpOpt.isEmpty()) {
@@ -75,7 +75,7 @@ public class CheckpointApprovalService {
         log.infof("HITL-APPROVE: session %s role %s approved with %d decisions", sessionId, agentRole, decisions.size());
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint approveAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
@@ -101,7 +101,7 @@ public class CheckpointApprovalService {
         return cp;
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void deny(String sessionId, String agentRole, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.load(sessionId, agentRole);
         if (cpOpt.isEmpty()) return;
@@ -116,7 +116,7 @@ public class CheckpointApprovalService {
         log.infof("HITL-DENY: session %s role %s denied. reason=%s", sessionId, agentRole, reason);
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint denyAll(String sessionId, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
@@ -131,7 +131,7 @@ public class CheckpointApprovalService {
         return cp;
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
@@ -161,7 +161,7 @@ public class CheckpointApprovalService {
         return cp;
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint denyTool(String sessionId, String toolName, String reason) {
         Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);

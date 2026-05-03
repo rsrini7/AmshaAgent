@@ -5,10 +5,11 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import io.quarkus.qute.TemplateData;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
  * A single step in the agent's reasoning process.
@@ -22,18 +23,8 @@ import io.quarkus.qute.TemplateData;
  * </ul>
  */
 @TemplateData
-@JsonTypeInfo(
-    use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "stepType",
-    defaultImpl = ReasoningStep.ToolCallStep.class
-)
-@JsonSubTypes({
-    @JsonSubTypes.Type(value = ReasoningStep.ToolCallStep.class, name = "TOOL_CALL"),
-    @JsonSubTypes.Type(value = ReasoningStep.ObservationStep.class, name = "OBSERVATION"),
-    @JsonSubTypes.Type(value = ReasoningStep.FinishStep.class, name = "FINISH"),
-    @JsonSubTypes.Type(value = ReasoningStep.ParallelStep.class, name = "PARALLEL")
-})
+@RegisterForReflection
+@JsonDeserialize(using = ReasoningStepDeserializer.class)
 public sealed interface ReasoningStep permits 
     ReasoningStep.ToolCallStep, 
     ReasoningStep.ObservationStep, 

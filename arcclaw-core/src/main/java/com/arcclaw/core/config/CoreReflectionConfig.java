@@ -30,6 +30,8 @@ import com.arcclaw.core.tools.MemorySearchTool;
 import com.arcclaw.core.tools.SandboxExecTool;
 import com.arcclaw.core.tools.ScheduleTaskTool;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
+
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -76,7 +78,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SkillPromptParams.class,
         SandboxResult.class,
         AgentJobCompleted.class,
-        CronTaskScheduled.class
+        CronTaskScheduled.class,
+        ToolResponse.class,
+        ToolResponse.ToolSuccess.class,
+        ToolResponse.ToolFailure.class,
+        ToolResponse.ToolPending.class
     },
     classNames = {
         "com.github.benmanes.caffeine.cache.SSLMSA",
