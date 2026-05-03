@@ -2,6 +2,7 @@ package com.arcclaw.core.config;
 
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ReasoningStepDeserializer;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.AuditEventResponse;
@@ -82,7 +83,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         ToolResponse.class,
         ToolResponse.ToolSuccess.class,
         ToolResponse.ToolFailure.class,
-        ToolResponse.ToolPending.class
+        ToolResponse.ToolPending.class,
+        ReasoningStepDeserializer.class
     },
     classNames = {
         "com.github.benmanes.caffeine.cache.SSLMSA",
