@@ -124,9 +124,21 @@ public class CheckpointApprovalService {
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
-        cp.setStatus(CheckpointStatus.DENIED);
-        agentStore.save(cp);
+        // §Bug-1 Fix: Keep status as AWAITING_APPROVAL so claimForResume CAS can succeed.
+        // The resume handler will manage the final status transition.
 
+        try {
+            String decisionsJson = cp.getBatchToolDecisions();
+            if (decisionsJson != null && !decisionsJson.isBlank()) {
+                Map<String, ToolDecision> decisions = objectMapper.readValue(decisionsJson, new TypeReference<>() {});
+                decisions.replaceAll((k, v) -> ToolDecision.DENIED);
+                cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
+            }
+        } catch (Exception e) {
+            log.errorf("HITL-DENY-ALL: failed to update decisions: %s", e.getMessage());
+        }
+
+        agentStore.save(cp);
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
                 sessionId, HitlEventType.DENIED.wireValue(), cp.getPendingToolName(), cp.getPendingToolParametersJson(), null, reason, Instant.now()
         ));
