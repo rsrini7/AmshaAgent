@@ -55,7 +55,11 @@ public class CheckpointStatusService {
          .setParameter("expected", expectedStatus)
          .executeUpdate();
         
-        return updated == 1;
+        boolean success = updated == 1;
+        if (!success) {
+            log.debugf("[StatusService] Atomic transition failed for %d (expected %s)", id, expectedStatus);
+        }
+        return success;
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
@@ -100,15 +104,17 @@ public class CheckpointStatusService {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
         log.warnf("[StatusService] Marking checkpoint %d as FAILED: %s (code=%s)", checkpointId, failReason, errorCode);
+        String nowStr = TemporalUtils.formatIsoLex(Instant.now());
         em.createNativeQuery(
                 "UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, " +
                 "error_code = :code, trace_id = :trace, root_cause_class = :root, " +
-                "failed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
+                "failed_at = :failedAt, updated_at = :updatedAt WHERE checkpoint_id = :id")
                 .setParameter("reason", failReason)
                 .setParameter("code", errorCode)
                 .setParameter("trace", traceId)
                 .setParameter("root", rootCauseClass)
-                .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
+                .setParameter("failedAt", nowStr)
+                .setParameter("updatedAt", nowStr)
                 .setParameter("id", checkpointId)
                 .executeUpdate();
     }
@@ -116,10 +122,12 @@ public class CheckpointStatusService {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkCompleted(Long checkpointId) {
         log.infof("[StatusService] Marking checkpoint %d as COMPLETED", checkpointId);
+        String nowStr = TemporalUtils.formatIsoLex(Instant.now());
         em.createNativeQuery(
-                "UPDATE agent_checkpoint SET status = 'COMPLETED', completed_at = :now, updated_at = :now " +
+                "UPDATE agent_checkpoint SET status = 'COMPLETED', completed_at = :completedAt, updated_at = :updatedAt " +
                 "WHERE checkpoint_id = :id")
-                .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
+                .setParameter("completedAt", nowStr)
+                .setParameter("updatedAt", nowStr)
                 .setParameter("id", checkpointId)
                 .executeUpdate();
     }
@@ -127,11 +135,13 @@ public class CheckpointStatusService {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkOrphaned(Long checkpointId, String reason) {
         log.warnf("[StatusService] Marking checkpoint %d as ORPHANED: %s", checkpointId, reason);
+        String nowStr = TemporalUtils.formatIsoLex(Instant.now());
         em.createNativeQuery(
                 "UPDATE agent_checkpoint SET status = 'ORPHANED', fail_reason = :reason, " +
-                "failed_at = :now, updated_at = :now WHERE checkpoint_id = :id")
+                "failed_at = :failedAt, updated_at = :updatedAt WHERE checkpoint_id = :id")
                 .setParameter("reason", reason)
-                .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
+                .setParameter("failedAt", nowStr)
+                .setParameter("updatedAt", nowStr)
                 .setParameter("id", checkpointId)
                 .executeUpdate();
     }
