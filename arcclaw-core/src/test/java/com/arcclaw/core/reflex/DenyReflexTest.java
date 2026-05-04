@@ -215,6 +215,8 @@ class DenyReflexTest {
 
     @Test
     void testAmbiguityWarningWhenBothSessionAndCronPending() {
+        // With a live session pending, bare /deny always resolves to the live session.
+        // CRONs require explicit targeting — no ambiguity prompt shown.
         String userId = "user-1";
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setOriginalGoal("Store my API key");
@@ -230,11 +232,9 @@ class DenyReflexTest {
         ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny", ctx);
         String resultText = result.commandResponse().get();
 
-        assertTrue(resultText.contains("Ambiguous denial"));
-        assertTrue(resultText.contains("This Chat"));
-        assertTrue(resultText.contains("Store my API key"));
-        assertTrue(resultText.contains("Background"));
-        assertTrue(resultText.contains("Periodic backup"));
+        // Live session is denied directly — no ambiguity prompt
+        assertEquals("", resultText);
+        verify(checkpointApprovalService).denyAll(eq("session-1"), eq("CLI deny"));
     }
 
     @Test

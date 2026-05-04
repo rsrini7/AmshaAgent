@@ -145,7 +145,7 @@ public class CheckpointRepository {
         if (chatId == null) return false;
         em.clear();
         return !em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :s",
+                "SELECT c FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :s AND c.sessionId NOT LIKE 'cron-%'",
                 AgentCheckpoint.class)
                 .setParameter("chatId", chatId)
                 .setParameter("s", CheckpointStatus.AWAITING_APPROVAL)

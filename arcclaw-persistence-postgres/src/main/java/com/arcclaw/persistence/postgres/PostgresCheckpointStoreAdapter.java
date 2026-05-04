@@ -435,7 +435,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public boolean hasPendingApprovalForChat(String chatId) {
         if (chatId == null) return false;
-        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :status", Long.class)
+        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :status AND c.sessionId NOT LIKE 'cron-%'", Long.class)
                 .setParameter("chatId", chatId)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .getSingleResult();

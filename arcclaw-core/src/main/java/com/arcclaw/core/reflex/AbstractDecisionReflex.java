@@ -144,12 +144,15 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     // handleDelegateDecision is called directly after the delegate check passes.
 
     private String handleAmbiguityDetection(Optional<AgentCheckpoint> latestPending, List<AgentCronEntity> pendingCrons) {
-        if (latestPending.isPresent() && !pendingCrons.isEmpty()) {
+        // If a live session is pending, bare /approve always resolves to it.
+        // CRON tasks require explicit targeting (/approve 2 or /approve <cronId>).
+        if (latestPending.isPresent()) {
+            return null;
+        }
+        // No live session pending — if multiple CRONs are pending, disambiguate.
+        if (pendingCrons.size() > 1) {
             StringBuilder sb = new StringBuilder("⚠️ ").append(getAmbiguityTitle()).append(". You have multiple tasks waiting:\n\n");
             int idx = 1;
-            sb.append("1️⃣ `/%s 1` - (This Chat) ".formatted(getActionName().toLowerCase()))
-              .append(latestPending.get().getOriginalGoal()).append("\n");
-            idx++;
             for (AgentCronEntity c : pendingCrons) {
                 sb.append("%d️⃣ `/%s %d` or `/%s %s` - (Background) ".formatted(idx, getActionName().toLowerCase(), idx, getActionName().toLowerCase(), c.id))
                   .append(c.goal).append("\n");
