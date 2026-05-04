@@ -1,5 +1,6 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -45,6 +46,7 @@ public class CheckpointBatchOperations {
                 sessionId, toolName, decision);
 
         // Targeted SELECT to avoid loading the full entity graph
+        @SuppressWarnings("unchecked")
         List<Object[]> rows = em.createNativeQuery(
                 "SELECT batch_tool_decisions, status FROM agent_checkpoint " +
                 "WHERE session_id = :sid AND agent_role = :role " +
@@ -84,7 +86,7 @@ public class CheckpointBatchOperations {
                     "UPDATE agent_checkpoint SET batch_tool_decisions = :json, updated_at = :now " +
                     "WHERE session_id = :sid AND agent_role = :role AND status = 'AWAITING_APPROVAL'")
                     .setParameter("json", updatedJson)
-                    .setParameter("now", java.time.Instant.now())
+                    .setParameter("now", Instant.now())
                     .setParameter("sid", sessionId)
                     .setParameter("role", agentRole)
                     .executeUpdate();

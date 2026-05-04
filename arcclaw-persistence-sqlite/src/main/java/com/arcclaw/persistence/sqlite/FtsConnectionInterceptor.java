@@ -75,16 +75,20 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             }
 
             if (!attached) {
-                String ftsPath;
-                try {
-                    Files.createDirectories(Path.of(dataDir));
-                } catch (IOException e) {
-                    log.warn("Failed to create data directory for FTS: " + dataDir, e);
-                }
-                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+                if (!connection.getAutoCommit()) {
+                    log.debug("FtsConnectionInterceptor: Cannot ATTACH fts (transaction active). Will retry on next acquire.");
+                } else {
+                    String ftsPath;
+                    try {
+                        Files.createDirectories(Path.of(dataDir));
+                    } catch (IOException e) {
+                        log.warn("Failed to create data directory for FTS: " + dataDir, e);
+                    }
+                    ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
 
-                try (Statement stmt = connection.createStatement()) {
-                    stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
+                    try (Statement stmt = connection.createStatement()) {
+                        stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
+                    }
                 }
             }
 
@@ -94,7 +98,14 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             // ----------------------------------------------------------------
             try (Statement stmt = connection.createStatement()) {
                 stmt.execute("PRAGMA busy_timeout=10000");
-                stmt.execute("PRAGMA synchronous=NORMAL");
+                if (connection.getAutoCommit()) {
+                    try {
+                        stmt.execute("PRAGMA synchronous=NORMAL");
+                    } catch (Exception e) {
+                        // Safety level may not be changed inside a transaction (§5.14)
+                        log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", e.getMessage());
+                    }
+                }
             }
 
 

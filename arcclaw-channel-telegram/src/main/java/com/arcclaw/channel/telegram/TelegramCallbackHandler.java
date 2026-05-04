@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
+import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -108,7 +109,13 @@ public class TelegramCallbackHandler {
             }
 
             // If completely done, we can remove the keyboard entirely
-            if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
+            if (result.outcome() == ApprovalOutcome.PARTIAL_STILL_PENDING) {
+                // §7.27: edit in-place to show remaining tools
+                String originalText = query.getMessage().getText();
+                InlineKeyboardMarkup nextKeyboard =
+                    BatchHitlKeyboardBuilder.buildKeyboard(sessionId, result.pendingToolNames());
+                sender.editMessage(chatId, messageId, originalText, nextKeyboard);
+            } else if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
                 String originalText = query.getMessage().getText();
                 sender.editMessage(chatId, messageId, originalText, null);
             }

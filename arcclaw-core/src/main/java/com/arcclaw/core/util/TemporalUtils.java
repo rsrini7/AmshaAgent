@@ -34,6 +34,16 @@ public class TemporalUtils {
      * @return the parsed Instant, or null if input is null
      */
     public static Instant parseIsoLex(String text) {
-        return text == null ? null : Instant.from(ISO_LEX_FORMATTER.parse(text));
+        if (text == null) return null;
+        try {
+            return Instant.from(ISO_LEX_FORMATTER.parse(text));
+        } catch (Exception e) {
+            // Fallback for legacy data stored as epoch milliseconds
+            try {
+                return Instant.ofEpochMilli(Long.parseLong(text));
+            } catch (NumberFormatException nfe) {
+                throw new RuntimeException("Failed to parse instant: " + text, e);
+            }
+        }
     }
 }
