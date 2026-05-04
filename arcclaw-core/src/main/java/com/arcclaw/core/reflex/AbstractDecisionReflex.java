@@ -297,7 +297,9 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         try {
             AgentCheckpoint cp = applyDecisionToTool(sessionId, toolName, reason);
-            checkpointApprovalService.triggerResume(cp);
+            if (BatchDecisionUtil.pendingToolNames(cp, objectMapper).isEmpty()) {
+                checkpointApprovalService.triggerResume(cp);
+            }
             return getPerToolSuccessResponse(toolName);
         } catch (CheckpointResolutionException e) {
             return getNoPendingMessage();

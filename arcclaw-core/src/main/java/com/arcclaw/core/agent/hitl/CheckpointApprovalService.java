@@ -18,6 +18,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -199,6 +200,12 @@ public class CheckpointApprovalService {
      */
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;
+
+        if (!BatchDecisionUtil.pendingToolNames(cp, objectMapper).isEmpty()) {
+            log.debugf("HITL-RESUME: skipping trigger for session %s as batch tools are still pending", cp.getSessionId());
+            return;
+        }
+
         log.infof("HITL-RESUME: triggering resume for session %s role %s", cp.getSessionId(), cp.getAgentRole());
 
         // §Resume-Fix: actively drive resumption to prevent the HITL flow from stalling

@@ -94,43 +94,49 @@ public class CheckpointResumeHandler {
             return;
         }
 
+        if (!agentStore.claimForResume(sessionId, agentRole)) {
+            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming - skipping duplicate.", sessionId);
+            return;
+        }
+
         AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
         if (checkpoint == null) {
             log.warnf("[RESUME-GUARD] checkpoint null after claim for session=%s - releasing DB state.", sessionId);
             agentStore.releaseResumeClaim(sessionId, agentRole); 
-            return;
-        }
-
-        if (!agentStore.claimForResume(sessionId, agentRole, checkpoint.hasBrowserTool())) {
-            log.infof("[BATCH-RESUME-GUARD] session=%s already resuming - skipping duplicate.", sessionId);
+            agentStore.clearBatchResuming(sessionId);
             return;
         }
 
         syncCronStatus(sessionId);
 
         executor.execute(() -> {
-            Arc.container().requestContext().activate();
-            MessageContext context = null;
             try {
-                String resumeGoal = strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
-                if (resumeGoal == null || resumeGoal.isBlank()) {
-                    log.warnf("resumeAfterBatchDecision: no resume goal found for session %s role %s", sessionId, agentRole);
-                    return;
+                Arc.container().requestContext().activate();
+                MessageContext context = null;
+                try {
+                    String resumeGoal = strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
+                    if (resumeGoal == null || resumeGoal.isBlank()) {
+                        log.warnf("resumeAfterBatchDecision: no resume goal found for session %s role %s", sessionId, agentRole);
+                        return;
+                    }
+         
+                    ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.WEBSOCKET);
+                    ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
+                    context = prepareResumeMessageContext(chatId, user, cType, resumeGoal);
+         
+                    AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
+                    if (result != null) {
+                        dispatchResumeResult(context, result, cType, user, sessionId);
+                    }
+                } catch (Exception e) {
+                    handleResumeFailure(sessionId, context, e);
+                } finally {
+                    try {
+                        Arc.container().requestContext().deactivate();
+                    } catch (Exception ignored) {}
                 }
-     
-                ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.WEBSOCKET);
-                ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
-                context = prepareResumeMessageContext(chatId, user, cType, resumeGoal);
-     
-                AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
-                if (result != null) {
-                    dispatchResumeResult(context, result, cType, user, sessionId);
-                }
-            } catch (Exception e) {
-                handleResumeFailure(sessionId, context, e);
             } finally {
                 agentStore.clearBatchResuming(sessionId);
-                Arc.container().requestContext().deactivate();
             }
         });
     }
