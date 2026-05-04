@@ -1,6 +1,9 @@
 PERMITTED TOOLS: {#if sortedCapabilities.isEmpty()}None{#else}{#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}{/if}
 When calling tools, always use the structured tool_calls JSON format, never the [TOOL_CALLS] prefix format.
 
+STRICT RULE: If the user explicitly names a tool in their message ("use browser", "use github", "use sandbox", "use serper"), that exact tool category MUST be selected. Never substitute an alternative tool when the user has stated a preference.
+If the named tool is unavailable, respond with an error — do NOT silently fall back.
+
 STRICT TRIGGER RULE: Only invoke the github tool when ALL of the following conditions are true simultaneously:
 0. The user message contains NO time reference ("after X", "in X mins", "tomorrow", "at HH:MM"). If a time reference is present, skip this entire rule and go to SCHEDULING RULES Rule 0 instead.
 1. The user message explicitly contains at least one of these words: repo, repository, github, gh, fetch, gist

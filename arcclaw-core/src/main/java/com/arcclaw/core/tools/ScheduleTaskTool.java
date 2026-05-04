@@ -176,6 +176,19 @@ public class ScheduleTaskTool implements AgentTool {
         boolean runOnce = parseRunOnce(params);
         String executionRole = parseExecutionRole(params);
 
+        if (!runOnce) {
+            String combined = "";
+            if (goal != null) combined += " " + goal.toLowerCase();
+            if (ctx.rawUserGoal() != null) combined += " " + ctx.rawUserGoal().toLowerCase();
+            
+            boolean hasIntervalKeyword = combined.contains("every") || combined.contains("recurring") || combined.contains("each");
+            boolean hasOffsetKeyword = combined.contains("after") || combined.contains("in ") || combined.contains("in a ") || combined.contains("once");
+            
+            if (hasOffsetKeyword && !hasIntervalKeyword) {
+                runOnce = true;
+            }
+        }
+
         String cronExpression = resolveCron(params);
         String suggestedNextFireTime = ctx.suggestedNextFireTime();
         
