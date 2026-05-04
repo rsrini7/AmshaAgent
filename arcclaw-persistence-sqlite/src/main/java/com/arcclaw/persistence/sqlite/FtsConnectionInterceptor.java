@@ -64,13 +64,25 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             //         connection. ATTACH is also per-connection.
             // ----------------------------------------------------------------
             boolean attached = false;
-            try (Statement stmt = connection.createStatement();
-                 ResultSet rs = stmt.executeQuery("PRAGMA database_list")) {
-                while (rs.next()) {
-                    if ("fts".equals(rs.getString("name"))) {
-                        attached = true;
-                        break;
+            try (Statement stmt = connection.createStatement()) {
+                try (ResultSet rs = stmt.executeQuery("PRAGMA database_list")) {
+                    while (rs.next()) {
+                        if ("fts".equals(rs.getString("name"))) {
+                            attached = true;
+                            break;
+                        }
                     }
+                }
+
+                try {
+                    stmt.execute("PRAGMA busy_timeout=10000");
+                } catch (Exception e) {
+                    log.debugf("FtsConnectionInterceptor: Could not set busy_timeout=10000: %s", e.getMessage());
+                }
+                try {
+                    stmt.execute("PRAGMA synchronous=NORMAL");
+                } catch (Exception e) {
+                    log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", e.getMessage());
                 }
             }
 
@@ -89,20 +101,6 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                     try (Statement stmt = connection.createStatement()) {
                         stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
                     }
-                }
-            }
-
-            // ----------------------------------------------------------------
-            // Step 1.5: Set per-connection PRAGMAs for SQLite hardening (§5.14)
-            //           busy_timeout is CRITICAL for concurrent pool threads.
-            // ----------------------------------------------------------------
-            try (Statement stmt = connection.createStatement()) {
-                stmt.execute("PRAGMA busy_timeout=10000");
-                try {
-                    stmt.execute("PRAGMA synchronous=NORMAL");
-                } catch (Exception e) {
-                    // Safety level may not be changed inside a transaction (§5.14)
-                    log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", e.getMessage());
                 }
             }
 
