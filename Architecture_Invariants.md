@@ -279,7 +279,7 @@ Mixing these two fields corrupts encryption version tracking and is undetectable
 SQLite WAL mode allows any number of concurrent readers but **only one writer at a time**.
 This is a database engine constraint, not a configuration choice.
 
-**The forbidden nesting pattern:**
+**The forbidden nesting pattern (Entity Management):**
 ```
 @Transactional(REQUIRED)               ← acquires Connection-1, starts XA BEGIN IMMEDIATE
   └─ calls agentStore.updateXxx()
@@ -294,7 +294,7 @@ open with a reserved SQLite write lock**. The inner `REQUIRES_NEW` borrows a sec
 connection and attempts `COMMIT`. SQLite cannot grant the exclusive write lock required
 for `COMMIT` while Connection-1 holds the reserved lock → `SQLITE_BUSY`.
 
-**The correct pattern:**
+**The correct pattern (Transaction Boundaries):**
 ```
 @Transactional(NOT_SUPPORTED)          ← no transaction, no reserved lock
   └─ calls agentStore.updateXxx()
@@ -303,11 +303,18 @@ for `COMMIT` while Connection-1 holds the reserved lock → `SQLITE_BUSY`.
                  └─ @Transactional(REQUIRES_NEW)  ← gets its own clean connection, COMMIT succeeds
 ```
 
+**The correct pattern (Native SQL):**
+High-concurrency updates (e.g., HITL approvals, Status transitions, Cron claiming) MUST bypass Hibernate Entity Management and use **Targeted Native SQL UPDATE/INSERT statements**. 
+
+*Why:* Hibernate's `em.merge()` or entity dirty-checking flushes ALL columns on an entity, holding the database in a "reserved" lock state longer than necessary, and often conflicting with other threads via `@Version` columns. Native SQL targets exactly the columns needed and releases the lock in milliseconds.
+
 MUST NOT: Annotate any method `@Transactional(REQUIRED)` (or bare `@Transactional`)
 if that method directly or transitively calls any `@Transactional(REQUIRES_NEW)` method.
 
 MUST NOT: Accept "it worked in JVM mode" as proof of safety. Agroal pool timing
 differs under load and between JVM and native image startup sequences.
+
+MUST NOT: Use `em.merge()` or full-entity `em.persist()` inside the `arcclaw-persistence-sqlite` module for entities that face concurrent overlapping writes (like `AgentCheckpoint`). Use `em.createNativeQuery("UPDATE/INSERT OR REPLACE...")` instead.
 
 ---
 
