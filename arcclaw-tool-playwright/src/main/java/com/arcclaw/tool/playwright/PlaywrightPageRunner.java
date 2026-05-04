@@ -81,6 +81,7 @@ public class PlaywrightPageRunner {
     @PostConstruct
     void init() {
         this.runtimeEnabled = configEnabled;
+        log.infof("[PlaywrightPageRunner] Initialized configEnabled: %b (ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED value)", configEnabled);
     }
 
     /**

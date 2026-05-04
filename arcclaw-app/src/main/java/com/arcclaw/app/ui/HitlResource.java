@@ -56,8 +56,10 @@ public class HitlResource {
 
         // §85-B: Lazy ownership binding for SSE subscription.
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
-        String userId = securityContext.getUserPrincipal().getName();
-        if (userId == null) {
+        String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
+            ? securityContext.getUserPrincipal().getName()
+            : "anonymous";
+        if (userId == null || "anonymous".equals(userId)) {
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
         
@@ -73,8 +75,10 @@ public class HitlResource {
     @Operation(summary = "List all pending tool execution approvals for the current user")
     public Response listPending() {
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
-        String userId = securityContext.getUserPrincipal().getName();
-        if (userId == null) {
+        String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
+            ? securityContext.getUserPrincipal().getName()
+            : "anonymous";
+        if (userId == null || "anonymous".equals(userId)) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", "Cannot resolve user identity"))
                     .build();
