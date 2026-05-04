@@ -72,7 +72,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
     void isCheckpointExpired_true_rejectsCall() {
         // mock expired
         when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
-            .thenReturn(new ApprovalResult(ApprovalOutcome.EXPIRED, "test-session", "dummy_tool", 0));
+            .thenReturn(new ApprovalResult(ApprovalOutcome.EXPIRED, "test-session", "dummy_tool", 0, java.util.List.of()));
 
         handler.handleCallback(exchange);
 
@@ -86,7 +86,7 @@ class TelegramCallbackHandlerExpiryGuardTest {
     void isCheckpointExpired_false_proceedsToApprove() {
         // mock not expired
         when(approvalGateway.decide(eq("test-session"), eq("dummy_tool"), any(ApprovalDecision.class), anyString()))
-            .thenReturn(new ApprovalResult(ApprovalOutcome.APPROVED, "test-session", "dummy_tool", 0));
+            .thenReturn(new ApprovalResult(ApprovalOutcome.APPROVED, "test-session", "dummy_tool", 0, java.util.List.of()));
 
         handler.handleCallback(exchange);
 
