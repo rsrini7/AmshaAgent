@@ -95,6 +95,13 @@ public class StatusReflex implements AgentReflex {
         // Priority 2 & 3 - active states trump terminal states
         for (AgentCheckpoint cp : checkpoints) {
             CheckpointStatus s = cp.getStatus();
+            if (s == CheckpointStatus.RESUMING) {
+                // Ignore stale resuming checkpoints older than 5 minutes
+                if (cp.getUpdatedAt() != null && java.time.Duration.between(cp.getUpdatedAt(), java.time.Instant.now()).toMinutes() > 5) {
+                    continue;
+                }
+                return s.name();
+            }
             if (s == CheckpointStatus.AWAITING_APPROVAL || s == CheckpointStatus.IN_PROGRESS) {
                 return s.name();
             }
