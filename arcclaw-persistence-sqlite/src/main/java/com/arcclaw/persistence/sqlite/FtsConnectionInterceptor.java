@@ -89,6 +89,16 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             }
 
             // ----------------------------------------------------------------
+            // Step 1.5: Set per-connection PRAGMAs for SQLite hardening (§5.14)
+            //           busy_timeout is CRITICAL for concurrent pool threads.
+            // ----------------------------------------------------------------
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute("PRAGMA busy_timeout=10000");
+                stmt.execute("PRAGMA synchronous=NORMAL");
+            }
+
+
+            // ----------------------------------------------------------------
             // Step 2: Load sqlite-vec on this connection - but only if vec0
             //         is not already registered on this specific sqlite3* handle.
             //

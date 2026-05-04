@@ -39,6 +39,13 @@ public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
         }
     }
 
+    /**
+     * REQUIRES_NEW is intentional (§T5-3). Advisory lock acquisition must commit
+     * immediately and be visible to other threads/processes. It must NOT join 
+     * an outer transaction, as lock visibility would then be deferred until 
+     * the caller commits. Safe in SQLite because all callers (AgentCronScheduler, 
+     * CheckpointResumeHandler) are non-transactional at their entry points.
+     */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doTryLock(String lockKey, int timeoutSeconds) {
         Instant now = Instant.now();
@@ -73,6 +80,11 @@ public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
         }
     }
 
+    /**
+     * REQUIRES_NEW is intentional (§T5-3). Lock release must commit immediately 
+     * to allow other processes to acquire it, regardless of the caller's 
+     * subsequent success or failure.
+     */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doUnlock(String lockKey) {
         em.createQuery("DELETE FROM AdvisoryLockEntity l WHERE l.lockKey = :key AND l.ownerId = :owner")

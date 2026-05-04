@@ -38,7 +38,7 @@ public class CheckpointBatchOperations {
         this(null, null);
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public boolean doAtomicUpdateBatchToolDecision(String sessionId, String agentRole,
                                                     String toolName, String decision) {
         log.infof("[BatchOps] Updating tool decision for session=%s tool=%s -> %s",

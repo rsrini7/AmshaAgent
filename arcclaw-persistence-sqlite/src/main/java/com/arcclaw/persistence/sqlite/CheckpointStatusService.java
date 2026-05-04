@@ -31,7 +31,7 @@ public class CheckpointStatusService {
         this(null);
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doTransitionStatus(Long id, String newStatus) {
         log.infof("[StatusService] Transitioning checkpoint %d to %s", id, newStatus);
         em.createNativeQuery(
@@ -43,7 +43,7 @@ public class CheckpointStatusService {
                 .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public boolean doAtomicTransition(Long id, String expectedStatus, String newStatus) {
         log.infof("[StatusService] Atomic transition checkpoint %d: %s -> %s", id, expectedStatus, newStatus);
         int updated = em.createNativeQuery(
@@ -62,7 +62,7 @@ public class CheckpointStatusService {
         return success;
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public boolean doClaimForResume(String sessionId, String agentRole, int staleClaimMinutes) {
         log.infof("[StatusService] Claiming resume for session=%s role=%s", sessionId, agentRole);
         Instant cutoff = Instant.now().minus(staleClaimMinutes, ChronoUnit.MINUTES);
@@ -86,7 +86,7 @@ public class CheckpointStatusService {
         return success;
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doReleaseResumeClaim(String sessionId, String agentRole) {
         log.infof("[StatusService] Releasing resume claim for session=%s role=%s", sessionId, agentRole);
         em.createNativeQuery(
@@ -101,7 +101,7 @@ public class CheckpointStatusService {
          .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doMarkFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
         log.warnf("[StatusService] Marking checkpoint %d as FAILED: %s (code=%s)", checkpointId, failReason, errorCode);
         String nowStr = TemporalUtils.formatIsoLex(Instant.now());
@@ -119,7 +119,7 @@ public class CheckpointStatusService {
                 .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doMarkCompleted(Long checkpointId) {
         log.infof("[StatusService] Marking checkpoint %d as COMPLETED", checkpointId);
         String nowStr = TemporalUtils.formatIsoLex(Instant.now());
@@ -132,7 +132,7 @@ public class CheckpointStatusService {
                 .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doMarkOrphaned(Long checkpointId, String reason) {
         log.warnf("[StatusService] Marking checkpoint %d as ORPHANED: %s", checkpointId, reason);
         String nowStr = TemporalUtils.formatIsoLex(Instant.now());
@@ -146,7 +146,7 @@ public class CheckpointStatusService {
                 .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doArchive(Long checkpointId) {
         log.infof("[StatusService] Archiving checkpoint %d", checkpointId);
         em.createNativeQuery(

@@ -11,7 +11,6 @@ import java.util.Map;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
@@ -48,7 +47,6 @@ public class TelegramCallbackHandler {
     String botToken;
 
     @ActivateRequestContext
-    @Transactional
     public void handleCallback(Exchange exchange) {
         IncomingCallbackQuery query = exchange.getIn().getBody(IncomingCallbackQuery.class);
         if (query == null) return;

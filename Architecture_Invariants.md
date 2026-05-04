@@ -279,42 +279,44 @@ Mixing these two fields corrupts encryption version tracking and is undetectable
 SQLite WAL mode allows any number of concurrent readers but **only one writer at a time**.
 This is a database engine constraint, not a configuration choice.
 
-**The forbidden nesting pattern (Entity Management):**
+**The Correct Transaction Strategy for SQLite:**
+
+1. **General Data Persistence (REQUIRED)**: 
+   - Most methods in `CheckpointStorePort` and `CheckpointStatusService` MUST use `@Transactional(REQUIRED)`. 
+   - This allows multiple service calls on the same thread to join a single transaction and share the same database connection/write lock. 
+   - Using `REQUIRES_NEW` for general data in a nested call chain causes self-deadlock because the outer transaction holds the write lock while the inner transaction waits for it.
+
+2. **Advisory Locks (REQUIRES_NEW)**:
+   - See §5.8.1 for the mandatory isolation exception.
+
+**The forbidden nesting pattern (Connection Exhaustion / Deadlock):**
 ```
 @Transactional(REQUIRED)               ← acquires Connection-1, starts XA BEGIN IMMEDIATE
-  └─ calls agentStore.updateXxx()
-       └─ withRetry(...)
-            └─ self.doUpdateXxx()
-                 └─ @Transactional(REQUIRES_NEW)  ← acquires Connection-2, tries COMMIT
-                      └─ SQLITE_BUSY - Connection-1 holds the reserved write lock
+  └─ calls store.save()
+       └─ @Transactional(REQUIRES_NEW)  ← acquires Connection-2, tries to write
+            └─ SQLITE_BUSY - Connection-1 holds the reserved write lock
 ```
 
-`REQUIRES_NEW` suspends the outer `REQUIRED` transaction but **keeps its Agroal connection
-open with a reserved SQLite write lock**. The inner `REQUIRES_NEW` borrows a second
-connection and attempts `COMMIT`. SQLite cannot grant the exclusive write lock required
-for `COMMIT` while Connection-1 holds the reserved lock → `SQLITE_BUSY`.
+MUST NOT: Annotate any method `@Transactional(REQUIRED)` (or bare `@Transactional`) if that method directly or transitively calls any `@Transactional(REQUIRES_NEW)` method that writes to the SAME database.
 
-**The correct pattern (Transaction Boundaries):**
-```
-@Transactional(NOT_SUPPORTED)          ← no transaction, no reserved lock
-  └─ calls agentStore.updateXxx()
-       └─ withRetry(...)
-            └─ self.doUpdateXxx()
-                 └─ @Transactional(REQUIRES_NEW)  ← gets its own clean connection, COMMIT succeeds
-```
+MUST NOT: Use `em.merge()` or full-entity `em.persist()` inside the `arcclaw-persistence-sqlite` module for entities that face concurrent overlapping writes (like `AgentCheckpoint`). Use native SQL `UPDATE` instead.
 
-**The correct pattern (Native SQL):**
-High-concurrency updates (e.g., HITL approvals, Status transitions, Cron claiming) MUST bypass Hibernate Entity Management and use **Targeted Native SQL UPDATE/INSERT statements**. 
+### 5.8.1 Advisory Lock Isolation Exception (§T5-3)
 
-*Why:* Hibernate's `em.merge()` or entity dirty-checking flushes ALL columns on an entity, holding the database in a "reserved" lock state longer than necessary, and often conflicting with other threads via `@Version` columns. Native SQL targets exactly the columns needed and releases the lock in milliseconds.
+`SqliteAdvisoryLockAdapter` (`doTryLock`, `doUnlock`) MUST remain `@Transactional(REQUIRES_NEW)`. 
 
-MUST NOT: Annotate any method `@Transactional(REQUIRED)` (or bare `@Transactional`)
-if that method directly or transitively calls any `@Transactional(REQUIRES_NEW)` method.
+**Rationale:** 
+- Advisory locks are used for cross-process/cross-thread coordination (e.g., leader election).
+- The lock acquisition MUST commit immediately and be visible to other threads/processes. 
+- If it joined a `REQUIRED` transaction, the lock would not be "taken" in the DB until the entire outer transaction committed, allowing other threads to race and enter the same critical section.
 
-MUST NOT: Accept "it worked in JVM mode" as proof of safety. Agroal pool timing
-differs under load and between JVM and native image startup sequences.
+**Safety Condition:**
+- Callers of advisory locks (e.g., `AgentCronScheduler`, `CheckpointResumeHandler`, `TelegramCallbackHandler`) MUST be non-transactional (`NOT_SUPPORTED`) at their entry points.
+- This ensures the `REQUIRES_NEW` lock transaction is the *only* transaction on the thread, preventing the §5.8 nesting deadlock.
 
-MUST NOT: Use `em.merge()` or full-entity `em.persist()` inside the `arcclaw-persistence-sqlite` module for entities that face concurrent overlapping writes (like `AgentCheckpoint`). Use `em.createNativeQuery("UPDATE/INSERT OR REPLACE...")` instead.
+---
+
+## 5.9 Transaction-Free Zone: Long-Running Operations
 
 ---
 

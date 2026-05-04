@@ -42,7 +42,7 @@ public class SqlitePersistenceAdapter implements PersistenceAdapterPort {
         }
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void persistSynchronously(PersistenceAction action) {
         em.clear();
         action.execute();
