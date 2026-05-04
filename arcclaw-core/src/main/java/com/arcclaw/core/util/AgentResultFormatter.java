@@ -44,11 +44,22 @@ public class AgentResultFormatter {
 
     
     public static String format(AgentResult result) {
+        return format(result, false);
+    }
+
+    public static String formatBasic(AgentResult result) {
+        return format(result, true);
+    }
+
+    private static String format(AgentResult result, boolean basic) {
         String reply = switch (result) {
             case AgentResult.Finished f       -> sanitize(f.answer());
             case AgentResult.StructuredFinished sf -> sanitize(sf.answer());
             case AgentResult.AwaitingApproval a -> {
                 boolean isCron = a.sessionId() != null && a.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX);
+                if (basic) {
+                    yield formatBasicHitlMessage(a.toolName(), a.sessionId(), isCron);
+                }
                 yield formatHitlMessage(a.toolName(), a.paramsJson(), a.sessionId(), isCron);
             }
             case AgentResult.LoopExceeded _ -> "⏱ I ran out of steps. Try rephrasing your request.";
@@ -100,6 +111,19 @@ public class AgentResultFormatter {
         return "⚠️ Approval Required for background task.\n\n" +
                "Goal: " + goal + "\n\n" +
                formatHitlMessage(toolName, null, cronId, true);
+    }
+
+    private static String formatBasicHitlMessage(String compositeName, String cronId, boolean isCron) {
+        StringBuilder sb = new StringBuilder();
+        boolean isBatch = compositeName != null
+            && compositeName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
+
+        if (isBatch) {
+            sb.append("⏸ Parallel batch execution requires approval.");
+        } else {
+            sb.append("⏸ Approval needed for tool: ").append(compositeName);
+        }
+        return sb.toString();
     }
 
     private static String formatHitlMessage(String compositeName, String paramsJson,

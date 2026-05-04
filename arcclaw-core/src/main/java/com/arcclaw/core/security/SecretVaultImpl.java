@@ -77,14 +77,18 @@ public class SecretVaultImpl implements SecretVault {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void store(String keyName, byte[] secret) {
-        store(keyName, secret, WorkspaceContext.resolveUserId());
+        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        store(keyName, secret, WorkspaceContext.getUserIdOrUnknown(), sessionId);
     }
 
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void store(String keyName, byte[] secret, String userId) {
-        String sessionId = WorkspaceContext.requireSessionId();
+        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        store(keyName, secret, userId, sessionId);
+    }
 
+    private void store(String keyName, byte[] secret, String userId, String sessionId) {
         // 1. Derive Key
         VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
         try {
@@ -117,19 +121,25 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public Optional<VaultKey> get(String keyName) {
-        return get(keyName, WorkspaceContext.resolveUserId());
+        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        return get(keyName, WorkspaceContext.getUserIdOrUnknown(), sessionId);
     }
 
     @Override
     public Optional<VaultKey> get(String keyName, String userId) {
-        String sessionId = WorkspaceContext.requireSessionId();
+        String sessionId = WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : VaultConstants.SYSTEM_SESSION_ID;
+        return get(keyName, userId, sessionId);
+    }
 
+    private Optional<VaultKey> get(String keyName, String userId, String sessionId) {
         // 1. Fetch
         EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
 
         if (entity == null) {
-            auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
-                    "keyName=" + keyName);
+            if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
+                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
+                        "keyName=" + keyName);
+            }
             return Optional.empty();
         }
 
@@ -138,7 +148,9 @@ public class SecretVaultImpl implements SecretVault {
         try {
             // 3. Decrypt
             byte[] plaintext = cipher.decrypt(entity.ciphertext, entity.nonce, sessionKey, keyName);
-            auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
+            if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
+                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
+            }
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
             // Log security event?

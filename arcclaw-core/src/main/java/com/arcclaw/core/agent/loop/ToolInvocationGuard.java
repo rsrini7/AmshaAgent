@@ -18,7 +18,6 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.ApprovalFrame;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.skill.CompiledSkillEntry;
@@ -84,12 +83,6 @@ public class ToolInvocationGuard {
         record Blocked(String observation) implements GuardDecision {}
     }
 
-    public GuardDecision evaluate(String sessionId, String agentRole,
-            String toolName, Map<String, Object> params,
-            List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
-        return evaluate(sessionId, agentRole, WorkspaceContext.requireAutonomyOrSupervised(), toolName, params, history, goal, skillSnapshot);
-    }
-
     public GuardDecision evaluate(String sessionId, String agentRole, AutonomyLevel level,
             String toolName, Map<String, Object> params,
             List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
@@ -98,7 +91,7 @@ public class ToolInvocationGuard {
             if (interceptor.handledToolNames().isEmpty()
                     || interceptor.handledToolNames().contains(toolName)) {
                 Optional<GuardDecision> decision = interceptor.evaluate(
-                        sessionId, agentRole, toolName, params, history, goal, skillSnapshot);
+                        sessionId, agentRole, level, toolName, params, history, goal, skillSnapshot);
                 if (decision.isPresent()) {
                     return decision.get();
                 }

@@ -14,6 +14,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.mcp.transport.McpClientService;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class McpSelfRegisterToolTest {
         );
 
         ToolResponse resp = WorkspaceContext.run("session-456", "user-123", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(params));
+            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(0, resp.exitCode());
         verify(mcpClientService, times(1)).connect("my-server", "http://localhost:3000/mcp");
@@ -59,7 +60,7 @@ class McpSelfRegisterToolTest {
         );
 
         ToolResponse resp = WorkspaceContext.run("session-456", "user-123", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(params));
+            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(400, resp.exitCode());
         assertFalse(resp.success());
@@ -75,7 +76,7 @@ class McpSelfRegisterToolTest {
 
         // Blank userId in run() should trigger the guard in execute()
         ToolResponse resp = WorkspaceContext.run("session-456", "", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(params));
+            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", ""), params));
 
         assertEquals(403, resp.exitCode());
     }
@@ -92,9 +93,15 @@ class McpSelfRegisterToolTest {
         );
 
         ToolResponse resp = WorkspaceContext.run("session-456", "user-123", "chat-789", 
-            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(params));
+            AutonomyLevel.FULL, "COORDINATOR", () -> tool.execute(ctx("session-456", "user-123"), params));
 
         assertEquals(502, resp.exitCode());
         assertEquals("MCP connection failed: Connection refused", resp.output());
+    }
+
+    private ToolExecutionContext ctx(String sessionId, String userId) {
+        return new ToolExecutionContext(
+            sessionId, userId, "chat-789", "COORDINATOR", AutonomyLevel.FULL, 
+            "trace-1", null, null, null, null, null, null);
     }
 }

@@ -347,8 +347,17 @@ public final class WorkspaceContext {
 
     /**
      * Returns the currently bound USER_ID from ScopedValue or returns "unknown".
+     * Includes MDC fallback for compatibility with non-virtual threads/filters (§2.3).
      */
     public static String getUserIdOrUnknown() {
-        return USER_ID.isBound() && USER_ID.get() != null ? USER_ID.get() : "unknown";
+        try {
+            if (USER_ID.isBound() && USER_ID.get() != null) {
+                return USER_ID.get();
+            }
+            String mdcUser = (String) MDC.get(MdcKeys.USER_ID);
+            return (mdcUser != null && !mdcUser.isBlank()) ? mdcUser : "unknown";
+        } catch (Exception _ ) {
+            return "unknown";
+        }
     }
 }

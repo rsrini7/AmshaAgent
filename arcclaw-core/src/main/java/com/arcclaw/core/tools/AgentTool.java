@@ -80,13 +80,13 @@ public interface AgentTool {
     }
 
     default List<String> sandboxCommand(Map<String, Object> params) {
-        return sandboxCommand(ToolExecutionContext.fromContext(), params);
+        throw new UnsupportedOperationException("Tool " + name() + " requires ToolExecutionContext. Use sandboxCommand(ctx, params).");
     }
 
     ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params);
 
     default ToolResponse execute(Map<String, Object> params) {
-        return execute(ToolExecutionContext.fromContext(), params);
+        throw new UnsupportedOperationException("Tool " + name() + " requires ToolExecutionContext. Use execute(ctx, params).");
     }
 
     default JsonObjectSchema parametersSchema() {

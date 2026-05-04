@@ -62,6 +62,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
             ? null : serializer.serialize(contextData);
         CheckpointUpsertResult result = storeAdapter.upsertWithSteps(
                 sessionId, agentRole, json, autonomy != null ? autonomy.toString() : AutonomyLevel.SUPERVISED.toString(), steps.size(), goal, contextDataJson);
+        
+        // §Fix: Ensure granular steps are also saved
+        saveSteps(result.checkpoint().id(), steps);
+
         if (result.created()) {
             transitionService.emitCreated(
                     sessionId, agentRole, userId, autonomy,

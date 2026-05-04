@@ -60,12 +60,7 @@ class SerperWebSearchToolTest {
     void testBlankUserIdFails() throws Exception {
         Map<String, Object> params = Map.of("query", "test");
 
-        ToolExecutionContext ctx = new ToolExecutionContext(
-            "session-1", "", "chat-1", "researcher", AutonomyLevel.FULL,
-            "trace-1", null, null, null, null, null, null
-        );
-
-        ToolResponse resp = tool.execute(ctx, params);
+        ToolResponse resp = tool.execute(ctx("session-1", ""), params);
 
         assertEquals(403, resp.exitCode());
     }
@@ -76,7 +71,7 @@ class SerperWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "test");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertEquals(503, resp.exitCode());
     }
@@ -101,7 +96,7 @@ class SerperWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "ultimate answer");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertTrue(resp.success());
         assertTrue(resp.output().contains("Direct Answer"));
@@ -128,7 +123,7 @@ class SerperWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "quarkus");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertTrue(resp.success());
         assertTrue(resp.output().contains("Quarkus Docs"));
@@ -146,7 +141,7 @@ class SerperWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "test");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertEquals(401, resp.exitCode());
         assertTrue(resp.output().contains("Serper Search API failed"));
@@ -163,8 +158,18 @@ class SerperWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "test", "count", 50);
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
         
         assertTrue(resp.output().contains("No relevant web or news results"));
+    }
+
+    private ToolExecutionContext ctx() {
+        return ctx("session-1", "user-1");
+    }
+
+    private ToolExecutionContext ctx(String sessionId, String userId) {
+        return new ToolExecutionContext(
+            sessionId, userId, "chat-1", "RESEARCHER", AutonomyLevel.FULL, 
+            "trace-1", null, null, null, null, null, null);
     }
 }

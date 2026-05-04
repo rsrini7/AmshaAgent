@@ -2,6 +2,7 @@ package com.arcclaw.persistence.postgres;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -21,7 +22,6 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
-import java.util.Map;
 
 /**
  * PostgreSQL implementation of CheckpointStorePort.
@@ -388,7 +388,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
         log.infof("[Postgres] Updating tool decision for session=%s role=%s tool=%s -> %s",
                 sessionId, agentRole, toolName, decision);

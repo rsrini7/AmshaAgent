@@ -12,6 +12,7 @@ import java.util.Map;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +40,7 @@ class PlaywrightBrowserToolTest {
 
     private ToolResponse runWithContext(Map<String, Object> params) {
         try {
-            return WorkspaceContext.run("sess-1", "test-user-123", "chat-1", AutonomyLevel.FULL, "researcher", () -> tool.execute(params));
+            return WorkspaceContext.run("sess-1", "test-user-123", "chat-1", AutonomyLevel.FULL, "researcher", () -> tool.execute(ctx("sess-1", "test-user-123"), params));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -97,7 +98,7 @@ class PlaywrightBrowserToolTest {
 
     @Test void execute_returns403_whenUserIdBlank() throws Exception {
         Map<String, Object> params = Map.of("url", "https://example.com");
-        ToolResponse res = WorkspaceContext.run("sess-1", "", "chat-1", AutonomyLevel.FULL, "researcher", () -> tool.execute(params));
+        ToolResponse res = WorkspaceContext.run("sess-1", "", "chat-1", AutonomyLevel.FULL, "researcher", () -> tool.execute(ctx("sess-1", ""), params));
         Assertions.assertFalse(res.success());
         Assertions.assertEquals(403, res.exitCode());
     }
@@ -182,5 +183,11 @@ class PlaywrightBrowserToolTest {
         ToolResponse res = runWithContext(params);
 
         Assertions.assertEquals(longResult, res.output());
+    }
+
+    private ToolExecutionContext ctx(String sessionId, String userId) {
+        return new ToolExecutionContext(
+            sessionId, userId, "chat-1", "researcher", AutonomyLevel.FULL, 
+            "trace-1", null, null, null, null, null, null);
     }
 }

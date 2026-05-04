@@ -1,7 +1,5 @@
 package com.arcclaw.core.agent.reasoning;
 
-import com.arcclaw.core.scope.WorkspaceContext;
-
 /**
  * CDI extension point for injecting context into system prompts before
  * the role-specific Qute template renders. Implementations in downstream
@@ -18,8 +16,4 @@ public interface ContextEnricher {
      * @param basePrompt the fully assembled system prompt so far
      */
     String enrich(String sessionId, String userId, String goal, String basePrompt);
-
-    default String enrich(String sessionId, String goal, String basePrompt) {
-        return enrich(sessionId, WorkspaceContext.resolveUserId(), goal, basePrompt);
-    }
 }

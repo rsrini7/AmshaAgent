@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -45,7 +46,7 @@ class GithubToolGuardInterceptorTest {
         when(chatMemoryStore.getMessages(anyString())).thenReturn(List.of());
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
-                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "abc def", List.of());
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.NAME, Map.of(), List.of(), "abc def", List.of());
 
         assertTrue(result.isPresent());
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result.get());
@@ -60,7 +61,7 @@ class GithubToolGuardInterceptorTest {
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
 
         Optional<ToolInvocationGuard.GuardDecision> result = interceptor.evaluate(
-                "s1", "coordinator", GithubTool.NAME, Map.of(), List.of(), "how are you?", List.of());
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, GithubTool.NAME, Map.of(), List.of(), "how are you?", List.of());
 
         assertTrue(result.isEmpty(), "Pre-approved GitHub should pass through to HITL layer");
     }

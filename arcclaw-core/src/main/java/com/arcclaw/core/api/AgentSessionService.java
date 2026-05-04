@@ -130,7 +130,7 @@ public class AgentSessionService {
         heartbeatTracker.recordHeartbeat(sessionId, level);
 
         String requestingKey = resolveUserId();
-        if (requestingKey != null && !requestingKey.isBlank()) {
+        if (requestingKey != null && !requestingKey.isBlank() && !"unknown".equals(requestingKey)) {
             heartbeatTracker.tryBindOwner(sessionId, requestingKey);
         }
         return sessionId;
@@ -148,7 +148,7 @@ public class AgentSessionService {
         if (securityContext != null && securityContext.getUserPrincipal() != null) {
             return securityContext.getUserPrincipal().getName();
         }
-        return WorkspaceContext.resolveUserId();
+        return WorkspaceContext.getUserIdOrUnknown();
     }
 
     public Response runSync(String sessionId, RunAgentRequest request) {

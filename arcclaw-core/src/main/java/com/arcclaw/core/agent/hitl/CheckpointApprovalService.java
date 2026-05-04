@@ -61,7 +61,8 @@ public class CheckpointApprovalService {
         }
 
         AgentCheckpoint cp = cpOpt.get();
-        cp.setStatus(CheckpointStatus.APPROVED);
+        // §Bug-1 Fix: Do NOT set status = APPROVED here to avoid SQLite constraint failures.
+        // The triggerResume call below will transition it to RESUMING.
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
         } catch (Exception e) {
@@ -81,7 +82,7 @@ public class CheckpointApprovalService {
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
-        cp.setStatus(CheckpointStatus.APPROVED);
+        // §Bug-1 Fix: Keep status as AWAITING_APPROVAL.
         
         try {
             String decisionsJson = cp.getBatchToolDecisions();
@@ -137,6 +138,7 @@ public class CheckpointApprovalService {
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
+        // §Bug-2 Fix: Explicitly use the passed-in toolName parameter.
         try {
             Map<String, ToolDecision> decisions = new LinkedHashMap<>();
             String existingDecisions = cp.getBatchToolDecisions();
@@ -147,9 +149,7 @@ public class CheckpointApprovalService {
             decisions.put(toolName, ToolDecision.APPROVED);
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
 
-            if (decisions.values().stream().noneMatch(d -> d == ToolDecision.PENDING)) {
-                cp.setStatus(CheckpointStatus.APPROVED);
-            }
+            // §Bug-1 Fix: Keep as AWAITING_APPROVAL.
             agentStore.save(cp);
 
             agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
@@ -167,6 +167,7 @@ public class CheckpointApprovalService {
         if (cpOpt.isEmpty()) throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
+        // §Bug-2 Fix: Explicitly use the passed-in toolName parameter.
         try {
             Map<String, ToolDecision> decisions = new LinkedHashMap<>();
             String existingDecisions = cp.getBatchToolDecisions();
@@ -177,9 +178,7 @@ public class CheckpointApprovalService {
             decisions.put(toolName, ToolDecision.DENIED);
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
 
-            if (decisions.values().stream().noneMatch(d -> d == ToolDecision.PENDING)) {
-                cp.setStatus(CheckpointStatus.APPROVED); // Checkpoint is "done" deciding
-            }
+            // §Bug-1 Fix: Keep as AWAITING_APPROVAL.
             agentStore.save(cp);
 
             agentSseService.publish(sessionId, new AgentSseService.HitlEvent(

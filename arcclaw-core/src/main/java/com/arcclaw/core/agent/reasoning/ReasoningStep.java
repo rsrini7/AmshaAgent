@@ -5,9 +5,9 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.quarkus.qute.TemplateData;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -24,6 +24,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  */
 @TemplateData
 @RegisterForReflection
+@JsonSerialize(using = ReasoningStepSerializer.class)
 @JsonDeserialize(using = ReasoningStepDeserializer.class)
 public sealed interface ReasoningStep permits 
     ReasoningStep.ToolCallStep, 
@@ -57,8 +58,7 @@ public sealed interface ReasoningStep permits
     }
 
     /** Tool invocation step. */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
-    @JsonTypeName("TOOL_CALL")
+    @JsonDeserialize(using = JsonDeserializer.None.class)
     @JsonIgnoreProperties(ignoreUnknown = true)
     record ToolCallStep(
         String thought,
@@ -76,8 +76,7 @@ public sealed interface ReasoningStep permits
     ) implements ReasoningStep {}
 
     /** Observation or system directive step. */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
-    @JsonTypeName("OBSERVATION")
+    @JsonDeserialize(using = JsonDeserializer.None.class)
     @JsonIgnoreProperties(ignoreUnknown = true)
     record ObservationStep(
         String thought,
@@ -96,8 +95,7 @@ public sealed interface ReasoningStep permits
     }
 
     /** Final conclusion step. */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
-    @JsonTypeName("FINISH")
+    @JsonDeserialize(using = JsonDeserializer.None.class)
     @JsonIgnoreProperties(ignoreUnknown = true)
     record FinishStep(
         String thought,
@@ -116,8 +114,7 @@ public sealed interface ReasoningStep permits
     }
 
     /** Parallel tool execution batch. */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "stepType")
-    @JsonTypeName("PARALLEL")
+    @JsonDeserialize(using = JsonDeserializer.None.class)
     @JsonIgnoreProperties(ignoreUnknown = true)
     record ParallelStep(
         String thought,

@@ -16,6 +16,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tool.InterceptorPriority;
@@ -76,7 +77,7 @@ class ToolGuardOrderingTest {
         manualGuard.init(); // Triggers sorting
         
         // Act
-        manualGuard.evaluate("s1", "coordinator", "test-tool", Map.of(), List.of(), "goal", List.of());
+        manualGuard.evaluate("s1", "coordinator", AutonomyLevel.SUPERVISED, "test-tool", Map.of(), List.of(), "goal", List.of());
         
         // Assert
         assertEquals(List.of("B", "A"), executionOrder, "Interceptor B (priority 5) should execute before A (priority 10)");
@@ -88,7 +89,7 @@ class ToolGuardOrderingTest {
         public MockInterceptor(String name, List<String> order) { this.name = name; this.order = order; }
         @Override public Set<String> handledToolNames() { return Set.of(); }
         @Override public Optional<ToolInvocationGuard.GuardDecision> evaluate(
-                String s, String r, String t, Map<String, Object> p, List<ReasoningStep> h, String g, List<CompiledSkillEntry> sk) {
+                String s, String r, AutonomyLevel l, String t, Map<String, Object> p, List<ReasoningStep> h, String g, List<CompiledSkillEntry> sk) {
             order.add(name);
             return Optional.empty(); // Continue
         }

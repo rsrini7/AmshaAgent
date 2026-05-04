@@ -21,6 +21,7 @@ import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.util.ClassUtils;
@@ -102,18 +103,18 @@ public class ToolRegistry {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + toolName));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
-                WorkspaceContext.requireSessionId(),
-                WorkspaceContext.resolveUserId(),
-                WorkspaceContext.requireChatIdOrUserId(),
-                WorkspaceContext.requireAgentRole(),
-                WorkspaceContext.requireAutonomyOrSupervised(),
+                WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "system",
+                WorkspaceContext.getUserIdOrUnknown(),
+                WorkspaceContext.CHAT_ID.isBound() ? WorkspaceContext.CHAT_ID.get() : "system",
+                WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : "coordinator",
+                WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : AutonomyLevel.SUPERVISED,
                 Span.current().getSpanContext().getTraceId(),
-                WorkspaceContext.channelType().orElse(null),
-                WorkspaceContext.channelPlatformId(),
+                WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null,
+                WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null,
                 WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null,
-                WorkspaceContext.suggestedCron(),
-                WorkspaceContext.suggestedNextFireTime(),
-                WorkspaceContext.suggestedCronSource()
+                WorkspaceContext.SUGGESTED_CRON.isBound() ? WorkspaceContext.SUGGESTED_CRON.get() : null,
+                WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.isBound() ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get() : null,
+                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null
         );
 
         // 1. Governance checks

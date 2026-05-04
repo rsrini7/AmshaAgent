@@ -31,13 +31,12 @@ public class WebChannelSender implements ChannelSender {
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
         String rendered = renderer.render(nodes);
         
-        String targetSessionId = nodes.stream()
+        ReplyNode.ApprovalPrompt prompt = (ReplyNode.ApprovalPrompt) nodes.stream()
             .filter(n -> n instanceof ReplyNode.ApprovalPrompt)
-            .map(n -> ((ReplyNode.ApprovalPrompt) n).sessionId())
             .findFirst()
             .orElse(null);
 
-        sendRawWithSession(recipient, rendered, targetSessionId);
+        sendRawWithSession(recipient, rendered, prompt);
     }
 
     @Override
@@ -45,8 +44,8 @@ public class WebChannelSender implements ChannelSender {
         sendRawWithSession(recipient, text, null);
     }
 
-    private void sendRawWithSession(ChannelUser recipient, String text, String targetSessionId) {
-        String payload = buildMessageJson(text, targetSessionId);
+    private void sendRawWithSession(ChannelUser recipient, String text, ReplyNode.ApprovalPrompt prompt) {
+        String payload = buildMessageJson(text, prompt);
         String platformId = recipient.platformId();
 
         sessionStore.get(platformId).ifPresentOrElse(
@@ -62,7 +61,7 @@ public class WebChannelSender implements ChannelSender {
                 // If the direct platformId is stale (e.g. refresh), try a broadcast based on the sessionId
                 // that is known to exist for the user's platform reference (§85-C)
                 sessionStore.getArcclawSessionId(platformId).ifPresentOrElse(
-                    sid -> sendBySessionWithTarget(sid, text, targetSessionId),
+                    sid -> sendBySessionWithTarget(sid, text, prompt),
                     () -> log.warnf("WebChannelSender: no WS session for id=%s", platformId)
                 );
             }
@@ -74,8 +73,8 @@ public class WebChannelSender implements ChannelSender {
         sendBySessionWithTarget(sessionId, text, null);
     }
 
-    private void sendBySessionWithTarget(String sessionId, String text, String targetSessionId) {
-        String payload = buildMessageJson(text, targetSessionId);
+    private void sendBySessionWithTarget(String sessionId, String text, ReplyNode.ApprovalPrompt prompt) {
+        String payload = buildMessageJson(text, prompt);
         List<WebSocketConnection> conns = sessionStore.getConnectionsByArcclawSession(sessionId);
         
         if (!conns.isEmpty()) {
@@ -96,15 +95,19 @@ public class WebChannelSender implements ChannelSender {
         }
     }
 
-    private String buildMessageJson(String text, String targetSessionId) {
+    private String buildMessageJson(String text, ReplyNode.ApprovalPrompt prompt) {
         var builder = Json.createObjectBuilder()
             .add("type", "message")
             .add("role", "assistant")
             .add("text", text)
             .add("timestamp", System.currentTimeMillis());
         
-        if (targetSessionId != null) {
-            builder.add("sessionId", targetSessionId);
+        if (prompt != null) {
+            builder.add("sessionId", prompt.sessionId());
+            builder.add("approval", Json.createObjectBuilder()
+                .add("tool", prompt.toolName())
+                .add("params", prompt.paramsJson() != null ? prompt.paramsJson() : "{}")
+            );
         }
         
         return builder.build().toString();

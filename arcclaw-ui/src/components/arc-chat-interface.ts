@@ -12,6 +12,10 @@ interface ChatMessage {
   text: string;
   timestamp: number;
   isApprovalPrompt?: boolean;
+  approvalData?: {
+    tool: string;
+    params: any;
+  };
   historic?: boolean;
   targetSessionId?: string;
 }
@@ -89,7 +93,7 @@ export class ArcChatInterface extends LitElement {
     
     .msg-group {
       display: flex; flex-direction: column; gap: 6px;
-      max-width: min(680px, 80%);
+      max-width: min(800px, 90%);
     }
     .msg-group-user { align-self: flex-end; }
     .msg-group-assistant { align-self: flex-start; }
@@ -113,6 +117,7 @@ export class ArcChatInterface extends LitElement {
       padding: 12px 16px; border-radius: 12px;
       font-size: 14px; line-height: 1.6; color: var(--text-primary);
       word-break: break-word; position: relative;
+      white-space: pre-wrap; /* SR-Fix: preserve formatting in status messages */
     }
     .bubble-user {
       background: var(--accent);
@@ -207,6 +212,15 @@ export class ArcChatInterface extends LitElement {
        border-radius: 12px; overflow: hidden;
     }
     .approval-body { padding: 16px; border-bottom: 1px solid rgba(245, 158, 11, 0.2); }
+    .approval-title { font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .approval-tool { font-size: 13px; margin-bottom: 8px; }
+    .approval-tool code { background: rgba(245, 158, 11, 0.2); padding: 2px 6px; border-radius: 4px; color: #fbbf24; }
+    .approval-params-header { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+    .approval-params { 
+       background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; 
+       font-size: 12px; font-family: 'Fira Code', monospace; 
+       margin: 0; overflow-x: auto; max-height: 240px; border: 1px solid rgba(255,255,255,0.05);
+    }
     .approval-actions { display: flex; padding: 12px; gap: 10px; background: rgba(10, 11, 15, 0.5); }
     .btn-approve { flex: 1; height: 38px; background: #00d4aa; color: #0a0b0f; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
     .btn-deny { border: 1px solid rgba(255,255,255,0.1); background: transparent; color: white; border-radius: 8px; padding: 0 16px; cursor: pointer; }
@@ -239,7 +253,7 @@ export class ArcChatInterface extends LitElement {
           text: m.text,
           timestamp: m.timestamp || Date.now(),
           historic: true,
-          isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸'),
+          isApprovalPrompt: m.role === 'assistant' && (m.text.includes('⏸') || m.text.includes('Approval')),
           actionId: m.actionId || null
         }));
       await this.updateComplete;
@@ -341,13 +355,16 @@ export class ArcChatInterface extends LitElement {
       this._isTyping = false;
       this._awaitingApproval = false;
       this._showDenyReason = false;
-      const isApproval = frame.text.includes('⏸');
+      
+      const isApproval = frame.approval || frame.text.includes('⏸');
+      
       this._messages = [...this._messages, {
         id: crypto.randomUUID(), 
         role: 'assistant', 
         text: frame.text, 
         timestamp: frame.timestamp || Date.now(), 
-        isApprovalPrompt: isApproval,
+        isApprovalPrompt: !!isApproval,
+        approvalData: frame.approval || null,
         targetSessionId: frame.sessionId || null
       }];
       if (isApproval) this._awaitingApproval = true;
@@ -462,10 +479,19 @@ export class ArcChatInterface extends LitElement {
                  ${m.isApprovalPrompt && this._awaitingApproval ? html`
                    <div class="approval-card">
                      <div class="approval-body">
-                       <strong>Action Requires Approval</strong>
-                       <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
-                         This session has paused to wait for your permission.
-                       </p>
+                       <div class="approval-title">
+                         <span>⏸</span> Action Requires Approval
+                       </div>
+                       
+                       ${m.approvalData ? html`
+                         <div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div>
+                         <div class="approval-params-header">Parameters:</div>
+                         <pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>
+                       ` : html`
+                         <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
+                           This session has paused to wait for your permission.
+                         </p>
+                       `}
                      </div>
                      <div class="approval-actions">
                         ${this._showDenyReason ? html`

@@ -96,8 +96,7 @@ public class SessionLifecycleCoordinator {
      */
     public String setupMdc(String sessionId, String canonicalRole) {
         // §Issue-5 Fix: resolve userId from context instead of hard-coding "unknown"
-        String userId = WorkspaceContext.resolveUserId();
-        if (userId == null || userId.isBlank()) userId = "unknown";
+        String userId = WorkspaceContext.getUserIdOrUnknown();
         setupMdc(sessionId, canonicalRole, userId);
         return userId;
     }
@@ -119,26 +118,25 @@ public class SessionLifecycleCoordinator {
                     AgentErrorMessageUtil.safeMessage(e));
         }
     }
+public String resolveCanonicalRole(String sessionId, String agentRole, String userId) {
+    if (!AgentRoleEnum.isKnownRole(agentRole)) {
+        log.warnf("SessionLifecycleCoordinator: unknown agentRole '%s' for session %s - defaulting to COORDINATOR",
+                agentRole, sessionId);
 
-    public String resolveCanonicalRole(String sessionId, String agentRole, String userId) {
-        if (!AgentRoleEnum.isKnownRole(agentRole)) {
-            log.warnf("SessionLifecycleCoordinator: unknown agentRole '%s' for session %s - defaulting to COORDINATOR",
-                    agentRole, sessionId);
+        auditService.record(
+                sessionId,
+                userId,
+                agentRole,
+                SecurityEventType.INVALID_ROLE_FALLBACK,
+                "Unknown agentRole [" + agentRole + "] defaulted to COORDINATOR");
 
-            auditService.record(
-                    sessionId,
-                    userId,
-                    agentRole,
-                    SecurityEventType.INVALID_ROLE_FALLBACK,
-                    "Unknown agentRole [" + agentRole + "] defaulted to COORDINATOR");
+        Counter.builder("arcclaw.agent.role.unknown")
+                .tag("role", agentRole != null ? agentRole : "null")
+                .register(meterRegistry)
+                .increment();
 
-            Counter.builder("arcclaw.agent.role.unknown")
-                    .tag("role", agentRole != null ? agentRole : "null")
-                    .register(meterRegistry)
-                    .increment();
-
-            return AgentRoleEnum.COORDINATOR.toScopedName();
-        }
+        return AgentRoleEnum.COORDINATOR.toScopedName();
+    }
 
         // §4.4 - alias expansion happens HERE, nowhere else.
         // AgentRoleEnum.fromString handles any configured aliases.

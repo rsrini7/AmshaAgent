@@ -15,6 +15,7 @@ import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,7 +58,7 @@ class ToolInvocationGuardDynamicTest {
 
         // Root Cause 1: When dynamic lookup is unsatisfied, isDynamicAllowed=false -> Blocked
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", "github", Map.of("op", "search"),
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "github", Map.of("op", "search"),
                 Collections.emptyList(), "just a question", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
@@ -71,7 +72,7 @@ class ToolInvocationGuardDynamicTest {
         when(mockToolRegistry.findTool(anyString())).thenReturn(Optional.empty());
 
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", "external_tool", Map.of("arg", "val"),
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "external_tool", Map.of("arg", "val"),
                 Collections.emptyList(), "execute external search", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
@@ -86,7 +87,7 @@ class ToolInvocationGuardDynamicTest {
 
         // Root Cause 1: Rejected dynamic tool -> Blocked
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", "some_tool", Map.of(),
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "some_tool", Map.of(),
                 Collections.emptyList(), "just a question", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);

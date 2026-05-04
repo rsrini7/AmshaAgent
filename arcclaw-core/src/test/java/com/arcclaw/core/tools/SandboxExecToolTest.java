@@ -53,7 +53,7 @@ class SandboxExecToolTest {
     void python_language_builds_correct_command() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "print('hello')", "language", "python");
-            tool.execute(params);
+            tool.execute(ctx(), params);
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
@@ -72,7 +72,7 @@ class SandboxExecToolTest {
     void python3_alias_also_uses_os_aware_executable() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "print('hi')", "language", "python3");
-            tool.execute(params);
+            tool.execute(ctx(), params);
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
@@ -88,7 +88,7 @@ class SandboxExecToolTest {
     void bash_language_builds_correct_command() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "ls -la", "language", "bash");
-            tool.execute(params);
+            tool.execute(ctx(), params);
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
@@ -106,7 +106,7 @@ class SandboxExecToolTest {
     void node_language_builds_correct_command() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "console.log('hi')", "language", "node");
-            tool.execute(params);
+            tool.execute(ctx(), params);
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
@@ -143,7 +143,7 @@ class SandboxExecToolTest {
     void unknown_language_returns_failure_without_calling_executor() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "puts 'hi'", "language", "ruby");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
             assertTrue(r.output().contains("Unsupported language"), "Actual: " + r.output());
@@ -156,7 +156,7 @@ class SandboxExecToolTest {
     void missing_language_returns_failure_with_hint() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "print('hi')");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
             assertTrue(r.output().contains("'language' is required"));
@@ -172,7 +172,7 @@ class SandboxExecToolTest {
     void missing_code_returns_failure() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("language", "python");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
             assertTrue(r.output().contains("'code' is required"));
@@ -193,7 +193,7 @@ class SandboxExecToolTest {
                     .thenReturn(SandboxResult.success(bigOutput));
 
             Map<String, Object> params = Map.of("code", "dummy", "language", "python");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertEquals(8192 + TRUNCATION_SUFFIX.length(), r.output().length());
             assertTrue(r.output().endsWith(TRUNCATION_SUFFIX));
@@ -209,7 +209,7 @@ class SandboxExecToolTest {
                     .thenReturn(SandboxResult.success(exactOutput));
 
             Map<String, Object> params = Map.of("code", "dummy", "language", "python");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertEquals(8192, r.output().length());
             assertFalse(r.output().endsWith(TRUNCATION_SUFFIX));
@@ -224,7 +224,7 @@ class SandboxExecToolTest {
                     .thenReturn(SandboxResult.success(null));
 
             Map<String, Object> params = Map.of("code", "pass", "language", "python");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertTrue(r.success());
             assertEquals("[execution produced no output]", r.output());
@@ -243,7 +243,7 @@ class SandboxExecToolTest {
                     .thenThrow(new ToolExecutionException("exit 1", 1));
 
             Map<String, Object> params = Map.of("code", "exit 1", "language", "bash");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
             assertEquals(1, r.exitCode());
@@ -259,7 +259,7 @@ class SandboxExecToolTest {
                     .thenThrow(new TimeoutException("30s exceeded"));
 
             Map<String, Object> params = Map.of("code", "sleep 999", "language", "bash");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             // SandboxExecTool returns a generic SANDBOX_OFFLINE_MSG for infra failures
             assertTrue(r.isInfraFailure());
@@ -275,7 +275,7 @@ class SandboxExecToolTest {
                     .thenThrow(new BudgetExceededException("over limit"));
 
             Map<String, Object> params = Map.of("code", "x", "language", "python");
-            assertThrows(BudgetExceededException.class, () -> tool.execute(params));
+            assertThrows(BudgetExceededException.class, () -> tool.execute(ctx(), params));
             return null;
         });
     }
@@ -290,7 +290,7 @@ class SandboxExecToolTest {
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Map<String, String>> secretsCaptor = ArgumentCaptor.forClass(Map.class);
             Map<String, Object> params = Map.of("code", "x", "language", "python");
-            tool.execute(params);
+            tool.execute(ctx(), params);
 
             verify(mockIsolationExecutor).executeSandboxed(any(), any(), any(), secretsCaptor.capture());
             assertTrue(secretsCaptor.getValue().isEmpty());
@@ -305,7 +305,7 @@ class SandboxExecToolTest {
                     "code", "print('hi')",
                     "language", "python",
                     "args", List.of("--verbose", "--dry-run"));
-            tool.execute(params);
+            tool.execute(ctx(), params);
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<String>> cmdCaptor = ArgumentCaptor.forClass(List.class);
@@ -357,7 +357,7 @@ class SandboxExecToolTest {
                     .thenReturn(SandboxResult.success("Hi\n")); // Single call runs java Main.java
 
             Map<String, Object> params = Map.of("code", code, "language", "java");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
             // VERIFY: r.success() may be false if javac is missing on host, 
             // but the test should be updated to account for the restored javac logic.
             // If the user's environment HAS javac, this passes. 
@@ -382,7 +382,7 @@ class SandboxExecToolTest {
 
             String code = "public class Main { public static void main(String[] a) { /* valid code */ } }";
             Map<String, Object> params = Map.of("code", code, "language", "java");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
             assertTrue(r.output().contains("syntax error"));
@@ -419,7 +419,7 @@ class SandboxExecToolTest {
                     .thenReturn(SandboxResult.success("Hello\n"));
 
             Map<String, Object> params = Map.of("code", code, "language", "go");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertTrue(r.success());
             assertEquals("Hello\n", r.output());
@@ -445,7 +445,7 @@ class SandboxExecToolTest {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             String code = "public class Main { public static void main(String[] a) throws Exception { Runtime.getRuntime().exec(\"rm -rf /\"); } }";
             Map<String, Object> params = Map.of("code", code, "language", "java");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
             assertTrue(r.output().contains("Execution blocked"));
@@ -459,7 +459,7 @@ class SandboxExecToolTest {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             String code = "package main\nimport \"os\"\nfunc main() { os.RemoveAll(\"/\") }";
             Map<String, Object> params = Map.of("code", code, "language", "go");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertFalse(r.success());
             assertTrue(r.output().contains("Execution blocked"));
@@ -480,7 +480,7 @@ class SandboxExecToolTest {
 
             for (String lang : List.of("python", "python3", "node", "bash")) {
                 Map<String, Object> params = Map.of("code", "x", "language", lang);
-                ToolResponse r = tool.execute(params);
+                ToolResponse r = tool.execute(ctx(), params);
                 // May succeed or fail depending on OS - just must NOT be "Unsupported language"
                 assertFalse(r.output().startsWith("Unsupported language"),
                         "Language should be accepted: " + lang);
@@ -493,7 +493,7 @@ class SandboxExecToolTest {
     void ruby_is_still_rejected_after_java_go_added() throws Exception {
         WorkspaceContext.run("test-session", "user1", "chat1", AutonomyLevel.FULL, "coder", () -> {
             Map<String, Object> params = Map.of("code", "puts 'hi'", "language", "ruby");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
             assertFalse(r.success());
             assertTrue(r.output().contains("Unsupported language"), "Expected 'Unsupported language' in: " + r.output());
             verifyNoInteractions(mockIsolationExecutor);
@@ -508,12 +508,18 @@ class SandboxExecToolTest {
                     .thenReturn(SandboxResult.infraFailure("dial tcp: connection refused"));
 
             Map<String, Object> params = Map.of("code", "print('hi')", "language", "python");
-            ToolResponse r = tool.execute(params);
+            ToolResponse r = tool.execute(ctx(), params);
 
             assertTrue(r.isInfraFailure(), "Should be flagged as infra failure");
             assertFalse(r.success());
             assertTrue(r.output().contains("SANDBOX_OFFLINE"));
             return null; // Return null to make it a Callable
         });
+    }
+
+    private ToolExecutionContext ctx() {
+        return new ToolExecutionContext(
+            "test-session", "user1", "chat1", "coder", AutonomyLevel.FULL, 
+            "trace-1", null, null, null, null, null, null);
     }
 }
