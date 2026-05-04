@@ -432,6 +432,16 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
         }
     }
 
+    @Override
+    public boolean hasPendingApprovalForChat(String chatId) {
+        if (chatId == null) return false;
+        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :status", Long.class)
+                .setParameter("chatId", chatId)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .getSingleResult();
+        return count > 0;
+    }
+
     private void updateEntity(AgentCheckpoint entity, CheckpointDto dto) {
         entity.setSessionId(dto.sessionId());
         entity.setAgentRole(dto.agentRole());

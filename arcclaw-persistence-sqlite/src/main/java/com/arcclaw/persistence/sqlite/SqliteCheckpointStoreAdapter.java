@@ -305,6 +305,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             .stream().findFirst().map(CheckpointMapper::toDto), "find-latest-status");
     }
 
+    @Override
+    public boolean hasPendingApprovalForChat(String chatId) {
+        return withRetry(() -> checkpointRepo.hasPendingApprovalForChat(chatId), "has-pending-approval-for-chat");
+    }
+
     private <T> T withRetry(Callable<T> task, String operation) {
         try {
             return retryTemplate.execute(operation, 5, 50, task);

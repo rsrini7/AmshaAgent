@@ -270,10 +270,7 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      */
     boolean isSessionActive(String sessionId);
 
-    /**
-     * Returns true if the session has at least one checkpoint in
-     * AWAITING_APPROVAL status. Used to guard against premature session
-     * termination during tab navigation.
-     */
     boolean hasPendingApproval(String sessionId);
+
+    boolean hasPendingApprovalForChat(String chatId);
 }

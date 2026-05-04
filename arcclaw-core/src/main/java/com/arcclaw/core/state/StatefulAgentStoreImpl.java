@@ -315,6 +315,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public boolean hasPendingApproval(String sessionId)
         { return storeAdapter.hasPendingApproval(sessionId); }
 
+    @Override public boolean hasPendingApprovalForChat(String chatId)
+        { return storeAdapter.hasPendingApprovalForChat(chatId); }
+
     @Override public void deleteCheckpoint(String sessionId, String role)
         { storeAdapter.deleteCheckpoint(sessionId, role); }
 }

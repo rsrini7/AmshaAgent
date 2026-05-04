@@ -1,10 +1,14 @@
 package com.arcclaw.app.scheduler;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
@@ -14,9 +18,11 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.event.FlushQueuedNotifications;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
@@ -35,23 +41,27 @@ public class CronResultHandler {
     private final AuditService auditService;
     private final WorkspaceManager workspaceManager;
     private final Event<AgentJobCompleted> jobCompletedEvent;
+    private final StatefulAgentStore statefulAgentStore;
 
     protected CronResultHandler() {
         this.cronRepository = null;
         this.auditService = null;
         this.workspaceManager = null;
         this.jobCompletedEvent = null;
+        this.statefulAgentStore = null;
     }
 
     @Inject
     public CronResultHandler(AgentCronRepository cronRepository,
                              AuditService auditService,
                              WorkspaceManager workspaceManager,
-                             Event<AgentJobCompleted> jobCompletedEvent) {
+                             Event<AgentJobCompleted> jobCompletedEvent,
+                             StatefulAgentStore statefulAgentStore) {
         this.cronRepository = cronRepository;
         this.auditService = auditService;
         this.workspaceManager = workspaceManager;
         this.jobCompletedEvent = jobCompletedEvent;
+        this.statefulAgentStore = statefulAgentStore;
     }
 
     public void handleSuccess(AgentCronEntity job, String cronSessionId, String executionId, AgentResult result) {
@@ -79,6 +89,30 @@ public class CronResultHandler {
         workspaceManager.terminateSession(cronSessionId);
     }
 
+    // NOTE: In-memory queue for serializing CRON HITL alerts against live approvals.
+    // This is not durable across server restarts, but old approvals are eventually
+    // auto-reaped by the 24h background task cleanup.
+    public static final ConcurrentHashMap<String, List<Runnable>> queuedNotifications =
+        new ConcurrentHashMap<>();
+
+    public static void flushQueuedNotifications(String chatId) {
+        if (chatId == null) return;
+        List<Runnable> runnables = queuedNotifications.remove(chatId);
+        if (runnables != null) {
+            for (Runnable r : runnables) {
+                try {
+                    r.run();
+                } catch (Exception e) {
+                    log.errorf(e, "Failed to run queued notification for chatId=%s", chatId);
+                }
+            }
+        }
+    }
+
+    public void onFlushNotifications(@Observes FlushQueuedNotifications event) {
+        flushQueuedNotifications(event.chatId());
+    }
+
     // Handles AwaitingApproval - session must stay alive for ApproveReflex
     private void handleApprovalPause(AgentCronEntity job, String cronSessionId, String executionId, AgentResult.AwaitingApproval result) {
         cronRepository.markAwaitingApproval(job.id);
@@ -93,10 +127,18 @@ public class CronResultHandler {
 
         String displayGoal = job.goal != null ? job.goal.replaceFirst("^CRON\\s+", "") : "";
         String answer = AgentResultFormatter.formatCronHitl(job.id, displayGoal, result.toolName());
-        // Fire delivery event - session intentionally kept alive for approval
-        fireCompletionEvent(job, executionId, answer, null);
+        
+        Runnable notifyTask = () -> {
+            fireCompletionEvent(job, executionId, answer, null);
+            log.infof("[CronResultHandler] Session kept alive for cron=%s - AWAITING_APPROVAL. (Notification handled here)", cronSessionId);
+        };
 
-        log.infof("[CronResultHandler] Session kept alive for cron=%s - AWAITING_APPROVAL. (Notification handled here)", cronSessionId);
+        if (statefulAgentStore != null && statefulAgentStore.hasPendingApprovalForChat(job.chatId)) {
+            queuedNotifications.computeIfAbsent(job.chatId, k -> new CopyOnWriteArrayList<>()).add(notifyTask);
+            log.infof("CRON-HITL: chat %s busy with live session approval, queuing CRON approval", job.chatId);
+        } else {
+            notifyTask.run();
+        }
     }
 
     public void handleFailure(AgentCronEntity job, String cronSessionId, String executionId, Throwable t) {

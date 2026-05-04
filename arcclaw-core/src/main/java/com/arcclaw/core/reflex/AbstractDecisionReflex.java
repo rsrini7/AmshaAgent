@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.event.FlushQueuedNotifications;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -50,6 +51,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     @Inject protected AgentLoop agentLoop;
     @Inject protected ReasoningEngine reasoningEngine;
     @Inject protected Event<AgentJobCompleted> jobCompletedEvent;
+    @Inject protected Event<FlushQueuedNotifications> flushEvent;
     @Inject protected AuditService auditService;
     @Inject protected ObjectMapper objectMapper;
     @Inject protected CheckpointResumeHandler checkpointResumeHandler;
@@ -113,6 +115,13 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
                 return pollForBridgeResult(sessionId);
             });
+            try {
+                if (flushEvent != null && !statefulAgentStore.hasPendingApprovalForChat(chatId)) {
+                    flushEvent.fire(new FlushQueuedNotifications(chatId));
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to flush notifications", ex);
+            }
             return response != null ? ReflexResult.respond(response, context) : ReflexResult.forward(context);
         } catch (Exception e) {
             log.errorf("Failed to process %s for session %s: %s", getActionName(), sessionId, ExceptionUtils.getRootCauseMessage(e));
@@ -137,13 +146,16 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     private String handleAmbiguityDetection(Optional<AgentCheckpoint> latestPending, List<AgentCronEntity> pendingCrons) {
         if (latestPending.isPresent() && !pendingCrons.isEmpty()) {
             StringBuilder sb = new StringBuilder("⚠️ ").append(getAmbiguityTitle()).append(". You have multiple tasks waiting:\n\n");
-            sb.append("• `/%s` - (This Chat) ".formatted(getActionName().toLowerCase()))
+            int idx = 1;
+            sb.append("1️⃣ `/%s 1` - (This Chat) ".formatted(getActionName().toLowerCase()))
               .append(latestPending.get().getOriginalGoal()).append("\n");
+            idx++;
             for (AgentCronEntity c : pendingCrons) {
-                sb.append("• `/%s %s` - (Background) ".formatted(getActionName().toLowerCase(), c.id))
+                sb.append("%d️⃣ `/%s %d` or `/%s %s` - (Background) ".formatted(idx, getActionName().toLowerCase(), idx, getActionName().toLowerCase(), c.id))
                   .append(c.goal).append("\n");
+                idx++;
             }
-            sb.append("\nPlease reply with the specific reflex.");
+            sb.append("\nPlease reply with the specific reflex numbered option.");
             return sb.toString();
         }
         return null;
@@ -345,6 +357,41 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     }
     
     private String processExplicitTarget(String targetId, String sessionId, String userId, String chatId, String reason, MessageContext context) throws Exception {
+        // Resolve numeric disambiguation index
+        if (targetId.matches("\\d+")) {
+            int idx = Integer.parseInt(targetId);
+            Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
+            List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+            
+            String resolvedTargetId = null;
+            if (selfPending.isPresent()) {
+                if (idx == 1) {
+                    resolvedTargetId = sessionId;
+                } else if (idx >= 2 && idx - 2 < pendingCrons.size()) {
+                    resolvedTargetId = pendingCrons.get(idx - 2).id;
+                }
+            } else {
+                if (idx >= 1 && idx - 1 < pendingCrons.size()) {
+                    resolvedTargetId = pendingCrons.get(idx - 1).id;
+                }
+            }
+            if (resolvedTargetId != null) {
+                targetId = resolvedTargetId;
+            }
+        }
+
+        // Resolve prefix match for cron job IDs
+        if (targetId.length() >= 4 && !targetId.contains("-")) {
+            List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+            String prefix = targetId.toLowerCase();
+            Optional<AgentCronEntity> matchedCron = pendingCrons.stream()
+                .filter(c -> c.id.toLowerCase().startsWith(prefix))
+                .findFirst();
+            if (matchedCron.isPresent()) {
+                targetId = matchedCron.get().id;
+            }
+        }
+
         // §Self-Session Fast-Path: if the user provided their own session ID,
         // treat it identically to a bare /approve — no delegate check needed.
         if (targetId.equals(sessionId)) {

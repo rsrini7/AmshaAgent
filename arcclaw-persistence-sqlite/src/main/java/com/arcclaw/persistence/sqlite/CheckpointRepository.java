@@ -140,4 +140,16 @@ public class CheckpointRepository {
                 .setMaxResults(1)
                 .getResultList();
     }
+
+    public boolean hasPendingApprovalForChat(String chatId) {
+        if (chatId == null) return false;
+        em.clear();
+        return !em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :s",
+                AgentCheckpoint.class)
+                .setParameter("chatId", chatId)
+                .setParameter("s", CheckpointStatus.AWAITING_APPROVAL)
+                .getResultList()
+                .isEmpty();
+    }
 }
