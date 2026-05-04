@@ -243,7 +243,18 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             return null;
         }
 
-        AgentCheckpoint pendingCheckpoint = applyDecisionToAll(cronId, reason);
+        // §Session-Resolution Fix: The cronId from the user may be a bare job ID (e.g. "622e0712-..."),
+        // but checkpoints are stored under "cron-<jobId>-<execUuid>". Resolve the full session ID
+        // first so applyDecisionToAll can find the checkpoint.
+        String resolvedSessionId = cronId;
+        if (!cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            Optional<AgentCheckpoint> segmentMatch = statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(cronId);
+            if (segmentMatch.isPresent()) {
+                resolvedSessionId = segmentMatch.get().getSessionId();
+            }
+        }
+
+        AgentCheckpoint pendingCheckpoint = applyDecisionToAll(resolvedSessionId, reason);
         String cronSessionId = pendingCheckpoint.getSessionId();
         String cronRole = pendingCheckpoint.getAgentRole();
 
