@@ -114,7 +114,9 @@ public class ApprovalStateMachine implements ApprovalGateway {
         decisionEvents.fire(new ApprovalDecisionEvent(sessionId, channelType, channelPlatformId, toolName, decision, outcome));
 
         // 8. Return ApprovalResult with outcome + remainingPendingTools
-        List<String> nextPending = pendingTools.stream().filter(t -> !t.equals(toolName)).toList();
+        List<String> nextPending = "all".equalsIgnoreCase(toolName) 
+            ? List.of() 
+            : pendingTools.stream().filter(t -> !t.equals(toolName)).toList();
         return new ApprovalResult(outcome, sessionId, toolName, remaining, nextPending);
     }
 

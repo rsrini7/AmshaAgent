@@ -98,13 +98,11 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             // ----------------------------------------------------------------
             try (Statement stmt = connection.createStatement()) {
                 stmt.execute("PRAGMA busy_timeout=10000");
-                if (connection.getAutoCommit()) {
-                    try {
-                        stmt.execute("PRAGMA synchronous=NORMAL");
-                    } catch (Exception e) {
-                        // Safety level may not be changed inside a transaction (§5.14)
-                        log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", e.getMessage());
-                    }
+                try {
+                    stmt.execute("PRAGMA synchronous=NORMAL");
+                } catch (Exception e) {
+                    // Safety level may not be changed inside a transaction (§5.14)
+                    log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", e.getMessage());
                 }
             }
 
