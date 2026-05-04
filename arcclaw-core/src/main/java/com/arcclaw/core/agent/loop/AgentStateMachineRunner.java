@@ -271,7 +271,7 @@ public class AgentStateMachineRunner {
             int iteration, int llmSchemaErrorCount, int consecutiveFailures, int rateLimitRetryCount, String transientError) {
         
         Span iterSpan = agentOtelContext.startIterationSpan(context.sessionId(), iteration, context.agentRole());
-        try (Scope scope = iterSpan.makeCurrent()) {
+        try (Scope _ = iterSpan.makeCurrent()) {
             if (history.isEmpty() && intentDetector.isWriteIntent(context.goal())) {
                 transientError = "The user wants to store data. Call ingest_document immediately.";
             }

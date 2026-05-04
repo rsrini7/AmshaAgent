@@ -15,7 +15,6 @@ import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.ToolOperation;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 

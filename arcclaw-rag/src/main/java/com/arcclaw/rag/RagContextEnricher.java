@@ -9,7 +9,6 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ContextEnricher;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.Fts5QueryUtil;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

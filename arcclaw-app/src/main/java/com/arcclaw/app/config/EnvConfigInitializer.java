@@ -68,7 +68,7 @@ public class EnvConfigInitializer {
             try {
                 byte[] decoded = Base64.getDecoder().decode(value);
                 valid = decoded.length >= 16;
-            } catch (IllegalArgumentException ignored) {}
+            } catch (IllegalArgumentException _) {}
             if (!valid) {
                 try {
                     String generated = Base64.getEncoder().encodeToString(
@@ -154,7 +154,7 @@ public class EnvConfigInitializer {
                 if (in == null) return;
                 Files.copy(in, exampleFile, StandardCopyOption.REPLACE_EXISTING);
                 System.err.println("[ArcClaw] No .env found. Created .env.example next to the binary.");
-            } catch (IOException ignored) {}
+            } catch (IOException _) {}
         }
     }
 }

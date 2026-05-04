@@ -174,7 +174,7 @@ public class SerperWebSearchTool implements AgentTool {
         } else if (cObj instanceof String s) {
             try {
                 return Math.min(10, Math.max(1, Integer.parseInt(s)));
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException _) {}
         }
         return 5;
     }

@@ -98,7 +98,7 @@ public class GovernanceLayer implements GovernanceStrategy {
         double incrementalCost = (effectiveInput / 1000.0) * pricePer1kInput + (effectiveOutput / 1000.0) * pricePer1kOutput;
 
         final BudgetUpdateResult[] resultWrapper = new BudgetUpdateResult[1];
-        budgets.compute(sessionId, (id, existing) -> {
+        budgets.compute(sessionId, (_, existing) -> {
             SessionBudget budget = (existing == null) ? new SessionBudget(budgetUsd, WARNING_THRESHOLD) : existing;
             budget.setLastAccessedAt(Instant.now());
 

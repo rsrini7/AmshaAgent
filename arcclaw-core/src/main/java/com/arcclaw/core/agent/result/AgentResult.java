@@ -73,7 +73,7 @@ public sealed interface AgentResult
                 // we use a fresh one if not provided. In production, this DTO
                 // should be refactored to NOT expose paramsJson.
                 return new ObjectMapper().writeValueAsString(frame.params());
-            } catch (Exception e) { return "{}"; }
+            } catch (Exception _) { return "{}"; }
         }
     }
 
@@ -117,7 +117,7 @@ public sealed interface AgentResult
         Map<String, Object> params = Collections.emptyMap();
         try {
             params = new ObjectMapper().readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
         return awaitingApproval(new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM), sessionId, steps);
     }
 

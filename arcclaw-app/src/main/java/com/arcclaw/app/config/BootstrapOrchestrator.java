@@ -74,7 +74,7 @@ public class BootstrapOrchestrator {
             pb.environment().put("ARCCLAW_LD_PRELOAD_SET", "1");
             pb.inheritIO();
             System.exit(pb.start().waitFor());
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
     }
 
     private static String findLibm() {
@@ -135,6 +135,6 @@ public class BootstrapOrchestrator {
     private static void drainInputBuffer() {
         try {
             while (System.in.available() > 0) System.in.read();
-        } catch (IOException ignored) {}
+        } catch (IOException _) {}
     }
 }

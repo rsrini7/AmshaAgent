@@ -32,7 +32,6 @@ import com.arcclaw.core.tools.SandboxExecTool;
 import com.arcclaw.core.tools.ScheduleTaskTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
-
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**

@@ -75,7 +75,7 @@ public class ApprovalCheckpointManager {
         String paramsJson = "{}";
         try {
             paramsJson = objectMapper.writeValueAsString(frame.params());
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         agentStore.clearBatchResuming(sessionId);
@@ -126,7 +126,7 @@ public class ApprovalCheckpointManager {
         Map<String, Object> params = Map.of();
         try {
             params = objectMapper.readValue(paramsJson, Map.class);
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
         ApprovalFrame frame = new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM);
         return persist(context, frame, history, channelType != null ? channelType.toString() : null, channelPlatformId != null ? channelPlatformId.toString() : null);
     }
@@ -154,7 +154,7 @@ public class ApprovalCheckpointManager {
             for (ParallelToolCall call : calls) {
                 decisions.put(call.toolName(), ToolDecision.PENDING);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
 
         // 2. Load or create checkpoint
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
@@ -166,7 +166,7 @@ public class ApprovalCheckpointManager {
         cp.setPendingToolParametersJson(originalBatchJson);
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
 
         cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());
@@ -229,7 +229,7 @@ public class ApprovalCheckpointManager {
                     decisions.put(call.toolName(), ToolDecision.PENDING);
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         agentStore.clearBatchResuming(sessionId);
@@ -241,7 +241,7 @@ public class ApprovalCheckpointManager {
         cp.setPreExecutedResults(preExecutedJson);
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
 
         cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());

@@ -125,7 +125,7 @@ public class SessionHeartbeatTracker {
     public boolean tryBindOwner(String sessionId, String ownerKeyName) {
         if (ownerKeyName == null) return false;
         
-        SessionMetadata result = sessionData.computeIfPresent(sessionId, (k, existing) -> {
+        SessionMetadata result = sessionData.computeIfPresent(sessionId, (_, existing) -> {
             if (existing.ownerKeyName() == null || existing.ownerKeyName().equals(ownerKeyName)) {
                 // Not owned yet, or already owned by this user → bind/keep.
                 return new SessionMetadata(
@@ -141,7 +141,7 @@ public class SessionHeartbeatTracker {
     }
 
     public void recordTokens(String sessionId, long inputTokens, long outputTokens) {
-        sessionData.computeIfPresent(sessionId, (k, existing) ->
+        sessionData.computeIfPresent(sessionId, (_, existing) ->
             new SessionMetadata(
                 existing.lastHeartbeat(),
                 existing.autonomyLevel(),

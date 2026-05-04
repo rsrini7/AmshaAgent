@@ -84,7 +84,7 @@ public class RecoveryProcessor {
                     JsonNode pAnswerNode = paramsNode.get("answer");
                     if (pAnswerNode != null && !pAnswerNode.isNull()) return pAnswerNode.asText();
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception _) {}
             return null;
         }
         return result;

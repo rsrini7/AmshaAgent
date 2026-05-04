@@ -17,7 +17,7 @@ public class SessionAuditSequencer {
      * Retrieves or creates a fair ReentrantLock for the given session.
      */
     public ReentrantLock lockFor(String sessionId) {
-        return sessionLocks.computeIfAbsent(sessionId, ignored -> new ReentrantLock(true));
+        return sessionLocks.computeIfAbsent(sessionId, _ -> new ReentrantLock(true));
     }
 
     /**

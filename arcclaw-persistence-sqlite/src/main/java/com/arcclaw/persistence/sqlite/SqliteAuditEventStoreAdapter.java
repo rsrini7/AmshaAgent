@@ -38,7 +38,7 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
               .setParameter("sid", "warmup")
               .setMaxResults(1)
               .getResultList();
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // best effort warmup
         }
     }

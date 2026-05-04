@@ -234,14 +234,14 @@ class ResumeStrategyDispatcher {
         if (checkpoint.hasBatchToolDecisions()) {
             try {
                 decisions = objectMapper.readValue(checkpoint.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
-            } catch (Exception ignored) {}
+            } catch (Exception _) {}
         }
 
         Map<String, String> preExecuted = Map.of();
         if (checkpoint.hasPreExecutedResults()) {
             try {
                 preExecuted = objectMapper.readValue(checkpoint.getPreExecutedResults(), new TypeReference<Map<String, String>>() {});
-            } catch (Exception ignored) {}
+            } catch (Exception _) {}
         }
 
         List<ParallelToolCall> completed = new ArrayList<>();
@@ -255,7 +255,7 @@ class ResumeStrategyDispatcher {
                         case ToolResponse.ToolPending pending -> call.withResult(pending.output(), false);
                     });
                     continue;
-                } catch (Exception ignored) {}
+                } catch (Exception _) {}
             }
 
             if (decisions.getOrDefault(call.toolName(), ToolDecision.PENDING) == ToolDecision.DENIED) {

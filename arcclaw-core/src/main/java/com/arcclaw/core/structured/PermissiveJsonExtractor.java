@@ -96,7 +96,7 @@ public class PermissiveJsonExtractor {
                     && "object".equals(root.get("type").asText())) {
                 return mapper.writeValueAsString(root.get("properties"));
             }
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // Not a schema envelope - return original
         }
         return json;
