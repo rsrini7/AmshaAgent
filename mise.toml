@@ -1373,7 +1373,7 @@ $script:excludeRelPaths = @(
 # ── Include lists - these override exclusions above ──────────────────────────
 $script:includeFiles = @(
     'Architecture_Invariants.md',
-    'Flyway-Migration.md',
+    'Flyway-Migration.md'
 )
 
 $script:includeRelPaths = @(
