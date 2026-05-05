@@ -43,8 +43,20 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     public void filter(ContainerRequestContext requestContext) {
         long startTime = System.currentTimeMillis();
         String path = uriInfo.getPath();
+        // Normalize path: ensure leading slash and handle optional /api/v1 prefix
+        String normalizedPath = (path == null) ? "/" : (path.startsWith("/") ? path : "/" + path);
+        if (normalizedPath.startsWith("/api/v1/")) {
+            normalizedPath = normalizedPath.substring(7);
+        } else if (normalizedPath.equals("/api/v1")) {
+            normalizedPath = "/";
+        }
+        if (!normalizedPath.startsWith("/")) {
+            normalizedPath = "/" + normalizedPath;
+        }
 
-        if (path.startsWith("/info") || path.startsWith("/api/v1/info") || path.startsWith("/onboarding")) {
+        final String finalPath = normalizedPath;
+
+        if (finalPath.startsWith("/info") || finalPath.startsWith("/onboarding")) {
             return;
         }
 
@@ -63,7 +75,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         String method = requestContext.getMethod();
 
         if (apiKey == null || apiKey.isBlank()) {
-            logAudit(safeKey, path, method, "REJECTED_NO_KEY", ip, System.currentTimeMillis() - startTime);
+            logAudit(safeKey, finalPath, method, "REJECTED_NO_KEY", ip, System.currentTimeMillis() - startTime);
             requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
@@ -72,7 +84,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         if (!apiKeyRegistry.isValidKey(apiKey)) {
-            logAudit(safeKey, path, method, "REJECTED_INVALID_KEY", ip, System.currentTimeMillis() - startTime);
+            logAudit(safeKey, finalPath, method, "REJECTED_INVALID_KEY", ip, System.currentTimeMillis() - startTime);
             requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
@@ -80,12 +92,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        boolean isInternalUiKey = "internal".equals(apiKeyRegistry.getKeyName(apiKey));
-        boolean isReadOnlyPolling = "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(path::startsWith);
+        String userId = apiKeyRegistry.getKeyName(apiKey);
+        boolean isInternalUiKey = "internal".equals(userId);
+        boolean isReadOnlyPolling = "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
 
         if (!(isReadOnlyPolling && isInternalUiKey)) {
             if (!apiKeyRegistry.isAllowed(apiKey)) {
-                logAudit(safeKey, path, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
+                logAudit(safeKey, finalPath, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
                 requestContext.abortWith(Response.status(429)
                         .header("Retry-After", "60")
                         .type(MediaType.APPLICATION_JSON)
@@ -95,12 +108,21 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             }
         }
 
-        String userId = apiKeyRegistry.getKeyName(apiKey);
         if (userId != null) {
             MDC.put(MdcKeys.USER_ID, userId);
+            
+            // §85-C: Propagate identity to JAX-RS SecurityContext.
+            // Downstream resources (like HitlResource) rely on getUserPrincipal() to authorize operations.
+            final String fUserId = userId;
+            requestContext.setSecurityContext(new jakarta.ws.rs.core.SecurityContext() {
+                @Override public java.security.Principal getUserPrincipal() { return () -> fUserId; }
+                @Override public boolean isUserInRole(String role) { return "internal".equals(fUserId); }
+                @Override public boolean isSecure() { return requestContext.getSecurityContext().isSecure(); }
+                @Override public String getAuthenticationScheme() { return "API_KEY"; }
+            });
         }
 
-        logAudit(safeKey, path, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
+        logAudit(safeKey, finalPath, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
     }
 
     private static final Set<String> POLL_LIKE_PATHS = Set.of(

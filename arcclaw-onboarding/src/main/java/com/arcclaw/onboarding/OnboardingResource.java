@@ -69,7 +69,7 @@ public class OnboardingResource {
     Instance<OnboardingStepProvider> pluginProviders;
     @Inject McpClientService mcpClientService;
 
-    @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "dev-key")
+    @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
     private static final Map<String, String> DEFAULT_MODELS = Map.of(
