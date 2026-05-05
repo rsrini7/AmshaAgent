@@ -1367,7 +1367,10 @@ $script:excludeFiles = @(
 
 $script:excludeRelPaths = @(
     'arcclaw-app/src/main/resources/META-INF/resources',
-    'arcclaw-app/src/main/resources/native'
+    'arcclaw-app/src/main/resources/native',
+    '.playwright-driver',
+    '.mvn',
+    'scratch'
 )
 
 # ── Include lists - these override exclusions above ──────────────────────────
