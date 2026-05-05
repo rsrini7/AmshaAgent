@@ -1362,7 +1362,7 @@ $script:excludeExts = @(
 
 $script:excludeFiles = @(
     '.gitignore', '.gitattributes', 'build.env',
-    'arcclaw-source.zip', 'arcclaw-source.7z'
+    'arcclaw-source.zip', 'arcclaw-source.7z', '.env'
 )
 
 $script:excludeRelPaths = @(
