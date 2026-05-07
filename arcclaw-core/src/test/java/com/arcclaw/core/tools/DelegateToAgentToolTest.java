@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -19,6 +20,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.security.AutonomyLevel;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +38,7 @@ class DelegateToAgentToolTest {
     @Mock ReasoningEngine reasoningEngine;
     @Mock AgentLoop agentLoop;
     @Mock Instance<AgentLoop> agentLoopInstance;
+    @Mock CapabilityRegistry capabilityRegistry;
 
     @InjectMocks DelegateToAgentTool tool;
 
@@ -183,6 +186,9 @@ class DelegateToAgentToolTest {
             "agent", "researcher",
             "goal", "search the web"
         );
+
+        when(capabilityRegistry.getSupplementalTools("architect")).thenReturn(Set.of("github", "memory_search", "delegate_to_agent"));
+        when(capabilityRegistry.getSupplementalTools("researcher")).thenReturn(Set.of("github", "memory_search", "web_search", "delegate_to_agent"));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
             SESSION_ID, USER_ID, CHAT_ID, "architect", AutonomyLevel.FULL,

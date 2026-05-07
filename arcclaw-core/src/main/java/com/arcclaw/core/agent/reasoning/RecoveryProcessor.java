@@ -11,6 +11,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -84,7 +85,9 @@ public class RecoveryProcessor {
                     JsonNode pAnswerNode = paramsNode.get("answer");
                     if (pAnswerNode != null && !pAnswerNode.isNull()) return pAnswerNode.asText();
                 }
-            } catch (Exception _) {}
+            } catch (Exception e) {
+                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
             return null;
         }
         return result;

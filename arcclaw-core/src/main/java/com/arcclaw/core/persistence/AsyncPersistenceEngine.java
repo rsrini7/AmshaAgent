@@ -22,6 +22,7 @@ import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -52,6 +53,9 @@ public class AsyncPersistenceEngine {
 
     @Inject
     CheckpointStorePort checkpointStore;
+
+    @ConfigProperty(name = "arcclaw.audit.idle-timeout-ms", defaultValue = "10000")
+    long idleTimeoutMs;
 
     private final AtomicBoolean running          = new AtomicBoolean(true);
     private final AtomicBoolean processingCritical  = new AtomicBoolean(false);
@@ -167,8 +171,8 @@ public class AsyncPersistenceEngine {
                 || processingCritical.get()
                 || processingTelemetry.get())) {
             sleepQuietly(10);
-            if (System.currentTimeMillis() - start > 10000) {
-                log.warn("waitForIdle timed out after 10s - possible deadlock or hung drain thread");
+            if (System.currentTimeMillis() - start > idleTimeoutMs) {
+                log.warnf("waitForIdle timed out after %dms - possible deadlock or hung drain thread", idleTimeoutMs);
                 break;
             }
         }

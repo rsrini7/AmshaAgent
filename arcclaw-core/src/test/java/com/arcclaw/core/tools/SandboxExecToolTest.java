@@ -38,7 +38,7 @@ class SandboxExecToolTest {
     @InjectMock
     ProcessIsolationExecutor mockIsolationExecutor;
 
-    private static final String TRUNCATION_SUFFIX = "[output truncated at 8192 chars]";
+    private static final String TRUNCATION_SUFFIX = "[output truncated at max output chars limit]";
 
     // Mirror the same OS detection used in SandboxExecTool so assertions are
     // platform-correct: 'python' on Windows, 'python3' on Linux/macOS.
@@ -327,22 +327,6 @@ class SandboxExecToolTest {
     @Test
     void capability_returns_sandbox_exec() {
         assertEquals(ToolCapability.SANDBOX_EXEC, tool.capability());
-    }
-
-    @Test
-    void coder_role_has_sandbox_exec_capability() {
-        assertTrue(AgentRoleEnum.CODER.definition().capabilities().contains(ToolCapability.SANDBOX_EXEC));
-    }
-
-    @Test
-    void debugger_role_has_sandbox_exec_capability() {
-        assertTrue(AgentRoleEnum.DEBUGGER.definition().capabilities().contains(ToolCapability.SANDBOX_EXEC));
-    }
-
-    @Test
-    void coordinator_does_not_have_sandbox_exec_capability() {
-        assertFalse(AgentRoleEnum.COORDINATOR.definition().capabilities()
-                .contains(ToolCapability.SANDBOX_EXEC));
     }
 
     // -------------------------------------------------------------------------

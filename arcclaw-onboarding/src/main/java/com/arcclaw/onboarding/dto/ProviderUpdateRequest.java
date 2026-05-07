@@ -1,7 +1,9 @@
 package com.arcclaw.onboarding.dto;
 
+import jakarta.validation.constraints.NotBlank;
+
 public record ProviderUpdateRequest(
-    String provider,
-    String model,
-    String apiKey
+    @NotBlank String provider,
+    @NotBlank String model,
+    @NotBlank String apiKey
 ) {}

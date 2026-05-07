@@ -1,5 +1,6 @@
 package com.arcclaw.app.security;
 
+import java.security.Principal;
 import java.time.Clock;
 import java.util.Set;
 
@@ -11,6 +12,7 @@ import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.Provider;
 
@@ -114,8 +116,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             // §85-C: Propagate identity to JAX-RS SecurityContext.
             // Downstream resources (like HitlResource) rely on getUserPrincipal() to authorize operations.
             final String fUserId = userId;
-            requestContext.setSecurityContext(new jakarta.ws.rs.core.SecurityContext() {
-                @Override public java.security.Principal getUserPrincipal() { return () -> fUserId; }
+            requestContext.setSecurityContext(new SecurityContext() {
+                @Override public Principal getUserPrincipal() { return () -> fUserId; }
                 @Override public boolean isUserInRole(String role) { return "internal".equals(fUserId); }
                 @Override public boolean isSecure() { return requestContext.getSecurityContext().isSecure(); }
                 @Override public String getAuthenticationScheme() { return "API_KEY"; }

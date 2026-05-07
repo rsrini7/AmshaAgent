@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -54,7 +55,7 @@ public class McpConnectResource {
 
     // ── request / response records ────────────────────────────────────────────
 
-    public record ConnectRequest(String name, String url) {}
+    public record ConnectRequest(@NotBlank String name, @NotBlank String url) {}
 
     public record ConnectResponse(String name, String url, int toolsRegistered, String status) {}
 

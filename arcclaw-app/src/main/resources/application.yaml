@@ -411,6 +411,7 @@ arcclaw:
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
       structured-output-mode: ${ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE:NATIVE}
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
+      max-backoff-ms: ${ARCCLAW_MEMORY_COMPACTION_MAX_BACKOFF_MS:60000}
   chat:
     default-observation-max-length: 2000
     tool-specific-limits:
@@ -455,6 +456,9 @@ arcclaw:
       - github
       - memory_search
     server-enabled: true
+
+  retry:
+    default-delay-ms: ${ARCCLAW_RETRY_DEFAULT_DELAY_MS:30000}
 
   cron:
     poll-interval: 30s
@@ -509,6 +513,7 @@ arcclaw:
 
   audit:
     hmac-key: "${ARCCLAW_AUDIT_HMAC_KEY:dev-audit-hmac-key-min-32-bytes-00000}"
+    idle-timeout-ms: ${ARCCLAW_AUDIT_IDLE_TIMEOUT_MS:10000}
 
   governance:
     # Floor applied ONLY when LLM provider returns 0 input AND 0 output tokens.
@@ -537,6 +542,7 @@ arcclaw:
     tool-runner-user: "${ARCCLAW_SANDBOX_USER:sandbox}"
     memory-limit: "${ARCCLAW_SANDBOX_MEMORY_LIMIT:512m}"
     cpu-limit: "${ARCCLAW_SANDBOX_CPU_LIMIT:0.5}"
+    max-output-chars: ${ARCCLAW_SANDBOX_MAX_OUTPUT_CHARS:8192}
     # Executable overrides (auto-discovered on host PATH if omitted)
     python-executable: "${ARCCLAW_SANDBOX_PYTHON_EXECUTABLE:}"
     go-executable: "${ARCCLAW_SANDBOX_GO_EXECUTABLE:}"

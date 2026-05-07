@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -96,7 +97,8 @@ public class PermissiveJsonExtractor {
                     && "object".equals(root.get("type").asText())) {
                 return mapper.writeValueAsString(root.get("properties"));
             }
-        } catch (Exception _) {
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
             // Not a schema envelope - return original
         }
         return json;

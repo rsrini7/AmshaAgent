@@ -25,6 +25,7 @@ import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -40,8 +41,11 @@ import org.jboss.logging.Logger;
 public class SandboxExecTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(SandboxExecTool.class);
-    private static final int MAX_OUTPUT_CHARS = 8192;
-    private static final String TRUNCATION_SUFFIX = "[output truncated at 8192 chars]";
+    
+    @ConfigProperty(name = "arcclaw.sandbox.max-output-chars", defaultValue = "8192")
+    int maxOutputChars;
+    
+    private static final String TRUNCATION_SUFFIX = "[output truncated at max output chars limit]";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // ── Container-side mount point for the workspace directory.
@@ -457,9 +461,9 @@ public class SandboxExecTool implements AgentTool {
      */
     private String truncate(String output) {
         if (output == null || output.isBlank()) return NO_OUTPUT_SENTINEL;
-        if (output.length() <= MAX_OUTPUT_CHARS) return output;
+        if (output.length() <= maxOutputChars) return output;
         int endIndex = output.offsetByCodePoints(
-                0, Math.min(output.codePointCount(0, output.length()), MAX_OUTPUT_CHARS));
+                0, Math.min(output.codePointCount(0, output.length()), maxOutputChars));
         return output.substring(0, endIndex) + TRUNCATION_SUFFIX;
     }
 
@@ -478,6 +482,7 @@ public class SandboxExecTool implements AgentTool {
                     params.put("language", node.get("language").asText());
                 }
             } catch (Exception e) {
+                log.debugf("Non-fatal (unwrapping): %s", ExceptionUtils.getRootCauseMessage(e));
                 // ignore and proceed with raw code if parsing fails
             }
         }

@@ -421,7 +421,7 @@ public class AgentLoop {
                        sessionId, context.getUser().channel(), context.getUser().platformId());
         } catch (Exception e) {
             log.warnf("Failed to stamp channel info for session %s - Cause: %s",
-                      sessionId, AgentErrorMessageUtil.safeMessage(e));
+                      sessionId, ExceptionUtils.getRootCauseMessage(e));
         }
     }
 

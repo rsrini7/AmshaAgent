@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
@@ -21,14 +22,16 @@ import com.arcclaw.core.tools.ToolRegistry;
 public class PromptSectionBuilder {
 
     private final ToolRegistry toolRegistry;
+    private final CapabilityRegistry capabilityRegistry;
 
     @Inject
-    public PromptSectionBuilder(ToolRegistry toolRegistry) {
+    public PromptSectionBuilder(ToolRegistry toolRegistry, CapabilityRegistry capabilityRegistry) {
         this.toolRegistry = toolRegistry;
+        this.capabilityRegistry = capabilityRegistry;
     }
 
     protected PromptSectionBuilder() {
-        this(null);
+        this(null, null);
     }
 
     private static final String EXECUTION_BOUNDARY_SANDBOX = """
@@ -52,7 +55,7 @@ public class PromptSectionBuilder {
     private static final String COMPACT_BROWSER_RETRY_RULE = "BROWSER EXTRACTION RETRY RULE: If `browser_navigate` extraction returns too little text, retry once with a broader selector.\n";
 
     public String buildExecutionBoundaryRule(AgentRoleEnum roleEnum, boolean isCompact) {
-        boolean hasSandbox = roleEnum.definition().toolNames().contains(ToolCapability.SANDBOX_EXEC.toolName());
+        boolean hasSandbox = capabilityRegistry.hasCapability(roleEnum.id(), ToolCapability.SANDBOX_EXEC.toolName());
         if (isCompact) {
             return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;
         }
@@ -91,7 +94,7 @@ public class PromptSectionBuilder {
 
     public List<String> getAvailableToolNames(AgentExecutionContext context, AgentRoleEnum roleEnum) {
         boolean isBackground = context != null && context.autonomyLevel() == AutonomyLevel.BACKGROUND;
-        return roleEnum.definition().toolNames()
+        return capabilityRegistry.getSupplementalTools(roleEnum.id())
                 .stream()
                 .filter(name -> toolRegistry.findTool(name)
                         .map(AgentTool::isEnabled).orElse(false))

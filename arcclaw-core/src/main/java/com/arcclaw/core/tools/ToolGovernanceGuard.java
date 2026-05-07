@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -29,6 +30,7 @@ public class ToolGovernanceGuard {
     @Inject AutonomyPolicy autonomyPolicy;
     @Inject AuditService auditService;
     @Inject ObjectMapper objectMapper;
+    @Inject CapabilityRegistry capabilityRegistry;
 
     /**
      * Verifies if the active agent role is allowed to execute the given tool.
@@ -39,10 +41,10 @@ public class ToolGovernanceGuard {
      */
     public void verifyRoleCapability(ToolExecutionContext ctx, String toolName) {
         String roleName = ctx.agentRole();
-        AgentRoleEnum role = AgentRoleEnum.fromString(roleName);
-        Set<ToolCapability> capabilities = role.definition().capabilities();
-        boolean allowed = capabilities.stream()
-                .anyMatch(cap -> cap.toolName().equals(toolName));
+        
+        // Derive permission from the dynamic CapabilityRegistry (populated by @ToolMetadata scans)
+        // rather than the hardcoded static sets in AgentRoleEnum. §T2-5
+        boolean allowed = capabilityRegistry.hasCapability(roleName, toolName);
 
         if (!allowed) {
             log.warnf("Role '%s' (session=%s) attempt to call unauthorized tool: %s",

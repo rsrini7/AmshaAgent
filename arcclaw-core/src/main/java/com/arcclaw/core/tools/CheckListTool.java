@@ -9,6 +9,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.security.ToolOperation;
@@ -20,6 +21,11 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
  * Allows agents to track progress for multi-step tasks.
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "manage_checklist",
+    description = "Manage task checklist progress",
+    defaultRoles = {"coder", "debugger"}
+)
 public class CheckListTool implements AgentTool {
 
     @Inject

@@ -20,6 +20,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -75,7 +76,9 @@ public class ApprovalCheckpointManager {
         String paramsJson = "{}";
         try {
             paramsJson = objectMapper.writeValueAsString(frame.params());
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         agentStore.clearBatchResuming(sessionId);
@@ -126,7 +129,9 @@ public class ApprovalCheckpointManager {
         Map<String, Object> params = Map.of();
         try {
             params = objectMapper.readValue(paramsJson, Map.class);
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
         ApprovalFrame frame = new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM);
         return persist(context, frame, history, channelType != null ? channelType.toString() : null, channelPlatformId != null ? channelPlatformId.toString() : null);
     }
@@ -154,7 +159,9 @@ public class ApprovalCheckpointManager {
             for (ParallelToolCall call : calls) {
                 decisions.put(call.toolName(), ToolDecision.PENDING);
             }
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
 
         // 2. Load or create checkpoint
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
@@ -166,7 +173,9 @@ public class ApprovalCheckpointManager {
         cp.setPendingToolParametersJson(originalBatchJson);
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
 
         cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());
@@ -229,7 +238,9 @@ public class ApprovalCheckpointManager {
                     decisions.put(call.toolName(), ToolDecision.PENDING);
                 }
             }
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         agentStore.clearBatchResuming(sessionId);
@@ -241,7 +252,9 @@ public class ApprovalCheckpointManager {
         cp.setPreExecutedResults(preExecutedJson);
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
 
         cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());

@@ -902,8 +902,8 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - `BudgetExceededException` - MUST propagate (not catch); `AgentStateMachineRunner` handles it.
 - `ToolExecutionException`, `TimeoutException`, `SecurityException`, `IOException` - MUST catch
   and return `ToolResponse.failure(message)`. Never propagate to `ToolInvoker`.
-- Output exceeding 8192 characters MUST be truncated at exactly 8192 with suffix
-  `[output truncated at 8192 chars]`. Never include raw Java stack traces in tool output.
+- Output exceeding arcclaw.sandbox.max-output-chars (default 8192) MUST be truncated at that limit with suffix
+  `[output truncated at max output chars limit]`. Never include raw Java stack traces in tool output.
 
 
 ---

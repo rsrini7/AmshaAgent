@@ -25,7 +25,8 @@ public class ToolRegistryDeadCatchTest {
         WorkspaceContext.run("test-session", "user", "chat", AutonomyLevel.FULL, "phantom_role", () -> {
             ToolResponse response = registry.invokeTool("github", Map.of("action", "repo", "command", "list"));
             assertEquals(403, response.exitCode());
-            assertTrue(response.output().contains("Unknown agent role: phantom_role"));
+            assertTrue(response.output().contains("Agent role 'phantom_role' is not permitted to use tool"), 
+                "Actual output was: " + response.output());
         });
     }
 }

@@ -30,6 +30,7 @@ import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Arc;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
@@ -133,7 +134,9 @@ public class CheckpointResumeHandler {
                 } finally {
                     try {
                         Arc.container().requestContext().deactivate();
-                    } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                    }
                 }
             } finally {
                 agentStore.clearBatchResuming(sessionId);

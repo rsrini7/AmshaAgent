@@ -12,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -21,6 +22,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -160,7 +162,7 @@ public class ChatHistoryAssembler {
                         argsJson = (input.size() == 1 && input.containsKey("parameters") && input.get("parameters") instanceof String)
                             ? (String) input.get("parameters") : objectMapper.writeValueAsString(input);
                     }
-                } catch (Exception e) { argsJson = "{}"; }
+                } catch (JsonProcessingException e) { argsJson = "{}"; }
 
                 String callId = "call_" + i;
                 ToolExecutionRequest request = ToolExecutionRequest.builder()
@@ -206,7 +208,7 @@ public class ChatHistoryAssembler {
                     String argsJson;
                     try {
                         argsJson = objectMapper.writeValueAsString(call.params());
-                    } catch (Exception e) { argsJson = "{}"; }
+                    } catch (JsonProcessingException e) { argsJson = "{}"; }
                     return ToolExecutionRequest.builder()
                         .id(call.callId()).name(call.toolName()).arguments(argsJson).build();
                 })
@@ -259,9 +261,9 @@ public class ChatHistoryAssembler {
             return objectMapper.readValue(json,
                 new TypeReference<
                     List<ParallelToolCall>>() {});
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             log.warnf("ChatHistoryAssembler.deserializeBatch failed: %s",
-                      e.getMessage());
+                      ExceptionUtils.getRootCauseMessage(e));
             return null;
         }
     }

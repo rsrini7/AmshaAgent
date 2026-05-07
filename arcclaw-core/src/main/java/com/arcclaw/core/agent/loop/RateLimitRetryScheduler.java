@@ -16,6 +16,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.scheduler.Scheduled;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -35,6 +36,9 @@ public class RateLimitRetryScheduler {
 
     @Inject
     MeterRegistry meterRegistry;
+
+    @ConfigProperty(name = "arcclaw.retry.default-delay-ms", defaultValue = "30000")
+    long defaultRetryDelayMs;
 
     private final AtomicLong backlogMaxAge = new AtomicLong(0);
 
@@ -69,7 +73,7 @@ public class RateLimitRetryScheduler {
             long ageSec = Duration.between(cp.getUpdatedAt(), now).getSeconds();
             maxAgeSec = Math.max(maxAgeSec, ageSec);
 
-            long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : 30000;
+            long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : defaultRetryDelayMs;
             Instant readyAt = cp.getUpdatedAt().plus(retryAfterMs, ChronoUnit.MILLIS);
 
             if (now.isAfter(readyAt)) {

@@ -321,8 +321,8 @@ export class ArcChatInterface extends LitElement {
     const baseDelay = 1000;
     const maxDelay = 30000;
     const delay = Math.min(maxDelay, baseDelay * Math.pow(2, this._reconnectAttempts));
-    const jitter = delay * 0.2 * (Math.random() - 0.5);
-    const finalDelay = delay + jitter;
+    const jitter = delay * 0.2 * (Math.random() * 2 - 1);
+    const finalDelay = Math.max(baseDelay, delay + jitter);
 
     console.log(`ArcClaw: Reconnecting in ${Math.round(finalDelay)}ms (attempt ${this._reconnectAttempts + 1})`);
     

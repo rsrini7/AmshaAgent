@@ -11,6 +11,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.TemplateData;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 
 /**
  * Result of an {@link AgentLoop} execution.
@@ -22,6 +24,8 @@ public sealed interface AgentResult
                 AgentResult.AwaitingRetry,
                 AgentResult.LoopExceeded,
                 AgentResult.Failed {
+
+    Logger log = Logger.getLogger(AgentResult.class);
 
     List<ReasoningStep> steps();
     int totalInputTokens();
@@ -73,7 +77,10 @@ public sealed interface AgentResult
                 // we use a fresh one if not provided. In production, this DTO
                 // should be refactored to NOT expose paramsJson.
                 return new ObjectMapper().writeValueAsString(frame.params());
-            } catch (Exception _) { return "{}"; }
+            } catch (Exception e) {
+                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                return "{}";
+            }
         }
     }
 
@@ -117,7 +124,9 @@ public sealed interface AgentResult
         Map<String, Object> params = Collections.emptyMap();
         try {
             params = new ObjectMapper().readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
         return awaitingApproval(new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM), sessionId, steps);
     }
 

@@ -22,6 +22,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -234,14 +235,18 @@ class ResumeStrategyDispatcher {
         if (checkpoint.hasBatchToolDecisions()) {
             try {
                 decisions = objectMapper.readValue(checkpoint.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
-            } catch (Exception _) {}
+            } catch (Exception e) {
+                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         Map<String, String> preExecuted = Map.of();
         if (checkpoint.hasPreExecutedResults()) {
             try {
                 preExecuted = objectMapper.readValue(checkpoint.getPreExecutedResults(), new TypeReference<Map<String, String>>() {});
-            } catch (Exception _) {}
+            } catch (Exception e) {
+                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         List<ParallelToolCall> completed = new ArrayList<>();
@@ -255,7 +260,9 @@ class ResumeStrategyDispatcher {
                         case ToolResponse.ToolPending pending -> call.withResult(pending.output(), false);
                     });
                     continue;
-                } catch (Exception _) {}
+                } catch (Exception e) {
+                    log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                }
             }
 
             if (decisions.getOrDefault(call.toolName(), ToolDecision.PENDING) == ToolDecision.DENIED) {

@@ -3,6 +3,7 @@ import { AgentEvent } from './types';
 export class SseManager {
   private _reader: ReadableStreamDefaultReader<string> | null = null;
   private _retryTimeout: number | null = null;
+  private _retryCount = 0;
   private _controller: AbortController | null = null;
 
   constructor(
@@ -31,6 +32,7 @@ export class SseManager {
       }
 
       this.onStatusChange('connected');
+      this._retryCount = 0;
       this._reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       this._readLoop().catch(() => this._scheduleReconnect('error'));
     } catch (err: any) {
@@ -72,10 +74,19 @@ export class SseManager {
     this.onStatusChange(status);
     this._cleanup();
     
+    // Exponential backoff: initial 1s * 2^retryCount, capped at 30s
+    // Jitter: +/- 20%
+    const baseDelay = Math.min(1000 * Math.pow(2, this._retryCount), 30000);
+    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
+    const delay = Math.max(1000, baseDelay + jitter);
+
+    console.warn(`[SseManager] ${status}. Reconnecting in ${Math.round(delay)}ms (attempt ${this._retryCount + 1})`);
+    
+    this._retryCount++;
     this._retryTimeout = window.setTimeout(() => {
       this._retryTimeout = null;
       this.connect();
-    }, 5000);
+    }, delay);
   }
 
   private _cleanup(): void {

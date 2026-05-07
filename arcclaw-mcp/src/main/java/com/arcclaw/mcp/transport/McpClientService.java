@@ -187,6 +187,7 @@ public class McpClientService {
 
     @Timeout(10000)
     @Retry(maxRetries = 2, delay = 1000, retryOn = {IOException.class})
+    @CircuitBreaker(requestVolumeThreshold = 10, failureRatio = 0.5, delay = 5000)
     public String invoke(String serverName, String toolName, String paramsJson) {
         var timer = Timer.builder("arcclaw.mcp.tool.invocation")
                 .tag("server", serverName)

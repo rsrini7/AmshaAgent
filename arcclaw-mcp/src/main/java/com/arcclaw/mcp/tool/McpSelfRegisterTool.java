@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.security.ToolOperation;
@@ -27,6 +28,11 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
  * access to new capabilities and external systems.
  */
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "register_mcp_server",
+    description = "Register a new MCP server",
+    defaultRoles = {"coder", "debugger"}
+)
 public class McpSelfRegisterTool implements AgentTool {
 
     private static final Pattern SAFE_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");

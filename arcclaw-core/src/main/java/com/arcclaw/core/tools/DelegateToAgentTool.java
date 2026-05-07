@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.governance.BudgetExceededException;
@@ -45,6 +46,7 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
+    @Inject CapabilityRegistry capabilityRegistry;
 
     @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
     int maxDelegationDepth = 2;
@@ -124,15 +126,14 @@ public class DelegateToAgentTool implements AgentTool {
         AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
 
         if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
-            Set<ToolCapability> currentCaps = currentRole.definition().capabilities();
-            Set<ToolCapability> targetCaps = targetRole.definition().capabilities();
+            Set<String> currentCaps = capabilityRegistry.getSupplementalTools(currentRoleName);
+            Set<String> targetCaps = capabilityRegistry.getSupplementalTools(targetRole.id());
 
-            Set<ToolCapability> unauthorizedCaps = new HashSet<>(targetCaps);
+            Set<String> unauthorizedCaps = new HashSet<>(targetCaps);
             unauthorizedCaps.removeAll(currentCaps);
 
             if (!unauthorizedCaps.isEmpty()) {
                 String unauthorizedList = unauthorizedCaps.stream()
-                    .map(Enum::name)
                     .sorted()
                     .collect(Collectors.joining(", "));
                 

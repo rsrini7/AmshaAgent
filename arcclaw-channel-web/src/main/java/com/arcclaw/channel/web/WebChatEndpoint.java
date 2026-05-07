@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
@@ -19,6 +20,7 @@ import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
+import io.quarkus.websockets.next.HandshakeRequest;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
@@ -27,9 +29,6 @@ import io.quarkus.websockets.next.WebSocket;
 import io.quarkus.websockets.next.WebSocketConnection;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import io.quarkus.websockets.next.HandshakeRequest;
 
 @ApplicationScoped
 @WebSocket(path = "/ws/chat")

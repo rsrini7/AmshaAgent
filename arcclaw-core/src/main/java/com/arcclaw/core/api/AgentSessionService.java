@@ -44,7 +44,9 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.MdcManaged;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.quarkus.virtual.threads.VirtualThreads;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -197,7 +199,7 @@ public class AgentSessionService {
         } catch (BudgetExceededException e) {
             return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
         } catch (Exception e) {
-            log.errorf("Sync agent run failed: %s", e.getMessage());
+            log.errorf("Sync agent run failed: %s", ExceptionUtils.getRootCauseMessage(e));
             return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
@@ -245,7 +247,7 @@ public class AgentSessionService {
                     return res;
                 });
             } catch (Exception e) {
-                log.errorf("Async agent run failed: %s", e.getMessage());
+                log.errorf("Async agent run failed: %s", ExceptionUtils.getRootCauseMessage(e));
                 response.resume(Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build());
             }
         }));
@@ -277,7 +279,7 @@ public class AgentSessionService {
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            log.errorf("Approve failed: %s", e.getMessage());
+            log.errorf("Approve failed: %s", ExceptionUtils.getRootCauseMessage(e));
             return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
@@ -299,7 +301,7 @@ public class AgentSessionService {
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            log.errorf("Deny failed: %s", e.getMessage());
+            log.errorf("Deny failed: %s", ExceptionUtils.getRootCauseMessage(e));
             return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
         }
     }
@@ -316,7 +318,7 @@ public class AgentSessionService {
                             List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
                             return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
                         } catch (Exception e) {
-                            log.errorf("Failed to load steps: %s", e.getMessage());
+                            log.errorf("Failed to load steps: %s", ExceptionUtils.getRootCauseMessage(e));
                             return Response.serverError().entity(Map.of("error", e.getMessage())).build();
                         }
                     })

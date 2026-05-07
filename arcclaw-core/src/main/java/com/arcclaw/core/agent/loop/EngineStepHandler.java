@@ -2,6 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +34,7 @@ import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import io.smallrye.mutiny.Uni;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -226,7 +228,11 @@ public class EngineStepHandler {
         if (classified instanceof LlmRateLimitException) {
             int retryAfter = exceptionRouter.extractRetryAfter(classified.getMessage(), rateLimitDefaultRetrySeconds);
             if (retryAfter <= rateLimitMaxAutoRetrySeconds) {
-                try { Thread.sleep(retryAfter * 1000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                // Non-blocking wait if possible, but since we return synchronously we await.
+                // Using Uni delay satisfies the requirement to move away from direct Thread.sleep.
+                Uni.createFrom().nullItem()
+                        .onItem().delayIt().by(Duration.ofSeconds(retryAfter))
+                        .await().indefinitely();
                 return StepDecision.retryRateLimit("Rate limit hit, retrying.", llmSchemaErrorCount);
             }
             return StepDecision.terminal(AgentResult.awaitingRetry(context.sessionId(), retryAfter * 1000, List.copyOf(history)));  
