@@ -44,7 +44,6 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.MdcManaged;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.quarkus.virtual.threads.VirtualThreads;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

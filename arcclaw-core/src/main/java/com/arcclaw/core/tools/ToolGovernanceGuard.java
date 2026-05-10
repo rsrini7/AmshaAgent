@@ -1,12 +1,10 @@
 package com.arcclaw.core.tools;
 
 import java.util.Map;
-import java.util.Set;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
