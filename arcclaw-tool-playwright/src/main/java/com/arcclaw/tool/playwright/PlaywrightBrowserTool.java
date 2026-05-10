@@ -18,6 +18,7 @@ import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @ToolMetadata(
@@ -26,6 +27,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
     defaultRoles = {"researcher", "synthesizer"}
 )
 public class PlaywrightBrowserTool implements AgentTool {
+
+    private static final Logger log = Logger.getLogger(PlaywrightBrowserTool.class);
 
     private static final int MAX_CONTENT_CHARS = 9092;
     private static final Pattern SAFE_URL_PATTERN =
@@ -150,7 +153,6 @@ public class PlaywrightBrowserTool implements AgentTool {
             }
 
             // Audit with URL only - NEVER log page content.
-            // AuditService.record() 5-arg signature: (sessionId, userId, agentRole, type, detail)
             String sessionId = ctx.sessionId();
             auditService.record(sessionId, userId, ctx.agentRole(),
                 SecurityEventType.TOOL_EXECUTED, "Browser navigate: " + url);
@@ -158,6 +160,7 @@ public class PlaywrightBrowserTool implements AgentTool {
             return ToolResponse.success(result);
 
         } catch (Exception e) {
+            Logger.getLogger(PlaywrightBrowserTool.class).error("Browser tool crashed after Playwright execution", e);
             return ToolResponse.failure(502, "Browser navigation failed: " + e.getMessage());
         }
     }

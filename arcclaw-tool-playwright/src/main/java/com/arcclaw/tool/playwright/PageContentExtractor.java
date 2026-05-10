@@ -55,11 +55,14 @@ public class PageContentExtractor {
         String best = "";
         for (String sel : fallbacks) {
             try {
-                // If it's the same as the already-failed llmSelector, skip
                 if (sel.equalsIgnoreCase(llmSelector)) continue;
 
-                page.waitForSelector(sel, new Page.WaitForSelectorOptions().setState(WaitForSelectorState.VISIBLE).setTimeout(selectorWaitMs));
-                String current = page.locator(sel).allInnerTexts().stream()
+                // The page is already loaded, so we only wait a tiny bit (100ms) or just check immediately
+                // to avoid 14+ seconds of cumulative timeout delays.
+                Locator loc = page.locator(sel);
+                if (loc.count() == 0) continue;
+
+                String current = loc.allInnerTexts().stream()
                     .map(t -> normalizeWhitespace(t.trim()))
                     .filter(s -> s.length() > minFilterChars)
                     .collect(Collectors.joining("\n\n---\n\n"));
