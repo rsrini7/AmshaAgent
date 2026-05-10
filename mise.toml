@@ -576,7 +576,7 @@ try {
     
     mise use --path mise.toml java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package "-Pnative,slim" -pl arcclaw-app -am -DskipTests '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    & $mvnw clean package -Pnative -Dslim -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { throw "Maven native build failed" }
     Write-Host "✅  Native build complete [local-slim]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     mise run dist

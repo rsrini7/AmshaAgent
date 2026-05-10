@@ -427,13 +427,14 @@ paths: {}</echo>
       </properties>
     </profile>
 
+    <!-- Simplified Slim Profile: Uses automatic OS detection from parent POM -->
     <profile>
       <id>slim</id>
       <activation>
         <property><name>slim</name></property>
       </activation>
       <properties>
-        <quarkus.native.resources.excludes>driver/**</quarkus.native.resources.excludes>
+        <quarkus.native.resources.excludes>${playwright.driver.excludes}</quarkus.native.resources.excludes>
       </properties>
     </profile>
 

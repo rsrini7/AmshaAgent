@@ -169,4 +169,28 @@
       </plugins>
     </pluginManagement>
   </build>
+
+  <profiles>
+    <profile>
+      <id>os-windows</id>
+      <activation><os><family>windows</family></os></activation>
+      <properties>
+        <playwright.driver.excludes>driver/linux_x64/**,driver/mac_x64/**,driver/mac_arm64/**</playwright.driver.excludes>
+      </properties>
+    </profile>
+    <profile>
+      <id>os-linux</id>
+      <activation><os><name>linux</name></os></activation>
+      <properties>
+        <playwright.driver.excludes>driver/win32_x64/**,driver/mac_x64/**,driver/mac_arm64/**</playwright.driver.excludes>
+      </properties>
+    </profile>
+    <profile>
+      <id>os-mac</id>
+      <activation><os><family>mac</family></os></activation>
+      <properties>
+        <playwright.driver.excludes>driver/win32_x64/**,driver/linux_x64/**</playwright.driver.excludes>
+      </properties>
+    </profile>
+  </profiles>
 </project>
