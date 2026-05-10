@@ -428,6 +428,16 @@ paths: {}</echo>
     </profile>
 
     <profile>
+      <id>slim</id>
+      <activation>
+        <property><name>slim</name></property>
+      </activation>
+      <properties>
+        <quarkus.native.resources.excludes>driver/**</quarkus.native.resources.excludes>
+      </properties>
+    </profile>
+
+    <profile>
       <id>jvm</id>
       <activation><activeByDefault>true</activeByDefault></activation>
       <properties>
