@@ -22,6 +22,11 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-opentelemetry</artifactId>
+        </dependency>        
+
         <!-- JPA API for SPI signatures (provided scope) -->
         <dependency>
             <groupId>jakarta.persistence</groupId>
@@ -35,6 +40,7 @@
             <artifactId>quarkus-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+        
     </dependencies>
 
     <build>

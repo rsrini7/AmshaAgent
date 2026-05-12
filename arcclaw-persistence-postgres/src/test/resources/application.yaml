@@ -1,0 +1,60 @@
+quarkus:
+  application:
+    name: arcclaw-persistence-postgres-test
+
+  arc:
+    exclude-types:
+      - com.arcclaw.channel.telegram.*
+      - com.arcclaw.channel.web.*
+      - com.arcclaw.core.agent.reasoning.PromptTemplateEngine
+      - com.arcclaw.core.agent.persona.AgentProducer
+      - com.arcclaw.core.agent.reasoning.ChatModelProducer
+      - com.arcclaw.core.agent.reasoning.LangChainReasoningEngine
+      - com.arcclaw.core.routing.IntentDetectorModelProducer
+      - com.arcclaw.core.routing.LlmModelFactory
+
+  index-dependency:
+    arcclaw-core:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-core
+    arcclaw-channel-api:
+      group-id: com.arcclaw
+      artifact-id: arcclaw-channel-api
+
+  datasource:
+    db-kind: postgresql
+    username: test
+    password: test
+    jdbc:
+      url: jdbc:postgresql://localhost:5432/test
+
+  hibernate-orm:
+    schema-management:
+      strategy: update
+    log:
+      sql: false
+    jdbc:
+      timezone: UTC
+    packages:
+      - com.arcclaw.core.state
+      - com.arcclaw.core.security
+      - com.arcclaw.core.audit
+      - com.arcclaw.core.skill
+
+  opentelemetry:
+    enabled: false
+  smallrye-fault-tolerance:
+    enabled: false
+  otel:
+    sdk:
+      disabled: true
+  scheduler:
+    enabled: false
+
+  log:
+    level: INFO
+    category:
+      "org.hibernate.SQL":
+        level: WARN
+      "org.testcontainers":
+        level: INFO

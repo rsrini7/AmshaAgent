@@ -9,9 +9,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -24,6 +27,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.smallrye.mutiny.Uni;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -38,6 +42,48 @@ public class PodmanMcpTransport {
     private final ConcurrentHashMap<String, OutputStream> writers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BufferedReader> readers = new ConcurrentHashMap<>();
     private final AtomicInteger requestIdGenerator = new AtomicInteger(1);
+    private ScheduledExecutorService healthCheckExecutor;
+
+    @ConfigProperty(name = "arcclaw.mcp.podman.health-check-interval-ms", defaultValue = "15000")
+    long healthCheckIntervalMs;
+
+    @PostConstruct
+    void init() {
+        startHealthCheck();
+    }
+
+    private void startHealthCheck() {
+        if (healthCheckIntervalMs <= 0) return;
+        healthCheckExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "podman-mcp-health-check");
+            t.setDaemon(true);
+            return t;
+        });
+        healthCheckExecutor.scheduleWithFixedDelay(this::healthCheck,
+            healthCheckIntervalMs, healthCheckIntervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void healthCheck() {
+        for (String serverName : activeProcesses.keySet()) {
+            Process p = activeProcesses.get(serverName);
+            if (p != null && !p.isAlive()) {
+                log.warnf("Health check: Podman MCP server '%s' process is dead, cleaning up", serverName);
+                try {
+                    OutputStream w = writers.remove(serverName);
+                    if (w != null) w.close();
+                } catch (IOException e) {
+                    log.debugf("Failed to close writer for %s: %s", serverName, e.getMessage());
+                }
+                try {
+                    BufferedReader r = readers.remove(serverName);
+                    if (r != null) r.close();
+                } catch (IOException e) {
+                    log.debugf("Failed to close reader for %s: %s", serverName, e.getMessage());
+                }
+                activeProcesses.remove(serverName);
+            }
+        }
+    }
 
     public Uni<Void> connect(McpServerConfig config) {
         return Uni.createFrom().item(() -> {
@@ -204,6 +250,17 @@ public class PodmanMcpTransport {
     @PreDestroy
     void cleanup() {
         log.info("PodmanMcpTransport shutting down - terminating active MCP processes");
+        if (healthCheckExecutor != null) {
+            healthCheckExecutor.shutdown();
+            try {
+                if (!healthCheckExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+                    healthCheckExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                healthCheckExecutor.shutdownNow();
+            }
+        }
         activeProcesses.forEach((sessionId, process) -> {
             log.infof("Destroying MCP process for session: %s", sessionId);
             process.destroy();
