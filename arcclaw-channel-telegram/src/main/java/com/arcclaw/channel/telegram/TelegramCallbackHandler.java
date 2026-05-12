@@ -121,8 +121,10 @@ public class TelegramCallbackHandler {
                     BatchHitlKeyboardBuilder.buildKeyboard(sessionId, result.pendingToolNames());
                 sender.editMessage(chatId, messageId, originalText, nextKeyboard);
             } else if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
-                String originalText = query.getMessage().getText();
-                sender.editMessage(chatId, messageId, originalText, null);
+                String doneText = result.outcome() == ApprovalOutcome.APPROVED
+                    ? "✅ Approved: " + toolName
+                    : "❌ Rejected: " + toolName;
+                sender.editMessage(chatId, messageId, doneText, null);
             }
 
             if (popupText != null) {
