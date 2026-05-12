@@ -215,28 +215,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     }
 
     private String processExplicitTarget(String targetId, String sessionId, String userId, String chatId, String reason, MessageContext context, AmbiguityResolver ambiguityResolver) throws Exception {
-        // Resolve numeric disambiguation index
-        if (targetId.matches("\\d+")) {
-            int idx = Integer.parseInt(targetId);
-            Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
-            List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
-            
-            String resolvedTargetId = null;
-            if (selfPending.isPresent()) {
-                if (idx == 1) {
-                    resolvedTargetId = sessionId;
-                } else if (idx >= 2 && idx - 2 < pendingCrons.size()) {
-                    resolvedTargetId = pendingCrons.get(idx - 2).id;
-                }
-            } else {
-                if (idx >= 1 && idx - 1 < pendingCrons.size()) {
-                    resolvedTargetId = pendingCrons.get(idx - 1).id;
-                }
-            }
-            if (resolvedTargetId != null) {
-                targetId = resolvedTargetId;
-            }
-        }
+        targetId = resolveNumericTargetIndex(targetId, sessionId, userId);
 
         // Resolve prefix match for cron job IDs
         if (targetId.length() >= 4 && !targetId.contains("-")) {
@@ -315,5 +294,25 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         // 3. Nothing found
         if (statefulAgentStore.isSessionActive(targetId)) return getTargetNotAwaitingMessage();
         return "Target session not found or has no pending approval.";
+    }
+
+    private String resolveNumericTargetIndex(String targetId, String sessionId, String userId) {
+        if (!targetId.matches("\\d+")) return targetId;
+        int idx = Integer.parseInt(targetId);
+        Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
+        List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+        String resolvedTargetId = null;
+        if (selfPending.isPresent()) {
+            if (idx == 1) {
+                resolvedTargetId = sessionId;
+            } else if (idx >= 2 && idx - 2 < pendingCrons.size()) {
+                resolvedTargetId = pendingCrons.get(idx - 2).id;
+            }
+        } else {
+            if (idx >= 1 && idx - 1 < pendingCrons.size()) {
+                resolvedTargetId = pendingCrons.get(idx - 1).id;
+            }
+        }
+        return resolvedTargetId != null ? resolvedTargetId : targetId;
     }
 }

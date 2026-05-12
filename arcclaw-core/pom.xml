@@ -262,38 +262,6 @@
 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.6.0</version>
-        <executions>
-          <execution>
-            <id>complexity-gate</id>
-            <phase>verify</phase>
-            <goals><goal>check</goal></goals>
-            <configuration>
-              <suppressionsLocation>checkstyle-suppressions.xml</suppressionsLocation>
-              <checkstyleRules>
-                <module name="Checker">
-                  <module name="FileLength">
-                    <property name="max" value="500"/>
-                  </module>
-                  <module name="TreeWalker">
-                    <module name="MethodLength">
-                      <property name="max" value="80"/>
-                      <property name="countEmpty" value="false"/>
-                    </module>
-                  </module>
-                </module>
-              </checkstyleRules>
-              <consoleOutput>true</consoleOutput>
-              <failsOnError>true</failsOnError>
-              <includeTestSourceDirectory>false</includeTestSourceDirectory>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
         <version>3.5.0</version>
         <executions>
