@@ -3,11 +3,13 @@ package com.arcclaw.persistence.postgres;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.github.dockerjava.api.DockerClient;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 
+@SuppressWarnings("resource")
 public class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
 
     private PostgreSQLContainer<?> postgres;
@@ -41,8 +43,7 @@ public class PostgresTestResource implements QuarkusTestResourceLifecycleManager
     }
 
     private boolean isDockerAvailable() {
-        try {
-            DockerClientFactory.instance().client();
+        try (DockerClient _ = DockerClientFactory.instance().client()) {
             return true;
         } catch (Exception e) {
             return false;

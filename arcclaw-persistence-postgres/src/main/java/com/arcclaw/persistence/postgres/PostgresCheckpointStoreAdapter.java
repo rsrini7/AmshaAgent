@@ -2,7 +2,6 @@ package com.arcclaw.persistence.postgres;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -14,13 +13,10 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ReasoningStepEntity;
-import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 /**
@@ -32,23 +28,26 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     private static final Logger log = Logger.getLogger(PostgresCheckpointStoreAdapter.class);
 
     @Inject EntityManager em;
-    @Inject ObjectMapper objectMapper;
+    @Inject CheckpointBatchOperations batchOps;
+    @Inject ZombieRecoveryService zombieRecoveryService;
 
     @Override
     @Transactional
     public CheckpointDto save(CheckpointDto dto) {
+        log.infof("[PostgresCheckpointAdapter] Saving checkpoint session=%s role=%s", dto.sessionId(), dto.agentRole());
         AgentCheckpoint entity = dto.id() != null ? em.find(AgentCheckpoint.class, dto.id()) : null;
         if (entity == null) {
             entity = new AgentCheckpoint();
         }
-        updateEntity(entity, dto);
+        CheckpointMapper.updateEntity(entity, dto);
         entity = em.merge(entity);
-        return toDto(entity);
+        return CheckpointMapper.toDto(entity);
     }
 
     @Override
     @Transactional
     public CheckpointDto saveCheckpointWithSteps(CheckpointDto checkpoint, List<ReasoningStepDto> steps) {
+        log.infof("[PostgresCheckpointAdapter] Saving checkpoint with %d steps for session=%s", steps.size(), checkpoint.sessionId());
         CheckpointDto saved = save(checkpoint);
         saveSteps(saved.id(), steps);
         return saved;
@@ -56,7 +55,8 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public Optional<CheckpointDto> findById(Long id) {
-        return Optional.ofNullable(em.find(AgentCheckpoint.class, id)).map(this::toDto);
+        log.debugf("[PostgresCheckpointAdapter] Finding checkpoint by id=%d", id);
+        return Optional.ofNullable(em.find(AgentCheckpoint.class, id)).map(CheckpointMapper::toDto);
     }
 
     @Override
@@ -67,7 +67,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
-                .map(this::toDto);
+                .map(CheckpointMapper::toDto);
     }
 
     @Override
@@ -76,13 +76,14 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 .setParameter("sessionId", sessionId)
                 .setParameter("terminal", List.of(CheckpointStatus.COMPLETED, CheckpointStatus.FAILED, CheckpointStatus.DENIED))
                 .getResultStream()
-                .map(this::toDto)
+                .map(CheckpointMapper::toDto)
                 .toList();
     }
 
     @Override
     @Transactional
     public void transitionStatus(Long id, String newStatus) {
+        log.infof("[PostgresCheckpointAdapter] Transitioning checkpoint %d to %s", id, newStatus);
         em.createQuery("UPDATE AgentCheckpoint c SET c.status = :status WHERE c.id = :id")
                 .setParameter("status", CheckpointStatus.valueOf(newStatus))
                 .setParameter("id", id)
@@ -92,6 +93,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
+        log.debugf("[PostgresCheckpointAdapter] Atomic transition checkpoint %d from %s to %s", id, expectedStatus, newStatus);
         int updated = em.createQuery("UPDATE AgentCheckpoint c SET c.status = :newStatus WHERE c.id = :id AND c.status = :expected")
                 .setParameter("newStatus", CheckpointStatus.valueOf(newStatus))
                 .setParameter("expected", CheckpointStatus.valueOf(expectedStatus))
@@ -103,6 +105,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public boolean claimForResume(String sessionId, String agentRole) {
+        log.infof("[PostgresCheckpointAdapter] Attempting to claim resume for session=%s role=%s", sessionId, agentRole);
         int updated = em.createQuery("UPDATE AgentCheckpoint c SET c.status = :resuming WHERE c.sessionId = :sessionId AND c.agentRole = :role AND c.status = :approved")
                 .setParameter("resuming", CheckpointStatus.RESUMING)
                 .setParameter("approved", CheckpointStatus.APPROVED)
@@ -114,12 +117,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff", AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("cutoff", cutoff)
-                .getResultStream()
-                .map(this::toDto)
-                .toList();
+        return zombieRecoveryService.findStaleApprovals(cutoff);
     }
 
     @Override
@@ -130,7 +128,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
-                .map(this::toDto);
+                .map(CheckpointMapper::toDto);
     }
 
     @Override
@@ -140,7 +138,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
-                .map(this::toDto);
+                .map(CheckpointMapper::toDto);
     }
 
     @Override
@@ -151,7 +149,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
-                .map(this::toDto);
+                .map(CheckpointMapper::toDto);
     }
 
     @Override
@@ -162,12 +160,13 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
-                .map(this::toDto);
+                .map(CheckpointMapper::toDto);
     }
 
     @Override
     @Transactional
     public void saveSteps(Long checkpointId, List<ReasoningStepDto> steps) {
+        log.infof("[PostgresCheckpointAdapter] Saving %d steps for checkpoint=%d", steps.size(), checkpointId);
         deleteSteps(checkpointId);
         int seq = 0;
         for (ReasoningStepDto dto : steps) {
@@ -204,6 +203,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public void deleteSteps(Long checkpointId) {
+        log.infof("[PostgresCheckpointAdapter] Deleting steps for checkpoint=%d", checkpointId);
         em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
                 .setParameter("id", checkpointId)
                 .executeUpdate();
@@ -214,7 +214,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
         return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status", AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.valueOf(status))
                 .getResultStream()
-                .map(this::toDto)
+                .map(CheckpointMapper::toDto)
                 .toList();
     }
 
@@ -230,11 +230,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public boolean isSessionActive(String sessionId) {
-        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.status NOT IN (:terminal)", Long.class)
-                .setParameter("sessionId", sessionId)
-                .setParameter("terminal", List.of(CheckpointStatus.COMPLETED, CheckpointStatus.FAILED, CheckpointStatus.DENIED))
-                .getSingleResult();
-        return count > 0;
+        return zombieRecoveryService.isSessionActive(sessionId);
     }
 
     @Override
@@ -244,12 +240,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff", AgentCheckpoint.class)
-                .setParameter("status", CheckpointStatus.IN_PROGRESS)
-                .setParameter("cutoff", cutoff)
-                .getResultStream()
-                .map(this::toDto)
-                .toList();
+        return zombieRecoveryService.findInProgressZombies(cutoff);
     }
 
     @Override
@@ -260,16 +251,14 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public void markCheckpointsFailed(String sessionId) {
-        em.createQuery("UPDATE AgentCheckpoint c SET c.status = :failed WHERE c.sessionId = :sessionId AND c.status NOT IN (:terminal)")
-                .setParameter("failed", CheckpointStatus.FAILED)
-                .setParameter("sessionId", sessionId)
-                .setParameter("terminal", List.of(CheckpointStatus.COMPLETED, CheckpointStatus.FAILED, CheckpointStatus.DENIED, CheckpointStatus.ARCHIVED))
-                .executeUpdate();
+        log.warnf("[PostgresCheckpointAdapter] Marking ALL active checkpoints as FAILED for session=%s", sessionId);
+        zombieRecoveryService.markCheckpointsFailed(sessionId);
     }
 
     @Override
     @Transactional
     public void deleteCheckpoint(String sessionId, String role) {
+        log.infof("[PostgresCheckpointAdapter] Deleting checkpoint for session=%s role=%s", sessionId, role);
         findBySessionAndRole(sessionId, role).ifPresent(dto -> {
             deleteSteps(dto.id());
             em.createQuery("DELETE FROM AgentCheckpoint c WHERE c.id = :id")
@@ -281,6 +270,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
+        log.infof("[PostgresCheckpointAdapter] Upserting checkpoint for session=%s role=%s", sessionId, agentRole);
         AgentCheckpoint entity = em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.agentRole = :role", AgentCheckpoint.class)
                 .setParameter("sessionId", sessionId)
                 .setParameter("role", agentRole)
@@ -302,12 +292,13 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
         entity.setUpdatedAt(Instant.now());
         
         entity = em.merge(entity);
-        return new CheckpointUpsertResult(toDto(entity), true);
+        return new CheckpointUpsertResult(CheckpointMapper.toDto(entity), true);
     }
 
     @Override
     @Transactional
     public CheckpointUpsertResult upsertAndFinalize(String sessionId, String agentRole, String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
+        log.infof("[PostgresCheckpointAdapter] Upserting and finalizing checkpoint for session=%s (status=%s)", sessionId, finalStatus);
         CheckpointUpsertResult res = upsertWithSteps(sessionId, agentRole, stateJson, "FULL", 0, originalGoal, contextDataJson);
         transitionStatus(res.checkpoint().id(), finalStatus);
         saveSteps(res.checkpoint().id(), steps);
@@ -317,17 +308,15 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public List<CheckpointDto> recoverInProgressZombies(Instant inProgressCutoff, String failReason) {
-        List<CheckpointDto> zombies = findInProgressZombies(inProgressCutoff);
-        for (CheckpointDto z : zombies) {
-            markFailed(z.id(), failReason, "ZOMBIE_RECOVERY", null, null);
-        }
-        return zombies;
+        log.infof("[PostgresCheckpointAdapter] Recovering zombie checkpoints before %s", inProgressCutoff);
+        return zombieRecoveryService.recoverInProgressZombies(inProgressCutoff, failReason);
     }
 
     @Override
     @Transactional
     public void purgeOldChatHistory(Instant cutoff) {
-        // Chat memory is in PersistentChatMemoryStore
+        log.infof("[PostgresCheckpointAdapter] Purging old chat history before %s", cutoff);
+        zombieRecoveryService.purgeOldChatHistory(cutoff);
     }
 
     @Override
@@ -390,90 +379,12 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
-        log.infof("[Postgres] Updating tool decision for session=%s role=%s tool=%s -> %s",
-                sessionId, agentRole, toolName, decision);
-
-        List<AgentCheckpoint> results = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
-                .setParameter("sid", sessionId)
-                .setParameter("role", agentRole)
-                .setMaxResults(1)
-                .getResultList();
-        if (results.isEmpty()) {
-            log.warnf("[Postgres] No checkpoint found for session=%s role=%s", sessionId, agentRole);
-            return false;
-        }
-
-        AgentCheckpoint cp = results.get(0);
-        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL || cp.getBatchToolDecisions() == null) {
-            log.warnf("[Postgres] Checkpoint session=%s not in AWAITING_APPROVAL or no batch decisions", sessionId);
-            return false;
-        }
-
-        try {
-            Map<String, ToolDecision> map = objectMapper.readValue(
-                cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
-            if (!map.containsKey(toolName)) {
-                log.warnf("[Postgres] Tool '%s' not found in batch for session %s", toolName, sessionId);
-                return false;
-            }
-            map.put(toolName, ToolDecision.valueOf(decision));
-            cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
-            em.merge(cp);
-            log.infof("[Postgres] Successfully updated decision for tool '%s'", toolName);
-            return true;
-        } catch (Exception e) {
-            log.errorf("Failed to update batch tool decision for session=%s tool=%s: %s",
-                       sessionId, toolName, e.getMessage());
-            return false;
-        }
+        return batchOps.atomicUpdateToolDecision(sessionId, agentRole, toolName, decision);
     }
 
     @Override
     public boolean hasPendingApprovalForChat(String chatId) {
-        if (chatId == null) return false;
-        Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :status AND c.sessionId NOT LIKE 'cron-%'", Long.class)
-                .setParameter("chatId", chatId)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .getSingleResult();
-        return count > 0;
+        return batchOps.hasPendingApprovalForChat(chatId);
     }
 
-    private void updateEntity(AgentCheckpoint entity, CheckpointDto dto) {
-        entity.setSessionId(dto.sessionId());
-        entity.setAgentRole(dto.agentRole());
-        entity.setStatus(dto.status() != null ? CheckpointStatus.valueOf(dto.status()) : null);
-        entity.setPendingToolName(dto.pendingToolName());
-        entity.setPendingToolParametersJson(dto.pendingToolParametersJson());
-        entity.setBatchToolDecisions(dto.batchToolDecisions());
-        entity.setPreExecutedResults(dto.preExecutedResults());
-        entity.setAutonomyLevel(dto.autonomyLevel() != null ? AutonomyLevel.valueOf(dto.autonomyLevel()) : null);
-        entity.setOriginalGoal(dto.originalGoal());
-        entity.setContextDataJson(dto.contextDataJson());
-        entity.setIterationsUsed(dto.iterationsUsed());
-        entity.setMaxIterations(dto.maxIterations());
-        entity.setRetryAfterMs(dto.retryAfterMs());
-        entity.setChannelType(dto.channelType());
-        entity.setChannelPlatformId(dto.channelPlatformId());
-        entity.setSystemNote(dto.systemNote());
-        entity.setUpdatedAt(Instant.now());
-    }
-
-    private CheckpointDto toDto(AgentCheckpoint c) {
-        return new CheckpointDto(
-                c.getId(), c.getSessionId(), c.getAgentRole(),
-                c.getStatus() != null ? c.getStatus().name() : null,
-                c.getAutonomyLevel() != null ? c.getAutonomyLevel().name() : null,
-                null, c.getChannelPlatformId(), c.getChannelType(),
-                c.getOriginalGoal(), c.getFailedAt(), c.getCompletedAt(), c.getFailReason(),
-                c.getPendingToolName(), c.getBatchToolDecisions(), c.getPendingToolParametersJson(),
-                c.getPreExecutedResults(), c.getMaxIterations(), c.getIterationsUsed(),
-                c.getRetryAfterMs(), c.getSystemNote(), c.getContextDataJson(),
-                c.getErrorCode(), c.getTraceId(), c.getRootCauseClass(),
-                c.getCreatedAt(), c.getUpdatedAt()
-        );
-    }
 }

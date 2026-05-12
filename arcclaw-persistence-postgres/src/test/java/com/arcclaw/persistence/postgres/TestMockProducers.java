@@ -13,8 +13,6 @@ import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
-import com.arcclaw.core.agent.persona.Agent;
-import com.arcclaw.core.agent.persona.AgentRole;
 import com.arcclaw.core.agent.reasoning.PromptTemplateEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;

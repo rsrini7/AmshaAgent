@@ -60,11 +60,11 @@ public class ToolStepHandler {
     private final Instance<AgentObserver> observers;
     private final ToolInvocationGuard guard;
     private final ToolInvoker invoker;
-    private final ChatMemoryWriter writer;
     private final Instance<DynamicToolLookup> dynamicToolLookup;
     private final ApprovalCheckpointManager checkpointManager;
     private final ParallelToolStepExecutor parallelExecutor;
     private final MeterRegistry meterRegistry;
+    private final ToolResultProcessor resultProcessor;
 
     @Inject
     public ToolStepHandler(ToolRegistry toolRegistry,
@@ -80,11 +80,11 @@ public class ToolStepHandler {
         this.observers = observers;
         this.guard = guard;
         this.invoker = invoker;
-        this.writer = writer;
         this.dynamicToolLookup = dynamicToolLookup;
         this.checkpointManager = checkpointManager;
         this.parallelExecutor = parallelExecutor;
         this.meterRegistry = meterRegistry;
+        this.resultProcessor = new ToolResultProcessor(writer);
     }
 
     // ── Validation
@@ -223,7 +223,7 @@ public class ToolStepHandler {
         }
 
         // Phase 3 - Observe
-        String observation = buildObservation(response);
+        String observation = resultProcessor.buildObservation(response);
         final ReasoningStep completedStep = step.withObservation(observation, response instanceof ToolResponse.ToolSuccess);
         history.add(completedStep);
 
@@ -239,7 +239,7 @@ public class ToolStepHandler {
                     ? observation.substring(0, 200) + "..." : observation);
 
         // Phase 4 - Resolve
-        return resolveOutcome(context, toolName, params, response, observation,
+        return resultProcessor.resolveOutcome(context, toolName, params, response, observation,
                 completedStep, history, consecutiveFailures);
     }
 
@@ -356,126 +356,6 @@ public class ToolStepHandler {
         List<ReasoningStep> snapshot = new ArrayList<>(history);
         snapshot.add(step);
         return List.copyOf(snapshot);
-    }
-
-    private String buildObservation(ToolResponse response) {
-        return switch (response) {
-            case null -> "Tool invocation returned no response.";
-            case ToolResponse.ToolSuccess success -> success.output();
-            case ToolResponse.ToolFailure failure -> {
-                String out = failure.output();
-                if (out == null || out.isEmpty()) {
-                    yield "Tool execution failed: No output (exit=" + failure.exitCode() + ")";
-                }
-                if (out.startsWith("Tool execution failed:")) yield out;
-                yield "Tool execution failed: " + out + " (exit=" + failure.exitCode() + ")";
-            }
-            case ToolResponse.ToolPending pending -> pending.output();
-        };
-    }
-
-    /**
-     * Resolves the post-tool-invocation outcome.
-     */
-    private StepDecision resolveOutcome(AgentExecutionContext context, String toolName,
-        Map<String, Object> params, ToolResponse response, String observation,
-        ReasoningStep completedStep, List<ReasoningStep> history,
-        int consecutiveFailures) {
-
-        // 1. Tool-specific fast-paths
-        StepDecision decision = null;
-        if (ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)) {
-            decision = handleScheduleTaskOutcome(context, response, observation, history);
-        } else if (ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName)) {
-            decision = handleManageScheduleOutcome(context, params, response, observation, history);
-        } else if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
-            decision = handleDelegateOutcome(context, response, observation, history);
-        } else if (ToolCapability.GITHUB.toolName().equalsIgnoreCase(toolName)) {
-            decision = handleGithubUnavailableOutcome(context, response, observation, history);
-        } else if (ToolCapability.BROWSER_NAVIGATE.toolName().equalsIgnoreCase(toolName)) {
-            decision = handleBrowserOutcome(context, params, response, observation, history);
-        }
-
-        if (decision != null) {
-            return decision;
-        }
-
-        // 2. Generic Circuit Breaker (evaluates failures and returns PROCEED or TERMINAL)
-        return evaluateCircuitBreaker(completedStep, response, consecutiveFailures, context.sessionId(), history);
-    }
-
-    private StepDecision handleScheduleTaskOutcome(AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
-        if (res != null && res.success()) {
-            String cleanOutput = obs.split("\n\nCRITICAL DIRECTIVE:")[0];
-            String finalAnswer = "✅ " + cleanOutput;
-            writer.saveAnswer(ctx.sessionId(), finalAnswer);
-            return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
-        }
-        return null; // fall through
-    }
-
-    private StepDecision handleManageScheduleOutcome(AgentExecutionContext ctx, Map<String, Object> params, ToolResponse res, String obs, List<ReasoningStep> history) {
-        String action = String.valueOf(params.getOrDefault("action", "")).toLowerCase();
-        if (!"list".equals(action)) {
-            String finalAnswer = (res != null && res.success() ? "✅ " : "❌ ") + obs;
-            writer.saveAnswer(ctx.sessionId(), finalAnswer);
-            return StepDecision.terminal(AgentResult.finished(finalAnswer, List.copyOf(history)));
-        }
-        if (ToolStepResolutionUtils.isListOnlyGoal(ctx.goal())) {
-            writer.saveAnswer(ctx.sessionId(), obs);
-            return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
-        }
-        return null;
-    }
-
-    private StepDecision handleDelegateOutcome(AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
-        if (res != null && res.success() && !obs.startsWith("⚠️") && !obs.startsWith("⏳") && !obs.startsWith("Tool execution failed")) {
-            writer.saveAnswer(ctx.sessionId(), obs);
-            return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
-        }
-        return null;
-    }
-
-    private StepDecision handleGithubUnavailableOutcome(AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
-        if (res != null && !res.success() && obs.contains("GitHub integration is not available")) {
-            if (ctx.sessionId() != null) writer.saveAnswer(ctx.sessionId(), obs);
-            return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
-        }
-        return null;
-    }
-
-    private StepDecision handleBrowserOutcome(AgentExecutionContext ctx, Map<String, Object> params, ToolResponse res, String obs, List<ReasoningStep> history) {
-        if (res != null && !res.success()) {
-            String url = String.valueOf(params.getOrDefault("url", ""));
-            if (!url.isBlank()) {
-                log.infof("[TOOL-STEP] browser_navigate failed for %s - triggering fallback to serper_web_search", url);
-                
-                String fallbackGoal = "The browser was unable to visit " + url + " directly. " +
-                        "Please use serper_web_search to find information about this page or its content.";
-                
-                // Inject a logical observation that guides the model to fallback
-                ReasoningStep fallbackStep = ReasoningStep.observe(ToolCapability.BROWSER_NAVIGATE.toolName(), 
-                        "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
-                        "Browser navigation failed, falling back to search.");
-                history.add(fallbackStep);
-                
-                return StepDecision.retryEngine(fallbackGoal, 0);
-            }
-        }
-        return null;
-    }
-
-    private StepDecision evaluateCircuitBreaker(ReasoningStep step, ToolResponse res, int failures, String sid, List<ReasoningStep> history) {
-        int newFailures = (res != null && res.success()) ? 0 : failures + 1;
-        
-        // §Fix: Increase threshold from 2 to 3 to handle transient parameter mismatches
-        // where the LLM might need more than one correction turn to align with the schema.
-        if (newFailures >= 3) {
-            log.warnf("[STATE-MACHINE] Circuit breaker tripped session=%s after %d consecutive failures", sid, newFailures);
-            return StepDecision.terminal(AgentResult.finished(
-                "❌ I encountered repeated errors (" + newFailures + "). Please rephrase your request or check the tool parameters.", List.copyOf(history)));      
-        }
-        return StepDecision.proceedWithFailures(step, newFailures);
     }
 
     /** Sealed result of the invokeTool phase. */

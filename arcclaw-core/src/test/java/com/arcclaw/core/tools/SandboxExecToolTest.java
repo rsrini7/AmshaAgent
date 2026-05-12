@@ -16,7 +16,6 @@ import java.util.concurrent.TimeoutException;
 
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
@@ -43,7 +42,7 @@ class SandboxExecToolTest {
     // Mirror the same OS detection used in SandboxExecTool so assertions are
     // platform-correct: 'python' on Windows, 'python3' on Linux/macOS.
     private static final String EXPECTED_PYTHON =
-            SandboxExecTool.IS_WINDOWS ? "python" : "python3";
+            System.getProperty("os.name", "").toLowerCase().contains("win") ? "python" : "python3";
 
     // -------------------------------------------------------------------------
     // Command-building tests
