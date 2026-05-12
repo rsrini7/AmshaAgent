@@ -19,6 +19,7 @@ import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.jboss.logging.Logger;
 
 /**
  * Domain-level orchestrator for agent checkpoint persistence.
@@ -46,6 +47,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
  */
 @ApplicationScoped
 public class StatefulAgentStoreImpl implements StatefulAgentStore {
+
+    private static final Logger log = Logger.getLogger(StatefulAgentStoreImpl.class);
 
     @Inject CheckpointStorePort       storeAdapter;
     @Inject CheckpointSerializer      serializer;
@@ -83,8 +86,11 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AgentCheckpoint> load(String sessionId, String agentRole) {
-        return storeAdapter.findBySessionAndRole(sessionId, agentRole)
+        log.debugf("[Store] load(session=%s, role=%s)", sessionId, agentRole);
+        Optional<AgentCheckpoint> result = storeAdapter.findBySessionAndRole(sessionId, agentRole)
                 .map(CheckpointMapper::toEntity);
+        log.debugf("[Store] load returned %s for session=%s role=%s", result.isPresent() ? "checkpoint" : "empty", sessionId, agentRole);
+        return result;
     }
 
     @Override
@@ -203,12 +209,15 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public boolean claimForResume(String sessionId, String agentRole, boolean hasBrowserTool) {
         // 1. Instance-local check (fast path)
         if (resumeGuard.isResuming(sessionId)) {
+            log.warnf("[Store] claimForResume: instance-local guard blocked resume for session=%s role=%s", sessionId, agentRole);
             return false;
         }
 
         // 2. Distributed DB-backed lock (§T5-4)
         // Transition AWAITING_APPROVAL -> RESUMING in SQLite
         boolean claimed = storeAdapter.claimForResume(sessionId, agentRole);
+        log.infof("[Store] claimForResume(session=%s, role=%s, hasBrowser=%s) -> claimed=%s",
+                sessionId, agentRole, hasBrowserTool, claimed);
         if (claimed) {
             resumeGuard.markResuming(sessionId, hasBrowserTool);
         }
@@ -243,6 +252,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public void releaseResumeClaim(String sessionId, String agentRole) {
+        log.infof("[Store] releaseResumeClaim(session=%s, role=%s)", sessionId, agentRole);
         storeAdapter.releaseResumeClaim(sessionId, agentRole);
         resumeGuard.clearResuming(sessionId);
     }
@@ -253,17 +263,40 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public boolean updateBatchToolDecision(String sessionId, String agentRole,
                                            String toolName, String decision) {
-        return storeAdapter.atomicUpdateBatchToolDecision(sessionId, agentRole, toolName, decision);
+        log.infof("[Store] updateBatchToolDecision(session=%s, role=%s, tool=%s, decision=%s)",
+                sessionId, agentRole, toolName, decision);
+        boolean result = storeAdapter.atomicUpdateBatchToolDecision(sessionId, agentRole, toolName, decision);
+        log.infof("[Store] updateBatchToolDecision returned %s for session=%s tool=%s", result, sessionId, toolName);
+        return result;
     }
 
     @Override
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
-        Optional<CheckpointDto> dtoOpt = storeAdapter.findBySessionAndRole(sessionId, agentRole);
-        if (dtoOpt.isEmpty() || dtoOpt.get().batchToolDecisions() == null) return false;
+        // Use findLatestAwaitingApproval (which has em.clear) to get fresh data
+        // after native SQL writes from BatchOps
+        Optional<CheckpointDto> dtoOpt = storeAdapter.findLatestAwaitingApproval(sessionId)
+                .filter(dto -> agentRole.equals(dto.agentRole()));
+        if (dtoOpt.isEmpty()) {
+            log.warnf("[Store] isAllBatchToolsDecided: no checkpoint found for session=%s role=%s", sessionId, agentRole);
+            return false;
+        }
+        if (dtoOpt.get().batchToolDecisions() == null) {
+            log.warnf("[Store] isAllBatchToolsDecided: batchToolDecisions is null for session=%s role=%s", sessionId, agentRole);
+            return false;
+        }
+        String rawJson = dtoOpt.get().batchToolDecisions();
         Map<String, ToolDecision> map = serializer.deserialize(
-                dtoOpt.get().batchToolDecisions(),
+                rawJson,
                 new TypeReference<Map<String, ToolDecision>>() {});
-        return map != null && map.values().stream().noneMatch(v -> ToolDecision.PENDING == v);
+        if (map == null) {
+            log.warnf("[Store] isAllBatchToolsDecided: deserialized map is null for session=%s", sessionId);
+            return false;
+        }
+        long pendingCount = map.values().stream().filter(v -> ToolDecision.PENDING == v).count();
+        boolean allDecided = pendingCount == 0;
+        log.infof("[Store] isAllBatchToolsDecided(session=%s, role=%s): map=%s pending=%d allDecided=%s",
+                sessionId, agentRole, rawJson, pendingCount, allDecided);
+        return allDecided;
     }
 
     // ── Query delegation ──────────────────────────────────────────────────────

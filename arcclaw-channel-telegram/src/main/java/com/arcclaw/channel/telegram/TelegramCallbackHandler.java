@@ -91,10 +91,15 @@ public class TelegramCallbackHandler {
 
             // Resolve full sessionId from 8-char prefix to stay under 64-byte limit §7.25
             if (sessionId.length() < 36) {
+                String originalPrefix = sessionId;
                 sessionId = approvalGateway.resolveSessionIdPrefix(sessionId);
+                log.infof("Resolved session prefix '%s' -> '%s' for user=%s", originalPrefix, sessionId, userId);
             }
 
             ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");
+            log.infof("ApprovalResult: session=%s tool=%s outcome=%s remaining=%d pending=%s user=%s",
+                    sessionId, toolName, result.outcome(), result.remainingPendingTools(),
+                    result.pendingToolNames(), userId);
 
             String popupText = null;
             switch (result.outcome()) {
