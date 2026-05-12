@@ -101,11 +101,14 @@ public class ApprovalStateMachine implements ApprovalGateway {
         String channelType = cp.getChannelType() != null ? cp.getChannelType() : "websocket";
         ApprovalOutcome outcome;
         if (allDecided) {
+            // Reload fresh from DB — cp is stale (loaded before native SQL update)
+            String freshJson = agentStore.findLatestAwaitingApproval(sessionId)
+                .map(AgentCheckpoint::getBatchToolDecisions)
+                .orElse(cp.getBatchToolDecisions());
             Map<String, ToolDecision> decisions;
             try {
                 decisions = objectMapper.readValue(
-                    cp.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
-                decisions.put(toolName, decisionEnum);  // merge the current just-committed decision
+                    freshJson, new TypeReference<Map<String, ToolDecision>>() {});
             } catch (Exception e) {
                 log.warnf("[ASM] Failed to deserialize decisions for session=%s: %s", sessionId, e.getMessage());
                 decisions = Map.of(toolName, decisionEnum);  // safe fallback
