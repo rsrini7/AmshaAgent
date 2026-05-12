@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -61,6 +62,7 @@ public class AgentStateMachineRunner {
     private final ToolRegistry toolRegistry;
     private final ToolInvoker toolInvoker;
     private final StepDecisionRouter stepDecisionRouter;
+    private final ApprovalCheckpointManager checkpointManager;
 
     @Inject
     public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
@@ -75,8 +77,9 @@ public class AgentStateMachineRunner {
                                    @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries,
                                    MeterRegistry meterRegistry,
                                    ToolRegistry toolRegistry,
-                                   ToolInvoker toolInvoker,
-                                   StepDecisionRouter stepDecisionRouter) {
+                                    ToolInvoker toolInvoker,
+                                    StepDecisionRouter stepDecisionRouter,
+                                    ApprovalCheckpointManager checkpointManager) {
         this.engineStepHandler = engineStepHandler;
         this.writer = writer;
         this.observers = observers;
@@ -91,6 +94,7 @@ public class AgentStateMachineRunner {
         this.toolRegistry = toolRegistry;
         this.toolInvoker = toolInvoker;
         this.stepDecisionRouter = stepDecisionRouter;
+        this.checkpointManager = checkpointManager;
     }
 
     /**
@@ -191,7 +195,11 @@ public class AgentStateMachineRunner {
         AgentResult finalResult = null;
 
         try {
-            runBrowserPreflight(context, history);
+            Optional<AgentResult> preflightResult = runBrowserPreflight(context, history);
+            if (preflightResult.isPresent()) {
+                finalResult = preflightResult.get();
+                return finalResult;
+            }
 
             while (iteration < context.maxIterations() || (iteration == context.maxIterations() && context.isForceFinishRetry())) {
                 iteration++;
@@ -230,9 +238,11 @@ public class AgentStateMachineRunner {
         }
     }
 
-    private void runBrowserPreflight(AgentExecutionContext context, List<ReasoningStep> history) {
+    private Optional<AgentResult> runBrowserPreflight(AgentExecutionContext context, List<ReasoningStep> history) {
         if (history.isEmpty()) {
-            buildBrowserPreflightStep(context).ifPresent(preflightStep -> {
+            Optional<ReasoningStep> preflightOpt = buildBrowserPreflightStep(context);
+            if (preflightOpt.isPresent()) {
+                ReasoningStep preflightStep = preflightOpt.get();
                 try {
                     ToolResponse response = WorkspaceContext.run(
                             context.sessionId(), context.userId(), context.chatId(),
@@ -243,11 +253,19 @@ public class AgentStateMachineRunner {
                             response.success() ? response.output() : "Browser navigation failed: " + response.output(),
                             response.success());
                     history.add(completed);
+                } catch (RequiresApprovalException e) {
+                    log.infof("[BrowserPreflight] Tool '%s' requires approval for session %s - pausing for human-in-the-loop",
+                            preflightStep.action(), context.sessionId());
+                    List<ReasoningStep> historyAtPause = appendPendingStep(history, preflightStep);
+                    return Optional.of(checkpointManager.persist(context,
+                            e.getFrame(), historyAtPause,
+                            context.channelType(), context.channelPlatformId()));
                 } catch (Exception e) {
                     log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), e.getMessage());
                 }
-            });
+            }
         }
+        return Optional.empty();
     }
 
     private record IterationResult(
@@ -317,6 +335,12 @@ public class AgentStateMachineRunner {
         } finally {
             iterSpan.end();
         }
+    }
+
+    private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {
+        List<ReasoningStep> snapshot = new ArrayList<>(history);
+        snapshot.add(step);
+        return List.copyOf(snapshot);
     }
 
     private Optional<ReasoningStep> buildBrowserPreflightStep(AgentExecutionContext context) {

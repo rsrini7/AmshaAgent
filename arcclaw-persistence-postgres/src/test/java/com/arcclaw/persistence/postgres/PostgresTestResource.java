@@ -3,11 +3,10 @@ package com.arcclaw.persistence.postgres;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
-
-import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
 

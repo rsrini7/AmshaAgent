@@ -78,7 +78,7 @@ public class ParallelToolStepExecutor {
             SequentialToolExecutor sequentialToolExecutor,
             Instance<ManagedExecutor> managedExecutors,
             @ConfigProperty(name = "arcclaw.hitl.pre-executable-tools", defaultValue = "") Optional<List<String>> preExecutableTools,
-            @ConfigProperty(name = "arcclaw.tools.external-tools", defaultValue = "playwright_navigate,playwright_click,playwright_type,playwright_press,playwright_select,playwright_scroll,playwright_screenshot,playwright_content,web_search") List<String> externalTools,
+            @ConfigProperty(name = "arcclaw.tools.external-tools", defaultValue = "browser_navigate,web_search") List<String> externalTools,
             @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60") long toolTimeoutSeconds) {
         this.objectMapper = objectMapper;
         this.guard = guard;

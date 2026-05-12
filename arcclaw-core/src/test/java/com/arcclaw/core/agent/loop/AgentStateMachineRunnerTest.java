@@ -141,7 +141,8 @@ class AgentStateMachineRunnerTest {
                 new SimpleMeterRegistry(),
                 toolRegistry,
                 invoker,
-                stepDecisionRouter
+                stepDecisionRouter,
+                checkpointManager
         );
 
         lenient().when(observers.iterator()).thenReturn(Collections.emptyIterator());

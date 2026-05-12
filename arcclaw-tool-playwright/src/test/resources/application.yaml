@@ -20,7 +20,7 @@ quarkus:
     exclude-types:
       - "com.arcclaw.core.**"
       - "com.arcclaw.persistence.**"
-      - "com.arcclaw.tool.playwright.PlaywrightBrowserTool"
+      - "com.arcclaw.tool.playwright.PlaywrightCliTool"
 
   otel:
     sdk:
@@ -31,8 +31,6 @@ quarkus:
     category:
       "com.arcclaw.tool.playwright":
         level: WARN
-      "com.microsoft.playwright":
-        level: "OFF"
 
   langchain4j:
     openai:
