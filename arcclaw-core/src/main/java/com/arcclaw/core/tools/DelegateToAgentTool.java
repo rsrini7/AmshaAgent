@@ -167,8 +167,11 @@ public class DelegateToAgentTool implements AgentTool {
             default -> AutonomyLevel.FULL;
         };
 
+        String channelType = ctx.channelType();
+        String platformId = ctx.channelPlatformId();
         return WorkspaceContext.run(
             innerSessionId, userId, chatId, innerLevel, targetRole.toScopedName(),
+            channelType, platformId,
             () -> agentLoop.get().run(innerSessionId, targetRole.toScopedName(), goal, reasoningEngine, maxIterations)
         );
     }

@@ -75,68 +75,25 @@ public class CronSchemaEnforcer {
         ).executeUpdate();
 
         // 3. Schema migrations - safe ALTER TABLE for upgrades from older schemas
-        // Check if columns exist before trying to add them to avoid SQLITE_ERROR log pollution
-        if (!hasColumn("agent_cron", "runOnce")) {
-            try {
-                em.createNativeQuery(
-                        "ALTER TABLE agent_cron ADD COLUMN runOnce INTEGER NOT NULL DEFAULT 0"
-                ).executeUpdate();
-            } catch (Exception e) {
-                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
-            }
-        }
-
-        if (!hasColumn("agent_cron", "lastDeliveryId")) {
-            try {
-                em.createNativeQuery(
-                        "ALTER TABLE agent_cron ADD COLUMN lastDeliveryId TEXT"
-                ).executeUpdate();
-            } catch (Exception e) {
-                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
-            }
-        }
-
-        if (!hasColumn("agent_cron", "channelType")) {
-            try {
-                em.createNativeQuery(
-                        "ALTER TABLE agent_cron ADD COLUMN channelType TEXT"
-                ).executeUpdate();
-            } catch (Exception e) {
-                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
-            }
-        }
-
-        if (!hasColumn("agent_cron", "channelPlatformId")) {
-            try {
-                em.createNativeQuery(
-                        "ALTER TABLE agent_cron ADD COLUMN channelPlatformId TEXT"
-                ).executeUpdate();
-            } catch (Exception e) {
-                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
-            }
-        }
-
-        if (!hasColumn("agent_cron", "executionRole")) {
-            try {
-                em.createNativeQuery(
-                        "ALTER TABLE agent_cron ADD COLUMN executionRole TEXT"
-                ).executeUpdate();
-            } catch (Exception e) {
-                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
-            }
-        }
-
-        if (!hasColumn("agent_cron", "updatedAt")) {
-            try {
-                em.createNativeQuery(
-                        "ALTER TABLE agent_cron ADD COLUMN updatedAt TEXT"
-                ).executeUpdate();
-            } catch (Exception e) {
-                log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
-            }
-        }
+        addColumnIfMissing("runOnce", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing("lastDeliveryId", "TEXT");
+        addColumnIfMissing("channelType", "TEXT");
+        addColumnIfMissing("channelPlatformId", "TEXT");
+        addColumnIfMissing("executionRole", "TEXT");
+        addColumnIfMissing("updatedAt", "TEXT");
 
         log.info("CronSchemaEnforcer: agent_cron table, indexes, and migrations verified.");
+    }
+
+    private void addColumnIfMissing(String column, String columnDef) {
+        if (hasColumn("agent_cron", column)) return;
+        try {
+            em.createNativeQuery(
+                    "ALTER TABLE agent_cron ADD COLUMN " + column + " " + columnDef
+            ).executeUpdate();
+        } catch (Exception e) {
+            log.warnf("Migration failed for agent_cron: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
     }
 
     /**

@@ -23,8 +23,8 @@ public class IdentityExtractionReflex implements AgentReflex {
     
     @Inject ManagedExecutor managedExecutor;
 
-    private static final Pattern NAME_PATTERN = Pattern.compile("(?i)\\b(?:my name is|i am|i'm)\\s+([a-zA-Z\\s]+)");
-    private static final Pattern ALIAS_PATTERN = Pattern.compile("(?i)\\b(?:call me)\\s+([a-zA-Z\\s]+)");
+    private static final Pattern NAME_PATTERN = Pattern.compile("(?i)\\b(?:my name is|i am|i'm)\\s+([a-zA-Z]+)\\b");
+    private static final Pattern ALIAS_PATTERN = Pattern.compile("(?i)\\b(?:call me)\\s+([a-zA-Z]+)\\b");
     private static final Pattern HOBBY_PATTERN = Pattern.compile("(?i)\\b(?:my hobby is|i enjoy doing)\\s+(.+)");
     private static final Pattern PREF_PATTERN = Pattern.compile("(?i)\\b(?:i prefer)\\s+(.+)");
     private static final Pattern LIKE_PATTERN = Pattern.compile("(?i)\\b(?:i like|i love|i enjoy)\\s+(.+)");

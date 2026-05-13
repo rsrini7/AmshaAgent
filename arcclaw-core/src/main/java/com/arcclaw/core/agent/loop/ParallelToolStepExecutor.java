@@ -1,12 +1,10 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -65,6 +63,7 @@ public class ParallelToolStepExecutor {
     private final Optional<List<String>> preExecutableTools;
     private final List<String> externalTools;
     private final long toolTimeoutSeconds;
+    private final BatchResultAggregator batchResultAggregator;
 
     @Inject
     public ParallelToolStepExecutor(
@@ -92,6 +91,7 @@ public class ParallelToolStepExecutor {
         this.preExecutableTools = preExecutableTools;
         this.externalTools = externalTools;
         this.toolTimeoutSeconds = toolTimeoutSeconds;
+        this.batchResultAggregator = new BatchResultAggregator(objectMapper, this.observers);
     }
 
     protected ParallelToolStepExecutor() {
@@ -148,7 +148,7 @@ public class ParallelToolStepExecutor {
                       "- returning merged dedup batch.",
                       context.sessionId(), calls.size());
             List<ParallelToolCall> allDedup = new ArrayList<>(dedupCalls);
-            return buildCompletedBatchDecision(
+            return batchResultAggregator.buildCompletedBatchDecision(
                 context, history, batchStep, allDedup, consecutiveFailures);
         }
 
@@ -191,9 +191,9 @@ public class ParallelToolStepExecutor {
             MdcCleaner.clear(MdcKeys.PARALLEL_BATCH_SIZE, MdcKeys.PARALLEL_TOOLS);
         }
 
-        List<ParallelToolCall> allCompleted = mergeCompletedCalls(calls, dedupCalls, allowedCompleted);
+        List<ParallelToolCall> allCompleted = batchResultAggregator.mergeCompletedCalls(calls, dedupCalls, allowedCompleted);
 
-        return buildCompletedBatchDecision(
+        return batchResultAggregator.buildCompletedBatchDecision(
             context, history, batchStep, allCompleted, consecutiveFailures);
     }
 
@@ -229,6 +229,8 @@ public class ParallelToolStepExecutor {
                     call.toolName(), blocked.observation());
                 ReasoningStep failedStep = batchStep.withObservation(blockedObs, false);
                 history.add(failedStep);
+                observers.forEach(o -> o.onStepComplete(
+                    context.sessionId(), context.agentRole(), failedStep));
                 r.hitlOrBlockedDecision = StepDecision.retryValidation(consecutiveFailures + 1);
                 return r;
             }
@@ -277,76 +279,21 @@ public class ParallelToolStepExecutor {
                 allowedCompleted.add(timedOut.withResult(
                     String.format("Tool timed out after %ds.", toolTimeoutSeconds),
                     false));
+                observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
+                    ReasoningStep.observe(timedOut.toolName(),
+                        String.format("Tool timed out after %ds.", toolTimeoutSeconds),
+                        "System")));
             } catch (ExecutionException e) {
                 log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s",
                            e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
-                allowedCompleted.add(allowedCalls.get(i).withResult("Unexpected execution failure.", false));
+                ParallelToolCall failedCall = allowedCalls.get(i);
+                allowedCompleted.add(failedCall.withResult("Unexpected execution failure.", false));
+                observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
+                    ReasoningStep.observe(failedCall.toolName(),
+                        "Unexpected execution failure.", "System")));
             }
         }
         return allowedCompleted;
-    }
-
-    private List<ParallelToolCall> mergeCompletedCalls(
-            List<ParallelToolCall> originalCalls, List<ParallelToolCall> dedupCalls, List<ParallelToolCall> allowedCompleted) {
-        List<ParallelToolCall> allCompleted = new ArrayList<>();
-        for (ParallelToolCall original : originalCalls) {
-            Optional<ParallelToolCall> dedup = dedupCalls.stream()
-                .filter(d -> Objects.equals(d.callId(), original.callId()))
-                .findFirst();
-            if (dedup.isPresent()) {
-                allCompleted.add(dedup.get());
-            } else {
-                allowedCompleted.stream()
-                    .filter(c -> Objects.equals(c.callId(), original.callId()))
-                    .findFirst()
-                    .ifPresent(allCompleted::add);
-            }
-        }
-        return allCompleted;
-    }
-
-    private StepDecision buildCompletedBatchDecision(
-            AgentExecutionContext context,
-            List<ReasoningStep> history,
-            ReasoningStep batchStep,
-            List<ParallelToolCall> completed,
-            int consecutiveFailures) {
-
-        String batchJson;
-        try {
-            batchJson = objectMapper.writeValueAsString(completed);
-        } catch (Exception e) {
-            log.errorf("[PARALLEL] Failed to serialize completed batch: %s", e.getMessage());
-            return StepDecision.terminal(AgentResult.failed(
-                "Failed to serialize parallel tool results.",
-                AgentResult.FailureCategory.SYSTEM_ERROR,
-                List.copyOf(history)));
-        }
-
-        Map<String, Object> completedPayload = new HashMap<>();
-        completedPayload.put("batch", batchJson);
-
-        String summary = completed.stream()
-            .map(c -> String.format("[%s → %s]", c.toolName(), c.success() ? "OK" : "FAIL"))
-            .collect(Collectors.joining(", "));
-
-        log.infof("[PARALLEL] session=%s batch completed: %s", context.sessionId(), summary);
-
-        boolean allSuccess = completed.stream().allMatch(ParallelToolCall::success);
-
-        ReasoningStep completedBatchStep = ReasoningStep.parallelBatch(
-            batchStep.thought(),
-            completedPayload,
-            batchStep.inputTokens(),
-            batchStep.outputTokens()
-        ).withObservation(summary, allSuccess);
-
-        history.add(completedBatchStep);
-
-        observers.forEach(o -> o.onStepComplete(
-                context.sessionId(), context.agentRole(), completedBatchStep));
-
-        return StepDecision.proceed(completedBatchStep);
     }
 
     private StepDecision handleHitlBatch(
@@ -365,7 +312,7 @@ public class ParallelToolStepExecutor {
             PreExecutionFilter.split(calls, autonomy, safeTools);
 
         if (split.preExecutable().isEmpty()) {
-            List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
+            List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
             return StepDecision.terminal(
                 checkpointManager.persistBatch(
                     context, calls, historyAtPause,
@@ -389,7 +336,7 @@ public class ParallelToolStepExecutor {
             }
         }
 
-        List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
+        List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
         return StepDecision.terminal(
             checkpointManager.persistBatchWithPreExecuted(
                 context, calls, preResults, historyAtPause,
@@ -400,12 +347,6 @@ public class ParallelToolStepExecutor {
         if (toolName == null) return false;
         String baseName = toolName.contains(":") ? toolName.split(":")[1] : toolName;
         return externalTools.contains(toolName) || externalTools.contains(baseName);
-    }
-
-    private List<ReasoningStep> appendPendingBatchStep(List<ReasoningStep> history, ReasoningStep batchStep) {
-        List<ReasoningStep> snapshot = new ArrayList<>(history);
-        snapshot.add(batchStep);
-        return List.copyOf(snapshot);
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {
