@@ -1,4 +1,4 @@
-import { AgentEvent } from './types';
+import { AgentEvent } from './generated/models';
 
 export class SseManager {
   private _reader: ReadableStreamDefaultReader<string> | null = null;

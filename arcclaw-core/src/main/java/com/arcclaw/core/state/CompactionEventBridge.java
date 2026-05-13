@@ -131,9 +131,13 @@ public class CompactionEventBridge {
         try {
             log.debugf("Compaction bridge received request for session %s", request.sessionId());
 
-            // D2.1: Protect key turns from being compacted if HITL is pending
-            if (agentStore.findLatestAwaitingApproval(request.sessionId()).isPresent()) {
-                log.infof("Compaction deferred/skipped for session %s: pending HITL approval (F15)", request.sessionId());
+            // F15: Skip compaction only if the session is actively running (IN_PROGRESS),
+            // to avoid racing with LLM chat memory reads. Safe to compact when paused
+            // for human approval (AWAITING_APPROVAL) — no LLM turn is in flight.
+            if (agentStore.findLatestAwaitingApproval(request.sessionId())
+                    .map(c -> c.getStatus() == CheckpointStatus.IN_PROGRESS)
+                    .orElse(false)) {
+                log.infof("Compaction deferred for session %s: session actively in progress", request.sessionId());
                 return;
             }
 

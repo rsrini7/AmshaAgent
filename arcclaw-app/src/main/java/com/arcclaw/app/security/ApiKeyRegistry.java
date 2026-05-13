@@ -35,7 +35,15 @@ public class ApiKeyRegistry {
     @ConfigProperty(name = "arcclaw.api.rate-limit.requests-per-minute", defaultValue = "20")
     int requestsPerMinute;
 
+    @ConfigProperty(name = "arcclaw.api.rate-limit.mutation-per-minute", defaultValue = "10")
+    int mutationPerMinute;
+
     private final Cache<String, Bucket> rateLimiter = Caffeine.newBuilder()
+                                                        .maximumSize(10_000)
+                                                        .expireAfterAccess(1, TimeUnit.HOURS)
+                                                        .build();
+
+    private final Cache<String, Bucket> mutationRateLimiter = Caffeine.newBuilder()
                                                         .maximumSize(10_000)
                                                         .expireAfterAccess(1, TimeUnit.HOURS)
                                                         .build();
@@ -94,6 +102,21 @@ public class ApiKeyRegistry {
                 .addLimit(Bandwidth.builder()
                         .capacity(requestsPerMinute)
                         .refillIntervally(requestsPerMinute, Duration.ofMinutes(1))
+                        .build())
+                .build());
+        return bucket.tryConsume(1);
+    }
+
+    /**
+     * Stricter rate limit for mutation endpoints (POST/PUT/PATCH/DELETE).
+     * Uses a separate bucket per key, refilled intervally at {@link #mutationPerMinute} per minute.
+     */
+    public boolean isMutationAllowed(String key) {
+        if (key == null) return false;
+        Bucket bucket = mutationRateLimiter.get(key, k -> Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(mutationPerMinute)
+                        .refillIntervally(mutationPerMinute, Duration.ofMinutes(1))
                         .build())
                 .build());
         return bucket.tryConsume(1);

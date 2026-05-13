@@ -47,6 +47,11 @@ public class PlaywrightCliInstaller {
             return;
         }
 
+        if (isChromiumInstalled()) {
+            log.debug("Chromium browser already installed");
+            return;
+        }
+
         try {
             System.err.println("  → Installing chromium browser…");
             String browsersOut = exec(List.of("playwright-cli", "install-browser", "chromium"));
@@ -56,6 +61,15 @@ public class PlaywrightCliInstaller {
             System.err.println("  ✓ chromium browser installed.");
         } catch (Exception e) {
             log.warnf("Playwright browser install failed (may already be installed): %s", e.getMessage());
+        }
+    }
+
+    private static boolean isChromiumInstalled() {
+        try {
+            String out = exec(List.of("playwright-cli", "browser-path", "chromium"));
+            return out != null && !out.isBlank();
+        } catch (Exception e) {
+            return false;
         }
     }
 

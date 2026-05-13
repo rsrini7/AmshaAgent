@@ -1,6 +1,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { SkillDto, ToolDto } from '../api/types';
+import { SkillDto } from '../api/generated/models/SkillDto';
+import { ToolDto } from '../api/types';
 import { ArcClient } from '../api/client';
 
 

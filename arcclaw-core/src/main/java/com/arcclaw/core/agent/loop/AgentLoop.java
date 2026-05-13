@@ -217,9 +217,16 @@ public class AgentLoop {
 
         String chatId = context != null && context.getChatId() != null ? context.getChatId() : sessionId;
         AutonomyLevel autonomy = context != null && context.getAutonomyLevel().isPresent() 
-            ? context.getAutonomyLevel().get() : AutonomyLevel.SUPERVISED;
+            ? context.getAutonomyLevel().get() 
+            : (WorkspaceContext.AUTONOMY.isBound() && WorkspaceContext.AUTONOMY.get() != null 
+                ? WorkspaceContext.AUTONOMY.get() 
+                : AutonomyLevel.SUPERVISED);
         String channelTypeStr = context != null && context.getChannelType() != null 
-            ? context.getChannelType().name() : null;
+            ? context.getChannelType().name() 
+            : WorkspaceContext.channelType().orElse(null);
+        String channelPlatformId = context != null && context.getUser() != null 
+            ? context.getUser().platformId() 
+            : WorkspaceContext.channelPlatformId();
 
         return new AgentExecutionContext(
                 sessionId,
@@ -232,7 +239,7 @@ public class AgentLoop {
                 maxIterations,
                 decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
                 channelTypeStr,
-                context != null && context.getUser() != null ? context.getUser().platformId() : null,
+                channelPlatformId,
                 systemNote,
                 mergedData
         );

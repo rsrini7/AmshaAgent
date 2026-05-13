@@ -36,13 +36,7 @@ public class WebChatEndpoint {
 
     private static final Logger log = Logger.getLogger(WebChatEndpoint.class);
 
-    // conn.id() → platformId (UUID per WebSocket connection, used as channelId/userId)
-    private final Map<String, String> connectionToSession = new ConcurrentHashMap<>();
-
-    // conn.id() → ArcClaw sessionId (resolved by SessionRegistry, used for REST/HITL calls)
-    private final Map<String, String> connectionToArcclawSession = new ConcurrentHashMap<>();
-    
-    // Sessions currently undergoing termination
+    // Sessions currently undergoing termination (keyed by arcclawSessionId)
     private final Set<String> terminatingSessions = ConcurrentHashMap.newKeySet();
 
     @Inject WebSocketSessionStore sessionStore;
@@ -50,8 +44,10 @@ public class WebChatEndpoint {
     @Inject PendingApprovalChecker pendingApprovalChecker;
     @Inject WsTokenStore wsTokenStore;
 
-    // conn.id() → authenticated boolean
-    private final Map<String, Boolean> connectionAuthenticated = new ConcurrentHashMap<>();
+    private record ConnectionState(String platformId, String arcclawSessionId, boolean authenticated) {}
+
+    // conn.id() → consolidated connection state
+    private final Map<String, ConnectionState> connections = new ConcurrentHashMap<>();
 
     @ConfigProperty(name = "arcclaw.channel.web.require-auth", defaultValue = "false")
     boolean requireAuth;
@@ -84,11 +80,20 @@ public class WebChatEndpoint {
                 platformId = UUID.randomUUID().toString();
             }
 
-            connectionToSession.put(conn.id(), platformId);
-
             String arcclawSessionId = channelServices.resolveOrCreateSession(
                 ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
-            connectionToArcclawSession.put(conn.id(), arcclawSessionId);
+
+            // Close any stale connection for the same platformId to prevent duplicate broadcasts
+            String pid = platformId;
+            sessionStore.get(pid).ifPresent(oldConn -> {
+                log.infof("Closing stale WebSocket %s for platformId %s (replaced by %s)",
+                    oldConn.id(), pid, conn.id());
+                connections.remove(oldConn.id());
+                sessionStore.unregister(pid);
+                oldConn.close().subscribe().with(v -> {}, err -> {});
+            });
+
+            connections.put(conn.id(), new ConnectionState(platformId, arcclawSessionId, !requireAuth));
 
             log.debugf("WebSocket mapping established: connId=%s -> platformId=%s, arcclawSession=%s", 
                 conn.id(), platformId, arcclawSessionId);
@@ -107,7 +112,7 @@ public class WebChatEndpoint {
     }
 
     private void setupAuthenticatedSession(WebSocketConnection conn, String platformId, String arcclawSessionId) {
-        connectionAuthenticated.put(conn.id(), true);
+        connections.put(conn.id(), new ConnectionState(platformId, arcclawSessionId, true));
         
         // Track connection and mapping in the globally accessible store (§85-C)
         sessionStore.register(platformId, arcclawSessionId, conn);
@@ -132,12 +137,13 @@ public class WebChatEndpoint {
             JsonObject json = reader.readObject();
             String type = json.getString("type", "");
 
-            if (requireAuth && !connectionAuthenticated.containsKey(conn.id())) {
+            ConnectionState cs = connections.get(conn.id());
+            if (requireAuth && (cs == null || !cs.authenticated())) {
                 if ("AUTH".equals(type)) {
                     String token = json.getString("token", "");
                     if (wsTokenStore.validateAndConsumeToken(token)) {
-                        String platformId = connectionToSession.get(conn.id());
-                        String arcclawSessionId = connectionToArcclawSession.get(conn.id());
+                        String platformId = cs != null ? cs.platformId() : null;
+                        String arcclawSessionId = cs != null ? cs.arcclawSessionId() : null;
                         setupAuthenticatedSession(conn, platformId, arcclawSessionId);
                     } else {
                         conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid or expired token\"}");
@@ -158,12 +164,13 @@ public class WebChatEndpoint {
                 return;
             }
 
-            String platformId = connectionToSession.get(conn.id());
-            if (platformId == null) {
-                log.warnf("Received message without a platformId mapped for connection %s. connectionToSession.size=%d, requireAuth=%b", 
-                    conn.id(), connectionToSession.size(), requireAuth);
+            ConnectionState messageCs = connections.get(conn.id());
+            if (messageCs == null || messageCs.platformId() == null) {
+                log.warnf("Received message without a platformId mapped for connection %s. connections.size=%d, requireAuth=%b", 
+                    conn.id(), connections.size(), requireAuth);
                 return;
             }
+            String platformId = messageCs.platformId();
 
             ChannelUser user = new ChannelUser(
                 platformId,
@@ -199,9 +206,9 @@ public class WebChatEndpoint {
 
     private void cleanup(WebSocketConnection conn, String reason) {
         String connId = conn.id();
-        connectionAuthenticated.remove(connId);
-        String platformId = connectionToSession.remove(connId);
-        String arcclawSessionId = connectionToArcclawSession.remove(connId);
+        ConnectionState removed = connections.remove(connId);
+        String platformId = removed != null ? removed.platformId() : null;
+        String arcclawSessionId = removed != null ? removed.arcclawSessionId() : null;
 
         if (platformId != null) {
             sessionStore.unregister(platformId);

@@ -83,17 +83,17 @@ public class HitlServiceTest {
     @Test
     public void testGetPendingApprovalsIsTenantScoped() {
         // userA should only see cpA
-        Map<String, HitlService.PendingApproval> userAApprovals = hitlService.getPendingApprovals("userA", 50);
+        Map<String, HitlService.PendingApproval> userAApprovals = hitlService.getPendingApprovals("userA", 50, 0);
         assertEquals(1, userAApprovals.size());
         assertTrue(userAApprovals.containsKey(String.valueOf(cpUserA_Id)));
 
         // userB should only see cpB
-        Map<String, HitlService.PendingApproval> userBApprovals = hitlService.getPendingApprovals("userB", 50);
+        Map<String, HitlService.PendingApproval> userBApprovals = hitlService.getPendingApprovals("userB", 50, 0);
         assertEquals(1, userBApprovals.size());
         assertTrue(userBApprovals.containsKey(String.valueOf(cpUserB_Id)));
         
         // Blank or null user yields empty results
-        assertTrue(hitlService.getPendingApprovals(null, 50).isEmpty());
-        assertTrue(hitlService.getPendingApprovals("", 50).isEmpty());
+        assertTrue(hitlService.getPendingApprovals(null, 50, 0).isEmpty());
+        assertTrue(hitlService.getPendingApprovals("", 50, 0).isEmpty());
     }
 }

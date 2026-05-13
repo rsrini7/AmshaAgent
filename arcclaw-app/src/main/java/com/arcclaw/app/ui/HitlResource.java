@@ -2,12 +2,15 @@ package com.arcclaw.app.ui;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -21,10 +24,13 @@ import jakarta.ws.rs.core.SecurityContext;
 
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
+import com.arcclaw.app.ui.dto.PageDto;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -42,6 +48,12 @@ public class HitlResource {
 
     @Context
     SecurityContext securityContext;
+
+    // Idempotency cache: idempotencyKey → Response (prevents double-approvals via X-Idempotency-Key)
+    private final Cache<String, Response> idempotencyCache = Caffeine.newBuilder()
+            .maximumSize(10_000)
+            .expireAfterWrite(1, TimeUnit.HOURS)
+            .build();
 
     @GET
     @Path("/events")
@@ -73,7 +85,9 @@ public class HitlResource {
 
     @GET
     @Operation(summary = "List all pending tool execution approvals for the current user")
-    public Response listPending() {
+    public Response listPending(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
         String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
             ? securityContext.getUserPrincipal().getName()
@@ -84,7 +98,12 @@ public class HitlResource {
                     .build();
         }
 
-        List<PendingApprovalDto> result = hitlService.getPendingApprovals(userId, 50).values().stream()
+        int effectiveSize = Math.min(Math.max(1, size), 50);
+        int offset = page * effectiveSize;
+
+        long totalCount = hitlService.countPendingApprovals(userId);
+        List<PendingApprovalDto> items = hitlService.getPendingApprovals(userId, effectiveSize, offset)
+            .values().stream()
             .map(pending -> new PendingApprovalDto(
                 pending.taskId(),
                 pending.sessionId(),
@@ -94,19 +113,32 @@ public class HitlResource {
                 pending.agentRole()
             ))
             .collect(Collectors.toList());
-        return Response.ok(result).build();
+
+        PageDto<PendingApprovalDto> pageResult = PageDto.of(items, page, effectiveSize, totalCount);
+        return Response.ok(pageResult).build();
     }
 
     @POST
     @Path("{taskId}/approve")
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Approve a pending tool execution")
-    public Response approve(@PathParam("taskId") String taskId, CheckpointApprovalRequest request) {
+    public Response approve(
+            @PathParam("taskId") String taskId,
+            CheckpointApprovalRequest request,
+            @HeaderParam("X-Idempotency-Key") String idempotencyKey) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Response cached = idempotencyCache.getIfPresent(idempotencyKey);
+            if (cached != null) return cached;
+        }
         String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null) ? request.reason() : "Approved via REST";
         try {
             hitlService.resolve(taskId, toolName, true, reason);
-            return Response.ok(new CheckpointApprovalResponse("approved", taskId, toolName, reason)).build();
+            Response response = Response.ok(new CheckpointApprovalResponse("approved", taskId, toolName, reason)).build();
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyCache.put(idempotencyKey, response);
+            }
+            return response;
         } catch (Exception e) {
             return handleException(taskId, e);
         }
@@ -116,13 +148,24 @@ public class HitlResource {
     @Path("{taskId}/reject")
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Reject a pending tool execution")
-    public Response reject(@PathParam("taskId") String taskId, CheckpointApprovalRequest request) {
+    public Response reject(
+            @PathParam("taskId") String taskId,
+            CheckpointApprovalRequest request,
+            @HeaderParam("X-Idempotency-Key") String idempotencyKey) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Response cached = idempotencyCache.getIfPresent(idempotencyKey);
+            if (cached != null) return cached;
+        }
         String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null && request.reason() != null && !request.reason().isBlank()) 
             ? request.reason() : "Rejected by user";
         try {
             hitlService.resolve(taskId, toolName, false, reason);
-            return Response.ok(new CheckpointApprovalResponse("rejected", taskId, toolName, reason)).build();
+            Response response = Response.ok(new CheckpointApprovalResponse("rejected", taskId, toolName, reason)).build();
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyCache.put(idempotencyKey, response);
+            }
+            return response;
         } catch (Exception e) {
             return handleException(taskId, e);
         }

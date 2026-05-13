@@ -53,6 +53,7 @@ class ApproveReflexDelegateTest {
     @Mock CliResultBridge cliResultBridge;
     @Mock WorkspaceManager workspaceManager;
     @Mock Event<AgentJobCompleted> jobCompletedEvent;
+    @Mock ResumeResultHelper resumeResultHelper;
     
     ApproveReflex reflex;
     
@@ -71,6 +72,8 @@ class ApproveReflexDelegateTest {
         reflex.cliResultBridge = cliResultBridge;
         reflex.workspaceManager = workspaceManager;
         reflex.jobCompletedEvent = jobCompletedEvent;
+        reflex.resumeResultHelper = resumeResultHelper;
+        reflex.cronDecisionRouter = createCronRouter();
         reflex.log = mock(Logger.class);
     }
 
@@ -186,6 +189,16 @@ class ApproveReflexDelegateTest {
 
         // Verify the cron path was actually attempted
         verify(cronRepository, atLeastOnce()).findById(any());
+    }
+
+    private CronDecisionRouter createCronRouter() {
+        CronDecisionRouter router = new CronDecisionRouter();
+        router.statefulAgentStore = agentStore;
+        router.cronRepository = cronRepository;
+        router.agentLoop = agentLoop;
+        router.reasoningEngine = reasoningEngine;
+        router.workspaceManager = workspaceManager;
+        return router;
     }
 
     private MessageContext createTestContext(String sessionId, String userId, String text) {

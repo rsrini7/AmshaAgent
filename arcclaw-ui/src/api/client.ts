@@ -1,4 +1,6 @@
-import { AgentStatusDto, PendingApprovalDto, ApprovalResultDto, ToolDto, SkillDto } from './types';
+import { AgentStatusDto } from './generated/models/AgentStatusDto';
+import { SkillDto } from './generated/models/SkillDto';
+import { PendingApprovalDto, ApprovalResultDto, ToolDto } from './types';
 
 export class ArcClient {
   constructor(
@@ -22,8 +24,8 @@ export class ArcClient {
     return r.json();
   }
 
-  async getHitl(): Promise<PendingApprovalDto[]> {
-    const r = await fetch(`${this.baseUrl}/hitl`, { headers: this.headers() });
+  async getHitl(page = 0, size = 20): Promise<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }> {
+    const r = await fetch(`${this.baseUrl}/hitl?page=${page}&size=${size}`, { headers: this.headers() });
     if (!r.ok) throw new Error(`GET /hitl failed: ${r.status}`);
     return r.json();
   }
