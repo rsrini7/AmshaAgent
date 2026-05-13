@@ -17,14 +17,14 @@ public class WorkspaceGovernanceTest {
     @Test
     void testSessionIdBoundCorrectly() {
         WorkspaceContext.run(TEST_SESSION_ID, "gov-user", "gov-chat", AutonomyLevel.READONLY, "coordinator", () -> {
-            assertEquals(TEST_SESSION_ID, WorkspaceContext.requireSessionId());
+            assertEquals(TEST_SESSION_ID, WorkspaceContext.SESSION_ID.get());
         });
     }
 
     @Test
     void testAutonomyBoundCorrectly() {
         WorkspaceContext.run(TEST_SESSION_ID, "gov-user", "gov-chat", AutonomyLevel.SUPERVISED, "coordinator", () -> {
-            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.requireAutonomyOrSupervised());
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.AUTONOMY.get());
         });
     }
 

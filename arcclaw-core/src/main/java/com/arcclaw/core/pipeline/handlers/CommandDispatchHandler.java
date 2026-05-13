@@ -174,7 +174,6 @@ public class CommandDispatchHandler implements MessageHandler {
         return HandleResult.CONTINUE;
     }
 
-    @SuppressWarnings("deprecation")
     private void dispatch(MessageContext context, String input) {
         String sessionId = context.getSessionId().orElse("");
         String userId    = context.getUser().platformId();

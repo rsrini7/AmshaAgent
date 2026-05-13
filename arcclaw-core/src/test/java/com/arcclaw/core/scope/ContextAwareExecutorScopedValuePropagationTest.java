@@ -42,11 +42,11 @@ public class ContextAwareExecutorScopedValuePropagationTest {
 
         Callable<Boolean> task = () -> {
             // Assert all 6 are non-null and match the caller's values.
-            assertEquals(sid, WorkspaceContext.requireSessionId());
-            assertEquals(uid, WorkspaceContext.requireUserId());
-            assertEquals(cid, WorkspaceContext.requireChatId());
-            assertEquals(auto, WorkspaceContext.requireAutonomyOrSupervised());
-            assertEquals(role, WorkspaceContext.requireAgentRole());
+            assertEquals(sid, WorkspaceContext.SESSION_ID.get());
+            assertEquals(uid, WorkspaceContext.USER_ID.get());
+            assertEquals(cid, WorkspaceContext.CHAT_ID.get());
+            assertEquals(auto, WorkspaceContext.AUTONOMY.get());
+            assertEquals(role, WorkspaceContext.AGENT_ROLE.get());
             assertEquals(channel, WorkspaceContext.channelType().orElse(""));
             return true;
         };
@@ -71,7 +71,7 @@ public class ContextAwareExecutorScopedValuePropagationTest {
 
         Callable<Boolean> task = () -> {
             // Inside the task, assert WorkspaceContext.autonomy() == SUPERVISED
-            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.requireAutonomyOrSupervised());
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.AUTONOMY.get());
             return true;
         };
 

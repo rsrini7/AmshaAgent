@@ -60,7 +60,7 @@ class AgentDispatchHandlerAutonomyTest {
         AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-full"), anyString(), anyString(), any(), anyInt(), eq(ctx)))
                 .thenAnswer(inv -> {
-                    captured.set(WorkspaceContext.requireAutonomyOrSupervised());
+                    captured.set(WorkspaceContext.AUTONOMY.get());
                     return AgentResult.finished("done", Collections.emptyList());
                 });
 
@@ -77,15 +77,15 @@ class AgentDispatchHandlerAutonomyTest {
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "chat-supervised", Instant.now());
         MessageContext ctx = new MessageContext("chat-supervised", user, msg);
         ctx.setSessionId("session-supervised");
-        // Explicitly null autonomy
-        ctx.setAutonomyLevel(null);
+        // SessionResolutionHandler now defaults null autonomy to SUPERVISED before dispatch
+        ctx.setAutonomyLevel(AutonomyLevel.SUPERVISED);
         ctx.setSessionContext(new SessionContext(
-            "session-supervised", user, null, false));
+            "session-supervised", user, AutonomyLevel.SUPERVISED, false));
 
         AtomicReference<AutonomyLevel> captured = new AtomicReference<>();
         when(agentLoop.run(eq("session-supervised"), anyString(), anyString(), any(), anyInt(), eq(ctx)))
                 .thenAnswer(inv -> {
-                    captured.set(WorkspaceContext.requireAutonomyOrSupervised());
+                    captured.set(WorkspaceContext.AUTONOMY.get());
                     return AgentResult.finished("done", Collections.emptyList());
                 });
 

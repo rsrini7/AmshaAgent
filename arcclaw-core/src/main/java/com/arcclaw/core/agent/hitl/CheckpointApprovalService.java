@@ -243,13 +243,4 @@ public class CheckpointApprovalService {
         ));
     }
 
-    /**
-     * @deprecated No longer needed — {@link #triggerResume} publishes the single RESUMED event.
-     *             Retained for backward compatibility with callers that haven't been updated yet.
-     */
-    @Deprecated(since = "P4")
-    public void recordResumed(String sessionId, String agentRole) {
-        // No-op: triggerResume now publishes the single RESUMED event.
-        log.debugf("HITL-RESUME: recordResumed called for session %s (no-op, triggerResume handles SSE)", sessionId);
-    }
 }
