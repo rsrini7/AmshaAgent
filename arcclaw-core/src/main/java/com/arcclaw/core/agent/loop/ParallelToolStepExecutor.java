@@ -210,7 +210,7 @@ public class ParallelToolStepExecutor {
         GuardEvaluationResult r = new GuardEvaluationResult();
         for (ParallelToolCall call : calls) {
             ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                context.sessionId(), context.agentRole(),
+                context.sessionId(), context.agentRole(), context.autonomyLevel(),
                 call.toolName(), call.params(), history,
                 context.goal(), List.of());
             if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval) {
@@ -355,16 +355,6 @@ public class ParallelToolStepExecutor {
             ReasoningStep batchStep,
             List<ParallelToolCall> calls) {
 
-        String originalBatchJson;
-        try {
-            originalBatchJson = objectMapper.writeValueAsString(calls);
-        } catch (Exception e) {
-            return StepDecision.terminal(AgentResult.failed(
-                "Failed to serialize batch for HITL approval.",
-                AgentResult.FailureCategory.SYSTEM_ERROR,
-                List.copyOf(history)));
-        }
-
         Set<String> safeTools = preExecutableTools
             .map(HashSet::new)
             .orElse(new HashSet<>());
@@ -374,19 +364,15 @@ public class ParallelToolStepExecutor {
         PreExecutionFilter.SplitResult split =
             PreExecutionFilter.split(calls, autonomy, safeTools);
 
-        String compositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX +
-            calls.stream().map(ParallelToolCall::toolName)
-                 .collect(Collectors.joining(","));
-
         if (split.preExecutable().isEmpty()) {
             List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
             return StepDecision.terminal(
                 checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, historyAtPause,
+                    context, calls, historyAtPause,
                     context.channelType(), context.channelPlatformId()));
         }
 
-        Map<String, String> preResults = new LinkedHashMap<>();
+        Map<String, ToolResponse> preResults = new LinkedHashMap<>();
         for (ParallelToolCall call : split.preExecutable()) {
             try {
                 ToolResponse resp = WorkspaceContext.runWithFullAutonomy(
@@ -394,39 +380,19 @@ public class ParallelToolStepExecutor {
                     context.agentRole(),
                     () -> sequentialToolExecutor.invoke(call.toolName(), call.params(), context.sessionId()));
                 
-                preResults.put(call.toolName(), objectMapper.writeValueAsString(resp));
+                preResults.put(call.toolName(), resp);
                 log.debugf("[PRE-EXEC] session=%s tool=%s succeeded.", context.sessionId(), call.toolName());
             } catch (Exception e) {
                 log.warnf("[PRE-EXEC] session=%s tool %s failed pre-execution: %s",
                     context.sessionId(), call.toolName(), e.getMessage());
-                ToolResponse errorResp = ToolResponse.failure(1, "Pre-execution failed: " + e.getMessage());
-                try {
-                    preResults.put(call.toolName(), objectMapper.writeValueAsString(errorResp));
-                } catch (Exception ignored) {}
+                preResults.put(call.toolName(), ToolResponse.failure(1, "Pre-execution failed: " + e.getMessage()));
             }
-        }
-
-        String hitlCompositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX +
-            split.hitlPending().stream()
-            .map(ParallelToolCall::toolName)
-            .collect(Collectors.joining(","));
-
-        String preResultsJson;
-        try {
-            preResultsJson = objectMapper.writeValueAsString(preResults);
-        } catch (Exception e) {
-            log.errorf("Failed to serialize pre-executed results: %s", e.getMessage());
-            List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
-            return StepDecision.terminal(checkpointManager.persistBatch(
-                    context, compositeName, originalBatchJson, calls, historyAtPause,
-                    context.channelType(), context.channelPlatformId()));
         }
 
         List<ReasoningStep> historyAtPause = appendPendingBatchStep(history, batchStep);
         return StepDecision.terminal(
             checkpointManager.persistBatchWithPreExecuted(
-                context, hitlCompositeName, originalBatchJson,
-                split.hitlPending(), preResultsJson, historyAtPause,
+                context, calls, preResults, historyAtPause,
                 context.channelType(), context.channelPlatformId()));
     }
 

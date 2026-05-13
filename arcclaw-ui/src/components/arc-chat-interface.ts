@@ -4,7 +4,6 @@ import { WsManager } from '../api/websocket';
 import { marked } from 'marked';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import DOMPurify from 'dompurify';
-import '@lit-labs/virtualizer';
 
 interface ChatMessage {
   id: string;
@@ -12,6 +11,10 @@ interface ChatMessage {
   text: string;
   timestamp: number;
   isApprovalPrompt?: boolean;
+  approvalData?: {
+    tool: string;
+    params: any;
+  };
   historic?: boolean;
   targetSessionId?: string;
 }
@@ -75,25 +78,21 @@ export class ArcChatInterface extends LitElement {
 
     .messages {
       flex: 1; display: flex; flex-direction: column;
-      padding: 0; scroll-behavior: smooth;
-      /* Lit virtualizer needs a defined height or flex parent */
-      height: 100%;
-    }
-    
-    lit-virtualizer {
-      height: 100%;
-      width: 100%;
-      padding: 24px;
-      box-sizing: border-box;
+      padding: 24px; scroll-behavior: smooth;
+      overflow-y: auto;
+      position: relative;
+      min-height: 0;
     }
     
     .msg-group {
-      display: flex; flex-direction: column; gap: 6px;
-      max-width: min(680px, 80%);
+      display: flex; flex-direction: column; gap: 2px;
+      max-width: 80%;
+      margin: 4px 0;
+      flex: 0 0 auto;
     }
-    .msg-group-user { align-self: flex-end; }
-    .msg-group-assistant { align-self: flex-start; }
-    .msg-group-system { align-self: center; max-width: 100%; }
+    .msg-group-user { align-self: flex-end; align-items: flex-end; }
+    .msg-group-assistant { align-self: flex-start; align-items: flex-start; }
+    .msg-group-system { align-self: center; max-width: 100%; align-items: center; margin: 12px 0; }
 
     .msg-header {
       display: flex; align-items: center; gap: 8px;
@@ -110,12 +109,16 @@ export class ArcChatInterface extends LitElement {
     }
 
     .bubble { 
-      padding: 12px 16px; border-radius: 12px;
-      font-size: 14px; line-height: 1.6; color: var(--text-primary);
+      padding: 8px 12px; border-radius: 12px;
+      font-size: 13px; line-height: 1.4; color: var(--text-primary);
       word-break: break-word; position: relative;
+      width: fit-content;
+      max-width: 100%;
     }
+    .bubble-user { white-space: pre-wrap; }
     .bubble-user {
       background: var(--accent);
+      color: white;
       border-radius: 18px 18px 4px 18px;
       box-shadow: 0 4px 12px rgba(108, 99, 255, 0.2);
     }
@@ -123,6 +126,7 @@ export class ArcChatInterface extends LitElement {
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       border-radius: 18px 18px 18px 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .bubble-system {
       background: transparent; color: var(--text-muted); padding: 4px 12px;
@@ -197,16 +201,26 @@ export class ArcChatInterface extends LitElement {
     .bubble pre { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin: 8px 0; overflow-x: auto; }
     .bubble code { font-family: 'Fira Code', monospace; font-size: 0.9em; background: rgba(255,255,255,0.05); padding: 2px 4px; border-radius: 4px; }
     .bubble pre code { background: transparent; padding: 0; }
-    .bubble p { margin-bottom: 8px; }
+    .bubble p { margin-bottom: 4px; }
     .bubble p:last-child { margin-bottom: 0; }
 
     /* Approval Card - Custom Full Width Style */
     .approval-card {
-       width: 100%; max-width: 100% !important; margin: 10px 0;
-       border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.05);
+       width: 100%; max-width: 600px !important; margin: 12px 0;
+       border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.08);
        border-radius: 12px; overflow: hidden;
+       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
     .approval-body { padding: 16px; border-bottom: 1px solid rgba(245, 158, 11, 0.2); }
+    .approval-title { font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .approval-tool { font-size: 13px; margin-bottom: 8px; }
+    .approval-tool code { background: rgba(245, 158, 11, 0.2); padding: 2px 6px; border-radius: 4px; color: #fbbf24; }
+    .approval-params-header { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+    .approval-params { 
+       background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; 
+       font-size: 12px; font-family: 'Fira Code', monospace; 
+       margin: 0; overflow-x: auto; max-height: 240px; border: 1px solid rgba(255,255,255,0.05);
+    }
     .approval-actions { display: flex; padding: 12px; gap: 10px; background: rgba(10, 11, 15, 0.5); }
     .btn-approve { flex: 1; height: 38px; background: #00d4aa; color: #0a0b0f; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
     .btn-deny { border: 1px solid rgba(255,255,255,0.1); background: transparent; color: white; border-radius: 8px; padding: 0 16px; cursor: pointer; }
@@ -239,7 +253,7 @@ export class ArcChatInterface extends LitElement {
           text: m.text,
           timestamp: m.timestamp || Date.now(),
           historic: true,
-          isApprovalPrompt: m.role === 'assistant' && m.text.includes('⏸'),
+          isApprovalPrompt: m.role === 'assistant' && (m.text.includes('⏸') || m.text.includes('Approval')),
           actionId: m.actionId || null
         }));
       await this.updateComplete;
@@ -307,8 +321,8 @@ export class ArcChatInterface extends LitElement {
     const baseDelay = 1000;
     const maxDelay = 30000;
     const delay = Math.min(maxDelay, baseDelay * Math.pow(2, this._reconnectAttempts));
-    const jitter = delay * 0.2 * (Math.random() - 0.5);
-    const finalDelay = delay + jitter;
+    const jitter = delay * 0.2 * (Math.random() * 2 - 1);
+    const finalDelay = Math.max(baseDelay, delay + jitter);
 
     console.log(`ArcClaw: Reconnecting in ${Math.round(finalDelay)}ms (attempt ${this._reconnectAttempts + 1})`);
     
@@ -341,21 +355,21 @@ export class ArcChatInterface extends LitElement {
       this._isTyping = false;
       this._awaitingApproval = false;
       this._showDenyReason = false;
-      const isApproval = frame.text.includes('⏸');
+      
+      const isApproval = frame.approval || frame.text.includes('⏸');
+      
       this._messages = [...this._messages, {
         id: crypto.randomUUID(), 
         role: 'assistant', 
         text: frame.text, 
         timestamp: frame.timestamp || Date.now(), 
-        isApprovalPrompt: isApproval,
+        isApprovalPrompt: !!isApproval,
+        approvalData: frame.approval || null,
         targetSessionId: frame.sessionId || null
       }];
       if (isApproval) this._awaitingApproval = true;
       // Scroll to bottom after new message
-      this.updateComplete.then(() => {
-        const virtualizer = this.shadowRoot?.querySelector('lit-virtualizer') as any;
-        if (virtualizer) virtualizer.scrollToIndex(this._messages.length - 1, 'smooth');
-      });
+      this._scrollToBottom();
     }
   }
 
@@ -366,10 +380,7 @@ export class ArcChatInterface extends LitElement {
     this._ws?.send({ type: 'message', text });
     this._input = '';
     this._isTyping = true;
-    this.updateComplete.then(() => {
-      const virtualizer = this.shadowRoot?.querySelector('lit-virtualizer') as any;
-      if (virtualizer) virtualizer.scrollToIndex(this._messages.length - 1, 'smooth');
-    });
+    this._scrollToBottom();
   }
   
   private _sendApprove(msg: ChatMessage) {
@@ -445,9 +456,7 @@ export class ArcChatInterface extends LitElement {
   render() {
     return html`
       <div class="messages">
-        <lit-virtualizer
-          .items=${this._messages}
-          .renderItem=${(m: ChatMessage) => m.role === 'system' ? html`
+        ${this._messages.map(m => m.role === 'system' ? html`
             <div class="msg-group msg-group-system">
                <div class="bubble bubble-system">${m.text}</div>
             </div>
@@ -456,35 +465,10 @@ export class ArcChatInterface extends LitElement {
                <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
                  ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> ArcClaw Agent` : 'You'}
                </div>
-               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">
-                 ${m.role === 'user' ? m.text : this._renderMarkdown(m.id, m.text)}
-                 
-                 ${m.isApprovalPrompt && this._awaitingApproval ? html`
-                   <div class="approval-card">
-                     <div class="approval-body">
-                       <strong>Action Requires Approval</strong>
-                       <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
-                         This session has paused to wait for your permission.
-                       </p>
-                     </div>
-                     <div class="approval-actions">
-                        ${this._showDenyReason ? html`
-                          <textarea class="deny-reason" .value=${this._denyReason} 
-                            @input=${(e: any) => this._denyReason = e.target.value}
-                            placeholder="Reason for denial (optional)..."></textarea>
-                        ` : nothing}
-                        <button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button>
-                        <button class="btn-deny" @click=${() => this._sendDeny(m)}>
-                          ${this._showDenyReason ? 'Send Feedback' : 'Deny'}
-                        </button>
-                     </div>
-                   </div>
-                 ` : nothing}
-               </div>
+               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">${m.role === 'user' ? m.text : this._renderMarkdown(m.id, m.text)}${m.isApprovalPrompt && this._awaitingApproval ? html`<div class="approval-card"><div class="approval-body"><div class="approval-title"><span>⏸</span> Action Requires Approval</div>${m.approvalData ? html`<div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div><div class="approval-params-header">Parameters:</div><pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>` : html`<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">This session has paused to wait for your permission.</p>`}</div><div class="approval-actions">${this._showDenyReason ? html`<textarea class="deny-reason" .value=${this._denyReason} @input=${(e: any) => this._denyReason = e.target.value} placeholder="Reason for denial (optional)..."></textarea>` : nothing}<button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button><button class="btn-deny" @click=${() => this._sendDeny(m)}>${this._showDenyReason ? 'Send Feedback' : 'Deny'}</button></div></div>` : nothing}</div>
                <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
             </div>
-          `}
-        ></lit-virtualizer>
+          `)}
         
         ${this._isTyping ? html`
           <div class="typing">

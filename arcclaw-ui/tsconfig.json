@@ -22,5 +22,9 @@
     /* Lit-specific */
     "experimentalDecorators": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "src/api/generated"
+  ]
 }

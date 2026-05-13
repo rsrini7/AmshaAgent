@@ -15,6 +15,7 @@ import jakarta.enterprise.event.Event;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.security.AutonomyLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,8 +51,8 @@ class CheckListToolTest {
             Map.of("content", "Task 2", "status", "in_progress", "activeForm", "f2")
         ));
 
-        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", null, "architect", () -> {
-            ToolResponse resp = tool.execute(params);
+        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", AutonomyLevel.FULL, "architect", () -> {
+            ToolResponse resp = tool.execute(ctx(), params);
             assertTrue(resp.success());
 
             ArgumentCaptor<CheckListEvent> captor = ArgumentCaptor.forClass(CheckListEvent.class);
@@ -73,8 +74,8 @@ class CheckListToolTest {
             Map.of("content", "T2", "status", "in_progress", "activeForm", "f2")
         ));
 
-        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", null, "architect", () -> {
-            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> tool.execute(params));
+        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", AutonomyLevel.FULL, "architect", () -> {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> tool.execute(ctx(), params));
             assertTrue(ex.getMessage().contains("Found: 2"));
         });
     }
@@ -85,8 +86,8 @@ class CheckListToolTest {
             Map.of("content", "", "status", "pending", "activeForm", "f1")
         ));
 
-        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", null, "architect", () -> {
-            assertThrows(IllegalArgumentException.class, () -> tool.execute(params));
+        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", AutonomyLevel.FULL, "architect", () -> {
+            assertThrows(IllegalArgumentException.class, () -> tool.execute(ctx(), params));
         });
     }
 
@@ -94,16 +95,24 @@ class CheckListToolTest {
     void testEmptyChecklistThrows() {
         Map<String, Object> params = Map.of("checkList", List.of());
 
-        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", null, "architect", () -> {
-            assertThrows(IllegalArgumentException.class, () -> tool.execute(params));
+        WorkspaceContext.run(SESSION_ID, USER_ID, "chat-1", AutonomyLevel.FULL, "architect", () -> {
+            assertThrows(IllegalArgumentException.class, () -> tool.execute(ctx(), params));
         });
     }
 
     @Test
     void testMissingUserIdThrowsForbidden() {
-         WorkspaceContext.run(SESSION_ID, "", "chat-1", null, "architect", () -> {
-            ToolResponse resp = tool.execute(Map.of("checkList", List.of(Map.of("content", "t", "status", "pending", "activeForm", "f"))));
-            assertEquals(403, resp.exitCode());
-        });
+        ToolExecutionContext emptyUserCtx = new ToolExecutionContext(
+            SESSION_ID, "", "chat-1", "architect", AutonomyLevel.FULL, 
+            "trace-1", null, null, null, null, null, null);
+        
+        ToolResponse resp = tool.execute(emptyUserCtx, Map.of("checkList", List.of(Map.of("content", "t", "status", "pending", "activeForm", "f"))));
+        assertEquals(403, resp.exitCode());
+    }
+
+    private ToolExecutionContext ctx() {
+        return new ToolExecutionContext(
+            SESSION_ID, USER_ID, "chat-1", "architect", AutonomyLevel.FULL, 
+            "trace-1", null, null, null, null, null, null);
     }
 }

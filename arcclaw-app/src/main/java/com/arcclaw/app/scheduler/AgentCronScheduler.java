@@ -34,6 +34,7 @@ import com.arcclaw.persistence.api.AdvisoryLockPort;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
+import io.smallrye.mutiny.Uni;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
@@ -108,16 +109,12 @@ public class AgentCronScheduler {
      * but whose sessions are now dead (as all sessions are non-persistent §5.17).
      */
     void onStartup(@Observes StartupEvent ev) {
-        vThreads.execute(() -> {
-            try {
-                // Wait briefly for persistence adapters to stabilize
-                Thread.sleep(startupDelayMs);
-                if (!active) return;
-                sweepOrphanedApprovalJobs();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
+        // Wait briefly for persistence adapters to stabilize without blocking virtual thread
+        Uni.createFrom().voidItem()
+           .onItem().delayIt().by(Duration.ofMillis(startupDelayMs))
+           .subscribe().with(unused -> {
+               if (active) sweepOrphanedApprovalJobs();
+           }, failure -> log.error("Startup orphan sweep failed", failure));
     }
 
     private void sweepOrphanedApprovalJobs() {

@@ -33,7 +33,7 @@ public class Vec0NativeLibraryInstaller {
                     defaultValue = "./lib/vec0")
     String configuredVecPath;
 
-    void onStart(@Observes @Priority(10) StartupEvent ignored) {
+    void onStart(@Observes @Priority(10) StartupEvent ev) {
         performInstallation(configuredVecPath);
     }
 

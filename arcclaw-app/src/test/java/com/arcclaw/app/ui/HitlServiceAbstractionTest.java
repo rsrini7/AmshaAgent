@@ -4,7 +4,7 @@ import static org.mockito.Mockito.*;
 
 import jakarta.persistence.EntityManager;
 
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import org.junit.jupiter.api.BeforeEach;

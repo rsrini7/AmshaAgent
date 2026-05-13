@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.governance.BudgetExceededException;
@@ -45,6 +46,7 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
+    @Inject CapabilityRegistry capabilityRegistry;
 
     @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
     int maxDelegationDepth = 2;
@@ -83,23 +85,11 @@ public class DelegateToAgentTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
-        String currentRoleName;
-        String outerSessionId;
-        String userId;
-        String chatId;
-
-        try {
-            currentRoleName = WorkspaceContext.requireAgentRole();
-            outerSessionId  = WorkspaceContext.requireSessionId();
-            userId          = WorkspaceContext.requireUserId();
-            chatId          = WorkspaceContext.requireChatId();
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
-        }
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        String currentRoleName = ctx.agentRole();
+        String outerSessionId = ctx.sessionId();
+        String userId = ctx.userId();
+        String chatId = ctx.chatId();
 
         Object agentObj = params.get("agent");
         Object goalObj = params.get("goal");
@@ -136,15 +126,14 @@ public class DelegateToAgentTool implements AgentTool {
         AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
 
         if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
-            Set<ToolCapability> currentCaps = currentRole.definition().capabilities();
-            Set<ToolCapability> targetCaps = targetRole.definition().capabilities();
+            Set<String> currentCaps = capabilityRegistry.getSupplementalTools(currentRoleName);
+            Set<String> targetCaps = capabilityRegistry.getSupplementalTools(targetRole.id());
 
-            Set<ToolCapability> unauthorizedCaps = new HashSet<>(targetCaps);
+            Set<String> unauthorizedCaps = new HashSet<>(targetCaps);
             unauthorizedCaps.removeAll(currentCaps);
 
             if (!unauthorizedCaps.isEmpty()) {
                 String unauthorizedList = unauthorizedCaps.stream()
-                    .map(Enum::name)
                     .sorted()
                     .collect(Collectors.joining(", "));
                 
@@ -156,7 +145,7 @@ public class DelegateToAgentTool implements AgentTool {
 
         AgentResult result;
         try {
-            result = runSubAgent(outerSessionId, agentName, goal, targetRole, userId, chatId);
+            result = runSubAgent(ctx, outerSessionId, agentName, goal, targetRole, userId, chatId);
         } catch (BudgetExceededException e) {
             throw e;
         } catch (Exception e) {
@@ -166,13 +155,13 @@ public class DelegateToAgentTool implements AgentTool {
         return handleSubAgentResult(result, targetRole, outerSessionId);
     }
 
-    private AgentResult runSubAgent(String outerSessionId, String agentName, String goal, AgentRoleEnum targetRole, String userId, String chatId) throws Exception {
+    private AgentResult runSubAgent(ToolExecutionContext ctx, String outerSessionId, String agentName, String goal, AgentRoleEnum targetRole, String userId, String chatId) throws Exception {
         int maxIterations = Math.max(1, targetRole.definition().maxIterations());
         String innerSessionId = outerSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL + agentName + ":" + System.currentTimeMillis();
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s", agentName, goal, outerSessionId);
 
-        AutonomyLevel outerLevel = WorkspaceContext.requireAutonomyOrSupervised();
+        AutonomyLevel outerLevel = ctx.autonomyLevel();
         AutonomyLevel innerLevel = switch (outerLevel) {
             case READONLY -> AutonomyLevel.READONLY;
             default -> AutonomyLevel.FULL;

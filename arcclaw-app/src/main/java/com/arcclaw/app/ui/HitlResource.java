@@ -14,8 +14,10 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
@@ -23,7 +25,6 @@ import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.scope.WorkspaceContext;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -39,6 +40,9 @@ public class HitlResource {
     @Inject AgentSseService agentSseService;
     @Inject SessionHeartbeatTracker heartbeatTracker;
 
+    @Context
+    SecurityContext securityContext;
+
     @GET
     @Path("/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
@@ -52,8 +56,10 @@ public class HitlResource {
 
         // §85-B: Lazy ownership binding for SSE subscription.
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
-        String userId = WorkspaceContext.resolveUserId();
-        if (userId == null) {
+        String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
+            ? securityContext.getUserPrincipal().getName()
+            : "anonymous";
+        if (userId == null || "anonymous".equals(userId)) {
             return Multi.createFrom().failure(new WebApplicationException(Response.Status.UNAUTHORIZED));
         }
         
@@ -69,8 +75,10 @@ public class HitlResource {
     @Operation(summary = "List all pending tool execution approvals for the current user")
     public Response listPending() {
         // ApiKeyAuthFilter has already validated the key and put userId in MDC.
-        String userId = WorkspaceContext.resolveUserId();
-        if (userId == null) {
+        String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
+            ? securityContext.getUserPrincipal().getName()
+            : "anonymous";
+        if (userId == null || "anonymous".equals(userId)) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", "Cannot resolve user identity"))
                     .build();

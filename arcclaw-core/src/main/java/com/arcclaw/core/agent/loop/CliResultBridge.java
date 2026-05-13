@@ -64,7 +64,7 @@ public class CliResultBridge {
             return CompletableFuture.completedFuture(buffered);
         }
 
-        return waiters.computeIfAbsent(sessionId, k -> new CompletableFuture<>());
+        return waiters.computeIfAbsent(sessionId, _ -> new CompletableFuture<>());
     }
 
     /**

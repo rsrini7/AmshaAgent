@@ -36,7 +36,7 @@ public class DynamicExtensionTestTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         return ToolResponse.success("dynamic success");
     }
 }

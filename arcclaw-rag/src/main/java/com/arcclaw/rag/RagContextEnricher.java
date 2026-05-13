@@ -9,7 +9,6 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ContextEnricher;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.Fts5QueryUtil;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -48,7 +47,7 @@ public class RagContextEnricher implements ContextEnricher {
     );
 
     @Override
-    public String enrich(String sessionId, String goal, String basePrompt) {
+    public String enrich(String sessionId, String userId, String goal, String basePrompt) {
         if (goal == null || goal.isBlank()) return basePrompt;
 
         // §7.45: Skip RAG for cron sessions to prevent scheduling context from
@@ -64,7 +63,6 @@ public class RagContextEnricher implements ContextEnricher {
             return basePrompt;
         }
 
-        String userId = WorkspaceContext.requireUserId();
         if (userId == null || userId.isBlank()) {
             userId = sessionId;
         }

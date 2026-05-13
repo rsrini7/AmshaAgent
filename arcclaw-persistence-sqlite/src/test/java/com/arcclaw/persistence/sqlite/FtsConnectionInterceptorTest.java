@@ -77,6 +77,7 @@ class FtsConnectionInterceptorTest {
     private ConnBundle buildConnection(boolean vec0AlreadyLoaded,
                                    boolean loadExtensionFails) throws Exception {
         Connection conn = mock(Connection.class);
+        lenient().when(conn.getAutoCommit()).thenReturn(true);
 
         // Step 1: PRAGMA database_list → fts already attached
         Statement pragmaStmt = mock(Statement.class);
@@ -122,6 +123,7 @@ class FtsConnectionInterceptorTest {
     /** Connection where PRAGMA database_list returns no "fts" → ATTACH must fire. */
     private ConnBundle buildConnectionWithoutFtsAttached() throws Exception {
         Connection conn = mock(Connection.class);
+        lenient().when(conn.getAutoCommit()).thenReturn(true);
 
         // PRAGMA database_list - no "fts" row
         Statement pragmaStmt = mock(Statement.class);
@@ -365,6 +367,7 @@ class FtsConnectionInterceptorTest {
 
                 // Connection with fts absent + load_extension fails
                 Connection conn = mock(Connection.class);
+                lenient().when(conn.getAutoCommit()).thenReturn(true);
 
                 Statement pragmaStmt = mock(Statement.class);
                 ResultSet dbListRs   = mock(ResultSet.class);

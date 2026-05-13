@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
+import com.arcclaw.core.security.AutonomyLevel;
 import org.junit.jupiter.api.Test;
 
 class GithubToolTest {
@@ -19,7 +20,7 @@ class GithubToolTest {
             "command", "delete",
             "target", "rsrini7/arcclaw"
         );
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(params));
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
         assertTrue(exception.getMessage().contains("not permitted"));
     }
 
@@ -30,7 +31,7 @@ class GithubToolTest {
             "command", "archive",
             "target", "rsrini7/arcclaw"
         );
-        assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(params));
+        assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
     }
 
     @Test
@@ -40,7 +41,7 @@ class GithubToolTest {
             "command", "view",
             "target", "rsrini7/arcclaw"
         );
-        assertDoesNotThrow(() -> tool.sandboxCommand(params));
+        assertDoesNotThrow(() -> tool.sandboxCommand(ctx(), params));
     }
 
     @Test
@@ -50,7 +51,7 @@ class GithubToolTest {
             "command", "list",
             "target", "rsrini7"
         );
-        var cmd = tool.sandboxCommand(params);
+        var cmd = tool.sandboxCommand(ctx(), params);
         // cmd is ["gh", "api", "users/rsrini7/repos?per_page=30"]
         assertTrue(cmd.stream().anyMatch(s -> s.contains("rsrini7")));
     }
@@ -62,7 +63,7 @@ class GithubToolTest {
             "command", "list",
             "target", "rsrini7"
         );
-        var cmd = tool.sandboxCommand(params);
+        var cmd = tool.sandboxCommand(ctx(), params);
         assertTrue(cmd.contains("api"));
         assertTrue(cmd.stream().anyMatch(s -> s.contains("rsrini7")), "gist list SHOULD contain username when targeting another user");
     }
@@ -73,7 +74,7 @@ class GithubToolTest {
             "action", "gist",
             "command", "view"
         );
-        assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(params));
+        assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
     }
 
     @Test
@@ -83,7 +84,13 @@ class GithubToolTest {
             "command", "view",
             "target", "abc-123"
         );
-        var cmd = tool.sandboxCommand(params);
+        var cmd = tool.sandboxCommand(ctx(), params);
         assertTrue(cmd.contains("abc-123"));
+    }
+
+    private ToolExecutionContext ctx() {
+        return new ToolExecutionContext(
+            "s1", "u1", "c1", "coder", AutonomyLevel.FULL, "t1", 
+            null, null, null, null, null, null);
     }
 }

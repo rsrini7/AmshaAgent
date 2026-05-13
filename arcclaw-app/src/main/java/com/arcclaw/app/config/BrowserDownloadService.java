@@ -24,6 +24,15 @@ public class BrowserDownloadService {
      * Installs Playwright Chromium browser.
      */
     public static void installChromium(Path browsersPath) {
+        String skipInstall = System.getProperty("ARCCLAW_PLAYWRIGHT_SKIP_INSTALL",
+            System.getenv("ARCCLAW_PLAYWRIGHT_SKIP_INSTALL") != null
+                ? System.getenv("ARCCLAW_PLAYWRIGHT_SKIP_INSTALL") : "false");
+
+        if ("true".equalsIgnoreCase(skipInstall)) {
+            log.info("Playwright browser auto-installation is SKIPPED (ARCCLAW_PLAYWRIGHT_SKIP_INSTALL=true)");
+            return;
+        }
+
         System.err.println();
         System.err.println("  → Installing Playwright Chromium into " + browsersPath + " ...");
         System.err.println("    (This may take a few minutes depending on your connection)");

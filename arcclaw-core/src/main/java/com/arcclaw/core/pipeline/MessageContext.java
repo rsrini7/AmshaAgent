@@ -12,60 +12,53 @@ import com.arcclaw.core.security.AutonomyLevel;
 
 /**
  * Context for a message passing through the pipeline.
- * Contains both raw input and enriched metadata as handlers process it.
+ * Composes {@link TransportContext} and {@link DomainContext}.
  */
 public final class MessageContext {
-    private final String chatId;
-    private final ChannelUser user;
-    private final ChannelMessage message;
-    
-    // Enriched fields
-    private String sessionId;
-    private String agentRole;
-    private AgentState initialState;
-    private String goal;
-    private boolean resumeSignal = false;
-    private AutonomyLevel autonomyLevel;
+    private final TransportContext transport;
+    private final DomainContext domain = new DomainContext();
 
     public MessageContext(String chatId, ChannelUser user, ChannelMessage message) {
-        this.chatId = chatId;
-        this.user = user;
-        this.message = message;
+        this.transport = new TransportContext(chatId, user, message);
     }
 
-    public String getChatId() { return chatId; }
-    public ChannelUser getUser() { return user; }
-    public ChannelMessage getMessage() { return message; }
+    public TransportContext transport() { return transport; }
+    public DomainContext domain() { return domain; }
 
-    public ChannelType getChannelType() {
-        return user != null ? user.channel() : ChannelType.TELEGRAM;
-    }
+    // --- Transport Delegates ---
 
-    public Optional<String> getSessionId() { return Optional.ofNullable(sessionId); }
-    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+    public String getChatId() { return transport.chatId(); }
+    public ChannelUser getUser() { return transport.user(); }
+    public ChannelMessage getMessage() { return transport.message(); }
+    public ChannelType getChannelType() { return transport.channelType(); }
 
-    public Optional<String> getAgentRole() { return Optional.ofNullable(agentRole); }
-    public void setAgentRole(String agentRole) { this.agentRole = agentRole; }
+    // --- Domain Delegates ---
 
-    public Optional<AgentState> getInitialState() { return Optional.ofNullable(initialState); }
-    public void setInitialState(AgentState initialState) { this.initialState = initialState; }
+    public Optional<String> getSessionId() { return Optional.ofNullable(domain.getSessionId()); }
+    public void setSessionId(String sessionId) { domain.setSessionId(sessionId); }
 
-    public boolean isResumeSignal() { return resumeSignal; }
-    public void setResumeSignal(boolean resumeSignal) { this.resumeSignal = resumeSignal; }
+    public Optional<String> getAgentRole() { return Optional.ofNullable(domain.getAgentRole()); }
+    public void setAgentRole(String agentRole) { domain.setAgentRole(agentRole); }
 
-    public String getGoal() { return goal; }
-    public void setGoal(String goal) { this.goal = goal; }
+    public Optional<AgentState> getInitialState() { return Optional.ofNullable(domain.getInitialState()); }
+    public void setInitialState(AgentState initialState) { domain.setInitialState(initialState); }
 
-    public Optional<AutonomyLevel> getAutonomyLevel() { return Optional.ofNullable(autonomyLevel); }
-    public void setAutonomyLevel(AutonomyLevel autonomyLevel) { this.autonomyLevel = autonomyLevel; }
+    public boolean isResumeSignal() { return domain.isResumeSignal(); }
+    public void setResumeSignal(boolean resumeSignal) { domain.setResumeSignal(resumeSignal); }
 
-    private SessionContext sessionContext;
-    public Optional<SessionContext> getSessionContext() { return Optional.ofNullable(sessionContext); }
-    public void setSessionContext(SessionContext sessionContext) { this.sessionContext = sessionContext; }
+    public String getGoal() { return domain.getGoal(); }
+    public void setGoal(String goal) { domain.setGoal(goal); }
+
+    public Optional<AutonomyLevel> getAutonomyLevel() { return Optional.ofNullable(domain.getAutonomyLevel()); }
+    public void setAutonomyLevel(AutonomyLevel autonomyLevel) { domain.setAutonomyLevel(autonomyLevel); }
+
+    public Optional<SessionContext> getSessionContext() { return Optional.ofNullable(domain.getSessionContext()); }
+    public void setSessionContext(SessionContext sessionContext) { domain.setSessionContext(sessionContext); }
+
+    // --- Extensibility ---
 
     private final Map<String, Object> data = new HashMap<>();
     public Map<String, Object> getData() { return data; }
     public Object getData(String key) { return data.get(key); }
     public void setData(String key, Object value) { this.data.put(key, value); }
 }
-

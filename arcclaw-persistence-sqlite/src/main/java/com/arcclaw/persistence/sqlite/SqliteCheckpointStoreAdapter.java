@@ -71,7 +71,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return withRetry(() -> self.doSaveEntity(checkpointDto), "save-entity");
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
         if (checkpointDto.id() == null) {
             return CheckpointMapper.toDto(checkpointRepo.persist(CheckpointMapper.toEntity(checkpointDto)));
@@ -91,7 +91,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return withRetry(() -> self.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed, originalGoal, contextDataJson), "upsert-steps");
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
             String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
         return upsertService.doUpsertWithSteps(sessionId, agentRole, stateJson, autonomy, iterationsUsed, originalGoal, contextDataJson);
@@ -104,7 +104,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return withRetry(() -> self.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps, originalGoal, contextDataJson), "upsert-and-finalize");
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
         String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
         return upsertService.doUpsertAndFinalize(sessionId, agentRole, stateJson, finalStatus, steps, originalGoal, contextDataJson);
@@ -117,7 +117,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return withRetry(() -> self.doSaveCheckpointWithSteps(checkpointDto, steps), "save-checkpoint-steps");
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public CheckpointDto doSaveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
         CheckpointDto saved = doSaveEntity(checkpointDto);
         stepRepo.persistSteps(saved.id(), steps);
@@ -157,7 +157,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return withRetry(() -> self.doClaimForResume(sessionId, agentRole), "claim-for-resume");
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public boolean doClaimForResume(String sessionId, String agentRole) {
         return statusService.doClaimForResume(sessionId, agentRole, staleClaimMinutes);
     }
@@ -168,7 +168,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         withRetry(() -> { self.doReleaseResumeClaim(sessionId, agentRole); return null; }, "release-resume-claim");
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doReleaseResumeClaim(String sessionId, String agentRole) {
         statusService.doReleaseResumeClaim(sessionId, agentRole);
     }
@@ -303,6 +303,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     public Optional<CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status) {
         return withRetry(() -> checkpointRepo.findLatestBySessionAndStatus(sessionId, status)
             .stream().findFirst().map(CheckpointMapper::toDto), "find-latest-status");
+    }
+
+    @Override
+    public boolean hasPendingApprovalForChat(String chatId) {
+        return withRetry(() -> checkpointRepo.hasPendingApprovalForChat(chatId), "has-pending-approval-for-chat");
     }
 
     private <T> T withRetry(Callable<T> task, String operation) {

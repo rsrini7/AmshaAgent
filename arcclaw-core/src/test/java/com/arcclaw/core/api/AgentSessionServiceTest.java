@@ -18,8 +18,8 @@ import java.util.concurrent.ExecutorService;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -122,6 +122,12 @@ class AgentSessionServiceTest {
         
         mockedContext.when(WorkspaceContext::resolveUserId)
                 .thenAnswer(inv -> MDC.get(MdcKeys.USER_ID));
+        
+        mockedContext.when(WorkspaceContext::getUserIdOrUnknown)
+                .thenAnswer(inv -> {
+                    String uid = (String) MDC.get(MdcKeys.USER_ID);
+                    return (uid != null && !uid.isBlank()) ? uid : "unknown";
+                });
         
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
                 .thenAnswer(inv -> {
@@ -294,8 +300,9 @@ class AgentSessionServiceTest {
         when(heartbeatTracker.exists("sess-1")).thenReturn(true);
         when(heartbeatTracker.getOwner("sess-1")).thenReturn(Optional.of("key-A"));
         
-        // WorkspaceContext.resolveUserId() returns "key-B"
+        // WorkspaceContext.resolveUserId() and getUserIdOrUnknown() return "key-B"
         mockedContext.when(WorkspaceContext::resolveUserId).thenReturn("key-B");
+        mockedContext.when(WorkspaceContext::getUserIdOrUnknown).thenReturn("key-B");
         
         Optional<Response> result = service.validateSession("sess-1");
         

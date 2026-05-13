@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
+import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.AgentTool;
@@ -42,6 +43,9 @@ class SystemPromptBuilderTest {
     ToolRegistry toolRegistry;
 
     @Mock
+    CapabilityRegistry capabilityRegistry;
+
+    @Mock
     IntentClassificationService intentService;
 
     @Mock
@@ -56,7 +60,7 @@ class SystemPromptBuilderTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        sharedSectionBuilder = new PromptSectionBuilder(toolRegistry);
+        sharedSectionBuilder = new PromptSectionBuilder(toolRegistry, capabilityRegistry);
         instructionLibrary = new PromptInstructionLibrary();
 
         builder = new SystemPromptBuilder(128000, false, null, rolePromptSections,
@@ -65,6 +69,8 @@ class SystemPromptBuilderTest {
         
         when(intentService.isSimpleConversational(any())).thenReturn(false);
         when(toolRegistry.findTool(any())).thenReturn(Optional.of(mock(AgentTool.class)));
+        when(capabilityRegistry.getSupplementalTools(any())).thenReturn(Collections.emptySet());
+        when(capabilityRegistry.hasCapability(any(), any())).thenReturn(false);
         
         // Provide real coordinator section for tests that expect it
         when(rolePromptSections.stream()).thenAnswer(_ -> Stream.of(new CoordinatorPromptSection()));
@@ -163,6 +169,7 @@ class SystemPromptBuilderTest {
         AgentTool mockTool = mock(AgentTool.class);
         when(mockTool.isEnabled()).thenReturn(true);
         when(toolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
+        when(capabilityRegistry.getSupplementalTools("researcher")).thenReturn(Collections.singleton("browser_navigate"));
         setField(builder, "contextWindow", 8192);
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);

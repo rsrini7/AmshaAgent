@@ -24,8 +24,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -242,6 +242,7 @@ class ApproveReflexTest {
 
     @Test
     void testPlainApproveWithMultiplePendingCronsListsAll() {
+        // No live session + 2 CRONs → CRON-only disambiguation prompt
         String userId = "user-1";
         AgentCronEntity c1 = new AgentCronEntity();
         c1.id = "cron-1";
@@ -260,7 +261,7 @@ class ApproveReflexTest {
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
         String resultText = result.commandResponse().get();
 
-        assertTrue(resultText.contains("Multiple background tasks awaiting approval"));
+        assertTrue(resultText.contains("Ambiguous approval"));
         assertTrue(resultText.contains("cron-1"));
         assertTrue(resultText.contains("Goal 1"));
         assertTrue(resultText.contains("cron-2"));
@@ -269,6 +270,8 @@ class ApproveReflexTest {
 
     @Test
     void testAmbiguityWarningWhenBothSessionAndCronPending() {
+        // With a live session pending, bare /approve always resolves to the live session.
+        // CRONs require explicit targeting — no ambiguity prompt shown.
         String userId = "user-1";
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setOriginalGoal("Store my API key");
@@ -284,11 +287,9 @@ class ApproveReflexTest {
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
         String resultText = result.commandResponse().get();
 
-        assertTrue(resultText.contains("Ambiguous approval"));
-        assertTrue(resultText.contains("This Chat"));
-        assertTrue(resultText.contains("Store my API key"));
-        assertTrue(resultText.contains("Background"));
-        assertTrue(resultText.contains("Periodic backup"));
+        // Live session is approved directly — no ambiguity prompt
+        assertEquals("", resultText);
+        verify(checkpointApprovalService).approveAll(eq("session-1"), anyString());
     }
 
     @Test

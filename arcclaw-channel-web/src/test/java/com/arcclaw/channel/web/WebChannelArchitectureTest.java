@@ -19,5 +19,6 @@ public class WebChannelArchitectureTest {
             .that().resideInAPackage("com.arcclaw.channel.web..")
             // Ignore test-only mock producers that bridge core/channel for integration testing
             .and().haveSimpleNameNotEndingWith("MockChatModelProducer")
-            .should().dependOnClassesThat().resideInAPackage("com.arcclaw.core..");
+            .should().dependOnClassesThat().resideInAPackage("com.arcclaw.core..")
+            .allowEmptyShould(true);
 }

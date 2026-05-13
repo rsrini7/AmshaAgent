@@ -1,5 +1,6 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -9,7 +10,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -39,46 +39,65 @@ public class CheckpointBatchOperations {
         this(null, null);
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public boolean doAtomicUpdateBatchToolDecision(String sessionId, String agentRole,
                                                     String toolName, String decision) {
-        log.infof("[BatchOps] Updating tool decision for session=%s role=%s tool=%s -> %s",
-                sessionId, agentRole, toolName, decision);
-        em.clear();
-        List<AgentCheckpoint> results = em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role " +
-                "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+        log.infof("[BatchOps] Updating tool decision for session=%s tool=%s -> %s",
+                sessionId, toolName, decision);
+
+        // Targeted SELECT to avoid loading the full entity graph
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery(
+                "SELECT batch_tool_decisions, status FROM agent_checkpoint " +
+                "WHERE session_id = :sid AND agent_role = :role " +
+                "ORDER BY checkpoint_id DESC")
                 .setParameter("sid", sessionId)
                 .setParameter("role", agentRole)
                 .setMaxResults(1)
                 .getResultList();
-        if (results.isEmpty()) {
-            log.warnf("[BatchOps] No checkpoint found for session=%s role=%s", sessionId, agentRole);
+
+        if (rows.isEmpty()) {
+            log.warnf("[BatchOps] No checkpoint found for session=%s", sessionId);
             return false;
         }
 
-        AgentCheckpoint cp = results.get(0);
-        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL || cp.getBatchToolDecisions() == null) {
-            log.warnf("[BatchOps] Checkpoint session=%s not in AWAITING_APPROVAL or no batch decisions", sessionId);
+        String rawJson = (String) rows.get(0)[0];
+        String status = (String) rows.get(0)[1];
+
+        if (!"AWAITING_APPROVAL".equals(status) || rawJson == null) {
+            log.warnf("[BatchOps] Checkpoint not in AWAITING_APPROVAL or no batch data");
             return false;
         }
 
         try {
             Map<String, ToolDecision> map = objectMapper.readValue(
-                cp.getBatchToolDecisions(),
-                new TypeReference<Map<String, ToolDecision>>() {});
+                rawJson, new TypeReference<Map<String, ToolDecision>>() {});
+            
             if (!map.containsKey(toolName)) {
-                log.warnf("[BatchOps] Tool '%s' not found in batch for session %s", toolName, sessionId);
+                log.warnf("[BatchOps] Tool '%s' not in batch for session %s", toolName, sessionId);
                 return false;
             }
+
             map.put(toolName, ToolDecision.valueOf(decision));
-            cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
-            log.infof("[BatchOps] Successfully updated decision for tool '%s'", toolName);
-            return true;
+            String updatedJson = objectMapper.writeValueAsString(map);
+
+            // Targeted UPDATE to minimize lock duration
+            int updated = em.createNativeQuery(
+                    "UPDATE agent_checkpoint SET batch_tool_decisions = :json, updated_at = :now " +
+                    "WHERE session_id = :sid AND agent_role = :role AND status = 'AWAITING_APPROVAL'")
+                    .setParameter("json", updatedJson)
+                    .setParameter("now", Instant.now())
+                    .setParameter("sid", sessionId)
+                    .setParameter("role", agentRole)
+                    .executeUpdate();
+
+            if (updated > 0) {
+                log.infof("[BatchOps] Successfully updated decision for tool '%s'", toolName);
+                return true;
+            }
+            return false;
         } catch (Exception e) {
-            log.errorf("Failed to update batch tool decision for session=%s tool=%s: %s",
-                       sessionId, toolName, e.getMessage());
+            log.errorf("Failed to update batch tool decision: %s", e.getMessage());
             return false;
         }
     }

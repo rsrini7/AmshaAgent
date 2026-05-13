@@ -46,7 +46,7 @@ public final class UserMessages {
     public static final String HISTORY_AI_PREFIX  = ". 🤖 *ArcClaw:* ";
     public static final String STATUS_FORMAT = "📊 *Status:* %s\n" +
                                                "💰 *Cost:* $%.4f / $%.2f (%.1f%%)\n" +
-                                               "🔢 *Tokens:* %d prompt + %d completion = %d total\n" +
+                                               "🔢 *Tokens:* %d in + %d out = %d total\n" +
                                                "🧠 *Memory:* %s\n" +
                                                "⏱️ *Session:* %s";
     public static final String NO_PENDING_APPROVAL = "No pending approval found for this session.";

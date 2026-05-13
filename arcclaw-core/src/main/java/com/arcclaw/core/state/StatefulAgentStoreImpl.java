@@ -55,17 +55,20 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     // ── Save / Load ───────────────────────────────────────────────────────────
 
     @Override
-    public AgentCheckpoint save(String sessionId, String agentRole, List<ReasoningStep> steps, String goal) {
+    public AgentCheckpoint save(String sessionId, String agentRole, String userId, AutonomyLevel autonomy, List<ReasoningStep> steps, String goal) {
         String json = serializer.serializeSteps(steps);
         Map<String, Object> contextData = WorkspaceContext.getData();
         String contextDataJson = (contextData == null || contextData.isEmpty()) 
             ? null : serializer.serialize(contextData);
-        AutonomyLevel autonomy = WorkspaceContext.requireAutonomyOrSupervised();
         CheckpointUpsertResult result = storeAdapter.upsertWithSteps(
-                sessionId, agentRole, json, autonomy.toString(), steps.size(), goal, contextDataJson);
+                sessionId, agentRole, json, autonomy != null ? autonomy.toString() : AutonomyLevel.SUPERVISED.toString(), steps.size(), goal, contextDataJson);
+        
+        // §Fix: Ensure granular steps are also saved
+        saveSteps(result.checkpoint().id(), steps);
+
         if (result.created()) {
             transitionService.emitCreated(
-                    sessionId, agentRole, WorkspaceContext.resolveUserId(), autonomy,
+                    sessionId, agentRole, userId, autonomy,
                     result.checkpoint().id(), result.checkpoint().createdAt());
         }
         return CheckpointMapper.toEntity(result.checkpoint());
@@ -123,7 +126,7 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override
-    public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole,
+    public AgentCheckpoint saveAndFinalize(String sessionId, String agentRole, String userId, AutonomyLevel autonomy,
                                            List<ReasoningStep> steps,
                                            CheckpointStatus finalStatus,
                                            String goal) {
@@ -140,14 +143,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         CheckpointDto saved = result.checkpoint();
         boolean isNew = result.created();
 
-        String userId = WorkspaceContext.resolveUserId();
         if (isNew) {
-            // Single-shot agents create the checkpoint here - emit CREATED once.
             transitionService.emitCreated(sessionId, agentRole, userId,
-                    WorkspaceContext.requireAutonomyOrSupervised(), saved.id(), saved.createdAt());
+                    autonomy, saved.id(), saved.createdAt());
         }
-        // Emit audit-only: status is already baked into the checkpoint by
-        // upsertAndFinalize above.
         transitionService.emitFinalStatus(sessionId, agentRole, userId, finalStatus, saved.id(), saved.createdAt());
         if (finalStatus == CheckpointStatus.COMPLETED) {
             storeAdapter.archive(saved.id());
@@ -165,24 +164,24 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     // ── Status transitions (all delegated to CheckpointTransitionService) ─────
 
     @Override public void markFailed(Long id, String reason)
-        { transitionService.markFailed(id, reason); }
+        { transitionService.markFailed(id, reason, null, null, null, "unknown"); }
 
     @Override public void markFailed(AgentCheckpoint cp, String reason)
-        { transitionService.markFailed(cp, reason); }
+        { transitionService.markFailed(cp.getId(), reason, null, null, null, "unknown"); }
 
     @Override public void markFailed(Long id, String reason,
                                      String errorCode, String traceId, String rootCauseClass)
-        { transitionService.markFailed(id, reason, errorCode, traceId, rootCauseClass); }
+        { transitionService.markFailed(id, reason, errorCode, traceId, rootCauseClass, "unknown"); }
 
     @Override public void markFailed(AgentCheckpoint cp, String reason,
                                      String errorCode, String traceId, String rootCauseClass)
-        { transitionService.markFailed(cp, reason, errorCode, traceId, rootCauseClass); }
+        { transitionService.markFailed(cp.getId(), reason, errorCode, traceId, rootCauseClass, "unknown"); }
 
     @Override public void markOrphaned(Long checkpointId, String reason)
-        { transitionService.markOrphaned(checkpointId, reason); }
+        { transitionService.markOrphaned(checkpointId, reason, "unknown"); }
 
     @Override public void markCompleted(Long checkpointId)
-        { transitionService.markCompleted(checkpointId); }
+        { transitionService.markCompleted(checkpointId, "unknown"); }
 
     @Override public void archive(Long checkpointId)
         { storeAdapter.archive(checkpointId); }
@@ -315,6 +314,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override public boolean hasPendingApproval(String sessionId)
         { return storeAdapter.hasPendingApproval(sessionId); }
+
+    @Override public boolean hasPendingApprovalForChat(String chatId)
+        { return storeAdapter.hasPendingApprovalForChat(chatId); }
 
     @Override public void deleteCheckpoint(String sessionId, String role)
         { storeAdapter.deleteCheckpoint(sessionId, role); }

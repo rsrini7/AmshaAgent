@@ -87,14 +87,19 @@ public enum CheckpointStatus {
      */
     AWAITING_RETRY,
 
-    /**
-     * Agent loop is in the process of resuming from an {@link #AWAITING_APPROVAL}
+    /** Agent loop is in the process of resuming from an {@link #AWAITING_APPROVAL}
      * state. This status acts as a distributed double-resume lock (§T5-4).
      * <p>
      * Once the resume logic successfully enters the agent loop, it transitions
      * to {@link #IN_PROGRESS}.
      */
     RESUMING,
+
+    /**
+     * The user has approved the pending tool call(s).
+     * Transitions to {@link #RESUMING} when the loop is triggered.
+     */
+    APPROVED,
 
      /**
       * Terminal status set by AgentLoop when a fresh turn starts over an existing

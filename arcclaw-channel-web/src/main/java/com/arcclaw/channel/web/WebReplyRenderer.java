@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
 
 @ApplicationScoped
 public class WebReplyRenderer implements ReplyRenderer {
@@ -56,9 +57,11 @@ public class WebReplyRenderer implements ReplyRenderer {
             case ReplyNode.KeyValue kv -> "**" + kv.key() + "**: " + kv.value() + "\n\n";
             case ReplyNode.Separator _ -> "---\n\n";
             case ReplyNode.ApprovalPrompt ap -> {
-                yield "**Approval Required:**\n" +
-                      "- **Tool:** `" + ap.toolName() + "`\n" +
-                      "- **Params:**\n```json\n" + ap.paramsJson() + "\n```\n\n";
+                String tool = ap.toolName();
+                if (tool != null && tool.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+                    yield "⏸ **Parallel execution requires your approval**\n\n";
+                }
+                yield "⏸ **Tool execution requires your approval:** `" + tool + "`\n\n";
             }
             case ReplyNode.ErrorMessage err -> "**Error (" + err.category() + ")**: " + err.reason() + "\n\n";
         };

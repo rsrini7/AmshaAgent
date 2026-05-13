@@ -16,7 +16,6 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -128,20 +127,17 @@ public class SerperWebSearchTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         String userId;
         String sessionId;
         String agentRole;
 
-        try {
-            userId    = WorkspaceContext.requireUserId();
-            sessionId = WorkspaceContext.requireSessionId();
-            agentRole = WorkspaceContext.requireAgentRole();
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
+        userId    = ctx.userId();
+        sessionId = ctx.sessionId();
+        agentRole = ctx.agentRole();
+
+        if (userId == null || userId.isBlank() || sessionId == null || agentRole == null) {
+            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
  
         String query = (String) params.get("query");
@@ -178,7 +174,7 @@ public class SerperWebSearchTool implements AgentTool {
         } else if (cObj instanceof String s) {
             try {
                 return Math.min(10, Math.max(1, Integer.parseInt(s)));
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException _) {}
         }
         return 5;
     }

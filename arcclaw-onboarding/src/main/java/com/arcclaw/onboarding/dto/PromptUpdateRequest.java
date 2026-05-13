@@ -1,3 +1,6 @@
 package com.arcclaw.onboarding.dto;
 
-public record PromptUpdateRequest(String systemPrompt) {}
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record PromptUpdateRequest(@NotBlank @Size(max = 100000) String systemPrompt) {}

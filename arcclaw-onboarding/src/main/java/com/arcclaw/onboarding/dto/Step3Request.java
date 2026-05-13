@@ -1,3 +1,5 @@
 package com.arcclaw.onboarding.dto;
 
-public record Step3Request(String apiKey) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record Step3Request(@NotBlank String apiKey) {}

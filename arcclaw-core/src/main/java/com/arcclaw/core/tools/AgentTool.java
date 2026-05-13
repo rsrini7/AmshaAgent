@@ -69,26 +69,25 @@ public interface AgentTool {
      * <p>
      * Only called by the registry when {@link #requiresSandbox()} returns true.
      *
+     * @param ctx    Contextual information for this tool execution.
      * @param params Tool-specific parameters (same as execute).
      * @return The OS command tokens to run inside the sandbox.
      * @throws IllegalArgumentException if required params are missing.
      */
-    default List<String> sandboxCommand(Map<String, Object> params) {
+    default List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
         throw new UnsupportedOperationException(
                 name() + " declared requiresSandbox=true but did not implement sandboxCommand()");
     }
 
-    /**
-     * Execute the tool with the given parameters.
-     * <p>
-     * Implementations should delegate to {@code ProcessIsolationExecutor}
-     * for sandboxed execution. Parameters are tool-specific (e.g.,
-     * {@code "repo" → "owner/name"} for GitHub operations).
-     *
-     * @param params Tool-specific parameters.
-     * @return The execution result.
-     */
-    ToolResponse execute(Map<String, Object> params);
+    default List<String> sandboxCommand(Map<String, Object> params) {
+        throw new UnsupportedOperationException("Tool " + name() + " requires ToolExecutionContext. Use sandboxCommand(ctx, params).");
+    }
+
+    ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params);
+
+    default ToolResponse execute(Map<String, Object> params) {
+        throw new UnsupportedOperationException("Tool " + name() + " requires ToolExecutionContext. Use execute(ctx, params).");
+    }
 
     default JsonObjectSchema parametersSchema() {
         return null;
@@ -149,5 +148,25 @@ public interface AgentTool {
      */
     default IdempotencyMode idempotencyMode() {
         return IdempotencyMode.NON_IDEMPOTENT;
+    }
+
+    /**
+     * Called when the tool is initialized by the registry.
+     */
+    default void onInit() {}
+
+    /**
+     * Called when the tool is destroyed (e.g., application shutdown).
+     */
+    default void onDestroy() {}
+
+    /**
+     * Optional health check for the tool.
+     * Tools managing external resources (Playwright, MCP) should implement this.
+     *
+     * @return A ToolResponse indicating success (healthy) or failure (unhealthy).
+     */
+    default ToolResponse healthCheck() {
+        return ToolResponse.success(name() + " is healthy");
     }
 }

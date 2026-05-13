@@ -8,13 +8,12 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.TemporalUtils;
 import org.jboss.logging.Logger;
 
 /**
  * Handles status transitions and lifecycle marking for agent checkpoints.
+ * Optimized for SQLite via Native SQL to minimize lock duration and avoid JTA deadlocks.
  */
 @ApplicationScoped
 public class CheckpointStatusService {
@@ -32,19 +31,19 @@ public class CheckpointStatusService {
         this(null);
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doTransitionStatus(Long id, String newStatus) {
         log.infof("[StatusService] Transitioning checkpoint %d to %s", id, newStatus);
-        AgentCheckpoint entity = em.find(AgentCheckpoint.class, id);
-        if (entity != null) {
-            entity.setStatus(CheckpointStatus.valueOf(newStatus));
-            entity.setUpdatedAt(Instant.now());
-        } else {
-            log.warnf("[StatusService] Checkpoint %d not found for transition", id);
-        }
+        em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = :new, updated_at = :now " +
+                "WHERE checkpoint_id = :id")
+                .setParameter("new", newStatus)
+                .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
+                .setParameter("id", id)
+                .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public boolean doAtomicTransition(Long id, String expectedStatus, String newStatus) {
         log.infof("[StatusService] Atomic transition checkpoint %d: %s -> %s", id, expectedStatus, newStatus);
         int updated = em.createNativeQuery(
@@ -58,12 +57,12 @@ public class CheckpointStatusService {
         
         boolean success = updated == 1;
         if (!success) {
-            log.debugf("[StatusService] Atomic transition failed for checkpoint %d (expected %s)", id, expectedStatus);
+            log.debugf("[StatusService] Atomic transition failed for %d (expected %s)", id, expectedStatus);
         }
         return success;
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public boolean doClaimForResume(String sessionId, String agentRole, int staleClaimMinutes) {
         log.infof("[StatusService] Claiming resume for session=%s role=%s", sessionId, agentRole);
         Instant cutoff = Instant.now().minus(staleClaimMinutes, ChronoUnit.MINUTES);
@@ -87,7 +86,7 @@ public class CheckpointStatusService {
         return success;
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doReleaseResumeClaim(String sessionId, String agentRole) {
         log.infof("[StatusService] Releasing resume claim for session=%s role=%s", sessionId, agentRole);
         em.createNativeQuery(
@@ -102,60 +101,72 @@ public class CheckpointStatusService {
          .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doMarkFailed(Long checkpointId, String failReason, String errorCode, String traceId, String rootCauseClass) {
         log.warnf("[StatusService] Marking checkpoint %d as FAILED: %s (code=%s)", checkpointId, failReason, errorCode);
-        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
-        if (cp == null) return;
-        cp.setStatus(CheckpointStatus.FAILED);
-        cp.setFailReason(failReason);
-        cp.setErrorCode(errorCode);
-        cp.setTraceId(traceId);
-        cp.setRootCauseClass(rootCauseClass);
-        cp.setFailedAt(Instant.now());
-        cp.setUpdatedAt(Instant.now());
+        String nowStr = TemporalUtils.formatIsoLex(Instant.now());
+        em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'FAILED', fail_reason = :reason, " +
+                "error_code = :code, trace_id = :trace, root_cause_class = :root, " +
+                "failed_at = :failedAt, updated_at = :updatedAt WHERE checkpoint_id = :id")
+                .setParameter("reason", failReason)
+                .setParameter("code", errorCode)
+                .setParameter("trace", traceId)
+                .setParameter("root", rootCauseClass)
+                .setParameter("failedAt", nowStr)
+                .setParameter("updatedAt", nowStr)
+                .setParameter("id", checkpointId)
+                .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doMarkCompleted(Long checkpointId) {
         log.infof("[StatusService] Marking checkpoint %d as COMPLETED", checkpointId);
-        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
-        if (cp == null) return;
-        cp.setStatus(CheckpointStatus.COMPLETED);
-        cp.setCompletedAt(Instant.now());
-        cp.setUpdatedAt(Instant.now());
+        String nowStr = TemporalUtils.formatIsoLex(Instant.now());
+        em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'COMPLETED', completed_at = :completedAt, updated_at = :updatedAt " +
+                "WHERE checkpoint_id = :id")
+                .setParameter("completedAt", nowStr)
+                .setParameter("updatedAt", nowStr)
+                .setParameter("id", checkpointId)
+                .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doMarkOrphaned(Long checkpointId, String reason) {
         log.warnf("[StatusService] Marking checkpoint %d as ORPHANED: %s", checkpointId, reason);
-        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
-        if (cp == null) return;
-        cp.setStatus(CheckpointStatus.ORPHANED);
-        cp.setFailedAt(Instant.now());
-        cp.setFailReason(reason);
+        String nowStr = TemporalUtils.formatIsoLex(Instant.now());
+        em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'ORPHANED', fail_reason = :reason, " +
+                "failed_at = :failedAt, updated_at = :updatedAt WHERE checkpoint_id = :id")
+                .setParameter("reason", reason)
+                .setParameter("failedAt", nowStr)
+                .setParameter("updatedAt", nowStr)
+                .setParameter("id", checkpointId)
+                .executeUpdate();
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional(Transactional.TxType.REQUIRED)
     public void doArchive(Long checkpointId) {
         log.infof("[StatusService] Archiving checkpoint %d", checkpointId);
-        AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId);
-        if (cp == null) return;
-        cp.setStatus(CheckpointStatus.ARCHIVED);
-        cp.setUpdatedAt(Instant.now());
+        em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'ARCHIVED', updated_at = :now " +
+                "WHERE checkpoint_id = :id")
+                .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
+                .setParameter("id", checkpointId)
+                .executeUpdate();
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean doClaimForRetry(Long id) {
         log.infof("[StatusService] Claiming checkpoint %d for retry", id);
-        AgentCheckpoint entity = em.find(AgentCheckpoint.class, id);
-        if (entity != null && CheckpointStatus.AWAITING_RETRY == entity.getStatus()) {
-            entity.setStatus(CheckpointStatus.IN_PROGRESS);
-            entity.setRetryAfterMs(null);
-            entity.setUpdatedAt(Instant.now());
-            log.infof("[StatusService] Successfully claimed checkpoint %d for retry", id);
-            return true;
-        }
-        return false;
+        int updated = em.createNativeQuery(
+                "UPDATE agent_checkpoint SET status = 'IN_PROGRESS', retry_after_ms = NULL, updated_at = :now " +
+                "WHERE checkpoint_id = :id AND status = 'AWAITING_RETRY'")
+                .setParameter("now", TemporalUtils.formatIsoLex(Instant.now()))
+                .setParameter("id", id)
+                .executeUpdate();
+        
+        return updated == 1;
     }
 }

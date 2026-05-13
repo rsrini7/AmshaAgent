@@ -26,8 +26,8 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.AgentLoop;
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
@@ -215,6 +215,8 @@ class DenyReflexTest {
 
     @Test
     void testAmbiguityWarningWhenBothSessionAndCronPending() {
+        // With a live session pending, bare /deny always resolves to the live session.
+        // CRONs require explicit targeting — no ambiguity prompt shown.
         String userId = "user-1";
         AgentCheckpoint cp = new AgentCheckpoint();
         cp.setOriginalGoal("Store my API key");
@@ -230,11 +232,9 @@ class DenyReflexTest {
         ReflexResult result = denyReflex.execute("session-1", userId, "chat-1", "/deny", ctx);
         String resultText = result.commandResponse().get();
 
-        assertTrue(resultText.contains("Ambiguous denial"));
-        assertTrue(resultText.contains("This Chat"));
-        assertTrue(resultText.contains("Store my API key"));
-        assertTrue(resultText.contains("Background"));
-        assertTrue(resultText.contains("Periodic backup"));
+        // Live session is denied directly — no ambiguity prompt
+        assertEquals("", resultText);
+        verify(checkpointApprovalService).denyAll(eq("session-1"), eq("CLI deny"));
     }
 
     @Test

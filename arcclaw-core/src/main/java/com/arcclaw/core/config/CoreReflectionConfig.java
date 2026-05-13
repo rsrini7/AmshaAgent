@@ -2,6 +2,8 @@ package com.arcclaw.core.config;
 
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.reasoning.ReasoningStepDeserializer;
+import com.arcclaw.core.agent.reasoning.ReasoningStepSerializer;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.AuditEventResponse;
@@ -30,6 +32,7 @@ import com.arcclaw.core.tools.MemorySearchTool;
 import com.arcclaw.core.tools.SandboxExecTool;
 import com.arcclaw.core.tools.ScheduleTaskTool;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.ToolResponse;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -76,7 +79,13 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SkillPromptParams.class,
         SandboxResult.class,
         AgentJobCompleted.class,
-        CronTaskScheduled.class
+        CronTaskScheduled.class,
+        ToolResponse.class,
+        ToolResponse.ToolSuccess.class,
+        ToolResponse.ToolFailure.class,
+        ToolResponse.ToolPending.class,
+        ReasoningStepDeserializer.class,
+        ReasoningStepSerializer.class
     },
     classNames = {
         "com.github.benmanes.caffeine.cache.SSLMSA",

@@ -64,29 +64,46 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             //         connection. ATTACH is also per-connection.
             // ----------------------------------------------------------------
             boolean attached = false;
-            try (Statement stmt = connection.createStatement();
-                 ResultSet rs = stmt.executeQuery("PRAGMA database_list")) {
-                while (rs.next()) {
-                    if ("fts".equals(rs.getString("name"))) {
-                        attached = true;
-                        break;
+            try (Statement stmt = connection.createStatement()) {
+                try (ResultSet rs = stmt.executeQuery("PRAGMA database_list")) {
+                    while (rs.next()) {
+                        if ("fts".equals(rs.getString("name"))) {
+                            attached = true;
+                            break;
+                        }
                     }
+                }
+
+                try {
+                    stmt.execute("PRAGMA busy_timeout=10000");
+                } catch (Exception e) {
+                    log.debugf("FtsConnectionInterceptor: Could not set busy_timeout=10000: %s", e.getMessage());
+                }
+                try {
+                    stmt.execute("PRAGMA synchronous=NORMAL");
+                } catch (Exception e) {
+                    log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", e.getMessage());
                 }
             }
 
             if (!attached) {
-                String ftsPath;
-                try {
-                    Files.createDirectories(Path.of(dataDir));
-                } catch (IOException e) {
-                    log.warn("Failed to create data directory for FTS: " + dataDir, e);
-                }
-                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+                if (!connection.getAutoCommit()) {
+                    log.debug("FtsConnectionInterceptor: Cannot ATTACH fts (transaction active). Will retry on next acquire.");
+                } else {
+                    String ftsPath;
+                    try {
+                        Files.createDirectories(Path.of(dataDir));
+                    } catch (IOException e) {
+                        log.warn("Failed to create data directory for FTS: " + dataDir, e);
+                    }
+                    ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
 
-                try (Statement stmt = connection.createStatement()) {
-                    stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
+                    try (Statement stmt = connection.createStatement()) {
+                        stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
+                    }
                 }
             }
+
 
             // ----------------------------------------------------------------
             // Step 2: Load sqlite-vec on this connection - but only if vec0

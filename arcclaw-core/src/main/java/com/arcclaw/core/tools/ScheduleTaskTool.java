@@ -19,7 +19,6 @@ import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.CronTaskScheduled;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -158,21 +157,18 @@ public class ScheduleTaskTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         log.infof("[ScheduleTaskTool] Executing with params: %s", params);
         String userId;
         String chatId;
         String sessionId;
 
-        try {
-            userId    = WorkspaceContext.requireUserId();
-            chatId    = WorkspaceContext.requireChatIdOrUserId();
-            sessionId = WorkspaceContext.requireSessionId();
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("unbound")) {
-                return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-            }
-            throw e;
+        userId    = ctx.userId();
+        chatId    = ctx.chatId() != null ? ctx.chatId() : userId;
+        sessionId = ctx.sessionId();
+
+        if (userId == null || userId.isBlank() || sessionId == null) {
+            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
 
         String goal = (String) params.get("goal");
@@ -180,18 +176,31 @@ public class ScheduleTaskTool implements AgentTool {
         boolean runOnce = parseRunOnce(params);
         String executionRole = parseExecutionRole(params);
 
+        if (!runOnce) {
+            String combined = "";
+            if (goal != null) combined += " " + goal.toLowerCase();
+            if (ctx.rawUserGoal() != null) combined += " " + ctx.rawUserGoal().toLowerCase();
+            
+            boolean hasIntervalKeyword = combined.contains("every") || combined.contains("recurring") || combined.contains("each");
+            boolean hasOffsetKeyword = combined.contains("after") || combined.contains("in ") || combined.contains("in a ") || combined.contains("once");
+            
+            if (hasOffsetKeyword && !hasIntervalKeyword) {
+                runOnce = true;
+            }
+        }
+
         String cronExpression = resolveCron(params);
-        String suggestedNextFireTime = WorkspaceContext.suggestedNextFireTime();
+        String suggestedNextFireTime = ctx.suggestedNextFireTime();
         
         boolean cronFromJavaSide = false;
         if (cronExpression == null || cronExpression.isBlank()) {
-            cronExpression = WorkspaceContext.suggestedCron();
+            cronExpression = ctx.suggestedCron();
             if (cronExpression != null && !cronExpression.isBlank()) {
                 cronFromJavaSide = true;
             }
         }
 
-        if (cronFromJavaSide || "UTC".equals(WorkspaceContext.suggestedCronSource())) {
+        if (cronFromJavaSide || "UTC".equals(ctx.suggestedCronSource())) {
             zone = ZoneId.of("UTC");
         }
 
@@ -234,7 +243,7 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
         }
 
-        AgentCronEntity entity = createAndPersistCron(sessionId, userId, chatId, cronExpression, zone, runOnce, executionRole, goal, nextFireTime);
+        AgentCronEntity entity = createAndPersistCron(ctx, sessionId, userId, chatId, cronExpression, zone, runOnce, executionRole, goal, nextFireTime);
 
         auditAndSchedule(sessionId, userId, cronExpression, entity, runOnce, executionRole);
 
@@ -286,13 +295,13 @@ public class ScheduleTaskTool implements AgentTool {
         }
     }
 
-    private AgentCronEntity createAndPersistCron(String sessionId, String userId, String chatId, String cronExpression, ZoneId zone, boolean runOnce, String executionRole, String goal, Instant nextFireTime) {
+    private AgentCronEntity createAndPersistCron(ToolExecutionContext ctx, String sessionId, String userId, String chatId, String cronExpression, ZoneId zone, boolean runOnce, String executionRole, String goal, Instant nextFireTime) {
         AgentCronEntity entity = new AgentCronEntity();
         entity.id             = UUID.randomUUID().toString();
         entity.sessionId      = sessionId;
         entity.userId         = userId;
         entity.chatId         = chatId;
-        entity.channelType    = WorkspaceContext.requireChannelType();
+        entity.channelType    = ctx.channelType();
         entity.cronExpression = cronExpression;
         entity.timezone       = zone.getId();
         entity.runOnce        = runOnce;

@@ -45,6 +45,14 @@ public class CapabilityRegistry {
     }
  
     /**
+     * Checks if a role has a specific tool capability.
+     */
+    public boolean hasCapability(String roleId, String toolName) {
+        Set<String> tools = roleSupplementalTools.get(roleId);
+        return tools != null && tools.contains(toolName);
+    }
+
+    /**
      * Clears all registered supplemental tools.
      * <p>
      * <strong>§4.2:</strong> This is idempotent and safe to call during

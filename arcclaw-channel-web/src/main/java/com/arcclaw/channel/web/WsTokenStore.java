@@ -24,11 +24,7 @@ public class WsTokenStore {
         if (token == null || token.isBlank()) {
             return false;
         }
-        Boolean exists = tokenCache.getIfPresent(token);
-        if (exists != null && exists) {
-            tokenCache.invalidate(token);
-            return true;
-        }
-        return false;
+        Boolean exists = tokenCache.asMap().remove(token);
+        return exists != null && exists;
     }
 }

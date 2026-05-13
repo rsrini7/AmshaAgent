@@ -12,11 +12,11 @@ import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.reflex.PiiScanReflex;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
+import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryEntryDto;
@@ -83,8 +83,8 @@ public class IngestDocumentTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
-        String userId = WorkspaceContext.requireUserId();
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        String userId = ctx.userId();
         if (userId == null || userId.isBlank()) {
             return ToolResponse.failure(403,
                 "Security violation: tenant context not bound.");
@@ -99,7 +99,7 @@ public class IngestDocumentTool implements AgentTool {
         }
 
         // 🟢 Fix Bug 2: Resolve [REDACTED-*] placeholders from RAW_USER_GOAL
-        text = resolveRedactedPlaceholders(text);
+        text = resolveRedactedPlaceholders(ctx, text);
 
         text = sanitize(text);  // ← sanitize before blank re-check
 
@@ -117,7 +117,7 @@ public class IngestDocumentTool implements AgentTool {
         IngestResult result = memoryPort.index(new MemoryEntryDto(null, text, Map.of("label", label)));
 
         auditService.recordMandatory(
-            WorkspaceContext.requireSessionId(), userId, WorkspaceContext.requireAgentRole(),
+            ctx.sessionId(), userId, ctx.agentRole(),
             SecurityEventType.MEMORY_INGESTED,
             String.format("label=%s length=%d snippet=%s", 
                 label, text.length(), (text.length() > 50 ? text.substring(0, 50) + "..." : text))
@@ -132,12 +132,12 @@ public class IngestDocumentTool implements AgentTool {
             "Document ingested successfully into Global KB. chunkId: " + result.id());
     }
 
-    private String resolveRedactedPlaceholders(String text) {
+    private String resolveRedactedPlaceholders(ToolExecutionContext ctx, String text) {
         if (text == null || !text.contains("[REDACTED-")) {
             return text;
         }
 
-        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+        String rawGoal = ctx.rawUserGoal();
         if (rawGoal == null) {
             return text;
         }

@@ -35,7 +35,8 @@ class RagContextEnricherTest {
     @Test
     void testEnrichSkipOnCronSession() {
         String sessionId = AgentSentinels.CRON_SESSION_PREFIX + "123";
-        String result = enricher.enrich(sessionId, "What is my name?", "Base prompt");
+        // Signature: enrich(sessionId, userId, goal, basePrompt)
+        String result = enricher.enrich(sessionId, "user-1", "What is my name?", "Base prompt");
         assertEquals("Base prompt", result);
         verifyNoInteractions(memoryService);
     }
@@ -43,7 +44,8 @@ class RagContextEnricherTest {
     @Test
     void testEnrichSkipOnWriteIntent() {
         String goal = "Store my name as Srini";
-        String result = enricher.enrich("sess-1", goal, "Base prompt");
+        // Signature: enrich(sessionId, userId, goal, basePrompt)
+        String result = enricher.enrich("sess-1", "user-1", goal, "Base prompt");
         assertEquals("Base prompt", result);
         verifyNoInteractions(memoryService);
     }
@@ -62,7 +64,7 @@ class RagContextEnricherTest {
         when(memoryService.search(anyString(), eq("user-1"), anyInt())).thenReturn(mockChunks);
 
         String result = WorkspaceContext.run(sessionId, "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
-            return enricher.enrich(sessionId, goal, basePrompt);
+            return enricher.enrich(sessionId, "user-1", goal, basePrompt);
         });
 
         assertTrue(result.contains("ArcClaw is an agentic AI framework."));
@@ -75,7 +77,7 @@ class RagContextEnricherTest {
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(Collections.emptyList());
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
-            return enricher.enrich("sess-1", "Query", "Base prompt");
+            return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
         });
 
         assertEquals("Base prompt", result);
@@ -93,7 +95,7 @@ class RagContextEnricherTest {
         when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
-            return enricher.enrich("sess-1", "Query", "Base prompt");
+            return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
         });
 
         assertTrue(result.contains("Strong match 1"));

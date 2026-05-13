@@ -18,7 +18,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.core.agent.loop.CheckpointApprovalService;
+import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.lifecycle.WorkspaceManager;

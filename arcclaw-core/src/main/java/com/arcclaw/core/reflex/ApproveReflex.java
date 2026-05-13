@@ -75,7 +75,7 @@ public class ApproveReflex extends AbstractDecisionReflex {
             case AgentResult.Failed f  -> cronRepository.markFailed(cron.id, f.reason());
             case AgentResult.AwaitingApproval _ -> cronRepository.markAwaitingApproval(cron.id);
             case AgentResult.AwaitingRetry _    -> {} // No-op - retry handled by RateLimitRetryScheduler
-            case AgentResult.LoopExceeded _     -> cronRepository.markFailed(cron.id, "Loop exceeded");
+            case AgentResult.LoopExceeded _ -> cronRepository.markFailed(cron.id, "Loop exceeded");
             default -> {}
         }
     }

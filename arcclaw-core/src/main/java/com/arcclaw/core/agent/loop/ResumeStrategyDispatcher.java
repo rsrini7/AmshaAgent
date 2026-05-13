@@ -22,6 +22,7 @@ import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -139,16 +140,16 @@ class ResumeStrategyDispatcher {
         while (true) {
             try {
                 ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                        sessionId, WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
+                        sessionId, context.userId(), context.chatId(), effectiveRole,
                         channelType, context.channelPlatformId(),
                         () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
-                if (response.isInfraFailure()) {
+                if (response instanceof ToolResponse.ToolFailure failure && failure.isInfraFailure()) {
                     return AgentResult.failed("⚠️ The sandbox execution environment is currently offline.",
                             AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
                 }
 
-                recordReasoningStep(toolName, paramsJson, response.output(), response.success(), history, sessionId);
+                recordReasoningStep(toolName, paramsJson, response.output(), response instanceof ToolResponse.ToolSuccess, history, sessionId);
                 
                 if (ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)) {
                     history.add(ReasoningStep.systemMessage(
@@ -158,9 +159,9 @@ class ResumeStrategyDispatcher {
                 
                 completeInProgressCheckpoint(checkpoint);
 
-                if (response.success()) {
+                if (response instanceof ToolResponse.ToolSuccess success) {
                     if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
-                        return AgentResult.finished(response.output(), List.copyOf(history));
+                        return AgentResult.finished(success.output(), List.copyOf(history));
                     }
                     return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
                 } else {
@@ -234,14 +235,18 @@ class ResumeStrategyDispatcher {
         if (checkpoint.hasBatchToolDecisions()) {
             try {
                 decisions = objectMapper.readValue(checkpoint.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         Map<String, String> preExecuted = Map.of();
         if (checkpoint.hasPreExecutedResults()) {
             try {
                 preExecuted = objectMapper.readValue(checkpoint.getPreExecutedResults(), new TypeReference<Map<String, String>>() {});
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            }
         }
 
         List<ParallelToolCall> completed = new ArrayList<>();
@@ -249,9 +254,15 @@ class ResumeStrategyDispatcher {
             if (preExecuted.containsKey(call.toolName())) {
                 try {
                     ToolResponse stored = objectMapper.readValue(preExecuted.get(call.toolName()), ToolResponse.class);
-                    completed.add(call.withResult(stored.output(), stored.success()));
+                    completed.add(switch (stored) {
+                        case ToolResponse.ToolSuccess success -> call.withResult(success.output(), true);
+                        case ToolResponse.ToolFailure failure -> call.withResult(failure.output(), false);
+                        case ToolResponse.ToolPending pending -> call.withResult(pending.output(), false);
+                    });
                     continue;
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                }
             }
 
             if (decisions.getOrDefault(call.toolName(), ToolDecision.PENDING) == ToolDecision.DENIED) {
@@ -262,10 +273,15 @@ class ResumeStrategyDispatcher {
             try {
                 String effectiveRole = checkpoint.getPendingToolRole() != null ? checkpoint.getPendingToolRole() : context.agentRole();
                 ToolResponse response = WorkspaceContext.runWithFullAutonomy(
-                    context.sessionId(), WorkspaceContext.requireUserId(), WorkspaceContext.requireChatId(), effectiveRole,
+                    context.sessionId(), context.userId(), context.chatId(), effectiveRole,
                     channelType, context.channelPlatformId(),
                     () -> toolRegistry.invokeTool(call.toolName(), call.paramsJson(), context.sessionId()));
-                completed.add(call.withResult(response.output(), response.success()));
+                
+                completed.add(switch (response) {
+                    case ToolResponse.ToolSuccess success -> call.withResult(success.output(), true);
+                    case ToolResponse.ToolFailure failure -> call.withResult(failure.output(), false);
+                    case ToolResponse.ToolPending pending -> call.withResult(pending.output(), false);
+                });
             } catch (Exception e) {
                 completed.add(call.withResult("Tool execution failed on resume: " + AgentErrorMessageUtil.safeMessage(e), false));
             }
@@ -299,6 +315,6 @@ class ResumeStrategyDispatcher {
         if (context != null && context.channelType() != null && !context.channelType().isBlank()) {
             return context.channelType();
         }
-        return WorkspaceContext.channelType().orElse("unknown");
+        return "unknown";
     }
 }

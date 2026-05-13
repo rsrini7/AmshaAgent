@@ -63,7 +63,7 @@ class BraveWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "test");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx("session-1", ""), params));
 
         assertEquals(403, resp.exitCode());
     }
@@ -74,7 +74,7 @@ class BraveWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "test");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertEquals(503, resp.exitCode());
     }
@@ -100,7 +100,7 @@ class BraveWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "brave");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertTrue(resp.success());
         assertTrue(resp.output().contains("Brave Search"));
@@ -118,7 +118,7 @@ class BraveWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "test", "count", 50);
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
         
         assertTrue(resp.output().contains("No results"));
     }
@@ -134,9 +134,19 @@ class BraveWebSearchToolTest {
         Map<String, Object> params = Map.of("query", "test");
 
         ToolResponse resp = WorkspaceContext.run("session-1", "user-1", "chat-1", 
-            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(params));
+            AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertEquals(401, resp.exitCode());
         assertTrue(resp.output().contains("Brave Search API failed"));
+    }
+
+    private ToolExecutionContext ctx() {
+        return ctx("session-1", "user-1");
+    }
+
+    private ToolExecutionContext ctx(String sessionId, String userId) {
+        return new ToolExecutionContext(
+            sessionId, userId, "chat-1", "RESEARCHER", AutonomyLevel.FULL, 
+            "trace-1", null, null, null, null, null, null);
     }
 }

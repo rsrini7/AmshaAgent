@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -50,7 +51,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
 
     @Override
     public Optional<ToolInvocationGuard.GuardDecision> evaluate(
-            String sessionId, String agentRole, String toolName,
+            String sessionId, String agentRole, AutonomyLevel level, String toolName,
             Map<String, Object> params, List<ReasoningStep> history,
             String goal, List<CompiledSkillEntry> skillSnapshot) {
 

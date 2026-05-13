@@ -69,7 +69,8 @@ public class CheckpointStatusTest {
             CheckpointStatus.NOT_STARTED,
             CheckpointStatus.IN_PROGRESS,
             CheckpointStatus.AWAITING_APPROVAL,
-            CheckpointStatus.AWAITING_RETRY
+            CheckpointStatus.AWAITING_RETRY,
+            CheckpointStatus.APPROVED
         );
 
         assertEquals(expectedNonTerminal, nonTerminal,

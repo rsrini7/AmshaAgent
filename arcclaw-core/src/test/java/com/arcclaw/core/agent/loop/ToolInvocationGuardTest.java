@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -71,7 +72,7 @@ class ToolInvocationGuardTest {
         List<ReasoningStep> history = List.of(past);
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", "tool", Map.of("arg", 1), history, "goal", List.of());
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "tool", Map.of("arg", 1), history, "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Deduplicate.class, result);
         assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result).cachedObservation().contains("result 1"));
@@ -84,7 +85,7 @@ class ToolInvocationGuardTest {
         List<ReasoningStep> history = List.of(past);
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", "tool", Map.of("arg", 1), history, "goal", List.of());
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "tool", Map.of("arg", 1), history, "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
     }
@@ -95,7 +96,7 @@ class ToolInvocationGuardTest {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                    "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal", List.of());
+                    "s1", "coordinator", AutonomyLevel.SUPERVISED, "delete-all", Map.of(), List.of(), "goal", List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
         });
@@ -107,7 +108,7 @@ class ToolInvocationGuardTest {
             when(roleRegistry.requiresApprovalForTools(any())).thenReturn(true);
 
             ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                    "s1", "coordinator", "delete-all", Map.of(), List.of(), "goal", List.of());
+                    "s1", "coordinator", AutonomyLevel.FULL, "delete-all", Map.of(), List.of(), "goal", List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
         });
@@ -117,7 +118,7 @@ class ToolInvocationGuardTest {
     void testInterceptorCanBlockTool() {
         ToolGuardInterceptor interceptor = mock(ToolGuardInterceptor.class);
         when(interceptor.handledToolNames()).thenReturn(Set.of("guarded-tool"));
-        when(interceptor.evaluate(anyString(), anyString(), anyString(), any(), any(), anyString(), any()))
+        when(interceptor.evaluate(anyString(), anyString(), any(AutonomyLevel.class), anyString(), any(), anyList(), anyString(), anyList()))
                 .thenReturn(Optional.of(new ToolInvocationGuard.GuardDecision.Blocked("interceptor-blocked")));
         
         when(mockInterceptors.iterator()).thenReturn(List.of(interceptor).iterator());
@@ -125,7 +126,7 @@ class ToolInvocationGuardTest {
         guard.init(); // Re-initialize with new interceptor mock
 
         ToolInvocationGuard.GuardDecision result = guard.evaluate(
-                "s1", "coordinator", "guarded-tool", Map.of(), List.of(), "goal", List.of());
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, "guarded-tool", Map.of(), List.of(), "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
         assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result).observation().contains("interceptor-blocked"));
@@ -135,4 +136,3 @@ class ToolInvocationGuardTest {
         WorkspaceContext.run(sessionId, "user", "chat", level, "coordinator", runnable);
     }
 }
-

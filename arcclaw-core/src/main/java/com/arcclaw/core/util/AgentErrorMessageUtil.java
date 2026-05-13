@@ -168,7 +168,7 @@ public final class AgentErrorMessageUtil {
         } else if (s.endsWith("s")) {
             try {
                 seconds = (int) Math.round(Double.parseDouble(s.substring(0, s.length() - 1)));
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException _) {
                 return "a few moments";
             }
         } else {
@@ -216,7 +216,7 @@ public final class AgentErrorMessageUtil {
             if (m.find()) {
                 try {
                     return Long.parseLong(m.group(1)) * 1000L;
-                } catch (NumberFormatException ignored) {}
+                } catch (NumberFormatException _) {}
             }
             // Also check for "try again in X.Ys" format
             Matcher m2 = RETRY_AFTER_PATTERN.matcher(msg);
@@ -225,7 +225,7 @@ public final class AgentErrorMessageUtil {
                 if (wait.endsWith("s")) {
                     try {
                         return (long) (Double.parseDouble(wait.substring(0, wait.length() - 1)) * 1000L);
-                    } catch (NumberFormatException ignored) {}
+                    } catch (NumberFormatException _) {}
                 }
             }
         }

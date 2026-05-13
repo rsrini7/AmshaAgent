@@ -46,10 +46,14 @@ public class SequentialToolExecutor {
                     context.autonomyLevel(), context.agentRole(), context.channelType(),
                     () -> {
                         ToolResponse response = invoke(call.toolName(), call.params(), context.sessionId());
-                        if (response.success()) {
-                            guard.recordToolCall(context.sessionId(), call.toolName(), call.params(), response.output());
-                        }
-                        return call.withResult(response.output(), response.success());
+                        return switch (response) {
+                            case ToolResponse.ToolSuccess success -> {
+                                guard.recordToolCall(context.sessionId(), call.toolName(), call.params(), success.output());
+                                yield call.withResult(success.output(), true);
+                            }
+                            case ToolResponse.ToolFailure failure -> call.withResult(failure.output(), false);
+                            case ToolResponse.ToolPending pending -> call.withResult(pending.output(), false);
+                        };
                     }
                 );
             } catch (Exception e) {

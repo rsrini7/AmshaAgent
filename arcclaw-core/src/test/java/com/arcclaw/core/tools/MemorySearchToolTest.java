@@ -61,7 +61,7 @@ class MemorySearchToolTest {
 
         ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
                 AutonomyLevel.SUPERVISED, "tool",
-                () -> tool.execute(Map.of("query", "blockchain")));
+                () -> tool.execute(ctx("test-session", "user-42"), Map.of("query", "blockchain")));
 
         assertTrue(result.success());
         assertTrue(result.output().contains("session-1"));
@@ -78,7 +78,7 @@ class MemorySearchToolTest {
         // Blank userId - intentionally triggers the 403 tenant boundary check
         ToolResponse response = WorkspaceContext.run("test-session", "", "test-chat",
                 AutonomyLevel.SUPERVISED, "tool",
-                () -> tool.execute(Map.of("query", "test")));
+                () -> tool.execute(ctx("test-session", ""), Map.of("query", "test")));
 
         assertFalse(response.success());
         assertEquals(403, response.exitCode());
@@ -91,14 +91,12 @@ class MemorySearchToolTest {
 
         ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
                 AutonomyLevel.SUPERVISED, "tool",
-                () -> tool.execute(Map.of("query", "   ")));
+                () -> tool.execute(ctx("test-session", "user-42"), Map.of("query", "   ")));
 
         assertFalse(result.success());
         assertEquals(400, result.exitCode());
         assertEquals("query parameter is required for memory_search", result.output());
     }
-
-
 
     @Test
     void testEmptyFtsResultReturnsGracefulMessage() throws Exception {
@@ -110,7 +108,7 @@ class MemorySearchToolTest {
 
         ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
                 AutonomyLevel.SUPERVISED, "tool",
-                () -> tool.execute(Map.of("query", "unknown topic")));
+                () -> tool.execute(ctx("test-session", "user-42"), Map.of("query", "unknown topic")));
 
         assertTrue(result.success());
         assertEquals("No relevant memory found for query: unknown topic. Proceed with current context only.",
@@ -127,7 +125,7 @@ class MemorySearchToolTest {
 
         ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
                 AutonomyLevel.SUPERVISED, "tool",
-                () -> tool.execute(Map.of("query", "blockchain")));
+                () -> tool.execute(ctx("test-session", "user-42"), Map.of("query", "blockchain")));
 
         assertTrue(result.success());
         assertEquals("No relevant memory found for query: blockchain. Proceed with current context only.",
@@ -144,7 +142,7 @@ class MemorySearchToolTest {
 
         ToolResponse result = WorkspaceContext.run("test-session", "user-42", "test-chat",
                 AutonomyLevel.SUPERVISED, "tool",
-                () -> tool.execute(Map.of("query", "blockchain")));
+                () -> tool.execute(ctx("test-session", "user-42"), Map.of("query", "blockchain")));
 
         assertTrue(result.success()); // Swallows exception and proceeds to memoryPort
     }
@@ -153,5 +151,11 @@ class MemorySearchToolTest {
     void testRequiresManualApprovalReturnsTrue() {
         MemorySearchTool tool = new MemorySearchTool();
         assertTrue(tool.requiresManualApproval(Map.of()), "memory_search MUST always require manual approval");
+    }
+
+    private ToolExecutionContext ctx(String sessionId, String userId) {
+        return new ToolExecutionContext(
+            sessionId, userId, "test-chat", "tool", AutonomyLevel.SUPERVISED, 
+            "trace-1", null, null, null, null, null, null);
     }
 }

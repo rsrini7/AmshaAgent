@@ -35,7 +35,7 @@ export class ArcShell extends LitElement {
       color: var(--text-primary);
     }
     main { 
-      flex: 1; overflow-y: auto; display: flex; flex-direction: column; 
+      flex: 1; overflow: hidden; display: flex; flex-direction: column; 
       position: relative; 
     }
     .content-area { flex: 1; min-height: 0; }

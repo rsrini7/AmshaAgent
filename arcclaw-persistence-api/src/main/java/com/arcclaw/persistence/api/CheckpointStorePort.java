@@ -193,4 +193,6 @@ public interface CheckpointStorePort {
     void releaseResumeClaim(String sessionId, String agentRole);
 
     boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision);
+
+    boolean hasPendingApprovalForChat(String chatId);
 }

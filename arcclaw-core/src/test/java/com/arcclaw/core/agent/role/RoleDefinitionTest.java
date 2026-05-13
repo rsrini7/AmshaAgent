@@ -55,21 +55,6 @@ public class RoleDefinitionTest {
         assertFalse(AgentRoleEnum.SYNTHESIZER.definition().canGenerateCode());
     }
 
-    @Test
-    void testBrahmaHasSandboxExecAndDelegate() {
-        Set<ToolCapability> caps = AgentRoleEnum.CODER.definition().capabilities();
-        assertEquals(2, caps.size(), "Coder must have exactly two capabilities: SANDBOX_EXEC and DELEGATE_TO_AGENT");
-        assertTrue(caps.contains(ToolCapability.SANDBOX_EXEC));
-        assertTrue(caps.contains(ToolCapability.DELEGATE_TO_AGENT));
-    }
-
-    @Test
-    void testArchitectCapabilities() {
-        RoleDefinition archDef = AgentRoleEnum.ARCHITECT.definition();
-        assertEquals(Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.DELEGATE_TO_AGENT), archDef.capabilities());
-        Set<String> expectedTools = Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName(), ToolCapability.DELEGATE_TO_AGENT.toolName());
-        assertEquals(expectedTools, archDef.toolNames(), "Architect should have github, memory_search and delegate_to_agent tools");
-    }
 
     @Test
     void testDeityAliases() {

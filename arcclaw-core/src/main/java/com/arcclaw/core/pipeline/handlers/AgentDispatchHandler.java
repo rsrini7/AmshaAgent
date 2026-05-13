@@ -12,7 +12,6 @@ import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
@@ -214,17 +213,18 @@ public class AgentDispatchHandler implements MessageHandler {
     }
 
     private void formatAndSendReply(MessageContext context, AgentResult result, String sessionId) {
-        String output = AgentResultFormatter.format(result);
         channelPluginRegistry.find(context.getChannelType())
             .map(ChannelPlugin::sender)
             .ifPresentOrElse(
                 s -> {
-                    if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+                    if (result instanceof AgentResult.AwaitingApproval aa) {
+                        String text = AgentResultFormatter.formatBasic(result);
                         s.send(context.getUser(), List.of(
-                            new ReplyNode.Text(output),
+                            new ReplyNode.Text(text),
                             new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)
                         ));
                     } else {
+                        String output = AgentResultFormatter.format(result);
                         s.sendRaw(context.getUser(), output);
                     }
                 },

@@ -13,16 +13,18 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.agent.sse.HitlEventType;
+import com.arcclaw.core.governance.ApprovalFrame;
 import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
  * Handles checkpoint persistence and SSE notification logic.
- * Refactored to constructor injection as part of T4-1.
  */
 @ApplicationScoped
 public class ApprovalCheckpointManager {
@@ -64,12 +66,20 @@ public class ApprovalCheckpointManager {
      * Channel type and platformId MUST be stamped before save so resumeCheckpoint()
      * can read the correct Telegram/WebSocket target after approval.
      */
-    AgentResult persist(AgentExecutionContext context,
-            String toolName, String paramsJson,
+    public AgentResult persist(AgentExecutionContext context,
+            ApprovalFrame frame,
             List<ReasoningStep> history,
             String channelType, String channelPlatformId) {
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
+        String toolName = frame.tool();
+        String paramsJson = "{}";
+        try {
+            paramsJson = objectMapper.writeValueAsString(frame.params());
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
+
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         agentStore.clearBatchResuming(sessionId);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
@@ -100,122 +110,74 @@ public class ApprovalCheckpointManager {
         cp = agentStore.saveWithSteps(cp, history);
 
         log.infof("STATE-MACHINE Pausing session %s for human approval of tool %s " +
-                  "(channel=%s platformId=%s)",
-                  sessionId, toolName, channelType, channelPlatformId);
+                  "(channel=%s platformId=%s, risk=%s)",
+                  sessionId, toolName, channelType, channelPlatformId, frame.riskLevel());
 
         // SSE HitlEvent is always sent for UI/Web tracking
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), toolName, paramsJson, null, Instant.now()   
+            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), toolName, paramsJson, frame.riskLevel().name(), null, Instant.now()   
         ));
         
-        // Notification logic: 
-        // 1. Cron sessions: CronResultHandler handles Telegram notification (formatted with cron details).
-        // 2. Interactive sessions: MessagePipeline/AgentDispatchHandler handles the notification.
-        // ApprovalCheckpointManager should NOT trigger additional channel notifications.
-        return AgentResult.awaitingApproval(toolName, paramsJson, sessionId, List.copyOf(history));
+        return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
+    }
+
+    @SuppressWarnings("unchecked")
+    public AgentResult persist(AgentExecutionContext context,
+            String toolName, String paramsJson,
+            List<ReasoningStep> history,
+            Object channelType, Object channelPlatformId) {
+        Map<String, Object> params = Map.of();
+        try {
+            params = objectMapper.readValue(paramsJson, Map.class);
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
+        ApprovalFrame frame = new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM);
+        return persist(context, frame, history, channelType != null ? channelType.toString() : null, channelPlatformId != null ? channelPlatformId.toString() : null);
     }
 
     /**
-     * Persists an AWAITING_APPROVAL checkpoint for a parallel tool batch.
+     * Specialized persistence for parallel tool batches.
+     * Encapsulates the composite name generation and multi-tool status mapping.
      */
-    public AgentResult persistBatch(
-            AgentExecutionContext context,
-            String compositeName,
-            String batchJson,
+    public AgentResult persistBatch(AgentExecutionContext context,
             List<ParallelToolCall> calls,
             List<ReasoningStep> history,
             String channelType, String channelPlatformId) {
-
-        String sessionId = context.sessionId();
-        String agentRole = context.agentRole();
-
-        AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
-        // §Resume-Fix: Clear any stale in-memory resume flag from previous (failed/orphaned)
-        // resume attempts. A new HITL pause invalidates any prior resume state.
-        agentStore.clearBatchResuming(sessionId);
-
-        Map<String, ToolDecision> decisions = new LinkedHashMap<>();
-        calls.forEach(call -> decisions.put(
-            call.toolName(), ToolDecision.PENDING));
-
-        String decisionsJson;
-        try {
-            decisionsJson = objectMapper.writeValueAsString(decisions);
-        } catch (Exception e) {
-            log.errorf("[PARALLEL-HITL] Failed to serialize decisions for " +
-                       "session %s: %s", sessionId,
-                       e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            return persist(context, compositeName, batchJson, history,
-                           channelType, channelPlatformId);
-        }
-
-        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cp.setPendingToolName(compositeName);
-        cp.setPendingToolRole(agentRole);
-        cp.setPendingToolParametersJson(batchJson);
-        cp.setBatchToolDecisions(decisionsJson);
-        cp.setOriginalGoal(context.goal());
-        cp.setSystemNote(context.systemNote());
-        cp.setUpdatedAt(Instant.now());
-
-        if (context.hasChannelInfo()) {
-            cp.setChannelType(context.channelType());
-            cp.setChannelPlatformId(context.channelPlatformId());
-        }
         
-        // Save checkpoint metadata and reasoning steps in one atomic store write.
-        cp = agentStore.saveWithSteps(cp, history);
-
-        log.infof("[STATE-MACHINE] Pausing session %s for parallel HITL: %s " +
-                  "(channel=%s platformId=%s)",
-                  sessionId, compositeName, channelType, channelPlatformId);
-
-        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), compositeName, batchJson, null, Instant.now()
-        ));
-        return AgentResult.awaitingApproval(
-            compositeName, batchJson, sessionId, List.copyOf(history));
-    }
-
-    /**
-     * Persists an AWAITING_APPROVAL checkpoint for a parallel tool batch
-     * that contains both HITL-pending and pre-executed tool results.
-     */
-    public AgentResult persistBatchWithPreExecuted(
-            AgentExecutionContext context,
-            String compositeName,
-            String originalBatchJson,
-            List<ParallelToolCall> hitlCalls,
-            String preExecutedResultsJson,
-            List<ReasoningStep> history,
-            String channelType, String channelPlatformId) {
-
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
 
-        AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
-        agentStore.clearBatchResuming(sessionId);
-
+        // 1. Generate composite name and JSON payload
+        String compositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX +
+                calls.stream().map(ParallelToolCall::toolName).distinct().reduce((a, b) -> a + "|" + b).orElse("batch");
+        
+        String originalBatchJson = "[]";
         Map<String, ToolDecision> decisions = new LinkedHashMap<>();
-        hitlCalls.forEach(call ->
-            decisions.put(call.toolName(), ToolDecision.PENDING));
-
-        String decisionsJson;
         try {
-            decisionsJson = objectMapper.writeValueAsString(decisions);
+            originalBatchJson = objectMapper.writeValueAsString(calls);
+            for (ParallelToolCall call : calls) {
+                decisions.put(call.toolName(), ToolDecision.PENDING);
+            }
         } catch (Exception e) {
-            log.errorf("[PARALLEL-HITL] Failed to serialize decisions: %s",
-                       e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            return persist(context, compositeName, originalBatchJson, history,
-                           channelType, channelPlatformId);
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
         }
 
+        // 2. Load or create checkpoint
+        AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
+        agentStore.clearBatchResuming(sessionId);
+        
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(compositeName);
         cp.setPendingToolRole(agentRole);
         cp.setPendingToolParametersJson(originalBatchJson);
-        cp.setBatchToolDecisions(decisionsJson);
-        cp.setPreExecutedResults(preExecutedResultsJson);
+        try {
+            cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
+
+        cp.setMaxIterations(context.maxIterations());
         cp.setOriginalGoal(context.goal());
         cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(Instant.now());
@@ -224,19 +186,96 @@ public class ApprovalCheckpointManager {
             cp.setChannelType(context.channelType());
             cp.setChannelPlatformId(context.channelPlatformId());
         }
-        
-        // Save checkpoint metadata and reasoning steps in one atomic store write.
-        cp = agentStore.saveWithSteps(cp, history);
 
-        log.infof("[STATE-MACHINE] Pausing session %s - HITL tools pending: %d | batch: %s " +
-                  "(channel=%s platformId=%s)",
-                  sessionId, hitlCalls.size(), compositeName, channelType, channelPlatformId);
+        // 3. Save
+        agentStore.saveWithSteps(cp, history);
+
+        log.infof("STATE-MACHINE Pausing session %s for parallel batch approval: %s",
+                sessionId, compositeName);
+
+        // 4. Notify UI via SSE
+        agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
+            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), compositeName, originalBatchJson, ApprovalFrame.RiskLevel.MEDIUM.name(), null, Instant.now()
+        ));
+
+        // Create a synthetic frame for the result
+        ApprovalFrame frame = new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), ApprovalFrame.RiskLevel.MEDIUM);
+        return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
+    }
+
+    /**
+     * Specialized persistence for parallel batches where some tools already executed (pre-execution pass).
+     * Preserves pre-executed results in the checkpoint so they aren't lost during the HITL pause. §7.30
+     */
+    public AgentResult persistBatchWithPreExecuted(AgentExecutionContext context,
+            List<ParallelToolCall> allCalls,
+            Map<String, ToolResponse> results,
+            List<ReasoningStep> history,
+            String channelType, String channelPlatformId) {
+        
+        String sessionId = context.sessionId();
+        String agentRole = context.agentRole();
+
+        // §Issue-3 Fix: Build composite name from HITL-pending tools only (not pre-executed).
+        // This prevents ResumeStrategyDispatcher from attempting to re-execute already-completed tools.
+        String compositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX +
+                allCalls.stream()
+                    .filter(call -> !results.containsKey(call.toolName()))
+                    .map(ParallelToolCall::toolName).distinct()
+                    .reduce((a, b) -> a + "|" + b).orElse("batch");
+        
+        String originalBatchJson = "[]";
+        String preExecutedJson = "{}";
+        Map<String, ToolDecision> decisions = new LinkedHashMap<>();
+        
+        try {
+            originalBatchJson = objectMapper.writeValueAsString(allCalls);
+            preExecutedJson = objectMapper.writeValueAsString(results);
+            for (ParallelToolCall call : allCalls) {
+                if (results.containsKey(call.toolName())) {
+                    decisions.put(call.toolName(), ToolDecision.APPROVED);
+                } else {
+                    decisions.put(call.toolName(), ToolDecision.PENDING);
+                }
+            }
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
+
+        AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
+        agentStore.clearBatchResuming(sessionId);
+        
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setPendingToolName(compositeName);
+        cp.setPendingToolRole(agentRole);
+        cp.setPendingToolParametersJson(originalBatchJson);
+        cp.setPreExecutedResults(preExecutedJson);
+        try {
+            cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
+        } catch (Exception e) {
+            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+        }
+
+        cp.setMaxIterations(context.maxIterations());
+        cp.setOriginalGoal(context.goal());
+        cp.setSystemNote(context.systemNote());
+        cp.setUpdatedAt(Instant.now());
+
+        if (context.hasChannelInfo()) {
+            cp.setChannelType(context.channelType());
+            cp.setChannelPlatformId(context.channelPlatformId());
+        }
+
+        agentStore.saveWithSteps(cp, history);
+
+        log.infof("STATE-MACHINE Pausing session %s for parallel batch approval (with %d pre-executed): %s",
+                sessionId, results.size(), compositeName);
 
         agentSseService.publish(sessionId, new AgentSseService.HitlEvent(
-            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), compositeName, originalBatchJson, null, Instant.now()
+            sessionId, HitlEventType.AWAITING_APPROVAL.wireValue(), compositeName, originalBatchJson, ApprovalFrame.RiskLevel.MEDIUM.name(), null, Instant.now()
         ));
-        return AgentResult.awaitingApproval(
-            compositeName, originalBatchJson, sessionId,
-            List.copyOf(history));
+        
+        ApprovalFrame frame = new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), ApprovalFrame.RiskLevel.MEDIUM);
+        return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 }

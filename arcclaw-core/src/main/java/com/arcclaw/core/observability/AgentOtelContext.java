@@ -95,10 +95,10 @@ public class AgentOtelContext implements AgentObserver {
         Span rootSpan = rootSpans.get(sessionId);
         if (rootSpan != null) {
             long totalIn = totalInputTokens
-                    .computeIfAbsent(sessionId, k -> new AtomicLong(0))
+                    .computeIfAbsent(sessionId, _ -> new AtomicLong(0))
                     .addAndGet(inputTokens);
             long totalOut = totalOutputTokens
-                    .computeIfAbsent(sessionId, k -> new AtomicLong(0))
+                    .computeIfAbsent(sessionId, _ -> new AtomicLong(0))
                     .addAndGet(outputTokens);
             rootSpan.setAttribute("llm.usage.prompt_tokens", totalIn);
             rootSpan.setAttribute("llm.usage.completion_tokens", totalOut);

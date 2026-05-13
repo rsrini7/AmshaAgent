@@ -18,6 +18,7 @@ import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.core.state.StatefulAgentStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,9 @@ class CronResultHandlerTest {
     @Mock
     Event<AgentJobCompleted> jobCompletedEvent;
 
+    @Mock
+    StatefulAgentStore statefulAgentStore;
+
     CronResultHandler handler;
 
     private AgentCronEntity job;
@@ -48,7 +52,7 @@ class CronResultHandlerTest {
 
     @BeforeEach
     void setup() {
-        handler = new CronResultHandler(cronRepository, auditService, workspaceManager, jobCompletedEvent);
+        handler = new CronResultHandler(cronRepository, auditService, workspaceManager, jobCompletedEvent, statefulAgentStore);
         job = new AgentCronEntity();
         job.id = "cron-1";
         job.userId = "user-1";

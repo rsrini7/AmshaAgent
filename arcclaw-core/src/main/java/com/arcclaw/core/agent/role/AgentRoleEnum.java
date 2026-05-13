@@ -38,35 +38,35 @@ public record AgentRoleEnum(String id) {
             AgentPersona.BRIHASPATI.roleId(),
             AgentPersona.BRIHASPATI.displayName(),
             "Designs system architecture, evaluates technical trade-offs, and authors ADRs.",
-            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.DELEGATE_TO_AGENT), 
+            7, true, false, Set.of(), 
             AgentPersona.BRIHASPATI.aliases()
         ),
         AgentPersona.VISHNU.roleId(), new RoleDefinition(
             AgentPersona.VISHNU.roleId(),
             AgentPersona.VISHNU.displayName(),
             "Orchestrates sub-agents, manages session state, and schedules background tasks.",
-            7, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.MEMORY_SEARCH, ToolCapability.INGEST_DOCUMENT, ToolCapability.DELEGATE_TO_AGENT), 
+            7, true, false, Set.of(), 
             AgentPersona.VISHNU.aliases()
         ),
         AgentPersona.SARASWATI.roleId(), new RoleDefinition(
             AgentPersona.SARASWATI.roleId(),
             AgentPersona.SARASWATI.displayName(),
             "Perform information retrieval, web searches, and documentation lookups.",
-            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.BROWSER_NAVIGATE, ToolCapability.DELEGATE_TO_AGENT), 
+            10, true, false, Set.of(), 
             AgentPersona.SARASWATI.aliases()
         ),
         AgentPersona.BRAHMA.roleId(), new RoleDefinition(
             AgentPersona.BRAHMA.roleId(),
             AgentPersona.BRAHMA.displayName(),
             "Writes new architectural code, features from scratch, and logic implementations.",
-            15, false, true, Set.of(ToolCapability.SANDBOX_EXEC, ToolCapability.DELEGATE_TO_AGENT), 
+            15, false, true, Set.of(), 
             AgentPersona.BRAHMA.aliases()
         ),
         AgentPersona.SHIVA.roleId(), new RoleDefinition(
             AgentPersona.SHIVA.roleId(),
             AgentPersona.SHIVA.displayName(),
             "Analyzes stack traces, finds bugs, and fixes broken code.",
-            15, false, true, Set.of(ToolCapability.GITHUB, ToolCapability.SANDBOX_EXEC, ToolCapability.DELEGATE_TO_AGENT), 
+            15, false, true, Set.of(), 
             AgentPersona.SHIVA.aliases()
         ),
         AgentPersona.DATTATREYA.roleId(), new RoleDefinition(
@@ -75,7 +75,7 @@ public record AgentRoleEnum(String id) {
             "Cross-domain synthesis tasks requiring code, debug, research, and architecture " +
             "simultaneously. Activated when a single task spans multiple specialist domains " +
             "and their outputs need integration or conflict resolution.",
-            10, true, false, Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH, ToolCapability.SCHEDULE_TASK, ToolCapability.MANAGE_SCHEDULE, ToolCapability.INGEST_DOCUMENT, ToolCapability.BROWSER_NAVIGATE, ToolCapability.WEB_SEARCH_BRAVE, ToolCapability.WEB_SEARCH_SERPER, ToolCapability.DELEGATE_TO_AGENT), 
+            10, true, false, Set.of(), 
             AgentPersona.DATTATREYA.aliases()
         )
     );

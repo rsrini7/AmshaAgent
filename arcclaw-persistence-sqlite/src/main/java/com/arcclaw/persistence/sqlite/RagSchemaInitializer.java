@@ -36,7 +36,7 @@ public class RagSchemaInitializer {
     void onStart(@Observes @Priority(Interceptor.Priority.APPLICATION + 100) StartupEvent ev) {
         // Acquire a connection to trigger FtsConnectionInterceptor.onConnectionAcquire()
         // which calls enable_load_extension + load_extension(vec-extension-path).
-        // Without this, isVectorSearchEnabled() is always false at startup because
+        // isVectorSearchEnabled() is always false at startup because
         // no pooled connection has been acquired yet.
         try (Connection _ = dataSource.getConnection()) {
             log.debugf("RagSchemaInitializer: connection acquired to trigger vec0 load.");

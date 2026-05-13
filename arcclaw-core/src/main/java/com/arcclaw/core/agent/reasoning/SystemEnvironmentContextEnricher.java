@@ -21,7 +21,7 @@ public class SystemEnvironmentContextEnricher implements ContextEnricher {
     ToolRegistry toolRegistry;
 
     @Override
-    public String enrich(String sessionId, String goal, String basePrompt) {
+    public String enrich(String sessionId, String userId, String goal, String basePrompt) {
         StringBuilder sb = new StringBuilder();
         sb.append("\n## Host Environment Context\n");
         sb.append("- **Working Directory**: `")

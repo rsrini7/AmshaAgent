@@ -170,14 +170,31 @@ public class FinishActionHandler {
                                 List<ReasoningStep> history,
                                 ReasoningStep step,
                                 int llmSchemaErrorCount) {
+        if (step instanceof ReasoningStep.FinishStep finishStep) {
+            return handle(context, history, finishStep, llmSchemaErrorCount);
+        }
+        if (step != null && ReasoningStep.FINISH.equals(step.action())) {
+            // Reconstruct as a FinishStep
+            ReasoningStep.FinishStep fs = new ReasoningStep.FinishStep(step.thought(), step.actionInput(), 0, 0, false);
+            return handle(context, history, fs, llmSchemaErrorCount);
+        }
+        // §Issue-4 Fix: Graceful fallback instead of unchecked exception for non-migrated callers.
+        // This path should be unreachable after full migration to ReasoningStep.FinishStep,
+        // but we guard defensively to avoid crashing the agent loop.
+        log.warnf("FINISH-HANDLER: unexpected step type %s passed to handle() bridge — returning Correction",
+                step != null ? step.getClass().getSimpleName() : "null");
+        ReasoningStep correctedStep = step != null ? step.withObservation("Unexpected step type for FINISH") : null;
+        return new FinishOutcome.Correction(correctedStep,
+                "System: Expected a FINISH action but received an unexpected step type. Please FINISH with a plain text answer.");
+    }
+
+    public FinishOutcome handle(AgentExecutionContext context,
+                                List<ReasoningStep> history,
+                                ReasoningStep.FinishStep step,
+                                int llmSchemaErrorCount) {
 
         String sessionId = context.sessionId();
         String agentRole = context.agentRole();
-
-        if (!ReasoningStep.FINISH.equals(step.action())) {
-            ReasoningStep cleanStep = step.withObservation("System: Action must be FINISH");
-            return new FinishOutcome.Correction(cleanStep, "System: You must invoke the FINISH action.");
-        }
 
         // --- Extract and strip candidate answer ---
         String candidateAnswer = extractCandidateAnswer(step);
@@ -283,24 +300,21 @@ public class FinishActionHandler {
     }
 
     private boolean stepContainsSuccessfulSchedule(ReasoningStep step) {
-        if ("schedule_task".equals(step.action()) && Boolean.TRUE.equals(step.success())) {
-            return true;
-        }
-        if (!step.isParallelBatch() || step.actionInput() == null) {
-            return false;
-        }
-        Object batchRaw = step.actionInput().get("batch");
-        if (!(batchRaw instanceof String batchJson) || batchJson.isBlank()) {
-            return false;
-        }
-        try {
-            List<ParallelToolCall> calls = objectMapper.readValue(batchJson, new TypeReference<List<ParallelToolCall>>() {});
-            return calls.stream().anyMatch(call ->
-                    "schedule_task".equals(call.toolName()) && call.success());
-        } catch (Exception e) {
-            log.debugf("FINISH-HANDLER: failed to parse parallel batch while checking schedule success: %s", e.getMessage());
-            return false;
-        }
+        return switch (step) {
+            case ReasoningStep.ToolCallStep toolCall -> "schedule_task".equals(toolCall.action()) && Boolean.TRUE.equals(toolCall.success());
+            case ReasoningStep.ParallelStep parallel -> {
+                Object batchRaw = parallel.actionInput().get("batch");
+                if (!(batchRaw instanceof String batchJson) || batchJson.isBlank()) yield false;
+                try {
+                    List<ParallelToolCall> calls = objectMapper.readValue(batchJson, new TypeReference<List<ParallelToolCall>>() {});
+                    yield calls.stream().anyMatch(call -> "schedule_task".equals(call.toolName()) && call.success());
+                } catch (Exception e) {
+                    log.debugf("FINISH-HANDLER: failed to parse parallel batch: %s", e.getMessage());
+                    yield false;
+                }
+            }
+            default -> false;
+        };
     }
 
     private FinishOutcome applyCodePolicy(String sessionId, String agentRole, List<ReasoningStep> history, String answer) {

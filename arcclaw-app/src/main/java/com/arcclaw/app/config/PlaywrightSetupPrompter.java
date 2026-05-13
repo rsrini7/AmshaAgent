@@ -15,7 +15,10 @@ public class PlaywrightSetupPrompter {
                 System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED"));
         boolean playwrightEnabled = "true".equalsIgnoreCase(playwrightProp);
 
-        if (playwrightEnabled && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
+        String skipInstall = System.getProperty("ARCCLAW_PLAYWRIGHT_SKIP_INSTALL",
+                System.getenv("ARCCLAW_PLAYWRIGHT_SKIP_INSTALL"));
+        
+        if (playwrightEnabled && !"true".equalsIgnoreCase(skipInstall) && !PlaywrightBrowserInstaller.isChromiumInstalled(browsersPath)) {
             System.err.println("[ArcClaw] ℹ️  Auto-installing Chromium for Playwright...");
             PlaywrightBrowserInstaller.installChromium(browsersPath);
         }

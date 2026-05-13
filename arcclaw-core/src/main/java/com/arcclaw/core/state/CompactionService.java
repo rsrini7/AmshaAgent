@@ -83,6 +83,9 @@ public class CompactionService {
     @ConfigProperty(name = "arcclaw.memory.compaction.keep-recent", defaultValue = "5")
     int keepRecent;
 
+    @ConfigProperty(name = "arcclaw.memory.compaction.max-backoff-ms", defaultValue = "60000")
+    long maxBackoffMs;
+
     private static final Logger log = Logger.getLogger(CompactionService.class);
 
     private static final String PROMPT_TEMPLATE = """
@@ -305,7 +308,7 @@ public class CompactionService {
                     if (i < maxRetries) {
                         // Exponential Backoff: base * 2^attempt
                         // Safety: attempt is capped by Strategy.maxAttempts (clamped to 10), so no overflow risk.
-                        long expDelay = Math.min(60000, 1000L * (1L << i));
+                        long expDelay = Math.min(maxBackoffMs, 1000L * (1L << i));
                         log.warnf("CompactionService: %s for session %s (attempt %d/%d). Retrying in %d ms...",
                                 errorType, sessionId, i, maxRetries, expDelay);
                         try {

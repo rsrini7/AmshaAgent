@@ -110,7 +110,7 @@ public class LoopExitPublisher {
             case AgentResult.StructuredFinished _ -> "idle";
             case AgentResult.AwaitingApproval _   -> "waiting-approval";
             case AgentResult.AwaitingRetry _      -> "waiting-retry";
-            default                                     -> "error";
+            default                               -> "error";
         };
     }
 }

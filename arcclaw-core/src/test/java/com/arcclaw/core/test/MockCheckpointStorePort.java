@@ -313,4 +313,9 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
         return true;
     }
+
+    @Override
+    public boolean hasPendingApprovalForChat(String chatId) {
+        return false;
+    }
 }

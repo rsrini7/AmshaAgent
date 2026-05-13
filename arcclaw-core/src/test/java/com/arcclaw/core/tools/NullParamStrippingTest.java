@@ -42,7 +42,7 @@ class NullParamStrippingTest {
         when(mockTool.isEnabled()).thenReturn(true);
         when(mockTool.requiredOperation()).thenReturn(ToolOperation.READ_FS);
         when(mockTool.requiresSandbox()).thenReturn(false);
-        when(mockTool.execute(any())).thenReturn(ToolResponse.success("ok"));
+        when(mockTool.execute(any(), any())).thenReturn(ToolResponse.success("ok"));
 
         when(discoveryService.getToolIndex()).thenReturn(Map.of("test-tool", mockTool));
     }
@@ -58,7 +58,7 @@ class NullParamStrippingTest {
         WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             registry.invokeTool("test-tool", inputParams);
             
-            verify(mockTool).execute(argThat(params -> {
+            verify(mockTool).execute(any(), argThat(params -> {
                 assertTrue(params.containsKey("keep"));
                 assertFalse(params.containsKey("strip"));
                 return true;
@@ -77,7 +77,7 @@ class NullParamStrippingTest {
         WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             registry.invokeTool("test-tool", inputParams);
             
-            verify(mockTool).execute(argThat(params -> {
+            verify(mockTool).execute(any(), argThat(params -> {
                 assertTrue(params.containsKey("keep"));
                 assertTrue(params.containsKey("preserve"));
                 assertTrue(params.get("preserve") == null);

@@ -120,12 +120,12 @@ public sealed interface ChannelCommand
     );
 
     private static Optional<String> parseTargetId(Optional<String> argOpt) {
-        // IDs are either UUIDs or hyphenated strings (cron segment IDs)
-        return argOpt.filter(arg -> arg.contains("-"));
+        // Explicit targets can be a hyphenated ID, a numeric option, or an alphanumeric prefix of at least 4 chars.
+        return argOpt.filter(arg -> arg.contains("-") || arg.matches("\\d+") || (arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")));
     }
 
     private static Optional<String> parseToolName(Optional<String> argOpt) {
-        return argOpt.filter(arg -> !arg.contains("-") && !arg.isBlank());
+        return argOpt.filter(arg -> !arg.contains("-") && !arg.matches("\\d+") && !(arg.length() >= 4 && arg.matches("[0-9a-fA-F]+")) && !arg.isBlank());
     }
 
     // ------------------------------------------------------------------

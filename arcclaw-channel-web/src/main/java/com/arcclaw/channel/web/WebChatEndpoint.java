@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
@@ -19,6 +20,7 @@ import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
+import io.quarkus.websockets.next.HandshakeRequest;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
 import io.quarkus.websockets.next.OnOpen;
@@ -28,6 +30,7 @@ import io.quarkus.websockets.next.WebSocketConnection;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+@ApplicationScoped
 @WebSocket(path = "/ws/chat")
 public class WebChatEndpoint {
 
@@ -61,27 +64,45 @@ public class WebChatEndpoint {
 
     @OnOpen
     public void onOpen(WebSocketConnection conn) {
-        // platformId is the stable per-connection identity (channelId + userId)
-        String query = conn.handshakeRequest().query();
-        String platformId = null;
-        if (query != null && query.contains("sessionId=")) {
-            String rawId = query.split("sessionId=")[1].split("&")[0];
-            platformId = URLDecoder.decode(rawId, StandardCharsets.UTF_8);
-        }
-        if (platformId == null || platformId.isBlank()) {
-            platformId = UUID.randomUUID().toString();
-        }
+        log.infof("WebSocket handshake: connId=%s", conn.id());
+        
+        try {
+            // platformId is the stable per-connection identity (channelId + userId)
+            HandshakeRequest handshake = conn.handshakeRequest();
+            String query = (handshake != null) ? handshake.query() : null;
+            String platformId = null;
+            
+            if (query != null && query.contains("sessionId=")) {
+                String[] parts = query.split("sessionId=");
+                if (parts.length > 1) {
+                    platformId = URLDecoder.decode(parts[1].split("&")[0], StandardCharsets.UTF_8);
+                }
+            }
+            
+            if (platformId == null || platformId.isBlank()) {
+                log.warnf("No platformId (sessionId) found in query string for connId=%s. Generating random.", conn.id());
+                platformId = UUID.randomUUID().toString();
+            }
 
-        connectionToSession.put(conn.id(), platformId);
+            connectionToSession.put(conn.id(), platformId);
 
-        String arcclawSessionId = channelServices.resolveOrCreateSession(
-            ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
-        connectionToArcclawSession.put(conn.id(), arcclawSessionId);
+            String arcclawSessionId = channelServices.resolveOrCreateSession(
+                ChannelType.WEBSOCKET.id().toUpperCase(), platformId, platformId);
+            connectionToArcclawSession.put(conn.id(), arcclawSessionId);
 
-        if (!requireAuth) {
-            setupAuthenticatedSession(conn, platformId, arcclawSessionId);
-        } else {
-            log.debugf("WebSocket pending auth: connId=%s platformId=%s", conn.id(), platformId);
+            log.debugf("WebSocket mapping established: connId=%s -> platformId=%s, arcclawSession=%s", 
+                conn.id(), platformId, arcclawSessionId);
+
+            if (!requireAuth) {
+                setupAuthenticatedSession(conn, platformId, arcclawSessionId);
+            } else {
+                log.infof("WebSocket pending auth: connId=%s platformId=%s", conn.id(), platformId);
+            }
+        } catch (Exception e) {
+            log.errorf(e, "Failed to initialize WebSocket connection %s: %s", conn.id(), e.getMessage());
+            // Cleanup and close to prevent orphaned states
+            cleanup(conn, "initialization error");
+            conn.close().subscribe().with(id -> {}, err -> {});
         }
     }
 
@@ -139,7 +160,8 @@ public class WebChatEndpoint {
 
             String platformId = connectionToSession.get(conn.id());
             if (platformId == null) {
-                log.warn("Received message without a platformId mapped for connection " + conn.id());
+                log.warnf("Received message without a platformId mapped for connection %s. connectionToSession.size=%d, requireAuth=%b", 
+                    conn.id(), connectionToSession.size(), requireAuth);
                 return;
             }
 

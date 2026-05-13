@@ -15,5 +15,5 @@ public interface ContextEnricher {
      * @param goal      the user's current goal/message text
      * @param basePrompt the fully assembled system prompt so far
      */
-    String enrich(String sessionId, String goal, String basePrompt);
+    String enrich(String sessionId, String userId, String goal, String basePrompt);
 }

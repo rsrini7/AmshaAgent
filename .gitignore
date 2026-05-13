@@ -65,3 +65,6 @@ arcclaw-app/src/main/resources/env-example
 
 arcclaw-source.zip
 arcclaw-source.7z
+
+# Generated
+arcclaw-ui/src/api/generated/

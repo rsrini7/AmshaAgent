@@ -382,7 +382,7 @@ try {
 """
 
 [tasks."build:native"]
-depends = ["env:recover", "build:ui-copy"]
+depends = ["dev:kill", "env:recover", "build:ui-copy"]
 description = "Native binary - Podman container (default on Linux/macOS) or local GraalVM - auto-detects, auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -499,7 +499,7 @@ Write-Host '      $env:GOAL="..."; mise run native:ask → single-shot query'
 """
 
 [tasks."build:native-local"]
-depends = ["env:recover", "build:ui-copy"]
+depends = ["dev:kill", "env:recover", "build:ui-copy"]
 description = "Native binary - always local GraalVM, no container (fast, any OS) - auto-switches JDK"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -557,11 +557,45 @@ if (Test-Path '.env') {
 }
 """
 
+[tasks."build:native-local-slim"]
+depends = ["dev:kill", "env:recover", "build:ui-copy"]
+description = "Native binary - Local GraalVM + Slim mode (excludes Playwright driver bundle)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
+Write-Host 'ℹ️   build:native-local-slim: local GraalVM, excluding Playwright driver bundle.'
+
+try {
+    $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
+    $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
+    if ($targetGB -lt 4) { $targetGB = 4 }
+    
+    mise use --path mise.toml java@graalvm-community-25.0.2
+    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+    & $mvnw clean package -Pnative -Dslim -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed" }
+    Write-Host "✅  Native build complete [local-slim]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    mise run dist
+} finally {
+    mise use --path mise.toml java@temurin-25
+}
+"""
+
 [tasks."build:native-wsl2-local"]
 description = "Native Linux binary via WSL2 - always local GraalVM, no container (fastest WSL2 build)"
 quiet = true
 dir = "{{config_root}}"
 run = "mise run build:native-wsl2 --local"
+
+[tasks."build:native-wsl2-local-slim"]
+description = "Native Linux binary via WSL2 - local GraalVM + Slim mode"
+quiet = true
+dir = "{{config_root}}"
+run = "mise run build:native-wsl2 --local --slim"
 
 [tasks."build:native-lowmem"]
 depends = ["env:recover", "build:ui-copy"]
@@ -976,7 +1010,16 @@ Write-Host '── Scanning for lingering Quarkus processes ──────�
 $jps = Get-Command jps -ErrorAction SilentlyContinue
 if (-not $jps) { Write-Host '❌  jps not found - is a JDK active? Run: mise run jdk:status'; exit 1 }
 $procs = & jps -l 2>&1 | Where-Object { $_ -match 'quarkus-run\\.jar|quarkus\\.jar|QuarkusDevModeMain' }
-if (-not $procs) {
+
+# Also scan for native binaries (§Cosmetic-Fix)
+$nativeProcs = Get-Process -Name "arcclaw" -ErrorAction SilentlyContinue
+if ($nativeProcs) {
+    Write-Host "ℹ️   Found running native processes: $($nativeProcs.Name)"
+    $nativeProcs | Stop-Process -Force
+    Write-Host "✅  Killed native processes."
+}
+
+if (-not $procs -and -not $nativeProcs) {
     Write-Host '✅  No lingering Quarkus processes found.'
     exit 0
 }
@@ -1278,6 +1321,7 @@ if (Test-Path '.env.build-backup') {
 """
 
 [tasks.dist]
+depends = ["dev:kill"]
 description = "Assemble dist/ folder: native exe"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1294,6 +1338,14 @@ if (-not (Test-Path $src)) {
     Write-Host "❌  Native binary not found at $src - run: mise run build:native"
     exit 1
 }
+
+# --- Cleanup dist/ ephemeral data to ensure a clean package ---
+if (Test-Path "$distDir/.playwright-browsers") { 
+    Write-Host "ℹ️   Removing .playwright-browsers from $distDir for clean distribution..."
+    Remove-Item -Recurse -Force "$distDir/.playwright-browsers" 
+}
+if (Test-Path "$distDir/.playwright-driver") { Remove-Item -Recurse -Force "$distDir/.playwright-driver" }
+if (Test-Path "$distDir/data") { Write-Host "ℹ️   Removing existing data/ from $distDir"; Remove-Item -Recurse -Force "$distDir/data" }
 
 Copy-Item $src "$distDir/$distExe"
 
@@ -1362,18 +1414,21 @@ $script:excludeExts = @(
 
 $script:excludeFiles = @(
     '.gitignore', '.gitattributes', 'build.env',
-    'arcclaw-source.zip', 'arcclaw-source.7z'
+    'arcclaw-source.zip', 'arcclaw-source.7z', '.env'
 )
 
 $script:excludeRelPaths = @(
     'arcclaw-app/src/main/resources/META-INF/resources',
-    'arcclaw-app/src/main/resources/native'
+    'arcclaw-app/src/main/resources/native',
+    '.playwright-driver',
+    '.mvn',
+    'scratch'
 )
 
 # ── Include lists - these override exclusions above ──────────────────────────
 $script:includeFiles = @(
     'Architecture_Invariants.md',
-    'Flyway-Migration.md',
+    'Flyway-Migration.md'
 )
 
 $script:includeRelPaths = @(

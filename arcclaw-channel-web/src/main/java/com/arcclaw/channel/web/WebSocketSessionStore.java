@@ -77,7 +77,7 @@ public class WebSocketSessionStore {
         platformToSession.values().forEach(conn -> {
             try {
                 conn.close();
-            } catch (Exception ignored) {
+            } catch (Exception _) {
             }
         });
         platformToSession.clear();

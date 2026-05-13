@@ -1,5 +1,7 @@
 package com.arcclaw.core.reflex;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -95,6 +97,13 @@ public class StatusReflex implements AgentReflex {
         // Priority 2 & 3 - active states trump terminal states
         for (AgentCheckpoint cp : checkpoints) {
             CheckpointStatus s = cp.getStatus();
+            if (s == CheckpointStatus.RESUMING) {
+                // Ignore stale resuming checkpoints older than 5 minutes
+                if (cp.getUpdatedAt() != null && Duration.between(cp.getUpdatedAt(), Instant.now()).toMinutes() > 5) {
+                    continue;
+                }
+                return s.name();
+            }
             if (s == CheckpointStatus.AWAITING_APPROVAL || s == CheckpointStatus.IN_PROGRESS) {
                 return s.name();
             }

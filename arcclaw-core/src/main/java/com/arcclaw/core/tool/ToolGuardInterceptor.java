@@ -7,6 +7,7 @@ import java.util.Set;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 
 /**
@@ -26,7 +27,7 @@ public interface ToolGuardInterceptor {
      * Return Optional.of(decision) to halt and use this decision.
      */
     Optional<ToolInvocationGuard.GuardDecision> evaluate(
-        String sessionId, String agentRole, String toolName,
+        String sessionId, String agentRole, AutonomyLevel autonomyLevel, String toolName,
         Map<String, Object> params, List<ReasoningStep> history,
         String goal, List<CompiledSkillEntry> skillSnapshot);
 }

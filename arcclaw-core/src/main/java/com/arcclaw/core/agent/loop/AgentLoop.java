@@ -29,6 +29,7 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.structured.StructuredOutputException;
@@ -44,11 +45,6 @@ import org.jboss.logging.Logger;
 
 /**
  * Lifecycle shell for the ArcClaw agent reasoning loop.
- *
- * <p>Handles session lifecycle only: MDC setup/teardown, OpenTelemetry span management,
- * checkpoint load/resume, compliance violation handling, and observer callbacks.
- * All reasoning iteration logic (Thought-Plan-Act-Observe, tool invocation, circuit breaker,
- * schema self-healing) is delegated to {@link AgentStateMachineRunner}.
  */
 @ApplicationScoped
 @MdcManaged
@@ -57,45 +53,19 @@ public class AgentLoop {
     private static final Logger log = Logger.getLogger(AgentLoop.class);
     private static final int DEFAULT_MAX_ITERATIONS = 5;
 
-    @Inject
-    StatefulAgentStore agentStore;
-
-    @Inject
-    AgentStateMachineRunner stateMachineRunner;
-
-    @Inject
-    CheckpointResumeHandler checkpointResumeHandler;
-
-    @Inject
-    ChannelPluginRegistry channelPluginRegistry;
-
-    @Inject
-    AuditHashUtil hashUtil;
-
-    @Inject
-    AgentSseService agentSseService;
-
-    @Inject
-    ReasoningEngine reasoningEngine;
-
-    @Inject
-    SessionLifecycleCoordinator sessionLifecycleCoordinator;
-
-    @Inject
-    CheckpointResumeCoordinator checkpointResumeCoordinator;
-
-    @Inject
-    ObservabilityManager observabilityManager;
-
-    @Inject
-    @Identifier("agent-output-mode")
-    Instance<StructuredOutputMode> structuredOutputModeInstance;
-
-    @Inject
-    MeterRegistry meterRegistry;
-
-    @Inject
-    IntentClassificationService intentClassificationService;
+    @Inject StatefulAgentStore agentStore;
+    @Inject AgentStateMachineRunner stateMachineRunner;
+    @Inject CheckpointResumeHandler checkpointResumeHandler;
+    @Inject ChannelPluginRegistry channelPluginRegistry;
+    @Inject AuditHashUtil hashUtil;
+    @Inject AgentSseService agentSseService;
+    @Inject ReasoningEngine reasoningEngine;
+    @Inject SessionLifecycleCoordinator sessionLifecycleCoordinator;
+    @Inject CheckpointResumeCoordinator checkpointResumeCoordinator;
+    @Inject ObservabilityManager observabilityManager;
+    @Inject @Identifier("agent-output-mode") Instance<StructuredOutputMode> structuredOutputModeInstance;
+    @Inject MeterRegistry meterRegistry;
+    @Inject IntentClassificationService intentClassificationService;
 
     @ActivateRequestContext
     public AgentResult resume(String sessionId, String agentRole, String goal) {
@@ -131,15 +101,22 @@ public class AgentLoop {
     public AgentResult run(String sessionId, String agentRole, String goal, String systemNote,
             ReasoningEngine engine, int maxIterations, MessageContext context) {
 
-        final String canonicalRole = sessionLifecycleCoordinator.resolveCanonicalRole(sessionId, agentRole);
-        return runWithRole(sessionId, canonicalRole, goal, systemNote, engine, maxIterations, context);
+        String userId = context != null && context.getUser() != null ? context.getUser().platformId() : WorkspaceContext.getUserIdOrUnknown();
+        final String canonicalRole = sessionLifecycleCoordinator.resolveCanonicalRole(sessionId, agentRole, userId);
+        return runWithRole(sessionId, canonicalRole, goal, systemNote, engine, maxIterations, context, userId);
     }
 
     @ActivateRequestContext
     AgentResult runWithRole(String sessionId, String canonicalRole, String goal, String systemNote,
             ReasoningEngine engine, int maxIterations, MessageContext context) {
+        return runWithRole(sessionId, canonicalRole, goal, systemNote, engine, maxIterations, context, "unknown");
+    }
 
-        final String capturedUserId = sessionLifecycleCoordinator.setupMdc(sessionId, canonicalRole);
+    @ActivateRequestContext
+    AgentResult runWithRole(String sessionId, String canonicalRole, String goal, String systemNote,
+            ReasoningEngine engine, int maxIterations, MessageContext context, String capturedUserId) {
+
+        sessionLifecycleCoordinator.setupMdc(sessionId, canonicalRole, capturedUserId);
 
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
@@ -150,72 +127,72 @@ public class AgentLoop {
                 var decision = checkpointResumeCoordinator.resolveResumePath(
                         sessionId, canonicalRole, capturedUserId, context);
 
-            String effectiveRole = canonicalRole;
-            if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-                if (intentClassificationService.isContinuityCommand(goal)) {
-                    resumedHistory.addAll(r.history());
-                    effectiveRole = r.checkpointRole();
-                } else {
-                    log.infof("[AgentLoop] Fresh goal detected for session %s - skipping history restoration from %s turn and resetting to canonical role %s to avoid task confusion.", 
-                            sessionId, r.checkpointRole(), canonicalRole);
+                String effectiveRole = canonicalRole;
+                if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
+                    if (intentClassificationService.isContinuityCommand(goal)) {
+                        resumedHistory.addAll(r.history());
+                        effectiveRole = r.checkpointRole();
+                    } else {
+                        log.infof("[AgentLoop] Fresh goal detected for session %s - skipping history restoration from %s turn and resetting to canonical role %s to avoid task confusion.", 
+                                sessionId, r.checkpointRole(), canonicalRole);
+                    }
                 }
-            }
 
-            StructuredOutputMode mode = (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied()) 
-                ? structuredOutputModeInstance.get() : StructuredOutputMode.NATIVE;
+                StructuredOutputMode mode = (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied()) 
+                    ? structuredOutputModeInstance.get() : StructuredOutputMode.NATIVE;
 
-            AgentExecutionContext agentExecutionContext = createExecutionContext(
-                    sessionId, capturedUserId, effectiveRole, goal, systemNote, maxIterations, context, decision, mode);
+                AgentExecutionContext agentExecutionContext = createExecutionContext(
+                        sessionId, capturedUserId, effectiveRole, goal, systemNote, maxIterations, context, decision, mode);
 
-            result = executeWithinScopes(agentExecutionContext, resumedHistory, context, engine, goal, sessionId, canonicalRole, capturedUserId);
+                result = executeWithinScopes(agentExecutionContext, resumedHistory, context, engine, goal, sessionId, canonicalRole, capturedUserId);
 
-            if (result instanceof AgentResult.AwaitingApproval) {
-                tryStampChannelInfo(sessionId, canonicalRole, context);
-            } else if (result instanceof AgentResult.AwaitingRetry awaitingRetry) {
-                updateStoreForRetry(sessionId, canonicalRole, awaitingRetry, context);
-            } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
-                updateStoreForTerminal(sessionId, canonicalRole, result, goal);
-            }
+                if (result instanceof AgentResult.AwaitingApproval) {
+                    tryStampChannelInfo(sessionId, canonicalRole, context);
+                } else if (result instanceof AgentResult.AwaitingRetry awaitingRetry) {
+                    updateStoreForRetry(sessionId, canonicalRole, awaitingRetry, context);
+                } else if (result != null && result.steps() != null && !result.steps().isEmpty()) {
+                    updateStoreForTerminal(sessionId, canonicalRole, capturedUserId, agentExecutionContext.autonomyLevel(), result, goal);
+                }
 
-            return result;
+                return result;
 
-        } catch (StructuredOutputException e) {
-            String msg = AgentErrorMessageUtil.safeMessage(e);
-            log.errorf("Structured output failure for session %s: %s", sessionId, msg);
-            result = AgentResult.failed(msg, AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
-            return result;
+            } catch (StructuredOutputException e) {
+                String msg = AgentErrorMessageUtil.safeMessage(e);
+                log.errorf("Structured output failure for session %s: %s", sessionId, msg);
+                result = AgentResult.failed(msg, AgentResult.FailureCategory.SCHEMA_ERROR, List.copyOf(resumedHistory));
+                return result;
 
-        } catch (BudgetExceededException e) {
-            meterRegistry.counter("arcclaw.agent.loop.failure",
-                    "role", canonicalRole != null ? canonicalRole : "unknown",
-                    "exception", ClassUtils.getCleanName(e)).increment();
-            throw e;
+            } catch (BudgetExceededException e) {
+                meterRegistry.counter("arcclaw.agent.loop.failure",
+                        "role", canonicalRole != null ? canonicalRole : "unknown",
+                        "exception", ClassUtils.getCleanName(e)).increment();
+                throw e;
 
-        } catch (BudgetWarningException e) {
-            throw e;
+            } catch (BudgetWarningException e) {
+                throw e;
 
-        } catch (ComplianceViolationException cve) {
-            result = handleComplianceViolation(sessionId, canonicalRole, cve);
-            return result;
+            } catch (ComplianceViolationException cve) {
+                result = handleComplianceViolation(sessionId, canonicalRole, cve);
+                return result;
 
-        } catch (Exception e) {
-            meterRegistry.counter("arcclaw.agent.loop.failure",
-                    "role", canonicalRole != null ? canonicalRole : "unknown",
-                    "exception", ClassUtils.getCleanName(e)).increment();
-            result = handleSystemError(sessionId, canonicalRole, e);
-            return result;
+            } catch (Exception e) {
+                meterRegistry.counter("arcclaw.agent.loop.failure",
+                        "role", canonicalRole != null ? canonicalRole : "unknown",
+                        "exception", ClassUtils.getCleanName(e)).increment();
+                result = handleSystemError(sessionId, canonicalRole, e);
+                return result;
 
-        } finally {
-            try {
-                String goalHash = hashUtil.sha256hex(goal);
-                observabilityManager.notifyLoopComplete(sessionId, capturedUserId, canonicalRole, goalHash, result);
             } finally {
-                observabilityManager.endSession(sessionId);
-                sessionLifecycleCoordinator.teardownMdc();
+                try {
+                    String goalHash = hashUtil.sha256hex(goal);
+                    observabilityManager.notifyLoopComplete(sessionId, capturedUserId, canonicalRole, goalHash, result);
+                } finally {
+                    observabilityManager.endSession(sessionId);
+                    sessionLifecycleCoordinator.teardownMdc();
+                }
             }
         }
     }
-}
 
     private AgentExecutionContext createExecutionContext(
             String sessionId, String capturedUserId, String effectiveRole, String goal,
@@ -233,17 +210,23 @@ public class AgentLoop {
             }
         }
 
+        String chatId = context != null && context.getChatId() != null ? context.getChatId() : sessionId;
+        AutonomyLevel autonomy = context != null && context.getAutonomyLevel().isPresent() 
+            ? context.getAutonomyLevel().get() : AutonomyLevel.SUPERVISED;
+        String channelTypeStr = context != null && context.getChannelType() != null 
+            ? context.getChannelType().name() : null;
+
         return new AgentExecutionContext(
                 sessionId,
                 capturedUserId,
-                WorkspaceContext.requireChatId(),
+                chatId,
                 effectiveRole,
                 goal,
-                WorkspaceContext.requireAutonomyOrSupervised(),
+                autonomy,
                 mode,
                 maxIterations,
                 decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r ? r.iterationsUsed() : 0,
-                context != null ? context.getChannelType().name() : WorkspaceContext.channelType().orElse(null),
+                channelTypeStr,
                 context != null && context.getUser() != null ? context.getUser().platformId() : null,
                 systemNote,
                 mergedData
@@ -307,20 +290,20 @@ public class AgentLoop {
         ));
     }
 
-    private void updateStoreForTerminal(String sessionId, String canonicalRole, AgentResult result, String goal) {
+    private void updateStoreForTerminal(String sessionId, String canonicalRole, String userId, AutonomyLevel autonomy, AgentResult result, String goal) {
         if (result instanceof AgentResult.Finished) {
-            agentStore.saveAndFinalize(sessionId, canonicalRole, result.steps(), CheckpointStatus.COMPLETED, goal);
+            agentStore.saveAndFinalize(sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
                     sessionId, canonicalRole, "COMPLETED", Instant.now()
             ));
         } else if (result instanceof AgentResult.Failed f) {
-            var cp = agentStore.save(sessionId, canonicalRole, result.steps(), goal);
+            var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), f.reason());
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
                     sessionId, canonicalRole, "FAILED", Instant.now()
             ));
         } else if (result instanceof AgentResult.LoopExceeded l) {
-            var cp = agentStore.save(sessionId, canonicalRole, result.steps(), goal);
+            var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
                     sessionId, canonicalRole, "FAILED", Instant.now()
@@ -438,7 +421,7 @@ public class AgentLoop {
                        sessionId, context.getUser().channel(), context.getUser().platformId());
         } catch (Exception e) {
             log.warnf("Failed to stamp channel info for session %s - Cause: %s",
-                      sessionId, AgentErrorMessageUtil.safeMessage(e));
+                      sessionId, ExceptionUtils.getRootCauseMessage(e));
         }
     }
 

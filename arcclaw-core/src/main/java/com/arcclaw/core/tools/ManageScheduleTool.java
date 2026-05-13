@@ -15,7 +15,6 @@ import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.message.UserMessages;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
@@ -82,14 +81,14 @@ public class ManageScheduleTool implements AgentTool {
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         String userId;
         String sessionId;
 
         try {
             // Step 1 - Extract and validate tenant context - NS2: Fail fast
-            userId    = WorkspaceContext.requireUserId();
-            sessionId = WorkspaceContext.requireSessionId();
+            userId    = ctx.userId();
+            sessionId = ctx.sessionId();
         } catch (IllegalStateException e) {
             // NS2 backward compatibility: convert missing context into 403 ToolResponse
             if (e.getMessage() != null && e.getMessage().contains("unbound")) {

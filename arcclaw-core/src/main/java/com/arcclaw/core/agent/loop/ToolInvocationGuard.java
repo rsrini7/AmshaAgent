@@ -17,8 +17,9 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
-import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.governance.ApprovalFrame;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tool.InterceptorPriority;
@@ -74,11 +75,15 @@ public class ToolInvocationGuard {
             GuardDecision.PauseForApproval, GuardDecision.Blocked {
         record Allow() implements GuardDecision {}
         record Deduplicate(String cachedObservation) implements GuardDecision {}
-        record PauseForApproval(String toolName, String paramsJson) implements GuardDecision {}
+        record PauseForApproval(ApprovalFrame frame) implements GuardDecision {
+            public PauseForApproval(String reason, String toolName) {
+                this(new ApprovalFrame(toolName, Map.of(), ApprovalFrame.RiskLevel.MEDIUM));
+            }
+        }
         record Blocked(String observation) implements GuardDecision {}
     }
 
-    public GuardDecision evaluate(String sessionId, String agentRole,
+    public GuardDecision evaluate(String sessionId, String agentRole, AutonomyLevel level,
             String toolName, Map<String, Object> params,
             List<ReasoningStep> history, String goal, List<CompiledSkillEntry> skillSnapshot) {
 
@@ -86,14 +91,15 @@ public class ToolInvocationGuard {
             if (interceptor.handledToolNames().isEmpty()
                     || interceptor.handledToolNames().contains(toolName)) {
                 Optional<GuardDecision> decision = interceptor.evaluate(
-                        sessionId, agentRole, toolName, params, history, goal, skillSnapshot);
+                        sessionId, agentRole, level, toolName, params, history, goal, skillSnapshot);
                 if (decision.isPresent()) {
                     return decision.get();
                 }
             }
         }
 
-        IdempotencyMode mode = toolRegistry.findTool(toolName)
+        var toolOpt = toolRegistry.findTool(toolName);
+        IdempotencyMode mode = toolOpt
                 .map(AgentTool::idempotencyMode)
                 .orElse(IdempotencyMode.NON_IDEMPOTENT);
 
@@ -128,7 +134,7 @@ public class ToolInvocationGuard {
             }
         }
 
-        boolean isInternalTool = toolRegistry.findTool(toolName).isPresent();
+        boolean isInternalTool = toolOpt.isPresent();
         boolean isDynamicAllowed = !isInternalTool
                 && dynamicToolLookup != null && !dynamicToolLookup.isUnsatisfied()
                 && dynamicToolLookup.get().isDynamicToolAllowed(toolName);
@@ -145,9 +151,8 @@ public class ToolInvocationGuard {
         boolean isSchedulingTool = ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
                 || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
         boolean isDelegationTool = ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName);
-        AutonomyLevel level = WorkspaceContext.requireAutonomyOrSupervised();
 
-        boolean toolRequiresApproval = toolRegistry.findTool(toolName)
+        boolean toolRequiresApproval = toolOpt
                 .map(tool -> tool.requiresManualApproval(params))
                 .orElse(false);
 
@@ -159,34 +164,29 @@ public class ToolInvocationGuard {
                 && !isExempt
                 && !AutonomyLevel.FULL.equals(level)) {
 
-            try {
-                String paramsJson = objectMapper.writeValueAsString(params);
-                return new GuardDecision.PauseForApproval(toolName, paramsJson);
-            } catch (Exception e) {
-                return new GuardDecision.Blocked(
-                        "Tool blocked: failed to serialize parameters for approval.");
-            }
+            ToolOperation op = toolOpt.map(AgentTool::requiredOperation)
+                    .orElse(ToolOperation.EXECUTE_SHELL);
+            ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
+            return new GuardDecision.PauseForApproval(frame);
         }
 
         return new GuardDecision.Allow();
+    }
+
+    public void recordToolCall(String sessionId, String toolName, Map<String, Object> params, String observation) {
+        if (observation == null || observation.isBlank()) return;
+        Map<String, String> index = sessionDedupeCache.computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
+        index.put(buildDedupeKey(toolName, params), observation);
     }
 
     public void clearSession(String sessionId) {
         sessionDedupeCache.remove(sessionId);
     }
 
-    public void recordToolCall(String sessionId, String toolName, Map<String, Object> params, String observation) {
-        Map<String, String> index = sessionDedupeCache.computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
-        if (observation != null) {
-            index.put(buildDedupeKey(toolName, params), observation);
-        }
-    }
-
     private String buildDedupeKey(String toolName, Map<String, Object> params) {
-        if (params == null || params.isEmpty()) {
-            return toolName + ":empty";
-        }
+        if (params == null || params.isEmpty()) return toolName + ":empty";
         try {
+            // Sort keys for deterministic JSON
             TreeMap<String, Object> sorted = new TreeMap<>(params);
             String normalizedJson = objectMapper.writeValueAsString(sorted);
             return toolName + ":" + normalizedJson.hashCode();

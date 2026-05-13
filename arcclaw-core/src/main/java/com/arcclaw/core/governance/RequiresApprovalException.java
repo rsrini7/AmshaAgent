@@ -1,27 +1,29 @@
 package com.arcclaw.core.governance;
 
+import java.util.Map;
+
 /**
  * Exception thrown when a tool execution requires explicit human approval.
  */
 public class RequiresApprovalException extends RuntimeException {
 
-    private final String toolName;
-    private final String toolParametersJson;
+    private final ApprovalFrame frame;
     private final String sessionId;
 
-    public RequiresApprovalException(String toolName, String toolParametersJson, String sessionId) {
-        super("Tool '" + toolName + "' requires human approval for session " + sessionId);
-        this.toolName = toolName;
-        this.toolParametersJson = toolParametersJson;
+    public RequiresApprovalException(ApprovalFrame frame, String sessionId) {
+        super("Tool '" + frame.tool() + "' requires human approval for session " + sessionId);
+        this.frame = frame;
         this.sessionId = sessionId;
     }
 
-    public String getToolName() {
-        return toolName;
+    public RequiresApprovalException(String toolName, String paramsJson, String sessionId) {
+        super("Tool '" + toolName + "' requires human approval for session " + sessionId);
+        this.frame = new ApprovalFrame(toolName, Map.of(), ApprovalFrame.RiskLevel.MEDIUM);
+        this.sessionId = sessionId;
     }
 
-    public String getToolParametersJson() {
-        return toolParametersJson;
+    public ApprovalFrame getFrame() {
+        return frame;
     }
 
     public String getSessionId() {

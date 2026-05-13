@@ -1,8 +1,16 @@
 package com.arcclaw.app.ui.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import dev.langchain4j.data.message.*;
 
-public record ChatMessageDto(String role, String text, Long actionId, Long timestamp) {
+public record ChatMessageDto(
+    @NotBlank String role,
+    @NotBlank @Size(max = 100000) String text,
+    Long actionId,
+    Long timestamp
+) {
 
     public static ChatMessageDto from(ChatMessage msg) {
         return from(msg, null);

@@ -83,7 +83,7 @@ public class BrowserHealthChecker {
         try {
             String ver = Playwright.class.getPackage().getImplementationVersion();
             if (ver != null && ver.matches("\\d+\\.\\d+\\.\\d+")) return ver;
-        } catch (Exception ignored) {}
+        } catch (Exception _) {}
 
         // 3. Fallback: Try MANIFEST.MF on classpath
         try {
@@ -111,7 +111,7 @@ public class BrowserHealthChecker {
                 .sorted(Comparator.reverseOrder())
                 .findFirst();
             if (found.isPresent()) return found.get();
-        } catch (IOException ignored) {}
+        } catch (IOException _) {}
 
         return "1.56.0"; // Final fallback matching project pom.xml and quarkus-playwright 2.2.1
     }

@@ -24,7 +24,7 @@ class SystemEnvironmentContextEnricherTest {
     void testEnrichmentContainsEnvironmentMetadata() {
         when(toolRegistry.registeredToolNames()).thenReturn("github, sandbox_exec");
 
-        String result = enricher.enrich("session-1", "fix bug", "Base system prompt.");
+        String result = enricher.enrich("session-1", "user-1", "fix bug", "Base system prompt.");
 
         assertTrue(result.contains("Base system prompt."), "Should contain base prompt");
         assertTrue(result.contains("## Host Environment Context"), "Should contain header");
@@ -39,7 +39,7 @@ class SystemEnvironmentContextEnricherTest {
     void testEnrichmentWithNoTools() {
         when(toolRegistry.registeredToolNames()).thenReturn("");
 
-        String result = enricher.enrich("session-2", "hello", "Base prompt.");
+        String result = enricher.enrich("session-2", "user-2", "hello", "Base prompt.");
 
         assertTrue(result.contains("Registered Agent Tools**: none"));
     }
