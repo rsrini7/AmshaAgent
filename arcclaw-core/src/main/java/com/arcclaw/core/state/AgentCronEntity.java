@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.util.TemporalUtils;
 
 /**
@@ -18,7 +19,7 @@ import com.arcclaw.core.util.TemporalUtils;
  */
 @Entity
 @Table(name = "agent_cron")
-public class AgentCronEntity {
+public class AgentCronEntity implements AgentCron {
 
     @Id
     public String id;
@@ -113,4 +114,40 @@ public class AgentCronEntity {
         );
     }
 
+    @Override public String getId() { return id; }
+    @Override public void setId(String id) { this.id = id; }
+    @Override public String getSessionId() { return sessionId; }
+    @Override public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+    @Override public String getUserId() { return userId; }
+    @Override public void setUserId(String userId) { this.userId = userId; }
+    @Override public String getChatId() { return chatId; }
+    @Override public void setChatId(String chatId) { this.chatId = chatId; }
+    @Override public String getChannelType() { return channelType; }
+    @Override public void setChannelType(String channelType) { this.channelType = channelType; }
+    @Override public String getChannelPlatformId() { return channelPlatformId; }
+    @Override public void setChannelPlatformId(String channelPlatformId) { this.channelPlatformId = channelPlatformId; }
+    @Override public String getCronExpression() { return cronExpression; }
+    @Override public void setCronExpression(String cronExpression) { this.cronExpression = cronExpression; }
+    @Override public String getTimezone() { return timezone; }
+    @Override public void setTimezone(String timezone) { this.timezone = timezone; }
+    @Override public boolean isRunOnce() { return runOnce; }
+    @Override public void setRunOnce(boolean runOnce) { this.runOnce = runOnce; }
+    @Override public String getGoal() { return goal; }
+    @Override public void setGoal(String goal) { this.goal = goal; }
+    @Override public Instant getNextFireTime() { return nextFireTime; }
+    @Override public void setNextFireTime(Instant nextFireTime) { this.nextFireTime = nextFireTime; }
+    @Override public Instant getLastFireTime() { return lastFireTime; }
+    @Override public void setLastFireTime(Instant lastFireTime) { this.lastFireTime = lastFireTime; }
+    @Override public CronStatus getStatus() { return status; }
+    @Override public void setStatus(CronStatus status) { this.status = status; }
+    @Override public String getExecutionRole() { return executionRole; }
+    @Override public void setExecutionRole(String executionRole) { this.executionRole = executionRole; }
+    @Override public String getErrorReason() { return errorReason; }
+    @Override public void setErrorReason(String errorReason) { this.errorReason = errorReason; }
+    @Override public String getLastDeliveryId() { return lastDeliveryId; }
+    @Override public void setLastDeliveryId(String lastDeliveryId) { this.lastDeliveryId = lastDeliveryId; }
+    @Override public Instant getCreatedAt() { return createdAt; }
+    @Override public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    @Override public Instant getUpdatedAt() { return updatedAt; }
+    @Override public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }

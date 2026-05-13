@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.arcclaw.core.config.SystemMetadataRegistry;
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +53,7 @@ class TelemetryAuditServiceTest {
         ArgumentCaptor<AuditEvent> eventCaptor = ArgumentCaptor.forClass(AuditEvent.class);
         captor.getValue().getDbAction().execute(); // Execute the lambda (no null arg)
         verify(auditEventRepository).record(eventCaptor.capture());
-        assertEquals("1.0.0", eventCaptor.getValue().appVersion);
+        assertEquals("1.0.0", eventCaptor.getValue().getAppVersion());
     }
 
     @Test

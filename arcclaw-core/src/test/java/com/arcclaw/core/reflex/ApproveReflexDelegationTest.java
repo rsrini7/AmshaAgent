@@ -18,7 +18,8 @@ import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,7 +70,7 @@ public class ApproveReflexDelegationTest {
 
     @Test
     void test_bulkApprove_delegatesToCheckpointApprovalService() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         cp.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
@@ -89,7 +90,7 @@ public class ApproveReflexDelegationTest {
 
     @Test
     void test_perToolApprove_delegatesToCheckpointApprovalService() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");

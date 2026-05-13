@@ -1,5 +1,7 @@
 package com.arcclaw.core.state;
 
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -334,10 +336,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     }
 
     @Override public List<AgentCheckpoint> findStaleAwaitingApproval(Instant cutoff)
-        { return storeAdapter.findStaleApprovals(cutoff).stream().map(CheckpointMapper::toEntity).toList(); }
+        { return storeAdapter.findStaleApprovals(cutoff).stream().<AgentCheckpoint>map(CheckpointMapper::toEntity).toList(); }
 
     @Override public List<AgentCheckpoint> findByStatus(CheckpointStatus status)
-        { return storeAdapter.findByStatus(status.toString()).stream().map(CheckpointMapper::toEntity).toList(); }
+        { return storeAdapter.findByStatus(status.toString()).stream().<AgentCheckpoint>map(CheckpointMapper::toEntity).toList(); }
 
     @Override public boolean isCheckpointExpired(String sessionId, long timeoutHours)
         { return storeAdapter.isCheckpointExpired(sessionId, timeoutHours); }

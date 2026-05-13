@@ -3,7 +3,7 @@ package com.arcclaw.core.util;
 import java.util.List;
 import java.util.Map;
 
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

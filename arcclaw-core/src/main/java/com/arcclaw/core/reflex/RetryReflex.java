@@ -7,7 +7,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.CheckpointResumeCoordinator;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 

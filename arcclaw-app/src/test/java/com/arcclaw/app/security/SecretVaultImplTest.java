@@ -21,13 +21,14 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.audit.AuditEvent;
+import com.arcclaw.core.audit.AuditEventEntity;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AesGcmSivCipher;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.EncryptedSecret;
+import com.arcclaw.core.domain.model.EncryptedSecret;
+import com.arcclaw.core.security.EncryptedSecretEntity;
 import com.arcclaw.core.security.EncryptedSecretRepository;
 import com.arcclaw.core.security.SecretVaultImpl;
 import com.arcclaw.core.security.VaultKey;
@@ -99,8 +100,10 @@ public class SecretVaultImplTest {
             assertNotNull(entity);
 
             // Flip the last bit of the ciphertext
-            entity.ciphertext[entity.ciphertext.length - 1] ^= 1;
-            saveEntity(entity);
+            byte[] ct = entity.getCiphertext();
+            ct[ct.length - 1] ^= 1;
+            entity.setCiphertext(ct);
+            saveEntity((EncryptedSecretEntity) entity);
 
             // 3. Retrieve - Expect SecurityException (AEAD failure)
             assertThrows(SecurityException.class, () -> vault.get(API_KEY_NAME));
@@ -127,7 +130,7 @@ public class SecretVaultImplTest {
             EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
 
             // 3. Inject into GITHUB_TOKEN slot
-            insertForgedSecret(TEST_SESSION_ID, targetKeyName, sorceEntity.ciphertext, sorceEntity.nonce);
+            insertForgedSecret(TEST_SESSION_ID, targetKeyName, sorceEntity.getCiphertext(), sorceEntity.getNonce());
 
             // 4. Retrieve GITHUB_TOKEN - Expect SecurityException
             assertThrows(SecurityException.class, () -> vault.get(targetKeyName));
@@ -135,7 +138,7 @@ public class SecretVaultImplTest {
     }
 
     @Transactional
-    void saveEntity(EncryptedSecret entity) {
+    void saveEntity(EncryptedSecretEntity entity) {
         entityManager.merge(entity);
         entityManager.flush();
         entityManager.clear();
@@ -143,10 +146,11 @@ public class SecretVaultImplTest {
 
     @Transactional
     void insertForgedSecret(String sessionId, String keyName, byte[] ciphertext, byte[] nonce) {
-        EncryptedSecret forged = new EncryptedSecret();
-        forged.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
-        forged.ciphertext = ciphertext.clone();
-        forged.nonce = nonce.clone();
+        EncryptedSecretEntity forged = new EncryptedSecretEntity();
+        forged.setSessionId(sessionId);
+        forged.setKeyName(keyName);
+        forged.setCiphertext(ciphertext.clone());
+        forged.setNonce(nonce.clone());
         forged.setEncryptionKeyVersion(1);
         repository.persist(forged);
         entityManager.flush();
@@ -303,13 +307,13 @@ public class SecretVaultImplTest {
 
         // Verify audit record has correct user ID
         WorkspaceContext.runWithFullAutonomy(testSessionId, testUserId, "test-chat", "test-role", () -> {
-            List<AuditEvent> events = entityManager.createQuery("SELECT a FROM AuditEvent a WHERE a.sessionId = :sid AND a.eventType = :type", AuditEvent.class)
+            List<AuditEventEntity> events = entityManager.createQuery("SELECT a FROM AuditEvent a WHERE a.sessionId = :sid AND a.eventType = :type", AuditEventEntity.class)
                     .setParameter("sid", testSessionId)
                     .setParameter("type", SecurityEventType.VAULT_STORE)
                     .getResultList();
             
             assertFalse(events.isEmpty(), "Audit event should be recorded");
-            assertEquals(testUserId, events.get(0).userId);
+            assertEquals(testUserId, events.get(0).getUserId());
         });
 
         // Cleanup on test thread with transaction

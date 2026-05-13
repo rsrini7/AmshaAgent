@@ -9,6 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import io.quarkus.arc.Unremovable;
@@ -36,25 +37,21 @@ public class AuditEventRepository {
      */
     @Transactional
     public void record(AuditEvent event) {
-        if (event.idempotencyKey != null) {
-            if (auditStore.countByIdempotencyKey(event.idempotencyKey) > 0) {
-                // Already recorded in a previous (retried) attempt. Skip to ensure logical idempotency.
+        if (event.getIdempotencyKey() != null) {
+            if (auditStore.countByIdempotencyKey(event.getIdempotencyKey()) > 0) {
                 return;
             }
         }
 
-        ReentrantLock lock = sequencer.lockFor(event.sessionId);
+        ReentrantLock lock = sequencer.lockFor(event.getSessionId());
         lock.lock();
         try {
-            // Step 1: assign monotonic sequence
-            long currentMax = auditStore.getMaxSequence(event.sessionId);
-            event.sequence = currentMax + 1;
+            long currentMax = auditStore.getMaxSequence(event.getSessionId());
+            event.setSequence(currentMax + 1);
 
-            // Step 2 & 3: Compute chain fields via centralized utility
-            String prevHash = findLatestHash(event.sessionId);
+            String prevHash = findLatestHash(event.getSessionId());
             hashUtil.calculateChainFields(event, prevHash);
 
-            // Step 4: validate and persist
             validateBeforePersist(event);
             auditStore.save(toDto(event));
         } finally {
@@ -67,13 +64,13 @@ public class AuditEventRepository {
      * Catches any null-escape from hash utilities before hitting the DB NOT NULL constraint.
      */
     public void validateBeforePersist(AuditEvent event) {
-        if (event.sessionId == null || event.sessionId.isBlank())
+        if (event.getSessionId() == null || event.getSessionId().isBlank())
             throw new IllegalStateException("AuditEvent.sessionId must not be null/blank");
-        if (event.prevHash == null || event.prevHash.isBlank())
+        if (event.getPrevHash() == null || event.getPrevHash().isBlank())
             throw new IllegalStateException("AuditEvent.prevHash must not be null - genesis hash failed");
-        if (event.hmacHash == null || event.hmacHash.isBlank())
+        if (event.getHmacHash() == null || event.getHmacHash().isBlank())
             throw new IllegalStateException("AuditEvent.hmacHash must not be null - HMAC failed");
-        if (event.sequence < 0)
+        if (event.getSequence() < 0)
             throw new IllegalStateException("AuditEvent.sequence must be >= 0");
     }
 
@@ -97,49 +94,49 @@ public class AuditEventRepository {
         return auditStore.countEventsByType(sessionId, eventType.name()) > 0;
     }
 
-    private AuditEvent toEntity(AuditEventDto dto) {
-        AuditEvent entity = new AuditEvent();
-        entity.id = dto.id();
-        entity.sessionId = dto.sessionId();
-        entity.userId = dto.userId();
-        entity.agentRole = dto.agentRole();
-        entity.goalHash = dto.goalHash();
-        entity.outcome = dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null;
-        entity.eventType = dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null;
-        entity.eventDetail = dto.eventDetail();
-        entity.inputTokens = dto.inputTokens();
-        entity.outputTokens = dto.outputTokens();
-        entity.usdCost = dto.usdCost();
-        entity.timestamp = dto.timestamp();
-        entity.iterationsUsed = dto.iterationsUsed();
-        entity.appVersion = dto.appVersion();
-        entity.idempotencyKey = dto.idempotencyKey();
-        entity.sequence = dto.sequence();
-        entity.hmacHash = dto.hmacHash();
-        entity.prevHash = dto.prevHash();
+    private AuditEventEntity toEntity(AuditEventDto dto) {
+        AuditEventEntity entity = new AuditEventEntity();
+        entity.setId(dto.id());
+        entity.setSessionId(dto.sessionId());
+        entity.setUserId(dto.userId());
+        entity.setAgentRole(dto.agentRole());
+        entity.setGoalHash(dto.goalHash());
+        entity.setOutcome(dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null);
+        entity.setEventType(dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null);
+        entity.setEventDetail(dto.eventDetail());
+        entity.setInputTokens(dto.inputTokens());
+        entity.setOutputTokens(dto.outputTokens());
+        entity.setUsdCost(dto.usdCost());
+        entity.setTimestamp(dto.timestamp());
+        entity.setIterationsUsed(dto.iterationsUsed());
+        entity.setAppVersion(dto.appVersion());
+        entity.setIdempotencyKey(dto.idempotencyKey());
+        entity.setSequence(dto.sequence());
+        entity.setHmacHash(dto.hmacHash());
+        entity.setPrevHash(dto.prevHash());
         return entity;
     }
 
     private AuditEventDto toDto(AuditEvent entity) {
         return new AuditEventDto(
-            entity.id,
-            entity.sessionId,
-            entity.userId,
-            entity.agentRole,
-            entity.goalHash,
-            entity.outcome != null ? entity.outcome.name() : null,
-            entity.eventType != null ? entity.eventType.name() : null,
-            entity.eventDetail,
-            entity.inputTokens,
-            entity.outputTokens,
-            entity.usdCost,
-            entity.timestamp,
-            entity.iterationsUsed,
-            entity.appVersion,
-            entity.idempotencyKey,
-            entity.sequence,
-            entity.hmacHash,
-            entity.prevHash
+            entity.getId(),
+            entity.getSessionId(),
+            entity.getUserId(),
+            entity.getAgentRole(),
+            entity.getGoalHash(),
+            entity.getOutcome() != null ? entity.getOutcome().name() : null,
+            entity.getEventType() != null ? entity.getEventType().name() : null,
+            entity.getEventDetail(),
+            entity.getInputTokens(),
+            entity.getOutputTokens(),
+            entity.getUsdCost(),
+            entity.getTimestamp(),
+            entity.getIterationsUsed(),
+            entity.getAppVersion(),
+            entity.getIdempotencyKey(),
+            entity.getSequence(),
+            entity.getHmacHash(),
+            entity.getPrevHash()
         );
     }
 }

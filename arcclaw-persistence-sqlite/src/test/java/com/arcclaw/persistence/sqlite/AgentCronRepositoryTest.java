@@ -13,6 +13,7 @@ import java.util.UUID;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
@@ -59,8 +60,8 @@ class AgentCronRepositoryTest {
                 Instant.now().minus(1, ChronoUnit.MINUTES));
         repository.persist(e);
 
-        List<AgentCronEntity> due = repository.findDueCrons();
-        assertTrue(due.stream().anyMatch(d -> d.id.equals(e.id)));
+        List<AgentCron> due = repository.findDueCrons();
+        assertTrue(due.stream().anyMatch(d -> d.getId().equals(e.id)));
     }
 
     @Test
@@ -69,8 +70,8 @@ class AgentCronRepositoryTest {
                 Instant.now().plus(1, ChronoUnit.HOURS));
         repository.persist(e);
 
-        List<AgentCronEntity> due = repository.findDueCrons();
-        assertFalse(due.stream().anyMatch(d -> d.id.equals(e.id)));
+        List<AgentCron> due = repository.findDueCrons();
+        assertFalse(due.stream().anyMatch(d -> d.getId().equals(e.id)));
     }
 
     @Test

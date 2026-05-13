@@ -27,7 +27,8 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,7 +85,7 @@ class ApproveReflexDelegateTest {
         String input = "/approve " + targetSid;
         
         // Session exists with pending approval — allowed because user is the owner
-        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.of(cp));
         lenient().when(delegateGuard.isDelegate(adminId)).thenReturn(false);
@@ -120,7 +121,7 @@ class ApproveReflexDelegateTest {
         String mySessionId = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + mySessionId;
         
-        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
         lenient().when(delegateGuard.isDelegate(ownerId)).thenReturn(false);
@@ -141,7 +142,7 @@ class ApproveReflexDelegateTest {
         lenient().when(delegateGuard.isDelegate(adminId)).thenReturn(true);
         
         // Mock the pending checkpoint for their own session
-        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(cp.hasBatchToolDecisions()).thenReturn(false);
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
@@ -170,7 +171,7 @@ class ApproveReflexDelegateTest {
         when(agentStore.isSessionActive(cronUUID)).thenReturn(false);
 
         // Mock the checkpoint approval so we reach the cron repository lookup
-        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
         when(cp.getSessionId()).thenReturn("cron-job123-exec456");
         when(checkpointApprovalService.approveAll(eq(cronUUID), any())).thenReturn(cp);
 

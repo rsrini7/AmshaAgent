@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
@@ -40,12 +40,12 @@ public class CheckpointUpsertService {
     public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
             String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
         
-        List<AgentCheckpoint> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
+        List<AgentCheckpointEntity> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
 
-        AgentCheckpoint entity;
+        AgentCheckpointEntity entity;
         boolean created = false;
         if (existing.isEmpty()) {
-            entity = new AgentCheckpoint();
+            entity = new AgentCheckpointEntity();
             entity.setSessionId(sessionId);
             entity.setAgentRole(agentRole);
             entity.setCreatedAt(Instant.now());
@@ -84,14 +84,14 @@ public class CheckpointUpsertService {
     public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
         String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
         
-        List<AgentCheckpoint> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
+        List<AgentCheckpointEntity> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
 
-        AgentCheckpoint entity;
+        AgentCheckpointEntity entity;
         boolean created = false;
         CheckpointStatus status = CheckpointStatus.valueOf(finalStatus);
 
         if (existing.isEmpty()) {
-            entity = new AgentCheckpoint();
+            entity = new AgentCheckpointEntity();
             entity.setSessionId(sessionId);
             entity.setAgentRole(agentRole);
             entity.setCreatedAt(Instant.now());
@@ -129,7 +129,7 @@ public class CheckpointUpsertService {
         return new CheckpointUpsertResult(savedDto, created);
     }
 
-    public void updateEntityFromDto(AgentCheckpoint entity, CheckpointDto dto) {
+    public void updateEntityFromDto(AgentCheckpointEntity entity, CheckpointDto dto) {
         entity.setSessionId(dto.sessionId());
         entity.setAgentRole(dto.agentRole());
         

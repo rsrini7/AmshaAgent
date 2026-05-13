@@ -24,7 +24,7 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.cron.CronTaskScheduled;
-import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.CronScheduleUtil;
@@ -121,16 +121,16 @@ public class AgentCronScheduler {
         if (!active) return;
         log.info("AgentCronScheduler: starting orphan sweep for AWAITING_APPROVAL jobs...");
         try {
-            List<AgentCronEntity> orphaned = cronRepository.findAllAwaitingApproval();
+            List<AgentCron> orphaned = cronRepository.findAllAwaitingApproval();
             if (orphaned.isEmpty()) {
                 log.info("AgentCronScheduler: no orphaned approval jobs found.");
                 return;
             }
 
-            for (AgentCronEntity job : orphaned) {
+            for (AgentCron job : orphaned) {
                 log.warnf("AgentCronScheduler: failing orphaned approval job id=%s goal='%s'",
-                        job.id, job.goal);
-                cronRepository.markFailed(job.id, "Orphaned - session expired before approval (server restart).");
+                        job.getId(), job.getGoal());
+                cronRepository.markFailed(job.getId(), "Orphaned - session expired before approval (server restart).");
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
         } catch (IllegalStateException | PersistenceException e) {
@@ -167,13 +167,13 @@ public class AgentCronScheduler {
      * Schedules a one-shot job to fire exactly at its nextFireTime if it is due soon.
      */
     public void scheduleSoon(String jobId) {
-        AgentCronEntity job = cronRepository.findById(jobId);
-        if (job == null || !job.runOnce || job.nextFireTime == null) return;
+        AgentCron job = cronRepository.findById(jobId);
+        if (job == null || !job.isRunOnce() || job.getNextFireTime() == null) return;
         
-        long delayMillis = Duration.between(Instant.now(), job.nextFireTime).toMillis();
+        long delayMillis = Duration.between(Instant.now(), job.getNextFireTime()).toMillis();
         
         if (delayMillis < 120_000) {
-            log.infof("CRON-PRECISE-SCHEDULE id=%s, firing in %dms", job.id, Math.max(0, delayMillis));
+            log.infof("CRON-PRECISE-SCHEDULE id=%s, firing in %dms", job.getId(), Math.max(0, delayMillis));
             preciseScheduler.schedule(() -> {
                 try {
                     selfProxy.get().executeSoonInternal(jobId);
@@ -186,13 +186,13 @@ public class AgentCronScheduler {
 
     @ActivateRequestContext
     public void executeSoonInternal(String jobId) {
-        AgentCronEntity job = cronRepository.findById(jobId);
+        AgentCron job = cronRepository.findById(jobId);
         if (job == null) return;
 
-        MDC.put(MdcKeys.USER_ID, job.userId);
+        MDC.put(MdcKeys.USER_ID, job.getUserId());
         try {
-            if (cronRepository.claimForFire(job.id)) {
-                 log.infof("CRON-PRECISE-FIRE id=%s", job.id);
+            if (cronRepository.claimForFire(job.getId())) {
+                 log.infof("CRON-PRECISE-FIRE id=%s", job.getId());
                  
                  final String capturedUserId = (String) MDC.get(MdcKeys.USER_ID);
                  vThreads.execute(() -> {
@@ -200,7 +200,7 @@ public class AgentCronScheduler {
                      try {
                          jobRunner.execute(job);
                      } catch (Exception e) {
-                         log.errorf(e, "CRON-EXEC-FAIL id=%s", job.id);
+                          log.errorf(e, "CRON-EXEC-FAIL id=%s", job.getId());
                      } finally {
                          MdcCleaner.clearAll();
                      }
@@ -260,23 +260,23 @@ public class AgentCronScheduler {
         }
         
         // Step 1 - Query due rows
-        List<AgentCronEntity> due = cronRepository.findDueCrons();
+        List<AgentCron> due = cronRepository.findDueCrons();
         if (due.isEmpty()) return;
 
         Instant lookbackCutoff = Instant.now().minus(maxLookbackWindow);
-        List<AgentCronEntity> skippedJobs = new ArrayList<>();
+        List<AgentCron> skippedJobs = new ArrayList<>();
 
-        Iterator<AgentCronEntity> iter = due.iterator();
+        Iterator<AgentCron> iter = due.iterator();
         while (iter.hasNext()) {
-            AgentCronEntity job = iter.next();
-            if (job.nextFireTime.isBefore(lookbackCutoff)) {
+            AgentCron job = iter.next();
+            if (job.getNextFireTime().isBefore(lookbackCutoff)) {
                 log.warnf("Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
-                    job.id, job.nextFireTime, maxLookbackWindow);
-                job.status = CronStatus.SKIPPED;
-                if (job.cronExpression != null && !job.cronExpression.isBlank()) {
-                    job.nextFireTime = CronScheduleUtil.computeNext(job.cronExpression, job.timezone);
+                    job.getId(), job.getNextFireTime(), lookbackCutoff);
+                job.setStatus(CronStatus.SKIPPED);
+                if (job.getCronExpression() != null && !job.getCronExpression().isBlank()) {
+                    job.setNextFireTime(CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone()));
                 } else {
-                    job.nextFireTime = null;
+                    job.setNextFireTime(null);
                 }
                 skippedJobs.add(job);
                 iter.remove();
@@ -292,18 +292,18 @@ public class AgentCronScheduler {
         log.infof("CRON-POLL found %d due job(s)", due.size());
 
         // Step 2 - Dispatch loop
-        for (AgentCronEntity job : due) {
-            if (!cronRepository.claimForFire(job.id)) continue;
+        for (AgentCron job : due) {
+            if (!cronRepository.claimForFire(job.getId())) continue;
 
             if (!concurrencyLimiter.tryAcquire()) {
-                log.warnf("CRON-THROTTLED cronId=%s, releasing claim", job.id);
-                cronRepository.releaseClaimToActive(job.id);
+                log.warnf("CRON-THROTTLED cronId=%s, releasing claim", job.getId());
+                cronRepository.releaseClaimToActive(job.getId());
                 continue;
             }
 
             try {
                 vThreads.execute(() -> {
-                    MDC.put(MdcKeys.USER_ID, job.userId);
+                    MDC.put(MdcKeys.USER_ID, job.getUserId());
                     try {
                         jobRunner.execute(job);
                     } finally {
@@ -313,9 +313,9 @@ public class AgentCronScheduler {
                 });
             } catch (RejectedExecutionException e) {
                 log.errorf("Failed to dispatch cron job %s: %s",
-                        job.id, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                        job.getId(), e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                 concurrencyLimiter.release();
-                cronRepository.releaseClaimToActive(job.id);
+                cronRepository.releaseClaimToActive(job.getId());
             }
         }
     }

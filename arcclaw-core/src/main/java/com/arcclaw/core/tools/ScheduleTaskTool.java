@@ -20,6 +20,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
@@ -243,12 +244,12 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
         }
 
-        AgentCronEntity entity = createAndPersistCron(ctx, sessionId, userId, chatId, cronExpression, zone, runOnce, executionRole, goal, nextFireTime);
+        AgentCron entity = createAndPersistCron(ctx, sessionId, userId, chatId, cronExpression, zone, runOnce, executionRole, goal, nextFireTime);
 
         auditAndSchedule(sessionId, userId, cronExpression, entity, runOnce, executionRole);
 
         return ToolResponse.success("Task scheduled successfully. " +
-                "ID: " + entity.id + " | Next fire: " +
+                "ID: " + entity.getId() + " | Next fire: " +
                 TemporalUtils.formatIsoLex(nextFireTime) +
                 "\n\nCRITICAL DIRECTIVE: The task is now safely handed off to the background cron system. " +
                 "You MUST NOT execute the goal yourself right now. " +
@@ -295,7 +296,7 @@ public class ScheduleTaskTool implements AgentTool {
         }
     }
 
-    private AgentCronEntity createAndPersistCron(ToolExecutionContext ctx, String sessionId, String userId, String chatId, String cronExpression, ZoneId zone, boolean runOnce, String executionRole, String goal, Instant nextFireTime) {
+    private AgentCron createAndPersistCron(ToolExecutionContext ctx, String sessionId, String userId, String chatId, String cronExpression, ZoneId zone, boolean runOnce, String executionRole, String goal, Instant nextFireTime) {
         AgentCronEntity entity = new AgentCronEntity();
         entity.id             = UUID.randomUUID().toString();
         entity.sessionId      = sessionId;
@@ -315,14 +316,14 @@ public class ScheduleTaskTool implements AgentTool {
         return entity;
     }
 
-    private void auditAndSchedule(String sessionId, String userId, String cronExpression, AgentCronEntity entity, boolean runOnce, String executionRole) {
+    private void auditAndSchedule(String sessionId, String userId, String cronExpression, AgentCron entity, boolean runOnce, String executionRole) {
         auditService.record(sessionId, userId,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.CRONCREATED,
-                "cronId=" + entity.id + " expression=" + cronExpression
-                + " tz=" + entity.timezone + " runOnce=" + runOnce + " role=" + executionRole);
+                "cronId=" + entity.getId() + " expression=" + cronExpression
+                + " tz=" + entity.getTimezone() + " runOnce=" + runOnce + " role=" + executionRole);
 
-        cronScheduledEvent.fire(new CronTaskScheduled(entity.id));
+        cronScheduledEvent.fire(new CronTaskScheduled(entity.getId()));
     }
 
     /**

@@ -9,7 +9,8 @@ import java.util.Map;
 
 import jakarta.persistence.EntityManager;
 
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
@@ -57,7 +58,7 @@ class StatefulAgentStoreConcurrencyTest {
     @Test
     void doSaveEntity_mergesStaleBatchDecisions() throws Exception {
         Long id = 100L;
-        AgentCheckpoint managed = new AgentCheckpoint();
+        AgentCheckpoint managed = new AgentCheckpointEntity();
         managed.setId(id);
         managed.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         // Managed has one APPROVED, one PENDING
@@ -79,7 +80,7 @@ class StatefulAgentStoreConcurrencyTest {
             null, null, null, 0, null, null, null, null, null, null, Instant.now(), Instant.now()
         );
 
-        when(em.find(AgentCheckpoint.class, id)).thenReturn(managed);
+        when(em.find(AgentCheckpointEntity.class, id)).thenReturn((AgentCheckpointEntity) managed);
 
         // Act
         adapter.doSaveEntity(incoming);
@@ -96,7 +97,7 @@ class StatefulAgentStoreConcurrencyTest {
     @Test
     void doSaveEntity_preservesIncomingFullUpdate() throws Exception {
         Long id = 200L;
-        AgentCheckpoint managed = new AgentCheckpoint();
+        AgentCheckpoint managed = new AgentCheckpointEntity();
         managed.setId(id);
         managed.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         Map<String, ToolDecision> managedDecisions = Map.of(
@@ -115,7 +116,7 @@ class StatefulAgentStoreConcurrencyTest {
             null, null, null, 0, null, null, null, null, null, null, Instant.now(), Instant.now()
         );
 
-        when(em.find(AgentCheckpoint.class, id)).thenReturn(managed);
+        when(em.find(AgentCheckpointEntity.class, id)).thenReturn((AgentCheckpointEntity) managed);
 
         // Act
         adapter.doSaveEntity(incoming);

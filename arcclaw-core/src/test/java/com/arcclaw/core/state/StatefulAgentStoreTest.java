@@ -9,6 +9,7 @@ import java.util.Map;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;

@@ -14,7 +14,7 @@ import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.agent.sse.HitlEventType;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;

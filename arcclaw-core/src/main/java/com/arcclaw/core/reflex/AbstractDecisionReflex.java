@@ -24,8 +24,8 @@ import com.arcclaw.core.event.FlushQueuedNotifications;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
@@ -69,11 +69,11 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
     protected abstract AgentCheckpoint applyDecisionToTool(String sessionId, String toolName, String reason);
     protected abstract AgentCheckpoint applyDecisionToAll(String sessionIdOrCronId, String reason);
-    protected abstract void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result);
+    protected abstract void postProcessCronDecision(AgentCron cron, String reason, AgentResult result);
     protected abstract String getCronResumeGoal(String cronSessionId, String cronRole);
 
     protected abstract String getAlreadyProcessingMessage();
-    protected abstract String getSingleCronFallbackMessage(AgentCronEntity cron);
+    protected abstract String getSingleCronFallbackMessage(AgentCron cron);
     protected abstract String getMultipleCronFallbackMessage(String list);
     protected abstract String getCronSuccessResponse(AgentResult result);
     protected abstract String getFailedRetryMessage();
@@ -96,7 +96,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 if (d.toolName.isPresent()) return handlePerToolDecision(d.toolName.get(), sessionId, userId, chatId, reason, context);
 
                 Optional<AgentCheckpoint> latestPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
-                List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+                List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
                 
                 String ambiguity = ambiguityResolver.detect(latestPending, pendingCrons);
                 if (ambiguity != null) return ambiguity;
@@ -110,7 +110,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 if (!pendingCrons.isEmpty()) {
                     if (pendingCrons.size() == 1) return getSingleCronFallbackMessage(pendingCrons.getFirst());
                     String cronList = pendingCrons.stream()
-                        .map(c -> "• `/%s %s` - %s".formatted(getActionName().toLowerCase(), c.id, c.goal))
+                        .map(c -> "• `/%s %s` - %s".formatted(getActionName().toLowerCase(), c.getId(), c.getGoal()))
                         .collect(Collectors.joining("\n"));
                     return getMultipleCronFallbackMessage(cronList);
                 }
@@ -221,13 +221,13 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         // Resolve prefix match for cron job IDs
         if (targetId.length() >= 4 && !targetId.contains("-")) {
-            List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+            List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
             String prefix = targetId.toLowerCase();
-            Optional<AgentCronEntity> matchedCron = pendingCrons.stream()
-                .filter(c -> c.id.toLowerCase().startsWith(prefix))
+            Optional<AgentCron> matchedCron = pendingCrons.stream()
+                .filter(c -> c.getId().toLowerCase().startsWith(prefix))
                 .findFirst();
             if (matchedCron.isPresent()) {
-                targetId = matchedCron.get().id;
+                targetId = matchedCron.get().getId();
             }
         }
 
@@ -237,7 +237,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             log.debugf("[%sReflex] targetId==sessionId (%s) — routing to own-session path",
                     getActionName(), sessionId);
             Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
-            List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+            List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
             String ambiguity = ambiguityResolver.detect(selfPending, pendingCrons);
             if (ambiguity != null) return ambiguity;
             String selfDecision = handleActiveSessionDecision(sessionId, userId, chatId, reason, context, selfPending);
@@ -248,7 +248,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             if (!pendingCrons.isEmpty()) {
                 if (pendingCrons.size() == 1) return getSingleCronFallbackMessage(pendingCrons.getFirst());
                 String cronList = pendingCrons.stream()
-                    .map(c -> "• `/%s %s` - %s".formatted(getActionName().toLowerCase(), c.id, c.goal))
+                    .map(c -> "• `/%s %s` - %s".formatted(getActionName().toLowerCase(), c.getId(), c.getGoal()))
                     .collect(Collectors.joining("\n"));
                 return getMultipleCronFallbackMessage(cronList);
             }
@@ -278,11 +278,11 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         // 2. Not a session — try as cron task (owner can approve their own tasks)
         try {
-            BiConsumer<AgentCronEntity, AgentResult> jobNotifier = (cron, result) -> {
-                ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
-                String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
+            BiConsumer<AgentCron, AgentResult> jobNotifier = (cron, result) -> {
+                ChannelType chType = ChannelType.fromString(cron.getChannelType()).orElse(ChannelType.TELEGRAM);
+                String platformId = cron.getChannelPlatformId() != null ? cron.getChannelPlatformId() : cron.getChatId();
                 jobCompletedEvent.fire(new AgentJobCompleted(
-                    cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
+                    cron.getId(), cron.getUserId(), chType, platformId, cron.getLastDeliveryId(),
                     AgentResultFormatter.format(result),
                     result instanceof AgentResult.Failed f ? f.category() : null));
             };
@@ -311,17 +311,17 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         if (!targetId.matches("\\d+")) return targetId;
         int idx = Integer.parseInt(targetId);
         Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
-        List<AgentCronEntity> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+        List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
         String resolvedTargetId = null;
         if (selfPending.isPresent()) {
             if (idx == 1) {
                 resolvedTargetId = sessionId;
             } else if (idx >= 2 && idx - 2 < pendingCrons.size()) {
-                resolvedTargetId = pendingCrons.get(idx - 2).id;
+                resolvedTargetId = pendingCrons.get(idx - 2).getId();
             }
         } else {
             if (idx >= 1 && idx - 1 < pendingCrons.size()) {
-                resolvedTargetId = pendingCrons.get(idx - 1).id;
+                resolvedTargetId = pendingCrons.get(idx - 1).getId();
             }
         }
         return resolvedTargetId != null ? resolvedTargetId : targetId;

@@ -5,13 +5,15 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import com.arcclaw.core.domain.model.ChatMemory;
+
 /**
  * JPA entity for persistent chat memory storage.
  * Stores conversation history as a JSON string.
  */
 @Entity
 @Table(name = "chat_memory")
-public class ChatMemoryEntity {
+public class ChatMemoryEntity implements ChatMemory {
 
     @Id
     @Column(name = "memory_id")

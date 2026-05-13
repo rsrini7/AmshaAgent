@@ -1,5 +1,6 @@
 package com.arcclaw.core.state;
 
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
@@ -11,7 +12,7 @@ public class AgentCheckpointTest {
 
     @Test
     void testFieldPrivacyAndJsonIgnore() throws NoSuchFieldException {
-        Class<AgentCheckpoint> clazz = AgentCheckpoint.class;
+        Class<AgentCheckpointEntity> clazz = AgentCheckpointEntity.class;
         
         // 1. Verify fields are private
         Field stateJson = clazz.getDeclaredField("stateJson");

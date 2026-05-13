@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import com.arcclaw.core.domain.model.ReasoningStepRecord;
+
 /**
  * JPA entity for persisting individual reasoning steps.
  * <p>
@@ -15,7 +17,7 @@ import jakarta.persistence.Table;
  */
 @Entity
 @Table(name = "reasoning_step")
-public class ReasoningStepEntity {
+public class ReasoningStepEntity implements ReasoningStepRecord {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

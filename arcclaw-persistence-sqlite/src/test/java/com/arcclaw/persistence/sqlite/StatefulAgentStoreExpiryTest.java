@@ -13,7 +13,8 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStoreImpl;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -47,7 +48,7 @@ class StatefulAgentStoreExpiryTest {
      */
     private void createAndBackdate(String sessionId, Instant backdateTo) {
         QuarkusTransaction.requiringNew().run(() -> {
-            AgentCheckpoint cp = new AgentCheckpoint();
+            AgentCheckpoint cp = new AgentCheckpointEntity();
             cp.setSessionId(sessionId);
             cp.setAgentRole("coordinator");
             cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);

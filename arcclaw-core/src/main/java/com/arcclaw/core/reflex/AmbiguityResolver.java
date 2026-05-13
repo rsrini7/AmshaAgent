@@ -3,8 +3,8 @@ package com.arcclaw.core.reflex;
 import java.util.List;
 import java.util.Optional;
 
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCron;
 
 public class AmbiguityResolver {
 
@@ -16,17 +16,17 @@ public class AmbiguityResolver {
         this.ambiguityTitle = ambiguityTitle;
     }
 
-    public String detect(Optional<AgentCheckpoint> latestPending, List<AgentCronEntity> pendingCrons) {
+    public String detect(Optional<AgentCheckpoint> latestPending, List<AgentCron> pendingCrons) {
         if (latestPending.isPresent()) {
             return null;
         }
         if (pendingCrons.size() > 1) {
             StringBuilder sb = new StringBuilder("⚠️ ").append(ambiguityTitle).append(". You have multiple tasks waiting:\n\n");
             int idx = 1;
-            for (AgentCronEntity c : pendingCrons) {
+            for (AgentCron c : pendingCrons) {
                 sb.append("%d️⃣ `/%s %d` or `/%s %s` - (Background) ".formatted(
-                        idx, actionName.toLowerCase(), idx, actionName.toLowerCase(), c.id))
-                  .append(c.goal).append("\n");
+                        idx, actionName.toLowerCase(), idx, actionName.toLowerCase(), c.getId()))
+                  .append(c.getGoal()).append("\n");
                 idx++;
             }
             sb.append("\nPlease reply with the specific reflex numbered option.");

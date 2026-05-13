@@ -6,6 +6,7 @@ import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.domain.model.AgentSkill;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -33,8 +34,8 @@ public class DatabaseSkillProvider implements SkillProvider {
     public List<SkillDefinition> load() {
         List<SkillDefinition> skills = new ArrayList<>();
         try {
-            List<AgentSkillEntity> dbSkills = repository.findAllSkills();
-            for (AgentSkillEntity entity : dbSkills) {
+            List<AgentSkill> dbSkills = repository.findAllSkills();
+            for (AgentSkill entity : dbSkills) {
                 try {
                     skills.add(parser.parse(entity.getDefinitionYaml()));
                 } catch (Exception e) {

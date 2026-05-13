@@ -24,7 +24,7 @@ import com.arcclaw.core.pipeline.SessionContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import org.jboss.logging.Logger;

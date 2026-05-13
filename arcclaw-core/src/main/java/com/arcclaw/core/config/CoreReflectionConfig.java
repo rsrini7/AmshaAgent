@@ -11,7 +11,7 @@ import com.arcclaw.core.api.dto.CreateSessionRequest;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
-import com.arcclaw.core.audit.AuditEvent;
+import com.arcclaw.core.audit.AuditEventEntity;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.AuditVerifier;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -61,7 +61,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SessionStatusResponse.class,
         AuditEventResponse.class,
         ToolRegistry.ToolDescriptor.class,
-        AuditEvent.class,
+        AuditEventEntity.class,
         AuditOutcome.class,
         SecurityEventType.class,
         GithubTool.class,

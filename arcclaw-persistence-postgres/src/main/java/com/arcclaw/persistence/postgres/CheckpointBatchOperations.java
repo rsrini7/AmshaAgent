@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -28,10 +28,10 @@ public class CheckpointBatchOperations {
         log.infof("[Postgres] Updating tool decision for session=%s role=%s tool=%s -> %s",
                 sessionId, agentRole, toolName, decision);
 
-        List<AgentCheckpoint> results = em.createQuery(
+        List<AgentCheckpointEntity> results = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role " +
                 "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("role", agentRole)
                 .setMaxResults(1)
@@ -41,7 +41,7 @@ public class CheckpointBatchOperations {
             return false;
         }
 
-        AgentCheckpoint cp = results.get(0);
+        AgentCheckpointEntity cp = results.get(0);
         if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL || cp.getBatchToolDecisions() == null) {
             log.warnf("[Postgres] Checkpoint session=%s not in AWAITING_APPROVAL or no batch decisions", sessionId);
             return false;

@@ -17,7 +17,8 @@ import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.lifecycle.SessionReaper;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -122,7 +123,7 @@ class WorkspaceManagerTest {
 
         // Use EM directly because load() filters out archived checkpoints
         QuarkusTransaction.requiringNew().run(() -> {
-            AgentCheckpoint cp = em.find(AgentCheckpoint.class, checkpointId[0]);
+            AgentCheckpoint cp = em.find(AgentCheckpointEntity.class, checkpointId[0]);
             // §7.31: Terminal COMPLETED checkpoints are immediately archived
             assertEquals(CheckpointStatus.ARCHIVED, cp.getStatus());
         });
@@ -134,7 +135,7 @@ class WorkspaceManagerTest {
         WorkspaceScopeHolder.run(sessionId, () -> {
             var cp = agentStore.save(sessionId, "coordinator", List.of(), "test goal");
             QuarkusTransaction.requiringNew().run(() -> {
-                AgentCheckpoint entity = em.find(AgentCheckpoint.class, cp.getId());
+                AgentCheckpoint entity = em.find(AgentCheckpointEntity.class, cp.getId());
                 entity.setStatus(CheckpointStatus.AWAITING_APPROVAL);
             });
         });

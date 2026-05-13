@@ -8,8 +8,8 @@ import java.util.List;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
-import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditEventRepository;
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -71,8 +71,8 @@ public class AuditServiceIntegrationTest {
             assertEquals(1, events.size());
             
             AuditEvent event = events.get(0);
-            assertEquals(SecurityEventType.VAULT_STORE, event.eventType);
-            assertTrue(event.eventDetail.contains("keyName=my-secret"));
+            assertEquals(SecurityEventType.VAULT_STORE, event.getEventType());
+            assertTrue(event.getEventDetail().contains("keyName=my-secret"));
             });
         });
     }
@@ -93,8 +93,8 @@ public class AuditServiceIntegrationTest {
             assertEquals(1, events.size());
             
             AuditEvent event = events.get(0);
-            assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS, event.eventType);
-            assertTrue(event.eventDetail.contains("keyName=non-existent-key"));
+            assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS, event.getEventType());
+            assertTrue(event.getEventDetail().contains("keyName=non-existent-key"));
             });
         });
     }
@@ -115,8 +115,8 @@ public class AuditServiceIntegrationTest {
             assertEquals(1, events.size());
             
             AuditEvent event = events.get(0);
-            assertEquals(SecurityEventType.CHECKPOINT_CREATED, event.eventType);
-            assertEquals("coordinator", event.agentRole);
+            assertEquals(SecurityEventType.CHECKPOINT_CREATED, event.getEventType());
+            assertEquals("coordinator", event.getAgentRole());
             });
         });
     }

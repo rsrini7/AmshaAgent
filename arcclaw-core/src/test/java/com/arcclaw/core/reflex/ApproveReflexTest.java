@@ -34,7 +34,8 @@ import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -139,7 +140,7 @@ class ApproveReflexTest {
         cron.lastDeliveryId = "dlv-1";
         cron.chatId = "chat-1";
 
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("cron-session-123");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
 
@@ -181,7 +182,7 @@ class ApproveReflexTest {
     @Test
     void testSessionCheckpointWinsOverPendingCron() {
         String userId = "user-1";
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
@@ -204,7 +205,7 @@ class ApproveReflexTest {
     @Test
     void testResumeGuardBlocksDuplicateCall() {
         String userId = "user-1";
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
@@ -227,7 +228,7 @@ class ApproveReflexTest {
         cron.userId = userId;
         cron.chatId = "chat-1";
         cron.status = CronStatus.AWAITING_APPROVAL;
-        AgentCheckpoint cp2 = new AgentCheckpoint();
+        AgentCheckpoint cp2 = new AgentCheckpointEntity();
         cp2.setSessionId("cron-session-1");
         cp2.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
         when(checkpointApprovalService.approveAll(eq("cron-123"), anyString())).thenReturn(cp2);
@@ -273,7 +274,7 @@ class ApproveReflexTest {
         // With a live session pending, bare /approve always resolves to the live session.
         // CRONs require explicit targeting — no ambiguity prompt shown.
         String userId = "user-1";
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setOriginalGoal("Store my API key");
         cp.setAgentRole("coordinator");
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
@@ -302,7 +303,7 @@ class ApproveReflexTest {
         cron.userId = "user-1";
         cron.status = CronStatus.AWAITING_APPROVAL;
 
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId(fullId);
         cp.setAgentRole("coordinator");
 
@@ -322,7 +323,7 @@ class ApproveReflexTest {
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.empty());
         when(cronRepository.findAwaitingApprovalByUserId("user-1")).thenReturn(List.of());
 
-        AgentCheckpoint failedCp = new AgentCheckpoint();
+        AgentCheckpoint failedCp = new AgentCheckpointEntity();
         failedCp.setStatus(CheckpointStatus.FAILED);
         when(statefulAgentStore.findLatestCheckpoint("session-1")).thenReturn(Optional.of(failedCp));
 

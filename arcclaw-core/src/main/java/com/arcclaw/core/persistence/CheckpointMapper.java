@@ -1,7 +1,8 @@
 package com.arcclaw.core.persistence;
 
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 
@@ -40,10 +41,10 @@ public class CheckpointMapper {
         );
     }
 
-    public static AgentCheckpoint toEntity(CheckpointDto dto) {
+    public static AgentCheckpointEntity toEntity(CheckpointDto dto) {
         if (dto == null) return null;
 
-        AgentCheckpoint entity = new AgentCheckpoint();
+        AgentCheckpointEntity entity = new AgentCheckpointEntity();
         entity.setId(dto.id());
         entity.setSessionId(dto.sessionId());
         entity.setAgentRole(dto.agentRole());

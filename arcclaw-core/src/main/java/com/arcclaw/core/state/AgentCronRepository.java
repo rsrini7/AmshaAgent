@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.util.CronScheduleUtil;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
@@ -27,35 +28,35 @@ public class AgentCronRepository {
     CronStorePort cronStore;
 
     @Transactional(TxType.NOT_SUPPORTED)
-    public List<AgentCronEntity> findDueCrons() {
+    public List<AgentCron> findDueCrons() {
         return cronStore.findDueCrons().stream()
                 .map(this::toEntity)
                 .collect(Collectors.toList());
     }
 
     @Transactional(TxType.REQUIRED)
-    public List<AgentCronEntity> findByUserId(String userId) {
+    public List<AgentCron> findByUserId(String userId) {
         return cronStore.findByUserId(userId).stream()
                 .map(this::toEntity)
                 .collect(Collectors.toList());
     }
 
     @Transactional(TxType.REQUIRED)
-    public List<AgentCronEntity> findAwaitingApprovalByUserId(String userId) {
+    public List<AgentCron> findAwaitingApprovalByUserId(String userId) {
         return cronStore.findAwaitingApprovalByUserId(userId).stream()
                 .map(this::toEntity)
                 .collect(Collectors.toList());
     }
 
     @Transactional(TxType.REQUIRED)
-    public List<AgentCronEntity> findAllAwaitingApproval() {
+    public List<AgentCron> findAllAwaitingApproval() {
         return cronStore.findAllAwaitingApproval().stream()
                 .map(this::toEntity)
                 .collect(Collectors.toList());
     }
 
     @Transactional(TxType.NOT_SUPPORTED)
-    public AgentCronEntity findById(String id) {
+    public AgentCron findById(String id) {
         return cronStore.findById(id).map(this::toEntity).orElse(null);
     }
 
@@ -100,11 +101,11 @@ public class AgentCronRepository {
     }
 
     @Transactional(TxType.REQUIRED)
-    public void markSkipped(List<AgentCronEntity> skippedJobs) {
+    public void markSkipped(List<AgentCron> skippedJobs) {
         if (skippedJobs.isEmpty()) return;
         Instant now = Instant.now();
-        for (AgentCronEntity job : skippedJobs) {
-            cronStore.markSkipped(job.id, job.nextFireTime, now);
+        for (AgentCron job : skippedJobs) {
+            cronStore.markSkipped(job.getId(), job.getNextFireTime(), now);
         }
     }
 
@@ -114,7 +115,7 @@ public class AgentCronRepository {
     }
 
     @Transactional(TxType.REQUIRED)
-    public void persist(AgentCronEntity entity) {
+    public void persist(AgentCron entity) {
         cronStore.save(toDto(entity));
     }
 
@@ -139,22 +140,22 @@ public class AgentCronRepository {
      */
     @Transactional(TxType.REQUIRED)
     public void markTerminal(String id, AgentResult result) {
-        AgentCronEntity cron = findById(id);
+        AgentCron cron = findById(id);
         if (cron == null || result == null) return;
 
         switch (result) {
             case AgentResult.Finished _ -> {
-                if (cron.runOnce) markCompleted(cron.id, Instant.now());
-                else markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
+                if (cron.isRunOnce()) markCompleted(cron.getId(), Instant.now());
+                else markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
             }
             case AgentResult.StructuredFinished _ -> {
-                if (cron.runOnce) markCompleted(cron.id, Instant.now());
-                else markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
+                if (cron.isRunOnce()) markCompleted(cron.getId(), Instant.now());
+                else markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
             }
-            case AgentResult.Failed f -> markFailed(cron.id, f.reason());
-            case AgentResult.AwaitingApproval _ -> markAwaitingApproval(cron.id);
+            case AgentResult.Failed f -> markFailed(cron.getId(), f.reason());
+            case AgentResult.AwaitingApproval _ -> markAwaitingApproval(cron.getId());
             case AgentResult.AwaitingRetry _ -> {} // No-op - retry handled by RateLimitRetryScheduler
-            case AgentResult.LoopExceeded _ -> markFailed(cron.id, "Loop exceeded");
+            case AgentResult.LoopExceeded _ -> markFailed(cron.getId(), "Loop exceeded");
             default -> {}
         }
     }
@@ -183,27 +184,27 @@ public class AgentCronRepository {
         return entity;
     }
 
-    private AgentCronDto toDto(AgentCronEntity entity) {
+    private AgentCronDto toDto(AgentCron entity) {
         if (entity == null) return null;
         return new AgentCronDto(
-                entity.id,
-                entity.sessionId,
-                entity.userId,
-                entity.chatId,
-                entity.channelType,
-                entity.channelPlatformId,
-                entity.cronExpression,
-                entity.timezone,
-                entity.runOnce,
-                entity.goal,
-                entity.nextFireTime,
-                entity.lastFireTime,
-                entity.status != null ? entity.status.name() : null,
-                entity.executionRole,
-                entity.errorReason,
-                entity.lastDeliveryId,
-                entity.createdAt,
-                entity.updatedAt
+                entity.getId(),
+                entity.getSessionId(),
+                entity.getUserId(),
+                entity.getChatId(),
+                entity.getChannelType(),
+                entity.getChannelPlatformId(),
+                entity.getCronExpression(),
+                entity.getTimezone(),
+                entity.isRunOnce(),
+                entity.getGoal(),
+                entity.getNextFireTime(),
+                entity.getLastFireTime(),
+                entity.getStatus() != null ? entity.getStatus().name() : null,
+                entity.getExecutionRole(),
+                entity.getErrorReason(),
+                entity.getLastDeliveryId(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
         );
     }
 }

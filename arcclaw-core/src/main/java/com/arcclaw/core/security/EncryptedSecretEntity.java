@@ -9,28 +9,74 @@ import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
+import com.arcclaw.core.domain.model.EncryptedSecret;
+
 @Entity
 @Table(name = "encrypted_secrets")
-public class EncryptedSecret {
+public class EncryptedSecretEntity implements EncryptedSecret {
 
     @EmbeddedId
-    public EncryptedSecretId id;
+    private EncryptedSecretId id;
 
     @Column(name = "encryption_key_version", nullable = false, columnDefinition = "integer default 1")
     private int encryptionKeyVersion = 1;
 
     @Column(nullable = false)
-    public byte[] ciphertext;
+    private byte[] ciphertext;
 
     @Column(nullable = false)
-    public byte[] nonce;
+    private byte[] nonce;
 
+    @Override
+    public String getSessionId() {
+        return id != null ? id.sessionId : null;
+    }
+
+    @Override
+    public void setSessionId(String sessionId) {
+        if (id == null) id = new EncryptedSecretId();
+        id.sessionId = sessionId;
+    }
+
+    @Override
+    public String getKeyName() {
+        return id != null ? id.keyName : null;
+    }
+
+    @Override
+    public void setKeyName(String keyName) {
+        if (id == null) id = new EncryptedSecretId();
+        id.keyName = keyName;
+    }
+
+    @Override
     public int getEncryptionKeyVersion() {
         return encryptionKeyVersion;
     }
 
+    @Override
     public void setEncryptionKeyVersion(int encryptionKeyVersion) {
         this.encryptionKeyVersion = encryptionKeyVersion;
+    }
+
+    @Override
+    public byte[] getCiphertext() {
+        return ciphertext;
+    }
+
+    @Override
+    public void setCiphertext(byte[] ciphertext) {
+        this.ciphertext = ciphertext;
+    }
+
+    @Override
+    public byte[] getNonce() {
+        return nonce;
+    }
+
+    @Override
+    public void setNonce(byte[] nonce) {
+        this.nonce = nonce;
     }
 
     // Composite Key Class

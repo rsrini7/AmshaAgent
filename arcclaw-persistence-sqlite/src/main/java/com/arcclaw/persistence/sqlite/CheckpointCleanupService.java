@@ -12,7 +12,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.persistence.CheckpointMapper;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import io.quarkus.scheduler.Scheduled;
@@ -79,9 +79,9 @@ public class CheckpointCleanupService {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doDeleteCheckpoint(String sessionId, String role) {
-        List<AgentCheckpoint> results = em.createQuery(
+        List<AgentCheckpointEntity> results = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.agentRole = :role",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("role", role)
                 .getResultList();
@@ -91,7 +91,7 @@ public class CheckpointCleanupService {
     public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("status", CheckpointStatus.IN_PROGRESS)
                 .setParameter("cutoff", cutoff)
                 .getResultList()
@@ -103,7 +103,7 @@ public class CheckpointCleanupService {
     public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", cutoff)
                 .getResultList()
@@ -114,9 +114,9 @@ public class CheckpointCleanupService {
 
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
         Instant cutoff = Instant.now().minus(timeoutHours, ChronoUnit.HOURS);
-        List<AgentCheckpoint> results = em.createQuery(
+        List<AgentCheckpointEntity> results = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status = :status AND c.updatedAt < :cutoff",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", cutoff)
@@ -125,9 +125,9 @@ public class CheckpointCleanupService {
     }
 
     public boolean isSessionActive(String sessionId) {
-        List<AgentCheckpoint> results = em.createQuery(
+        List<AgentCheckpointEntity> results = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status NOT IN (:terminalStatuses)",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .setMaxResults(1)

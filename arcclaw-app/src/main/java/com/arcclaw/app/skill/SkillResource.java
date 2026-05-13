@@ -18,6 +18,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.domain.model.AgentSkill;
 import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.skill.SkillDefinitionParser;
@@ -70,7 +71,7 @@ public class SkillResource {
 
             var existingOptional = repository.findByName(def.name());
             
-            AgentSkillEntity entity;
+            AgentSkill entity;
             if (existingOptional.isPresent()) {
                 entity = existingOptional.get();
                 entity.setDefinitionYaml(rawYamlDoc);

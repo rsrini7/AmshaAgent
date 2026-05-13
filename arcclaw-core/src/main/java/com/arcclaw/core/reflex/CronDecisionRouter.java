@@ -14,8 +14,8 @@ import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 
@@ -53,7 +53,7 @@ public class CronDecisionRouter {
             if (suffix.length() >= 36) resolvedJobId = suffix.substring(0, 36);
         }
 
-        AgentCronEntity cron = cronRepository.findById(resolvedJobId);
+        AgentCron cron = cronRepository.findById(resolvedJobId);
         if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             String sub = cronSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
             if (sub.length() >= 36) {
@@ -77,7 +77,7 @@ public class CronDecisionRouter {
             int budget = pendingCheckpoint.getMaxIterations() != null
                 ? Math.max(3, pendingCheckpoint.getMaxIterations()) : 3;
 
-            result = WorkspaceContext.run(cronSessionId, cron.userId, cron.chatId,
+            result = WorkspaceContext.run(cronSessionId, cron.getUserId(), cron.getChatId(),
                 AutonomyLevel.SUPERVISED, cronRole,
                 () -> agentLoop.run(cronSessionId, cronRole, goal,
                     pendingCheckpoint.getSystemNote(), reasoningEngine, budget, ctx.context));
@@ -114,7 +114,7 @@ public class CronDecisionRouter {
         PostDecisionHandler postProcessCronDecision,
         ResultMessageProvider successResponse,
         MessageProvider errorMsg,
-        BiConsumer<AgentCronEntity, AgentResult> jobNotifier
+        BiConsumer<AgentCron, AgentResult> jobNotifier
     ) {
         @FunctionalInterface public interface DecisionApplier {
             AgentCheckpoint apply(String sessionId, String reason);
@@ -126,7 +126,7 @@ public class CronDecisionRouter {
             String get(String cronSessionId, String cronRole);
         }
         @FunctionalInterface public interface PostDecisionHandler {
-            void accept(AgentCronEntity cron, String reason, AgentResult result);
+            void accept(AgentCron cron, String reason, AgentResult result);
         }
         @FunctionalInterface public interface ResultMessageProvider {
             String get(AgentResult result);

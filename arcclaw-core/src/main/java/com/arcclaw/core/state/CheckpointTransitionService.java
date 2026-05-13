@@ -1,5 +1,7 @@
 package com.arcclaw.core.state;
 
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+
 import java.time.Instant;
 
 import jakarta.enterprise.context.ApplicationScoped;

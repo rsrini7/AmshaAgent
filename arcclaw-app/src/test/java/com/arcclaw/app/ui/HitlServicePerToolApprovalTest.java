@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,11 +29,11 @@ public class HitlServicePerToolApprovalTest {
 
     @Test
     void test_resolve_perToolApprove_delegatesCorrectly() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpointEntity cp = new AgentCheckpointEntity();
         cp.setSessionId("s1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
-        when(em.find(AgentCheckpoint.class, 1L)).thenReturn(cp);
+        when(em.find(AgentCheckpointEntity.class, 1L)).thenReturn(cp);
 
         hitlService.resolve("1", "github", true, "approved github");
 
@@ -43,11 +43,11 @@ public class HitlServicePerToolApprovalTest {
 
     @Test
     void test_resolve_perToolDeny_delegatesCorrectly() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpointEntity cp = new AgentCheckpointEntity();
         cp.setSessionId("s1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
-        when(em.find(AgentCheckpoint.class, 1L)).thenReturn(cp);
+        when(em.find(AgentCheckpointEntity.class, 1L)).thenReturn(cp);
 
         hitlService.resolve("1", "sandboxexec", false, "unsafe");
 
@@ -57,11 +57,11 @@ public class HitlServicePerToolApprovalTest {
 
     @Test
     void test_resolve_bulkApprove_stillWorks() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpointEntity cp = new AgentCheckpointEntity();
         cp.setSessionId("s1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
-        when(em.find(AgentCheckpoint.class, 1L)).thenReturn(cp);
+        when(em.find(AgentCheckpointEntity.class, 1L)).thenReturn(cp);
 
         hitlService.resolve("1", null, true, "bulk");
 

@@ -7,6 +7,7 @@ import java.util.List;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.domain.model.AuditEvent;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -39,12 +40,12 @@ public class AuditObserverTest {
 
         List<AuditEvent> events = repository.findBySessionId(sessionId);
         assertEquals(1, events.size());
-        
+
         AuditEvent event = events.get(0);
-        assertEquals(AuditOutcome.FINISH, event.outcome);
-        assertEquals(SecurityEventType.LOOP_FINISH, event.eventType);
-        assertEquals(100, event.inputTokens);
-        assertEquals(20, event.outputTokens);
+        assertEquals(AuditOutcome.FINISH, event.getOutcome());
+        assertEquals(SecurityEventType.LOOP_FINISH, event.getEventType());
+        assertEquals(100, event.getInputTokens());
+        assertEquals(20, event.getOutputTokens());
         // Cost calculation verified implicitly
     }
 }

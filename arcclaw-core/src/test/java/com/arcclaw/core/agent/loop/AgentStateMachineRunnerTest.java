@@ -42,7 +42,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.AgentTool;
@@ -259,7 +259,7 @@ class AgentStateMachineRunnerTest {
                     .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
                             new ApprovalFrame("protected-tool", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
             when(agentStore.load(anyString(), anyString()))
-                    .thenReturn(Optional.of(new AgentCheckpoint()));
+                    .thenReturn(Optional.of(new AgentCheckpointEntity()));
 
             AgentExecutionContext ctx = new AgentExecutionContext(
                     "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE, 5, 0, "telegram", "platform-1", null, null);

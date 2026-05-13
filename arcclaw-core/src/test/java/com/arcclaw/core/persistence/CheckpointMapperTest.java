@@ -4,7 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Instant;
 
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import org.junit.jupiter.api.Test;
@@ -13,7 +14,7 @@ class CheckpointMapperTest {
 
     @Test
     void testRoundTrip() {
-        AgentCheckpoint entity = new AgentCheckpoint();
+        AgentCheckpoint entity = new AgentCheckpointEntity();
         entity.setId(1L);
         entity.setSessionId("s1");
         entity.setAgentRole("coordinator");

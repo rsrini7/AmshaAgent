@@ -22,7 +22,8 @@ import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -61,7 +62,7 @@ class CheckpointResumeHandlerPreExecTest {
         AgentExecutionContext context = new AgentExecutionContext(
             sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
 
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId(sessionId);
         cp.setAgentRole(agentRole);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);

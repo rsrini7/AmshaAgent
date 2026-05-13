@@ -11,7 +11,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.AfterEach;
@@ -44,7 +45,7 @@ public class HitlServiceTest {
         heartbeatTracker.tryBindOwner(sessionB, "userB");
 
         // Checkpoint for userA
-        AgentCheckpoint cpA = new AgentCheckpoint();
+        AgentCheckpoint cpA = new AgentCheckpointEntity();
         cpA.setSessionId(sessionA);
         cpA.setAgentRole("default");
         cpA.setStatus(CheckpointStatus.AWAITING_APPROVAL);
@@ -54,7 +55,7 @@ public class HitlServiceTest {
         cpUserA_Id = cpA.getId();
 
         // Checkpoint for userB
-        AgentCheckpoint cpB = new AgentCheckpoint();
+        AgentCheckpoint cpB = new AgentCheckpointEntity();
         cpB.setSessionId(sessionB);
         cpB.setAgentRole("default");
         cpB.setStatus(CheckpointStatus.AWAITING_APPROVAL);
@@ -70,11 +71,11 @@ public class HitlServiceTest {
     @Transactional
     public void teardown() {
         if (cpUserA_Id != null) {
-            AgentCheckpoint cp = em.find(AgentCheckpoint.class, cpUserA_Id);
+            AgentCheckpoint cp = em.find(AgentCheckpointEntity.class, cpUserA_Id);
             if (cp != null) em.remove(cp);
         }
         if (cpUserB_Id != null) {
-            AgentCheckpoint cp = em.find(AgentCheckpoint.class, cpUserB_Id);
+            AgentCheckpoint cp = em.find(AgentCheckpointEntity.class, cpUserB_Id);
             if (cp != null) em.remove(cp);
         }
         heartbeatTracker.clearAll();

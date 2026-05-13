@@ -32,7 +32,8 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.MdcKeys;
@@ -212,7 +213,7 @@ class AgentSessionServiceTest {
 
     @Test
     void testApprove_notAwaiting_returns409() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setStatus(CheckpointStatus.COMPLETED);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
         
@@ -222,7 +223,7 @@ class AgentSessionServiceTest {
 
     @Test
     void testDeny_success_routesThroughApprovalService() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setId(123L);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
@@ -252,7 +253,7 @@ class AgentSessionServiceTest {
     @Test
     void testRunAsync_denyGoal_routesThroughApprovalService() throws Exception {
         RunAgentRequest request = new RunAgentRequest("deny", "coordinator", 5);
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
         
         // Mocking VThreads execution to be synchronous for testing
@@ -272,7 +273,7 @@ class AgentSessionServiceTest {
     @Test
     void testRunAsync_approveGoal_routesThroughApprovalService() throws Exception {
         RunAgentRequest request = new RunAgentRequest("approve", "coordinator", 5);
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp);
         
         Mockito.doAnswer(inv -> {

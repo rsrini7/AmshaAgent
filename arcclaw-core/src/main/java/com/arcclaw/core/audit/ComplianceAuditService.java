@@ -3,6 +3,7 @@ package com.arcclaw.core.audit;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import org.jboss.logging.Logger;
@@ -39,7 +40,7 @@ public class ComplianceAuditService {
     public void recordMandatory(String sessionId, String userId, String agentRole,
                                 SecurityEventType type, String detail) {
         log.infof("[AUDIT-MANDATORY] type=%s session=%s", type, sessionId);
-        AuditEvent event = AuditEvent.securityEvent(sessionId, userId, agentRole, type, detail);
+        AuditEvent event = AuditEventEntity.securityEvent(sessionId, userId, agentRole, type, detail);
         PersistenceEvent pe = PersistenceEvent.critical(sessionId, type, () -> {
             auditEventRepository.record(event);
         });

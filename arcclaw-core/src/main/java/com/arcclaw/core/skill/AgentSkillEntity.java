@@ -7,6 +7,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import com.arcclaw.core.domain.model.AgentSkill;
+
 /**
  * Persistent script entity backed by the {@code agent_skill} SQLite table.
  * <p>
@@ -14,7 +16,7 @@ import jakarta.persistence.Table;
  */
 @Entity
 @Table(name = "agent_skill")
-public class AgentSkillEntity {
+public class AgentSkillEntity implements AgentSkill {
 
     @Id
     private String id;
@@ -41,30 +43,37 @@ public class AgentSkillEntity {
         this.updatedAt = updatedAt;
     }
 
+    @Override
     public String getId() {
         return id;
     }
 
+    @Override
     public String getName() {
         return name;
     }
 
+    @Override
     public String getDefinitionYaml() {
         return definitionYaml;
     }
 
+    @Override
     public void setDefinitionYaml(String definitionYaml) {
         this.definitionYaml = definitionYaml;
     }
 
+    @Override
     public Instant getCreatedAt() {
         return createdAt;
     }
 
+    @Override
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
+    @Override
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }

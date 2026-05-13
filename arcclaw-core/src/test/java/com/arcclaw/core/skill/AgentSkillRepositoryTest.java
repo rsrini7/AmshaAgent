@@ -8,6 +8,7 @@ import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.domain.model.AgentSkill;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,13 +31,13 @@ class AgentSkillRepositoryTest {
         repository.saveOrUpdate(entity);
 
         assertEquals(1, repository.findAllSkills().size());
-        AgentSkillEntity loaded = repository.findAllSkills().get(0);
+        AgentSkill loaded = repository.findAllSkills().get(0);
         assertEquals("test-skill", loaded.getName());
     }
 
     @Test
     void testFindByNameReturnsEmptyForUnknown() {
-        Optional<AgentSkillEntity> found = repository.findByName("unknown-skill");
+        Optional<AgentSkill> found = repository.findByName("unknown-skill");
         assertTrue(found.isEmpty());
     }
 
@@ -49,7 +50,7 @@ class AgentSkillRepositoryTest {
         repository.saveOrUpdate(entity2);
 
         assertEquals(1, repository.findAllSkills().size(), "Should merge into same row");
-        AgentSkillEntity loaded = repository.findAllSkills().get(0);
+        AgentSkill loaded = repository.findAllSkills().get(0);
         assertEquals("yaml-2", loaded.getDefinitionYaml());
     }
 }

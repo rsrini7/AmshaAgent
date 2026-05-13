@@ -22,30 +22,15 @@ import jakarta.persistence.Version;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
- /**
-  * JPA entity for persisting agent reasoning loop state.
- * <p>
- * Each checkpoint captures the full serialized reasoning history
- * ({@code stateJson}) for a given session and agent role, enabling
- * crash recovery and audit trails.
- * <p>
- * <strong>Design note:</strong> Uses plain JPA {@code @Entity} (not
- * {@code PanacheEntity}) because the entity lives in {@code arcclaw-core}
- * while the Quarkus build plugin runs in {@code arcclaw-app}. Panache
- * bytecode enhancement doesn't cross module boundaries. The repository
- * pattern ({@link AgentCheckpointRepository}) provides the Panache API.
- * <p>
- * <strong>SQLite note:</strong> Uses {@code TEXT} column (not {@code @Lob})
- * for better SQLite compatibility.
- */
-@Entity
+@Entity(name = "AgentCheckpoint")
 @Table(name = "agent_checkpoint", uniqueConstraints = @UniqueConstraint(name = "uq_checkpoint_session_role", columnNames = {
         "session_id",
         "agent_role" }))
-public class AgentCheckpoint {
+public class AgentCheckpointEntity implements AgentCheckpoint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -56,15 +41,12 @@ public class AgentCheckpoint {
     @Column(nullable = false)
     private Integer version;
 
-    /** The workspace session ID this checkpoint belongs to. */
     @Column(name = "session_id", nullable = false, length = 128)
     private String sessionId;
 
-    /** The agent role (e.g., "coordinator", "debugger", "researcher", "coder"). */
-    @Column(name = "agent_role",nullable = false, length = 64)
+    @Column(name = "agent_role", nullable = false, length = 64)
     private String agentRole;
 
-    /** Current lifecycle status of the checkpoint. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CheckpointStatus status;
@@ -74,53 +56,31 @@ public class AgentCheckpoint {
     @Nullable
     private AutonomyLevel autonomyLevel;
 
-    /**
-     * Jackson-serialized {@code List<ReasoningStep>}.
-     * <p>
-     * Stored as standard TEXT - no {@code @Lob} for SQLite compatibility.
-     * @deprecated Replaced by {@link ReasoningStepEntity} in Phase 55.3.
-     */
     @Deprecated
     @Column(name = "state_json", columnDefinition = "TEXT")
     @Nullable
     private String stateJson;
 
-    /** Channel platform ID (e.g. Telegram chat ID) - used for timeout notifications. */
     @Column(name = "channel_platform_id", length = 128)
     @Nullable
     private String channelPlatformId;
 
-    /** Channel type (e.g. TELEGRAM, REST_API) - used for timeout notifications. */
     @Column(name = "channel_type", length = 32)
     @Nullable
     private String channelType;
 
-    /**
-     * The original user goal that triggered the agent loop which produced this
-     * checkpoint. Captured at {@code AWAITING_APPROVAL} transition time.
-     * <p>
-     * Used on resume so {@code RagContextEnricher} embeds the real user intent
-     * instead of the synthetic {@code AgentSentinels.GOAL_RESUME_APPROVED} string,
-     * which would produce semantically meaningless RAG query vectors.
-     * <p>
-     * Truncated to 2048 chars - goals longer than this are rare and SQLite TEXT
-     * has no hard limit, but the column bound prevents runaway input.
-     */
     @Column(name = "original_goal", length = 2048)
     @Nullable
     private String originalGoal;
 
-    /** Timestamp when a failure occurred (null if not failed). */
     @Column(name = "failed_at")
     @Nullable
     private Instant failedAt;
 
-    /** Timestamp when the checkpoint completed successfully (null if not completed). */
     @Column(name = "completed_at")
     @Nullable
     private Instant completedAt;
 
-    /** Human-readable failure reason (null if not failed). */
     @Column(name = "fail_reason", length = 1024)
     @Nullable
     private String failReason;
@@ -129,27 +89,19 @@ public class AgentCheckpoint {
     @Nullable
     private String pendingToolName;
 
-    /**
-     * The specialist role (e.g. "coder") that requested the pending tool.
-     * Used on resume to ensure correct capability checks. §7.31
-     */
     @Column(name = "pending_tool_role", length = 64)
     @Nullable
     private String pendingToolRole;
 
     @Column(name = "batch_tool_decisions", columnDefinition = "TEXT")
     @Nullable
-    private String batchToolDecisions; // JSON: {"github":"PENDING","manage_schedule":"PENDING"}
+    private String batchToolDecisions;
 
     @Column(name = "pending_tool_parameters", columnDefinition = "TEXT")
-    @JsonIgnore // Privacy Fix Phase 41: ensure sensitive tool parameters never leak to telemetry/JSON APIs
+    @JsonIgnore
     @Nullable
     private String pendingToolParametersJson;
 
-    /**
-     * JSON map of toolName → serialized ToolResponse for tools that
-     * were pre-executed before the HITL pause. §7.30
-     */
     @Column(name = "pre_executed_results", columnDefinition = "TEXT")
     @Nullable
     private String preExecutedResults;
@@ -161,44 +113,33 @@ public class AgentCheckpoint {
     @Column(name = "iterations_used")
     private int iterationsUsed = 0;
 
-    /** Estimated duration (ms) to wait before retrying a rate-limited call. */
     @Column(name = "retry_after_ms")
     @Nullable
     private Integer retryAfterMs;
 
-    /** System constraints to be injected into the prompt (separate from original_goal). */
     @Column(name = "system_note", columnDefinition = "TEXT")
     @Nullable
     private String systemNote;
 
-    /**
-     * JSON-serialized Map<String, Object> containing transient execution data
-     * (e.g. SUGGESTED_NEXT_FIRE_TIME) from MessageContext. §7.48
-     */
     @Column(name = "context_data", columnDefinition = "TEXT")
     @Nullable
     private String contextDataJson;
 
-    /** Categorized error code for diagnostics (e.g. AUTH_FAILED, TOOL_TIMEOUT). */
     @Column(name = "error_code", length = 64)
     @Nullable
     private String errorCode;
 
-    /** Correlation ID for tracking failures across logs (OTel traceId). */
     @Column(name = "trace_id", length = 128)
     @Nullable
     private String traceId;
 
-    /** Simple name of the Java exception causing the failure. */
     @Column(name = "root_cause_class", length = 128)
     @Nullable
     private String rootCauseClass;
 
-    /** When this checkpoint was first created. */
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    /** When this checkpoint was last updated. */
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -214,6 +155,7 @@ public class AgentCheckpoint {
         updatedAt = Instant.now();
     }
 
+    @Override
     public Long getId() {
         return id;
     }
@@ -222,6 +164,7 @@ public class AgentCheckpoint {
         this.id = id;
     }
 
+    @Override
     public Integer getVersion() {
         return version;
     }
@@ -230,6 +173,7 @@ public class AgentCheckpoint {
         this.version = version;
     }
 
+    @Override
     public String getSessionId() {
         return sessionId;
     }
@@ -238,6 +182,7 @@ public class AgentCheckpoint {
         this.sessionId = sessionId;
     }
 
+    @Override
     public String getAgentRole() {
         return agentRole;
     }
@@ -246,6 +191,7 @@ public class AgentCheckpoint {
         this.agentRole = agentRole;
     }
 
+    @Override
     public String getStateJson() {
         return stateJson;
     }
@@ -254,34 +200,26 @@ public class AgentCheckpoint {
         this.stateJson = stateJson;
     }
 
+    @Override
     public String getChannelPlatformId() { return channelPlatformId; }
     public void setChannelPlatformId(String channelPlatformId) { this.channelPlatformId = channelPlatformId; }
 
+    @Override
     public String getChannelType() { return channelType; }
     public void setChannelType(String channelType) { this.channelType = channelType; }
 
-    /**
-     * Returns the original user goal captured when this checkpoint was paused
-     * for human approval. Use this as the goal for {@code AgentStateMachineRunner}
-     * on resume - never use {@link com.arcclaw.core.agent.AgentSentinels#GOAL_RESUME_APPROVED}
-     * as the RAG query string.
-     */
+    @Override
     public String getOriginalGoal() {
         return originalGoal;
     }
 
-    /**
-     * Sets the original user goal. Call this exactly once - inside
-     * {@code AgentStepProcessor.persistApprovalCheckpoint()} when the
-     * checkpoint transitions to {@code AWAITING_APPROVAL}.
-     * Never overwrite an already-set non-blank value.
-     */
     public void setOriginalGoal(String originalGoal) {
         this.originalGoal = (originalGoal != null && originalGoal.length() > 2048)
             ? originalGoal.substring(0, 2048)
             : originalGoal;
     }
 
+    @Override
     public Instant getFailedAt() {
         return failedAt;
     }
@@ -290,6 +228,7 @@ public class AgentCheckpoint {
         this.failedAt = failedAt;
     }
 
+    @Override
     public Instant getCompletedAt() {
         return completedAt;
     }
@@ -298,6 +237,7 @@ public class AgentCheckpoint {
         this.completedAt = completedAt;
     }
 
+    @Override
     public String getFailReason() {
         return failReason;
     }
@@ -306,6 +246,7 @@ public class AgentCheckpoint {
         this.failReason = failReason;
     }
 
+    @Override
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -314,6 +255,7 @@ public class AgentCheckpoint {
         this.createdAt = createdAt;
     }
 
+    @Override
     public String getPendingToolName() {
         return pendingToolName;
     }
@@ -322,6 +264,7 @@ public class AgentCheckpoint {
         this.pendingToolName = pendingToolName;
     }
 
+    @Override
     public String getPendingToolRole() {
         return pendingToolRole;
     }
@@ -330,6 +273,7 @@ public class AgentCheckpoint {
         this.pendingToolRole = pendingToolRole;
     }
 
+    @Override
     public String getBatchToolDecisions() {
         return batchToolDecisions;
     }
@@ -338,14 +282,12 @@ public class AgentCheckpoint {
         this.batchToolDecisions = batchToolDecisions;
     }
 
-    /**
-     * Returns true if this is a parallel-batch HITL checkpoint with
-     * per-tool decision state. §7.20
-     */
+    @Override
     public boolean hasBatchToolDecisions() {
         return batchToolDecisions != null && !batchToolDecisions.isBlank();
     }
 
+    @Override
     public String getPendingToolParametersJson() {
         return pendingToolParametersJson;
     }
@@ -354,18 +296,23 @@ public class AgentCheckpoint {
         this.pendingToolParametersJson = pendingToolParametersJson;
     }
 
+    @Override
     public Integer getMaxIterations() { return maxIterations; }
     public void setMaxIterations(Integer maxIterations) { this.maxIterations = maxIterations; }
 
+    @Override
     public int getIterationsUsed() { return iterationsUsed; }
     public void setIterationsUsed(int iterationsUsed) { this.iterationsUsed = iterationsUsed; }
 
+    @Override
     public Integer getRetryAfterMs() { return retryAfterMs; }
     public void setRetryAfterMs(Integer retryAfterMs) { this.retryAfterMs = retryAfterMs; }
 
+    @Override
     public String getSystemNote() { return systemNote; }
     public void setSystemNote(String systemNote) { this.systemNote = systemNote; }
 
+    @Override
     public String getContextDataJson() { return contextDataJson; }
     public void setContextDataJson(String contextDataJson) { this.contextDataJson = contextDataJson; }
 
@@ -373,26 +320,33 @@ public class AgentCheckpoint {
         this.updatedAt = updatedAt;
     }
 
+    @Override
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
+    @Override
     public String getPreExecutedResults() { return preExecutedResults; }
     public void setPreExecutedResults(String v) { this.preExecutedResults = v; }
 
+    @Override
     public String getErrorCode() { return errorCode; }
     public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
 
+    @Override
     public String getTraceId() { return traceId; }
     public void setTraceId(String traceId) { this.traceId = traceId; }
 
+    @Override
     public String getRootCauseClass() { return rootCauseClass; }
     public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
 
+    @Override
     public boolean hasPreExecutedResults() {
         return preExecutedResults != null && !preExecutedResults.isBlank();
     }
 
+    @Override
     public CheckpointStatus getStatus() {
         return status;
     }
@@ -401,6 +355,7 @@ public class AgentCheckpoint {
         this.status = status;
     }
 
+    @Override
     public AutonomyLevel getAutonomyLevel() {
         return autonomyLevel;
     }
@@ -409,29 +364,20 @@ public class AgentCheckpoint {
         this.autonomyLevel = autonomyLevel;
     }
 
-    /**
-     * Returns true if this checkpoint represents a paused parallel batch.
-     * See Architecture_Invariants.md §7.4.
-     */
+    @Override
     public boolean isParallelBatch() {
         return pendingToolName != null
             && pendingToolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
     }
 
-    /**
-     * Returns the individual tool names for a parallel batch checkpoint.
-     * Returns empty list for single-tool checkpoints.
-     */
+    @Override
     public List<String> parallelToolNames() {
         if (!isParallelBatch()) return Collections.emptyList();
         String composite = pendingToolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
         return Arrays.asList(composite.split(","));
     }
 
-    /**
-     * Returns true if any tool in this checkpoint is browser-backed (e.g. Playwright).
-     * Used to apply a longer resumption TTL for heavy tasks.
-     */
+    @Override
     public boolean hasBrowserTool() {
         if (pendingToolName == null) return false;
 

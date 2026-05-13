@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.domain.model.AgentSkill;
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
 import io.quarkus.arc.Unremovable;
@@ -24,12 +25,12 @@ public class AgentSkillRepository {
     SkillStorePort skillStore;
 
     @Transactional
-    public void saveOrUpdate(AgentSkillEntity entity) {
-        skillStore.save(toDto(entity));
+    public void saveOrUpdate(AgentSkill skill) {
+        skillStore.save(toDto(skill));
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public List<AgentSkillEntity> findAllSkills() {
+    public List<AgentSkill> findAllSkills() {
         return skillStore.findAll().stream()
                 .map(this::toEntity)
                 .collect(Collectors.toList());
@@ -41,7 +42,7 @@ public class AgentSkillRepository {
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public Optional<AgentSkillEntity> findByName(String name) {
+    public Optional<AgentSkill> findByName(String name) {
         return skillStore.findByName(name).map(this::toEntity);
     }
 
@@ -61,14 +62,14 @@ public class AgentSkillRepository {
         );
     }
 
-    private SkillDto toDto(AgentSkillEntity entity) {
-        if (entity == null) return null;
+    private SkillDto toDto(AgentSkill skill) {
+        if (skill == null) return null;
         return new SkillDto(
-            entity.getId(),
-            entity.getName(),
-            entity.getDefinitionYaml(),
-            entity.getCreatedAt(),
-            entity.getUpdatedAt()
+            skill.getId(),
+            skill.getName(),
+            skill.getDefinitionYaml(),
+            skill.getCreatedAt(),
+            skill.getUpdatedAt()
         );
     }
 }

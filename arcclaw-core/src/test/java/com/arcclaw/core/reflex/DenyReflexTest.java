@@ -33,7 +33,8 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -84,9 +85,9 @@ class DenyReflexTest {
                 .thenReturn(true);
 
         lenient().when(checkpointApprovalService.denyAll(anyString(), anyString()))
-                .thenReturn(new AgentCheckpoint());
+                .thenReturn(new AgentCheckpointEntity());
         lenient().when(checkpointApprovalService.denyTool(anyString(), anyString(), anyString()))
-                .thenReturn(new AgentCheckpoint());
+                .thenReturn(new AgentCheckpointEntity());
                 
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))
@@ -124,7 +125,7 @@ class DenyReflexTest {
         cron.lastDeliveryId = "dlv-1";
         cron.chatId = "chat-1";
 
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("cron-session-1");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
         
@@ -172,7 +173,7 @@ class DenyReflexTest {
     void testDenySessionCheckpointFindsArchitectRole() {
         String userId = "user-1";
         String sessionId = "session-1";
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole("architect");
 
@@ -197,7 +198,7 @@ class DenyReflexTest {
         
         when(cronRepository.findById("cron-123")).thenReturn(cron);
 
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
 
@@ -218,7 +219,7 @@ class DenyReflexTest {
         // With a live session pending, bare /deny always resolves to the live session.
         // CRONs require explicit targeting — no ambiguity prompt shown.
         String userId = "user-1";
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setOriginalGoal("Store my API key");
         cp.setAgentRole("coordinator");
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
@@ -247,7 +248,7 @@ class DenyReflexTest {
         cron.userId = "user-1";
         cron.status = CronStatus.AWAITING_APPROVAL;
 
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId(fullId);
         cp.setAgentRole("coordinator");
 
@@ -264,7 +265,7 @@ class DenyReflexTest {
 
     @Test
     void testPerToolDenialFeedback() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setAgentRole("coordinator");
         cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));

@@ -14,7 +14,8 @@ import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -67,7 +68,7 @@ public class HitlService {
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status " +
                 "AND c.sessionId IN (:sessionIds) " +
                 "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("sessionIds", visibleSessionIds)
                 .setFirstResult(effectiveOffset)
@@ -128,7 +129,7 @@ public class HitlService {
     @Transactional(TxType.NOT_SUPPORTED)   // ← was @Transactional
     public void resolve(String taskId, String toolName, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
-        AgentCheckpoint cp = em.find(AgentCheckpoint.class, id);
+        AgentCheckpoint cp = em.find(AgentCheckpointEntity.class, id);
         if (cp == null) {
             throw new IllegalArgumentException("No pending approval found for ID: " + taskId);
         }
