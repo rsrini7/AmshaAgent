@@ -43,19 +43,16 @@ public class HitlService {
      *
      * @param userId  trusted user identity (from API key, never from LLM)
      * @param limit   max results to return (capped at {@value #MAX_LIMIT})
+     * @param offset  number of results to skip for pagination
      */
     @Transactional
-    public Map<String, PendingApproval> getPendingApprovals(String userId, int limit) {
+    public Map<String, PendingApproval> getPendingApprovals(String userId, int limit, int offset) {
         if (userId == null || userId.isBlank()) {
             return Map.of();
         }
         int effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+        int effectiveOffset = Math.max(0, offset);
 
-        // §85-B: Include both owned sessions AND unowned sessions (Telegram, CLI).
-        // Telegram/CLI sessions never go through AgentSessionService.createSession()
-        // or the WebSocket lazy-bind path, so they have ownerKeyName = null.
-        // An authenticated UI user should see approvals from all their owned sessions
-        // plus any unowned (global) sessions.
         List<String> ownedSessionIds = heartbeatTracker.getSessionIdsByOwner(userId);
         List<String> unownedSessionIds = heartbeatTracker.getUnownedSessionIds();
 
@@ -73,11 +70,40 @@ public class HitlService {
                 AgentCheckpoint.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("sessionIds", visibleSessionIds)
+                .setFirstResult(effectiveOffset)
                 .setMaxResults(effectiveLimit)
                 .getResultList()
                 .stream()
                 .map(this::mapToPending)
                 .collect(Collectors.toMap(PendingApproval::taskId, p -> p));
+    }
+
+    /**
+     * Returns total count of pending approvals for the given userId.
+     */
+    @Transactional
+    public long countPendingApprovals(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return 0L;
+        }
+
+        List<String> ownedSessionIds = heartbeatTracker.getSessionIdsByOwner(userId);
+        List<String> unownedSessionIds = heartbeatTracker.getUnownedSessionIds();
+
+        List<String> visibleSessionIds = new ArrayList<>(ownedSessionIds);
+        visibleSessionIds.addAll(unownedSessionIds);
+
+        if (visibleSessionIds.isEmpty()) {
+            return 0L;
+        }
+
+        return em.createQuery(
+                "SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.status = :status " +
+                "AND c.sessionId IN (:sessionIds)",
+                Long.class)
+                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
+                .setParameter("sessionIds", visibleSessionIds)
+                .getSingleResult();
     }
 
     private PendingApproval mapToPending(AgentCheckpoint cp) {

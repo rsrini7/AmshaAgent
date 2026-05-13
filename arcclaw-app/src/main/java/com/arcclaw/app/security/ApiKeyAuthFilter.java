@@ -3,6 +3,7 @@ package com.arcclaw.app.security;
 import java.security.Principal;
 import java.time.Clock;
 import java.util.Set;
+import java.util.UUID;
 
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
@@ -99,7 +100,10 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         boolean isReadOnlyPolling = "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
 
         if (!(isReadOnlyPolling && isInternalUiKey)) {
-            if (!apiKeyRegistry.isAllowed(apiKey)) {
+            boolean allowed = "GET".equals(method)
+                ? apiKeyRegistry.isAllowed(apiKey)
+                : apiKeyRegistry.isMutationAllowed(apiKey);
+            if (!allowed) {
                 logAudit(safeKey, finalPath, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
                 requestContext.abortWith(Response.status(429)
                         .header("Retry-After", "60")
@@ -111,6 +115,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         if (userId != null) {
+            MDC.put(MdcKeys.REQUEST_ID, UUID.randomUUID().toString());
             MDC.put(MdcKeys.USER_ID, userId);
             
             // §85-C: Propagate identity to JAX-RS SecurityContext.

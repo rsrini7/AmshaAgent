@@ -1,17 +1,15 @@
 package com.arcclaw.core.reflex;
 
 import java.util.Optional;
+import java.util.function.BiConsumer;
 
 import jakarta.enterprise.context.Dependent;
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
-import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -20,7 +18,6 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.AgentResultFormatter;
 
 @Dependent
 public class CronDecisionRouter {
@@ -29,7 +26,6 @@ public class CronDecisionRouter {
     @Inject AgentCronRepository cronRepository;
     @Inject AgentLoop agentLoop;
     @Inject ReasoningEngine reasoningEngine;
-    @Inject Event<AgentJobCompleted> jobCompletedEvent;
     @Inject WorkspaceManager workspaceManager;
 
     public String execute(CronContext ctx) throws Exception {
@@ -91,7 +87,7 @@ public class CronDecisionRouter {
             }
 
             ctx.postProcessCronDecision().accept(cron, ctx.reason, result);
-            notifyJobCompleted(cron, result);
+            ctx.jobNotifier().accept(cron, result);
             return ctx.successResponse().get(result);
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
@@ -99,15 +95,6 @@ public class CronDecisionRouter {
                 try { workspaceManager.terminateSession(cronSessionId); } catch (Exception e) { /* best effort */ }
             }
         }
-    }
-
-    private void notifyJobCompleted(AgentCronEntity cron, AgentResult result) {
-        ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
-        String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
-        jobCompletedEvent.fire(new AgentJobCompleted(
-                cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
-                AgentResultFormatter.format(result),
-                result instanceof AgentResult.Failed f ? f.category() : null));
     }
 
     private boolean isTerminalResult(AgentResult result) {
@@ -126,7 +113,8 @@ public class CronDecisionRouter {
         GoalProvider cronResumeGoal,
         PostDecisionHandler postProcessCronDecision,
         ResultMessageProvider successResponse,
-        MessageProvider errorMsg
+        MessageProvider errorMsg,
+        BiConsumer<AgentCronEntity, AgentResult> jobNotifier
     ) {
         @FunctionalInterface public interface DecisionApplier {
             AgentCheckpoint apply(String sessionId, String reason);

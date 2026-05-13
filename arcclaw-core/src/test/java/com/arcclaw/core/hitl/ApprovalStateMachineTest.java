@@ -2,11 +2,14 @@ package com.arcclaw.core.hitl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.event.Event;
@@ -20,6 +23,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +60,21 @@ class ApprovalStateMachineTest {
 
         when(agentStore.findLatestAwaitingApproval("session-123")).thenReturn(Optional.of(cp));
         when(agentStore.isCheckpointExpired("session-123", 24L)).thenReturn(false);
+
+        doAnswer(invocation -> {
+            String tool = invocation.getArgument(2);
+            String decision = invocation.getArgument(3);
+            try {
+                Map<String, ToolDecision> map = objectMapper.readValue(
+                    cp.getBatchToolDecisions(),
+                    new TypeReference<Map<String, ToolDecision>>() {});
+                map.put(tool, ToolDecision.valueOf(decision));
+                cp.setBatchToolDecisions(objectMapper.writeValueAsString(map));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return true;
+        }).when(agentStore).updateBatchToolDecision(anyString(), anyString(), anyString(), anyString());
     }
 
     private void mockTools(List<String> pending, List<String> all) {

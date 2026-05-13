@@ -270,6 +270,7 @@ export class ArcChatInterface extends LitElement {
 
   private async _connect() {
     if (this._intentionalClose) return;
+    this._connecting = true;
 
     let token = '';
     if (this.apiKey) {
@@ -328,6 +329,10 @@ export class ArcChatInterface extends LitElement {
     
     if (this._reconnectTimeoutId) clearTimeout(this._reconnectTimeoutId);
     this._reconnectTimeoutId = setTimeout(() => {
+        this._reconnectTimeoutId = null;
+        // Re-check before connecting — _connect() may have already been
+        // triggered by updated() or another path since this was scheduled.
+        if (this._connecting || this._ws) return;
         this._reconnectAttempts++;
         this._connect();
     }, finalDelay);
@@ -447,6 +452,10 @@ export class ArcChatInterface extends LitElement {
   }
 
   public reconnect() {
+    if (this._reconnectTimeoutId) {
+      clearTimeout(this._reconnectTimeoutId);
+      this._reconnectTimeoutId = null;
+    }
     this._ws = null; 
     this._intentionalClose = false; 
     this._connecting = true;

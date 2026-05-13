@@ -13,6 +13,8 @@ public final class MdcKeys {
     public static final String CHAT_ID      = "chatId";
     public static final String AGENT_ROLE   = "agentRole";
     public static final String ROLE         = "role";
+    /** Unique request correlation ID set by ApiKeyAuthFilter. */
+    public static final String REQUEST_ID   = "requestId";
 
     /** Number of tools in the current parallel batch. */
     public static final String PARALLEL_BATCH_SIZE = "parallelBatchSize";
@@ -22,7 +24,7 @@ public final class MdcKeys {
 
     /** All known ArcClaw MDC keys for safe cleanup. */
     public static final List<String> ALL_KEYS = List.of(
-        USER_ID, SESSION_ID, CHAT_ID, AGENT_ROLE, ROLE,
+        USER_ID, SESSION_ID, CHAT_ID, AGENT_ROLE, ROLE, REQUEST_ID,
         PARALLEL_BATCH_SIZE, PARALLEL_TOOLS
     );
 }

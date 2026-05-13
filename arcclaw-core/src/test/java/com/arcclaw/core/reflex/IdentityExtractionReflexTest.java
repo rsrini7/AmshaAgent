@@ -62,4 +62,25 @@ public class IdentityExtractionReflexTest {
         Assertions.assertEquals("The user's name is Alice.", captured.text());
         Assertions.assertEquals("user_name", captured.metadata().get("label"));
     }
+
+    @Test
+    void testExecute_CompoundSentence() {
+        String input = "hey i am Srini and love to Study a lot and teach kids";
+        MessageContext context = createContext(input);
+
+        ReflexResult result = reflex.execute("session1", "user1", "chat1", input, context);
+
+        Assertions.assertTrue(result.commandResponse().isEmpty());
+
+        ArgumentCaptor<MemoryEntryDto> captor = ArgumentCaptor.forClass(MemoryEntryDto.class);
+        verify(memoryPort, Mockito.timeout(5000).times(3)).index(captor.capture());
+
+        var allValues = captor.getAllValues();
+        Assertions.assertEquals(3, allValues.size());
+
+        var texts = allValues.stream().map(MemoryEntryDto::text).collect(java.util.stream.Collectors.toSet());
+        Assertions.assertTrue(texts.contains("The user's name is Srini."), "Missing name fact");
+        Assertions.assertTrue(texts.contains("The user enjoys to Study a lot."), "Missing like fact");
+        Assertions.assertTrue(texts.contains("The user's role involves kids."), "Missing role fact");
+    }
 }

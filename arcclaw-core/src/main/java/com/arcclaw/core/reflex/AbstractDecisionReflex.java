@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.event.Event;
@@ -27,6 +28,7 @@ import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -276,6 +278,14 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         // 2. Not a session — try as cron task (owner can approve their own tasks)
         try {
+            BiConsumer<AgentCronEntity, AgentResult> jobNotifier = (cron, result) -> {
+                ChannelType chType = ChannelType.fromString(cron.channelType).orElse(ChannelType.TELEGRAM);
+                String platformId = cron.channelPlatformId != null ? cron.channelPlatformId : cron.chatId;
+                jobCompletedEvent.fire(new AgentJobCompleted(
+                    cron.id, cron.userId, chType, platformId, cron.lastDeliveryId,
+                    AgentResultFormatter.format(result),
+                    result instanceof AgentResult.Failed f ? f.category() : null));
+            };
             var cronCtx = new CronDecisionRouter.CronContext(
                 targetId, userId, chatId, reason, context,
                 (sid, rsn) -> applyDecisionToAll(sid, rsn),
@@ -283,7 +293,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 (cronSid, cronRole) -> getCronResumeGoal(cronSid, cronRole),
                 (cron, rsn, result) -> postProcessCronDecision(cron, rsn, result),
                 result -> getCronSuccessResponse(result),
-                () -> getErrorMessage()
+                () -> getErrorMessage(),
+                jobNotifier
             );
             String cronRes = cronDecisionRouter.execute(cronCtx);
             if (cronRes != null) return cronRes;

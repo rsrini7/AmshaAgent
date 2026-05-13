@@ -30,6 +30,7 @@ public class IdentityExtractionReflex implements AgentReflex {
     private static final Pattern LIKE_PATTERN = Pattern.compile("(?i)\\b(?:i like|i love|i enjoy)\\s+(.+)");
     private static final Pattern EMPLOYER_PATTERN = Pattern.compile("(?i)\\b(?:i work at|i work for)\\s+(.+)");
     private static final Pattern LOCATION_PATTERN = Pattern.compile("(?i)\\b(?:i am based in|i live in|i'm based in)\\s+(.+)");
+    private static final Pattern ROLE_PATTERN = Pattern.compile("(?i)\\bi (?:teach|study|tutor|mentor|coach|am a|work as)\\s+(.+)");
 
     @Override
     public boolean matches(String input) {
@@ -53,7 +54,8 @@ public class IdentityExtractionReflex implements AgentReflex {
                PREF_PATTERN.matcher(lower).find() ||
                LIKE_PATTERN.matcher(lower).find() ||
                EMPLOYER_PATTERN.matcher(lower).find() ||
-               LOCATION_PATTERN.matcher(lower).find();
+               LOCATION_PATTERN.matcher(lower).find() ||
+               ROLE_PATTERN.matcher(lower).find();
     }
 
     @Override
@@ -68,7 +70,7 @@ public class IdentityExtractionReflex implements AgentReflex {
             
             // Re-inject dropped pronouns for compound verbs (e.g. "i am Srini and love to study")
             String lower = clause.toLowerCase();
-            boolean isFirstPerson = lower.startsWith("i ") || lower.startsWith("my ");
+            boolean isFirstPerson = lower.startsWith("i ") || lower.startsWith("i'm") || lower.startsWith("my ") || lower.contains(" i ") || lower.contains(" i'm");
             
             if (!isFirstPerson && prevWasFirstPerson) {
                 clause = "i " + clause;
@@ -83,6 +85,7 @@ public class IdentityExtractionReflex implements AgentReflex {
             extractAndIngest(clause, LIKE_PATTERN, IdentityLabel.USER_LIKE);
             extractAndIngest(clause, EMPLOYER_PATTERN, IdentityLabel.USER_EMPLOYER);
             extractAndIngest(clause, LOCATION_PATTERN, IdentityLabel.USER_LOCATION);
+            extractAndIngest(clause, ROLE_PATTERN, IdentityLabel.USER_ROLE);
         }
 
         // Forward to the LLM without blocking
@@ -121,6 +124,7 @@ public class IdentityExtractionReflex implements AgentReflex {
             case USER_LIKE -> "The user enjoys " + value + ".";
             case USER_EMPLOYER -> "The user works at " + value + ".";
             case USER_LOCATION -> "The user is based in " + value + ".";
+            case USER_ROLE -> "The user's role involves " + value + ".";
             default -> "User identity fact: " + value;
         };
     }

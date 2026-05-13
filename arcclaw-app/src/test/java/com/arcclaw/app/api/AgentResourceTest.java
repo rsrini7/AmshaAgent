@@ -64,6 +64,7 @@ class AgentResourceTest {
 
                 Mockito.when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
                 Mockito.when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
+                Mockito.when(apiKeyRegistry.isMutationAllowed(anyString())).thenReturn(true);
 
                 // Mock store to return a valid (completed) checkpoint for status checks
                 AgentCheckpoint checkpoint = new AgentCheckpoint();

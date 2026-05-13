@@ -1,7 +1,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
-import { McpServerRequest } from '../api/types';
+import { McpServerRequest } from '../api/generated/models/McpServerRequest';
 
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {

@@ -78,8 +78,8 @@ class TelegramCallbackHandlerExpiryGuardTest {
 
         handler.handleCallback(exchange);
 
-        // Verify keyboard is cleared
-        verify(sender).editMessage(eq("1001"), eq(101), eq(null), eq(null));
+        // Verify keyboard is cleared and message shows result
+        verify(sender).editMessage(eq("1001"), eq(101), eq("❌ Rejected: dummy_tool"), eq(null));
         // Verify no message was sent (A3: uses toast instead)
         verify(sender, never()).sendRaw(any(ChannelUser.class), anyString());
     }
@@ -92,8 +92,8 @@ class TelegramCallbackHandlerExpiryGuardTest {
 
         handler.handleCallback(exchange);
 
-        // Verify keyboard is cleared
-        verify(sender).editMessage(eq("1001"), eq(101), eq(null), eq(null));
+        // Verify keyboard is cleared and message shows result
+        verify(sender).editMessage(eq("1001"), eq(101), eq("✅ Approved: dummy_tool"), eq(null));
         // Verify no message was sent (A3: uses toast instead)
         verify(sender, never()).sendRaw(any(ChannelUser.class), anyString());
     }

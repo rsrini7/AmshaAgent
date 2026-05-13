@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { AgentStatusDto, PendingApprovalDto, AgentEvent } from '../api/types';
+import { AgentStatusDto, AgentEvent } from '../api/generated/models';
+import { PendingApprovalDto } from '../api/types';
 import { ArcClient } from '../api/client';
 import { SseManager } from '../api/sse';
 
@@ -274,7 +275,8 @@ export class ArcShell extends LitElement {
   private async _fetchApprovals() {
     if (!this._client) return;
     try {
-      this._pendingApprovals = await this._client.getHitl();
+      const result = await this._client.getHitl();
+      this._pendingApprovals = result.items;
     } catch (err: any) {
       if (err.message?.includes('401')) {
         this._handleUnauthorized();

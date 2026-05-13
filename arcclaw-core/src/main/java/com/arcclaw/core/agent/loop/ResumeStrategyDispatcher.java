@@ -165,7 +165,9 @@ class ResumeStrategyDispatcher {
                     }
                     return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
                 } else {
-                    return null;
+                    String failMsg = response.output() != null ? response.output() : "Tool execution failed";
+                    return AgentResult.failed(failMsg,
+                            AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
                 }
             } catch (Exception e) {
                 long retryAfter = AgentErrorMessageUtil.parseRetryAfterMillis(e);

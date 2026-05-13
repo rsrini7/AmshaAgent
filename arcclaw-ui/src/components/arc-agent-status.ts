@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { AgentStatusDto } from '../api/types';
+import { AgentStatusDto } from '../api/generated/models/AgentStatusDto';
 
 const AUTONOMY_LABELS: Record<string, string> = {
   readonly:   '👁 Read Only',
@@ -80,12 +80,14 @@ export class ArcAgentStatus extends LitElement {
   }
 
   private renderCard(agent: AgentStatusDto) {
-    const dName = this.displayName(agent.agentName);
-    const color = AUTONOMY_COLORS[agent.autonomyLevel] || 'var(--border)';
-    const autLabel = AUTONOMY_LABELS[agent.autonomyLevel] || agent.autonomyLevel;
-    const task = agent.currentTask || 'Agent is currently idle.';
-      
-    const tokenDisplay = agent.tokenCount > 0 ? `${agent.tokenCount.toLocaleString()} TOKENS` : '0 TOKENS';
+    const dName = this.displayName(agent.agentName ?? '');
+    const autonomyLevel = agent.autonomyLevel ?? 'readonly';
+    const color = AUTONOMY_COLORS[autonomyLevel] || 'var(--border)';
+    const autLabel = AUTONOMY_LABELS[autonomyLevel] || autonomyLevel;
+    const task = agent.currentTask ?? 'Agent is currently idle.';
+    const tokenCount = agent.tokenCount ?? 0;
+    const tokenDisplay = tokenCount > 0 ? `${tokenCount.toLocaleString()} TOKENS` : '0 TOKENS';
+    const status = agent.status ?? 'idle';
 
     return html`
       <div class="card" style="--autonomy-color: ${color}">
@@ -94,10 +96,10 @@ export class ArcAgentStatus extends LitElement {
           <div class="name-col">
             <span class="name">${dName}</span>
           </div>
-          <span class="status-badge status-${agent.status}">${agent.status.replace('_', ' ')}</span>
+          <span class="status-badge status-${status}">${status.replace('_', ' ')}</span>
         </div>
         <div class="autonomy-chip">${autLabel}</div>
-        <div class="task" title="${agent.currentTask || ''}">${task}</div>
+        <div class="task" title="${task}">${task}</div>
         <div class="footer-row">
           <div class="tokens">${tokenDisplay}</div>
         </div>

@@ -100,6 +100,14 @@ public class ToolResultProcessor {
             writer.saveAnswer(ctx.sessionId(), obs);
             return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
         }
+        // Delegation paused for human approval — terminal with message, don't retry.
+        // The delegate checkpoint is AWAITING_APPROVAL with channel info so the user
+        // can approve the inner session directly.
+        if (res != null && !res.success() && obs.contains("paused for human approval")) {
+            String msg = "⏳ " + obs;
+            writer.saveAnswer(ctx.sessionId(), msg);
+            return StepDecision.terminal(AgentResult.finished(msg, List.copyOf(history)));
+        }
         return null;
     }
 

@@ -1,12 +1,3 @@
-export interface AgentStatusDto {
-  agentName: string;
-  role: string;
-  status: 'active' | 'idle' | 'waiting_approval' | 'error';
-  currentTask: string | null;
-  autonomyLevel: 'readonly' | 'background' | 'supervised' | 'full';
-  tokenCount: number;
-}
-
 export interface PendingApprovalDto {
   taskId: string;
   toolName: string;
@@ -18,15 +9,7 @@ export interface PendingApprovalDto {
 export interface ToolDto {
   name: string;
   description: string;
-  inputSchema: string | null; // serialized JSON of JsonObjectSchema
-}
-
-export interface SkillDto {
-    id: string;
-    name: string;
-    description: string;
-    source: string;
-    triggerPatterns: string[];
+  inputSchema: string | null;
 }
 
 export interface ApprovalResultDto {
@@ -54,13 +37,6 @@ export interface WsAssistantMessage {
 
 export type WsInboundFrame = WsConnectedEvent | WsAssistantMessage;
 
-// SSE Event Shapes
-export interface AgentEvent {
-  eventType: 'status_change' | 'heartbeat';
-  agentName: string;
-  payload: string;
-}
-
 export function parseAgentPayload(payload: string): { status: string; task: string | null } {
   const sep = payload.indexOf(' : ');
   if (sep === -1) return { status: payload.trim(), task: null };
@@ -74,15 +50,6 @@ export interface OnboardingStatusDto {
   provider: string | null;
   model: string | null;
   credentialsValidated: boolean;
-}
-
-export interface McpServerRequest {
-  name: string;
-  transport: 'sse' | 'stdio';
-  url?: string;
-  command?: string;
-  args?: string;
-  env?: string;
 }
 
 export interface OnboardingCompleteDto {
