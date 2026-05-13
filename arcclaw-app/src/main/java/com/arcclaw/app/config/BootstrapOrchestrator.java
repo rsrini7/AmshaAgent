@@ -23,8 +23,8 @@ public class BootstrapOrchestrator {
         EnvConfigInitializer.loadDotEnv(binaryDir);
         
         normalizePlaywrightPath(binaryDir);
-        PlaywrightBrowserInstaller.extractDriverIfNeeded(binaryDir);
-        
+        PlaywrightCliInstaller.ensureCliInstalled();
+
         ensureFallbackLlmDefaults();
         EnvConfigInitializer.validateAndAutoFixSecurityKeys(binaryDir);
         

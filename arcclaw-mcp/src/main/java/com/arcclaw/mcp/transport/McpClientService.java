@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
@@ -36,6 +38,7 @@ import io.micrometer.core.instrument.Timer;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.eclipse.microprofile.faulttolerance.Retry;
@@ -70,6 +73,10 @@ public class McpClientService {
     
     private final AtomicInteger requestIdGen = new AtomicInteger(1);
     private HttpClient httpClient;
+    private ScheduledExecutorService healthCheckExecutor;
+
+    @ConfigProperty(name = "arcclaw.mcp.health-check-interval-ms", defaultValue = "15000")
+    long healthCheckIntervalMs;
 
     private record StdioConfig(String command, List<String> args, Map<String, String> env) {}
 
@@ -79,6 +86,42 @@ public class McpClientService {
             .executor(getExecutor())
             .connectTimeout(Duration.ofSeconds(5))
             .build();
+        startHealthCheck();
+    }
+
+    private void startHealthCheck() {
+        if (healthCheckIntervalMs <= 0) return;
+        healthCheckExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "mcp-health-check");
+            t.setDaemon(true);
+            return t;
+        });
+        healthCheckExecutor.scheduleWithFixedDelay(this::healthCheck,
+            healthCheckIntervalMs, healthCheckIntervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void healthCheck() {
+        for (String serverName : processes.keySet()) {
+            Process p = processes.get(serverName);
+            if (p != null && !p.isAlive()) {
+                log.warnf("Health check: MCP STDIO server '%s' process is dead, initiating reconnect", serverName);
+                StdioConfig cfg = stdioConfigs.get(serverName);
+                if (cfg != null) {
+                    ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+                    lock.lock();
+                    try {
+                        cleanupStdio(serverName);
+                        connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
+                    } catch (Exception e) {
+                        log.errorf("Health check reconnect failed for %s: %s", serverName, e.getMessage());
+                    } finally {
+                        lock.unlock();
+                    }
+                } else {
+                    cleanupStdio(serverName);
+                }
+            }
+        }
     }
 
     @Timeout(10000)
@@ -394,6 +437,17 @@ public class McpClientService {
     @PreDestroy
     void cleanup() {
         log.info("McpClientService shutting down - terminating local MCP processes");
+        if (healthCheckExecutor != null) {
+            healthCheckExecutor.shutdown();
+            try {
+                if (!healthCheckExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+                    healthCheckExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                healthCheckExecutor.shutdownNow();
+            }
+        }
         processes.forEach((name, process) -> {
             process.destroy();
             try {

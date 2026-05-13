@@ -83,18 +83,24 @@ public class TelegramAgentHandler {
             return;
         }
 
-        AtomicBoolean flag = processingFlags.get(chatId, id -> new AtomicBoolean(false));
-        if (!flag.compareAndSet(false, true)) {
-            sender.sendRaw(user, "⏳ Still processing your previous message. Please wait.");
-            return;
-        }
+        // Let reflex/slash commands through even if processing — they are fast
+        // and the user needs to check status or approve/deny while waiting.
+        boolean isReflex = text != null && (text.trim().startsWith("/")
+            || text.trim().startsWith("@"));
+        AtomicBoolean flag = null;
+        if (!isReflex) {
+            flag = processingFlags.get(chatId, id -> new AtomicBoolean(false));
+            if (!flag.compareAndSet(false, true)) {
+                sender.sendRaw(user, "⏳ Still processing your previous message. Please wait.");
+                return;
+            }
 
-        // Action acknowledgment
-        if (text != null && !text.trim().startsWith("/")) {
+            // Action acknowledgment
             sender.sendRaw(user, "⏳");
         }
 
         log.infof("TELEGRAM-RECV Message received for chat %s, delegating to SPI", chatId);
+        AtomicBoolean flagRef = flag;
         channelServices.processAsync(channelMessage)
             .handle((res, ex) -> {
                 if (ex != null) {
@@ -103,7 +109,9 @@ public class TelegramAgentHandler {
                                ExceptionUtils.getStackTrace(ex).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
                     sender.sendRaw(user, "Sorry, an internal error occurred while processing your message.");
                 }
-                flag.set(false);
+                if (flagRef != null) {
+                    flagRef.set(false);
+                }
                 return null;
             });
     }

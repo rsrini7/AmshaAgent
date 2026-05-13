@@ -62,6 +62,7 @@ arcclaw-app/src/main/resources/env-example
 
 .playwright-browsers/
 .playwright-driver/
+.playwright-cli/
 
 arcclaw-source.zip
 arcclaw-source.7z

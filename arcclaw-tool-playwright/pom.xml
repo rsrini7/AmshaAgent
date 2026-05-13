@@ -13,8 +13,8 @@
 
   <artifactId>arcclaw-tool-playwright</artifactId>
   <name>arcclaw-tool-playwright</name>
-  <description>Playwright headless browser tool for ArcClaw. Provides the `browser_navigate` capability,
-allowing agents to read JavaScript-rendered pages that are inaccessible to plain HTTP fetch.</description>
+  <description>Playwright headless browser tool for ArcClaw. Provides the `browser_navigate` capability
+by shelling out to the official @playwright/cli daemon (Node.js 20+ required).</description>
 
   <dependencies>
     <!-- Core only - §16.1: tool modules MUST NOT depend on arcclaw-app -->
@@ -26,12 +26,6 @@ allowing agents to read JavaScript-rendered pages that are inaccessible to plain
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-arc</artifactId>
-    </dependency>
-    <!-- Playwright Java via Quarkiverse extension — supports native image -->
-    <dependency>
-      <groupId>io.quarkiverse.playwright</groupId>
-      <artifactId>quarkus-playwright</artifactId>
-      <version>2.2.1</version>
     </dependency>
 
     <dependency>

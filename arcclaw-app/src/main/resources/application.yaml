@@ -437,14 +437,8 @@ arcclaw:
       repos-per-page: ${ARCCLAW_GITHUB_REPOS_PER_PAGE:100}
     playwright:
       enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
-      headless: true
       timeout-ms: 30000
-      min-content-chars: 500   # minimum chars for a selector result to be accepted
-      min-filter-chars: 15     # minimum chars per individual text node to include
-      selector-wait-ms: 2000
-      max-screenshot-bytes: ${ARCCLAW_TOOLS_PLAYWRIGHT_MAX_SCREENSHOT_BYTES:1048576}
-      network-idle-ratio: ${ARCCLAW_TOOLS_PLAYWRIGHT_NETWORK_IDLE_RATIO:0.30}
-      run-future-buffer-ms: ${ARCCLAW_TOOLS_PLAYWRIGHT_RUN_FUTURE_BUFFER_MS:5000}
+      headless: "${ARCCLAW_TOOLS_PLAYWRIGHT_HEADLESS:true}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
@@ -754,7 +748,7 @@ mp:
       stalled-threshold-minutes: 15
     tools:
       # Slow tools that should be isolated to the 'external-tool-executor' bulkhead (§T5-2)
-      external-tools: "playwright_navigate,playwright_click,playwright_type,playwright_press,playwright_select,playwright_scroll,playwright_screenshot,playwright_content,web_search"
+      external-tools: "browser_navigate,web_search"
     parallel:
       tool-timeout-seconds: 60
     notification:
