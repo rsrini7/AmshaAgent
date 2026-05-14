@@ -1,0 +1,42 @@
+package com.arcclaw.persistence.fs;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.persistence.api.ChatMemoryDto;
+import com.arcclaw.persistence.api.ChatMemoryStorePort;
+import io.quarkus.arc.Unremovable;
+
+@ApplicationScoped
+@Unremovable
+public class FsChatMemoryStoreAdapter implements ChatMemoryStorePort {
+
+    private static final String DOMAIN = "chat-memory";
+
+    @Inject
+    FilesystemFileStore store;
+
+    @Override
+    public void save(ChatMemoryDto dto) {
+        store.write(List.of(DOMAIN, dto.memoryId() + ".json"), dto);
+    }
+
+    @Override
+    public Optional<ChatMemoryDto> findById(String memoryId) {
+        return store.readOptional(List.of(DOMAIN, memoryId + ".json"), ChatMemoryDto.class);
+    }
+
+    @Override
+    public void deleteById(String memoryId) {
+        store.delete(List.of(DOMAIN, memoryId + ".json"));
+    }
+
+    @Override
+    public List<Long> getTimestamps(String memoryId) {
+        return Collections.emptyList();
+    }
+}

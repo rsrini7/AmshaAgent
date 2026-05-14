@@ -17,6 +17,7 @@
     <module>arcclaw-persistence-api</module>
     <module>arcclaw-core</module>
     <module>arcclaw-persistence-sqlite</module>
+    <module>arcclaw-persistence-fs</module>
     <module>arcclaw-persistence-postgres</module>
     <module>arcclaw-rag</module>
     <module>arcclaw-mcp</module>
@@ -80,6 +81,11 @@
       <dependency>
         <groupId>com.arcclaw</groupId>
         <artifactId>arcclaw-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.arcclaw</groupId>
+        <artifactId>arcclaw-persistence-fs</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
