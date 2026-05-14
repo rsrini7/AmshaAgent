@@ -1,19 +1,21 @@
 package com.arcclaw.core.agent.reasoning;
 
-import java.time.Duration;
-
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
+import com.arcclaw.core.routing.ChatModelFactory;
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * {@link AgentChatModelProvider} for the Groq inference API (SPI 1 - agent reasoning engine).
+ * {@link AgentChatModelProvider} for the Groq inference API.
  * Groq uses the OpenAI API protocol, pointed at api.groq.com.
  */
 @ApplicationScoped
 public class GroqProviderFactory implements AgentChatModelProvider {
+
+    @Inject
+    AgentLlmConfig agentConfig;
 
     @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
                     defaultValue = "https://api.groq.com/openai/v1")
@@ -26,26 +28,6 @@ public class GroqProviderFactory implements AgentChatModelProvider {
                     defaultValue = "llama-3.3-70b-versatile")
     String modelName;
 
-    @ConfigProperty(name = "arcclaw.llm.max-output-tokens",
-                    defaultValue = "8192")
-    int maxTokens;
-
-    @ConfigProperty(name = "arcclaw.llm.temperature", defaultValue = "0.1")
-    double temperature;
-
-    @ConfigProperty(name = "arcclaw.llm.timeout",
-                    defaultValue = "PT60S")
-    Duration timeout;
-
-    @ConfigProperty(name = "arcclaw.llm.log-http", defaultValue = "false")
-    boolean logHttp;
-
-    @ConfigProperty(name = "arcclaw.llm.max-retries", defaultValue = "3")
-    int maxRetries;
-
-    @ConfigProperty(name = "arcclaw.llm.structured-output-mode", defaultValue = "NATIVE")
-    StructuredOutputMode structuredOutputMode;
-
     @Override
     public String providerName() {
         return "groq";
@@ -53,21 +35,14 @@ public class GroqProviderFactory implements AgentChatModelProvider {
 
     @Override
     public StructuredOutputMode structuredOutputMode() {
-        return structuredOutputMode;
+        return agentConfig.structuredOutputMode();
     }
 
     @Override
     public ChatModel create() {
-        return OpenAiChatModel.builder()
-            .baseUrl(baseUrl)
-            .apiKey(apiKey)
-            .modelName(modelName)
-            .maxTokens(maxTokens)
-            .timeout(timeout)
-            .maxRetries(maxRetries)
-            .temperature(temperature)
-            .logRequests(logHttp)
-            .logResponses(logHttp)
-            .build();
+        return ChatModelFactory.createOpenAi(
+                baseUrl, apiKey, modelName,
+                agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
+                agentConfig.temperature(), agentConfig.logHttp());
     }
 }

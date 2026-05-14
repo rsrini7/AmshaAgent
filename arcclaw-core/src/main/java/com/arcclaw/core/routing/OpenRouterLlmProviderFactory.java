@@ -1,11 +1,8 @@
 package com.arcclaw.core.routing;
 
-import java.util.Map;
-
 import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
@@ -25,19 +22,17 @@ public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
-        return OpenAiChatModel.builder()
-                .baseUrl(config.baseUrl())
-                .apiKey(config.apiKey()
-                        .orElseThrow(() -> new IllegalStateException(
-                                "OpenRouter requires apiKey - set ARCCLAW_LLM_API_KEY=sk-or-v1-...")))
-                .modelName(config.modelName())
-                .maxTokens(config.maxTokens().orElse(null))
-                .timeout(config.timeout().orElse(null))
-                .maxRetries(config.maxRetries().orElse(3))
-                .customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName))
-                .temperature(0.0)
-                .logRequests(false)
-                .logResponses(false)
+        return ChatModelFactory.withOpenRouterHeaders(
+                ChatModelFactory.openAiBuilder(
+                        config.baseUrl(),
+                        config.apiKey().orElseThrow(() -> new IllegalStateException(
+                                "OpenRouter requires apiKey - set ARCCLAW_LLM_API_KEY=sk-or-v1-...")),
+                        config.modelName(),
+                        config.maxTokens().orElse(null),
+                        config.timeout().orElse(null),
+                        config.maxRetries().orElse(3),
+                        0.0, false, false),
+                siteUrl, appName)
                 .build();
     }
 }

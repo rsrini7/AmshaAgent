@@ -5,7 +5,6 @@ import java.time.Duration;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 
 @ApplicationScoped
 public class NvidiaLlmProviderFactory implements RoutingChatModelProvider {
@@ -17,17 +16,15 @@ public class NvidiaLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
-        ChatModel base = OpenAiChatModel.builder()
-            .baseUrl(config.baseUrl())
-            .apiKey(config.apiKey().orElseThrow(() -> new IllegalStateException("NVIDIA requires apiKey")))
-            .modelName(config.modelName())
-            .maxTokens(config.maxTokens().orElse(null))
-            .timeout(config.timeout().orElse(Duration.ofSeconds(30)))
-            .maxRetries(config.maxRetries().orElse(3))
-            .temperature(0.0)
-            .logRequests(false)
-            .logResponses(false)
-            .build();
+        ChatModel base = ChatModelFactory.openAiBuilder(
+                config.baseUrl(),
+                config.apiKey().orElseThrow(() -> new IllegalStateException("NVIDIA requires apiKey")),
+                config.modelName(),
+                config.maxTokens().orElse(null),
+                config.timeout().orElse(Duration.ofSeconds(30)),
+                config.maxRetries().orElse(3),
+                0.0, false, false)
+                .build();
 
         return new NvidiaMessageSanitizer(base);
     }
