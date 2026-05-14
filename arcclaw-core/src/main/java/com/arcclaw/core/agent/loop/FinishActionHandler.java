@@ -160,7 +160,11 @@ public class FinishActionHandler {
         AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(answer, history);
         answer = guardResult.answer();
         if (guardResult.isFailure()) {
-            log.warnf("FINISH-GUARD failure in session %s: %s (possible model collapse)", sessionId, guardResult.failureReason());        
+            log.warnf("FINISH-GUARD failure in session %s: %s (possible model collapse)", sessionId, guardResult.failureReason());
+            ReasoningStep correctedStep = step.withObservation("Quality guard rejected the answer: " + guardResult.failureReason());
+            String hint = "Your previous answer was rejected by the quality guard (" + guardResult.failureReason()
+                    + "). Please provide a complete, well-formed response. Do NOT output raw JSON, tool calls, or placeholders.";
+            return new FinishOutcome.Correction(correctedStep, hint);
         }
 
         // --- Observers ---
