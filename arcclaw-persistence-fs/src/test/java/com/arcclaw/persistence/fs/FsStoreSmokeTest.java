@@ -1,5 +1,7 @@
 package com.arcclaw.persistence.fs;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -7,15 +9,14 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.arcclaw.persistence.api.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-import com.arcclaw.persistence.api.*;
 
 class FsStoreSmokeTest {
 
@@ -309,7 +310,7 @@ class FsStoreSmokeTest {
     @Test
     void testMemoryRetrieval() {
         memoryStore.loadExistingIndex();
-        IngestResult result = memoryStore.index(new MemoryEntryDto("mem1", "hello world", java.util.Map.of()));
+        IngestResult result = memoryStore.index(new MemoryEntryDto("mem1", "hello world", Map.of()));
         assertNotNull(result.id());
         assertEquals(1, memoryStore.search("hello", 10, null).size());
         assertEquals(0, memoryStore.search("goodbye", 10, null).size());

@@ -3,6 +3,8 @@ package com.arcclaw.persistence.fs;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -94,11 +96,11 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
     }
 
     @SuppressWarnings("unused")
-    private record IndexEntry(String id, String idempotencyKey, String eventType, java.time.Instant timestamp) {}
+    private record IndexEntry(String id, String idempotencyKey, String eventType, Instant timestamp) {}
 
     @SuppressWarnings("unused")
     private static class SessionIndex {
         public long maxSequence = 0;
-        public List<IndexEntry> events = new java.util.ArrayList<>();
+        public List<IndexEntry> events = new ArrayList<>();
     }
 }

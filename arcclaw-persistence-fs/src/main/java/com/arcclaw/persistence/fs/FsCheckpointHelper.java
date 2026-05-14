@@ -2,7 +2,9 @@ package com.arcclaw.persistence.fs;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -84,11 +86,11 @@ public class FsCheckpointHelper {
     static String updateJsonMap(String json, String key, String value) {
         try {
             ObjectMapper mapper = new ObjectMapper();
-            java.util.Map<String, String> map;
+            Map<String, String> map;
             if (json == null || json.isBlank() || json.equals("{}")) {
-                map = new java.util.LinkedHashMap<>();
+                map = new LinkedHashMap<>();
             } else {
-                map = mapper.readValue(json, new TypeReference<java.util.Map<String, String>>() {});
+                map = mapper.readValue(json, new TypeReference<Map<String, String>>() {});
             }
             map.put(key, value);
             return mapper.writeValueAsString(map);

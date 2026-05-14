@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,7 +59,7 @@ public class FsLockManager implements AdvisoryLockPort {
             RandomAccessFile raf = new RandomAccessFile(lockFile.toFile(), "rw");
             FileChannel channel = raf.getChannel();
             try {
-                java.nio.channels.FileLock fileLock = channel.tryLock();
+                FileLock fileLock = channel.tryLock();
                 if (fileLock != null) {
                     raf.writeBytes(Instant.now().plusSeconds(timeoutSeconds).toString());
                     raf.getFD().sync();
@@ -116,5 +117,5 @@ public class FsLockManager implements AdvisoryLockPort {
         return locksDir.resolve(safeName + ".lock");
     }
 
-    private record LockHolder(RandomAccessFile raf, FileChannel channel, java.nio.channels.FileLock fileLock) {}
+    private record LockHolder(RandomAccessFile raf, FileChannel channel, FileLock fileLock) {}
 }

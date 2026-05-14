@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -226,7 +227,7 @@ public class FsCronStoreAdapter implements CronStorePort {
         return true;
     }
 
-    private void updateWithLock(String id, java.util.function.UnaryOperator<AgentCronDto> updater) {
+    private void updateWithLock(String id, UnaryOperator<AgentCronDto> updater) {
         if (id == null || id.isBlank()) {
             log.warnf("updateWithLock called with null/blank id - skipping");
             return;

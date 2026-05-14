@@ -1,5 +1,6 @@
 package com.arcclaw.persistence.fs;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
@@ -52,8 +53,8 @@ public class FsSecretStoreAdapter implements SecretStorePort {
                 dto.sessionId(),
                 dto.keyName(),
                 dto.encryptionKeyVersion(),
-                java.util.Base64.getEncoder().encodeToString(dto.ciphertext()),
-                java.util.Base64.getEncoder().encodeToString(dto.nonce())
+                Base64.getEncoder().encodeToString(dto.ciphertext()),
+                Base64.getEncoder().encodeToString(dto.nonce())
             );
         }
 
@@ -62,8 +63,8 @@ public class FsSecretStoreAdapter implements SecretStorePort {
                 sessionId,
                 keyName,
                 encryptionKeyVersion,
-                java.util.Base64.getDecoder().decode(ciphertextBase64),
-                java.util.Base64.getDecoder().decode(nonceBase64)
+                Base64.getDecoder().decode(ciphertextBase64),
+                Base64.getDecoder().decode(nonceBase64)
             );
         }
     }
