@@ -235,7 +235,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) {
-        return findLatestBySessionAndStatus(sessionId, "AWAITING_APPROVAL");
+        return findLatestBySessionAndStatus(sessionId, CheckpointStatus.AWAITING_APPROVAL.name());
     }
 
     @Override
@@ -352,7 +352,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public void archive(Long checkpointId) {
-        transitionStatus(checkpointId, "ARCHIVED");
+        transitionStatus(checkpointId, CheckpointStatus.ARCHIVED.name());
     }
 
     @Override

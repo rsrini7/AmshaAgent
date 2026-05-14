@@ -13,6 +13,7 @@ import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.state.CheckpointStatus;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -67,7 +68,7 @@ public class AgentResponseMapper {
             case AgentResult.LoopExceeded l -> Response.status(408)
                     .entity(new ArcClawErrorResponse(
                             "Iteration limit " + l.maxIterations() + " reached",
-                            "LOOP_EXCEEDED"))
+                            CheckpointStatus.LOOP_EXCEEDED.name()))
                     .build();
             case AgentResult.Failed f -> mapFailedResponse(f);
         };

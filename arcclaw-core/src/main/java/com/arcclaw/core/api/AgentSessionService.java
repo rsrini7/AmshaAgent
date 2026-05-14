@@ -176,7 +176,7 @@ public class AgentSessionService {
             return Response.status(Response.Status.CONFLICT)
                     .entity(Map.of(
                         "error",  "Session is awaiting human approval",
-                        "code",   "AWAITING_APPROVAL",
+                        "code",   CheckpointStatus.AWAITING_APPROVAL.name(),
                         "hint",   "Use POST /sessions/" + sessionId + "/approve to proceed"
                     ))
                     .build();
@@ -222,13 +222,13 @@ public class AgentSessionService {
                 if ("approve".equalsIgnoreCase(goal) || "/approve".equalsIgnoreCase(goal)) {
                     AgentCheckpoint cp = checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
                     checkpointApprovalService.triggerResume(cp);
-                    response.resume(Response.accepted(Map.of("status", "APPROVED")).build());
+                    response.resume(Response.accepted(Map.of("status", CheckpointStatus.APPROVED.name())).build());
                     return;
                 }
                 if ("deny".equalsIgnoreCase(goal) || "/deny".equalsIgnoreCase(goal)) {
                     AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                     checkpointApprovalService.triggerResume(cp);
-                    response.resume(Response.ok(Map.of("status", "DENIED")).build());
+                    response.resume(Response.ok(Map.of("status", CheckpointStatus.DENIED.name())).build());
                     return;
                 }
 
@@ -321,7 +321,7 @@ public class AgentSessionService {
                             return Response.serverError().entity(Map.of("error", e.getMessage())).build();
                         }
                     })
-                    .orElseGet(() -> Response.ok(Map.of("sessionId", sessionId, "status", "NOT_STARTED")).build());
+                    .orElseGet(() -> Response.ok(Map.of("sessionId", sessionId, "status", CheckpointStatus.NOT_STARTED.name())).build());
         } catch (Exception e) {
             return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", e.getMessage())).build();
         }
