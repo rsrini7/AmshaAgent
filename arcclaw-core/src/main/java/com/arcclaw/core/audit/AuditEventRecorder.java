@@ -1,10 +1,7 @@
 package com.arcclaw.core.audit;
 
-import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -16,15 +13,10 @@ import io.quarkus.arc.Unremovable;
 
 @ApplicationScoped
 @Unremovable
-public class AuditEventRepository {
+public class AuditEventRecorder {
 
     @Inject
     AuditEventStorePort auditStore;
-
-    @PostConstruct
-    void warmupQueryCache() {
-        // Force HQL compilation at startup - now handled by adapter
-    }
 
     @Inject
     AuditHashUtil hashUtil;
@@ -32,9 +24,6 @@ public class AuditEventRepository {
     @Inject
     SessionAuditSequencer sequencer;
 
-    /**
-     * Persists an AuditEvent and computes its HMAC chain fields.
-     */
     @Transactional
     public void record(AuditEvent event) {
         if (event.getIdempotencyKey() != null) {
@@ -59,10 +48,6 @@ public class AuditEventRepository {
         }
     }
 
-    /**
-     * Defensive pre-persist validation.
-     * Catches any null-escape from hash utilities before hitting the DB NOT NULL constraint.
-     */
     public void validateBeforePersist(AuditEvent event) {
         if (event.getSessionId() == null || event.getSessionId().isBlank())
             throw new IllegalStateException("AuditEvent.sessionId must not be null/blank");
@@ -74,47 +59,9 @@ public class AuditEventRepository {
             throw new IllegalStateException("AuditEvent.sequence must be >= 0");
     }
 
-    /**
-     * Retrieves the latest HMAC hash for a specific session to continue the chain.
-     */
     @Transactional(Transactional.TxType.SUPPORTS)
     public String findLatestHash(String sessionId) {
         return auditStore.findLatestHash(sessionId).orElse(null);
-    }
-
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public List<AuditEvent> findBySessionId(String sessionId) {
-        return auditStore.findBySessionId(sessionId).stream()
-                .map(this::toEntity)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(Transactional.TxType.SUPPORTS)
-    public boolean hasEventInSession(String sessionId, SecurityEventType eventType) {
-        return auditStore.countEventsByType(sessionId, eventType.name()) > 0;
-    }
-
-    private AuditEventEntity toEntity(AuditEventDto dto) {
-        AuditEventEntity entity = new AuditEventEntity();
-        entity.setId(dto.id());
-        entity.setSessionId(dto.sessionId());
-        entity.setUserId(dto.userId());
-        entity.setAgentRole(dto.agentRole());
-        entity.setGoalHash(dto.goalHash());
-        entity.setOutcome(dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null);
-        entity.setEventType(dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null);
-        entity.setEventDetail(dto.eventDetail());
-        entity.setInputTokens(dto.inputTokens());
-        entity.setOutputTokens(dto.outputTokens());
-        entity.setUsdCost(dto.usdCost());
-        entity.setTimestamp(dto.timestamp());
-        entity.setIterationsUsed(dto.iterationsUsed());
-        entity.setAppVersion(dto.appVersion());
-        entity.setIdempotencyKey(dto.idempotencyKey());
-        entity.setSequence(dto.sequence());
-        entity.setHmacHash(dto.hmacHash());
-        entity.setPrevHash(dto.prevHash());
-        return entity;
     }
 
     private AuditEventDto toDto(AuditEvent entity) {

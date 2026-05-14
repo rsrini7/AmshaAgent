@@ -18,14 +18,14 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.event.FlushQueuedNotifications;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
-import com.arcclaw.core.domain.model.AgentCron;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.persistence.api.CronStorePort;
 import org.jboss.logging.Logger;
 
 /**
@@ -37,14 +37,14 @@ public class CronResultHandler {
 
     private static final Logger log = Logger.getLogger(CronResultHandler.class);
 
-    private final AgentCronRepository cronRepository;
+    private final CronStorePort cronStore;
     private final AuditService auditService;
     private final WorkspaceManager workspaceManager;
     private final Event<AgentJobCompleted> jobCompletedEvent;
     private final StatefulAgentStore statefulAgentStore;
 
     protected CronResultHandler() {
-        this.cronRepository = null;
+        this.cronStore = null;
         this.auditService = null;
         this.workspaceManager = null;
         this.jobCompletedEvent = null;
@@ -52,12 +52,12 @@ public class CronResultHandler {
     }
 
     @Inject
-    public CronResultHandler(AgentCronRepository cronRepository,
+    public CronResultHandler(CronStorePort cronStore,
                              AuditService auditService,
                              WorkspaceManager workspaceManager,
                              Event<AgentJobCompleted> jobCompletedEvent,
                              StatefulAgentStore statefulAgentStore) {
-        this.cronRepository = cronRepository;
+        this.cronStore = cronStore;
         this.auditService = auditService;
         this.workspaceManager = workspaceManager;
         this.jobCompletedEvent = jobCompletedEvent;
@@ -114,7 +114,7 @@ public class CronResultHandler {
 
     // Handles AwaitingApproval - session must stay alive for ApproveReflex
     private void handleApprovalPause(AgentCron job, String cronSessionId, String executionId, AgentResult.AwaitingApproval result) {
-        cronRepository.markAwaitingApproval(job.getId());
+        cronStore.markAwaitingApproval(job.getId());
         log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
                 job.getId(), result.toolName());
 
@@ -140,7 +140,7 @@ public class CronResultHandler {
     }
 
     public void handleFailure(AgentCron job, String cronSessionId, String executionId, Throwable t) {
-        cronRepository.markFailed(job.getId(), t.getMessage());
+        cronStore.markFailed(job.getId(), t.getMessage());
         
         auditService.record(cronSessionId, job.getUserId(),
                 AgentRoleEnum.COORDINATOR.toScopedName(),
@@ -162,7 +162,7 @@ public class CronResultHandler {
     private void handleFinalResult(AgentCron job, String cronSessionId, AgentResult result) {
         if (result instanceof AgentResult.Finished) {
             if (job.isRunOnce()) {
-                cronRepository.markCompleted(job.getId(), Instant.now());
+                cronStore.markCompleted(job.getId(), Instant.now());
                 auditService.record(cronSessionId, job.getUserId(),
                         AgentRoleEnum.COORDINATOR.toScopedName(),
                         SecurityEventType.CRONFIRED,
@@ -170,7 +170,7 @@ public class CronResultHandler {
                 log.infof("CRON-COMPLETED one-shot cronId=%s", job.getId());
             } else {
                 Instant next = CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone());
-                cronRepository.markFired(job.getId(), Instant.now(), next);
+                cronStore.markFired(job.getId(), Instant.now(), next);
                 auditService.record(cronSessionId, job.getUserId(),
                         AgentRoleEnum.COORDINATOR.toScopedName(),
                         SecurityEventType.CRONFIRED,
@@ -178,7 +178,7 @@ public class CronResultHandler {
                 log.infof("CRON-FIRED cronId=%s nextFire=%s", job.getId(), next);
             }
         } else {
-            cronRepository.markFailed(job.getId(), AgentResultFormatter.format(result));
+            cronStore.markFailed(job.getId(), AgentResultFormatter.format(result));
             auditService.record(cronSessionId, job.getUserId(),
                     AgentRoleEnum.COORDINATOR.toScopedName(),
                     SecurityEventType.CRONFAILED,

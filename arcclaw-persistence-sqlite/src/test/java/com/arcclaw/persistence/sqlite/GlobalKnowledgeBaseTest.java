@@ -22,8 +22,8 @@ import java.util.Locale;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 
-import com.arcclaw.core.state.RagChunkEntity;
 import com.arcclaw.persistence.api.MemoryChunkDto;
+import com.arcclaw.persistence.sqlite.entity.RagChunkEntity;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;

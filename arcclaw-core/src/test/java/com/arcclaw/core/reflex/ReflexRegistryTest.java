@@ -20,11 +20,11 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.governance.GovernanceLayer;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -152,7 +152,7 @@ class ReflexRegistryTest {
 
     @Test
     void testStatusReflexReturnsFormattedOutput() {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setStatus(CheckpointStatus.COMPLETED);
         when(statefulAgentStore.load("session-status", "coordinator"))
                 .thenReturn(Optional.of(cp));
@@ -200,7 +200,7 @@ class ReflexRegistryTest {
 
     @Test
     void testDenyReflexSetsCheckpointFailed() {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setSessionId("session-deny");
         cp.setAgentRole("coordinator");

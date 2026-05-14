@@ -18,16 +18,18 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Arc;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -48,7 +50,7 @@ public class CheckpointResumeHandler {
     private final ReasoningEngine reasoningEngine;
     private final ChannelPluginRegistry channelPluginRegistry;
     private final CliResultBridge cliResultBridge;
-    private final AgentCronRepository cronRepository;
+    private final CronStorePort cronStore;
     private final ResumeStrategyDispatcher strategyDispatcher;
 
     protected CheckpointResumeHandler() {
@@ -57,7 +59,7 @@ public class CheckpointResumeHandler {
         this.reasoningEngine = null;
         this.channelPluginRegistry = null;
         this.cliResultBridge = null;
-        this.cronRepository = null;
+        this.cronStore = null;
         this.strategyDispatcher = null;
     }
 
@@ -69,13 +71,13 @@ public class CheckpointResumeHandler {
                                    ReasoningEngine reasoningEngine,
                                    ChannelPluginRegistry channelPluginRegistry,
                                    CliResultBridge cliResultBridge,
-                                   AgentCronRepository cronRepository) {
+                                   CronStorePort cronStore) {
         this.agentStore = agentStore;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
         this.channelPluginRegistry = channelPluginRegistry;
         this.cliResultBridge = cliResultBridge;
-        this.cronRepository = cronRepository;
+        this.cronStore = cronStore;
         this.strategyDispatcher = new ResumeStrategyDispatcher(agentStore, toolRegistry, objectMapper, reasoningEngine);
     }
 
@@ -237,7 +239,7 @@ public class CheckpointResumeHandler {
             if (sub.length() >= 36) {
                 String jobId = sub.substring(0, 36);
                 try {
-                    cronRepository.markRunning(jobId);
+                    cronStore.markRunning(jobId);
                 } catch (Exception e) {
                     log.warnf("Failed to sync cron status for job %s: %s", jobId, e.getMessage());
                 }
@@ -251,11 +253,33 @@ public class CheckpointResumeHandler {
             if (sub.length() >= 36) {
                 String jobId = sub.substring(0, 36);
                 try {
-                    cronRepository.markTerminal(jobId, result);
+                    markCronTerminal(jobId, result);
                 } catch (Exception e) {
                     log.warnf("Failed to sync terminal cron status for job %s: %s", jobId, e.getMessage());
                 }
             }
+        }
+    }
+
+    private void markCronTerminal(String id, AgentResult result) {
+        var dto = cronStore.findById(id).orElse(null);
+        if (dto == null || result == null) return;
+        var cron = AgentCronRecord.fromDto(dto);
+
+        switch (result) {
+            case AgentResult.Finished _ -> {
+                if (cron.isRunOnce()) cronStore.markCompleted(id, Instant.now());
+                else cronStore.markFired(id, Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
+            }
+            case AgentResult.StructuredFinished _ -> {
+                if (cron.isRunOnce()) cronStore.markCompleted(id, Instant.now());
+                else cronStore.markFired(id, Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
+            }
+            case AgentResult.Failed f -> cronStore.markFailed(id, f.reason());
+            case AgentResult.AwaitingApproval _ -> cronStore.markAwaitingApproval(id);
+            case AgentResult.AwaitingRetry _ -> {}
+            case AgentResult.LoopExceeded _ -> cronStore.markFailed(id, "Loop exceeded");
+            default -> {}
         }
     }
 

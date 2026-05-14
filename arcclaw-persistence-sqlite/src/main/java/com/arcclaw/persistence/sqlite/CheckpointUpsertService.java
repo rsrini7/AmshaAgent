@@ -8,11 +8,11 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 
 /**
  * Handles complex upsert logic and entity-dto mapping for checkpoints.
@@ -168,3 +168,4 @@ public class CheckpointUpsertService {
         entity.setUpdatedAt(dto.updatedAt());
     }
 }
+

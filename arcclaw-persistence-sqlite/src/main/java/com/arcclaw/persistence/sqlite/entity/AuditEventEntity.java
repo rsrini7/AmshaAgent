@@ -1,4 +1,4 @@
-package com.arcclaw.core.audit;
+package com.arcclaw.persistence.sqlite.entity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -7,6 +7,8 @@ import java.util.UUID;
 import jakarta.persistence.*;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.audit.AuditOutcome;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.domain.model.AuditEvent;
 
 @Entity(name = "AuditEvent")
@@ -175,3 +177,5 @@ public class AuditEventEntity implements AuditEvent {
     @Override public String getPrevHash() { return prevHash; }
     @Override public void setPrevHash(String prevHash) { this.prevHash = prevHash; }
 }
+
+

@@ -9,10 +9,10 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.CompactionStorePort;
+import com.arcclaw.persistence.api.CronStorePort;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.jboss.logging.Logger;
 
@@ -33,7 +33,7 @@ public class ResetReflex implements AgentReflex {
     CompactionStorePort compactionSummaryRepository;
 
     @Inject
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @Inject
     StatefulAgentStore statefulAgentStore;
@@ -80,7 +80,7 @@ public class ResetReflex implements AgentReflex {
         }
 
         // 6. Clear stale cron jobs - session-scoped only, NOT user-scoped
-        long deletedCrons = cronRepository.deleteAllBySessionId(sessionId);
+        long deletedCrons = cronStore.deleteAllBySessionId(sessionId);
 
         String logStatus = isHardReset ? "chat history cleared" : "Chat memory retained";
         log.infof("[ResetReflex] Session %s reset - workspace, checkpoints, " +

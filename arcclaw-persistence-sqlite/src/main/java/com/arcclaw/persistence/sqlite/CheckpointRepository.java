@@ -8,8 +8,8 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import org.jboss.logging.Logger;
 
 /**
@@ -180,3 +180,4 @@ public class CheckpointRepository {
                 .isEmpty();
     }
 }
+

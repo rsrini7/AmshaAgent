@@ -7,7 +7,7 @@ import java.util.UUID;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
-import com.arcclaw.core.state.ChatMemoryEntity;
+import com.arcclaw.persistence.sqlite.entity.ChatMemoryEntity;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;

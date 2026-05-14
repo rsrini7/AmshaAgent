@@ -1,12 +1,11 @@
 package com.arcclaw.persistence.postgres;
 
-import com.arcclaw.core.state.AgentCheckpointEntity;
-
 import java.time.Instant;
 
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
 
 final class CheckpointMapper {
 
@@ -47,3 +46,4 @@ final class CheckpointMapper {
         entity.setUpdatedAt(Instant.now());
     }
 }
+

@@ -1,7 +1,5 @@
 package com.arcclaw.persistence.sqlite;
 
-import com.arcclaw.core.state.AgentCheckpointEntity;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +12,7 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -167,3 +166,4 @@ public class CheckpointBatchOperations {
         }
     }
 }
+

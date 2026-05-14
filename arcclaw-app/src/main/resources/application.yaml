@@ -99,11 +99,8 @@ quarkus:
       halt-on-error: false 
     sql-load-script: no-file
     packages:
+      - com.arcclaw.persistence.sqlite.entity
       - com.arcclaw.core.domain.model
-      - com.arcclaw.core.state
-      - com.arcclaw.core.security
-      - com.arcclaw.core.audit
-      - com.arcclaw.core.skill
       - com.arcclaw.core.routing
       - com.arcclaw.app.session
     log:

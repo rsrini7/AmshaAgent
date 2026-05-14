@@ -1,4 +1,4 @@
-package com.arcclaw.core.state;
+package com.arcclaw.persistence.sqlite.entity;
 
 import java.time.Instant;
 
@@ -27,3 +27,4 @@ public class RagChunkEntity {
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 }
+

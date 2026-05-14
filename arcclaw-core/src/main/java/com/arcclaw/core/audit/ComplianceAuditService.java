@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import org.jboss.logging.Logger;
@@ -13,18 +14,18 @@ public class ComplianceAuditService {
 
     private static final Logger log = Logger.getLogger(ComplianceAuditService.class);
 
-    private final AuditEventRepository auditEventRepository;
+    private final AuditEventRecorder auditEventRecorder;
     private final AsyncPersistenceEngine persistenceEngine;
 
     protected ComplianceAuditService() {
-        this.auditEventRepository = null;
+        this.auditEventRecorder = null;
         this.persistenceEngine = null;
     }
 
     @Inject
-    public ComplianceAuditService(AuditEventRepository auditEventRepository,
+    public ComplianceAuditService(AuditEventRecorder auditEventRecorder,
                                   AsyncPersistenceEngine persistenceEngine) {
-        this.auditEventRepository = auditEventRepository;
+        this.auditEventRecorder = auditEventRecorder;
         this.persistenceEngine = persistenceEngine;
     }
 
@@ -40,9 +41,9 @@ public class ComplianceAuditService {
     public void recordMandatory(String sessionId, String userId, String agentRole,
                                 SecurityEventType type, String detail) {
         log.infof("[AUDIT-MANDATORY] type=%s session=%s", type, sessionId);
-        AuditEvent event = AuditEventEntity.securityEvent(sessionId, userId, agentRole, type, detail);
+        AuditEvent event = AuditEventRecord.securityEvent(sessionId, userId, agentRole, type, detail);
         PersistenceEvent pe = PersistenceEvent.critical(sessionId, type, () -> {
-            auditEventRepository.record(event);
+            auditEventRecorder.record(event);
         });
         // Blocks - throws ComplianceViolationException if write fails
         persistenceEngine.submitCritical(pe);

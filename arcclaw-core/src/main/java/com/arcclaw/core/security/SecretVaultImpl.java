@@ -11,8 +11,9 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.domain.model.EncryptedSecret;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.persistence.api.SecretDto;
+import com.arcclaw.persistence.api.SecretStorePort;
 
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
@@ -27,14 +28,7 @@ public class SecretVaultImpl implements SecretVault {
     AesGcmSivCipher cipher;
 
     @Inject
-    EncryptedSecretRepository repository;
-
-    private EncryptedSecret createEntity(String sessionId, String keyName) {
-        EncryptedSecretEntity entity = new EncryptedSecretEntity();
-        entity.setSessionId(sessionId);
-        entity.setKeyName(keyName);
-        return entity;
-    }
+    SecretStorePort secretStore;
 
     @Inject
     AuditService auditService;
@@ -104,15 +98,13 @@ public class SecretVaultImpl implements SecretVault {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
 
             // 3. Persist
-            EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
-            if (entity == null) {
-                entity = createEntity(sessionId, keyName);
-            }
-            entity.setCiphertext(result.ciphertext());
-            entity.setNonce(result.nonce());
-            entity.setEncryptionKeyVersion(1);
-
-            repository.save(entity);
+            secretStore.save(new SecretDto(
+                sessionId,
+                keyName,
+                1,
+                result.ciphertext(),
+                result.nonce()
+            ));
 
             // Only record audit for non-system sessions to avoid infinite recursion or
             // missing context
@@ -140,9 +132,9 @@ public class SecretVaultImpl implements SecretVault {
 
     private Optional<VaultKey> get(String keyName, String userId, String sessionId) {
         // 1. Fetch
-        EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
+        SecretDto dto = secretStore.find(sessionId, keyName).orElse(null);
 
-        if (entity == null) {
+        if (dto == null) {
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
                         "keyName=" + keyName);
@@ -154,7 +146,7 @@ public class SecretVaultImpl implements SecretVault {
         VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
         try {
             // 3. Decrypt
-            byte[] plaintext = cipher.decrypt(entity.getCiphertext(), entity.getNonce(), sessionKey, keyName);
+            byte[] plaintext = cipher.decrypt(dto.ciphertext(), dto.nonce(), sessionKey, keyName);
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
             }
@@ -171,8 +163,8 @@ public class SecretVaultImpl implements SecretVault {
     public Optional<VaultKey> retrieveSystemKey(String keyName) {
         String sessionId = VaultConstants.SYSTEM_SESSION_ID;
 
-        EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
-        if (entity == null) {
+        SecretDto dto = secretStore.find(sessionId, keyName).orElse(null);
+        if (dto == null) {
             return Optional.empty();
         }
 
@@ -182,7 +174,7 @@ public class SecretVaultImpl implements SecretVault {
         // to avoid expensive re-derivation (Argon2id) which can cause transaction timeouts.
         VaultKey systemKey = getSystemMasterKey();
         try {
-            byte[] plaintext = cipher.decrypt(entity.getCiphertext(), entity.getNonce(), systemKey, keyName);
+            byte[] plaintext = cipher.decrypt(dto.ciphertext(), dto.nonce(), systemKey, keyName);
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
             throw e;
@@ -191,7 +183,7 @@ public class SecretVaultImpl implements SecretVault {
 
     @Override
     public boolean systemKeyExists(String keyName) {
-        return repository.find(VaultConstants.SYSTEM_SESSION_ID, keyName).isPresent();
+        return secretStore.find(VaultConstants.SYSTEM_SESSION_ID, keyName).isPresent();
     }
 
     @Override
@@ -205,15 +197,13 @@ public class SecretVaultImpl implements SecretVault {
         try {
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, systemKey, keyName);
 
-            EncryptedSecret entity = repository.find(sessionId, keyName).orElse(null);
-            if (entity == null) {
-                entity = createEntity(sessionId, keyName);
-            }
-            entity.setCiphertext(result.ciphertext());
-            entity.setNonce(result.nonce());
-            entity.setEncryptionKeyVersion(1);
-
-            repository.save(entity);
+            secretStore.save(new SecretDto(
+                sessionId,
+                keyName,
+                1,
+                result.ciphertext(),
+                result.nonce()
+            ));
         } catch (Exception e) {
             throw e;
         }
@@ -222,6 +212,6 @@ public class SecretVaultImpl implements SecretVault {
     @Override
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void removeSystemKey(String keyName) {
-        repository.delete(VaultConstants.SYSTEM_SESSION_ID, keyName);
+        secretStore.delete(VaultConstants.SYSTEM_SESSION_ID, keyName);
     }
 }

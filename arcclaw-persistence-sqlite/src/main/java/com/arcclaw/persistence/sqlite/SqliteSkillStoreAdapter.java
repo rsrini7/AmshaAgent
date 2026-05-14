@@ -9,9 +9,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.skill.AgentSkillEntity;
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
+import com.arcclaw.persistence.sqlite.entity.AgentSkillEntity;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -85,3 +85,4 @@ public class SqliteSkillStoreAdapter implements SkillStorePort {
         );
     }
 }
+

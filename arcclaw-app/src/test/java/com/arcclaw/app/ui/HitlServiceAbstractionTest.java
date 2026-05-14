@@ -5,8 +5,8 @@ import static org.mockito.Mockito.*;
 import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

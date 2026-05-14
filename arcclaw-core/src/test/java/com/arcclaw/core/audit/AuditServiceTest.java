@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.persistence.api.AuditEventStorePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,13 +23,13 @@ class AuditServiceTest {
     ComplianceAuditService complianceAuditService;
 
     @Mock 
-    AuditEventRepository auditEventRepository;
+    AuditEventStorePort auditStore;
 
     AuditService auditService;
 
     @BeforeEach
     void setUp() {
-        auditService = new AuditService(telemetryAuditService, complianceAuditService, auditEventRepository);
+        auditService = new AuditService(telemetryAuditService, complianceAuditService, auditStore);
     }
 
     @Test

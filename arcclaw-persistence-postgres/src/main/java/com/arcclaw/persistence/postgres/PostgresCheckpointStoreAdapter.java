@@ -10,13 +10,13 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.ReasoningStepEntity;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.postgres.entity.ReasoningStepEntity;
 import org.jboss.logging.Logger;
 
 /**
@@ -388,3 +388,5 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
 }
+
+

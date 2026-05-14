@@ -10,10 +10,10 @@ import java.util.Map;
 import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;

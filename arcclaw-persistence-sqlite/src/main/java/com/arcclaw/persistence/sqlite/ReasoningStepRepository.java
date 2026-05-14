@@ -8,8 +8,8 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.ReasoningStepEntity;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+import com.arcclaw.persistence.sqlite.entity.ReasoningStepEntity;
 
 /**
  * Handles core JPA operations for ReasoningStepEntity objects.
@@ -75,3 +75,4 @@ public class ReasoningStepRepository {
                 .executeUpdate();
     }
 }
+

@@ -1,4 +1,4 @@
-package com.arcclaw.core.skill;
+package com.arcclaw.persistence.sqlite.entity;
 
 import java.time.Instant;
 
@@ -78,3 +78,4 @@ public class AgentSkillEntity implements AgentSkill {
         this.updatedAt = updatedAt;
     }
 }
+

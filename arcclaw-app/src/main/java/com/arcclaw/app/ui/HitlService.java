@@ -13,11 +13,11 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
-import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

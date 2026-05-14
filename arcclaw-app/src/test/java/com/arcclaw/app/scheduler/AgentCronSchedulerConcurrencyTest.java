@@ -19,10 +19,9 @@ import java.util.concurrent.TimeUnit;
 
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
+import com.arcclaw.persistence.api.AgentCronDto;
+import com.arcclaw.persistence.api.CronStorePort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
@@ -50,7 +49,7 @@ class AgentCronSchedulerConcurrencyTest {
     AgentCronScheduler scheduler;
 
     @InjectMock
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @InjectMock
     AdvisoryLockPort advisoryLockPort;
@@ -58,24 +57,33 @@ class AgentCronSchedulerConcurrencyTest {
     @InjectMock
     CronJobRunner jobRunner;
 
-    private AgentCronEntity createDueJob(boolean runOnce) {
-        AgentCronEntity e = new AgentCronEntity();
-        e.id = UUID.randomUUID().toString();
-        e.sessionId = "session-" + e.id;
-        e.userId = "user-1";
-        e.chatId = "chat-1";
-        e.cronExpression = "0 9 * * 1";
-        e.timezone = "UTC";
-        e.runOnce = runOnce;
-        e.goal = "CRON: Test goal";
-        e.nextFireTime = Instant.now();
-        e.status = CronStatus.ACTIVE;
-        return e;
+    private AgentCronDto createDueJob(boolean runOnce) {
+        String id = UUID.randomUUID().toString();
+        return new AgentCronDto(
+            id,
+            "session-" + id,
+            "user-1",
+            "chat-1",
+            null,
+            null,
+            "0 9 * * 1",
+            "UTC",
+            runOnce,
+            "CRON: Test goal",
+            Instant.now(),
+            null,
+            "ACTIVE",
+            null,
+            null,
+            null,
+            null,
+            null
+        );
     }
 
     @BeforeEach
     void setup() {
-        reset(cronRepository, jobRunner, advisoryLockPort);
+        reset(cronStore, jobRunner, advisoryLockPort);
         
         when(advisoryLockPort.tryLock(anyString(), ArgumentMatchers.anyInt())).thenReturn(true);
 
@@ -86,12 +94,12 @@ class AgentCronSchedulerConcurrencyTest {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void testThrottledJobIsSkippedNotMarkedFailed() throws Exception {
-        AgentCronEntity job1 = createDueJob(false);
-        AgentCronEntity job2 = createDueJob(false);
-        AgentCronEntity job3 = createDueJob(false);
+        AgentCronDto job1 = createDueJob(false);
+        AgentCronDto job2 = createDueJob(false);
+        AgentCronDto job3 = createDueJob(false);
 
-        when(cronRepository.findDueCrons()).thenReturn(List.of(job1, job2, job3));
-        when(cronRepository.claimForFire(anyString())).thenReturn(true);
+        when(cronStore.findDueCrons()).thenReturn(List.of(job1, job2, job3));
+        when(cronStore.claimForFire(anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch gateLatch = new CountDownLatch(1);
@@ -110,8 +118,8 @@ class AgentCronSchedulerConcurrencyTest {
         scheduler.pollAndDispatch();
 
         // Job 3 should be throttled because permits = 2
-        verify(cronRepository).releaseClaimToActive(job3.id);
-        verify(cronRepository, never()).markFailed(eq(job3.id), anyString());
+        verify(cronStore).releaseClaimToActive(job3.id());
+        verify(cronStore, never()).markFailed(eq(job3.id()), anyString());
 
         assertTrue(startLatch.await(60, TimeUnit.SECONDS), "Jobs did not start for throttle test");
         
@@ -133,14 +141,14 @@ class AgentCronSchedulerConcurrencyTest {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void testSemaphoreReleasedAfterSuccessfulCompletion() throws Exception {
-        AgentCronEntity job1 = createDueJob(true);
-        AgentCronEntity job2 = createDueJob(true);
-        AgentCronEntity job3 = createDueJob(true);
+        AgentCronDto job1 = createDueJob(true);
+        AgentCronDto job2 = createDueJob(true);
+        AgentCronDto job3 = createDueJob(true);
 
-        when(cronRepository.findDueCrons())
+        when(cronStore.findDueCrons())
             .thenReturn(List.of(job1, job2))
             .thenReturn(List.of(job3));
-        when(cronRepository.claimForFire(anyString())).thenReturn(true);
+        when(cronStore.claimForFire(anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch gateLatch = new CountDownLatch(1);
@@ -190,14 +198,14 @@ class AgentCronSchedulerConcurrencyTest {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void testSemaphoreReleasedAfterInnerException() throws Exception {
-        AgentCronEntity job1 = createDueJob(true);
-        AgentCronEntity job2 = createDueJob(true);
-        AgentCronEntity job3 = createDueJob(true);
+        AgentCronDto job1 = createDueJob(true);
+        AgentCronDto job2 = createDueJob(true);
+        AgentCronDto job3 = createDueJob(true);
 
-        when(cronRepository.findDueCrons())
+        when(cronStore.findDueCrons())
             .thenReturn(List.of(job1, job2))
             .thenReturn(List.of(job3));
-        when(cronRepository.claimForFire(anyString())).thenReturn(true);
+        when(cronStore.claimForFire(anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch finishLatch = new CountDownLatch(2);

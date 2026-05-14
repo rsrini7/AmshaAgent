@@ -9,7 +9,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.test.MockAuditEventStorePort;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
@@ -23,7 +23,7 @@ public class AuditVerifierTest {
     AuditVerifier verifier;
 
     @Inject
-    AuditEventRepository repository;
+    AuditEventRecorder recorder;
 
     @Inject
     AuditEventStorePort storePort;
@@ -35,9 +35,9 @@ public class AuditVerifierTest {
     @Transactional
     public void testValidChain() {
         String sessionId = "test-verify-valid-" + System.currentTimeMillis();
-        repository.record(AuditEventEntity.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
-        repository.record(AuditEventEntity.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
-        repository.record(AuditEventEntity.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
+        recorder.record(AuditEventRecord.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
+        recorder.record(AuditEventRecord.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
+        recorder.record(AuditEventRecord.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, null));
 
         AuditVerifier.VerificationResult result = verifier.verifyChain(sessionId);
         assertTrue(result.valid());
@@ -48,11 +48,13 @@ public class AuditVerifierTest {
     @Transactional
     public void testTamperedRowBreaksChain() throws Exception {
         String sessionId = "test-verify-tamper-" + System.currentTimeMillis();
-        repository.record(AuditEventEntity.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "A"));
-        repository.record(AuditEventEntity.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "B"));
-        repository.record(AuditEventEntity.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "C"));
+        recorder.record(AuditEventRecord.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "A"));
+        recorder.record(AuditEventRecord.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "B"));
+        recorder.record(AuditEventRecord.securityEvent(sessionId, "u", "r", SecurityEventType.LOOP_FINISH, "C"));
 
-        List<? extends AuditEvent> events = repository.findBySessionId(sessionId);
+        var events = storePort.findBySessionId(sessionId).stream()
+                .map(AuditEventRecord::fromDto)
+                .toList();
         assertEquals(3, events.size());
         UUID middleId = events.get(1).getId();
 

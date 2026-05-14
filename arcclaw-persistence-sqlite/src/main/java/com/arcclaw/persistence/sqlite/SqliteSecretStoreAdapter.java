@@ -7,9 +7,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.security.EncryptedSecretEntity;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
+import com.arcclaw.persistence.sqlite.entity.EncryptedSecretEntity;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -74,3 +74,4 @@ public class SqliteSecretStoreAdapter implements SecretStorePort {
         );
     }
 }
+

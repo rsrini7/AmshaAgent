@@ -10,20 +10,21 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCron;
+import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.domain.model.AgentCron;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CronStorePort;
 
 @Dependent
 public class CronDecisionRouter {
 
     @Inject StatefulAgentStore statefulAgentStore;
-    @Inject AgentCronRepository cronRepository;
+    @Inject CronStorePort cronStore;
     @Inject AgentLoop agentLoop;
     @Inject ReasoningEngine reasoningEngine;
     @Inject WorkspaceManager workspaceManager;
@@ -53,12 +54,12 @@ public class CronDecisionRouter {
             if (suffix.length() >= 36) resolvedJobId = suffix.substring(0, 36);
         }
 
-        AgentCron cron = cronRepository.findById(resolvedJobId);
+        AgentCron cron = cronStore.findById(resolvedJobId).map(AgentCronRecord::fromDto).orElse(null);
         if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             String sub = cronSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
             if (sub.length() >= 36) {
                 resolvedJobId = sub.substring(0, 36);
-                cron = cronRepository.findById(resolvedJobId);
+                cron = cronStore.findById(resolvedJobId).map(AgentCronRecord::fromDto).orElse(null);
             }
         }
 

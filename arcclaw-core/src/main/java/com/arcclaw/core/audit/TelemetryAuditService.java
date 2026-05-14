@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.config.SystemMetadataRegistry;
 import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -18,21 +19,21 @@ public class TelemetryAuditService {
 
     private static final Logger log = Logger.getLogger(TelemetryAuditService.class);
 
-    private final AuditEventRepository auditEventRepository;
+    private final AuditEventRecorder auditEventRecorder;
     private final AsyncPersistenceEngine persistenceEngine;
     private final SystemMetadataRegistry registry;
 
     protected TelemetryAuditService() {
-        this.auditEventRepository = null;
+        this.auditEventRecorder = null;
         this.persistenceEngine = null;
         this.registry = null;
     }
 
     @Inject
-    public TelemetryAuditService(AuditEventRepository auditEventRepository,
+    public TelemetryAuditService(AuditEventRecorder auditEventRecorder,
                                  AsyncPersistenceEngine persistenceEngine,
                                  SystemMetadataRegistry registry) {
-        this.auditEventRepository = auditEventRepository;
+        this.auditEventRecorder = auditEventRecorder;
         this.persistenceEngine = persistenceEngine;
         this.registry = registry;
     }
@@ -53,11 +54,11 @@ public class TelemetryAuditService {
                                        SecurityEventType type, String detail, String idempotencyKey) {
         log.infof("[AUDIT-PROBE] type=%s session=%s idempotency=%s", type, sessionId, idempotencyKey);
         try {
-            AuditEvent event = AuditEventEntity.securityEvent(sessionId, userId, agentRole, type, detail);
+            AuditEvent event = AuditEventRecord.securityEvent(sessionId, userId, agentRole, type, detail);
             event.setAppVersion(registry.getAppVersion());
             event.setIdempotencyKey(idempotencyKey);
             PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, type, () -> {
-                auditEventRepository.record(event);
+                auditEventRecorder.record(event);
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {
@@ -90,10 +91,10 @@ public class TelemetryAuditService {
             String appVersion = registry.getAppVersion();
 
             PersistenceEvent pe = PersistenceEvent.telemetry(sessionId, eventType, () -> {
-                AuditEvent event = AuditEventEntity.of(sessionId, userId, agentRole, goalHash, outcome, eventType,
+                AuditEvent event = AuditEventRecord.of(sessionId, userId, agentRole, goalHash, outcome, eventType,
                                                        inputTokens, outputTokens, usdCost, stepCount, detail);
                 event.setAppVersion(appVersion);
-                auditEventRepository.record(event);
+                auditEventRecorder.record(event);
             });
             persistenceEngine.submitTelemetry(pe);
         } catch (Exception e) {

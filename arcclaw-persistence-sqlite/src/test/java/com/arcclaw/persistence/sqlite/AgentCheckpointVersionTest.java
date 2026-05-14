@@ -12,8 +12,8 @@ import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 

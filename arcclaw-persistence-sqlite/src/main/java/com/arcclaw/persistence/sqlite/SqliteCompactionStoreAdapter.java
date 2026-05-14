@@ -11,9 +11,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.CompactionSummaryEntity;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import com.arcclaw.persistence.sqlite.entity.CompactionSummaryEntity;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -133,3 +133,4 @@ public class SqliteCompactionStoreAdapter implements CompactionStorePort {
         return escaped.isBlank() ? null : escaped;
     }
 }
+

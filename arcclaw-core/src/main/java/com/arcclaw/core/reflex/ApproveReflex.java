@@ -65,17 +65,17 @@ public class ApproveReflex extends AbstractDecisionReflex {
         // syncCronTerminalStatus in CheckpointResumeHandler covers the async delegation path.
         switch (result) {
             case AgentResult.Finished _ -> {
-                if (cron.isRunOnce()) cronRepository.markCompleted(cron.getId(), Instant.now());
-                else cronRepository.markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
+                if (cron.isRunOnce()) cronStore.markCompleted(cron.getId(), Instant.now());
+                else cronStore.markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
             }
             case AgentResult.StructuredFinished _ -> {
-                if (cron.isRunOnce()) cronRepository.markCompleted(cron.getId(), Instant.now());
-                else cronRepository.markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
+                if (cron.isRunOnce()) cronStore.markCompleted(cron.getId(), Instant.now());
+                else cronStore.markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
             }
-            case AgentResult.Failed f  -> cronRepository.markFailed(cron.getId(), f.reason());
-            case AgentResult.AwaitingApproval _ -> cronRepository.markAwaitingApproval(cron.getId());
+            case AgentResult.Failed f  -> cronStore.markFailed(cron.getId(), f.reason());
+            case AgentResult.AwaitingApproval _ -> cronStore.markAwaitingApproval(cron.getId());
             case AgentResult.AwaitingRetry _    -> {} // No-op - retry handled by RateLimitRetryScheduler
-            case AgentResult.LoopExceeded _ -> cronRepository.markFailed(cron.getId(), "Loop exceeded");
+            case AgentResult.LoopExceeded _ -> cronStore.markFailed(cron.getId(), "Loop exceeded");
             default -> {}
         }
     }

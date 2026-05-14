@@ -1,4 +1,4 @@
-package com.arcclaw.core.security;
+package com.arcclaw.persistence.sqlite.entity;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -113,3 +113,4 @@ public class EncryptedSecretEntity implements EncryptedSecret {
         }
     }
 }
+

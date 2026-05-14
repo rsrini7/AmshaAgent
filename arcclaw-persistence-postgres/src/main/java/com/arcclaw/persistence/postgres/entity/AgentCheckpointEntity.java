@@ -1,4 +1,4 @@
-package com.arcclaw.core.state;
+package com.arcclaw.persistence.postgres.entity;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -24,6 +24,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity(name = "AgentCheckpoint")
@@ -393,3 +394,5 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
                 .orElse(false);
     }
 }
+
+

@@ -15,7 +15,7 @@ import java.util.List;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.persistence.api.CheckpointDto;
@@ -132,7 +132,7 @@ class WorkspaceManagerGcSweepTest {
         assertEquals(1, heartbeatTracker.activeSessionCount());
 
         // Setup mock to return a timed out checkpoint
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId(sessionId);
         cp.setAgentRole("coordinator");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);

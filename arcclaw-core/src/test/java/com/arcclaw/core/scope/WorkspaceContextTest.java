@@ -2,6 +2,7 @@ package com.arcclaw.core.scope;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.NoSuchElementException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,10 +45,10 @@ class WorkspaceContextTest {
 
     @Test
     void testUnboundScopedValuesThrow() {
-        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.SESSION_ID.get());
-        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.USER_ID.get());
-        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.CHAT_ID.get());
-        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.AGENT_ROLE.get());
+        assertThrows(NoSuchElementException.class, () -> WorkspaceContext.SESSION_ID.get());
+        assertThrows(NoSuchElementException.class, () -> WorkspaceContext.USER_ID.get());
+        assertThrows(NoSuchElementException.class, () -> WorkspaceContext.CHAT_ID.get());
+        assertThrows(NoSuchElementException.class, () -> WorkspaceContext.AGENT_ROLE.get());
         assertThrows(IllegalStateException.class, WorkspaceContext::requireAutonomy);
     }
 

@@ -11,9 +11,9 @@ import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.sse.AgentSseService;
-import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
+import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
@@ -46,7 +46,7 @@ public class CheckpointApprovalServiceTest {
 
     @Test
     void test_approveTool_marksToolApprovedAndResumesWhenAllDecided() {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         
@@ -55,12 +55,12 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).save(any(AgentCheckpointEntity.class));
+        verify(agentStore).save(any(AgentCheckpointRecord.class));
     }
 
     @Test
     void test_approveTool_doesNotResumeWhenToolsStillPending() {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         
@@ -69,7 +69,7 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveTool("s1", "github", "test");
 
-        verify(agentStore).save(any(AgentCheckpointEntity.class));
+        verify(agentStore).save(any(AgentCheckpointRecord.class));
     }
 
     @Test
@@ -85,7 +85,7 @@ public class CheckpointApprovalServiceTest {
 
     @Test
     void test_approveAll_approvesAllPendingTools() throws Exception {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         cp.setPendingToolName("parallel|github,sandboxexec");
@@ -95,12 +95,12 @@ public class CheckpointApprovalServiceTest {
 
         checkpointApprovalService.approveAll("s1", "bulk approve");
 
-        verify(agentStore).save(any(AgentCheckpointEntity.class));
+        verify(agentStore).save(any(AgentCheckpointRecord.class));
     }
 
     @Test
     void test_triggerResume_callsResumeHandler() {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         when(agentStore.findLatestNonArchivedCheckpoint("s1")).thenReturn(Optional.of(cp));

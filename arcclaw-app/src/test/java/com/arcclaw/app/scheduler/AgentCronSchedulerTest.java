@@ -18,10 +18,9 @@ import java.util.concurrent.RejectedExecutionException;
 
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
-import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
+import com.arcclaw.persistence.api.AgentCronDto;
+import com.arcclaw.persistence.api.CronStorePort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -41,7 +40,7 @@ class AgentCronSchedulerTest {
     AgentCronScheduler scheduler;
 
     @InjectMock
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @InjectMock
     AdvisoryLockPort advisoryLockPort;
@@ -52,25 +51,33 @@ class AgentCronSchedulerTest {
     @InjectMock
     ManagedExecutor vThreadsMock;
 
-    private AgentCronEntity createDueJob(boolean runOnce) {
-        AgentCronEntity e = new AgentCronEntity();
-        e.id = UUID.randomUUID().toString();
-        e.sessionId = "session-" + e.id;
-        e.userId = "user-1";
-        e.chatId = "chat-1";
-        e.cronExpression = "0 9 * * 1";
-        e.timezone = "UTC";
-        e.runOnce = runOnce;
-        e.goal = "CRON: Test goal";
-        e.nextFireTime = Instant.now().minus(1, ChronoUnit.MINUTES);
-        e.status = CronStatus.ACTIVE;
-        e.createdAt = Instant.now();
-        return e;
+    private AgentCronDto createDueJob(boolean runOnce) {
+        String id = UUID.randomUUID().toString();
+        return new AgentCronDto(
+            id,
+            "session-" + id,
+            "user-1",
+            "chat-1",
+            null,
+            null,
+            "0 9 * * 1",
+            "UTC",
+            runOnce,
+            "CRON: Test goal",
+            Instant.now().minus(1, ChronoUnit.MINUTES),
+            null,
+            "ACTIVE",
+            null,
+            null,
+            null,
+            Instant.now(),
+            null
+        );
     }
 
     @BeforeEach
     void setup() {
-        reset(cronRepository, jobRunner, vThreadsMock, advisoryLockPort);
+        reset(cronStore, jobRunner, vThreadsMock, advisoryLockPort);
 
         when(advisoryLockPort.tryLock(ArgumentMatchers.anyString(), ArgumentMatchers.anyInt())).thenReturn(true);
 
@@ -83,7 +90,7 @@ class AgentCronSchedulerTest {
 
     @Test
     void testNoDueJobsNoDispatch() {
-        when(cronRepository.findDueCrons()).thenReturn(List.of());
+        when(cronStore.findDueCrons()).thenReturn(List.of());
 
         scheduler.pollAndDispatch();
 
@@ -92,21 +99,21 @@ class AgentCronSchedulerTest {
 
     @Test
     void testDueJobClaimedAndDispatched() {
-        AgentCronEntity job = createDueJob(true);
-        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
-        when(cronRepository.claimForFire(job.id)).thenReturn(true);
+        AgentCronDto job = createDueJob(true);
+        when(cronStore.findDueCrons()).thenReturn(List.of(job));
+        when(cronStore.claimForFire(job.id())).thenReturn(true);
 
         scheduler.pollAndDispatch();
 
-        verify(cronRepository).claimForFire(job.id);
-        verify(jobRunner).execute(job);
+        verify(cronStore).claimForFire(job.id());
+        verify(jobRunner).execute(any());
     }
 
     @Test
     void testDoubleFirePrevented() {
-        AgentCronEntity job = createDueJob(true);
-        when(cronRepository.findDueCrons()).thenReturn(List.of(job, job));
-        when(cronRepository.claimForFire(job.id))
+        AgentCronDto job = createDueJob(true);
+        when(cronStore.findDueCrons()).thenReturn(List.of(job, job));
+        when(cronStore.claimForFire(job.id()))
                 .thenReturn(true)
                 .thenReturn(false);
 
@@ -117,20 +124,20 @@ class AgentCronSchedulerTest {
 
     @Test
     void testStaleRunningJobReclaimed() {
-        when(cronRepository.findDueCrons()).thenReturn(List.of());
+        when(cronStore.findDueCrons()).thenReturn(List.of());
 
         scheduler.pollAndDispatch();
 
-        verify(cronRepository).reclaimStaleCrons(ArgumentMatchers.argThat(t ->
+        verify(cronStore).reclaimStaleCrons(ArgumentMatchers.argThat(t ->
                 t.isAfter(Instant.now().minus(6, ChronoUnit.MINUTES)) &&
                 t.isBefore(Instant.now().minus(4, ChronoUnit.MINUTES))));
     }
  
     @Test
     void testSemaphoreReleasedOnRejection() {
-        AgentCronEntity job = createDueJob(true);
-        when(cronRepository.findDueCrons()).thenReturn(List.of(job));
-        when(cronRepository.claimForFire(job.id)).thenReturn(true);
+        AgentCronDto job = createDueJob(true);
+        when(cronStore.findDueCrons()).thenReturn(List.of(job));
+        when(cronStore.claimForFire(job.id())).thenReturn(true);
  
         // Mock executor to throw RejectedExecutionException
         doAnswer(invocation -> {
@@ -146,7 +153,7 @@ class AgentCronSchedulerTest {
                 "Semaphore permits should be recovered after RejectedExecutionException");
  
         // Verify DB claim was released
-        verify(cronRepository).releaseClaimToActive(job.id);
+        verify(cronStore).releaseClaimToActive(job.id());
     }
 
     @Test

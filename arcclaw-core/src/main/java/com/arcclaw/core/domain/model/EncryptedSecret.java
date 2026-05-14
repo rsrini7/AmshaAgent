@@ -16,4 +16,12 @@ public interface EncryptedSecret {
 
     byte[] getNonce();
     void setNonce(byte[] nonce);
+
+    // ── Wither methods ────────────────────────────────────────────────────
+
+    default EncryptedSecret withSessionId(String s) { setSessionId(s); return this; }
+    default EncryptedSecret withKeyName(String k) { setKeyName(k); return this; }
+    default EncryptedSecret withEncryptionKeyVersion(int v) { setEncryptionKeyVersion(v); return this; }
+    default EncryptedSecret withCiphertext(byte[] c) { setCiphertext(c); return this; }
+    default EncryptedSecret withNonce(byte[] n) { setNonce(n); return this; }
 }

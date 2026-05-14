@@ -8,9 +8,9 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCron;
+import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.util.AgentResultFormatter;
 
 @ApplicationScoped
@@ -65,6 +65,6 @@ public class DenyReflex extends AbstractDecisionReflex {
         if (result instanceof AgentResult.AwaitingRetry) {
             return; // No-op - retry handled by RateLimitRetryScheduler (#736)
         }
-        cronRepository.markFailed(cron.getId(), reason != null ? reason : "User denied tool execution.");
+        cronStore.markFailed(cron.getId(), reason != null ? reason : "User denied tool execution.");
     }
 }

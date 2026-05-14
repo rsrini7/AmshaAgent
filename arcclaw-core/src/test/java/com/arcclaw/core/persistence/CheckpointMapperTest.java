@@ -5,7 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.time.Instant;
 
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
+import com.arcclaw.core.domain.model.CheckpointRecord;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import org.junit.jupiter.api.Test;
@@ -13,8 +14,8 @@ import org.junit.jupiter.api.Test;
 class CheckpointMapperTest {
 
     @Test
-    void testRoundTrip() {
-        AgentCheckpoint entity = new AgentCheckpointEntity();
+    void testToDto() {
+        AgentCheckpoint entity = new AgentCheckpointRecord();
         entity.setId(1L);
         entity.setSessionId("s1");
         entity.setAgentRole("coordinator");
@@ -60,37 +61,64 @@ class CheckpointMapperTest {
         assertEquals(entity.getUpdatedAt(), dto.updatedAt());
         assertEquals(entity.getFailedAt(), dto.failedAt());
         assertEquals(entity.getCompletedAt(), dto.completedAt());
-
-        AgentCheckpoint backToEntity = CheckpointMapper.toEntity(dto);
-        
-        assertEquals(entity.getId(), backToEntity.getId());
-        assertEquals(entity.getSessionId(), backToEntity.getSessionId());
-        assertEquals(entity.getAgentRole(), backToEntity.getAgentRole());
-        assertEquals(entity.getOriginalGoal(), backToEntity.getOriginalGoal());
-        assertEquals(entity.getSystemNote(), backToEntity.getSystemNote());
-        assertEquals(entity.getStatus(), backToEntity.getStatus());
-        assertEquals(entity.getStateJson(), backToEntity.getStateJson());
-        assertEquals(entity.getPendingToolName(), backToEntity.getPendingToolName());
-        assertEquals(entity.getPendingToolParametersJson(), backToEntity.getPendingToolParametersJson());
-        assertEquals(entity.getBatchToolDecisions(), backToEntity.getBatchToolDecisions());
-        assertEquals(entity.getMaxIterations(), backToEntity.getMaxIterations());
-        assertEquals(entity.getChannelType(), backToEntity.getChannelType());
-        assertEquals(entity.getChannelPlatformId(), backToEntity.getChannelPlatformId());
-        assertEquals(entity.getPreExecutedResults(), backToEntity.getPreExecutedResults());
-        assertEquals(entity.getErrorCode(), backToEntity.getErrorCode());
-        assertEquals(entity.getTraceId(), backToEntity.getTraceId());
-        assertEquals(entity.getRootCauseClass(), backToEntity.getRootCauseClass());
-        assertEquals(entity.getCreatedAt(), backToEntity.getCreatedAt());
-        assertEquals(entity.getUpdatedAt(), backToEntity.getUpdatedAt());
-        assertEquals(entity.getFailedAt(), backToEntity.getFailedAt());
-        assertEquals(entity.getCompletedAt(), backToEntity.getCompletedAt());
-        assertEquals(entity.getIterationsUsed(), backToEntity.getIterationsUsed());
-        assertEquals(entity.getRetryAfterMs(), backToEntity.getRetryAfterMs());
-        assertEquals(entity.getAutonomyLevel(), backToEntity.getAutonomyLevel());
     }
 
     @Test
-    void testToEntity_nullTimestampsSafe() {
+    void testFromDtoRoundTrip() {
+        AgentCheckpointRecord source = new AgentCheckpointRecord();
+        source.setId(1L);
+        source.setSessionId("s1");
+        source.setAgentRole("coordinator");
+        source.setOriginalGoal("goal");
+        source.setSystemNote("note");
+        source.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        source.setPendingToolName("github");
+        source.setPendingToolParametersJson("{\"arg\":\"val\"}");
+        source.setBatchToolDecisions("{\"github\":\"PENDING\"}");
+        source.setStateJson("[{\"thought\":\"thinking\",\"action\":\"github\"}]");
+        source.setMaxIterations(5);
+        source.setChannelType("telegram");
+        source.setChannelPlatformId("u123");
+        source.setPreExecutedResults("{\"tool\":\"result\"}");
+        source.setErrorCode("ERR123");
+        source.setTraceId("trace-456");
+        source.setRootCauseClass("java.lang.RuntimeException");
+        source.setCreatedAt(Instant.now());
+        source.setUpdatedAt(Instant.now());
+        source.setFailedAt(Instant.now().plusSeconds(1));
+        source.setCompletedAt(Instant.now().plusSeconds(2));
+
+        CheckpointDto dto = CheckpointMapper.toDto(source);
+        AgentCheckpoint record = CheckpointRecord.fromDto(dto);
+
+        assertEquals(source.getId(), record.getId());
+        assertEquals(source.getSessionId(), record.getSessionId());
+        assertEquals(source.getAgentRole(), record.getAgentRole());
+        assertEquals(source.getOriginalGoal(), record.getOriginalGoal());
+        assertEquals(source.getSystemNote(), record.getSystemNote());
+        assertEquals(source.getStatus(), record.getStatus());
+        assertEquals(source.getStateJson(), record.getStateJson());
+        assertEquals(source.getPendingToolName(), record.getPendingToolName());
+        assertEquals(source.getPendingToolParametersJson(), record.getPendingToolParametersJson());
+        assertEquals(source.getBatchToolDecisions(), record.getBatchToolDecisions());
+        assertEquals(source.getMaxIterations(), record.getMaxIterations());
+        assertEquals(source.getChannelType(), record.getChannelType());
+        assertEquals(source.getChannelPlatformId(), record.getChannelPlatformId());
+        assertEquals(source.getPreExecutedResults(), record.getPreExecutedResults());
+        assertEquals(source.getErrorCode(), record.getErrorCode());
+        assertEquals(source.getTraceId(), record.getTraceId());
+        assertEquals(source.getRootCauseClass(), record.getRootCauseClass());
+        assertEquals(source.getCreatedAt(), record.getCreatedAt());
+        assertEquals(source.getUpdatedAt(), record.getUpdatedAt());
+        assertEquals(source.getFailedAt(), record.getFailedAt());
+        assertEquals(source.getCompletedAt(), record.getCompletedAt());
+        assertEquals(source.getIterationsUsed(), record.getIterationsUsed());
+        assertEquals(source.getRetryAfterMs(), record.getRetryAfterMs());
+        assertEquals(source.getAutonomyLevel(), record.getAutonomyLevel());
+    }
+
+    @Test
+    void testFromDto_nullTimestampsSafe() {
         CheckpointDto dto = new CheckpointDto(
             null, "s1", "coord", "AWAITING_APPROVAL", "FULL", "[]",
             "u123", "telegram", "goal", null, null, null,
@@ -98,9 +126,9 @@ class CheckpointMapperTest {
             "ERR", "trace", "java.lang.RuntimeException", null, null
         );
 
-        AgentCheckpoint entity = CheckpointMapper.toEntity(dto);
-        assertEquals("s1", entity.getSessionId());
-        assertNull(entity.getCreatedAt());
-        assertNull(entity.getUpdatedAt());
+        AgentCheckpoint record = CheckpointRecord.fromDto(dto);
+        assertEquals("s1", record.getSessionId());
+        assertNull(record.getCreatedAt());
+        assertNull(record.getUpdatedAt());
     }
 }

@@ -2,20 +2,19 @@ package com.arcclaw.core.skill;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.lang.reflect.Field;
 import java.time.Instant;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Table;
-
+import com.arcclaw.core.domain.model.AgentSkillRecord;
+import com.arcclaw.persistence.api.SkillDto;
 import org.junit.jupiter.api.Test;
 
 class AgentSkillEntityTest {
 
     @Test
-    void testAllArgsConstructorAndAccessors() {
+    void testAccessors() {
         Instant now = Instant.now();
-        AgentSkillEntity entity = new AgentSkillEntity("id1", "my-skill", "yaml...", now, now);
+        SkillDto dto = new SkillDto("id1", "my-skill", "yaml...", now, now);
+        AgentSkillRecord entity = AgentSkillRecord.fromDto(dto);
         assertEquals("id1", entity.getId());
         assertEquals("my-skill", entity.getName());
         assertEquals("yaml...", entity.getDefinitionYaml());
@@ -28,21 +27,5 @@ class AgentSkillEntityTest {
         Instant later = now.plusSeconds(10);
         entity.setUpdatedAt(later);
         assertEquals(later, entity.getUpdatedAt());
-    }
-
-    @Test
-    void testTableName() {
-        Table table = AgentSkillEntity.class.getAnnotation(Table.class);
-        assertNotNull(table);
-        assertEquals("agent_skill", table.name());
-    }
-
-    @Test
-    void testNameColumnUnique() throws NoSuchFieldException {
-        Field nameField = AgentSkillEntity.class.getDeclaredField("name");
-        Column column = nameField.getAnnotation(Column.class);
-        assertNotNull(column);
-        assertTrue(column.unique());
-        assertFalse(column.nullable());
     }
 }

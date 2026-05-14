@@ -1,4 +1,4 @@
-package com.arcclaw.core.state;
+package com.arcclaw.persistence.sqlite.entity;
 
 import java.time.Instant;
 
@@ -66,3 +66,4 @@ public class CompactionSummaryEntity {
         }
     }
 }
+

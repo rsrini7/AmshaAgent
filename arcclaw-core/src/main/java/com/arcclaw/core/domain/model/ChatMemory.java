@@ -10,4 +10,10 @@ public interface ChatMemory {
 
     String getMetadataJson();
     void setMetadataJson(String metadataJson);
+
+    // ── Wither methods ────────────────────────────────────────────────────
+
+    default ChatMemory withMemoryId(String m) { setMemoryId(m); return this; }
+    default ChatMemory withMessagesJson(String j) { setMessagesJson(j); return this; }
+    default ChatMemory withMetadataJson(String j) { setMetadataJson(j); return this; }
 }

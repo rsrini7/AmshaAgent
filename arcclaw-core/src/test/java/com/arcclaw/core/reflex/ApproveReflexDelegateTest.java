@@ -25,12 +25,12 @@ import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +46,7 @@ class ApproveReflexDelegateTest {
     @Mock AgentLoop agentLoop;
     @Mock DelegateApprovalGuard delegateGuard;
     @Mock CheckpointResumeHandler resumeHandler;
-    @Mock AgentCronRepository cronRepository;
+    @Mock CronStorePort cronStore;
     @Mock ReasoningEngine reasoningEngine;
     @Mock AuditService auditService;
     @Mock ObjectMapper objectMapper;
@@ -65,7 +65,7 @@ class ApproveReflexDelegateTest {
         reflex.agentLoop = agentLoop;
         reflex.delegateGuard = delegateGuard;
         reflex.checkpointResumeHandler = resumeHandler;
-        reflex.cronRepository = cronRepository;
+        reflex.cronStore = cronStore;
         reflex.reasoningEngine = reasoningEngine;
         reflex.auditService = auditService;
         reflex.objectMapper = objectMapper;
@@ -85,7 +85,7 @@ class ApproveReflexDelegateTest {
         String input = "/approve " + targetSid;
         
         // Session exists with pending approval — allowed because user is the owner
-        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
+        AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.of(cp));
         lenient().when(delegateGuard.isDelegate(adminId)).thenReturn(false);
@@ -121,7 +121,7 @@ class ApproveReflexDelegateTest {
         String mySessionId = "b2ada049-88e1-474d-9589-783a82190d46";
         String input = "/approve " + mySessionId;
         
-        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
+        AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
         lenient().when(delegateGuard.isDelegate(ownerId)).thenReturn(false);
@@ -142,7 +142,7 @@ class ApproveReflexDelegateTest {
         lenient().when(delegateGuard.isDelegate(adminId)).thenReturn(true);
         
         // Mock the pending checkpoint for their own session
-        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
+        AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(cp.hasBatchToolDecisions()).thenReturn(false);
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
@@ -171,7 +171,7 @@ class ApproveReflexDelegateTest {
         when(agentStore.isSessionActive(cronUUID)).thenReturn(false);
 
         // Mock the checkpoint approval so we reach the cron repository lookup
-        AgentCheckpoint cp = mock(AgentCheckpointEntity.class);
+        AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getSessionId()).thenReturn("cron-job123-exec456");
         when(checkpointApprovalService.approveAll(eq(cronUUID), any())).thenReturn(cp);
 
@@ -189,13 +189,13 @@ class ApproveReflexDelegateTest {
                 "Cron task approval by owner should not require delegate role, got: " + response);
 
         // Verify the cron path was actually attempted
-        verify(cronRepository, atLeastOnce()).findById(any());
+        verify(cronStore, atLeastOnce()).findById(any());
     }
 
     private CronDecisionRouter createCronRouter() {
         CronDecisionRouter router = new CronDecisionRouter();
         router.statefulAgentStore = agentStore;
-        router.cronRepository = cronRepository;
+        router.cronStore = cronStore;
         router.agentLoop = agentLoop;
         router.reasoningEngine = reasoningEngine;
         router.workspaceManager = workspaceManager;

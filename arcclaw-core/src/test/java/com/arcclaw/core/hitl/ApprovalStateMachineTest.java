@@ -20,7 +20,7 @@ import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
@@ -54,7 +54,7 @@ class ApprovalStateMachineTest {
         stateMachine.objectMapper = objectMapper;
         stateMachine.hitlTimeoutHours = 24L;
 
-        cp = new AgentCheckpointEntity();
+        cp = new AgentCheckpointRecord();
         cp.setSessionId("session-123");
         cp.setAgentRole("coder");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);

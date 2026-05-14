@@ -11,21 +11,16 @@ import com.arcclaw.core.api.dto.CreateSessionRequest;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
-import com.arcclaw.core.audit.AuditEventEntity;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.AuditVerifier;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.sandbox.SandboxResult;
-import com.arcclaw.core.skill.AgentSkillEntity;
-import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.skill.SkillDefinition;
 import com.arcclaw.core.skill.SkillFrontmatter;
 import com.arcclaw.core.skill.SkillPromptParams;
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ManageScheduleTool;
 import com.arcclaw.core.tools.MemorySearchTool;
@@ -61,18 +56,13 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SessionStatusResponse.class,
         AuditEventResponse.class,
         ToolRegistry.ToolDescriptor.class,
-        AuditEventEntity.class,
         AuditOutcome.class,
         SecurityEventType.class,
         GithubTool.class,
         MemorySearchTool.class,
-        AgentCronEntity.class,
         SandboxExecTool.class,
         ScheduleTaskTool.class,
         ManageScheduleTool.class,
-        AgentCronRepository.class,
-        AgentSkillEntity.class,
-        AgentSkillRepository.class,
         SkillDefinition.class,
         SkillFrontmatter.class,
         CompiledSkillEntry.class,

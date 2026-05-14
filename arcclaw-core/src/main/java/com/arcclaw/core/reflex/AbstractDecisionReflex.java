@@ -20,16 +20,17 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCron;
+import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.event.FlushQueuedNotifications;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.domain.model.AgentCron;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
@@ -44,7 +45,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
     @Inject protected Logger log;
     @Inject protected StatefulAgentStore statefulAgentStore;
-    @Inject protected AgentCronRepository cronRepository;
+    @Inject protected CronStorePort cronStore;
     @Inject protected AgentLoop agentLoop;
     @Inject protected ReasoningEngine reasoningEngine;
     @Inject protected Event<AgentJobCompleted> jobCompletedEvent;
@@ -96,7 +97,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 if (d.toolName.isPresent()) return handlePerToolDecision(d.toolName.get(), sessionId, userId, chatId, reason, context);
 
                 Optional<AgentCheckpoint> latestPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
-                List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+                List<AgentCron> pendingCrons = cronStore.findAwaitingApprovalByUserId(userId).stream().map(AgentCronRecord::fromDto).collect(Collectors.toList());
                 
                 String ambiguity = ambiguityResolver.detect(latestPending, pendingCrons);
                 if (ambiguity != null) return ambiguity;
@@ -221,7 +222,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         // Resolve prefix match for cron job IDs
         if (targetId.length() >= 4 && !targetId.contains("-")) {
-            List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+            List<AgentCron> pendingCrons = cronStore.findAwaitingApprovalByUserId(userId).stream().map(AgentCronRecord::fromDto).collect(Collectors.toList());
             String prefix = targetId.toLowerCase();
             Optional<AgentCron> matchedCron = pendingCrons.stream()
                 .filter(c -> c.getId().toLowerCase().startsWith(prefix))
@@ -237,7 +238,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             log.debugf("[%sReflex] targetId==sessionId (%s) — routing to own-session path",
                     getActionName(), sessionId);
             Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
-            List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+            List<AgentCron> pendingCrons = cronStore.findAwaitingApprovalByUserId(userId).stream().map(AgentCronRecord::fromDto).collect(Collectors.toList());
             String ambiguity = ambiguityResolver.detect(selfPending, pendingCrons);
             if (ambiguity != null) return ambiguity;
             String selfDecision = handleActiveSessionDecision(sessionId, userId, chatId, reason, context, selfPending);
@@ -311,7 +312,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         if (!targetId.matches("\\d+")) return targetId;
         int idx = Integer.parseInt(targetId);
         Optional<AgentCheckpoint> selfPending = statefulAgentStore.findLatestAwaitingApproval(sessionId);
-        List<AgentCron> pendingCrons = cronRepository.findAwaitingApprovalByUserId(userId);
+        List<AgentCron> pendingCrons = cronStore.findAwaitingApprovalByUserId(userId).stream().map(AgentCronRecord::fromDto).collect(Collectors.toList());
         String resolvedTargetId = null;
         if (selfPending.isPresent()) {
             if (idx == 1) {

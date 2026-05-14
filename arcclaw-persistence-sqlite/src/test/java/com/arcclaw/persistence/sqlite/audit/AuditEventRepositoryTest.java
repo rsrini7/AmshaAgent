@@ -7,12 +7,13 @@ import java.util.UUID;
 
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.audit.AuditEventEntity;
-import com.arcclaw.core.audit.AuditEventRepository;
+import com.arcclaw.core.audit.AuditEventRecorder;
 import com.arcclaw.core.audit.AuditHashUtil;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.persistence.api.AuditEventStorePort;
+import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +23,10 @@ import org.junit.jupiter.api.Test;
 class AuditEventRepositoryTest {
 
     @Inject
-    AuditEventRepository repository;
+    AuditEventRecorder recorder;
+
+    @Inject
+    AuditEventStorePort storePort;
 
     @Inject
     AuditService auditService;
@@ -52,18 +56,18 @@ class AuditEventRepositoryTest {
         event.setPrevHash("prev");
         event.setHmacHash("hmac");
 
-        repository.record(event);
+        recorder.record(event);
         auditService.waitForIdle();
 
-        var list = repository.findBySessionId(sessionId);
+        var list = storePort.findBySessionId(sessionId);
         assertEquals(1, list.size());
-        assertEquals(SecurityEventType.CHECKPOINT_CREATED, list.get(0).getEventType());
+        assertEquals(SecurityEventType.CHECKPOINT_CREATED.name(), list.get(0).eventType());
     }
 
     @Test
     void testValidation_rejectsNullSessionId() {
         AuditEventEntity event = new AuditEventEntity();
         Assertions.assertThrows(IllegalStateException.class,
-            () -> repository.validateBeforePersist(event));
+            () -> recorder.validateBeforePersist(event));
     }
 }

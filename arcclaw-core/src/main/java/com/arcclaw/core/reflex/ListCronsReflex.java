@@ -9,12 +9,13 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.domain.model.AgentCron;
+import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.domain.model.AgentCron;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
+import com.arcclaw.persistence.api.CronStorePort;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -26,7 +27,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class ListCronsReflex implements AgentReflex {
 
     @Inject
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @ConfigProperty(name = "arcclaw.cron.list-retention-hours", defaultValue = "24")
     int retentionHours;
@@ -54,7 +55,9 @@ public class ListCronsReflex implements AgentReflex {
             return ReflexResult.respond(UserMessages.LIST_CONTEXT_NOT_AVAILABLE, context);
         }
         String uid = WorkspaceScopeHolder.USER_ID.get();
-        List<AgentCron> jobs = cronRepository.findByUserId(uid);
+        List<AgentCron> jobs = cronStore.findByUserId(uid).stream()
+                .map(AgentCronRecord::fromDto)
+                .collect(Collectors.toList());
         if (jobs.isEmpty()) {
             return ReflexResult.respond(UserMessages.NO_SCHEDULE_FOUND, context);
         }

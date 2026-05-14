@@ -8,12 +8,12 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.audit.AuditEventEntity;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+import com.arcclaw.persistence.postgres.entity.AuditEventEntity;
 
 /**
  * PostgreSQL implementation of the AuditEventStorePort with WORM enforcement triggers.
@@ -101,3 +101,4 @@ public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
         );
     }
 }
+

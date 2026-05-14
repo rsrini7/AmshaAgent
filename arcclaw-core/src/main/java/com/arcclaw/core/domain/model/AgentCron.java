@@ -61,4 +61,25 @@ public interface AgentCron {
     void setUpdatedAt(Instant updatedAt);
 
     String toDisplayString();
+
+    // ── Wither methods ────────────────────────────────────────────────────
+
+    default AgentCron withId(String id) { setId(id); return this; }
+    default AgentCron withSessionId(String s) { setSessionId(s); return this; }
+    default AgentCron withUserId(String u) { setUserId(u); return this; }
+    default AgentCron withChatId(String c) { setChatId(c); return this; }
+    default AgentCron withChannelType(String t) { setChannelType(t); return this; }
+    default AgentCron withChannelPlatformId(String p) { setChannelPlatformId(p); return this; }
+    default AgentCron withCronExpression(String e) { setCronExpression(e); return this; }
+    default AgentCron withTimezone(String t) { setTimezone(t); return this; }
+    default AgentCron withRunOnce(boolean r) { setRunOnce(r); return this; }
+    default AgentCron withGoal(String g) { setGoal(g); return this; }
+    default AgentCron withNextFireTime(Instant t) { setNextFireTime(t); return this; }
+    default AgentCron withLastFireTime(Instant t) { setLastFireTime(t); return this; }
+    default AgentCron withStatus(CronStatus s) { setStatus(s); return this; }
+    default AgentCron withExecutionRole(String r) { setExecutionRole(r); return this; }
+    default AgentCron withErrorReason(String r) { setErrorReason(r); return this; }
+    default AgentCron withLastDeliveryId(String d) { setLastDeliveryId(d); return this; }
+    default AgentCron withCreatedAt(Instant t) { setCreatedAt(t); return this; }
+    default AgentCron withUpdatedAt(Instant t) { setUpdatedAt(t); return this; }
 }

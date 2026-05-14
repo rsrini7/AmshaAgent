@@ -10,12 +10,12 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.audit.AuditEventEntity;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -156,3 +156,4 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
         );
     }
 }
+

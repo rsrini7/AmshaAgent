@@ -19,7 +19,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         McpConnectResource.DisconnectResponse.class,
         McpConnectResource.ServerEntry.class,
         SkillResource.MessageResponse.class,
-        SkillResource.SkillDto.class,
+        SkillResource.SkillResponse.class,
         AuthErrorResponse.class,
         RateLimitErrorResponse.class,
         AgentEvent.class,

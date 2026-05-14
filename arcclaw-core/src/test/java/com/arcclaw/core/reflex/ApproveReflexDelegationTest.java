@@ -16,12 +16,12 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCheckpointEntity;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
@@ -36,7 +36,7 @@ public class ApproveReflexDelegationTest {
 
     @Mock CheckpointApprovalService checkpointApprovalService;
     @Mock StatefulAgentStore statefulAgentStore;
-    @Mock AgentCronRepository cronRepository;
+    @Mock CronStorePort cronStore;
     @Mock CheckpointResumeHandler checkpointResumeHandler;
     ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks ApproveReflex approveReflex;
@@ -70,7 +70,7 @@ public class ApproveReflexDelegationTest {
 
     @Test
     void test_bulkApprove_delegatesToCheckpointApprovalService() {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         cp.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
@@ -90,7 +90,7 @@ public class ApproveReflexDelegationTest {
 
     @Test
     void test_perToolApprove_delegatesToCheckpointApprovalService() {
-        AgentCheckpoint cp = new AgentCheckpointEntity();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
         cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");

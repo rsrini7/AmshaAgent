@@ -97,4 +97,35 @@ public interface AgentCheckpoint {
     List<String> parallelToolNames();
     boolean hasBrowserTool();
     boolean hasPreExecutedResults();
+
+    // ── Wither methods (fluent mutation) ──────────────────────────────────
+
+    default AgentCheckpoint withId(Long id) { setId(id); return this; }
+    default AgentCheckpoint withVersion(Integer v) { setVersion(v); return this; }
+    default AgentCheckpoint withSessionId(String s) { setSessionId(s); return this; }
+    default AgentCheckpoint withAgentRole(String r) { setAgentRole(r); return this; }
+    default AgentCheckpoint withStatus(CheckpointStatus s) { setStatus(s); return this; }
+    default AgentCheckpoint withAutonomyLevel(AutonomyLevel a) { setAutonomyLevel(a); return this; }
+    default AgentCheckpoint withStateJson(String j) { setStateJson(j); return this; }
+    default AgentCheckpoint withChannelPlatformId(String p) { setChannelPlatformId(p); return this; }
+    default AgentCheckpoint withChannelType(String t) { setChannelType(t); return this; }
+    default AgentCheckpoint withOriginalGoal(String g) { setOriginalGoal(g); return this; }
+    default AgentCheckpoint withFailedAt(Instant t) { setFailedAt(t); return this; }
+    default AgentCheckpoint withCompletedAt(Instant t) { setCompletedAt(t); return this; }
+    default AgentCheckpoint withFailReason(String r) { setFailReason(r); return this; }
+    default AgentCheckpoint withPendingToolName(String n) { setPendingToolName(n); return this; }
+    default AgentCheckpoint withPendingToolRole(String r) { setPendingToolRole(r); return this; }
+    default AgentCheckpoint withBatchToolDecisions(String d) { setBatchToolDecisions(d); return this; }
+    default AgentCheckpoint withPendingToolParametersJson(String j) { setPendingToolParametersJson(j); return this; }
+    default AgentCheckpoint withPreExecutedResults(String r) { setPreExecutedResults(r); return this; }
+    default AgentCheckpoint withMaxIterations(Integer m) { setMaxIterations(m); return this; }
+    default AgentCheckpoint withIterationsUsed(int i) { setIterationsUsed(i); return this; }
+    default AgentCheckpoint withRetryAfterMs(Integer r) { setRetryAfterMs(r); return this; }
+    default AgentCheckpoint withSystemNote(String n) { setSystemNote(n); return this; }
+    default AgentCheckpoint withContextDataJson(String j) { setContextDataJson(j); return this; }
+    default AgentCheckpoint withErrorCode(String c) { setErrorCode(c); return this; }
+    default AgentCheckpoint withTraceId(String t) { setTraceId(t); return this; }
+    default AgentCheckpoint withRootCauseClass(String c) { setRootCauseClass(c); return this; }
+    default AgentCheckpoint withCreatedAt(Instant t) { setCreatedAt(t); return this; }
+    default AgentCheckpoint withUpdatedAt(Instant t) { setUpdatedAt(t); return this; }
 }

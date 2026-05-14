@@ -10,10 +10,13 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.persistence.CheckpointMapper;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import io.quarkus.arc.Unremovable;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -74,14 +77,47 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional(Transactional.TxType.REQUIRED)
     public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
         if (checkpointDto.id() == null) {
-            return CheckpointMapper.toDto(checkpointRepo.persist(CheckpointMapper.toEntity(checkpointDto)));
+            AgentCheckpointEntity entity = newEntityFromDto(checkpointDto);
+            return CheckpointMapper.toDto(checkpointRepo.persist(entity));
         }
         return checkpointRepo.findById(checkpointDto.id())
             .map(managed -> {
                 upsertService.updateEntityFromDto(managed, checkpointDto);
                 return CheckpointMapper.toDto(checkpointRepo.merge(managed));
             })
-            .orElseGet(() -> CheckpointMapper.toDto(checkpointRepo.persist(CheckpointMapper.toEntity(checkpointDto))));
+            .orElseGet(() -> {
+                AgentCheckpointEntity entity = newEntityFromDto(checkpointDto);
+                return CheckpointMapper.toDto(checkpointRepo.persist(entity));
+            });
+    }
+
+    private static AgentCheckpointEntity newEntityFromDto(CheckpointDto dto) {
+        AgentCheckpointEntity entity = new AgentCheckpointEntity();
+        entity.setSessionId(dto.sessionId());
+        entity.setAgentRole(dto.agentRole());
+        entity.setStatus(dto.status() != null ? CheckpointStatus.valueOf(dto.status()) : null);
+        entity.setPendingToolName(dto.pendingToolName());
+        entity.setPendingToolParametersJson(dto.pendingToolParametersJson());
+        entity.setBatchToolDecisions(dto.batchToolDecisions());
+        entity.setPreExecutedResults(dto.preExecutedResults());
+        entity.setAutonomyLevel(dto.autonomyLevel() != null ? AutonomyLevel.valueOf(dto.autonomyLevel()) : null);
+        entity.setOriginalGoal(dto.originalGoal());
+        entity.setContextDataJson(dto.contextDataJson());
+        entity.setIterationsUsed(dto.iterationsUsed());
+        entity.setMaxIterations(dto.maxIterations());
+        entity.setRetryAfterMs(dto.retryAfterMs());
+        entity.setChannelType(dto.channelType());
+        entity.setChannelPlatformId(dto.channelPlatformId());
+        entity.setSystemNote(dto.systemNote());
+        entity.setStateJson(dto.stateJson());
+        entity.setFailReason(dto.failReason());
+        entity.setFailedAt(dto.failedAt());
+        entity.setCompletedAt(dto.completedAt());
+        entity.setErrorCode(dto.errorCode());
+        entity.setTraceId(dto.traceId());
+        entity.setRootCauseClass(dto.rootCauseClass());
+        entity.setUpdatedAt(dto.updatedAt());
+        return entity;
     }
 
     @Override
@@ -318,3 +354,4 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         }
     }
 }
+

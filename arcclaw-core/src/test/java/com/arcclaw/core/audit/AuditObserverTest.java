@@ -8,6 +8,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.core.domain.model.AuditEventRecord;
+import com.arcclaw.persistence.api.AuditEventStorePort;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +20,7 @@ public class AuditObserverTest {
     AuditObserver observer;
 
     @Inject
-    AuditEventRepository repository;
+    AuditEventStorePort auditStore;
 
     @Inject
     AuditService auditService;
@@ -38,7 +40,9 @@ public class AuditObserverTest {
         
         auditService.waitForIdle();
 
-        List<AuditEvent> events = repository.findBySessionId(sessionId);
+        var events = auditStore.findBySessionId(sessionId).stream()
+                .map(AuditEventRecord::fromDto)
+                .toList();
         assertEquals(1, events.size());
 
         AuditEvent event = events.get(0);

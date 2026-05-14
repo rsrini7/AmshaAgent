@@ -8,8 +8,6 @@ import java.util.List;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
-import com.arcclaw.core.audit.AuditEventRepository;
-import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -17,6 +15,8 @@ import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.persistence.api.AuditEventDto;
+import com.arcclaw.persistence.api.AuditEventStorePort;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +29,7 @@ public class AuditServiceIntegrationTest {
     AuditService auditService;
 
     @Inject
-    AuditEventRepository repository;
+    AuditEventStorePort auditStore;
 
     @Inject
     SecretVault secretVault;
@@ -67,12 +67,12 @@ public class AuditServiceIntegrationTest {
             auditService.waitForIdle();
             em.clear();
 
-            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertEquals(1, events.size());
             
-            AuditEvent event = events.get(0);
-            assertEquals(SecurityEventType.VAULT_STORE, event.getEventType());
-            assertTrue(event.getEventDetail().contains("keyName=my-secret"));
+            AuditEventDto event = events.get(0);
+            assertEquals(SecurityEventType.VAULT_STORE.name(), event.eventType());
+            assertTrue(event.eventDetail().contains("keyName=my-secret"));
             });
         });
     }
@@ -89,12 +89,12 @@ public class AuditServiceIntegrationTest {
             auditService.waitForIdle();
             em.clear();
 
-            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertEquals(1, events.size());
             
-            AuditEvent event = events.get(0);
-            assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS, event.getEventType());
-            assertTrue(event.getEventDetail().contains("keyName=non-existent-key"));
+            AuditEventDto event = events.get(0);
+            assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS.name(), event.eventType());
+            assertTrue(event.eventDetail().contains("keyName=non-existent-key"));
             });
         });
     }
@@ -111,12 +111,12 @@ public class AuditServiceIntegrationTest {
             auditService.waitForIdle();
             em.clear();
 
-            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertEquals(1, events.size());
             
-            AuditEvent event = events.get(0);
-            assertEquals(SecurityEventType.CHECKPOINT_CREATED, event.getEventType());
-            assertEquals("coordinator", event.getAgentRole());
+            AuditEventDto event = events.get(0);
+            assertEquals(SecurityEventType.CHECKPOINT_CREATED.name(), event.eventType());
+            assertEquals("coordinator", event.agentRole());
             });
         });
     }
@@ -131,7 +131,7 @@ public class AuditServiceIntegrationTest {
             auditService.waitForIdle();
             em.clear();
 
-            List<AuditEvent> events = repository.findBySessionId(sessionId);
+            List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertEquals(1, events.size(), "Direct audit record failed to persist");
             });
         });

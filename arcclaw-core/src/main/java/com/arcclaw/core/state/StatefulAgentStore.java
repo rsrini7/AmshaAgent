@@ -1,7 +1,5 @@
 package com.arcclaw.core.state;
 
-import com.arcclaw.core.domain.model.AgentCheckpoint;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -9,6 +7,7 @@ import java.util.Optional;
 
 import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.security.AutonomyLevel;
 
 /**

@@ -21,12 +21,12 @@ import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.domain.model.AgentCron;
-import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -56,7 +56,7 @@ public class CronJobRunner {
     CronResultHandler resultHandler;
 
     @Inject
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
@@ -69,7 +69,7 @@ public class CronJobRunner {
     public void execute(AgentCron job) {
         String executionId = UUID.randomUUID().toString();
         
-        cronRepository.setDeliveryId(job.getId(), executionId);
+        cronStore.setDeliveryId(job.getId(), executionId);
 
         String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.getId() + "-" + executionId;
 

@@ -64,4 +64,25 @@ public interface AuditEvent {
     void setPrevHash(String prevHash);
 
     String computePayloadStr();
+
+    // ── Wither methods ────────────────────────────────────────────────────
+
+    default AuditEvent withId(UUID id) { setId(id); return this; }
+    default AuditEvent withSessionId(String s) { setSessionId(s); return this; }
+    default AuditEvent withUserId(String u) { setUserId(u); return this; }
+    default AuditEvent withAgentRole(String r) { setAgentRole(r); return this; }
+    default AuditEvent withGoalHash(String h) { setGoalHash(h); return this; }
+    default AuditEvent withOutcome(AuditOutcome o) { setOutcome(o); return this; }
+    default AuditEvent withEventType(SecurityEventType t) { setEventType(t); return this; }
+    default AuditEvent withEventDetail(String d) { setEventDetail(d); return this; }
+    default AuditEvent withInputTokens(int t) { setInputTokens(t); return this; }
+    default AuditEvent withOutputTokens(int t) { setOutputTokens(t); return this; }
+    default AuditEvent withUsdCost(BigDecimal c) { setUsdCost(c); return this; }
+    default AuditEvent withTimestamp(Instant t) { setTimestamp(t); return this; }
+    default AuditEvent withIterationsUsed(int i) { setIterationsUsed(i); return this; }
+    default AuditEvent withAppVersion(String v) { setAppVersion(v); return this; }
+    default AuditEvent withIdempotencyKey(String k) { setIdempotencyKey(k); return this; }
+    default AuditEvent withSequence(long s) { setSequence(s); return this; }
+    default AuditEvent withHmacHash(String h) { setHmacHash(h); return this; }
+    default AuditEvent withPrevHash(String h) { setPrevHash(h); return this; }
 }

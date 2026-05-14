@@ -21,13 +21,13 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.persistence.api.AgentCronDto;
+import com.arcclaw.persistence.api.CronStorePort;
 import org.junit.jupiter.api.Test;
 
 class ScheduleTaskToolTest {
 
-    private final AgentCronRepository cronRepository = mock(AgentCronRepository.class);
+    private final CronStorePort cronStore = mock(CronStorePort.class);
     private final AuditService auditService = mock(AuditService.class);
     @SuppressWarnings("unchecked")
     private final Event<CronTaskScheduled> cronScheduledEvent = mock(Event.class);
@@ -35,9 +35,9 @@ class ScheduleTaskToolTest {
     private ScheduleTaskTool createTool() {
         ScheduleTaskTool tool = new ScheduleTaskTool();
         try {
-            var repoField = ScheduleTaskTool.class.getDeclaredField("cronRepository");
+            var repoField = ScheduleTaskTool.class.getDeclaredField("cronStore");
             repoField.setAccessible(true);
-            repoField.set(tool, cronRepository);
+            repoField.set(tool, cronStore);
 
             var auditField = ScheduleTaskTool.class.getDeclaredField("auditService");
             auditField.setAccessible(true);
@@ -69,7 +69,7 @@ class ScheduleTaskToolTest {
         assertTrue(result.output().contains("ID:"));
         assertTrue(result.output().contains("Next fire:"));
 
-        verify(cronRepository).persist(any(AgentCronEntity.class));
+        verify(cronStore).save(any(AgentCronDto.class));
         verify(auditService).record(
                 eq("test-session-id"), eq("test-user"), eq("coordinator"),
                 eq(SecurityEventType.CRONCREATED), anyString()
@@ -92,7 +92,7 @@ class ScheduleTaskToolTest {
         assertEquals(400, result.exitCode());
         assertTrue(result.output().contains("Missing required parameter: cronExpression"));
 
-        verify(cronRepository, never()).persist(any());
+        verify(cronStore, never()).save(any());
     }
 
     @Test
@@ -111,7 +111,7 @@ class ScheduleTaskToolTest {
         assertEquals(422, result.exitCode());
         assertTrue(result.output().contains("unresolved references"));
 
-        verify(cronRepository, never()).persist(any());
+        verify(cronStore, never()).save(any());
     }
 
     @Test
@@ -130,7 +130,7 @@ class ScheduleTaskToolTest {
         assertEquals(403, result.exitCode());
         assertTrue(result.output().contains("tenant context not bound"));
 
-        verify(cronRepository, never()).persist(any());
+        verify(cronStore, never()).save(any());
     }
 
     @Test
@@ -152,9 +152,9 @@ class ScheduleTaskToolTest {
                 "runOnce", true
         ));
 
-        verify(cronRepository).persist(argThat(entity -> {
-            AgentCronEntity e = (AgentCronEntity) entity;
-            return e.runOnce;
+        verify(cronStore).save(argThat(dto -> {
+            AgentCronDto e = (AgentCronDto) dto;
+            return e.runOnce();
         }));
     }
 }

@@ -8,9 +8,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpointEntity;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
 
 @ApplicationScoped
 public class ZombieRecoveryService {
@@ -85,3 +85,4 @@ public class ZombieRecoveryService {
                 .executeUpdate();
     }
 }
+
