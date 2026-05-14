@@ -69,3 +69,5 @@ arcclaw-source.7z
 
 # Generated
 arcclaw-ui/src/api/generated/
+
+.opencode-memory
