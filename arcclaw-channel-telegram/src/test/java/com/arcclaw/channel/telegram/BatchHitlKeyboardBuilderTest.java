@@ -25,8 +25,8 @@ class BatchHitlKeyboardBuilderTest {
         String cronSid = "cron-" + UUID_STR;
         String compressed = BatchHitlKeyboardBuilder.compressSessionId(cronSid);
         assertNotNull(compressed);
-        assertTrue(compressed.startsWith("cron-"));
-        assertEquals(27, compressed.length());
+        assertTrue(compressed.startsWith("c-"));
+        assertEquals(24, compressed.length());
         String decompressed = BatchHitlKeyboardBuilder.decompressSessionId(compressed);
         assertEquals(cronSid, decompressed);
     }
@@ -100,7 +100,7 @@ class BatchHitlKeyboardBuilderTest {
         assertFalse(rows.isEmpty());
         String cb = rows.get(0).get(0).getCallbackData();
         assertNotNull(cb);
-        assertTrue(cb.startsWith("BATCH_APPROVE|"));
+        assertTrue(cb.startsWith("A|"));
         assertTrue(cb.length() <= 64);
         // Verify compressed ID is 22 chars (not the original 36)
         String sessionPart = cb.split("\\|")[1];

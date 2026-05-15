@@ -44,10 +44,12 @@ public class ApprovalNotificationService {
         return (cron, result) -> {
             ChannelType chType = ChannelType.fromString(cron.getChannelType()).orElse(ChannelType.TELEGRAM);
             String platformId = cron.getChannelPlatformId() != null ? cron.getChannelPlatformId() : cron.getChatId();
+            String toolName = result instanceof AgentResult.AwaitingApproval aa ? aa.toolName() : null;
             jobCompletedEvent.fire(new AgentJobCompleted(
                 cron.getId(), cron.getUserId(), chType, platformId, cron.getLastDeliveryId(),
                 AgentResultFormatter.format(result),
-                result instanceof AgentResult.Failed f ? f.category() : null));
+                result instanceof AgentResult.Failed f ? f.category() : null,
+                null, toolName));
         };
     }
 }

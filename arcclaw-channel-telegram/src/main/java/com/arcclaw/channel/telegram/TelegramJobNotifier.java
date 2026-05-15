@@ -1,5 +1,6 @@
 package com.arcclaw.channel.telegram;
 
+import java.util.List;
 import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -8,11 +9,12 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.jboss.logging.Logger;
 
 /**
  * Telegram implementation of {@link ChannelJobNotifier}.
- * Sends notifications to Telegram users.
+ * Sends notifications to Telegram users with inline keyboard support for approvals.
  */
 @ApplicationScoped
 public class TelegramJobNotifier implements ChannelJobNotifier {
@@ -43,6 +45,23 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
             sender.sendRaw(user, renderedMessage);
         } catch (Exception e) {
             log.errorf(e, "CRON-NOTIFY-FAIL recipient=%s sessionId=%s", recipient, sessionId);
+        }
+    }
+
+    @Override
+    public void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage) {
+        if (recipient == null || !RECIPIENT_ID_PATTERN.matcher(recipient).matches()) {
+            log.warnf("CRON-APPROVAL-NOTIFY skipped - chatId '%s' is not a valid Telegram ID", recipient);
+            return;
+        }
+
+        try {
+            ChannelUser user = new ChannelUser(recipient, recipient, "user", ChannelType.TELEGRAM);
+            InlineKeyboardMarkup markup = BatchHitlKeyboardBuilder.buildKeyboard(cronSessionId, List.of(toolName));
+            sender.sendWithKeyboard(user, escapeMdV2(renderedMessage), markup);
+            log.infof("CRON-APPROVAL-NOTIFY sent to=%s session=%s tool=%s", recipient, cronSessionId, toolName);
+        } catch (Exception e) {
+            log.errorf(e, "CRON-APPROVAL-NOTIFY-FAIL recipient=%s session=%s", recipient, cronSessionId);
         }
     }
 

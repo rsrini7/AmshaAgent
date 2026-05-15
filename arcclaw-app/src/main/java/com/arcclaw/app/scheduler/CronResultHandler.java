@@ -127,7 +127,7 @@ public class CronResultHandler {
         String answer = AgentResultFormatter.formatCronHitl(job.getId(), displayGoal, result.toolName());
         
         Runnable notifyTask = () -> {
-            fireCompletionEvent(job, executionId, answer, null);
+            fireCompletionEvent(job, executionId, answer, null, cronSessionId, result.toolName());
             log.infof("[CronResultHandler] Session kept alive for cron=%s - AWAITING_APPROVAL. (Notification handled here)", cronSessionId);
         };
 
@@ -187,6 +187,10 @@ public class CronResultHandler {
     }
 
     private void fireCompletionEvent(AgentCron job, String executionId, String answer, AgentResult.FailureCategory category) {
+        fireCompletionEvent(job, executionId, answer, category, null, null);
+    }
+
+    private void fireCompletionEvent(AgentCron job, String executionId, String answer, AgentResult.FailureCategory category, String cronSessionId, String toolName) {
         Optional<ChannelType> resolvedType = ChannelType.fromString(job.getChannelType());
         if (resolvedType.isEmpty()) {
             log.warnf("CRON-NOTIFY cronId=%s has null/unknown channelType='%s'. " +
@@ -194,8 +198,8 @@ public class CronResultHandler {
                        "Run migration: UPDATE agent_cron SET channel_type='TELEGRAM' " +
                        "WHERE channel_type IS NULL;",
                        job.getId(), job.getChannelType());
-            String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.getId();
-            auditService.record(cronSessionId, job.getUserId(),
+            String legacySessionId = AgentSentinels.CRON_SESSION_PREFIX + job.getId();
+            auditService.record(legacySessionId, job.getUserId(),
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 SecurityEventType.LEGACY_CHANNEL_FALLBACK,
                 "cronId=" + job.getId() + " channelType=" + job.getChannelType());
@@ -207,7 +211,7 @@ public class CronResultHandler {
         try {
             jobCompletedEvent.fire(new AgentJobCompleted(
                 job.getId(), job.getUserId(), chType, platformId, executionId,
-                answer, category));
+                answer, category, cronSessionId, toolName));
         } catch (Exception e) {
             log.warnf(e, "CRON-EVENT-FIRE-FAIL cronId=%s", job.getId());
         }
