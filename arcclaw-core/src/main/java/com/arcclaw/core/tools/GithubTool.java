@@ -6,6 +6,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -13,7 +14,9 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.security.RequiresSecret;
+import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.security.VaultKey;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -45,6 +48,12 @@ public class GithubTool implements AgentTool {
     @Inject
     @ConfigProperty(name = "arcclaw.tools.github.repos-per-page", defaultValue = "100")
     int reposPerPage;
+
+    @ConfigProperty(name = "arcclaw.sandbox.timeout-seconds", defaultValue = "30")
+    long timeoutSeconds;
+
+    @Inject
+    SecretVault secretVault;
 
     // ── SINGLE SOURCE OF TRUTH 
     // Keep ALLOWED_ACTIONS, ALLOWED_COMMANDS, description(), and parametersSchema()
@@ -88,12 +97,16 @@ public class GithubTool implements AgentTool {
     @Override
     @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "ARCCLAW_TOOLS_GITHUB_TOKEN")
     public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
+        return buildGhCommand(params);
+    }
+
+    private List<String> buildGhCommand(Map<String, Object> params) {
         String action  = (String) params.getOrDefault("action", "repo");
         String command = (String) params.getOrDefault("command", "view");
         String target  = (String) params.get("target");
         String ref     = (String) params.get("ref");
 
-        // ── ALLOWLIST GUARD 
+        // ── ALLOWLIST GUARD
         // This is the hard runtime enforcement. Must always match ALLOWED_ACTIONS
         // and ALLOWED_COMMANDS above and the schema advertised to the LLM.
         if (!ALLOWED_ACTIONS.contains(action)) {
@@ -105,7 +118,7 @@ public class GithubTool implements AgentTool {
                     "Command '" + command + "' is not permitted. Only 'view' and 'list' are supported.");
         }
 
-        //SMART GUARDRAILS 
+        //SMART GUARDRAILS
         if ("repo".equals(action)) {
             if ("view".equals(command) && (target == null || !target.contains("/"))) {
                 throw new IllegalArgumentException(
@@ -124,7 +137,7 @@ public class GithubTool implements AgentTool {
             }
         }
 
-        // REF / README BRANCH FETCH 
+        // REF / README BRANCH FETCH
         // gh api returns base64-encoded content; postProcessOutput() decodes it.
         if ("repo".equals(action) && "view".equals(command)
                 && ref != null && !ref.isBlank()) {
@@ -214,7 +227,53 @@ public class GithubTool implements AgentTool {
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
-        throw new UnsupportedOperationException("GithubTool requires sandbox execution");
+        try {
+            List<String> command = buildGhCommand(params);
+
+            // Resolve GH_TOKEN from vault for host-side execution
+            String ghToken = resolveGhToken();
+
+            var pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            if (ghToken != null) {
+                pb.environment().put("GH_TOKEN", ghToken);
+            }
+
+            var process = pb.start();
+            var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+
+            if (!finished) {
+                process.destroyForcibly();
+                return ToolResponse.infraFailure("GitHub command timed out after " + timeoutSeconds + "s");
+            }
+
+            String result = output.trim();
+            if (process.exitValue() != 0) {
+                return ToolResponse.failure(1, "gh CLI failed (exit " + process.exitValue() + "): " + result);
+            }
+
+            return ToolResponse.success(postProcessOutput(
+                    result.isBlank() ? "(no output)" : result, params));
+        } catch (IllegalArgumentException e) {
+            return ToolResponse.failure(1, e.getMessage());
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            return ToolResponse.failure(1, msg != null ? msg : "GitHub tool execution failed");
+        }
+    }
+
+    private String resolveGhToken() {
+        try {
+            VaultKey key = secretVault.retrieveSystemKey("ARCCLAW_TOOLS_GITHUB_TOKEN").orElse(null);
+            if (key == null) return null;
+            try (key) {
+                return new String(key.get(), StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            log.debugf("Could not resolve GH_TOKEN from vault: %s", e.getMessage());
+            return null;
+        }
     }
 
     @Override
