@@ -2,10 +2,8 @@ package com.arcclaw.core.reflex;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
@@ -19,16 +17,13 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.domain.model.AgentCronRecord;
-import com.arcclaw.core.event.FlushQueuedNotifications;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,9 +43,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     @Inject protected CronStorePort cronStore;
     @Inject protected AgentLoop agentLoop;
     @Inject protected ReasoningEngine reasoningEngine;
-    @Inject protected Event<AgentJobCompleted> jobCompletedEvent;
-    @Inject protected Event<FlushQueuedNotifications> flushEvent;
     @Inject protected AuditService auditService;
+    @Inject protected ApprovalNotificationService notificationService;
     @Inject protected ObjectMapper objectMapper;
     @Inject protected CheckpointResumeHandler checkpointResumeHandler;
     @Inject protected DelegateApprovalGuard delegateGuard;
@@ -123,13 +117,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
                 return resumeResultHelper.pollBridge(sessionId);
             });
-            try {
-                if (flushEvent != null && !statefulAgentStore.hasPendingApprovalForChat(chatId)) {
-                    flushEvent.fire(new FlushQueuedNotifications(chatId));
-                }
-            } catch (Exception ex) {
-                log.warn("Failed to flush notifications", ex);
-            }
+            notificationService.flushPendingNotifications(chatId);
             return response != null ? ReflexResult.respond(response, context) : ReflexResult.forward(context);
         } catch (Exception e) {
             log.errorf("Failed to process %s for session %s: %s", getActionName(), sessionId, ExceptionUtils.getRootCauseMessage(e));
@@ -279,14 +267,6 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         // 2. Not a session — try as cron task (owner can approve their own tasks)
         try {
-            BiConsumer<AgentCron, AgentResult> jobNotifier = (cron, result) -> {
-                ChannelType chType = ChannelType.fromString(cron.getChannelType()).orElse(ChannelType.TELEGRAM);
-                String platformId = cron.getChannelPlatformId() != null ? cron.getChannelPlatformId() : cron.getChatId();
-                jobCompletedEvent.fire(new AgentJobCompleted(
-                    cron.getId(), cron.getUserId(), chType, platformId, cron.getLastDeliveryId(),
-                    AgentResultFormatter.format(result),
-                    result instanceof AgentResult.Failed f ? f.category() : null));
-            };
             var cronCtx = new CronDecisionRouter.CronContext(
                 targetId, userId, chatId, reason, context,
                 (sid, rsn) -> applyDecisionToAll(sid, rsn),
@@ -295,7 +275,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                 (cron, rsn, result) -> postProcessCronDecision(cron, rsn, result),
                 result -> getCronSuccessResponse(result),
                 () -> getErrorMessage(),
-                jobNotifier
+                notificationService.createJobNotifier()
             );
             String cronRes = cronDecisionRouter.execute(cronCtx);
             if (cronRes != null) return cronRes;

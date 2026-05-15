@@ -32,12 +32,15 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
+import static org.mockito.Mockito.lenient;
+
 public class ApproveReflexDelegationTest {
 
     @Mock CheckpointApprovalService checkpointApprovalService;
     @Mock StatefulAgentStore statefulAgentStore;
     @Mock CronStorePort cronStore;
     @Mock CheckpointResumeHandler checkpointResumeHandler;
+    @Mock ApprovalNotificationService notificationService;
     ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks ApproveReflex approveReflex;
     
@@ -49,6 +52,7 @@ public class ApproveReflexDelegationTest {
         MockitoAnnotations.openMocks(this);
         approveReflex.log = Logger.getLogger("test");
         approveReflex.objectMapper = objectMapper;
+        lenient().when(notificationService.createJobNotifier()).thenReturn((cron, result) -> {});
         
         mockedScope = mockStatic(WorkspaceScopeHolder.class);
         mockedScope.when(() -> WorkspaceScopeHolder.run(anyString(), any(Runnable.class)))

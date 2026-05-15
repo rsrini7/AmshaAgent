@@ -19,7 +19,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
@@ -30,7 +29,6 @@ import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -67,8 +65,7 @@ class DenyReflexTest {
     @InjectMock
     CronStorePort cronStore;
 
-    @SuppressWarnings("unchecked")
-    Event<AgentJobCompleted> jobCompletedEventMock = mock(Event.class);
+    ApprovalNotificationService notificationServiceMock = mock(ApprovalNotificationService.class);
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -77,7 +74,8 @@ class DenyReflexTest {
         if (denyReflex instanceof ClientProxy) {
             instance = (DenyReflex) ((ClientProxy) denyReflex).arc_contextualInstance();
         }
-        instance.jobCompletedEvent = jobCompletedEventMock;
+        instance.notificationService = notificationServiceMock;
+        lenient().when(notificationServiceMock.createJobNotifier()).thenReturn((cron, result) -> {});
         
         // §7.29 guard: allow tests to proceed by default
         when(statefulAgentStore.claimForResume(anyString(), anyString()))
@@ -138,7 +136,7 @@ class DenyReflexTest {
         assertEquals("Denial Ack", resultText);
         assertTrue(ctx.isResumeSignal());
         verify(cronStore).markFailed(eq(cronId), anyString());
-        verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
+        verify(notificationServiceMock).createJobNotifier();
     }
 
     @Test

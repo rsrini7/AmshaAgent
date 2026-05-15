@@ -16,6 +16,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.governance.SessionBudgetTracker;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,7 +26,6 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -72,7 +72,7 @@ public class CompactionService {
     RateLimitTracker rateLimitTracker;
 
     @Inject
-    MeterRegistry meterRegistry;
+    SessionBudgetTracker budgetTracker;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.enabled", defaultValue = "true")
     boolean enabled;
@@ -173,14 +173,8 @@ public class CompactionService {
                 .mapToLong(m -> m.toString().length())
                 .sum();
         long estimatedTokens = totalChars / 4;
-        
-        // Record context stuffing ratio
-        if (meterRegistry != null) {
-                double ratio = (double) estimatedTokens / maxTokensBeforeCompaction;
-                String tier = getRatioTier(ratio);
-                meterRegistry.summary("arcclaw.compaction.context.ratio", "tier", tier)
-                             .record(ratio);
-            }
+
+        budgetTracker.recordContextRatio(estimatedTokens, maxTokensBeforeCompaction);
 
         if (log.isInfoEnabled()) {
             log.infof("CompactionService starting for session %s (est %d tokens, ratio %.2f)",
@@ -372,13 +366,6 @@ public class CompactionService {
         String msg = e.getMessage();
         if (msg != null && (msg.contains("rate_limit_exceeded") || msg.contains("429"))) return true;
         return isRateLimit(e.getCause());  // walk the cause chain
-    }
-
-    private String getRatioTier(double ratio) {
-        if (ratio < 0.5) return "low";
-        if (ratio < 0.9) return "medium";
-        if (ratio < 1.1) return "high";
-        return "critical";
     }
 
     private String truncateSafely(String text) {

@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.governance.SessionBudgetTracker;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,12 +43,15 @@ class CompactionServiceTest {
         mockAudit = mock(AuditService.class);
         mockModel = mock(ChatModel.class);
 
+        SessionBudgetTracker budgetTracker = new SessionBudgetTracker();
+        setField(budgetTracker, "meterRegistry", new SimpleMeterRegistry());
+        service.budgetTracker = budgetTracker;
+
         service.chatMemoryStore = mockChatStore;
         service.summaryRepository = mockPort;
         service.auditService = mockAudit;
         service.compactionModel = mockModel;
         service.objectMapper = new ObjectMapper();
-        service.meterRegistry = new SimpleMeterRegistry();
         
         service.enabled = true;
         service.threshold = 10;
@@ -238,5 +242,15 @@ class CompactionServiceTest {
                 "Compaction prompt should keep stable identifiers exact");
         assertTrue(template.contains("Do NOT preserve or restate secrets"),
                 "Compaction prompt should exclude secrets from summaries");
+    }
+
+    private static void setField(Object target, String name, Object value) {
+        try {
+            Field f = target.getClass().getDeclaredField(name);
+            f.setAccessible(true);
+            f.set(target, value);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
