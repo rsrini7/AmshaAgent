@@ -31,7 +31,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 
 - **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, or local Ollama models
 - **Six specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
-- **Agent delegation** - the Coordinator (Vishnu) can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`
+- **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
 - **Reflex system** - 16 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
 - **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
@@ -62,12 +62,12 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch; `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
-| **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.83 |
+| **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.78.1 |
 | **Memory** | Context compaction via `ContextCompactionService` + SQLite FTS5 + sqlite-vec two-tier RAG |
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
-| **Delegation** | Coordinator delegates to specialists via `delegate_to_agent` tool + `DelegationRoutingProvider` |
+| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability |
 
 - **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files - never as process arguments.
 - **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
@@ -160,7 +160,7 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 5. **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 6. **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or budget-exceeded).
 7. **Parallel Tool Execution:** When the LLM requests multiple tools in one step, `ParallelToolStepExecutor` executes them concurrently. Pre-executable tools (FULL autonomy or configured safe list) run immediately; remaining tools are held for batch HITL approval with Telegram inline keyboard.
-8. **Agent Delegation:** The Coordinator uses the `delegate_to_agent` tool to spin up a sub-agent loop for specialist tasks (coding, debugging, research, architecture). The sub-agent runs with its own isolated context and reports results back.
+8. **Agent Delegation:** Any role can use the `delegate_to_agent` tool to spin up a sub-agent loop for specialist tasks. Non-coordinators are restricted from delegating to roles they lack capabilities for. The sub-agent runs with its own isolated context and reports results back.
 9. **ProcessIsolationExecutor:** Three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in test mode only (`strategy: NONE`).
 10. **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 11. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
@@ -318,7 +318,7 @@ sequenceDiagram
 
         loop maxIterations - Thought → Plan → Act → Observe
             AL->>LLM: nextStep(agentRole, goal, history)
-            Note over LLM: Role-filtered tool schema injected<br/>coder → sandbox_exec + checklist<br/>coordinator → all tools + delegate_to_agent<br/>researcher → github + memory_search + web_search<br/>debugger → github + sandbox_exec
+            Note over LLM: Role-filtered tool schema injected<br/>coder → sandbox_exec + checklist<br/>coordinator → all tools + delegate_to_agent<br/>researcher → github + memory_search + web_search<br/>debugger → github + sandbox_exec<br/>all roles → delegate_to_agent (restricted)
             LLM-->>AL: Action (ToolName + Args OR parallel batch) OR FINISH
 
             alt Single tool call
@@ -364,7 +364,7 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 
 | Role | Deity | Max Iterations | Tools | Description |
 |---|---|---|---|---|
-| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists via `delegate_to_agent`, synthesizes final output |
+| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
 | `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
 | `coder` | **Brahma** | 15 | `sandbox_exec`, `manage_checklist` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox |
 | `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `manage_checklist` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification |
@@ -372,7 +372,7 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 | `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `brave_web_search`, `serper_web_search` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
 
 > [!NOTE]
-> The `coder` role's tool schema is limited to `sandbox_exec` and `manage_checklist` — it cannot make network calls or access external resources. The `coordinator` is the only role with `delegate_to_agent`; specialist agents do not recursively delegate. Tool schemas are assembled dynamically at runtime via `@ToolMetadata` annotations and the `CapabilityRegistry`. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
+> The `coder` role's tool schema is limited to `sandbox_exec` and `manage_checklist` — it cannot make network calls or access external resources. `delegate_to_agent` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. Tool schemas are assembled dynamically at runtime via `@ToolMetadata` annotations and the `CapabilityRegistry`. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
@@ -397,7 +397,7 @@ graph LR
         T3["📋 manage_schedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
         T4["🔍 memory_search<br/>SQLite FTS5 + sqlite-vec<br/>Past compaction summaries"]:::tool
         T5["🌐 ExternalMcpTool<br/>Dynamic tools from MCP servers<br/>HTTP_SSE / Podman STDIO transport"]:::tool
-        T6["🔀 delegate_to_agent<br/>coordinator only<br/>Spawns specialist sub-agent loop"]:::tool
+        T6["🔀 delegate_to_agent<br/>all roles<br/>Spawns specialist sub-agent loop"]:::tool
         T7["💻 sandbox_exec<br/>Isolated code execution<br/>Python / Java / Node / Go"]:::tool
         T8["✅ manage_checklist<br/>Task progress tracking"]:::tool
         T9["🔍 brave_web_search / serper_web_search<br/>Real-time web search"]:::tool
@@ -413,11 +413,11 @@ graph LR
 
     IC --> A1 & A2 & A3 & A4 & A5 & A6
     A1 --> T1 & T2 & T3 & T4 & T6
-    A2 --> T1 & T4 & T9
-    A3 --> T7 & T8
-    A4 --> T1 & T7 & T8
-    A5 --> T1 & T4
-    A6 --> T1 & T2 & T3 & T4 & T9
+    A2 --> T1 & T4 & T9 & T6
+    A3 --> T7 & T8 & T6
+    A4 --> T1 & T7 & T8 & T6
+    A5 --> T1 & T4 & T6
+    A6 --> T1 & T2 & T3 & T4 & T9 & T6
     A1 & A2 & A4 & A5 & A6 -.->|MCP tools appended| T5
 ```
 
@@ -426,7 +426,7 @@ graph LR
 ## 📦 Module Reference
 
 ```
-arcclaw-parent/               ← Root POM: Java 25, Quarkus 3.27.2, BouncyCastle 1.83
+arcclaw-parent/               ← Root POM: Java 25, Quarkus 3.27.2, BouncyCastle 1.78.1
 │
 arcclaw-channel-api/          ← Channel SPI contracts (zero implementation)
 │   ├── ChannelPlugin           6-method composite registration bean
@@ -646,7 +646,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | File | Purpose |
 |---|---|
 | `arcclaw-secrets.mount` | systemd unit that mounts `/run/arcclaw/secrets` as a tmpfs (mode 700, 10 MB, `noexec,nosuid`). Required for `TmpfsSecretTransport` on production Linux. Without this, secret env-files fall back to the OS temp directory. |
-| `backfillfts5.sql` | One-time migration script to backfill the `compaction_summary_fts` FTS5 table on existing databases after the Phase 45 deployment. Must be run once on any database created before Phase 45. |
+| `backfill_fts5.sql` | One-time migration script to backfill the `compaction_summary_fts` FTS5 table on existing databases after the Phase 45 deployment. Must be run once on any database created before Phase 45. |
 | `containers.conf` | Podman configuration overrides (`cgroupns=host`, `netns=host`, `storage.driver=vfs`). Required for rootless Podman on some Linux distributions - without it, the sandbox may fail silently on container network setup. |
 
 ### Why This Split?
@@ -813,13 +813,13 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `ScheduleTaskTool` | `schedule_task` | `SCHEDULE_AUTONOMOUS` | ❌ In-memory | coordinator, synthesizer | Schedule a future autonomous task with a 5-field UNIX cron expression; naked-pronoun guard + fork-bomb exclusion |
 | `ManageScheduleTool` | `manage_schedule` | `READ_FS` | ❌ In-memory | coordinator, synthesizer | List or delete the current user's scheduled cron jobs; tenant-isolated via `WorkspaceScopeHolder.USER_ID` |
 | `MemorySearchTool` | `memory_search` | `READ_FS` | ❌ In-memory | coordinator, researcher, architect, synthesizer | Two-tier RAG: FTS5 full-text + sqlite-vec vector search of past session compaction summaries |
-| `IngestDocumentTool` | `ingest_document` | `READ_FS` | ❌ In-memory | coordinator, synthesizer | Ingest a document into the global or session knowledge base for future vector retrieval |
-| `DelegateToAgentTool` | `delegate_to_agent` | `DELEGATE_AUTONOMOUS` | ❌ In-process | coordinator, researcher, architect, coder, debugger, synthesizer | Spawns a specialist sub-agent loop with a fully self-contained goal |
-| `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Node, Go, etc.) |
+| `IngestDocumentTool` | `ingest_document` | `WRITE_MEMORY` | ❌ In-memory | coordinator, synthesizer | Ingest a document into the global or session knowledge base for future vector retrieval |
+| `DelegateToAgentTool` | `delegate_to_agent` | `DELEGATE_AUTONOMOUS` | ❌ In-process | all 6 roles | Spawns a specialist sub-agent loop; non-coordinators are restricted from delegating to roles they lack |
+| `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Go, Node, Bash); falls back to direct execution with `allow-insecure-fallback` |
 | `CheckListTool` | `manage_checklist` | `READ_FS` | ❌ In-memory | coder, debugger | Manage task checklist progress tracking |
 | `BraveWebSearchTool` | `brave_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time web search via Brave Search API |
 | `SerperWebSearchTool` | `serper_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time Google search results via Serper API |
-| `PlaywrightCliTool` | `browser_navigate` | `EXECUTE_SHELL` | ✅ Podman | researcher, synthesizer | Headless browser automation via Playwright CLI |
+| `PlaywrightCliTool` | `browser_navigate` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Headless browser automation via Playwright CLI |
 | `ExternalMcpToolAdapter` | *(dynamic name)* | Varies | ❌ In-process | *(dynamic)* | Wraps tools from connected external MCP servers; registered dynamically via `DynamicToolCapabilityRegistry` |
 
 ### Tool Governance - Autonomy Levels
@@ -986,13 +986,13 @@ graph LR
 
 ### Context Compaction (`ContextCompactionService`)
 
-The rolling chat window is controlled by `quarkus.langchain4j.chat-memory.max-messages` (default: **20 messages**). System messages are always preserved; the window applies only to non-system messages.
+The rolling chat window is controlled by `arcclaw.chat-memory.max-messages` (default: **100 messages**). System messages are always preserved; the window applies only to non-system messages.
 
-When the rolling window exceeds `arcclaw.memory.compaction.threshold` (default: **16 messages**), `CompactionHandler` fires an **asynchronous CDI event** and returns immediately. The actual compaction runs in a background thread:
+When the rolling window exceeds `arcclaw.memory.compaction.threshold` (default: **10 messages**), `CompactionHandler` fires an **asynchronous CDI event** and returns immediately. The actual compaction runs in a background thread:
 
 1. Summarizes the oldest messages using `llama-3.1-8b-instant` into a `CompactionSummaryEntity`
 2. Discards the original messages from the rolling window
-3. Preserves the most recent `arcclaw.memory.compaction.keep-recent` (default: **6**) messages verbatim
+3. Preserves the most recent `arcclaw.memory.compaction.keep-recent` (default: **5**) messages verbatim
 4. Writes the summary into both `arcclaw-meta.db` and `arcclaw-fts.db`
 5. Writes a `CONTEXT_COMPACTED` audit event
 
@@ -1155,7 +1155,7 @@ All `/api/v1/*` endpoints (except `/api/v1/info`, `/q/health`, `/q/metrics`) req
 ArcClaw's `SecretVaultImpl` uses a multi-layer cryptographic scheme:
 
 - **Key Derivation**: `Argon2idKeyDerivation` with 64 MB memory, 3 iterations, 1 parallelism thread.
-- **Encryption**: `AesGcmSivCipher` - AES-256-GCM-SIV authenticated encryption (BouncyCastle 1.83). Nonce is derived from the vault key + salt (deterministic, immune to nonce reuse under key rotation).
+- **Encryption**: `AesGcmSivCipher` - AES-256-GCM-SIV authenticated encryption (BouncyCastle 1.78.1). Nonce is derived from the vault key + salt (deterministic, immune to nonce reuse under key rotation).
 - **Pepper**: A server-side secret (`arcclaw.vault.pepper`) mixed into the key derivation, preventing offline dictionary attacks even if the database is exfiltrated.
 - **Memory Safety**: `VaultKey` implements `AutoCloseable`. The `close()` method explicitly overwrites the key byte array with zeros before GC.
 
@@ -1287,7 +1287,7 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_AUDIT_HMAC_KEY` | ✅ | - | HMAC key for the audit log integrity chain (≥32 random chars). Never change after first boot. |
 | `ARCCLAW_API_KEYS_INTERNAL` | ✅ | - | Primary REST API key (`X-ArcClaw-API-Key` header) |
 | `ARCCLAW_API_KEYS_CI` | no | - | Optional secondary REST API key for CI pipelines |
-| `ARCCLAW_PII_MODE` | no | `REDACT_AND_FORWARD` | PII handling: `REDACT_AND_FORWARD` (silent redact) or `BLOCK_AND_NOTIFY` (reject message) |
+| `ARCCLAW_PII_MODE` | no | `BLOCK_AND_NOTIFY` | PII handling: `REDACT_AND_FORWARD` (silent redact) or `BLOCK_AND_NOTIFY` (reject message) |
 | `ARCCLAW_AUTO_SEED_SECRETS` | no | `false` | If `true`, seeds secrets from `.env` into the vault automatically on boot |
 
 ### Embedding / RAG
