@@ -1,4 +1,4 @@
-package com.arcclaw.core.api;
+package com.arcclaw.app.api;
 
 import java.util.List;
 
@@ -11,6 +11,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.api.AgentSessionService;
 import com.arcclaw.core.api.dto.AuditEventResponse;
 import com.arcclaw.core.audit.AuditVerifier;
 import com.arcclaw.core.domain.model.AuditEvent;

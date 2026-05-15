@@ -1,4 +1,4 @@
-package com.arcclaw.core.api;
+package com.arcclaw.app.api;
 
 import java.util.Map;
 
@@ -19,6 +19,7 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.core.api.AgentSessionService;
 import com.arcclaw.core.api.dto.CreateSessionRequest;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;

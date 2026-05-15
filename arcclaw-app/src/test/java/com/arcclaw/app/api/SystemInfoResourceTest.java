@@ -1,4 +1,4 @@
-package com.arcclaw.core.api;
+package com.arcclaw.app.api;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.anyOf;
