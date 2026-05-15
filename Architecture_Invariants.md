@@ -118,7 +118,7 @@ These are NOT interchangeable.
 ### 3.4 Approval handling
 - Approval-required executions MUST persist checkpoint state before exiting the loop.
 - Resume/deny behavior must use the checkpoint lifecycle, not ad hoc retry logic.
-- The double-resume guard (`StatefulAgentStore.markBatchResuming()`) MUST remain in
+- The double-resume guard (`StatefulAgentStore.claimForResume()` backed by `ResumeCoordinationGuard.markResuming()`) MUST remain in
   place. It prevents two concurrent approval signals (e.g., Telegram callback + REST)
   from both triggering `AgentLoop.run()` simultaneously for the same session.
   `clearBatchResuming()` MUST be called in the `finally` block of the resume path and
@@ -128,10 +128,7 @@ These are NOT interchangeable.
   `rejectAndTerminate()` path MUST mark the checkpoint FAILED, notify the user 
   via channel, and call `WorkspaceManager.terminateSession()` without entering 
   the agent loop.
-- `HitlService.resolve()` MUST call `resumeCheckpoint()` (for approvals) or 
-  `rejectAndTerminate()` (for denials) after the decision update. The decision 
-  methods (`approveTool`, `denyAll`) update DB state only - they do NOT trigger 
-  resume themselves.
+- `HitlService.resolve()` delegates to `CheckpointApprovalService.approveTool()`/`denyTool()`/`approveAll()`/`denyAll()` followed by `checkpointApprovalService.triggerResume(resolvedCp)`. The decision methods update batch decisions and persist; `triggerResume()` enters the transaction-free zone.
 
 ### 3.5 Structured retry budget behavior
 - Soft budget warnings may be logged and tolerated for retry behavior.
@@ -354,13 +351,11 @@ is blocked until that connection is released.
 | `denyTool()` | `@Transactional(NOT_SUPPORTED)` | Same |
 | `approveAll()` | `@Transactional(NOT_SUPPORTED)` | Same |
 | `denyAll()` | `@Transactional(NOT_SUPPORTED)` | Same |
+| `approve()` | `@Transactional(NOT_SUPPORTED)` | Per-session approval (non-per-tool path) |
+| `deny()` | `@Transactional(NOT_SUPPORTED)` | Per-session denial (non-per-tool path) |
 | `triggerResume()` | None / not annotated | In the transaction-free zone (§5.9) |
-| `persistBatchWithPreExecuted()` | Via `agentStore.save()` (REQUIRES_NEW) | Inherits REQUIRES_NEW from store |
-| `HitlService.resolve()` | `@Transactional(NOT_SUPPORTED)` | App-layer entry point for UI approval;
-|                         |                                 | delegates directly to approveTool() which
-|                         |                                 | is already NOT_SUPPORTED. An outer REQUIRED
-|                         |                                 | tx here re-introduces the REQUIRED→REQUIRES_NEW
-|                         |                                 | deadlock via the app→core call path. |
+| `ApprovalCheckpointManager.persistBatchWithPreExecuted()` | Via `agentStore.save()` (REQUIRES_NEW) | Inherits REQUIRES_NEW from store |
+| `HitlService.resolve()` | `@Transactional(NOT_SUPPORTED)` | App-layer entry point for UI approval; delegates to CheckpointApprovalService methods which are already NOT_SUPPORTED |
 
 MUST NOT change any of these to `@Transactional` or `@Transactional(REQUIRED)`.
 Doing so re-introduces the SQLITE_BUSY failure pattern described in §5.8.
@@ -535,19 +530,14 @@ operation and cannot cascade to unrelated callers or threads.
 
 ---
 
-## 5.16 `WorkspaceManager` GC Method Transaction Annotations
+## 5.16 `SessionReaper` GC Method Transaction Annotations
 
-`WorkspaceManager.gcSweep()` MUST be `@Transactional(NOT_SUPPORTED)`.
-`WorkspaceManager.findAwaitingApprovalIds()` MUST be `@Transactional(NOT_SUPPORTED)`.
-`WorkspaceManager.sweepTimedOutApprovals()` MUST be `@Transactional(NOT_SUPPORTED)`.
+`SessionReaper.findAwaitingApprovalIds()` MUST be `@Transactional(NOT_SUPPORTED)`.
+`SessionReaper.markApprovalTimedOut()` MUST be `@Transactional(NOT_SUPPORTED)`.
 
 These are scheduled GC methods that delegate to individual `REQUIRES_NEW` write units.
 Wrapping them in `REQUIRED` would create a long-lived connection that holds a write lock
 for the entire GC sweep duration (potentially scanning many sessions).
-
-`WorkspaceManager.markApprovalTimedOut()` MAY be `@Transactional(REQUIRED)` only if it
-does NOT call any `REQUIRES_NEW` repository method. If per-tool decision writes are added
-to this path in future, it must be demoted to `NOT_SUPPORTED`.
 
 ---
 
@@ -687,6 +677,13 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 ### 7.4 Channel daemons
 - Channel daemons must be safe when unconfigured.
 - `isConfigured()` exists to prevent startup crashes due to absent optional channel config.
+
+### 7.5 WebSocket channel invariants
+
+- `arcclaw-channel-web` MUST NOT import `com.arcclaw.core.*` directly (enforced by `ArchitectureBoundaryTest`).
+- WebSocket session state (`WebSocketSessionStore`) MUST be `@ApplicationScoped` with `ConcurrentHashMap` — no per-session CDI scopes for WebSocket connections.
+- HITL sessions MUST survive WebSocket disconnects — `WebChatEndpoint.onClose()` MUST check for `AWAITING_APPROVAL` before terminating the session.
+- The WebSocket endpoint path is `/ws/chat` (sessionId is in the message or query parameter, not in the URL path).
 
 ## §7. Parallel Tool Execution
 
@@ -830,7 +827,7 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 
 7.26 MUST: AWAITING_APPROVAL checkpoints older than
      arcclaw.hitl.timeout-hours (default: 24) MUST be auto-denied
-     by the WorkspaceManager GC scheduler. The user MUST receive a
+     by the SessionReaper scheduled sweep. The user MUST receive a
      Telegram notification that their approval window expired.
 
 7.27 MUST: After each per-tool decision (not all decided yet),
@@ -896,7 +893,22 @@ Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
 - Sandbox/protected tools must default to isolated execution unless explicitly documented otherwise.
 - Opting out of isolation is exceptional and requires strong justification.
 
-## 8.6 Sandbox tool exception contract
+### 8.6 Tool API key integration patterns
+
+Tools requiring API keys use one of two patterns:
+- **Declarative**: `@RequiresSecret(envVar, vaultKey)` on `sandboxCommand()` — resolved by `SandboxSecretResolver` and injected via `TmpfsSecretTransport` into the container. Used by `GithubTool`.
+- **Programmatic**: `vault.systemKeyExists()` + `vault.retrieveSystemKey()` with `@ConfigProperty` fallback. Used by `BraveWebSearchTool` and `SerperWebSearchTool` for optional API keys.
+
+Both patterns are valid. Tools that check `vault.systemKeyExists()` for `isEnabled()` while falling back to config properties are acceptable for optional tools that degrade gracefully when the key is absent.
+
+### 8.7 Browser automation (PlaywrightCliTool)
+
+- `PlaywrightCliTool` MUST validate URLs against `SAFE_URL_PATTERN` (`^https?://.*`) before navigation. File://, javascript:, and data: URLs are FORBIDDEN.
+- Content extraction MUST be capped at `MAX_CONTENT_CHARS` (9092).
+- The tool MUST be disabled by default (`arcclaw.tools.playwright.enabled=false`).
+- Browser automation MUST NOT execute in `READONLY` autonomy level.
+
+## 8.8 Sandbox tool exception contract
 
 `SandboxExecTool.execute()` MUST follow this exception contract:
 - `BudgetExceededException` - MUST propagate (not catch); `AgentStateMachineRunner` handles it.
@@ -1141,6 +1153,8 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Does any new `CheckpointStatus` terminal value need to be added to `doMarkCheckpointsFailedRequiresNew`? (§5.18)
 - [ ] Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19)
 - [ ] Does `AsyncPersistenceEngine` still bind `WorkspaceScopeHolder` per event, not per thread? (§5.17)
+- [ ] Is `SessionReaper.findAwaitingApprovalIds()` still `NOT_SUPPORTED`? (§5.16)
+- [ ] Is `SessionReaper.markApprovalTimedOut()` still `NOT_SUPPORTED`? (§5.16)
 
 ## 20. Routing and Classification Consolidation
 
@@ -1172,7 +1186,7 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - Markdown rendering (via `marked`) MUST be piped through the sanitizer to prevent XSS from unsafe agent outputs.
 
 ### 21.4 Backend Communication
-- All data-plane interaction MUST flow through the **REST API** (`/api/v1`) or **WebSockets (`/ws/chat/{sessionId}`)**.
+- All data-plane interaction MUST flow through the **REST API** (`/api/v1`) or **WebSockets (`/ws/chat`)**.
 - The UI MUST handle standard error codes (401 Unauthorized, 404 Not Found, 500 Server Error) gracefully, providing clear feedback to the user.
 
 ### 21.5 Styling & Aesthetics
