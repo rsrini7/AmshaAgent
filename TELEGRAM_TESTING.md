@@ -38,6 +38,26 @@
 
 ---
 
+## Quick Smoke Test (10 minutes)
+
+For rapid regression, use `telegram-test-arcclaw.txt` — a numbered list of 146 messages covering all major features. Paste messages into Telegram sequentially and verify responses match expectations.
+
+**What it covers:**
+- Identity extraction and memory (messages 1-9, 57-66)
+- Role routing: coordinator, coder, debugger, researcher, architect, synthesizer (messages 33, 51, 55, 67)
+- Tool usage: GitHub, web search, sandbox_exec (messages 19, 23, 39, 53)
+- Cron scheduling and management (messages 14, 27, 37, 101, 129-135)
+- Reflexes: /crons, /status, /history, /reset (messages 29-31, 77)
+- Vault: store and retrieve secrets (messages 16, 43-49, 69-74)
+- PII redaction (messages 110-112)
+- Prompt injection blocking (messages 114-118)
+- Memory search and compaction (messages 125-128, 138-143)
+- Non-ASCII: Japanese, Arabic, emoji (messages 127, 138, 140)
+
+For detailed verification of *each* feature (expected log patterns, audit events, edge cases), use the sections below.
+
+---
+
 ## 1. Prerequisites & Starting the Bot
 
 ### Required `.env` Variables
@@ -303,7 +323,7 @@ A Java service has high memory under load. Diagnose whether this is a code defec
 
 ## 6. Reflex Commands (Zero-Token Fast Path)
 
-All commands are intercepted by `CommandDispatchHandler → ReflexRegistry` at pipeline priority 30.
+All commands are intercepted by `CommandDispatchHandler → ReflexRegistry` at pipeline priority 45.
 **Zero LLM tokens consumed.** The `⏳` acknowledgment is NOT sent for commands.
 
 Audit event written for each: `REFLEX_COMMAND` (or specific event for approve/deny).
@@ -799,7 +819,7 @@ Search your memory for any discussions about SQLite or WAL mode.
 **Expect:** Bot uses `memory_search` tool and returns relevant compaction summaries from your
 session's history. Available to: coordinator, researcher, architect, synthesizer.
 
-**Log:** `INFO  [ToolInvoker] Invoking tool='memorysearch' session=<uuid>`
+**Log:** `INFO  [ToolInvoker] Invoking tool='memory_search' session=<uuid>`
 
 ---
 
@@ -1000,15 +1020,20 @@ the system prompt and tool caps for a matching session.
 ```http
 POST http://localhost:8080/api/v1/skills
 X-ArcClaw-API-Key: key-internal-changeme
-Content-Type: application/json
+Content-Type: text/plain
 
-{
-  "name": "code-reviewer",
-  "description": "Expert code reviewer",
-  "triggerPattern": "review this code",
-  "agentRole": "coder",
-  "systemPromptOverride": "You are an expert Java code reviewer. Focus on security and performance."
-}
+---
+name: code-reviewer
+description: Expert code reviewer
+trigger-patterns:
+  - "review.*code"
+  - "code.*review"
+tool-capabilities:
+  - GITHUB
+max-iterations: 5
+---
+You are an expert Java code reviewer. Focus on security and performance.
+Always reference OWASP categories where applicable.
 ```
 
 ### 18.2 Trigger the skill via Telegram
@@ -1185,7 +1210,7 @@ What do you know about ArcClaw's persistence layer?
 **Expect:** Agent uses `memory_search` and returns information about SQLite WAL mode from the
 ingested document.
 
-**Log:** `INFO  [ToolInvoker] Invoking tool='memorysearch' session=<uuid>`
+**Log:** `INFO  [ToolInvoker] Invoking tool='memory_search' session=<uuid>`
 
 ---
 
