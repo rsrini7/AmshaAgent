@@ -1,5 +1,7 @@
 package com.arcclaw.core.audit;
 
+import com.arcclaw.core.exception.ArcClawException;
+
 /**
  * Thrown when a CRITICAL (MANDATORY) audit event could not be persisted
  * after all retry attempts. Signals a fail-closed compliance violation.
@@ -8,7 +10,7 @@ package com.arcclaw.core.audit;
  * immediately - no subsequent LLM calls or tool executions are permitted
  * because the audit trail is broken.
  */
-public class ComplianceViolationException extends RuntimeException {
+public class ComplianceViolationException extends ArcClawException {
 
     private final String sessionId;
     private final SecurityEventType eventType;

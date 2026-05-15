@@ -71,8 +71,8 @@ public class AgentSessionService {
             "deletecron"
     );
 
-    private static final String REST_USER_ID = "rest:api";
-    private static final String REST_USER_NAME = "REST API User";
+    private static final String REST_USER_ID = ApiConstants.REST_USER_ID;
+    private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
     private static final String REST_CHAT_SESSION_PREFIX = "rest-chat-";
     

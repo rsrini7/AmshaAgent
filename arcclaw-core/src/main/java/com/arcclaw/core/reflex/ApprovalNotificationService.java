@@ -3,13 +3,14 @@ package com.arcclaw.core.reflex;
 import java.util.function.BiConsumer;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.domain.model.AgentCron;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.core.event.FlushQueuedNotifications;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
@@ -25,15 +26,12 @@ public class ApprovalNotificationService {
     StatefulAgentStore statefulAgentStore;
 
     @Inject
-    Event<AgentJobCompleted> jobCompletedEvent;
-
-    @Inject
-    Event<FlushQueuedNotifications> flushEvent;
+    DomainEventBus eventBus;
 
     public void flushPendingNotifications(String chatId) {
         try {
-            if (flushEvent != null && !statefulAgentStore.hasPendingApprovalForChat(chatId)) {
-                flushEvent.fire(new FlushQueuedNotifications(chatId));
+            if (!statefulAgentStore.hasPendingApprovalForChat(chatId)) {
+                eventBus.publish(EventTypeCatalog.FLUSH_QUEUED_NOTIFICATIONS, new FlushQueuedNotifications(chatId));
             }
         } catch (Exception e) {
             log.warn("Failed to flush notifications", e);
@@ -45,7 +43,7 @@ public class ApprovalNotificationService {
             ChannelType chType = ChannelType.fromString(cron.getChannelType()).orElse(ChannelType.TELEGRAM);
             String platformId = cron.getChannelPlatformId() != null ? cron.getChannelPlatformId() : cron.getChatId();
             String toolName = result instanceof AgentResult.AwaitingApproval aa ? aa.toolName() : null;
-            jobCompletedEvent.fire(new AgentJobCompleted(
+            eventBus.publish(EventTypeCatalog.AGENT_JOB_COMPLETED, new AgentJobCompleted(
                 cron.getId(), cron.getUserId(), chType, platformId, cron.getLastDeliveryId(),
                 AgentResultFormatter.format(result),
                 result instanceof AgentResult.Failed f ? f.category() : null,

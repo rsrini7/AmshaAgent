@@ -1,8 +1,8 @@
 package com.arcclaw.core.sandbox;
 
-import java.io.IOException;
+import com.arcclaw.core.exception.ArcClawException;
 
-public class PodmanUnavailableException extends IOException {
+public class PodmanUnavailableException extends ArcClawException {
     public PodmanUnavailableException(String message) {
         super(message);
     }

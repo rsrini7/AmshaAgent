@@ -1,11 +1,12 @@
 package com.arcclaw.core.pipeline.handlers;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -20,7 +21,7 @@ public class CompactionHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(CompactionHandler.class);
 
     @Inject CompactionService compactionService;
-    @Inject Event<CompactionRequest> compactionEvent;
+    @Inject DomainEventBus eventBus;
     @Inject CompactionInFlightFlag compactionInFlight;
     @Inject CompactionEventBridge compactionEventBridge;
     @Inject RateLimitTracker rateLimitTracker;
@@ -50,7 +51,7 @@ public class CompactionHandler implements MessageHandler {
 
             if (compactionInFlight.compareAndSet(sessionId, false, true)) {
                 compactionEventBridge.registerLatch(sessionId);
-                compactionEvent.fireAsync(new CompactionRequest(sessionId, userId));
+                eventBus.publishAsync(EventTypeCatalog.COMPACTION_REQUEST, new CompactionRequest(sessionId, userId));
                 log.debugf("Async compaction triggered for session %s", sessionId);
             } else {
                 log.debugf("Compaction already in-flight for session %s, skipping", sessionId);

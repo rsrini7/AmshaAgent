@@ -127,6 +127,8 @@ class AgentStateMachineRunnerTest {
 
         StepDecisionRouter stepDecisionRouter = new StepDecisionRouter(finishActionHandler, toolStepHandler, writer, engineStepHandler);
 
+        BrowserPreflightHandler browserPreflightHandler = mock(BrowserPreflightHandler.class);
+
         runner = new AgentStateMachineRunner(
                 engineStepHandler,
                 writer,
@@ -139,10 +141,8 @@ class AgentStateMachineRunnerTest {
                 correctionStrategy,
                 3,
                 new SimpleMeterRegistry(),
-                toolRegistry,
-                invoker,
                 stepDecisionRouter,
-                checkpointManager
+                browserPreflightHandler
         );
 
         lenient().when(observers.iterator()).thenReturn(Collections.emptyIterator());

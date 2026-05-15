@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
@@ -14,6 +13,8 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
@@ -32,7 +33,7 @@ public class ApprovalStateMachine implements ApprovalGateway {
     private static final Logger log = Logger.getLogger(ApprovalStateMachine.class);
 
     @Inject StatefulAgentStore agentStore;
-    @Inject Event<ApprovalDecisionEvent> decisionEvents;
+    @Inject DomainEventBus eventBus;
     @Inject CheckpointResumeHandler resumeHandler;
     @Inject ObjectMapper objectMapper;
 
@@ -101,7 +102,7 @@ public class ApprovalStateMachine implements ApprovalGateway {
         var result = resolveOutcome(sessionId, cp, effectiveTool, decisionEnum, allTools, pendingTools);
 
         // 7. Fire CDI ApprovalDecisionEvent for channel observers
-        decisionEvents.fire(new ApprovalDecisionEvent(sessionId, result.channelType(), cp.getChannelPlatformId(),
+        eventBus.publish(EventTypeCatalog.APPROVAL_DECISION, new ApprovalDecisionEvent(sessionId, result.channelType(), cp.getChannelPlatformId(),
             effectiveTool, decision, result.outcome()));
         log.debugf("[ASM] Fired ApprovalDecisionEvent for session=%s outcome=%s", sessionId, result.outcome());
 

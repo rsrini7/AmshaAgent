@@ -3,6 +3,7 @@ package com.arcclaw.core.hitl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -12,13 +13,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import jakarta.enterprise.event.Event;
-
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -33,7 +34,7 @@ class ApprovalStateMachineTest {
 
     private ApprovalStateMachine stateMachine;
     private StatefulAgentStore agentStore;
-    private Event<ApprovalDecisionEvent> decisionEvents;
+    private DomainEventBus eventBus;
     private CheckpointResumeHandler resumeHandler;
     private ObjectMapper objectMapper;
 
@@ -43,13 +44,13 @@ class ApprovalStateMachineTest {
     @SuppressWarnings("unchecked")
     void setup() throws Exception {
         agentStore = mock(StatefulAgentStore.class);
-        decisionEvents = mock(Event.class);
+        eventBus = mock(DomainEventBus.class);
         resumeHandler = mock(CheckpointResumeHandler.class);
         objectMapper = new ObjectMapper();
 
         stateMachine = new ApprovalStateMachine();
         stateMachine.agentStore = agentStore;
-        stateMachine.decisionEvents = decisionEvents;
+        stateMachine.eventBus = eventBus;
         stateMachine.resumeHandler = resumeHandler;
         stateMachine.objectMapper = objectMapper;
         stateMachine.hitlTimeoutHours = 24L;
@@ -105,7 +106,7 @@ class ApprovalStateMachineTest {
 
         verify(agentStore).updateBatchToolDecision("session-123", "coder", "github:read", ToolDecision.APPROVED.name());
         verify(resumeHandler).resumeAfterBatchDecision(any(), any(), any(), any(), any());
-        verify(decisionEvents).fire(any(ApprovalDecisionEvent.class));
+        verify(eventBus).publish(eq(EventTypeCatalog.APPROVAL_DECISION), any(ApprovalDecisionEvent.class));
     }
 
     @Test

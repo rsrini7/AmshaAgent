@@ -2,10 +2,12 @@ package com.arcclaw.core.governance;
 
 import java.util.Map;
 
+import com.arcclaw.core.exception.ArcClawException;
+
 /**
  * Exception thrown when a tool execution requires explicit human approval.
  */
-public class RequiresApprovalException extends RuntimeException {
+public class RequiresApprovalException extends ArcClawException {
 
     private final ApprovalFrame frame;
     private final String sessionId;
