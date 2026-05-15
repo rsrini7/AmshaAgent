@@ -171,7 +171,7 @@ public class CheckpointRepository {
                 "  AND c.status IN (:s1, :s2, :s3) " +
                 "ORDER BY c.id DESC",
                 AgentCheckpointEntity.class)
-                .setParameter("segment", segment + "%")
+                .setParameter("segment", "%" + segment + "%")
                 .setParameter("s1", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("s2", CheckpointStatus.RESUMING)
                 .setParameter("s3", CheckpointStatus.IN_PROGRESS)
