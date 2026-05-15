@@ -4,34 +4,6 @@ Prioritized actionable items. Completed items are removed. Items are ordered by 
 
 ---
 
-## Priority 1 — Schema & Persistence (Do Before Sub-Agent Work)
-
-### 1.1 Parent Checkpoint Linkage
-
-Add `parent_checkpoint_id` and `depth` columns to the `agent_checkpoint` schema.
-
-- **Why**: `DelegateToAgentTool` already spawns sub-agent loops, but checkpoints have no parent linkage. Building this after live data exists means a painful migration. The depth field enables future max-depth enforcement at the query level.
-- **Effort**: Low — one Flyway migration + entity field + `AgentCheckpoint` record update.
-- **When**: Before any work on multi-agent coordination or gRPC inter-agent communication.
-
-### 1.2 RRF Score Calibration
-
-Calibrate `arcclaw.rag.min-score` for RRF fusion. Current default is `-1.0` (disabled).
-
-- **Why**: RRF scores (keyword + vector fusion) produce small positive values (e.g. 0.016) that were blocked by the original 0.55 threshold. The `-1.0` workaround disables filtering entirely.
-- **Effort**: Low — measure false-positive injection rates with 50+ ingested documents, set a sensible floor (e.g. `0.01`).
-- **When**: After accumulating 50+ ingested RAG documents in production.
-
-### 1.3 AuditSchemaEnforcer Cleanup
-
-Extract FTS5 setup from `AuditSchemaEnforcer` into a dedicated `FtsSchemaInitializer`, then delete the enforcer.
-
-- **Why**: `AuditSchemaEnforcer` was gutted when WORM triggers moved to Flyway. It only manages FTS5 `CREATE VIRTUAL TABLE` now. The name is misleading.
-- **Effort**: Low — rename + restructure, no behavioral change.
-- **When**: Anytime.
-
----
-
 ## Priority 2 — Governance & Policy (Highest Architectural Leverage)
 
 ### 2.1 Policy Externalization via @ConfigMapping
@@ -95,6 +67,9 @@ Unify batch tool decision merging logic across all persistence adapters (SQLite,
 
 ## Completed (Removed from Backlog)
 
+- Parent checkpoint linkage (`parent_checkpoint_id` + `depth` on `agent_checkpoint`, linked in `DelegateToAgentTool`)
+- RRF score calibration (`min-score` default changed from `-1.0` to `0.01` — below minimum RRF score with k=60)
+- AuditSchemaEnforcer cleanup (extracted to `FtsSchemaInitializer`, deleted enforcer)
 - Flyway migration (quarkus-flyway, V1__baseline.sql, SessionSchemaEnforcer deleted, runonce renamed)
 - Monolithic adapter split (SqliteCheckpointStoreAdapter: 900+ → 364 lines, 7 services)
 - Cron test isolation (InstantToTextConverter moved to arcclaw-persistence-common)

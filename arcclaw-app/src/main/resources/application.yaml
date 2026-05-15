@@ -366,7 +366,7 @@ arcclaw:
       max-auto-retry-seconds: ${ARCCLAW_AGENT_RATE_LIMIT_MAX_AUTO_RETRY_SECONDS:15}
       default-retry-seconds: ${ARCCLAW_AGENT_RATE_LIMIT_DEFAULT_RETRY_SECONDS:10}
   rag:
-    min-score: -1.0f
+    min-score: 0.01f
     context-chunks: 3
     max-total-chars: 800
     max-chunk-chars: 300

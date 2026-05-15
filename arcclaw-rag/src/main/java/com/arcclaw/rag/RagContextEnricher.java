@@ -34,7 +34,7 @@ public class RagContextEnricher implements ContextEnricher {
     //   RRF Fusion             → small positive (e.g. 0.016)
     //
     // Set to -1.0 to disable filtering and trust the top-K ranking.
-    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "-1.0")
+    @ConfigProperty(name = "arcclaw.rag.min-score", defaultValue = "0.01")
     double minScore;
 
     // ── Fix Bug A: write-intent goals must never be enriched with past RAG data.
