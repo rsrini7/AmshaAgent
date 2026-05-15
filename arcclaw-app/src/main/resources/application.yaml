@@ -92,10 +92,15 @@ quarkus:
       # This must be LONGER than SQLite busy_timeout (10s)
       # so Agroal waits for SQLite to release before giving up
 
+  flyway:
+    migrate-at-start: true
+    baseline-on-migrate: true
+    locations: db/migration
+
   hibernate-orm:
     dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     schema-management:
-      strategy: update
+      strategy: none
       halt-on-error: false 
     sql-load-script: no-file
     packages:
@@ -621,6 +626,8 @@ mp:
 
 "%dev":
   quarkus:
+    flyway:
+      clean-at-start: true    # recreate schema from scratch on every dev restart
     mcp:
       server:
         stdio:
@@ -685,9 +692,14 @@ mp:
     datasource:
       jdbc:
         url: "jdbc:sqlite:target/test-audit.db"
+    flyway:
+      migrate-at-start: true
+      baseline-on-migrate: true
+      locations: db/migration
+      clean-at-start: true   # tests always need a clean schema
     hibernate-orm:
       schema-management:
-        strategy: update
+        strategy: none
       dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     log:
       category:

@@ -17,9 +17,8 @@ import org.jboss.logging.Logger;
 
 /**
  * Enforces WORM (Write-Once-Read-Many) compliance at the database level using SQLite triggers.
- * Prevent updates and deletes on the audit_event table.
- * 
- * Runs after Hibernate schema generation (@Priority APPLICATION + 100).
+ * Entity table DDL, WORM triggers, and indexes are managed by Flyway (V1__baseline.sql).
+ * This class only handles FTS5 virtual table setup in the attached fts database.
  */
 @ApplicationScoped
 public class AuditSchemaEnforcer implements AuditSchemaPort {
@@ -36,29 +35,7 @@ public class AuditSchemaEnforcer implements AuditSchemaPort {
     @Override
     @Transactional
     public void enforceWormConstraints() {
-        // Postgres equivalent (implement in PostgresAuditSchemaEnforcer when arcclaw-persistence-postgres is created):
-        //   REVOKE UPDATE, DELETE ON audit_event FROM application_role;
-        //   -- OR --
-        //   CREATE RULE no_update AS ON UPDATE TO audit_event DO INSTEAD NOTHING;
-        //   CREATE RULE no_delete AS ON DELETE TO audit_event DO INSTEAD NOTHING;
-        // Both approaches satisfy §5.23 DDL isolation - choose per deployment policy.
-
-        // WORM triggers - already present
-        em.createNativeQuery("""
-            CREATE TRIGGER IF NOT EXISTS prevent_audit_update
-            BEFORE UPDATE ON audit_event
-            BEGIN
-                SELECT RAISE(ABORT, 'audit_event rows are immutable');
-            END
-            """).executeUpdate();
-
-        em.createNativeQuery("""
-            CREATE TRIGGER IF NOT EXISTS prevent_audit_delete
-            BEFORE DELETE ON audit_event
-            BEGIN
-                SELECT RAISE(ABORT, 'audit_event rows are immutable');
-            END
-            """).executeUpdate();
+        // WORM triggers are now managed by Flyway V1__baseline.sql
     }
 
     @Transactional
@@ -66,30 +43,14 @@ public class AuditSchemaEnforcer implements AuditSchemaPort {
         @Observes @Priority(Interceptor.Priority.APPLICATION + 100)
         StartupEvent event) {
 
-        enforceWormConstraints();
-
-        // indexes with IF NOT EXISTS - idempotent on every restart
-        em.createNativeQuery(
-            "CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_event (sessionId)"
-        ).executeUpdate();
-
-        em.createNativeQuery(
-            "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_event (timestamp)"
-        ).executeUpdate();
-
-        em.createNativeQuery(
-            "CREATE INDEX IF NOT EXISTS idx_audit_userId ON audit_event (userId)"
-        ).executeUpdate();
-
-        log.info("AuditSchemaEnforcer: WORM triggers and indexes verified.");
+        log.info("AuditSchemaEnforcer: verifying FTS5 setup (entity DDL managed by Flyway).");
 
         // ── Phase 45: FTS5 Memory Index ──────────────────────────────────
-        // Hardened for tests: Ensure fts schema is attached if pool interceptor didn't run yet
-        log.debug("Verifying fts schema attachment...");
+        // Ensure fts schema is attached if pool interceptor didn't run yet
         int ftsFound = ((Number) em.createNativeQuery(
             "SELECT count(*) FROM pragma_database_list WHERE name = 'fts'")
             .getSingleResult()).intValue();
-        
+
         if (ftsFound == 0) {
             String ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
             log.info("fts schema missing on startup, attaching fallback database at: " + ftsPath);
@@ -112,8 +73,6 @@ public class AuditSchemaEnforcer implements AuditSchemaPort {
         } else {
             log.debugf("AuditSchemaEnforcer: FTS index has %d entries, verified.", ftsCount);
         }
-
-        log.info("AuditSchemaEnforcer: FTS5 isolated memory index verified (standalone).");
 
         log.info("AuditSchemaEnforcer: FTS5 memory index and triggers verified.");
     }

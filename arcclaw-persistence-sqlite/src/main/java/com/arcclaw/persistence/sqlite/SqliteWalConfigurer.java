@@ -21,6 +21,7 @@ import org.jboss.logging.Logger;
  * Ensures SQLite WAL mode is enabled for concurrent read/write and
  * re-attaches the FTS database on every fresh connection if needed.
  * <p>
+ * Entity table DDL is managed by Flyway (V1__baseline.sql).
  * Logic moved to the persistence-sqlite module to isolate SQLite-specific
  * boot configuration from the core domain.
  */
@@ -69,12 +70,6 @@ public class SqliteWalConfigurer {
                 } else {
                     throw e;
                 }
-            }
-            
-            try {
-                stmt.execute("CREATE VIRTUAL TABLE IF NOT EXISTS fts.compaction_summary_fts USING fts5(sessionId, summary)");
-            } catch (Exception e) {
-                log.warn("SQLite: Failed to create compaction_summary_fts table", e);
             }
 
         } catch (SQLException e) {
