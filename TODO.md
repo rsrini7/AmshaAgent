@@ -416,7 +416,7 @@ The comprehensive architecture review above has been validated against the live 
 | 1 | REST resources in core | P0 | ✅ COMPLETED | 4 resources moved to arcclaw-app; 0 JAX-RS annotations remain in core |
 | 2 | DB migration strategy | P0 | ✅ COMPLETED | Flyway V1 baseline with full DDL; hibernate-strategy=none; schema enforcers deleted/trimmed |
 | 3 | Duplicated entities | P1 | ❌ NOT STARTED | 4 entities duplicated (identical line counts); `arcclaw-persistence-common` doesn't exist |
-| 4 | Test coverage gaps | P1 | ⚠️ PARTIAL | `ParallelToolStepExecutor` and `ToolStepHandler` now each have 1 test; 6 key classes still untested |
+| 4 | Test coverage gaps | P1 | ✅ COMPLETED | 6 new test files added: ApprovalCheckpointManager (12t), CheckpointResumeCoordinator (8t), ToolResultProcessor (11t), SequentialToolExecutor (6t), AgentProducer (7t), CompactionSummaryCache (6t) |
 | 5 | Empty catch blocks | P1 | ✅ COMPLETED | 7 production + 8 test blocks fixed with ERROR/WARN/DEBUG logging or interrupt restoration |
 | 6 | Duplicated constants | P2 | ❌ NOT STARTED | `REST_USER_ID`/`REST_USER_NAME` still duplicated in same 2 files |
 | 7 | God classes | P2 | ❌ NOT STARTED | Same 5 classes, same injection counts, same file sizes |
@@ -461,15 +461,14 @@ The comprehensive architecture review above has been validated against the live 
 - [x] Test files (8 blocks) — `Thread.currentThread().interrupt()` for InterruptedException, comments for expected exceptions/cleanup
 - **Files affected**: 6 production files (BootstrapOrchestrator, EnvConfigInitializer, ChatHistoryAssembler, SerperWebSearchTool, AgentErrorMessageUtil) + 3 test files (FsStoreSmokeTest, WorkspaceContextTest, AsyncPersistenceEngineTest) + 2 governance test files
 
-**2.2 Add tests for critical untested classes**
-- [ ] `ApprovalCheckpointManager` — test HITL checkpoint persistence, await/resume flow
-- [ ] `CheckpointResumeCoordinator` — test resume orchestration with multiple agents
-- [ ] `ToolResultProcessor` — test result resolution paths (success, error, retry)
-- [ ] `SequentialToolExecutor` — test sequential execution order and error propagation
-- [ ] `AgentProducer` — test agent creation with different personas
-- [ ] `CompactionSummaryCache` — test caching behavior and eviction
-- **Risk**: Low — test-only changes
-- **Files affected**: 6 new test files
+**2.2 Add tests for critical untested classes** ✅ DONE
+- [x] `ApprovalCheckpointManager` (12 tests) — HITL checkpoint persistence, frame/string overloads, batch persist, pre-executed results
+- [x] `CheckpointResumeCoordinator` (8 tests) — FreshStart, IN_PROGRESS resume, AWAITING_APPROVAL+resume, AbortedStale, COMPLETED carry, terminal mismatch
+- [x] `ToolResultProcessor` (11 tests) — buildObservation (6 variants), evaluateCircuitBreaker (3 thresholds), resolveOutcome routing (6 tool-specific paths)
+- [x] `SequentialToolExecutor` (6 tests) — invoke delegation, execute success/failure/pending, null OTEL context, exception wrapping
+- [x] `AgentProducer` (7 tests) — all 6 personas verified via role(), distinct instance assertion
+- [x] `CompactionSummaryCache` (6 tests) — first-fetch, cache hit, per-instance caching, invalidation, no-op invalidation
+- **Files affected**: 6 new test files (55 total tests)
 
 **2.3 Extract shared entity base classes**
 - [ ] Create `arcclaw-persistence-common` module in parent pom
@@ -520,5 +519,5 @@ The comprehensive architecture review above has been validated against the live 
 
 ## Next Immediate Step
 
-→ **Start with Sprint 2.2 (Add tests for critical untested classes).** Both P0 items are complete, Sprint 2.1 is complete.
+→ **Start with Sprint 2.3 (Extract shared entity base classes).** P0, Sprint 2.1, and Sprint 2.2 are complete.
 
