@@ -66,7 +66,7 @@ run = [
     "echo   4. mise run setup              .env + chmod mvnw + JDKs + Playwright Chromium",
     "echo   5. mise run dev                hot-reload on :8080",
     "echo.",
-    "echo   See MISE_README.md for full documentation.",
+    "echo   See MISE_SETUP.md for full documentation.",
     "echo.",
 ]
 

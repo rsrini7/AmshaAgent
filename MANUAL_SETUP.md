@@ -3,11 +3,11 @@
 > **Stack**: JDK 25 · Quarkus 3.27.2 · LangChain4J 1.x · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide covers **manual setup without mise** on **macOS**, **WSL2 (Ubuntu)**, and **Windows**. All commands are direct - no wrapper scripts.
-> If you prefer automated setup, see [`MISE_README.md`](./MISE_README.md).
+> If you prefer automated setup, see [`MISE_SETUP.md`](./MISE_SETUP.md).
 
 ---
 
-> **Docs**: [README](./README.md) · [MISE_README](./MISE_README.md) · [Testing Guide](./TESTING_GUIDE.md) · [Telegram Testing](./TELEGRAM_TESTING.md) · [FAQ](./FAQ.md)
+> **Docs**: [README](./README.md) · [MISE Setup](./MISE_SETUP.md) · [Testing Guide](./TESTING_GUIDE.md) · [Telegram Testing](./TELEGRAM_TESTING.md) · [FAQ](./FAQ.md)
 
 ---
 
@@ -344,7 +344,7 @@ podman images | grep arcclaw-tool-runner
 |---|---|---|
 | **1 - Podman Rootless** | prod + Podman socket up + image present | Full container isolation, no network, memory/CPU capped |
 | **2 - Linux Namespaces** | Podman circuit breaker opened (3 consecutive failures) | `unshare` pid + net + mount |
-| **3 - Direct Execution** | dev mode, or Windows OS detected | None - host PATH ProcessBuilder |
+| **3 - Direct Execution** | `allow-insecure-fallback=true`, `%test` profile, or Windows OS | None - host PATH ProcessBuilder. Tools with host-side fallbacks (e.g. `GithubTool` → `gh` CLI) degrade gracefully. |
 
 > In `quarkus:dev`, strategy is always `NONE`. To test full isolation, run the packaged jar with `QUARKUS_PROFILE=prod`.
 
@@ -1106,7 +1106,7 @@ The `init-perms` service in `docker-compose.yaml` handles this automatically by 
 | Document | Purpose |
 |---|---|
 | [`README.md`](./README.md) | Architecture overview, agent personas, security model |
-| [`MISE_README.md`](./MISE_README.md) | Automated setup via mise task runner (recommended) |
+| [`MISE_SETUP.md`](./MISE_SETUP.md) | Automated setup via mise task runner (recommended) |
 | [`TESTING_GUIDE.md`](./TESTING_GUIDE.md) | End-to-end testing (19 sections) |
 | [`TELEGRAM_TESTING.md`](./TELEGRAM_TESTING.md) | Telegram bot end-to-end testing |
 | [`FAQ.md`](./FAQ.md) | Architecture Q&A, security rationale, operational guidance |

@@ -388,7 +388,7 @@ $env:GOAL = "Analyze the ArcClaw architecture"; mise run dev:ask
 $env:ROLE = "researcher"; $env:GOAL = "Review auth flow"; mise run dev:ask
 ```
 
-Available roles: `coordinator` · `researcher` · `architect` · `synthesizer` · `debugger`
+Available roles: `coordinator` · `researcher` · `coder` · `debugger` · `architect` · `synthesizer`
 
 ***
 
