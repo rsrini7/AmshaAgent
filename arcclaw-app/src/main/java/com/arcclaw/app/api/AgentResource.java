@@ -103,7 +103,10 @@ public class AgentResource {
     @Operation(summary = "Force terminate an active agent session")
     public Response terminateSession(@PathParam("id") String sessionId) {
         String userId = resolveUserId();
-        sessionService.terminateSession(sessionId, userId);
+        var result = sessionService.terminateSession(sessionId, userId);
+        if (!result.isSuccess()) {
+            return toResponse(result);
+        }
         return Response.noContent().build();
     }
 
@@ -149,7 +152,7 @@ public class AgentResource {
             case "SESSION_NOT_FOUND" -> Response.status(Response.Status.NOT_FOUND)
                     .entity(new ArcClawErrorResponse(result.errorMessage())).build();
             case "SESSION_ACCESS_DENIED" -> Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(new ArcClawErrorResponse(result.errorMessage())).build();
+                    .entity(new ArcClawErrorResponse(result.errorCode(), result.errorMessage(), null)).build();
             case "UNKNOWN_ROLE", "FORK_BOMB_REJECTED" -> Response.status(Response.Status.BAD_REQUEST)
                     .entity(new ArcClawErrorResponse(result.errorMessage())).build();
             case "AWAITING_APPROVAL" -> Response.status(Response.Status.CONFLICT)

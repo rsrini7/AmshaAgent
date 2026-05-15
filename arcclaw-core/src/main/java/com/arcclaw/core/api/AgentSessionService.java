@@ -301,11 +301,12 @@ public class AgentSessionService {
         }
     }
 
-    public void terminateSession(String sessionId, String userId) {
+    public ServiceResult<Object> terminateSession(String sessionId, String userId) {
         var sessionError = validateSession(sessionId, userId);
-        if (sessionError.isPresent()) return;
+        if (sessionError.isPresent()) return sessionError.get();
 
         workspaceManager.terminateSession(sessionId);
+        return ServiceResult.success(null);
     }
 
     private MessageContext createRestContext(String sessionId, String goal) {

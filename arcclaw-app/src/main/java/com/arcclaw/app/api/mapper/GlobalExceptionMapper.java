@@ -28,18 +28,20 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
         if (exception instanceof WebApplicationException wae) {
             return Response.fromResponse(wae.getResponse())
                 .entity(new ArcClawErrorResponse(
-                    "Request Failed", 
-                    exception.getMessage(), 
-                    uriInfo.getPath(), 
+                    null,
+                    "Request Failed",
+                    exception.getMessage(),
+                    uriInfo.getPath(),
                     Instant.now()))
                 .build();
         }
 
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
             .entity(new ArcClawErrorResponse(
-                "Internal Server Error", 
-                exception.getMessage(), 
-                uriInfo.getPath(), 
+                null,
+                "Internal Server Error",
+                exception.getMessage(),
+                uriInfo.getPath(),
                 Instant.now()))
             .build();
     }

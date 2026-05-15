@@ -49,6 +49,8 @@ quarkus:
   hibernate-orm:
     database:
       generation: drop-and-create
+    packages:
+      - com.arcclaw.persistence.common.entity
   log:
     level: INFO
     category:

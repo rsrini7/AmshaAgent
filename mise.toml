@@ -307,7 +307,7 @@ if (Test-Path '.env') {
 try {
     $env:MAVEN_OPTS = $mOpts
     & $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress
-    if ($LASTEXITCODE -ne 0) { throw "Maven build failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 } finally {
     if ($envBackup) {
@@ -339,7 +339,7 @@ if (Test-Path '.env') {
 try {
     $env:MAVEN_OPTS = $mOpts
     & $mvnw clean install -am -DskipTests --no-transfer-progress
-    if ($LASTEXITCODE -ne 0) { throw "Maven full build failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host '✅  Full build complete.'
 } finally {
     if ($envBackup) {
@@ -368,12 +368,12 @@ if (Test-Path '.env') {
     Write-Host 'ℹ️   .env shielded (.env.build-backup) - tests will use clean defaults.'
 }
 
-try {
-    $env:MAVEN_OPTS = $mOpts
-    & $mvnw clean verify -am "-Dquarkus.test.profile=test"
-    if ($LASTEXITCODE -ne 0) { throw "Tests failed (exit $LASTEXITCODE)" }
-    Write-Host '✅  Tests complete.'
-} finally {
+    try {
+        $env:MAVEN_OPTS = $mOpts
+        & $mvnw clean verify -am "-Dquarkus.test.profile=test"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Write-Host '✅  Tests complete.'
+    } finally {
     if ($envBackup) {
         Rename-Item '.env.build-backup' '.env'
         Write-Host 'ℹ️   .env restored.'
@@ -460,7 +460,7 @@ if ($strategy -eq 'container') {
 
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
-        if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
     } finally {
@@ -479,7 +479,7 @@ if ($strategy -eq 'container') {
         mise use --path mise.toml java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
-        if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
     } finally {
@@ -545,7 +545,7 @@ if (Test-Path '.env') {
 
         $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
         & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
-    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Assembling dist/ folder...'
     mise run dist
@@ -577,7 +577,7 @@ try {
     mise use --path mise.toml java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
     & $mvnw clean package -Pnative -Dslim -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
-    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed" }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Native build complete [local-slim]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     mise run dist
 } finally {
@@ -647,7 +647,7 @@ try {
         "-Dquarkus.profile=prod" `
         '-Dquarkus.native.container-build=false' `
         "-Dquarkus.native.native-image-xmx=${targetGB}g"
-    if ($LASTEXITCODE -ne 0) { throw "Maven native build failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Native lowmem build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Assembling dist/ folder...'
     mise run dist
@@ -1490,12 +1490,12 @@ try {
     if (Test-Path $out) { Remove-Item $out -Force }
     Write-Host "📦  Creating encrypted archive: $out"
     & $zipPath a "$out" "$stage\*" "-p$argPass" -mhe=on -mx=5 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "7z compression failed" }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     if (Test-Path $out) {
         Write-Host "✅  Archive created: $out" -ForegroundColor Green
         Get-Item $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/1KB)}} -AutoSize
-    } else { throw "Archive not found after compression" }
+    } else { exit 1 }
 } finally {
     if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 }
