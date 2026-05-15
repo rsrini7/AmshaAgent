@@ -36,7 +36,6 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 @Path("/sessions")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-@RunOnVirtualThread
 public class AgentResource {
 
     @Inject
@@ -49,6 +48,7 @@ public class AgentResource {
     SecurityContext securityContext;
 
     @POST
+    @RunOnVirtualThread
     @Operation(summary = "Create a new agent session with specified autonomy level")
     public Response createSession(@Valid CreateSessionRequest request) {
         var level = request != null ? request.autonomyLevel() : null;
@@ -59,6 +59,7 @@ public class AgentResource {
     }
 
     @GET
+    @RunOnVirtualThread
     @Operation(summary = "List all active agent sessions")
     public Response listSessions() {
         String userId = resolveUserId();
@@ -71,6 +72,7 @@ public class AgentResource {
 
     @POST
     @Path("/{id}/run")
+    @RunOnVirtualThread
     @Operation(summary = "Run an agent loop synchronously for a given goal")
     public Response runAgentSync(@PathParam("id") String sessionId, @Valid RunAgentRequest request) {
         String userId = resolveUserId();
@@ -91,6 +93,7 @@ public class AgentResource {
 
     @GET
     @Path("/{id}/status/{role}")
+    @RunOnVirtualThread
     @Operation(summary = "Get the current reasoning status and history for a role in a session")
     public Response getSessionStatus(@PathParam("id") String sessionId, @PathParam("role") String role) {
         String userId = resolveUserId();
@@ -100,6 +103,7 @@ public class AgentResource {
 
     @DELETE
     @Path("/{id}")
+    @RunOnVirtualThread
     @Operation(summary = "Force terminate an active agent session")
     public Response terminateSession(@PathParam("id") String sessionId) {
         String userId = resolveUserId();
@@ -112,6 +116,7 @@ public class AgentResource {
 
     @POST
     @Path("/{id}/approve")
+    @RunOnVirtualThread
     @Operation(summary = "Provide manual human approval for a pending tool execution")
     public Response approveSession(
             @PathParam("id") String sessionId,
@@ -123,6 +128,7 @@ public class AgentResource {
 
     @POST
     @Path("/{id}/deny")
+    @RunOnVirtualThread
     @Operation(summary = "Deny a pending tool execution and provide feedback to the agent")
     public Response denySession(
             @PathParam("id") String sessionId,

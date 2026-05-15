@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "generate": "mvn -f ../arcclaw-app/pom.xml prepare-package openapi-generator:generate -Pts-dto -DskipTests -q",
+    "generate": "mvn -f ../arcclaw-app/pom.xml package -Pts-dto -DskipTests -q",
     "prebuild": "npm run generate",
     "dev": "vite",
     "build": "tsc -p tsconfig.build.json && vite build",

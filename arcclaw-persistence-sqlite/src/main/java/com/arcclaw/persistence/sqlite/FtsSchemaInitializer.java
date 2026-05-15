@@ -47,14 +47,19 @@ public class FtsSchemaInitializer {
     private void ensureFtsSchema() {
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
+            // Check if already attached (FtsConnectionInterceptor may have attached it)
+            try (ResultSet rs = stmt.executeQuery("PRAGMA database_list")) {
+                while (rs.next()) {
+                    if (SCHEMA_NAME.equals(rs.getString("name"))) {
+                        LOG.debug("FTS schema already attached by connection interceptor, skipping.");
+                        return;
+                    }
+                }
+            }
             stmt.execute("ATTACH DATABASE 'data/arcclaw-fts.db' AS " + SCHEMA_NAME);
             LOG.info("FTS schema attached successfully.");
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("already attached")) {
-                LOG.info("FTS schema already attached.");
-            } else {
-                LOG.warnf("Could not attach FTS schema: %s", e.getMessage());
-            }
+            LOG.warnf("Could not attach FTS schema: %s", e.getMessage());
         }
     }
 
