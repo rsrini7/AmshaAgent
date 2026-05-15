@@ -381,35 +381,45 @@ paths: {}</echo>
           </execution>
         </executions>
       </plugin>
-      <plugin>
-        <groupId>org.openapitools</groupId>
-        <artifactId>openapi-generator-maven-plugin</artifactId>
-        <version>7.11.0</version>
-        <executions>
-          <execution>
-            <id>generate-ts-dto</id>
-            <phase>package</phase>
-            <goals>
-              <goal>generate</goal>
-            </goals>
-            <configuration>
-              <inputSpec>${project.basedir}/target/openapi.yaml</inputSpec>
-              <generatorName>typescript-fetch</generatorName>
-              <output>${project.basedir}/../arcclaw-ui/src/api/generated</output>
-              <configOptions>
-                <modelPropertyNaming>original</modelPropertyNaming>
-                <supportsES6>true</supportsES6>
-                <typescriptThreePlus>true</typescriptThreePlus>
-              </configOptions>
-              <skipIfSpecIsUnchanged>true</skipIfSpecIsUnchanged>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
     </plugins>
   </build>
 
   <profiles>
+    <profile>
+      <id>ts-dto</id>
+      <activation>
+        <property><name>ts-dto</name></property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.openapitools</groupId>
+            <artifactId>openapi-generator-maven-plugin</artifactId>
+            <version>7.11.0</version>
+            <executions>
+              <execution>
+                <id>generate-ts-dto</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>generate</goal>
+                </goals>
+                <configuration>
+                  <inputSpec>${project.basedir}/target/openapi.yaml</inputSpec>
+                  <generatorName>typescript-fetch</generatorName>
+                  <output>${project.basedir}/../arcclaw-ui/src/api/generated</output>
+                  <configOptions>
+                    <modelPropertyNaming>original</modelPropertyNaming>
+                    <supportsES6>true</supportsES6>
+                    <typescriptThreePlus>true</typescriptThreePlus>
+                  </configOptions>
+                  <skipIfSpecIsUnchanged>true</skipIfSpecIsUnchanged>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <profile>
       <id>native</id>
       <activation>
