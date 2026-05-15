@@ -16,6 +16,13 @@ ArcClaw is designed as a modular kernel. Every major subsystem exposes a clean C
 6. [Add a New LLM Provider](#6-add-a-new-llm-provider)
 7. [Add an ObservationTransformer](#7-add-an-observationtransformer)
 8. [Add a ToolGuardInterceptor](#8-add-a-toolguardinterceptor)
+9. [Add a MessageHandler (Pipeline Interceptor)](#9-add-a-messagehandler-pipeline-interceptor)
+10. [Add a ContextEnricher (System Prompt Injection)](#10-add-a-contextenricher-system-prompt-injection)
+11. [Add an IntentRoutingProvider (Fast-Path Routing)](#11-add-an-intentroutingprovider-fast-path-intent-routing)
+12. [Swap the GovernanceStrategy (Budget/Billing)](#12-swap-the-governancestrategy-budgetbilling)
+13. [Add a SkillProvider (Custom Skill Sources)](#13-add-a-skillprovider-custom-skill-sources)
+14. [Add an EmbeddingProviderFactory (Embedding Models)](#14-add-an-embeddingproviderfactory-embedding-models)
+15. [Implement Persistence Ports (Storage Backend)](#15-implement-persistence-ports-storage-backend)
 
 ---
 
@@ -27,6 +34,11 @@ Implement the `AgentTool` interface and mark it `@ApplicationScoped`. ArcClaw ha
 
 ```java
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "mytool",
+    description = "Does something useful",
+    defaultRoles = {"coordinator", "researcher"}
+)
 public class MyTool implements AgentTool {
 
     @Override public String name()        { return "mytool"; }
@@ -35,12 +47,14 @@ public class MyTool implements AgentTool {
     @Override public boolean requiresSandbox()         { return false; }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         String input = (String) params.get("input");
         return ToolResponse.success("Result: " + input);
     }
 }
 ```
+
+The `@ToolMetadata` annotation registers the tool's capability and grants it to specified roles automatically. The `ToolRegistry` discovers it via CDI and assembles role-specific tool schemas at startup.
 
 ### Sandboxed tool with secret injection (Podman + tmpfs)
 
@@ -48,6 +62,11 @@ For tools that must make network calls or run untrusted binaries, enable sandbox
 
 ```java
 @ApplicationScoped
+@ToolMetadata(
+    capabilityId = "mynetworktool",
+    description = "Fetches data from an external API",
+    defaultRoles = {"researcher", "synthesizer"}
+)
 public class MyNetworkTool implements AgentTool {
 
     @Override public String name()        { return "mynetworktool"; }
@@ -57,13 +76,14 @@ public class MyNetworkTool implements AgentTool {
 
     @Override
     @RequiresSecret(envVar = "MY_API_KEY", vaultKey = "MY_SERVICE_TOKEN")
-    public List<String> sandboxCommand(Map<String, Object> params) {
+    public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
         return List.of("my-cli", "fetch", "--target", (String) params.get("url"));
     }
 
     @Override
-    public ToolResponse execute(Map<String, Object> params) {
-        // Only called in %dev strategy=NONE / direct-exec mode
+    public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        // Host-side fallback when sandbox is unavailable (allow-insecure-fallback=true)
+        // Implement with ProcessBuilder for graceful degradation
         throw new UnsupportedOperationException("Sandbox required in production.");
     }
 }
@@ -71,25 +91,24 @@ public class MyNetworkTool implements AgentTool {
 
 ### Wiring tool permissions to a role
 
-Tool schema is filtered per role via `RoleDefinition.capabilities()`. Add the corresponding `ToolCapability` entry to the role's definition in `AgentRoleEnum`:
+Tool-to-role assignment is handled by the `@ToolMetadata` annotation on your tool class. The `defaultRoles` array lists which roles automatically get this tool in their schema:
 
 ```java
-// In AgentRoleEnum - add to the role's RoleDefinition
-COORDINATOR(new RoleDefinition(
-    Set.of(
-        ToolCapability.GITHUB,
-        ToolCapability.SCHEDULE_TASK,
-        ToolCapability.MANAGE_SCHEDULE,
-        ToolCapability.MEMORY_SEARCH,
-        ToolCapability.DELEGATE_TO_AGENT,
-        ToolCapability.MY_TOOL   // ← add your new ToolCapability entry
-    ),
-    maxIterations,
-    canUseTools
-))
+@ToolMetadata(
+    capabilityId = "mytool",           // must match AgentTool.name()
+    description = "What this tool does",
+    defaultRoles = {"coordinator", "researcher"}  // auto-granted to these roles
+)
 ```
 
-If your tool does not map to an existing `ToolCapability` value, add a new entry to the `ToolCapability` enum with `toolName()` returning the string that matches `AgentTool.name()`.
+If your tool needs a new `ToolCapability` enum entry (for Qute template access or explicit schema filtering), add it to the enum:
+
+```java
+// In ToolCapability.java
+MY_TOOL("mytool", "Does something useful"),
+```
+
+The `toolName` string must match `AgentTool.name()` exactly. The `ToolRegistry` resolves capabilities via `ToolCapability.fromToolName()` at startup.
 
 > [!NOTE]
 > **Storing secrets at runtime**: Users can store secrets interactively via the Telegram `store <key>=<value>` command or via the vault REST API. They are encrypted with AES-256-GCM-SIV and persisted in `arcclaw-meta.db`. Your `@RequiresSecret(vaultKey="MY_SERVICE_TOKEN")` declaration resolves against this vault automatically.
@@ -124,18 +143,23 @@ public class AnalystAgent implements Agent {
 
 ### Step 2 - Add the role to `AgentRoleEnum`
 
-Define the role with its `RoleDefinition`, specifying `maxIterations`, `canUseTools`, and the `Set<ToolCapability>` the role is permitted to use:
+Define the role with its `RoleDefinition`. Tool capabilities are dynamically assembled at startup via `@ToolMetadata` annotations on tool classes — you don't need to list them in `RoleDefinition`:
 
 ```java
-// In AgentRoleEnum
-ANALYST("analyst", new RoleDefinition(
-    Set.of(ToolCapability.MEMORY_SEARCH),  // tools this role may use
-    5,                                       // maxIterations
-    true                                     // canUseTools
-))
+// In AgentRoleEnum - add to the DEFINITIONS map
+AgentPersona.ANALYST.roleId(), new RoleDefinition(
+    AgentPersona.ANALYST.roleId(),
+    AgentPersona.ANALYST.displayName(),
+    "Interprets structured data and produces clear summaries.",
+    5,       // maxIterations
+    true,    // requiresApproval
+    false,   // codeCapable
+    Set.of(), // capabilities - assembled dynamically via @ToolMetadata
+    AgentPersona.ANALYST.aliases()
+)
 ```
 
-Add a case to every exhaustive switch over `AgentRoleEnum` in the codebase - the compiler will flag missing cases.
+Tools grant themselves to roles via `@ToolMetadata(defaultRoles = {"analyst", ...})`. Add a case to every exhaustive switch over `AgentRoleEnum` in the codebase — the compiler will flag missing cases.
 
 ### Step 3 - Add a Qute system prompt template
 
@@ -265,7 +289,7 @@ trigger-patterns:
   - "alternate.*pattern"
 tool-capabilities:
   - GITHUB
-  - MEMORYSEARCH
+  - MEMORY_SEARCH
 max-iterations: 7
 ---
 You are a specialist persona. Describe the skill's behaviour in detail here.
@@ -498,6 +522,240 @@ Interceptors registered via CDI are evaluated in the **first pass** of `ToolInvo
 
 ---
 
+## 9. Add a MessageHandler (Pipeline Interceptor)
+
+The `MessagePipeline` processes every inbound message through an ordered chain of `MessageHandler` implementations. Adding a handler lets you intercept messages at a specific priority band — for custom security checks, content transformation, analytics, or dispatch logic.
+
+```java
+@ApplicationScoped
+public class AuditTrailHandler implements MessageHandler {
+
+    @Override
+    public int priority() { return 25; } // runs between AllowlistHandler (10) and SessionResolutionHandler (40)
+
+    @Override
+    public HandleResult handle(MessageContext context) {
+        log.infof("Message from %s: %s", context.user().platformId(), context.message());
+        return HandleResult.CONTINUE; // pass to next handler
+    }
+}
+```
+
+**Priority ranges** (from `MessageHandler` Javadoc):
+
+| Range | Purpose | Existing handlers |
+|---|---|---|
+| 10–20 | Security, allowlist, global reflexes | `AllowlistHandler` (10) |
+| 30–40 | Session/context resolution | `SessionResolutionHandler` (40) |
+| 45–50 | Command dispatch, intent classification | `CommandDispatchHandler` (45), `IntentClassificationHandler` (50) |
+| 60–70 | Compaction, agent dispatch | `CompactionHandler` (60), `AgentDispatchHandler` (70) |
+
+Return `HandleResult.STOP` to halt the pipeline immediately (e.g., blocked message). Return `HandleResult.CONTINUE` to pass to the next handler.
+
+---
+
+## 10. Add a ContextEnricher (System Prompt Injection)
+
+`ContextEnricher` implementations inject additional context into the system prompt before the LLM sees it. The `SystemPromptBuilder` discovers all implementations via CDI and calls them in sequence.
+
+```java
+@ApplicationScoped
+public class TelemetryContextEnricher implements ContextEnricher {
+
+    @Override
+    public String enrich(String sessionId, String userId, String goal, String basePrompt) {
+        return basePrompt + "\n\nCURRENT METRICS: uptime=" + ManagementFactory.getRuntimeMXBean().getUptime() + "ms";
+    }
+}
+```
+
+**Built-in implementations:**
+
+| Enricher | Module | What it injects |
+|---|---|---|
+| `SystemEnvironmentContextEnricher` | `arcclaw-core` | Host environment metadata |
+| `RagContextEnricher` | `arcclaw-rag` | RAG-retrieved memory context (FTS5 + vector search results) |
+
+Return `basePrompt` unchanged if no context is available. Never return `null`.
+
+---
+
+## 11. Add an IntentRoutingProvider (Fast-Path Intent Routing)
+
+`IntentRoutingProvider` implementations add regex-based fast-path triggers that skip LLM intent classification entirely. If a message matches a provider's `fastPathTriggers()`, the role is assigned immediately without consuming classification tokens.
+
+```java
+@ApplicationScoped
+public class SecurityRoutingProvider implements IntentRoutingProvider {
+
+    private static final List<Pattern> TRIGGERS = List.of(
+        Pattern.compile("scan.*vulnerabilit", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("security.*audit", Pattern.CASE_INSENSITIVE)
+    );
+
+    @Override
+    public List<Pattern> fastPathTriggers() { return TRIGGERS; }
+
+    @Override
+    public Optional<String> fastPathRole() { return Optional.of("debugger"); }
+
+    @Override
+    public List<String> promptDirectives() {
+        return List.of("If the message mentions security scanning, route to debugger.");
+    }
+}
+```
+
+**Built-in providers:**
+
+| Provider | Routes to | Triggers |
+|---|---|---|
+| `CoderRoutingProvider` | `coder` | Code-writing patterns |
+| `DelegationRoutingProvider` | `coordinator` | "delegate to..." patterns |
+| `IngestRoutingProvider` | `coordinator` | "ingest this..." patterns |
+| `SchedulingRoutingProvider` | `coordinator` | "schedule..." patterns |
+| `ResearcherRoutingProvider` | `researcher` | Research/query patterns |
+| `DefaultRoutingProvider` | `coordinator` | Fallback (always matches) |
+
+Lower `priority()` values are evaluated first. Return `Optional.empty()` from `fastPathRole()` if the provider does not own a fast path.
+
+---
+
+## 12. Swap the GovernanceStrategy (Budget/Billing)
+
+`GovernanceStrategy` controls per-session USD budget enforcement, token tracking, and autonomy downgrade. The default `GovernanceLayer` implementation can be swapped via CDI `@Alternative` for custom billing engines, per-tenant policies, or test doubles.
+
+```java
+@Alternative
+@Priority(1) // overrides the default GovernanceLayer
+@ApplicationScoped
+public class TenantBudgetStrategy implements GovernanceStrategy {
+
+    @Override
+    public void recordLlmCall(String sessionId, int inputTokens, int outputTokens) {
+        // Custom per-tenant budget logic
+    }
+
+    @Override
+    public void assertWithinBudget(String sessionId) { /* ... */ }
+
+    @Override
+    public double getSessionCost(String sessionId) { /* ... */ }
+
+    @Override
+    public void clearSession(String sessionId) { /* ... */ }
+
+    @Override
+    public double getBudgetUsd() { /* ... */ }
+
+    @Override
+    public int getSessionInputTokens(String sessionId) { /* ... */ }
+
+    @Override
+    public int getSessionOutputTokens(String sessionId) { /* ... */ }
+}
+```
+
+> [!NOTE]
+> `GovernanceStrategy` throws `BudgetWarningException` (soft, 80% threshold) and `BudgetExceededException` (hard limit). The `recordLlmCall` method is called after every LLM invocation — keep it fast.
+
+---
+
+## 13. Add a SkillProvider (Custom Skill Sources)
+
+`SkillProvider` loads skill definitions from arbitrary sources. The `SkillLoader` discovers all implementations via CDI, merges them by priority, and registers them in the `SkillRegistry`.
+
+```java
+@ApplicationScoped
+public class S3SkillProvider implements SkillProvider {
+
+    @Override
+    public String sourceName() { return "s3"; }
+
+    @Override
+    public int priority() { return 50; } // between database (10) and classpath (100)
+
+    @Override
+    public List<SkillDefinition> load() {
+        // Fetch skill YAML documents from S3, parse, return
+        return List.of();
+    }
+}
+```
+
+**Built-in providers:**
+
+| Provider | Priority | Source |
+|---|---|---|
+| `DatabaseSkillProvider` | 10 | SQLite `agent_skill` table (user-created, wins on collision) |
+| `ClasspathSkillProvider` | 100 | `src/main/resources/skills/` (bundled baseline) |
+
+Lower priority = processed first, wins on name collision. Use values between 10 and 100 for custom providers.
+
+---
+
+## 14. Add an EmbeddingProviderFactory (Embedding Models)
+
+`EmbeddingProviderFactory` adds new embedding model providers for RAG vector search. The `EmbeddingModelProducer` discovers all implementations via CDI and selects the active one based on `arcclaw.rag.embed-provider`.
+
+```java
+@ApplicationScoped
+public class CohereEmbeddingProviderFactory implements EmbeddingProviderFactory {
+
+    @Override
+    public String providerId() { return "cohere"; }
+
+    @Override
+    public EmbeddingModel create(EmbeddingModelConfig config) {
+        String apiKey = requireApiKey(config);
+        return new CohereEmbeddingModel(apiKey, config.modelName().orElse("embed-english-v3.0"));
+    }
+}
+```
+
+**Built-in providers:**
+
+| Provider | providerId | Model |
+|---|---|---|
+| `JinaEmbeddingProviderFactory` | `jina` | `jina-embeddings-v5-text-nano` |
+| `OllamaEmbeddingProviderFactory` | `ollama` | `nomic-embed-text:v1.5` |
+| `OpenAiEmbeddingProviderFactory` | `openai` | `text-embedding-3-small` |
+
+Wire via `.env`:
+
+```properties
+arcclaw.rag.embed-provider=cohere
+arcclaw.rag.embed-model=embed-english-v3.0
+arcclaw.rag.embed-api-key=your-key
+```
+
+---
+
+## 15. Implement Persistence Ports (Storage Backend)
+
+ArcClaw uses hexagonal architecture with port interfaces in `arcclaw-persistence-api`. Three backends exist (SQLite, PostgreSQL, filesystem). To add a new backend (e.g., DynamoDB, Redis), implement all port interfaces:
+
+| Port | Responsibility |
+|---|---|
+| `CheckpointStorePort` | Agent checkpoint CRUD, claim, finalize |
+| `ChatMemoryStorePort` | Rolling chat window persistence |
+| `CronStorePort` | Cron job persistence |
+| `SecretStorePort` | Encrypted secret storage |
+| `AuditEventStorePort` | Audit event append + query |
+| `AuditSchemaPort` | WORM trigger setup |
+| `CompactionStorePort` | Compaction summary storage |
+| `MemoryRetrievalPort` | RAG memory retrieval |
+| `SkillStorePort` | Skill CRUD |
+| `AdvisoryLockPort` | Distributed advisory locking |
+| `PersistenceAdapterPort` | Composite adapter wiring all ports above |
+
+See `arcclaw-persistence-sqlite` for the reference implementation.
+
+> [!IMPORTANT]
+> Persistence ports are infrastructure-level extensions. Most developers extending ArcClaw should use the higher-level SPIs (tools, reflexes, handlers) rather than implementing a new storage backend.
+
+---
+
 ## Cross-Cutting Notes
 
 ### Where business logic lives
@@ -506,8 +764,11 @@ Code location matters for module boundary correctness:
 
 | Concern | Correct module |
 |---|---|
-| New `AgentTool`, `AgentReflex`, governance rule | `arcclaw-core` |
+| New `AgentTool`, `AgentReflex`, `MessageHandler`, `ContextEnricher`, `IntentRoutingProvider`, `GovernanceStrategy` | `arcclaw-core` |
 | New `RoutingChatModelProvider` | `arcclaw-app` |
+| New `EmbeddingProviderFactory` | `arcclaw-rag` |
+| New `SkillProvider` | `arcclaw-core` (or new module) |
+| New persistence port implementation | New module (see `arcclaw-persistence-sqlite` as reference) |
 | New channel implementation | New module or `arcclaw-channel-telegram` as reference |
 | REST endpoint or startup bootstrap | `arcclaw-app` |
 | Build-time CDI/MCP/RAG wiring | `arcclaw-deployment` |
