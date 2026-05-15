@@ -75,7 +75,7 @@ public class InteractiveSetupWizard {
             }
 
             for (CliUtils.VarSpec spec : missing) {
-                if (isTelegramKey(spec.key)) {
+                if (isTelegramKey(spec.key())) {
                     if (!askedTelegram) {
                         skipTelegram = !promptTelegramEnablement(envFile);
                         askedTelegram = true;
@@ -83,10 +83,10 @@ public class InteractiveSetupWizard {
                     if (skipTelegram) continue;
                 }
 
-                if (spec.key.equals("ARCCLAW_TOOLS_GITHUB_TOKEN") && !promptOptionalModule(spec.key, "GitHub repository access")) continue;
-                if (spec.key.equals("ARCCLAW_TOOLS_SERPER_API_KEY") && !promptOptionalModule(spec.key, "Serper Search Integration")) continue;
-                if (spec.key.equals("ARCCLAW_TOOLS_BRAVE_API_KEY") && !promptOptionalModule(spec.key, "Brave Search Integration")) continue;
-                if (spec.key.equals("ARCCLAW_LLM_FALLBACK_API_KEY") && !promptFallbackLlm(envFile)) continue;
+                if (spec.key().equals("ARCCLAW_TOOLS_GITHUB_TOKEN") && !promptOptionalModule(spec.key(), "GitHub repository access")) continue;
+                if (spec.key().equals("ARCCLAW_TOOLS_SERPER_API_KEY") && !promptOptionalModule(spec.key(), "Serper Search Integration")) continue;
+                if (spec.key().equals("ARCCLAW_TOOLS_BRAVE_API_KEY") && !promptOptionalModule(spec.key(), "Brave Search Integration")) continue;
+                if (spec.key().equals("ARCCLAW_LLM_FALLBACK_API_KEY") && !promptFallbackLlm(envFile)) continue;
 
                 promptVariable(envFile, spec);
             }
@@ -146,9 +146,9 @@ public class InteractiveSetupWizard {
     }
 
     private static boolean shouldPromptUnifiedKey(List<CliUtils.VarSpec> missing) {
-        boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key.equals("ARCCLAW_LLM_API_KEY"));
-        boolean intentKeyMissing = missing.stream().anyMatch(s -> s.key.equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY"));
-        boolean compactionKeyMissing = missing.stream().anyMatch(s -> s.key.equals("ARCCLAW_COMPACTION_API_KEY"));
+        boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_LLM_API_KEY"));
+        boolean intentKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY"));
+        boolean compactionKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
         return llmKeyMissing && (intentKeyMissing || compactionKeyMissing);
     }
 
@@ -161,7 +161,7 @@ public class InteractiveSetupWizard {
             String key = readPasswordWithFallback(System.console(), "  └─ Enter " + provider.toUpperCase() + " API key: ");
             if (key != null && !key.isBlank()) {
                 applyUnifiedKey(envFile, key, provider);
-                missing.removeIf(s -> s.key.equals("ARCCLAW_LLM_API_KEY") || s.key.equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") || s.key.equals("ARCCLAW_COMPACTION_API_KEY"));
+                missing.removeIf(s -> s.key().equals("ARCCLAW_LLM_API_KEY") || s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") || s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
             }
         }
     }
@@ -198,13 +198,13 @@ public class InteractiveSetupWizard {
     }
 
     private static void promptVariable(Path envFile, CliUtils.VarSpec spec) {
-        System.err.println("  ┌─ " + spec.key);
-        System.err.println("  │  " + spec.description);
-        String prompt = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key) ? " (Enter to auto-generate): " : ": ");
-        String value = SENSITIVE_KEYS.contains(spec.key) ? readPasswordWithFallback(System.console(), prompt) : readLineWithFallback(System.console(), prompt);
+        System.err.println("  ┌─ " + spec.key());
+        System.err.println("  │  " + spec.description());
+        String prompt = "  └─ Enter value" + (AUTO_GENERATABLE_KEYS.contains(spec.key()) ? " (Enter to auto-generate): " : ": ");
+        String value = SENSITIVE_KEYS.contains(spec.key()) ? readPasswordWithFallback(System.console(), prompt) : readLineWithFallback(System.console(), prompt);
         
         if (value == null || value.isBlank()) {
-            if (AUTO_GENERATABLE_KEYS.contains(spec.key)) {
+            if (AUTO_GENERATABLE_KEYS.contains(spec.key())) {
                 value = generateRandomValue();
                 System.err.println("     ✓ Auto-generated");
             } else {
@@ -212,8 +212,8 @@ public class InteractiveSetupWizard {
                 return;
             }
         }
-        EnvConfigInitializer.patchEnvFile(envFile, spec.key, value, EnvConfigInitializer.PatchMode.UPDATE);
-        System.setProperty(spec.key, value);
+        EnvConfigInitializer.patchEnvFile(envFile, spec.key(), value, EnvConfigInitializer.PatchMode.UPDATE);
+        System.setProperty(spec.key(), value);
         System.err.println("     ✓ Saved");
     }
 

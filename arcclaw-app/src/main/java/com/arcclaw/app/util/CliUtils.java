@@ -207,12 +207,12 @@ public class CliUtils {
 
         // 2. Intent/Compaction/Embed and Security keys
         for (VarSpec spec : CORE_VARS) {
-            if (!isSet(spec.key)) missing.add(spec);
+            if (!isSet(spec.key())) missing.add(spec);
         }
 
 
         for (VarSpec spec : TELEGRAM_VARS) {
-            if (!isSet(spec.key)) missing.add(spec);
+            if (!isSet(spec.key())) missing.add(spec);
         }
 
         if (!isSet("ARCCLAW_TOOLS_GITHUB_TOKEN") && !isExplicitOptOut("ARCCLAW_TOOLS_GITHUB_TOKEN")) {
@@ -281,7 +281,7 @@ public class CliUtils {
         List<VarSpec> missing = new ArrayList<>();
 
         for (VarSpec spec : CORE_VARS) {
-            if (!isSet(spec.key)) missing.add(spec);
+            if (!isSet(spec.key())) missing.add(spec);
         }
 
         String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
@@ -294,7 +294,7 @@ public class CliUtils {
 
         if (mode.equals("attach")) {
             for (VarSpec spec : TELEGRAM_VARS) {
-                if (!isSet(spec.key)) missing.add(spec);
+                if (!isSet(spec.key())) missing.add(spec);
             }
         } else if (mode.equals("serve")) {
             warnTelegramIfPartial();
@@ -338,9 +338,9 @@ public class CliUtils {
 
         for (VarSpec spec : missing) {
             System.err.println();
-            System.err.println("  KEY: " + spec.key);
-            System.err.println("       " + spec.description);
-            for (String step : spec.howToGet) {
+            System.err.println("  KEY: " + spec.key());
+            System.err.println("       " + spec.description());
+            for (String step : spec.howToGet()) {
                 System.err.println("       " + step);
             }
         }
@@ -457,14 +457,18 @@ public class CliUtils {
     // -------------------------------------------------------------------------
 
     public static class VarSpec {
-        public final String key;
-        public final String description;
-        public final String[] howToGet;
+        private final String key;
+        private final String description;
+        private final String[] howToGet;
 
         public VarSpec(String key, String description, String... howToGet) {
             this.key = key;
             this.description = description;
             this.howToGet = howToGet;
         }
+
+        public String key() { return key; }
+        public String description() { return description; }
+        public String[] howToGet() { return howToGet; }
     }
 }

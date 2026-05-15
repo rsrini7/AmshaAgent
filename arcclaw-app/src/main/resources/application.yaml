@@ -69,7 +69,7 @@ quarkus:
     path: /api/v1   # all /sessions endpoints served at /api/v1/sessions
 
   # ---------------------------------------------------------------------------
-  # DATABASE - SQLite
+  # DATABASE — SQLite (default). Switch to PostgreSQL via %postgresql profile.
   # ---------------------------------------------------------------------------
   datasource:
     db-kind: sqlite
@@ -95,7 +95,9 @@ quarkus:
   flyway:
     migrate-at-start: true
     baseline-on-migrate: true
-    locations: db/migration
+    # SQLite migrations live under db/migration/sqlite/
+    # PostgreSQL (when activated via -Dquarkus.profile=postgresql) uses db/migration/postgresql/
+    locations: db/migration/sqlite
 
   hibernate-orm:
     dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
@@ -695,7 +697,7 @@ mp:
     flyway:
       migrate-at-start: true
       baseline-on-migrate: true
-      locations: db/migration
+      locations: db/migration/sqlite
       clean-at-start: true   # tests always need a clean schema
     hibernate-orm:
       schema-management:
@@ -828,39 +830,46 @@ mp:
 #      with the desired adapter: `arcclaw-persistence-fs` or `arcclaw-persistence-postgres`.
 #   2. For Postgres, also replace `quarkus-jdbc-sqlite` with `quarkus-jdbc-postgresql`
 #      and add `quarkus-hibernate-orm-panache` if not already present.
-#   3. Uncomment the corresponding profile section below.
-#   4. Activate the profile: `-Dquarkus.profile=postgresql` or `-Dquarkus.profile=filesystem`.
+#   3. Activate the profile: `-Dquarkus.profile=postgresql` or `-Dquarkus.profile=filesystem`.
+#   4. Flyway migrations are dialect-specific:
+#      - db/migration/sqlite/     → SQLite (default, also used in %test)
+#      - db/migration/postgresql/ → PostgreSQL (activated with %postgresql profile)
 # Only ONE persistence adapter should be on the classpath at a time to avoid CDI ambiguity.
 # ---------------------------------------------------------------------------
 
-#"%postgresql":
-#  quarkus:
-#    datasource:
-#      db-kind: postgresql
-#      jdbc:
-#        url: "jdbc:postgresql://${ARCCLAW_PG_HOST:localhost}:${ARCCLAW_PG_PORT:5432}/${ARCCLAW_PG_DB:arcclaw}"
-#        username: "${ARCCLAW_PG_USER:arcclaw}"
-#        password: "${ARCCLAW_PG_PASSWORD:changeme}"
-#        min-size: 2
-#        max-size: 10
-#        transactions: enabled
-#        background-validation-interval: PT30S
-#        validation-query-sql: "SELECT 1"
-#        acquisition-timeout: 30
-#    hibernate-orm:
-#      database:
-#        default-schema: public
-#      schema-management:
-#        strategy: update
-#        halt-on-error: false
-#      sql-load-script: no-file
-#      packages:
-#        - com.arcclaw.persistence.sqlite.entity
-#        - com.arcclaw.core.domain.model
-#        - com.arcclaw.core.routing
-#        - com.arcclaw.app.session
-#      log:
-#        sql: false
+"%postgresql":
+  quarkus:
+    datasource:
+      db-kind: postgresql
+      jdbc:
+        url: "jdbc:postgresql://${ARCCLAW_PG_HOST:localhost}:${ARCCLAW_PG_PORT:5432}/${ARCCLAW_PG_DB:arcclaw}"
+        username: "${ARCCLAW_PG_USER:arcclaw}"
+        password: "${ARCCLAW_PG_PASSWORD:changeme}"
+        min-size: 2
+        max-size: 10
+        transactions: enabled
+        background-validation-interval: PT30S
+        validation-query-sql: "SELECT 1"
+        acquisition-timeout: 30
+    flyway:
+      migrate-at-start: true
+      baseline-on-migrate: true
+      # PostgreSQL-specific migrations under db/migration/postgresql/
+      locations: db/migration/postgresql
+      clean-at-start: true   # fresh schema on every start — no data migration needed
+    hibernate-orm:
+      database:
+        default-schema: public
+      schema-management:
+        strategy: none
+      sql-load-script: no-file
+      packages:
+        - com.arcclaw.persistence.sqlite.entity
+        - com.arcclaw.core.domain.model
+        - com.arcclaw.core.routing
+        - com.arcclaw.app.session
+      log:
+        sql: false
 
 #"%filesystem":
 #  # File-based persistence — no JDBC datasource or Hibernate required.
