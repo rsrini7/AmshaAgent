@@ -101,7 +101,6 @@ quarkus:
     dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     schema-management:
       strategy: none
-      halt-on-error: false 
     sql-load-script: no-file
     packages:
       - com.arcclaw.persistence.common.entity

@@ -52,6 +52,9 @@ quarkus:
       url: "jdbc:sqlite:./target/telegram-test.db"
   hibernate-orm:
     schema-management:
+      # strategy: update — NOT none. This module includes com.arcclaw.persistence.sqlite.entity
+      # in Hibernate packages, so tables like encrypted_secrets must exist at startup.
+      # Test DB is ephemeral (target/telegram-test.db), `update` is safe.
       strategy: update
     dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     packages:

@@ -10,12 +10,15 @@ import java.util.concurrent.TimeUnit;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class NamespaceExecutor {
 
+    private static final Logger log = Logger.getLogger(NamespaceExecutor.class);
+
     @ConfigProperty(name = "arcclaw.sandbox.timeout-seconds", defaultValue = "30")
-    long timeoutSeconds;
+    private long timeoutSeconds;
 
     /**
      * Strategy B: Linux unshare namespaces (lighter, no Podman needed).
@@ -35,8 +38,7 @@ public class NamespaceExecutor {
             File workspaceDir = workspaceRoot.toFile();
             if (!workspaceDir.exists()) {
                 workspaceDir.mkdirs();
-                // log not available in this simple class, but following user request pattern
-                System.err.println("PIE Workspace dir missing - recreated: " + workspaceDir.getAbsolutePath());
+                log.warnf("PIE Workspace dir missing - recreated: %s", workspaceDir.getAbsolutePath());
             }
             pb.directory(workspaceDir);
         }

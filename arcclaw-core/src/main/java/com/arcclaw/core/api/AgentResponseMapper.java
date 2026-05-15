@@ -5,7 +5,6 @@ import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -27,7 +26,7 @@ public class AgentResponseMapper {
     );
 
     private static final Pattern REPEATING_UUID_PATTERN = Pattern.compile(
-            "([0-9a-f]{4,8})\\1.*\\1.*\\1",   // same segment repeated 3+ times
+            "([0-9a-f]{4,8})\\1.*\\1.*\\1",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -39,56 +38,39 @@ public class AgentResponseMapper {
     public record RateLimitRetryResponse(long retryAfterMs, String sessionId) {}
     public record AgentErrorResponse(String reason, String code) {}
 
-    public Response mapResult(AgentResult result, boolean isAsync) {
+    public record MappedResult(Object entity, int suggestedHttpStatus) {}
+
+    public MappedResult mapResult(AgentResult result, boolean isAsync) {
         return switch (result) {
             case AgentResult.Finished f -> {
                 String answer = sanitizeAnswer(f.answer());
-                AgentResponse entity = new AgentResponse(
-                        answer, f.totalInputTokens(), f.totalOutputTokens());
-                yield isAsync
-                        ? Response.accepted(entity).build()
-                        : Response.ok(entity).build();
+                AgentResponse entity = new AgentResponse(answer, f.totalInputTokens(), f.totalOutputTokens());
+                yield new MappedResult(entity, isAsync ? 202 : 200);
             }
             case AgentResult.StructuredFinished sf -> {
                 String answer = sanitizeAnswer(sf.answer());
-                AgentResponse entity = new AgentResponse(
-                        answer, sf.totalInputTokens(), sf.totalOutputTokens());
-                yield isAsync
-                        ? Response.accepted(entity).build()
-                        : Response.ok(entity).build();
+                AgentResponse entity = new AgentResponse(answer, sf.totalInputTokens(), sf.totalOutputTokens());
+                yield new MappedResult(entity, isAsync ? 202 : 200);
             }
-            case AgentResult.AwaitingApproval a -> Response.status(202)
-                    .entity(new ApprovalRequiredResponse(
-                            a.toolName(), a.paramsJson(), a.sessionId()))
-                    .build();
-            case AgentResult.AwaitingRetry r -> Response.status(202)
-                    .entity(new RateLimitRetryResponse(
-                            r.retryAfterMs(), r.sessionId()))
-                    .build();
-            case AgentResult.LoopExceeded l -> Response.status(408)
-                    .entity(new ArcClawErrorResponse(
-                            "Iteration limit " + l.maxIterations() + " reached",
-                            CheckpointStatus.LOOP_EXCEEDED.name()))
-                    .build();
+            case AgentResult.AwaitingApproval a -> new MappedResult(
+                    new ApprovalRequiredResponse(a.toolName(), a.paramsJson(), a.sessionId()), 202);
+            case AgentResult.AwaitingRetry r -> new MappedResult(
+                    new RateLimitRetryResponse(r.retryAfterMs(), r.sessionId()), 202);
+            case AgentResult.LoopExceeded l -> new MappedResult(
+                    new ArcClawErrorResponse("Iteration limit " + l.maxIterations() + " reached",
+                            CheckpointStatus.LOOP_EXCEEDED.name()), 408);
             case AgentResult.Failed f -> mapFailedResponse(f);
         };
     }
 
-    /**
-     * Strips hallucinated cron confirmations - LLM sometimes fabricates
-     * "Task scheduled successfully. ID: <uuid>" without actually calling the tool.
-     * Verified by checking for a real CRONCREATED audit event in the current session.
-     */
     private String sanitizeAnswer(String answer) {
         if (answer == null) return null;
 
         String stripped = answer.strip();
         if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
-                // Strip leaked RAG/compaction context blocks
                 answer = AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).replaceFirst("").strip();
         }
 
-        // Strip system prompt echoes (host env, persona names, etc.)
         if (AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(answer).find()) {
             log.warnf("AgentResponseMapper: stripping system prompt echo from answer");
             Matcher m = AgentSentinels.SYSTEM_PROMPT_ECHO_PATTERN.matcher(answer);
@@ -97,10 +79,10 @@ public class AgentResponseMapper {
                 if (!salvaged.isBlank()) {
                     answer = salvaged;
                 } else {
-                    answer = "⚠️ I wasn't able to generate a clean response. Please try again.";
+                    answer = "\u26a0\ufe0f I wasn't able to generate a clean response. Please try again.";
                 }
             } else {
-                answer = "⚠️ I wasn't able to generate a clean response. Please try again.";
+                answer = "\u26a0\ufe0f I wasn't able to generate a clean response. Please try again.";
             }
         }
 
@@ -112,7 +94,7 @@ public class AgentResponseMapper {
         String sessionId = WorkspaceContext.SESSION_ID.isBound()
                 ? WorkspaceContext.SESSION_ID.get() : null;
 
-        if (sessionId == null) return answer; // can't verify - pass through
+        if (sessionId == null) return answer;
 
         boolean realCronExists = auditService.hasEventInSession(
                 sessionId, SecurityEventType.CRONCREATED);
@@ -123,29 +105,25 @@ public class AgentResponseMapper {
                     + "Please provide a specific, self-contained goal.";
         }
 
-        return answer; // real CRONCREATED exists - answer is legitimate
+        return answer;
     }
 
-    private Response mapFailedResponse(AgentResult.Failed f) {
+    private MappedResult mapFailedResponse(AgentResult.Failed f) {
         return switch (f.category()) {
-            case COMPLIANCE_VIOLATION -> Response.status(451)
-                    .entity(new ArcClawErrorResponse(f.reason(), "COMPLIANCE")).build();
-            case BUDGET_EXCEEDED -> Response.status(429)
-                    .entity(new ArcClawErrorResponse(f.reason(), "BUDGET")).build();
-            case USER_DENIED -> Response.status(422)
-                    .entity(new ArcClawErrorResponse(f.reason(), "USER_DENIED")).build();
-            case SCHEMA_ERROR -> Response.status(422)
-                    .entity(new ArcClawErrorResponse(
-                            "The agent encountered a schema error and could not complete "
-                            + "the request. Try rephrasing your goal.",
-                            "SCHEMA"))
-                    .build();
-            case SYSTEM_ERROR -> Response.serverError()
-                    .entity(new ArcClawErrorResponse(f.reason(), "SYSTEM")).build();
-            case RATE_LIMIT -> Response.status(429)
-                    .entity(new ArcClawErrorResponse(f.reason(), "RATE_LIMIT")).build();
-            case SECURITY_POLICY -> Response.status(403)
-                    .entity(new ArcClawErrorResponse(f.reason(), "SECURITY_POLICY")).build();
+            case COMPLIANCE_VIOLATION -> new MappedResult(
+                    new ArcClawErrorResponse(f.reason(), "COMPLIANCE"), 451);
+            case BUDGET_EXCEEDED -> new MappedResult(
+                    new ArcClawErrorResponse(f.reason(), "BUDGET"), 429);
+            case USER_DENIED -> new MappedResult(
+                    new ArcClawErrorResponse(f.reason(), "USER_DENIED"), 422);
+            case SCHEMA_ERROR -> new MappedResult(
+                    new ArcClawErrorResponse("The agent encountered a schema error and could not complete the request. Try rephrasing your goal.", "SCHEMA"), 422);
+            case SYSTEM_ERROR -> new MappedResult(
+                    new ArcClawErrorResponse(f.reason(), "SYSTEM"), 500);
+            case RATE_LIMIT -> new MappedResult(
+                    new ArcClawErrorResponse(f.reason(), "RATE_LIMIT"), 429);
+            case SECURITY_POLICY -> new MappedResult(
+                    new ArcClawErrorResponse(f.reason(), "SECURITY_POLICY"), 403);
         };
     }
 }

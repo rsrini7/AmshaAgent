@@ -59,16 +59,12 @@ class ApproveReflexDelegateTest {
     void setup() {
         reflex = new ApproveReflex();
         reflex.statefulAgentStore = agentStore;
-        reflex.agentLoop = agentLoop;
         reflex.delegateGuard = delegateGuard;
         reflex.checkpointResumeHandler = resumeHandler;
         reflex.cronStore = cronStore;
-        reflex.reasoningEngine = reasoningEngine;
         reflex.auditService = auditService;
         reflex.objectMapper = objectMapper;
         reflex.checkpointApprovalService = checkpointApprovalService;
-        reflex.cliResultBridge = cliResultBridge;
-        reflex.workspaceManager = workspaceManager;
         reflex.notificationService = notificationService;
         reflex.resumeResultHelper = resumeResultHelper;
         reflex.cronDecisionRouter = createCronRouter();

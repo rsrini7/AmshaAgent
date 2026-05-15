@@ -6,7 +6,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
-import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.event.DomainEventBus;
 import com.arcclaw.core.event.EventTypeCatalog;

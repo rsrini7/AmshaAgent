@@ -1,22 +1,15 @@
 package com.arcclaw.persistence.fs;
 
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
-import com.fasterxml.jackson.core.type.TypeReference;
 import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 
@@ -34,6 +27,7 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
     public void save(AuditEventDto dto) {
         String sessionDir = dto.sessionId();
         String fileName = dto.id().toString() + ".json";
+        log.debugf("Saving audit event %s for session %s", dto.id(), sessionDir);
 
         long seq = dto.sequence();
         SessionIndex index = loadIndex(sessionDir);
@@ -49,7 +43,10 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
     @Override
     public Optional<String> findLatestHash(String sessionId) {
         SessionIndex index = loadIndex(sessionId);
-        if (index.events.isEmpty()) return Optional.empty();
+        if (index.events.isEmpty()) {
+            log.debugf("No audit events for session %s", sessionId);
+            return Optional.empty();
+        }
         String lastEventId = index.events.get(index.events.size() - 1).id;
         return store.readOptional(List.of(DOMAIN, sessionId, lastEventId + ".json"), AuditEventDto.class)
             .map(AuditEventDto::hmacHash);
@@ -95,10 +92,8 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
         store.write(List.of(DOMAIN, sessionId, "index.json"), index);
     }
 
-    @SuppressWarnings("unused")
     private record IndexEntry(String id, String idempotencyKey, String eventType, Instant timestamp) {}
 
-    @SuppressWarnings("unused")
     private static class SessionIndex {
         public long maxSequence = 0;
         public List<IndexEntry> events = new ArrayList<>();

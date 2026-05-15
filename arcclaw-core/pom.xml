@@ -34,17 +34,17 @@
 
 
 
-    <!-- REST -->
+    <!-- Jackson annotations for DTO serialization (no JAX-RS dependency) -->
     <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-rest</artifactId>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
     </dependency>
 
-    <!-- REST Data Binding & Validation -->
-    <dependency>
-        <groupId>io.quarkus</groupId>
-        <artifactId>quarkus-rest-jackson</artifactId>
-    </dependency>
+    <!-- Validation -->
     <dependency>
         <groupId>io.quarkus</groupId>
         <artifactId>quarkus-hibernate-validator</artifactId>

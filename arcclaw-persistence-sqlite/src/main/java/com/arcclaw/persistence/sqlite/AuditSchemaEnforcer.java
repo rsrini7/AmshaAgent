@@ -53,7 +53,7 @@ public class AuditSchemaEnforcer implements AuditSchemaPort {
 
         if (ftsFound == 0) {
             String ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
-            log.info("fts schema missing on startup, attaching fallback database at: " + ftsPath);
+            log.infof("fts schema missing on startup, attaching fallback database at: %s", ftsPath);
             em.createNativeQuery("ATTACH DATABASE '" + ftsPath + "' AS fts").executeUpdate();
         }
 

@@ -65,6 +65,9 @@ quarkus:
 
   hibernate-orm:
     schema-management:
+      # strategy: update — NOT none. SQLite tests have no Flyway/import.sql;
+      # Hibernate must auto-create tables (encrypted_secrets, advisory_lock, etc.)
+      # for @QuarkusTest integration tests. Test DB is ephemeral, so `update` is safe.
       strategy: update
     dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     log:

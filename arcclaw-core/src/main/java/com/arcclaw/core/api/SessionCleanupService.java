@@ -6,15 +6,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.SecurityContext;
-
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.api.dto.ServiceResult;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
@@ -32,7 +30,7 @@ public class SessionCleanupService {
     private final SessionHeartbeatTracker heartbeatTracker;
     private final ReflexRegistry reflexRegistry;
     private final AuditService auditService;
-    private final SecurityContext securityContext;
+    private final String userId;
 
     private static final List<String> NON_SLASH_REFLEX_PREFIXES = List.of(
             "deletecron"
@@ -45,54 +43,42 @@ public class SessionCleanupService {
 
     public SessionCleanupService(Logger log, SessionHeartbeatTracker heartbeatTracker,
                                   ReflexRegistry reflexRegistry, AuditService auditService,
-                                  SecurityContext securityContext) {
+                                  String userId) {
         this.log = log;
         this.heartbeatTracker = heartbeatTracker;
         this.reflexRegistry = reflexRegistry;
         this.auditService = auditService;
-        this.securityContext = securityContext;
+        this.userId = userId;
     }
 
-    public String resolveUserId() {
-        if (securityContext != null && securityContext.getUserPrincipal() != null) {
-            return securityContext.getUserPrincipal().getName();
-        }
-        return WorkspaceContext.getUserIdOrUnknown();
-    }
-
-    public Optional<Response> validateRole(String role) {
+    public Optional<ServiceResult<Object>> validateRole(String role) {
         if (!AgentRoleEnum.isKnownRole(role)) {
-            return Optional.of(Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "Unknown role: " + role)).build());
+            return Optional.of(ServiceResult.error("UNKNOWN_ROLE", "Unknown role: " + role));
         }
         return Optional.empty();
     }
 
-    public Optional<Response> validateSession(String sessionId) {
+    public Optional<ServiceResult<Object>> validateSession(String sessionId) {
         if (!heartbeatTracker.exists(sessionId)) {
-            return Optional.of(Response.status(Response.Status.NOT_FOUND).entity(Map.of("error", "Session not found: " + sessionId)).build());
+            return Optional.of(ServiceResult.error("SESSION_NOT_FOUND", "Session not found: " + sessionId));
         }
 
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
-            String requestingKey = resolveUserId();
-            if (requestingKey != null && !owner.get().equals(requestingKey)) {
+            if (userId != null && !owner.get().equals(userId)) {
                 log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
-                          requestingKey, sessionId, owner.get());
+                          userId, sessionId, owner.get());
 
                 auditService.recordMandatory(
                     sessionId,
-                    requestingKey,
+                    userId,
                     AgentSentinels.SYSTEM_ROLE,
                     SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "Key " + requestingKey + " attempted cross-key session access"
+                    "Key " + userId + " attempted cross-key session access"
                 );
 
-                return Optional.of(Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(Map.of(
-                        "error", "API key not authorized for this session",
-                        "code", "SESSION_ACCESS_DENIED"
-                    ))
-                    .build());
+                return Optional.of(ServiceResult.error("SESSION_ACCESS_DENIED",
+                        "API key not authorized for this session"));
             }
         }
         return Optional.empty();
@@ -109,18 +95,20 @@ public class SessionCleanupService {
         return (level != null) ? level : AutonomyLevel.SUPERVISED;
     }
 
-    public Optional<Response> handleSlashCommand(String sessionId, RunAgentRequest request) {
+    public Optional<ServiceResult<Object>> handleSlashCommand(String sessionId, RunAgentRequest request) {
         String goal = request.goal();
         if (goal == null || (!goal.startsWith("/") && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith))) return Optional.empty();
 
         try {
-            Callable<Response> op = () -> {
+            Callable<ServiceResult<Object>> op = () -> {
                 String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 String channel = ChannelType.REST_API.name();
-                return WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
                     MessageContext context = createRestContext(sessionId, goal);
                     ReflexResult result = reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
-                    return result.commandResponse().map(r -> Response.ok(Map.of("status", "OK", "message", r)).build()).orElse(null);
+                    return result.commandResponse()
+                            .map(r -> ServiceResult.success((Object) Map.of("status", "OK", "message", r)))
+                            .orElse(null);
                 });
             };
             return Optional.ofNullable(WorkspaceScopeHolder.call(sessionId, op));

@@ -14,13 +14,10 @@ import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import io.quarkus.arc.Unremovable;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
 public class FsCheckpointStoreAdapter implements CheckpointStorePort {
-
-    private static final Logger log = Logger.getLogger(FsCheckpointStoreAdapter.class);
 
     @Inject
     FilesystemFileStore store;

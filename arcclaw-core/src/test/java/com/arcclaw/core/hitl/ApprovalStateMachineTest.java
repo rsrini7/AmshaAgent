@@ -18,10 +18,10 @@ import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
-import com.arcclaw.core.event.DomainEventBus;
-import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
@@ -41,7 +41,6 @@ class ApprovalStateMachineTest {
     private AgentCheckpoint cp;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setup() throws Exception {
         agentStore = mock(StatefulAgentStore.class);
         eventBus = mock(DomainEventBus.class);

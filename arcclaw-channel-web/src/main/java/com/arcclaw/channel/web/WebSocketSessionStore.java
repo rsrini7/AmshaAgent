@@ -11,6 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import io.quarkus.websockets.next.WebSocketConnection;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 
 /**
  * Tracks active WebSocket connections and maps them to both temporary 
@@ -20,6 +22,8 @@ import io.quarkus.websockets.next.WebSocketConnection;
 public class WebSocketSessionStore {
     
     // platformId → WebSocketConnection
+    private static final Logger log = Logger.getLogger(WebSocketSessionStore.class);
+
     private final Map<String, WebSocketConnection> platformToSession = new ConcurrentHashMap<>();
     
     // connId → arcclawSessionId
@@ -77,7 +81,8 @@ public class WebSocketSessionStore {
         platformToSession.values().forEach(conn -> {
             try {
                 conn.close();
-            } catch (Exception _) {
+            } catch (Exception e) {
+                log.debugf("Failed to close WebSocket connection: %s", ExceptionUtils.getRootCauseMessage(e));
             }
         });
         platformToSession.clear();

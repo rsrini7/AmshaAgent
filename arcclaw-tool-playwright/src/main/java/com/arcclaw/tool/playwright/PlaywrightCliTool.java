@@ -274,7 +274,7 @@ public class PlaywrightCliTool implements AgentTool {
         try {
             exec("close-all");
         } catch (Exception e) {
-            log.debug("playwright-cli cleanup: " + e.getMessage());
+            log.debugf("playwright-cli cleanup: %s", e.getMessage());
         }
     }
 }

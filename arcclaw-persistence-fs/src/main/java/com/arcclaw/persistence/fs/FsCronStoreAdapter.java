@@ -259,8 +259,6 @@ public class FsCronStoreAdapter implements CronStorePort {
         return store.readOptional(List.of(DOMAIN, INDICES, BY_USER, userId + ".json"), UserIndex.class)
             .orElse(new UserIndex());
     }
-
-    @SuppressWarnings("unused")
     private static class UserIndex {
         public List<String> ids = new ArrayList<>();
     }

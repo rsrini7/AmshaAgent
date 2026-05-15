@@ -146,7 +146,7 @@ public class EnvConfigInitializer {
                 Files.writeString(envFile, separator + key + "=" + value + System.lineSeparator(), StandardOpenOption.APPEND);
             }
         } catch (IOException e) {
-            System.err.println("[ArcClaw] ⚠️  Could not update .env: " + e.getMessage());
+            log.warnf("[ArcClaw] Could not update .env: %s", e.getMessage());
         }
     }
 

@@ -161,52 +161,28 @@ public class ScheduleTaskTool implements AgentTool {
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         log.infof("[ScheduleTaskTool] Executing with params: %s", params);
-        String userId;
-        String chatId;
-        String sessionId;
 
-        userId    = ctx.userId();
-        chatId    = ctx.chatId() != null ? ctx.chatId() : userId;
-        sessionId = ctx.sessionId();
-
-        if (userId == null || userId.isBlank() || sessionId == null) {
-            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
-        }
+        ToolResponse validationError = validateExecutionContext(ctx);
+        if (validationError != null) return validationError;
 
         String goal = (String) params.get("goal");
         ZoneId zone = parseTimezone(params);
         boolean runOnce = parseRunOnce(params);
+        if (!runOnce) {
+            runOnce = shouldTreatAsRunOnce(goal, ctx, runOnce);
+        }
         String executionRole = parseExecutionRole(params);
 
-        if (!runOnce) {
-            String combined = "";
-            if (goal != null) combined += " " + goal.toLowerCase();
-            if (ctx.rawUserGoal() != null) combined += " " + ctx.rawUserGoal().toLowerCase();
-            
-            boolean hasIntervalKeyword = combined.contains("every") || combined.contains("recurring") || combined.contains("each");
-            boolean hasOffsetKeyword = combined.contains("after") || combined.contains("in ") || combined.contains("in a ") || combined.contains("once");
-            
-            if (hasOffsetKeyword && !hasIntervalKeyword) {
-                runOnce = true;
-            }
-        }
-
         String cronExpression = resolveCron(params);
-        String suggestedNextFireTime = ctx.suggestedNextFireTime();
-        
-        boolean cronFromJavaSide = false;
-        if (cronExpression == null || cronExpression.isBlank()) {
-            cronExpression = ctx.suggestedCron();
-            if (cronExpression != null && !cronExpression.isBlank()) {
-                cronFromJavaSide = true;
-            }
-        }
+        cronExpression = resolveCronOrDefault(cronExpression, ctx);
+        boolean cronFromJavaSide = (cronExpression != null && !cronExpression.equals(params.get("cronExpression")));
 
         if (cronFromJavaSide || "UTC".equals(ctx.suggestedCronSource())) {
             zone = ZoneId.of("UTC");
         }
 
-        if ((cronExpression == null || cronExpression.isBlank()) 
+        String suggestedNextFireTime = ctx.suggestedNextFireTime();
+        if ((cronExpression == null || cronExpression.isBlank())
                 && !(runOnce && suggestedNextFireTime != null && !suggestedNextFireTime.isBlank())
                 && !runOnce) {
             log.warnf("[ScheduleTaskTool] Rejecting: no cron and no suggested fire time for recurring task.");
@@ -221,15 +197,8 @@ public class ScheduleTaskTool implements AgentTool {
             return ToolResponse.failure(400, "goal is required.");
         }
 
-        boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find();
-        if (hasNakedPronoun) {
-            log.warnf("[ScheduleTaskTool] Rejecting goal due to naked pronouns: %s", goal);
-            return ToolResponse.failure(422,
-                    "Goal contains unresolved references (e.g., 'it', 'the code'). " +
-                    "Rewrite with explicit technical context before scheduling. " +
-                    "Example: instead of 'deploy it', write 'deploy commit abc123 " +
-                    "to production via gh workflow run deploy.yml'.");
-        }
+        ToolResponse pronounError = checkNakedPronouns(goal);
+        if (pronounError != null) return pronounError;
 
         if (runOnce && cronExpression != null) {
             String[] fields = WHITESPACE_PATTERN.split(cronExpression.trim());
@@ -240,11 +209,14 @@ public class ScheduleTaskTool implements AgentTool {
 
         Instant nextFireTime = resolveNextFireTime(runOnce, suggestedNextFireTime, cronExpression, zone);
         if (nextFireTime == null) {
-            log.warnf("[ScheduleTaskTool] Rejecting: could not determine next fire time (cron='%s', suggested='%s')", 
+            log.warnf("[ScheduleTaskTool] Rejecting: could not determine next fire time (cron='%s', suggested='%s')",
                 cronExpression, suggestedNextFireTime);
             return ToolResponse.failure(400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
         }
 
+        String userId = ctx.userId();
+        String chatId = ctx.chatId() != null ? ctx.chatId() : userId;
+        String sessionId = ctx.sessionId();
         AgentCron entity = createAndPersistCron(ctx, sessionId, userId, chatId, cronExpression, zone, runOnce, executionRole, goal, nextFireTime);
 
         auditAndSchedule(sessionId, userId, cronExpression, entity, runOnce, executionRole);
@@ -255,6 +227,46 @@ public class ScheduleTaskTool implements AgentTool {
                 "\n\nCRITICAL DIRECTIVE: The task is now safely handed off to the background cron system. " +
                 "You MUST NOT execute the goal yourself right now. " +
                 "Reply to the user with a plain text confirmation of the schedule and FINISH immediately.");
+    }
+
+    private ToolResponse validateExecutionContext(ToolExecutionContext ctx) {
+        String userId = ctx.userId();
+        String sessionId = ctx.sessionId();
+        if (userId == null || userId.isBlank() || sessionId == null) {
+            return ToolResponse.failure(403, "Security violation: tenant context not bound.");
+        }
+        return null;
+    }
+
+    private boolean shouldTreatAsRunOnce(String goal, ToolExecutionContext ctx, boolean runOnce) {
+        String combined = "";
+        if (goal != null) combined += " " + goal.toLowerCase();
+        if (ctx.rawUserGoal() != null) combined += " " + ctx.rawUserGoal().toLowerCase();
+
+        boolean hasIntervalKeyword = combined.contains("every") || combined.contains("recurring") || combined.contains("each");
+        boolean hasOffsetKeyword = combined.contains("after") || combined.contains("in ") || combined.contains("in a ") || combined.contains("once");
+
+        return hasOffsetKeyword && !hasIntervalKeyword;
+    }
+
+    private String resolveCronOrDefault(String cronExpression, ToolExecutionContext ctx) {
+        if (cronExpression == null || cronExpression.isBlank()) {
+            return ctx.suggestedCron();
+        }
+        return cronExpression;
+    }
+
+    private ToolResponse checkNakedPronouns(String goal) {
+        boolean hasNakedPronoun = NAKED_PRONOUN.matcher(goal).find();
+        if (hasNakedPronoun) {
+            log.warnf("[ScheduleTaskTool] Rejecting goal due to naked pronouns: %s", goal);
+            return ToolResponse.failure(422,
+                    "Goal contains unresolved references (e.g., 'it', 'the code'). " +
+                    "Rewrite with explicit technical context before scheduling. " +
+                    "Example: instead of 'deploy it', write 'deploy commit abc123 " +
+                    "to production via gh workflow run deploy.yml'.");
+        }
+        return null;
     }
 
     private boolean parseRunOnce(Map<String, Object> params) {

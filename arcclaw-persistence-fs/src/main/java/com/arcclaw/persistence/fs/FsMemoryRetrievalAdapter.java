@@ -69,6 +69,5 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
         );
     }
 
-    @SuppressWarnings("unused")
     private record IndexEntry(String id, String text) {}
 }

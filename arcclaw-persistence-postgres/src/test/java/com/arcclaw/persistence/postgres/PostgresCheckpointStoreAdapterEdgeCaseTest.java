@@ -2,7 +2,6 @@ package com.arcclaw.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -87,9 +86,4 @@ class PostgresCheckpointStoreAdapterEdgeCaseTest {
         assertFalse(found.isPresent());
     }
 
-    private CheckpointDto createCheckpoint(String sessionId, String status) {
-        return new CheckpointDto(null, sessionId, "role", status, "FULL", "{}",
-            "plat-1", "telegram", "goal", null, null, null, null, null, null, null,
-            null, 0, null, null, null, null, null, null, Instant.now(), Instant.now());
-    }
 }

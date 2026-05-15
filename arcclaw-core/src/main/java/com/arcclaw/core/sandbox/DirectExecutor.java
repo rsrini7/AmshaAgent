@@ -10,12 +10,15 @@ import java.util.concurrent.TimeUnit;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class DirectExecutor {
 
+    private static final Logger log = Logger.getLogger(DirectExecutor.class);
+
     @ConfigProperty(name = "arcclaw.sandbox.timeout-seconds", defaultValue = "30")
-    long timeoutSeconds;
+    private long timeoutSeconds;
 
     /** Dev mode: no isolation, direct execution. */
     public String executeDirectly(Path workspaceRoot, List<String> command) throws Exception {
@@ -24,7 +27,7 @@ public class DirectExecutor {
         File workspaceDir = workspaceRoot.toFile();
         if (!workspaceDir.exists()) {
             workspaceDir.mkdirs();
-            System.err.println("PIE Workspace dir missing - recreated: " + workspaceDir.getAbsolutePath());
+            log.warnf("PIE Workspace dir missing - recreated: %s", workspaceDir.getAbsolutePath());
         }
         pb.directory(workspaceDir);
         pb.redirectErrorStream(true);

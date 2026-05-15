@@ -282,7 +282,8 @@ public class CheckpointResumeHandler {
                             sb.append("  ").append(e.getKey()).append(": ").append(val).append("\n");
                         }
                     }
-                } catch (Exception _) {
+                } catch (Exception e) {
+                    log.debugf("Failed to format params JSON, using raw: %s", e.getMessage());
                     String display = paramsJson.length() > 500 ? paramsJson.substring(0, 500) + "…" : paramsJson;
                     sb.append("\n  ").append(display);
                 }

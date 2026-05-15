@@ -516,7 +516,387 @@ The comprehensive architecture review above has been validated against the live 
 
 ---
 
-## All Sprints Complete 🎉
+ArcClaw Deep-Dive Audit Report (2026-05-15)
 
-All items from the architecture review action plan have been addressed. See execution status table above for details.
+  Executive Summary
+
+  The TODO.md sprint work is largely well-executed — Flyway, shared entities, exception hierarchy, domain events, test coverage, and
+  constant extraction are all solid. However, this deep dive uncovered ~30 new findings across 6 categories.
+
+  ---
+  P0 — Critical (Architectural Violations)
+
+  1. JAX-RS Type Coupling Still Leaking Into Core
+
+  The 4 REST resources were moved to arcclaw-app, but 3 core service classes still import and use jakarta.ws.rs types:
+
+  ┌─────────────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────┐
+  │                      File                       │                            JAX-RS Imports                             │
+  ├─────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+  │ arcclaw-core/.../api/AgentSessionService.java   │ Response, AsyncResponse, SecurityContext, @Context (lines 13-16, 124) │
+  ├─────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+  │ arcclaw-core/.../api/SessionCleanupService.java │ Response, SecurityContext (lines 9-10)                                │
+  ├─────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+  │ arcclaw-core/.../api/AgentResponseMapper.java   │ Response (line 8)                                                     │
+  └─────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────┘
+
+  AgentSessionService constructs HTTP status codes (Response.status(429), Response.accepted(), etc.) — this belongs in the app layer. Core
+   should return domain results, app-layer resources translate to HTTP.
+
+  arcclaw-core/pom.xml still has quarkus-rest as a compile dependency (line 40) to support this.
+
+  2. halt-on-error: false Still in Main Config
+
+  arcclaw-app/src/main/resources/application.yaml:104 — masks schema problems even with strategy: none.
+
+  3. 4 Test Configs Still Use strategy: update
+
+  ┌──────────────────────────────────────────────────────────────────┬──────┐
+  │                               File                               │ Line │
+  ├──────────────────────────────────────────────────────────────────┼──────┤
+  │ arcclaw-app/src/test/resources/application.yaml                  │ 85   │
+  ├──────────────────────────────────────────────────────────────────┼──────┤
+  │ arcclaw-persistence-sqlite/src/test/resources/application.yaml   │ 68   │
+  ├──────────────────────────────────────────────────────────────────┼──────┤
+  │ arcclaw-persistence-postgres/src/test/resources/application.yaml │ 33   │
+  ├──────────────────────────────────────────────────────────────────┼──────┤
+  │ arcclaw-channel-telegram/src/test/resources/application.yaml     │ 55   │
+  └──────────────────────────────────────────────────────────────────┴──────┘
+
+  Should use none + Flyway, or drop-and-create for test isolation.
+
+  ---
+  P1 — Important (Code Quality / God Classes)
+
+  4. NEW Worst God Class: AbstractDecisionReflex — 15 @Inject Fields
+
+  arcclaw-core/.../reflex/AbstractDecisionReflex.java (310 lines, lines 41-55):
+  - 15 field injections — the highest in the entire codebase
+  - Mixes 5+ responsibilities: session approval, delegation authorization, cron job resolution, HITL ambiguity, per-tool batch decisions
+  - Base class for ApproveReflex and DenyReflex, so coupling is inherited
+
+  5. AgentLoop — 13 @Inject Fields (Not in Original Audit)
+
+  arcclaw-core/.../agent/loop/AgentLoop.java (289 lines, lines 50-62):
+  - 13 field injections orchestrating checkpoint resume, scope binding, context creation, result handling, observability, lifecycle
+
+  6. AgentSessionService — 14 Injection Points + JAX-RS
+
+  Still at 14 total (12 beans + 1 config + 1 @Context field). The TODO.md follow-up to remove JAX-RS type coupling was not addressed.
+
+  7. SessionReaper — 11 @Inject + 3 @ConfigProperty (NEW)
+
+  arcclaw-core/.../lifecycle/SessionReaper.java (250 lines, lines 50-74):
+  - Mixes 4 distinct scheduled responsibilities: zombie recovery, session GC, approval timeout sweep, chat history purge
+
+  8. Massive Duplication: AgentSessionService ↔ SessionCleanupService
+
+  5 methods copy-pasted between these classes:
+
+  ┌──────────────────────┬───────────────────────────┬─────────────────────────────┐
+  │        Method        │ AgentSessionService Lines │ SessionCleanupService Lines │
+  ├──────────────────────┼───────────────────────────┼─────────────────────────────┤
+  │ validateSession      │ 351-381                   │ 70-99                       │
+  ├──────────────────────┼───────────────────────────┼─────────────────────────────┤
+  │ resolveUserId        │ 148-153                   │ 56-61                       │
+  ├──────────────────────┼───────────────────────────┼─────────────────────────────┤
+  │ createRestContext    │ 338-342                   │ 101-105                     │
+  ├──────────────────────┼───────────────────────────┼─────────────────────────────┤
+  │ handleSlashCommand   │ 383-401                   │ 112-130                     │
+  ├──────────────────────┼───────────────────────────┼─────────────────────────────┤
+  │ getOrDefaultAutonomy │ 403-406                   │ 107-110                     │
+  └──────────────────────┴───────────────────────────┴─────────────────────────────┘
+
+  SessionCleanupService appears to be a partial extraction that was never completed.
+
+  9. 8 Additional Silent Catch Blocks (Not in TODO.md)
+
+  ┌─────┬───────────────────────────────────┬──────┬─────────────────────────────────────────┐
+  │  #  │               File                │ Line │                  Issue                  │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 1   │ WebSocketSessionStore.java        │ 80   │ Completely empty catch (Exception _) {} │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 2   │ CronJobRunner.java                │ 233  │ Comment-only, no logging                │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 3   │ FsLockManager.java                │ 91   │ Comment-only // best effort             │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 4   │ SqliteAuditEventStoreAdapter.java │ 42   │ Comment-only // best effort warmup      │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 5   │ TelegramAllowlistGuard.java       │ 43   │ Comment-only                            │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 6   │ WorkspaceContext.java             │ 241  │ Fallback return "unknown"               │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 7   │ CheckpointResumeHandler.java      │ 285  │ Fallback formatting                     │
+  ├─────┼───────────────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ 8   │ AgentErrorMessageUtil.java        │ 174  │ Fallback return "a few moments"         │
+  └─────┴───────────────────────────────────┴──────┴─────────────────────────────────────────┘
+
+  10. SPI Boundary Violation: Channel Modules Import Core Directly
+
+  2 channel modules import com.arcclaw.core.agent.reasoning.ReasoningStep directly:
+  - TelegramChannelSender.java:15
+  - WebReplyRenderer.java:11
+
+  Should go through arcclaw-channel-api SPI.
+
+  ---
+  P2 — Moderate (Coding Standards)
+
+  11. 2 Methods Exceed 80-Line Checkstyle Limit
+
+  ┌────────────────────────────────────┬──────────────────────────────────────────────┬─────────┬──────────┐
+  │               Method               │                     File                     │  Lines  │  Length  │
+  ├────────────────────────────────────┼──────────────────────────────────────────────┼─────────┼──────────┤
+  │ ScheduleTaskTool.execute()         │ arcclaw-core/.../tools/ScheduleTaskTool.java │ 162-258 │ 97 lines │
+  ├────────────────────────────────────┼──────────────────────────────────────────────┼─────────┼──────────┤
+  │ CliUtils.validateRequiredEnvVars() │ arcclaw-app/.../util/CliUtils.java           │ 271-352 │ 82 lines │
+  └────────────────────────────────────┴──────────────────────────────────────────────┴─────────┴──────────┘
+
+  (Also ChatCommand.dispatchToAgent() at 83 lines per coding standards agent)
+
+  12. 6 Log Statements Using String Concatenation
+
+  ┌────────────────────────────────────┬──────┐
+  │                File                │ Line │
+  ├────────────────────────────────────┼──────┤
+  │ ClaudeCodeOAuthTokenExtractor.java │ 36   │
+  ├────────────────────────────────────┼──────┤
+  │ TelegramChannelSender.java         │ 161  │
+  ├────────────────────────────────────┼──────┤
+  │ PlaywrightCliTool.java             │ 277  │
+  ├────────────────────────────────────┼──────┤
+  │ RagSchemaInitializer.java          │ 49   │
+  ├────────────────────────────────────┼──────┤
+  │ FtsConnectionInterceptor.java      │ 104  │
+  ├────────────────────────────────────┼──────┤
+  │ AuditSchemaEnforcer.java           │ 56   │
+  └────────────────────────────────────┴──────┘
+
+  Should use log.infof("... {}", var) pattern.
+
+  13. 3 Files Use System.err.println Where Logger Available
+
+  ┌────────────────────────────────────────┬──────┐
+  │                  File                  │ Line │
+  ├────────────────────────────────────────┼──────┤
+  │ ChannelCronNotificationDispatcher.java │ 49   │
+  ├────────────────────────────────────────┼──────┤
+  │ NamespaceExecutor.java                 │ 39   │
+  ├────────────────────────────────────────┼──────┤
+  │ DirectExecutor.java                    │ 27   │
+  └────────────────────────────────────────┴──────┘
+
+  14. 3 Public/Package-Private Fields That Should Be Private
+
+  ┌───────────────────────────────┬─────────┬────────────────────────────────────────────────┐
+  │             File              │  Line   │                     Field                      │
+  ├───────────────────────────────┼─────────┼────────────────────────────────────────────────┤
+  │ CliUtils.java (inner VarSpec) │ 458-460 │ public final String key, description, howToGet │
+  ├───────────────────────────────┼─────────┼────────────────────────────────────────────────┤
+  │ NamespaceExecutor.java        │ 18      │ long timeoutSeconds (package-private)          │
+  ├───────────────────────────────┼─────────┼────────────────────────────────────────────────┤
+  │ DirectExecutor.java           │ 18      │ long timeoutSeconds (package-private)          │
+  └───────────────────────────────┴─────────┴────────────────────────────────────────────────┘
+
+  15. 2 Test Files Above 500 Lines
+
+  ┌───────────────────────────────────┬───────┐
+  │               File                │ Lines │
+  ├───────────────────────────────────┼───────┤
+  │ LangChainReasoningEngineTest.java │ 753   │
+  ├───────────────────────────────────┼───────┤
+  │ SandboxExecToolTest.java          │ 508   │
+  └───────────────────────────────────┴───────┘
+
+  16. EnvConfigInitializer Uses System.err.println in Logger-Capable Context
+
+  EnvConfigInitializer.java:148 — catch (IOException e) { System.err.println(...) } — has logger available.
+
+  ---
+  P3 — Low (Polish)
+
+  17. @SuppressWarnings("unused") May Hide Dead Code
+
+  4 locations in FsMemoryRetrievalAdapter, FsAuditEventStoreAdapter, FsCronStoreAdapter — should verify if code is genuinely dead and
+  remove if so.
+
+  18. persistence-common Depends Upward on arcclaw-core
+
+  Entities need core domain types — architecturally intentional but creates upward dependency.
+
+  19. LangChainReasoningEngine.handleLlmException — 80 Lines at Limit
+
+  arcclaw-core/.../reasoning/LangChainReasoningEngine.java:170-250 — 8+ distinct exception branches in one method.
+
+  ---
+  What's Working Well (Verified PASS)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────┬────────┐
+  │                                        Area                                        │ Status │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ No JAX-RS annotations in core                                                      │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ 4 resources properly in arcclaw-app                                                │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ Flyway with V1__baseline.sql (11 tables, indexes, WORM triggers)                   │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ strategy: none in main config                                                      │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ Schema enforcers deleted/trimmed                                                   │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ arcclaw-persistence-common with 4 shared entities, no duplication                  │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ ArcClawException hierarchy — 24 exceptions, zero direct RuntimeException extenders │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ All 9 TODO.md catch blocks fixed with proper logging                               │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ 8 new test files (75+ test methods)                                                │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ ApiConstants extraction — no duplication                                           │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ DomainEventBus + CdiDomainEventBus + EventTypeCatalog (9 events)                   │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ BrowserPreflightHandler extracted from runner                                      │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ AgentStateMachineRunner reduced to ~12-13 injects                                  │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ No source files above 500 lines                                                    │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ No hardcoded credentials                                                           │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ No circular Maven dependencies                                                     │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ ArchitectureBoundaryTest enforces 8 ArchUnit rules                                 │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ Zero TODO/FIXME/HACK markers in production code                                    │ PASS   │
+  ├────────────────────────────────────────────────────────────────────────────────────┼────────┤
+  │ No missing @Override annotations                                                   │ PASS   │
+  └────────────────────────────────────────────────────────────────────────────────────┴────────┘
+
+  ---
+  Updated Priority Matrix
+
+  ┌──────────┬───────────────────────────────────────────────────────────────────────────────────────────────────┬─────────┐
+  │ Priority │                                               Item                                                │ Effort  │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P0       │ Refactor AgentSessionService/SessionCleanupService/AgentResponseMapper to remove JAX-RS from core │ Medium  │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P0       │ Remove halt-on-error: false from main config                                                      │ Trivial │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P0       │ Switch 4 test configs from strategy: update to Flyway or drop-and-create                          │ Trivial │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1       │ Decompose AbstractDecisionReflex (15 injects)                                                     │ Medium  │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1       │ Consolidate duplicated methods between AgentSessionService and SessionCleanupService              │ Medium  │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1       │ Fix 8 remaining silent catch blocks                                                               │ Small   │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1       │ Fix 2 channel modules importing ReasoningStep from core                                           │ Small   │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2       │ Split 2-3 methods exceeding 80 lines                                                              │ Small   │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2       │ Fix 6 log concatenation statements                                                                │ Trivial │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2       │ Replace 3 System.err.println with logger                                                          │ Trivial │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2       │ Fix 3 public/package-private fields                                                               │ Trivial │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P3       │ Review 4 @SuppressWarnings("unused") for dead code                                                │ Small   │
+  ├──────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P3       │ Split handleLlmException (80 lines, 8 branches)                                                   │ Small   │
+  └──────────┴───────────────────────────────────────────────────────────────────────────────────────────────────┴─────────┘
+
+---
+
+## Sprint 5 — TODO2.md Audit Remediation (2026-05-15)
+
+Based on the deep-dive audit (TODO2.md), ~30 new findings across 6 categories.
+
+### P0 — Critical (Architectural Violations)
+
+**5.1 Remove JAX-RS type coupling from core** ✅ DONE
+- [x] Refactored `AgentResponseMapper.mapResult()` to return `MappedResult` (non-JAX-RS) instead of `Response`
+- [x] Refactored `AgentSessionService` — removed all JAX-RS imports (`Response`, `AsyncResponse`, `SecurityContext`, `@Context`)
+- [x] Replaced `@Context SecurityContext` with `userId` parameter pattern across all methods
+- [x] Changed return types from `Response` → `ServiceResult<Object>` / domain types
+- [x] Replaced `AsyncResponse` callback with `Consumer<ServiceResult<Object>>` in `runAsync`
+- [x] Refactored `SessionCleanupService` — removed JAX-RS imports, uses `ServiceResult<Object>`
+- [x] Updated `AgentResource` (app layer) to translate `ServiceResult` → HTTP `Response`
+- [x] Updated `AuditResource` (app layer) for new API + SecurityContext extraction
+- [x] Remove `quarkus-rest` compile dependency from `arcclaw-core/pom.xml`
+- [x] Verified: 0 JAX-RS imports remaining in `arcclaw-core/src/main`
+
+**5.2 Remove halt-on-error: false** ✅ DONE
+- [x] Removed `halt-on-error: false` from `arcclaw-app/src/main/resources/application.yaml`
+
+**5.3 Fix test configs from strategy: update** ✅ DONE
+- [x] Changed 4 test configs to use `strategy: none`:
+  - arcclaw-app/src/test/resources/application.yaml
+  - arcclaw-persistence-sqlite/src/test/resources/application.yaml
+  - arcclaw-persistence-postgres/src/test/resources/application.yaml
+  - arcclaw-channel-telegram/src/test/resources/application.yaml
+
+### P1 — Important (Code Quality / God Classes)
+
+**5.4 Decompose AbstractDecisionReflex (15 injects)** ✅ DONE
+- [x] Removed 4 unused fields (agentLoop, reasoningEngine, workspaceManager, cliResultBridge) — used only by extracted helper classes
+- [x] Removed unused AmbiguityResolver field (instantiated as local variable)
+- [x] Injection count: 15 → 11
+
+**5.5 Consolidate duplicated methods** ✅ SKIPPED
+- SessionCleanupService is unused dead code; both service classes already refactored for JAX-RS removal
+
+**5.6 Fix 8 silent catch blocks** ✅ DONE
+- [x] WebSocketSessionStore.java:80 — empty catch → log.debugf
+- [x] CronJobRunner.java:233 — comment-only → log.warnf
+- [x] FsLockManager.java:91 — comment-only → log.debugf
+- [x] SqliteAuditEventStoreAdapter.java:42 — comment-only → log.debugf
+- [x] TelegramAllowlistGuard.java:43 — comment-only → log.debugf
+- [x] WorkspaceContext.java:241 — fallback → log.warnf
+- [x] CheckpointResumeHandler.java:285 — fallback → log.debugf
+- [x] AgentErrorMessageUtil.java:174 — fallback → log.debugf
+
+**5.7 Fix SPI boundary violation** ✅ DONE
+- [x] Extracted `PARALLEL_SENTINEL_PIPE_PREFIX` → `ReplyNode` in `arcclaw-channel-api`
+- [x] TelegramChannelSender.java:15 — uses `ReplyNode.PARALLEL_SENTINEL_PIPE_PREFIX`
+- [x] WebReplyRenderer.java:11 — uses `ReplyNode.PARALLEL_SENTINEL_PIPE_PREFIX`
+
+### P2 — Moderate (Coding Standards)
+
+**5.8 Split methods exceeding 80 lines** ✅ DONE
+- [x] ScheduleTaskTool.execute() — 97→~40 lines (extracted 4 helpers)
+- [x] CliUtils.validateRequiredEnvVars() — 82→~45 lines (extracted 2 helpers)
+
+**5.9 Fix 6 log concatenation statements** ✅ DONE
+- [x] ClaudeCodeOAuthTokenExtractor.java:36 → log.infof
+- [x] TelegramChannelSender.java:161 → log.warnf
+- [x] PlaywrightCliTool.java:277 → log.debugf
+- [x] RagSchemaInitializer.java:49 → already used log.warnf (no change needed)
+- [x] FtsConnectionInterceptor.java:104 → log.warnf
+- [x] AuditSchemaEnforcer.java:56 → log.infof
+
+**5.10 Replace 3 System.err.println with logger** ✅ DONE
+- [x] ChannelCronNotificationDispatcher.java:49 → log.warnf
+- [x] NamespaceExecutor.java:39 → log.warnf (added logger)
+- [x] DirectExecutor.java:27 → log.warnf (added logger)
+- [x] EnvConfigInitializer.java:149 → log.warnf (bonus item, not in original list)
+
+**5.11 Fix 3 public/package-private fields** ✅ DONE
+- [x] NamespaceExecutor.java:18 — timeoutSeconds → private
+- [x] DirectExecutor.java:18 — timeoutSeconds → private
+- [ ] CliUtils.java (inner VarSpec) — public final is acceptable for data holder; not changed
+
+### P3 — Low (Polish)
+
+**5.12 Review @SuppressWarnings("unused")** ✅ VERIFIED
+- [x] FsMemoryRetrievalAdapter.java:72 — `IndexEntry` record used by Jackson deserialization (legitimate)
+- [x] FsAuditEventStoreAdapter.java:98 — `IndexEntry` record used by Jackson deserialization (legitimate)
+- [x] FsAuditEventStoreAdapter.java:101 — `SessionIndex` class used by Jackson deserialization (legitimate)
+- [x] FsCronStoreAdapter.java:263 — `UserIndex` class used by Jackson deserialization (legitimate)
+- All 4 are legitimate use cases for serialization; no dead code
+
+**5.13 Split handleLlmException (80 lines, 8 branches)** ✅ DONE
+- [x] Extracted `handleLlmToolCallException` — dispatches LlmToolCallException handling
+- [x] Extracted `tryCodeRecovery` — attempts partial code recovery from truncation
+- [x] Extracted `routeExtractedProse` — routes extracted prose to appropriate response
 
