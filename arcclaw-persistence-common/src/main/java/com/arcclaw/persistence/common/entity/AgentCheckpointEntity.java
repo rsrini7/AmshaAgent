@@ -144,6 +144,13 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "parent_checkpoint_id")
+    @Nullable
+    private Long parentCheckpointId;
+
+    @Column(name = "depth", nullable = false)
+    private int depth = 0;
+
     @PrePersist
     void onPersist() {
         var now = Instant.now();
@@ -341,6 +348,14 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
     @Override
     public String getRootCauseClass() { return rootCauseClass; }
     public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
+
+    @Override
+    public Long getParentCheckpointId() { return parentCheckpointId; }
+    public void setParentCheckpointId(Long parentCheckpointId) { this.parentCheckpointId = parentCheckpointId; }
+
+    @Override
+    public int getDepth() { return depth; }
+    public void setDepth(int depth) { this.depth = depth; }
 
     @Override
     public boolean hasPreExecutedResults() {

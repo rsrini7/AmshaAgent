@@ -92,6 +92,12 @@ public interface AgentCheckpoint {
     Instant getUpdatedAt();
     void setUpdatedAt(Instant updatedAt);
 
+    Long getParentCheckpointId();
+    void setParentCheckpointId(Long parentCheckpointId);
+
+    int getDepth();
+    void setDepth(int depth);
+
     boolean hasBatchToolDecisions();
     boolean isParallelBatch();
     List<String> parallelToolNames();
@@ -128,4 +134,6 @@ public interface AgentCheckpoint {
     default AgentCheckpoint withRootCauseClass(String c) { setRootCauseClass(c); return this; }
     default AgentCheckpoint withCreatedAt(Instant t) { setCreatedAt(t); return this; }
     default AgentCheckpoint withUpdatedAt(Instant t) { setUpdatedAt(t); return this; }
+    default AgentCheckpoint withParentCheckpointId(Long p) { setParentCheckpointId(p); return this; }
+    default AgentCheckpoint withDepth(int d) { setDepth(d); return this; }
 }

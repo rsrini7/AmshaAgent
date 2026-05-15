@@ -43,8 +43,9 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                 d.channelPlatformId(), d.channelType(), d.originalGoal(), d.failedAt(), d.completedAt(),
                 d.failReason(), d.pendingToolName(), d.batchToolDecisions(), d.pendingToolParametersJson(),
                 d.preExecutedResults(), d.maxIterations(), d.iterationsUsed(), d.retryAfterMs(), d.systemNote(),
-                d.contextDataJson(), d.errorCode(), d.traceId(), d.rootCauseClass(), d.createdAt() == null ? Instant.now() : d.createdAt(),
-                Instant.now());
+                d.contextDataJson(), d.errorCode(), d.traceId(), d.rootCauseClass(),
+                d.parentCheckpointId(), d.depth(),
+                d.createdAt() == null ? Instant.now() : d.createdAt(), Instant.now());
     }
 
     @Override
@@ -82,8 +83,9 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     existing.channelType(), existing.originalGoal(), existing.failedAt(), existing.completedAt(),
                     existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
                     existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
-                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(), 
-                    existing.errorCode(), existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
+                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(),
+                    existing.errorCode(), existing.traceId(), existing.rootCauseClass(),
+                    existing.parentCheckpointId(), existing.depth(), existing.createdAt(), Instant.now());
             store.put(id, updated);
         }
     }
@@ -189,12 +191,13 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     e.channelPlatformId(), e.channelType(), e.originalGoal() != null ? e.originalGoal() : originalGoal, e.failedAt(), e.completedAt(),
                     e.failReason(), e.pendingToolName(), e.batchToolDecisions(), e.pendingToolParametersJson(),
                     e.preExecutedResults(), e.maxIterations(), iterationsUsed, e.retryAfterMs(), e.systemNote(),
-                    contextDataJson, e.errorCode(), e.traceId(), e.rootCauseClass(), e.createdAt(), Instant.now());
+                    contextDataJson, e.errorCode(), e.traceId(), e.rootCauseClass(),
+                    e.parentCheckpointId(), e.depth(), e.createdAt(), Instant.now());
             store.put(e.id(), updated);
             return new CheckpointUpsertResult(updated, false);
         } else {
             CheckpointDto created = save(new CheckpointDto(null, sessionId, agentRole, "IN_PROGRESS", autonomy, stateJson,
-                    null, null, originalGoal, null, null, null, null, null, null, null, null, iterationsUsed, null, null, contextDataJson, null, null, null, Instant.now(), Instant.now()));
+                    null, null, originalGoal, null, null, null, null, null, null, null, null, iterationsUsed, null, null, contextDataJson, null, null, null, null, 0, Instant.now(), Instant.now()));
             return new CheckpointUpsertResult(created, true);
         }
     }
@@ -213,8 +216,9 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                 existing.channelType(), existing.originalGoal() != null ? existing.originalGoal() : originalGoal, failedAt, completedAt,
                 existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
                 existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
-                existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(), 
-                existing.errorCode(), existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
+                existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(),
+                existing.errorCode(), existing.traceId(), existing.rootCauseClass(),
+                existing.parentCheckpointId(), existing.depth(), existing.createdAt(), Instant.now());
         
         store.put(updated.id(), updated);
         saveSteps(updated.id(), steps);
@@ -241,8 +245,9 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     existing.channelType(), existing.originalGoal(), Instant.now(), existing.completedAt(),
                     failReason, existing.pendingToolName(), existing.batchToolDecisions(),
                     existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
-                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(), 
-                    errorCode, traceId, rootCauseClass, existing.createdAt(), Instant.now());
+                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(),
+                    errorCode, traceId, rootCauseClass,
+                    existing.parentCheckpointId(), existing.depth(), existing.createdAt(), Instant.now());
             store.put(checkpointId, updated);
         }
     }
@@ -274,7 +279,8 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
                     existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
                     existing.iterationsUsed(), null, // clear retryAfterMs
                     existing.systemNote(), existing.contextDataJson(), existing.errorCode(),
-                    existing.traceId(), existing.rootCauseClass(), existing.createdAt(), Instant.now());
+                    existing.traceId(), existing.rootCauseClass(),
+                    existing.parentCheckpointId(), existing.depth(), existing.createdAt(), Instant.now());
             store.put(id, updated);
             return true;
         }

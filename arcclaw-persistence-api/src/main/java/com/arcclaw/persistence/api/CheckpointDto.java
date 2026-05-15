@@ -31,6 +31,8 @@ public record CheckpointDto(
     String errorCode,
     String traceId,
     String rootCauseClass,
+    Long parentCheckpointId,
+    int depth,
     Instant createdAt,
     Instant updatedAt
 ) {}

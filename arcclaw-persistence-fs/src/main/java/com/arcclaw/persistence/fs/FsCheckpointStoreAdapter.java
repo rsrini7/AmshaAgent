@@ -41,6 +41,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                 dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(),
                 dto.retryAfterMs(), dto.systemNote(), dto.contextDataJson(),
                 dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
+                dto.parentCheckpointId(), dto.depth(),
                 dto.createdAt() != null ? dto.createdAt() : Instant.now(), Instant.now()
             );
         } else {
@@ -52,6 +53,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                 dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(),
                 dto.retryAfterMs(), dto.systemNote(), dto.contextDataJson(),
                 dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
+                dto.parentCheckpointId(), dto.depth(),
                 dto.createdAt(), Instant.now()
             );
         }
@@ -230,7 +232,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                     cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
                     cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
                     cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-                    "SESSION_TERMINATED", null, null, cp.createdAt(), Instant.now()
+                    "SESSION_TERMINATED", null, null,
+                    cp.parentCheckpointId(), cp.depth(),
+                    cp.createdAt(), Instant.now()
                 ));
             }
         }
@@ -262,7 +266,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            errorCode, traceId, rootCauseClass, cp.createdAt(), Instant.now()
+            errorCode, traceId, rootCauseClass,
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         )));
     }
 
@@ -275,7 +281,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         )));
     }
 
@@ -288,7 +296,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         )));
     }
 
@@ -310,7 +320,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            null, null, null, cp.createdAt(), Instant.now()
+            null, null, null,
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         ));
         return true;
     }
@@ -333,6 +345,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp != null ? cp.channelPlatformId() : null, cp != null ? cp.channelType() : null,
             goal, null, null, null, null, null, null, null,
             null, iterationsUsed, null, null, contextDataJson, null, null, null,
+            cp != null ? cp.parentCheckpointId() : null, cp != null ? cp.depth() : 0,
             cp != null ? cp.createdAt() : Instant.now(), Instant.now()
         ));
         return new CheckpointUpsertResult(saved, created);
@@ -358,6 +371,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             goal, failedAt, completedAt, null, null, null, null, null,
             cp != null ? cp.maxIterations() : null, cp != null ? cp.iterationsUsed() : 0,
             null, null, contextDataJson, null, null, null,
+            cp != null ? cp.parentCheckpointId() : null, cp != null ? cp.depth() : 0,
             cp != null ? cp.createdAt() : now, now
         ));
         helper.persistSteps(saved.id(), steps);
@@ -389,7 +403,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), updatedDecisions, cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         ));
         return true;
     }
@@ -402,7 +418,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         );
     }
 }

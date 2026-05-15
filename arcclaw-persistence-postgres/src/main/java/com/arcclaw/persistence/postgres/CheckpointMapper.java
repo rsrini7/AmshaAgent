@@ -22,6 +22,7 @@ final class CheckpointMapper {
                 c.getPreExecutedResults(), c.getMaxIterations(), c.getIterationsUsed(),
                 c.getRetryAfterMs(), c.getSystemNote(), c.getContextDataJson(),
                 c.getErrorCode(), c.getTraceId(), c.getRootCauseClass(),
+                c.getParentCheckpointId(), c.getDepth(),
                 c.getCreatedAt(), c.getUpdatedAt()
         );
     }
@@ -43,6 +44,8 @@ final class CheckpointMapper {
         entity.setChannelType(dto.channelType());
         entity.setChannelPlatformId(dto.channelPlatformId());
         entity.setSystemNote(dto.systemNote());
+        entity.setParentCheckpointId(dto.parentCheckpointId());
+        entity.setDepth(dto.depth());
         entity.setUpdatedAt(Instant.now());
     }
 }

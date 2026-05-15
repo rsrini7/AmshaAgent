@@ -251,7 +251,7 @@ class PersistencePortContractTest {
     private CheckpointDto createCheckpoint(String sessionId, String status) {
         return new CheckpointDto(
             null, sessionId, "role", status, "FULL", "{}", "plat-1", "telegram", "goal",
-            null, null, null, null, null, null, null, null, 0, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, 0, null, null, null, null, null, null, null, 0,
             Instant.now(), Instant.now()
         );
     }
@@ -259,7 +259,7 @@ class PersistencePortContractTest {
     private CheckpointDto createCheckpointWithId(String sessionId, String status) {
         return new CheckpointDto(
             null, sessionId, "role", status, "FULL", "{}", "plat-1", "telegram", "goal",
-            null, null, null, null, null, null, null, null, 0, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, 0, null, null, null, null, null, null, null, 0,
             Instant.now(), Instant.now()
         );
     }
@@ -297,7 +297,8 @@ class PersistencePortContractTest {
                     dto.failReason(), dto.pendingToolName(), dto.batchToolDecisions(),
                     dto.pendingToolParametersJson(), dto.preExecutedResults(), dto.maxIterations(),
                     dto.iterationsUsed(), dto.retryAfterMs(), dto.systemNote(), dto.contextDataJson(),
-                    dto.errorCode(), dto.traceId(), dto.rootCauseClass(), dto.createdAt(), Instant.now());
+                    dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
+                    dto.parentCheckpointId(), dto.depth(), dto.createdAt(), Instant.now());
             }
             store.put(dto.id(), dto);
             return dto;
@@ -321,7 +322,8 @@ class PersistencePortContractTest {
                 v.originalGoal(), v.failedAt(), v.completedAt(), v.failReason(), v.pendingToolName(),
                 v.batchToolDecisions(), v.pendingToolParametersJson(), v.preExecutedResults(),
                 v.maxIterations(), v.iterationsUsed(), v.retryAfterMs(), v.systemNote(), v.contextDataJson(),
-                v.errorCode(), v.traceId(), v.rootCauseClass(), v.createdAt(), Instant.now()));
+                v.errorCode(), v.traceId(), v.rootCauseClass(),
+                v.parentCheckpointId(), v.depth(), v.createdAt(), Instant.now()));
         }
         @Override public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
             CheckpointDto existing = store.get(id);

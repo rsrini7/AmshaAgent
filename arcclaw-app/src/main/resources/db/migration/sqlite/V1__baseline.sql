@@ -37,6 +37,8 @@ CREATE TABLE agent_checkpoint (
     error_code               TEXT,
     trace_id                 TEXT,
     root_cause_class         TEXT,
+    parent_checkpoint_id     INTEGER,
+    depth                    INTEGER NOT NULL DEFAULT 0,
     created_at               TEXT NOT NULL,
     updated_at               TEXT NOT NULL,
     UNIQUE(session_id, agent_role)

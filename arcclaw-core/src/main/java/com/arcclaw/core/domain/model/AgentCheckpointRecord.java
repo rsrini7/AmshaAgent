@@ -42,6 +42,8 @@ public final class AgentCheckpointRecord implements AgentCheckpoint {
     private String errorCode;
     private String traceId;
     private String rootCauseClass;
+    private Long parentCheckpointId;
+    private int depth;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -73,6 +75,8 @@ public final class AgentCheckpointRecord implements AgentCheckpoint {
         r.errorCode = dto.errorCode();
         r.traceId = dto.traceId();
         r.rootCauseClass = dto.rootCauseClass();
+        r.parentCheckpointId = dto.parentCheckpointId();
+        r.depth = dto.depth();
         r.createdAt = dto.createdAt();
         r.updatedAt = dto.updatedAt();
         return r;
@@ -130,6 +134,10 @@ public final class AgentCheckpointRecord implements AgentCheckpoint {
     @Override public void setTraceId(String traceId) { this.traceId = traceId; }
     @Override public String getRootCauseClass() { return rootCauseClass; }
     @Override public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
+    @Override public Long getParentCheckpointId() { return parentCheckpointId; }
+    @Override public void setParentCheckpointId(Long parentCheckpointId) { this.parentCheckpointId = parentCheckpointId; }
+    @Override public int getDepth() { return depth; }
+    @Override public void setDepth(int depth) { this.depth = depth; }
     @Override public Instant getCreatedAt() { return createdAt; }
     @Override public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     @Override public Instant getUpdatedAt() { return updatedAt; }

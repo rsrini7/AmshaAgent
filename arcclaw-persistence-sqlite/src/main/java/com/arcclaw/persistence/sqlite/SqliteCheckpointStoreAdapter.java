@@ -123,6 +123,8 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         entity.setErrorCode(dto.errorCode());
         entity.setTraceId(dto.traceId());
         entity.setRootCauseClass(dto.rootCauseClass());
+        entity.setParentCheckpointId(dto.parentCheckpointId());
+        entity.setDepth(dto.depth());
         entity.setUpdatedAt(dto.updatedAt());
         return entity;
     }

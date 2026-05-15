@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import jakarta.enterprise.inject.Instance;
@@ -23,6 +24,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.persistence.api.CheckpointCrudPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +41,7 @@ class DelegateToAgentToolTest {
     @Mock AgentLoop agentLoop;
     @Mock Instance<AgentLoop> agentLoopInstance;
     @Mock CapabilityRegistry capabilityRegistry;
+    @Mock CheckpointCrudPort checkpointCrud;
 
     @InjectMocks DelegateToAgentTool tool;
 
@@ -49,6 +52,7 @@ class DelegateToAgentToolTest {
     @BeforeEach
     void setup() {
         Mockito.lenient().when(agentLoopInstance.get()).thenReturn(agentLoop);
+        Mockito.lenient().when(checkpointCrud.findBySessionAndRole(any(), any())).thenReturn(Optional.empty());
     }
 
     @Test

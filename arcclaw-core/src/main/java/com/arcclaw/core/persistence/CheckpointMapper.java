@@ -33,6 +33,8 @@ public class CheckpointMapper {
             entity.getErrorCode(),
             entity.getTraceId(),
             entity.getRootCauseClass(),
+            entity.getParentCheckpointId(),
+            entity.getDepth(),
             entity.getCreatedAt(),
             entity.getUpdatedAt()
         );

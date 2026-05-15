@@ -208,7 +208,7 @@ class FsStoreSmokeTest {
             null, "session-cp-1", "primary", "IN_PROGRESS", "LIMITED",
             "{}", "platform1", "slack", "goal1",
             null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, null
+            10, 0, null, null, null, null, null, null, null, 0, null, null
         ));
         assertNotNull(cp.id());
         assertTrue(checkpointStore.findById(cp.id()).isPresent());
@@ -220,7 +220,7 @@ class FsStoreSmokeTest {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
             null, "session-cp-2", "primary", "IN_PROGRESS", "LIMITED",
             "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, null
+            10, 0, null, null, null, null, null, null, null, 0, null, null
         ));
         checkpointStore.transitionStatus(cp.id(), "COMPLETED");
         Optional<CheckpointDto> found = checkpointStore.findById(cp.id());
@@ -233,7 +233,7 @@ class FsStoreSmokeTest {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
             null, "session-cp-3", "primary", "IN_PROGRESS", "LIMITED",
             "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, null
+            10, 0, null, null, null, null, null, null, null, 0, null, null
         ));
         assertTrue(checkpointStore.atomicTransition(cp.id(), "IN_PROGRESS", "COMPLETED"));
         assertFalse(checkpointStore.atomicTransition(cp.id(), "IN_PROGRESS", "FAILED"));
@@ -244,7 +244,7 @@ class FsStoreSmokeTest {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
             null, "session-cp-steps", "primary", "IN_PROGRESS", "LIMITED",
             "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, null
+            10, 0, null, null, null, null, null, null, null, 0, null, null
         ));
         var step1 = new ReasoningStepDto("{\"thought\":\"step1\"}", "read", "{}", "ok", 10, 20, true, null, null, null);
         var step2 = new ReasoningStepDto("{\"thought\":\"step2\"}", "write", "{}", "done", 5, 10, true, null, null, null);
@@ -271,7 +271,7 @@ class FsStoreSmokeTest {
         CheckpointDto cp = checkpointStore.save(new CheckpointDto(
             null, "session-fail", "primary", "IN_PROGRESS", "LIMITED",
             "{}", null, null, null, null, null, null, null, null, null, null,
-            10, 0, null, null, null, null, null, null, null, null
+            10, 0, null, null, null, null, null, null, null, 0, null, null
         ));
         checkpointStore.markFailed(cp.id(), "test error", "ERR001", "trace1", "TestException");
         Optional<CheckpointDto> found = checkpointStore.findById(cp.id());
