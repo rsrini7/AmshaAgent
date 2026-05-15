@@ -91,6 +91,7 @@ quarkus:
     packages:
       - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
+      - com.arcclaw.core.domain.model
 
   langchain4j:
     openai:

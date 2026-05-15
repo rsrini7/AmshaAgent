@@ -61,4 +61,5 @@ quarkus:
       - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
       - com.arcclaw.core.lifecycle
+      - com.arcclaw.core.domain.model
 

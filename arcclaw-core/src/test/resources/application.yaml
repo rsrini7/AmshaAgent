@@ -51,6 +51,7 @@ quarkus:
       generation: drop-and-create
     packages:
       - com.arcclaw.persistence.common.entity
+      - com.arcclaw.core.domain.model
   log:
     level: INFO
     category:

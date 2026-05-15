@@ -81,6 +81,7 @@ quarkus:
     packages:
       - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
+      - com.arcclaw.core.domain.model
   log:
     level: INFO
     category:
