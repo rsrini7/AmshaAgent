@@ -40,7 +40,7 @@ public class CheckpointUpsertService {
     public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
             String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
         
-        List<AgentCheckpointEntity> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
+        List<AgentCheckpointEntity> existing = checkpointRepo.findAnyBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpointEntity entity;
         boolean created = false;
@@ -84,7 +84,7 @@ public class CheckpointUpsertService {
     public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
         String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
         
-        List<AgentCheckpointEntity> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
+        List<AgentCheckpointEntity> existing = checkpointRepo.findAnyBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpointEntity entity;
         boolean created = false;

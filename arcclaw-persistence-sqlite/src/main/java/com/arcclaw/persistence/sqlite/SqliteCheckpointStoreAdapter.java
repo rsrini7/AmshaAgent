@@ -77,6 +77,13 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional(Transactional.TxType.REQUIRED)
     public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
         if (checkpointDto.id() == null) {
+            var existing = checkpointRepo.findAnyBySessionAndRole(
+                    checkpointDto.sessionId(), checkpointDto.agentRole());
+            if (!existing.isEmpty()) {
+                AgentCheckpointEntity managed = existing.get(0);
+                upsertService.updateEntityFromDto(managed, checkpointDto);
+                return CheckpointMapper.toDto(checkpointRepo.merge(managed));
+            }
             AgentCheckpointEntity entity = newEntityFromDto(checkpointDto);
             return CheckpointMapper.toDto(checkpointRepo.persist(entity));
         }

@@ -68,6 +68,22 @@ public class CheckpointRepository {
         return result;
     }
 
+    public List<AgentCheckpointEntity> findAnyBySessionAndRole(String sessionId, String agentRole) {
+        log.debugf("[Query] findAnyBySessionAndRole(session=%s, role=%s)", sessionId, agentRole);
+        List<AgentCheckpointEntity> result = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.agentRole = :role " +
+                "ORDER BY c.id DESC",
+                AgentCheckpointEntity.class)
+                .setParameter("sid", sessionId)
+                .setParameter("role", agentRole)
+                .setMaxResults(1)
+                .getResultList();
+        log.debugf("[Query] findAnyBySessionAndRole returned %d result(s) for session=%s role=%s", result.size(), sessionId, agentRole);
+        return result;
+    }
+
     public List<AgentCheckpointEntity> findActiveBySession(String sessionId) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
@@ -155,7 +171,7 @@ public class CheckpointRepository {
                 "  AND c.status IN (:s1, :s2, :s3) " +
                 "ORDER BY c.id DESC",
                 AgentCheckpointEntity.class)
-                .setParameter("segment", "%" + segment + "%")
+                .setParameter("segment", segment + "%")
                 .setParameter("s1", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("s2", CheckpointStatus.RESUMING)
                 .setParameter("s3", CheckpointStatus.IN_PROGRESS)
