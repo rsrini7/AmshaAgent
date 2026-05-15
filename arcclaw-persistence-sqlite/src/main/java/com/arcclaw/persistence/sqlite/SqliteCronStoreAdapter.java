@@ -14,7 +14,7 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
-import com.arcclaw.persistence.sqlite.entity.AgentCronEntity;
+import com.arcclaw.persistence.common.entity.AgentCronEntity;
 import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;
 

@@ -6,7 +6,7 @@ import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

@@ -10,7 +10,7 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
-import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 
 @ApplicationScoped
 public class ZombieRecoveryService {

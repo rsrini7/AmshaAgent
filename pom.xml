@@ -15,6 +15,7 @@
   <modules>
     <module>arcclaw-channel-api</module>
     <module>arcclaw-persistence-api</module>
+    <module>arcclaw-persistence-common</module>
     <module>arcclaw-core</module>
     <module>arcclaw-persistence-sqlite</module>
     <module>arcclaw-persistence-fs</module>
@@ -81,6 +82,11 @@
       <dependency>
         <groupId>com.arcclaw</groupId>
         <artifactId>arcclaw-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.arcclaw</groupId>
+        <artifactId>arcclaw-persistence-common</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

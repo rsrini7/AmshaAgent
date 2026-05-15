@@ -13,7 +13,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
-import com.arcclaw.persistence.postgres.entity.AuditEventEntity;
+import com.arcclaw.persistence.common.entity.AuditEventEntity;
 
 /**
  * PostgreSQL implementation of the AuditEventStorePort with WORM enforcement triggers.

@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.sqlite.entity;
+package com.arcclaw.persistence.common.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -142,4 +142,3 @@ public class ReasoningStepEntity implements ReasoningStepRecord {
     public String getRootCauseClass() { return rootCauseClass; }
     public void setRootCauseClass(String rootCauseClass) { this.rootCauseClass = rootCauseClass; }
 }
-

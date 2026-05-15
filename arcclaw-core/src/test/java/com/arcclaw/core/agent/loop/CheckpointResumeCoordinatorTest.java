@@ -8,23 +8,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import com.arcclaw.core.agent.loop.CheckpointResumeCoordinator.ResumeDecision;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
-import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class CheckpointResumeCoordinatorTest {

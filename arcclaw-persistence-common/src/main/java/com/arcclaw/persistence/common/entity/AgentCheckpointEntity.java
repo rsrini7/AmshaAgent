@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.postgres.entity;
+package com.arcclaw.persistence.common.entity;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -388,11 +388,9 @@ public class AgentCheckpointEntity implements AgentCheckpoint {
                 .flatMap(Optional::stream)
                 .anyMatch(ToolCapability::isBrowserBacked);
         }
-        
+
         return ToolCapability.fromToolName(pendingToolName)
                 .map(ToolCapability::isBrowserBacked)
                 .orElse(false);
     }
 }
-
-

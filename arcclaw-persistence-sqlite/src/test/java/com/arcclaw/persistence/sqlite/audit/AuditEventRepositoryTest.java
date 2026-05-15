@@ -13,7 +13,7 @@ import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.persistence.api.AuditEventStorePort;
-import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
+import com.arcclaw.persistence.common.entity.AuditEventEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;

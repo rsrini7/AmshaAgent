@@ -2,22 +2,20 @@ package com.arcclaw.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.ToolResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
-import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.tools.ToolResponse;
 
 @ExtendWith(MockitoExtension.class)
 class ToolResultProcessorTest {

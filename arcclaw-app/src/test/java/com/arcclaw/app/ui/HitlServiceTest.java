@@ -13,7 +13,7 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

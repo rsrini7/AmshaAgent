@@ -9,7 +9,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import org.jboss.logging.Logger;
 
 /**

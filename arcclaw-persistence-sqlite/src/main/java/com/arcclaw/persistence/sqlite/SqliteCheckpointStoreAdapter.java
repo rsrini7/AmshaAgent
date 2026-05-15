@@ -16,7 +16,7 @@ import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.arc.Unremovable;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

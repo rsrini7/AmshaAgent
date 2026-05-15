@@ -6,15 +6,14 @@ import static org.mockito.Mockito.*;
 import java.time.Instant;
 import java.util.Optional;
 
+import com.arcclaw.core.state.CompactionEventBridge;
+import com.arcclaw.persistence.api.CompactionStorePort;
+import com.arcclaw.persistence.api.CompactionSummaryDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.arcclaw.core.state.CompactionEventBridge;
-import com.arcclaw.persistence.api.CompactionStorePort;
-import com.arcclaw.persistence.api.CompactionSummaryDto;
 
 @ExtendWith(MockitoExtension.class)
 class CompactionSummaryCacheTest {

@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.postgres.entity;
+package com.arcclaw.persistence.common.entity;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
@@ -19,5 +19,3 @@ public class CronStatusConverter
         return CronStatus.fromStorageValue(dbData);
     }
 }
-
-

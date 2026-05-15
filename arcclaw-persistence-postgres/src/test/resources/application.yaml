@@ -36,6 +36,7 @@ quarkus:
     jdbc:
       timezone: UTC
     packages:
+      - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.postgres.entity
 
   opentelemetry:

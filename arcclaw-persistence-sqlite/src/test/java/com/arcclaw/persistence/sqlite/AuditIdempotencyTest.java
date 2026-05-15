@@ -12,7 +12,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.domain.model.AuditEvent;
-import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
+import com.arcclaw.persistence.common.entity.AuditEventEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 

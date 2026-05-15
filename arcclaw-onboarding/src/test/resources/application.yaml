@@ -79,6 +79,7 @@ quarkus:
     log:
       sql: false
     packages:
+      - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
   log:
     level: INFO

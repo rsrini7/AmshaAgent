@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.postgres.entity;
+package com.arcclaw.persistence.common.entity;
 
 import java.time.Instant;
 
@@ -8,12 +8,12 @@ import jakarta.persistence.Converter;
 import com.arcclaw.core.util.TemporalUtils;
 
 /**
- * JPA converter for {@link Instant} Γåö SQLite TEXT.
+ * JPA converter for {@link Instant} ↔ SQLite TEXT.
  * <p>
  * Uses fixed-width ISO 8601 format provided by {@link TemporalUtils}.
  * This guarantees lexicographic sort safety in SQLite.
  * <p>
- * Architecture rule (┬º5.10.1): autoApply is ENABLED, ensuring all Instant 
+ * Architecture rule (§5.10.1): autoApply is ENABLED, ensuring all Instant
  * fields in core entities are automatically converted.
  */
 @Converter(autoApply = true)
@@ -37,4 +37,3 @@ public class InstantToTextConverter implements AttributeConverter<Instant, Strin
         return TemporalUtils.formatIsoLex(instant);
     }
 }
-

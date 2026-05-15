@@ -89,6 +89,7 @@ quarkus:
     jdbc:
       timezone: UTC
     packages:
+      - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
 
   langchain4j:

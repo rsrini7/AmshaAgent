@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.postgres.entity;
+package com.arcclaw.persistence.common.entity;
 
 import java.time.Instant;
 
@@ -16,7 +16,7 @@ import com.arcclaw.core.util.TemporalUtils;
  * Persistent cron job entity backed by the {@code agent_cron} SQLite table.
  * <p>
  * All fields are public (project convention: no getters/setters).
- * Lifecycle: ACTIVE ΓåÆ RUNNING ΓåÆ ACTIVE (recurring) / COMPLETED (one-shot) / FAILED.
+ * Lifecycle: ACTIVE → RUNNING → ACTIVE (recurring) / COMPLETED (one-shot) / FAILED.
  */
 @Entity
 @Table(name = "agent_cron")
@@ -31,11 +31,11 @@ public class AgentCronEntity implements AgentCron {
 
     public String chatId;
 
-    /** ChannelType enum name. Null = legacy row ΓåÆ TELEGRAM. */
+    /** ChannelType enum name. Null = legacy row → TELEGRAM. */
     @Column(nullable = true)
     public String channelType;
 
-    /** Channel-specific recipient ID. Null ΓåÆ fall back to chatId. */
+    /** Channel-specific recipient ID. Null → fall back to chatId. */
     @Column(nullable = true)
     public String channelPlatformId;
 
@@ -152,5 +152,3 @@ public class AgentCronEntity implements AgentCron {
     @Override public Instant getUpdatedAt() { return updatedAt; }
     @Override public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }
-
-

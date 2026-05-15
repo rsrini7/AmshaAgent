@@ -15,8 +15,8 @@ import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
-import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
-import com.arcclaw.persistence.postgres.entity.ReasoningStepEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.ReasoningStepEntity;
 import org.jboss.logging.Logger;
 
 /**

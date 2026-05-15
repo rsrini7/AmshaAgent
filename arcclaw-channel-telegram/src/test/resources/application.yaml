@@ -55,6 +55,7 @@ quarkus:
       strategy: update
     dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     packages:
+      - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
       - com.arcclaw.core.lifecycle
 

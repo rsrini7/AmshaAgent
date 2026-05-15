@@ -20,6 +20,14 @@
             <artifactId>arcclaw-persistence-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- Shared JPA entities -->
+        <dependency>
+            <groupId>com.arcclaw</groupId>
+            <artifactId>arcclaw-persistence-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.arcclaw</groupId>
             <artifactId>arcclaw-core</artifactId>
