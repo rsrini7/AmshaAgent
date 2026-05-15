@@ -123,7 +123,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
         return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment AND c.status = :status ORDER BY c.id DESC", AgentCheckpointEntity.class)
-                .setParameter("segment", "%" + segment + "%")
+                .setParameter("segment", segment + "%")
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setMaxResults(1)
                 .getResultStream()
