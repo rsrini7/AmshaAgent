@@ -51,7 +51,7 @@ class GovernanceLayerAssertBudgetTest {
             // Record massive tokens to exceed it
             try {
                 governanceLayer.recordLlmCall(sessionId, 2000000, 1000000); // (~ $6 + $15 = $21)
-            } catch (BudgetWarningException | BudgetExceededException _) {}
+            } catch (BudgetWarningException | BudgetExceededException _) { /* expected — exceeding budget */ }
             
             assertThrows(BudgetExceededException.class, () -> governanceLayer.assertWithinBudget(sessionId));
         });

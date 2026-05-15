@@ -92,12 +92,12 @@ class GovernanceLayerTest {
             // Stage 1: Warning (Total $8.10)
             try {
                 governanceLayer.recordLlmCall(sessionB, 700000, 400000);
-            } catch (BudgetWarningException _) {}
+            } catch (BudgetWarningException _) { /* expected — budget warning threshold */ }
             
             // Stage 2: Exceeded (Total $10.20)
             try {
                 governanceLayer.recordLlmCall(sessionB, 200000, 100000);
-            } catch (BudgetExceededException _) {}
+            } catch (BudgetExceededException _) { /* expected — budget exceeded */ }
         });
 
         WorkspaceContext.run(sessionId, "gov-user", "gov-chat", AutonomyLevel.FULL, "coordinator", () -> {

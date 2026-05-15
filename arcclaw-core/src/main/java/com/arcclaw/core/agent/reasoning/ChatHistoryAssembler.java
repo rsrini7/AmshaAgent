@@ -162,7 +162,10 @@ public class ChatHistoryAssembler {
                         argsJson = (input.size() == 1 && input.containsKey("parameters") && input.get("parameters") instanceof String)
                             ? (String) input.get("parameters") : objectMapper.writeValueAsString(input);
                     }
-                } catch (JsonProcessingException e) { argsJson = "{}"; }
+                } catch (JsonProcessingException e) {
+                    log.warnf("Failed to serialize action input: %s", ExceptionUtils.getRootCauseMessage(e));
+                    argsJson = "{}";
+                }
 
                 String callId = "call_" + i;
                 ToolExecutionRequest request = ToolExecutionRequest.builder()
@@ -208,7 +211,10 @@ public class ChatHistoryAssembler {
                     String argsJson;
                     try {
                         argsJson = objectMapper.writeValueAsString(call.params());
-                    } catch (JsonProcessingException e) { argsJson = "{}"; }
+                    } catch (JsonProcessingException e) {
+                        log.warnf("Failed to serialize parallel batch params: %s", ExceptionUtils.getRootCauseMessage(e));
+                        argsJson = "{}";
+                    }
                     return ToolExecutionRequest.builder()
                         .id(call.callId()).name(call.toolName()).arguments(argsJson).build();
                 })

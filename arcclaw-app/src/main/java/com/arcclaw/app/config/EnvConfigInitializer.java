@@ -13,10 +13,14 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.jboss.logging.Logger;
+
 /**
  * Handles .env file loading and validation of core environment variables.
  */
 public class EnvConfigInitializer {
+
+    private static final Logger log = Logger.getLogger(EnvConfigInitializer.class);
 
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
@@ -68,7 +72,9 @@ public class EnvConfigInitializer {
             try {
                 byte[] decoded = Base64.getDecoder().decode(value);
                 valid = decoded.length >= 16;
-            } catch (IllegalArgumentException _) {}
+            } catch (IllegalArgumentException e) {
+                log.warnf("Invalid Base64 for key %s, will regenerate: %s", key, e.getMessage());
+            }
             if (!valid) {
                 try {
                     String generated = Base64.getEncoder().encodeToString(
@@ -154,7 +160,9 @@ public class EnvConfigInitializer {
                 if (in == null) return;
                 Files.copy(in, exampleFile, StandardCopyOption.REPLACE_EXISTING);
                 System.err.println("[ArcClaw] No .env found. Created .env.example next to the binary.");
-            } catch (IOException _) {}
+            } catch (IOException e) {
+                log.warnf("Failed to extract .env.example: %s", e.getMessage());
+            }
         }
     }
 }

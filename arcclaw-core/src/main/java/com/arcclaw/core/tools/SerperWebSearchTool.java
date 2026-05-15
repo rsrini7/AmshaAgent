@@ -13,6 +13,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import org.jboss.logging.Logger;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -59,6 +60,9 @@ public class SerperWebSearchTool implements AgentTool {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    Logger log;
 
     private HttpClient httpClient;
 
@@ -174,7 +178,9 @@ public class SerperWebSearchTool implements AgentTool {
         } else if (cObj instanceof String s) {
             try {
                 return Math.min(10, Math.max(1, Integer.parseInt(s)));
-            } catch (NumberFormatException _) {}
+            } catch (NumberFormatException e) {
+                log.debugf("Failed to parse count parameter: %s", e.getMessage());
+            }
         }
         return 5;
     }

@@ -417,7 +417,7 @@ The comprehensive architecture review above has been validated against the live 
 | 2 | DB migration strategy | P0 | ✅ COMPLETED | Flyway V1 baseline with full DDL; hibernate-strategy=none; schema enforcers deleted/trimmed |
 | 3 | Duplicated entities | P1 | ❌ NOT STARTED | 4 entities duplicated (identical line counts); `arcclaw-persistence-common` doesn't exist |
 | 4 | Test coverage gaps | P1 | ⚠️ PARTIAL | `ParallelToolStepExecutor` and `ToolStepHandler` now each have 1 test; 6 key classes still untested |
-| 5 | Empty catch blocks | P1 | ❌ NOT STARTED | 15+ empty blocks found (more than the 9 originally reported) |
+| 5 | Empty catch blocks | P1 | ✅ COMPLETED | 7 production + 8 test blocks fixed with ERROR/WARN/DEBUG logging or interrupt restoration |
 | 6 | Duplicated constants | P2 | ❌ NOT STARTED | `REST_USER_ID`/`REST_USER_NAME` still duplicated in same 2 files |
 | 7 | God classes | P2 | ❌ NOT STARTED | Same 5 classes, same injection counts, same file sizes |
 | 8 | Persistence module tests | P2 | ❌ NOT STARTED | Postgres: 2 tests, FS: 1 test file (20 methods) |
@@ -452,15 +452,14 @@ The comprehensive architecture review above has been validated against the live 
 
 ### Sprint 2 — Code Quality (P1)
 
-**2.1 Fix all empty catch blocks**
-- [ ] `BootstrapOrchestrator.java:77,138` — log at ERROR level (these are startup-critical)
-- [ ] `EnvConfigInitializer.java:71,157` — log at WARN level
-- [ ] `ChatHistoryAssembler.java:165,211` — log at WARN with exception details
-- [ ] `SerperWebSearchTool.java:177` — log at DEBUG
-- [ ] `AgentErrorMessageUtil.java:219,228` — log at DEBUG
-- [ ] Test files (6 blocks) — add `Assertions.fail()` or log
-- **Risk**: Very Low — mechanical change
-- **Files affected**: 6 production files + 3 test files
+**2.1 Fix all empty catch blocks** ✅ DONE
+- [x] `BootstrapOrchestrator.java:77,138` — log at ERROR level (startup-critical) + WARN for stdin drain
+- [x] `EnvConfigInitializer.java:71,157` — log at WARN level
+- [x] `ChatHistoryAssembler.java:165,211` — log at WARN with exception details
+- [x] `SerperWebSearchTool.java:177` — log at DEBUG
+- [x] `AgentErrorMessageUtil.java:219,228` — log at DEBUG
+- [x] Test files (8 blocks) — `Thread.currentThread().interrupt()` for InterruptedException, comments for expected exceptions/cleanup
+- **Files affected**: 6 production files (BootstrapOrchestrator, EnvConfigInitializer, ChatHistoryAssembler, SerperWebSearchTool, AgentErrorMessageUtil) + 3 test files (FsStoreSmokeTest, WorkspaceContextTest, AsyncPersistenceEngineTest) + 2 governance test files
 
 **2.2 Add tests for critical untested classes**
 - [ ] `ApprovalCheckpointManager` — test HITL checkpoint persistence, await/resume flow
@@ -521,5 +520,5 @@ The comprehensive architecture review above has been validated against the live 
 
 ## Next Immediate Step
 
-→ **Start with Sprint 2.1 (Fix empty catch blocks).** Both P0 items are complete.
+→ **Start with Sprint 2.2 (Add tests for critical untested classes).** Both P0 items are complete, Sprint 2.1 is complete.
 

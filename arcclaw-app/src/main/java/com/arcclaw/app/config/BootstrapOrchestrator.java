@@ -74,7 +74,9 @@ public class BootstrapOrchestrator {
             pb.environment().put("ARCCLAW_LD_PRELOAD_SET", "1");
             pb.inheritIO();
             System.exit(pb.start().waitFor());
-        } catch (Exception _) {}
+        } catch (Exception e) {
+            log.error("Failed to re-exec with LD_PRELOAD", e);
+        }
     }
 
     private static String findLibm() {
@@ -135,6 +137,8 @@ public class BootstrapOrchestrator {
     private static void drainInputBuffer() {
         try {
             while (System.in.available() > 0) System.in.read();
-        } catch (IOException _) {}
+        } catch (IOException e) {
+            log.warn("Failed to drain input buffer", e);
+        }
     }
 }

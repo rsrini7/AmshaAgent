@@ -78,7 +78,7 @@ class FsStoreSmokeTest {
     void tearDown() throws IOException {
         try (var walk = Files.walk(tempDir)) {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try { Files.deleteIfExists(p); } catch (IOException ignored) {}
+                try { Files.deleteIfExists(p); } catch (IOException e) { /* best-effort cleanup */ }
             });
         }
     }
