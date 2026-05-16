@@ -12,34 +12,11 @@ public class LlmConfigAutoFixer {
         String provider = System.getProperty("ARCCLAW_LLM_PROVIDER", System.getenv("ARCCLAW_LLM_PROVIDER"));
         if (provider == null || provider.isBlank()) provider = "groq";
 
-        String baseUrl = System.getProperty("ARCCLAW_LLM_BASE_URL", System.getenv("ARCCLAW_LLM_BASE_URL"));
-        if (baseUrl == null || baseUrl.isBlank()) {
-            String defaultUrl = switch (provider.toLowerCase()) {
-                case "openrouter" -> "https://openrouter.ai/api/v1";
-                case "openai"     -> "https://api.openai.com/v1";
-                case "ollama"     -> "http://localhost:11434";
-                case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
-                default           -> null;
-            };
-            if (defaultUrl != null && !provider.equals("gemini")) {
-                EnvConfigInitializer.patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", defaultUrl, EnvConfigInitializer.PatchMode.UPDATE);
-                System.setProperty("ARCCLAW_LLM_BASE_URL", defaultUrl);
-            }
-        }
+        // Per-provider base URLs and models are configured in each provider's
+        // @ConfigProperty annotations with sensible defaults. No auto-fix needed.
 
-        autoFixProviderInvariants(envFile, provider);
         resolveContextWindow(envFile, provider);
-        resolveStructuredOutputModes();
-    }
-
-    private static void autoFixProviderInvariants(Path envFile, String provider) {
-        if ("openrouter".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct", "openai/gpt-oss-20b:free");
-            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1", "https://openrouter.ai/api/v1");
-        } else if ("groq".equalsIgnoreCase(provider)) {
-            fixIfMatches(envFile, "ARCCLAW_LLM_MODEL_NAME", "openai/gpt-oss-20b:free", "meta-llama/llama-4-scout-17b-16e-instruct");
-            fixIfMatches(envFile, "ARCCLAW_LLM_BASE_URL", "https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1");
-        }
+        resolveStructuredOutputModes(provider);
     }
 
     private static void resolveContextWindow(Path envFile, String provider) {
@@ -58,17 +35,10 @@ public class LlmConfigAutoFixer {
         System.setProperty("arcclaw.llm.compact-prompt-enabled", String.valueOf(compact));
     }
 
-    private static void resolveStructuredOutputModes() {
-        String model = System.getProperty("ARCCLAW_LLM_MODEL_NAME");
+    private static void resolveStructuredOutputModes(String provider) {
+        String modelKey = "ARCCLAW_" + provider.toUpperCase() + "_MODEL";
+        String model = System.getProperty(modelKey, System.getenv(modelKey));
         String target = (model != null && model.contains("llama-4-scout")) ? "PROMPT_DIRECTIVE" : "NATIVE";
         System.setProperty("arcclaw.llm.structured-output-mode", target);
-    }
-
-    private static void fixIfMatches(Path envFile, String key, String wrong, String target) {
-        String current = System.getProperty(key, System.getenv(key));
-        if (current == null || current.isBlank() || current.equals(wrong)) {
-            EnvConfigInitializer.patchEnvFile(envFile, key, target, EnvConfigInitializer.PatchMode.UPDATE);
-            System.setProperty(key, target);
-        }
     }
 }

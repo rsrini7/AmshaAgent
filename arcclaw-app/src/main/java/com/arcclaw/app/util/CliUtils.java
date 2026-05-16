@@ -37,7 +37,7 @@ public class CliUtils {
 
     /**
      * Required for every mode except bare --help / --version.
-     * ARCCLAW_LLM_API_KEY is intentionally NOT here - it is provider-conditional.
+     * Per-provider API keys (ARCCLAW_GROQ_API_KEY etc.) are provider-conditional.
      * See GROQ_KEY_SPEC / OPENROUTER_KEY_SPEC / OPENAI_KEY_SPEC below.
      */
     private static final VarSpec[] CORE_VARS = {
@@ -97,50 +97,61 @@ public class CliUtils {
     };
 
     private static final VarSpec GROQ_KEY_SPEC = new VarSpec(
-        "ARCCLAW_LLM_API_KEY",
-        "Groq Cloud API key (provider=groq). Starts with 'gsk_'.",
+        "ARCCLAW_GROQ_API_KEY",
+        "Groq Cloud API key. Starts with 'gsk_'.",
         "1. Sign up at https://console.groq.com",
         "2. Create an API key - it starts with 'gsk_'",
-        "3. Add:  ARCCLAW_LLM_API_KEY=gsk_your_key_here",
-        "Also set:  ARCCLAW_LLM_BASE_URL=https://api.groq.com/openai/v1"
+        "3. Add:  ARCCLAW_GROQ_API_KEY=gsk_your_key_here"
     );
 
 
     private static final VarSpec OPENROUTER_KEY_SPEC = new VarSpec(
-        "ARCCLAW_LLM_API_KEY",        // ← same key, different instructions
-        "OpenRouter API key (provider=openrouter). Starts with 'sk-or-v1-'.",
+        "ARCCLAW_OPENROUTER_API_KEY",
+        "OpenRouter API key. Starts with 'sk-or-v1-'.",
         "1. Sign up at https://openrouter.ai (free tier available)",
         "2. Create an API key - it starts with 'sk-or-v1-'",
-        "3. Add:  ARCCLAW_LLM_API_KEY=sk-or-v1-your_key_here",
-        "Also set:  ARCCLAW_LLM_BASE_URL=https://openrouter.ai/api/v1",
+        "3. Add:  ARCCLAW_OPENROUTER_API_KEY=sk-or-v1-your_key_here",
         "Free models with tool support: https://openrouter.ai/models?q=free"
     );
 
     private static final VarSpec OPENAI_KEY_SPEC = new VarSpec(
-        "ARCCLAW_LLM_API_KEY",        // ← same key
-        "OpenAI API key (provider=openai). Starts with 'sk-'.",
+        "ARCCLAW_OPENAI_API_KEY",
+        "OpenAI API key. Starts with 'sk-'.",
         "1. Sign up at https://platform.openai.com",
         "2. Create a project API key",
-        "3. Add:  ARCCLAW_LLM_API_KEY=sk-your_key_here",
-        "Also set:  ARCCLAW_LLM_BASE_URL=https://api.openai.com/v1"
+        "3. Add:  ARCCLAW_OPENAI_API_KEY=sk-your_key_here"
     );
 
     
     private static final VarSpec GEMINI_KEY_SPEC = new VarSpec(
-        "ARCCLAW_LLM_API_KEY",        // ← same key
-        "Google Gemini API key (provider=gemini).",
+        "ARCCLAW_GEMINI_API_KEY",
+        "Google Gemini API key.",
         "1. Get a free key at https://aistudio.google.com",
-        "2. Add:  ARCCLAW_LLM_API_KEY=AIza...",
-        "Gemini uses native SDK, so ARCCLAW_LLM_BASE_URL not required to set."
+        "2. Add:  ARCCLAW_GEMINI_API_KEY=AIza..."
     );
 
     private static final VarSpec CEREBRAS_KEY_SPEC = new VarSpec(
-        "ARCCLAW_LLM_API_KEY",
-        "Cerebras AI API key (provider=cerebras).",
+        "ARCCLAW_CEREBRAS_API_KEY",
+        "Cerebras AI API key.",
         "1. Sign up at https://cloud.cerebras.ai",
         "2. Create an API key - it starts with 'csk-'",
-        "3. Add:  ARCCLAW_LLM_API_KEY=csk-your_key_here",
-        "Also set:  ARCCLAW_LLM_BASE_URL=https://api.cerebras.ai/v1"
+        "3. Add:  ARCCLAW_CEREBRAS_API_KEY=csk-your_key_here"
+    );
+
+    private static final VarSpec NVIDIA_KEY_SPEC = new VarSpec(
+        "ARCCLAW_NVIDIA_API_KEY",
+        "NVIDIA NIM API key. Starts with 'nvapi-'.",
+        "1. Sign up at https://build.nvidia.com",
+        "2. Create an API key - it starts with 'nvapi-'",
+        "3. Add:  ARCCLAW_NVIDIA_API_KEY=nvapi-your_key_here"
+    );
+
+    /** OMLX uses local MLX server; no API key needed (defaults to 'not-needed'). */
+    private static final VarSpec OMLX_KEY_SPEC = new VarSpec(
+        "ARCCLAW_OMLX_API_KEY",
+        "OMLX API key (optional for local server, defaults to 'not-needed').",
+        "1. Run:  mlx_lm.server --model mlx-community/<model> --port 8000",
+        "2. Add:  ARCCLAW_OMLX_API_KEY=not-needed"
     );
 
     /** Required for attach mode (hard) and validated for serve mode (soft). */
@@ -176,7 +187,7 @@ public class CliUtils {
     public static List<VarSpec> getMissingVarSpecs(String[] args) {
         List<VarSpec> missing = new ArrayList<>();
 
-        // 1. LLM Primary Key (and Fallback) first
+        // 1. LLM Primary Key first
         String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
                 .orElseGet(() -> System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"))
                 .toLowerCase();
@@ -185,25 +196,13 @@ public class CliUtils {
             case "openrouter" -> OPENROUTER_KEY_SPEC;
             case "openai"     -> OPENAI_KEY_SPEC;
             case "gemini"     -> GEMINI_KEY_SPEC;
+            case "nvidia"     -> NVIDIA_KEY_SPEC;
+            case "cerebras"   -> CEREBRAS_KEY_SPEC;
+            case "omlx"       -> OMLX_KEY_SPEC;
             case "ollama"     -> null;
             default           -> GROQ_KEY_SPEC;
         };
         if (providerKeySpec != null && !isSet(providerKeySpec.key)) missing.add(providerKeySpec);
-
-        if (!isSet("ARCCLAW_LLM_FALLBACK_API_KEY") && !isExplicitOptOut("ARCCLAW_LLM_FALLBACK_API_KEY")) {
-            missing.add(new VarSpec(
-                "ARCCLAW_LLM_FALLBACK_API_KEY",
-                "Optional Fallback LLM API key.",
-                "Secondary provider used when primary fails (429/5xx).",
-                "Required if ARCCLAW_LLM_FALLBACK_PROVIDER is set to an API provider."
-            ));
-        }
-
-        if (providerKeySpec != null && !isSet("ARCCLAW_LLM_BASE_URL")) {
-             missing.add(new VarSpec("ARCCLAW_LLM_BASE_URL", 
-                 "Base URL for the selected LLM provider (" + llmProvider + ").",
-                 "Example: " + providerKeySpec.howToGet[providerKeySpec.howToGet.length-1]));
-        }
 
         // 2. Intent/Compaction/Embed and Security keys
         for (VarSpec spec : CORE_VARS) {
@@ -311,7 +310,9 @@ public class CliUtils {
             case "openrouter" -> OPENROUTER_KEY_SPEC;
             case "openai"     -> OPENAI_KEY_SPEC;
             case "gemini"     -> GEMINI_KEY_SPEC;
+            case "nvidia"     -> NVIDIA_KEY_SPEC;
             case "cerebras"   -> CEREBRAS_KEY_SPEC;
+            case "omlx"       -> OMLX_KEY_SPEC;
             case "ollama"     -> null;
             default           -> GROQ_KEY_SPEC;
         };

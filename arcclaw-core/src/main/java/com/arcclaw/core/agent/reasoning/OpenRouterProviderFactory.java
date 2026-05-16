@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -13,14 +15,14 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
+    @ConfigProperty(name = "ARCCLAW_OPENROUTER_API_KEY")
+    Optional<String> apiKey;
+
+    @ConfigProperty(name = "ARCCLAW_OPENROUTER_BASE_URL",
                     defaultValue = "https://openrouter.ai/api/v1")
     String baseUrl;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
-    String apiKey;
-
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.model-name",
+    @ConfigProperty(name = "ARCCLAW_OPENROUTER_MODEL",
                     defaultValue = "openai/gpt-oss-20b:free")
     String modelName;
 
@@ -43,14 +45,11 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
-        if ("not-configured".equals(apiKey)) {
-            throw new IllegalStateException(
-                "OpenRouterProviderFactory selected but arcclaw.openrouter.api-key " +
-                "(OPENROUTER_API_KEY) is not set.");
-        }
+        String key = apiKey.orElseThrow(() -> new IllegalStateException(
+                "OpenRouter requires ARCCLAW_OPENROUTER_API_KEY"));
         return ChatModelFactory.withOpenRouterHeaders(
                 ChatModelFactory.openAiBuilder(
-                        baseUrl, apiKey, modelName,
+                        baseUrl, key, modelName,
                         agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
                         agentConfig.temperature(), agentConfig.logHttp(), agentConfig.logHttp()),
                 siteUrl, appName)

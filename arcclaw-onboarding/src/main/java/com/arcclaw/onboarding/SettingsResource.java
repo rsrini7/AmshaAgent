@@ -91,8 +91,9 @@ public class SettingsResource {
 
         boolean isClaudeCode = "claude-code".equals(req.provider());
         boolean isOllama     = "ollama".equals(req.provider());
+        boolean isOmlx       = "omlx".equals(req.provider());
 
-        if (!isClaudeCode && !isOllama) {
+        if (!isClaudeCode && !isOllama && !isOmlx) {
             if (req.apiKey() == null || req.apiKey().isBlank()) {
                 return Response.status(400)
                     .entity(new ArcClawErrorResponse("apiKey is required for " + req.provider())).build();

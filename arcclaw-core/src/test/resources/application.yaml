@@ -1,10 +1,6 @@
 ARCCLAW_LLM_API_KEY: "dummy-test-key"
 
 arcclaw:
-  llm:
-    gemini:
-      api-key: "dummy-gemini-key"
-      model-name: "gemini-2.5-flash-lite"
   data-dir: "./target"
   workspace:
     root-dir: "./target/workspaces"
