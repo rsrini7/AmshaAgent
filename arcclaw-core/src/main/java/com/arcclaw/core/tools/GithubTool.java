@@ -86,7 +86,11 @@ public class GithubTool implements AgentTool {
 
     @Override
     public boolean requiresSandbox() {
-        return true;
+        // MUST return false — GitHub is a NETWORK_OUTBOUND API call, not code execution.
+        // Running gh CLI through the sandbox (Podman) is unnecessary and will FAIL
+        // when Podman is offline. Some AI-assisted code refactors may flip this to true
+        // thinking "more secure = better", but that breaks local dev setups.
+        return false;
     }
 
     @Override
