@@ -293,7 +293,9 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                     return c;
                 });
 
-        entity.setStatus(CheckpointStatus.IN_PROGRESS);
+        if (entity.getStatus() != CheckpointStatus.AWAITING_APPROVAL && entity.getStatus() != CheckpointStatus.RESUMING) {
+            entity.setStatus(CheckpointStatus.IN_PROGRESS);
+        }
         entity.setAutonomyLevel(autonomy != null ? AutonomyLevel.valueOf(autonomy) : AutonomyLevel.SUPERVISED);
         entity.setIterationsUsed(iterationsUsed);
         entity.setOriginalGoal(originalGoal);

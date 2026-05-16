@@ -342,8 +342,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         boolean created = existing.isEmpty();
         CheckpointDto cp = existing.orElse(null);
 
-        String status = (cp != null && (CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status()) || CheckpointStatus.RESUMING.name().equals(cp.status())))
-            ? cp.status() : CheckpointStatus.IN_PROGRESS.name();
+        boolean preserveAwaiting = cp != null && (CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status()) || CheckpointStatus.RESUMING.name().equals(cp.status()));
+        String status = preserveAwaiting ? cp.status() : CheckpointStatus.IN_PROGRESS.name();
+        String batchDecisions = preserveAwaiting ? cp.batchToolDecisions() : null;
         String goal = (originalGoal != null && !originalGoal.isBlank()) ? originalGoal
             : (cp != null ? cp.originalGoal() : null);
 
@@ -351,7 +352,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp != null ? cp.id() : null,
             sessionId, agentRole, status, autonomy, stateJson,
             cp != null ? cp.channelPlatformId() : null, cp != null ? cp.channelType() : null,
-            goal, null, null, null, null, null, null, null,
+            goal, null, null, null, null, batchDecisions, null, null,
             null, iterationsUsed, null, null, contextDataJson, null, null, null,
             cp != null ? cp.parentCheckpointId() : null, cp != null ? cp.depth() : 0,
             cp != null ? cp.createdAt() : Instant.now(), Instant.now()

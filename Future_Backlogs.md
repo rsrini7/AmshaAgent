@@ -8,10 +8,10 @@ Prioritized actionable items. Completed items are removed. Items are ordered by 
 
 ### 2.2 Consent / Data Provenance Tracking
 
-Add lightweight provenance tags to RAG context entries — which source authorized which piece of data to flow to which agent.
+Add provenance tags to RAG chunks — userId, sessionId, consent status, and source attribution.
 
-- **Why**: Relevant when ArcClaw ingests external data sources (RAG, MCP file servers). Currently, session scoping partially handles this, but there's no explicit provenance tag on ingested chunks.
-- **Effort**: Medium — add `source_session_id` and `ingested_by` fields to `rag_chunk` entity, propagate through `TwoTierMemoryService`.
+- **Why**: Zero provenance exists today. `RagChunkEntity.source` is hardcoded to `"System"`. `MemoryChunkDto` has no provenance fields. Without this, GDPR deletion requests and data lineage are impossible. Gated behind multi-source RAG — premature if external ingestion isn't imminent.
+- **Effort**: Medium (3-5d) — schema changes (`rag_chunk` columns), DTO updates (`MemoryChunkDto`, `MemoryEntryDto`), service-layer filtering in `TwoTierMemoryService`, migration strategy for existing data.
 - **When**: When MCP file server ingestion or multi-source RAG is implemented.
 
 ---
@@ -22,22 +22,23 @@ Add lightweight provenance tags to RAG context entries — which source authoriz
 
 Move `GlobalKnowledgeBase`, `SessionKnowledgeBase`, and `SqliteMemoryRetrievalAdapter` from `arcclaw-persistence-sqlite` to `arcclaw-rag` (or a dedicated `arcclaw-rag-sqlite` adapter).
 
-- **Why**: These classes use LangChain4j types (`TextSegment`, `EmbeddingStore`) and architecturally belong in the RAG domain, not a general persistence adapter.
-- **Effort**: Medium — module boundary move, dependency adjustments, test updates.
+- **Why**: 5 RAG classes (`GlobalKnowledgeBase`, `SessionKnowledgeBase`, `SqliteMemoryRetrievalAdapter`, `RagSchemaInitializer`, `RagChunkEntity`) live in `arcclaw-persistence-sqlite` instead of `arcclaw-rag`. The `arcclaw-rag` module exists but is thin — it only has the service facade and embedding providers. Moving them requires adding JPA/Hibernate dependency to `arcclaw-rag`, which increases its weight.
+- **Effort**: Medium-High (5-8d) — move 5+ classes, add JPA dep, fix CDI bean discovery (jandex), move tests.
 - **When**: Low priority — cosmetic, no behavioral change.
 
-### 3.2 A16 Batch Decision Consolidation Across Adapters
+### 3.2 Batch Decision Unification
 
-Unify batch tool decision merging logic across all persistence adapters (SQLite, filesystem, Postgres).
+Unify batch decision method naming, transaction boundaries, and extract a shared `CheckpointBatchOperations` utility for all adapters.
 
-- **Why**: Consolidated within SQLite into `CheckpointBatchOperations`, but `arcclaw-persistence-fs` has its own implementation path. Matters if a third adapter is added.
-- **Effort**: Low-medium — extract shared utility, update fs adapter.
+- **Why**: SQLite, Postgres, and FS each have their own approach with divergent method names (`doAtomicUpdateBatchToolDecision` vs `atomicUpdateToolDecision` vs `atomicUpdateBatchToolDecision`) and transaction semantics (`REQUIRED` vs `REQUIRES_NEW` vs none). The stale-join guard (critical for preventing concurrent decision overwrites) was recently ported to Postgres and FS, but full unification remains.
+- **Effort**: Medium — extract shared interface, align naming, standardize tx boundaries.
 - **When**: Only if adding a new persistence adapter beyond the existing three.
 
 ---
 
 ## Completed (Removed from Backlog)
 
+- Stale-join guard for batch decisions — `mergeBatchDecisions`-style preservation (A16) ported to Postgres and FS adapters to prevent concurrent batch-decision overwrites during approval turns
 - Active agent inventory endpoint — `GET /sessions/active` returns live agent instances with status, role, depth, parent linkage, iterations, and pending tool
 - Policy externalization via @ConfigMapping — `PolicyConfig` interface with `arcclaw.policy.*` config, refactored `DestructiveVocabularyFilter` and `ToolGovernanceGuard` to load from config
 - Tool contract exporter — `ToolContractExporter` writes `data/tool-contracts.json` at startup with schema, governance metadata, secrets, and role grants
