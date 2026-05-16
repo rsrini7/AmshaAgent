@@ -30,7 +30,7 @@ import com.arcclaw.core.security.SecretVaultImpl;
 import com.arcclaw.core.security.VaultKey;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
-import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
+import com.arcclaw.persistence.common.entity.AuditEventEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 

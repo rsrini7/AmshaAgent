@@ -8,7 +8,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
 
 @ApplicationScoped
 public class WebReplyRenderer implements ReplyRenderer {
@@ -58,7 +57,7 @@ public class WebReplyRenderer implements ReplyRenderer {
             case ReplyNode.Separator _ -> "---\n\n";
             case ReplyNode.ApprovalPrompt ap -> {
                 String tool = ap.toolName();
-                if (tool != null && tool.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+                if (tool != null && tool.startsWith(ReplyNode.PARALLEL_SENTINEL_PIPE_PREFIX)) {
                     yield "⏸ **Parallel execution requires your approval**\n\n";
                 }
                 yield "⏸ **Tool execution requires your approval:** `" + tool + "`\n\n";

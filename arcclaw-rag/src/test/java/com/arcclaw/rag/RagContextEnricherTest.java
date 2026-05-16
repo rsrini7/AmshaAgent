@@ -29,7 +29,7 @@ class RagContextEnricherTest {
         enricher.maxChunkChars = 300;
         enricher.maxTotalChars = 800;
         enricher.contextChunks = 3;
-        enricher.minScore = -1.0;
+        enricher.minScore = 0.01;
     }
 
     @Test

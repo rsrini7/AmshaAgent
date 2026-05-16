@@ -1,6 +1,8 @@
 package com.arcclaw.mcp.bridge;
 
-public class McpToolNotFoundException extends RuntimeException {
+import com.arcclaw.core.exception.ArcClawException;
+
+public class McpToolNotFoundException extends ArcClawException {
     public McpToolNotFoundException(String message) {
         super(message);
     }

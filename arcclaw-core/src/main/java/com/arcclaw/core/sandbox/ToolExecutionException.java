@@ -1,6 +1,8 @@
 package com.arcclaw.core.sandbox;
 
-public class ToolExecutionException extends RuntimeException {
+import com.arcclaw.core.exception.ArcClawException;
+
+public class ToolExecutionException extends ArcClawException {
     private final int exitCode;
 
     public ToolExecutionException(String message) {

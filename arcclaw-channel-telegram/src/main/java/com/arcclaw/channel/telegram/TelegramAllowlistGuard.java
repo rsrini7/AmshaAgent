@@ -41,7 +41,7 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
                         return true;
                     }
                 } catch (NumberFormatException _) {
-                    // Ignore parsing error, will fall back or return false
+                    log.debugf("Failed to parse allowed user ID: %s", userIdStr);
                 }
             }
             // If numeric IDs are configured, we strictly deny anything that doesn't match

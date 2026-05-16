@@ -9,7 +9,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import org.jboss.logging.Logger;
 
 /**
@@ -65,6 +65,22 @@ public class CheckpointRepository {
                 .setMaxResults(1)
                 .getResultList();
         log.debugf("[Query] findBySessionAndRole returned %d result(s) for session=%s role=%s", result.size(), sessionId, agentRole);
+        return result;
+    }
+
+    public List<AgentCheckpointEntity> findAnyBySessionAndRole(String sessionId, String agentRole) {
+        log.debugf("[Query] findAnyBySessionAndRole(session=%s, role=%s)", sessionId, agentRole);
+        List<AgentCheckpointEntity> result = em.createQuery(
+                "SELECT c FROM AgentCheckpoint c " +
+                "WHERE c.sessionId = :sid " +
+                "  AND c.agentRole = :role " +
+                "ORDER BY c.id DESC",
+                AgentCheckpointEntity.class)
+                .setParameter("sid", sessionId)
+                .setParameter("role", agentRole)
+                .setMaxResults(1)
+                .getResultList();
+        log.debugf("[Query] findAnyBySessionAndRole returned %d result(s) for session=%s role=%s", result.size(), sessionId, agentRole);
         return result;
     }
 

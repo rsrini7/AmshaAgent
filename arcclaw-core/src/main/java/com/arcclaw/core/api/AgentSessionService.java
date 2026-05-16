@@ -7,13 +7,10 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.container.AsyncResponse;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.SecurityContext;
 
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
@@ -27,6 +24,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.api.dto.ServiceResult;
 import com.arcclaw.core.api.dto.SessionStatusResponse;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -71,11 +69,11 @@ public class AgentSessionService {
             "deletecron"
     );
 
-    private static final String REST_USER_ID = "rest:api";
-    private static final String REST_USER_NAME = "REST API User";
+    private static final String REST_USER_ID = ApiConstants.REST_USER_ID;
+    private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
     private static final String REST_CHAT_SESSION_PREFIX = "rest-chat-";
-    
+
     protected AgentSessionService() {
         this.log = null;
         this.agentLoop = null;
@@ -121,48 +119,34 @@ public class AgentSessionService {
         this.maxResumeIterations = maxResumeIterations;
     }
 
-    @Context
-    SecurityContext securityContext;
-
-    public String createSession(AutonomyLevel autonomyLevel) {
+    public String createSession(String userId, AutonomyLevel autonomyLevel) {
         String sessionId = UUID.randomUUID().toString();
         AutonomyLevel level = (autonomyLevel != null) ? autonomyLevel : AutonomyLevel.SUPERVISED;
         log.infof("Creating new session: %s (autonomy=%s)", sessionId, level);
         heartbeatTracker.recordHeartbeat(sessionId, level);
 
-        String requestingKey = resolveUserId();
-        if (requestingKey != null && !requestingKey.isBlank() && !"unknown".equals(requestingKey)) {
-            heartbeatTracker.tryBindOwner(sessionId, requestingKey);
+        if (userId != null && !userId.isBlank() && !"unknown".equals(userId)) {
+            heartbeatTracker.tryBindOwner(sessionId, userId);
         }
         return sessionId;
     }
 
-    public Map<String, Instant> listSessions() {
-        String requestingKey = resolveUserId();
-        if (requestingKey == null || requestingKey.isBlank()) {
+    public Map<String, Instant> listSessions(String userId) {
+        if (userId == null || userId.isBlank()) {
             return Map.of();
         }
-        return heartbeatTracker.activeSessionsByOwner(requestingKey);
+        return heartbeatTracker.activeSessionsByOwner(userId);
     }
 
-    private String resolveUserId() {
-        if (securityContext != null && securityContext.getUserPrincipal() != null) {
-            return securityContext.getUserPrincipal().getName();
-        }
-        return WorkspaceContext.getUserIdOrUnknown();
-    }
-
-    public Response runSync(String sessionId, RunAgentRequest request) {
-        var sessionError = validateSession(sessionId);
+    public ServiceResult<Object> runSync(String sessionId, String userId, RunAgentRequest request) {
+        var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
 
         var roleError = validateRole(request.agentRole());
         if (roleError.isPresent()) return roleError.get();
 
         if (request.goal() != null && request.goal().startsWith("CRON:")) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "Reserved goal prefix", "code", "FORK_BOMB_REJECTED"))
-                    .build();
+            return ServiceResult.error("FORK_BOMB_REJECTED", "Reserved goal prefix");
         }
 
         var commandResponse = handleSlashCommand(sessionId, request);
@@ -173,48 +157,43 @@ public class AgentSessionService {
 
         Optional<AgentCheckpoint> cpOpt = agentStore.load(sessionId, canonicalRole);
         if (cpOpt.isPresent() && cpOpt.get().getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-            return Response.status(Response.Status.CONFLICT)
-                    .entity(Map.of(
-                        "error",  "Session is awaiting human approval",
-                        "code",   "AWAITING_APPROVAL",
-                        "hint",   "Use POST /sessions/" + sessionId + "/approve to proceed"
-                    ))
-                    .build();
+            return ServiceResult.error("AWAITING_APPROVAL",
+                    "Session is awaiting human approval");
         }
 
         try {
-            Callable<Response> op = () -> {
+            Callable<ServiceResult<Object>> op = () -> {
                 AutonomyLevel level = getOrDefaultAutonomy(sessionId);
                 String channel = ChannelType.REST_API.name();
-                
-                return WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, level, canonicalRole, channel, () -> {
+
+                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, level, canonicalRole, channel, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
                     context.setAutonomyLevel(level);
                     AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                    return responseMapper.mapResult(result, false);
+                    return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
                 });
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (BudgetExceededException e) {
-            return Response.status(429).entity(Map.of("error", e.getMessage(), "code", "BUDGET")).build();
+            return ServiceResult.error("BUDGET", e.getMessage());
         } catch (Exception e) {
             log.errorf("Sync agent run failed: %s", ExceptionUtils.getRootCauseMessage(e));
-            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
+            return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
     }
 
-    public void runAsync(String sessionId, RunAgentRequest request, AsyncResponse response) {
-        var sessionError = validateSession(sessionId);
-        if (sessionError.isPresent()) { response.resume(sessionError.get()); return; }
+    public void runAsync(String sessionId, String userId, RunAgentRequest request, Consumer<ServiceResult<Object>> callback) {
+        var sessionError = validateSession(sessionId, userId);
+        if (sessionError.isPresent()) { callback.accept(sessionError.get()); return; }
 
         var roleError = validateRole(request.agentRole());
-        if (roleError.isPresent()) { response.resume(roleError.get()); return; }
+        if (roleError.isPresent()) { callback.accept(roleError.get()); return; }
 
         vThreads.execute(() -> WorkspaceScopeHolder.run(sessionId, () -> {
             try {
                 var commandResponse = handleSlashCommand(sessionId, request);
                 if (commandResponse.isPresent()) {
-                    response.resume(commandResponse.get());
+                    callback.accept(commandResponse.get());
                     return;
                 }
 
@@ -222,13 +201,13 @@ public class AgentSessionService {
                 if ("approve".equalsIgnoreCase(goal) || "/approve".equalsIgnoreCase(goal)) {
                     AgentCheckpoint cp = checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
                     checkpointApprovalService.triggerResume(cp);
-                    response.resume(Response.accepted(Map.of("status", "APPROVED")).build());
+                    callback.accept(ServiceResult.success(Map.of("status", CheckpointStatus.APPROVED.name())));
                     return;
                 }
                 if ("deny".equalsIgnoreCase(goal) || "/deny".equalsIgnoreCase(goal)) {
                     AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                     checkpointApprovalService.triggerResume(cp);
-                    response.resume(Response.ok(Map.of("status", "DENIED")).build());
+                    callback.accept(ServiceResult.success(Map.of("status", CheckpointStatus.DENIED.name())));
                     return;
                 }
 
@@ -237,102 +216,97 @@ public class AgentSessionService {
                 String channel = ChannelType.REST_API.name();
                 int maxIterations = request.maxIterations() != null ? request.maxIterations() : 5;
 
-                WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, sessionLevel, canonicalRole, channel, () -> {
+                WorkspaceContext.<Void>run(sessionId, REST_USER_ID, sessionId, sessionLevel, canonicalRole, channel, () -> {
                     MessageContext context = createRestContext(sessionId, request.goal());
                     context.setAutonomyLevel(sessionLevel);
                     AgentResult result = agentLoop.run(sessionId, canonicalRole, request.goal(), reasoningEngine, maxIterations, context);
-                    Response res = responseMapper.mapResult(result, true);
-                    response.resume(res);
-                    return res;
+                    callback.accept(new ServiceResult<>(responseMapper.mapResult(result, true), null, null));
+                    return null;
                 });
             } catch (Exception e) {
                 log.errorf("Async agent run failed: %s", ExceptionUtils.getRootCauseMessage(e));
-                response.resume(Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build());
+                callback.accept(ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error"));
             }
         }));
     }
 
-    public Response approve(String sessionId, String agentRole) {
-        var sessionError = validateSession(sessionId);
+    public ServiceResult<Object> approve(String sessionId, String userId, String agentRole) {
+        var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
 
         try {
-            Callable<Response> op = () -> {
+            Callable<ServiceResult<Object>> op = () -> {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
                 var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return Response.status(Response.Status.CONFLICT).entity(Map.of("error", "No pending approval")).build();
+                    return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
                 }
 
                 checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
                 String channel = ChannelType.REST_API.name();
 
-                return WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
                     String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
                     int resumeIterations = checkpoint.get().getMaxIterations() != null ? Math.min(checkpoint.get().getMaxIterations(), maxResumeIterations) : maxResumeIterations;
                     MessageContext context = createRestContext(sessionId, resumeGoal);
                     context.setResumeSignal(true);
                     AgentResult result = agentLoop.run(sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
-                    return responseMapper.mapResult(result, false);
+                    return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
                 });
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
             log.errorf("Approve failed: %s", ExceptionUtils.getRootCauseMessage(e));
-            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
+            return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
     }
 
-    public Response deny(String sessionId, String agentRole) {
-        var sessionError = validateSession(sessionId);
+    public ServiceResult<Object> deny(String sessionId, String userId, String agentRole) {
+        var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
 
         try {
-            Callable<Response> op = () -> {
+            Callable<ServiceResult<Object>> op = () -> {
                 String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
                 var checkpoint = agentStore.load(sessionId, canonicalRole);
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return Response.status(Response.Status.CONFLICT).entity(Map.of("error", "No pending approval")).build();
+                    return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
                 }
                 AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
                 checkpointApprovalService.triggerResume(cp);
-                return Response.ok(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId)).build();
+                return ServiceResult.success(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId));
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
             log.errorf("Deny failed: %s", ExceptionUtils.getRootCauseMessage(e));
-            return Response.serverError().entity(Map.of("error", e.getMessage() != null ? e.getMessage() : "Internal error")).build();
+            return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
     }
 
-    public Response getStatus(String sessionId, String role) {
-        var sessionError = validateSession(sessionId);
+    public ServiceResult<Object> getStatus(String sessionId, String userId, String role) {
+        var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
 
         try {
             String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
-            return agentStore.load(sessionId, canonicalRole)
-                    .map(cp -> {
-                        try {
-                            List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
-                            return Response.ok(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason())).build();
-                        } catch (Exception e) {
-                            log.errorf("Failed to load steps: %s", ExceptionUtils.getRootCauseMessage(e));
-                            return Response.serverError().entity(Map.of("error", e.getMessage())).build();
-                        }
-                    })
-                    .orElseGet(() -> Response.ok(Map.of("sessionId", sessionId, "status", "NOT_STARTED")).build());
+            var checkpointOpt = agentStore.load(sessionId, canonicalRole);
+            if (checkpointOpt.isEmpty()) {
+                return ServiceResult.success(Map.of("sessionId", sessionId, "status", CheckpointStatus.NOT_STARTED.name()));
+            }
+            var cp = checkpointOpt.get();
+            List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
+            return ServiceResult.success(new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason()));
         } catch (Exception e) {
-            return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", e.getMessage())).build();
+            return ServiceResult.error("SYSTEM", e.getMessage());
         }
     }
 
-    public Response terminateSession(String sessionId) {
-        var sessionError = validateSession(sessionId);
+    public ServiceResult<Object> terminateSession(String sessionId, String userId) {
+        var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
 
         workspaceManager.terminateSession(sessionId);
-        return Response.noContent().build();
+        return ServiceResult.success(null);
     }
 
     private MessageContext createRestContext(String sessionId, String goal) {
@@ -341,57 +315,53 @@ public class AgentSessionService {
         return new MessageContext(REST_CHAT_SESSION_PREFIX + sessionId, user, msg);
     }
 
-    private Optional<Response> validateRole(String role) {
+    private Optional<ServiceResult<Object>> validateRole(String role) {
         if (!AgentRoleEnum.isKnownRole(role)) {
-            return Optional.of(Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "Unknown role: " + role)).build());
+            return Optional.of(ServiceResult.error("UNKNOWN_ROLE", "Unknown role: " + role));
         }
         return Optional.empty();
     }
 
-    public Optional<Response> validateSession(String sessionId) {
+    public Optional<ServiceResult<Object>> validateSession(String sessionId, String userId) {
         if (!heartbeatTracker.exists(sessionId)) {
-            return Optional.of(Response.status(Response.Status.NOT_FOUND).entity(Map.of("error", "Session not found: " + sessionId)).build());
+            return Optional.of(ServiceResult.error("SESSION_NOT_FOUND", "Session not found: " + sessionId));
         }
 
-        // Guard 2: per-key session ownership
         Optional<String> owner = heartbeatTracker.getOwner(sessionId);
         if (owner.isPresent()) {
-            String requestingKey = resolveUserId();
-            if (requestingKey != null && !owner.get().equals(requestingKey)) {
+            if (userId != null && !owner.get().equals(userId)) {
                 log.warnf("[SESSION-ISOLATION] key=%s attempted access to session=%s owned by key=%s",
-                          requestingKey, sessionId, owner.get());
-                
+                          userId, sessionId, owner.get());
+
                 auditService.recordMandatory(
                     sessionId,
-                    requestingKey,
+                    userId,
                     AgentSentinels.SYSTEM_ROLE,
                     SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "Key " + requestingKey + " attempted cross-key session access"
+                    "Key " + userId + " attempted cross-key session access"
                 );
 
-                return Optional.of(Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(Map.of(
-                        "error", "API key not authorized for this session",
-                        "code", "SESSION_ACCESS_DENIED"
-                    ))
-                    .build());
+                return Optional.of(ServiceResult.error("SESSION_ACCESS_DENIED",
+                        "API key not authorized for this session"));
             }
         }
         return Optional.empty();
     }
 
-    private Optional<Response> handleSlashCommand(String sessionId, RunAgentRequest request) {
+    private Optional<ServiceResult<Object>> handleSlashCommand(String sessionId, RunAgentRequest request) {
         String goal = request.goal();
         if (goal == null || (!goal.startsWith("/") && NON_SLASH_REFLEX_PREFIXES.stream().noneMatch(goal.toLowerCase()::startsWith))) return Optional.empty();
 
         try {
-            Callable<Response> op = () -> {
+            Callable<ServiceResult<Object>> op = () -> {
                 String canonicalRole = AgentRoleEnum.fromString(request.agentRole()).toScopedName();
                 String channel = ChannelType.REST_API.name();
-                return WorkspaceContext.<Response>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
+                return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
                     MessageContext context = createRestContext(sessionId, goal);
                     ReflexResult result = reflexRegistry.processIfReflex(sessionId, REST_USER_ID, sessionId, goal, context);
-                    return result.commandResponse().map(r -> Response.ok(Map.of("status", "OK", "message", r)).build()).orElse(null);
+                    return result.commandResponse()
+                            .map(r -> ServiceResult.success((Object) Map.of("status", "OK", "message", r)))
+                            .orElse(null);
                 });
             };
             return Optional.ofNullable(WorkspaceScopeHolder.call(sessionId, op));

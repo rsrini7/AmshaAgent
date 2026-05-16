@@ -33,7 +33,7 @@ public class ClaudeCodeOAuthTokenExtractor {
      */
     public Optional<String> extractToken() {
         if (!Files.exists(CREDENTIALS_PATH)) {
-            log.info("Claude Code credentials not found at " + CREDENTIALS_PATH);
+            log.infof("Claude Code credentials not found at %s", CREDENTIALS_PATH);
             return Optional.empty();
         }
 

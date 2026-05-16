@@ -8,7 +8,6 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,9 +18,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.AdvisoryLockPort;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class FsLockManager implements AdvisoryLockPort {
+
+    private static final Logger log = Logger.getLogger(FsLockManager.class);
 
     private final Path locksDir;
     private final Map<String, LockHolder> heldLocks = new ConcurrentHashMap<>();
@@ -89,7 +92,7 @@ public class FsLockManager implements AdvisoryLockPort {
                 holder.raf.close();
                 Files.deleteIfExists(lockFilePath(lockKey));
             } catch (IOException e) {
-                // best effort
+                log.debugf("Lock release failed (best effort): %s", ExceptionUtils.getRootCauseMessage(e));
             }
         }
     }

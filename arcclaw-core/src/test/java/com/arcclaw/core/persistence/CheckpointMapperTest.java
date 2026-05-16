@@ -123,7 +123,7 @@ class CheckpointMapperTest {
             null, "s1", "coord", "AWAITING_APPROVAL", "FULL", "[]",
             "u123", "telegram", "goal", null, null, null,
             "tool", "{}", "{}", null, 5, 0, null, "note", null,
-            "ERR", "trace", "java.lang.RuntimeException", null, null
+            "ERR", "trace", "java.lang.RuntimeException", null, 0, null, null
         );
 
         AgentCheckpoint record = CheckpointRecord.fromDto(dto);

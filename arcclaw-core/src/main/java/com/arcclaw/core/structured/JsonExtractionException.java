@@ -1,9 +1,11 @@
 package com.arcclaw.core.structured;
 
+import com.arcclaw.core.exception.ArcClawException;
+
 /**
  * Thrown when JSON extraction fails despite permissive parsing.
  */
-public class JsonExtractionException extends RuntimeException {
+public class JsonExtractionException extends ArcClawException {
     private final String rawResponse;
     private final Class<?> targetType;
     private final String jacksonPath;

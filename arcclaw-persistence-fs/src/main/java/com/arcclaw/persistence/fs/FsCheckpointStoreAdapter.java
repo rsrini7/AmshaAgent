@@ -8,18 +8,16 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import io.quarkus.arc.Unremovable;
-import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
 public class FsCheckpointStoreAdapter implements CheckpointStorePort {
-
-    private static final Logger log = Logger.getLogger(FsCheckpointStoreAdapter.class);
 
     @Inject
     FilesystemFileStore store;
@@ -43,6 +41,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                 dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(),
                 dto.retryAfterMs(), dto.systemNote(), dto.contextDataJson(),
                 dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
+                dto.parentCheckpointId(), dto.depth(),
                 dto.createdAt() != null ? dto.createdAt() : Instant.now(), Instant.now()
             );
         } else {
@@ -54,6 +53,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                 dto.preExecutedResults(), dto.maxIterations(), dto.iterationsUsed(),
                 dto.retryAfterMs(), dto.systemNote(), dto.contextDataJson(),
                 dto.errorCode(), dto.traceId(), dto.rootCauseClass(),
+                dto.parentCheckpointId(), dto.depth(),
                 dto.createdAt(), Instant.now()
             );
         }
@@ -84,8 +84,8 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public List<CheckpointDto> findActiveBySession(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .filter(c -> c.status() == null || (!"COMPLETED".equals(c.status())
-                && !"FAILED".equals(c.status()) && !"ARCHIVED".equals(c.status())))
+            .filter(c -> c.status() == null || (!CheckpointStatus.COMPLETED.name().equals(c.status())
+                && !CheckpointStatus.FAILED.name().equals(c.status()) && !CheckpointStatus.ARCHIVED.name().equals(c.status())))
             .toList();
     }
 
@@ -107,29 +107,29 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         if (existing.isEmpty()) return false;
         CheckpointDto cp = existing.get();
-        if (!"IN_PROGRESS".equals(cp.status()) && !"AWAITING_APPROVAL".equals(cp.status())) return false;
-        save(withNewStatus(cp, "RESUMING"));
+        if (!CheckpointStatus.IN_PROGRESS.name().equals(cp.status()) && !CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status())) return false;
+        save(withNewStatus(cp, CheckpointStatus.RESUMING.name()));
         return true;
     }
 
     @Override
     public void releaseResumeClaim(String sessionId, String agentRole) {
         findBySessionAndRole(sessionId, agentRole).ifPresent(cp -> {
-            if ("RESUMING".equals(cp.status())) save(withNewStatus(cp, "IN_PROGRESS"));
+            if (CheckpointStatus.RESUMING.name().equals(cp.status())) save(withNewStatus(cp, CheckpointStatus.IN_PROGRESS.name()));
         });
     }
 
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .filter(c -> "AWAITING_APPROVAL".equals(c.status()))
+            .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
             .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
 
     @Override
     public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
         return helper.loadAll().stream()
-            .filter(c -> "AWAITING_APPROVAL".equals(c.status()))
+            .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
             .filter(c -> c.updatedAt() != null && c.updatedAt().isBefore(cutoff))
             .toList();
     }
@@ -137,7 +137,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
         return helper.loadAll().stream()
-            .filter(c -> "AWAITING_APPROVAL".equals(c.status()))
+            .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
             .filter(c -> c.sessionId() != null && c.sessionId().contains(segment))
             .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
@@ -151,7 +151,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public Optional<CheckpointDto> findLatestNonArchivedBySession(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .filter(c -> !"ARCHIVED".equals(c.status()))
+            .filter(c -> !CheckpointStatus.ARCHIVED.name().equals(c.status()))
             .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
 
@@ -198,8 +198,8 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public boolean isSessionActive(String sessionId) {
         return helper.loadSession(sessionId).stream()
-            .anyMatch(c -> c.status() != null && !"COMPLETED".equals(c.status())
-                && !"FAILED".equals(c.status()) && !"ARCHIVED".equals(c.status()));
+            .anyMatch(c -> c.status() != null && !CheckpointStatus.COMPLETED.name().equals(c.status())
+                && !CheckpointStatus.FAILED.name().equals(c.status()) && !CheckpointStatus.ARCHIVED.name().equals(c.status()));
     }
 
     @Override
@@ -210,13 +210,13 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public boolean hasPendingApprovalForChat(String chatId) {
         return helper.loadAll().stream()
-            .anyMatch(c -> "AWAITING_APPROVAL".equals(c.status()) && chatId.equals(c.channelPlatformId()));
+            .anyMatch(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()) && chatId.equals(c.channelPlatformId()));
     }
 
     @Override
     public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
         return helper.loadAll().stream()
-            .filter(c -> "IN_PROGRESS".equals(c.status()) || "AWAITING_APPROVAL".equals(c.status()))
+            .filter(c -> CheckpointStatus.IN_PROGRESS.name().equals(c.status()) || CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
             .filter(c -> c.updatedAt() != null && c.updatedAt().isBefore(cutoff))
             .toList();
     }
@@ -224,15 +224,17 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public void markCheckpointsFailed(String sessionId) {
         for (CheckpointDto cp : helper.loadSession(sessionId)) {
-            if (cp.status() != null && !"COMPLETED".equals(cp.status()) && !"FAILED".equals(cp.status())) {
+            if (cp.status() != null && !CheckpointStatus.COMPLETED.name().equals(cp.status()) && !CheckpointStatus.FAILED.name().equals(cp.status())) {
                 save(new CheckpointDto(
-                    cp.id(), cp.sessionId(), cp.agentRole(), "FAILED", cp.autonomyLevel(),
+                    cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.FAILED.name(), cp.autonomyLevel(),
                     cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
                     cp.originalGoal(), Instant.now(), cp.completedAt(), "Session terminated",
                     cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
                     cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
                     cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-                    "SESSION_TERMINATED", null, null, cp.createdAt(), Instant.now()
+                    "SESSION_TERMINATED", null, null,
+                    cp.parentCheckpointId(), cp.depth(),
+                    cp.createdAt(), Instant.now()
                 ));
             }
         }
@@ -258,45 +260,51 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public void markFailed(Long id, String failReason, String errorCode, String traceId, String rootCauseClass) {
         findById(id).ifPresent(cp -> save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), "FAILED", cp.autonomyLevel(),
+            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.FAILED.name(), cp.autonomyLevel(),
             cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
             cp.originalGoal(), Instant.now(), cp.completedAt(), failReason,
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            errorCode, traceId, rootCauseClass, cp.createdAt(), Instant.now()
+            errorCode, traceId, rootCauseClass,
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         )));
     }
 
     @Override
     public void markCompleted(Long id) {
         findById(id).ifPresent(cp -> save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), "COMPLETED", cp.autonomyLevel(),
+            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.COMPLETED.name(), cp.autonomyLevel(),
             cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
             cp.originalGoal(), cp.failedAt(), Instant.now(), cp.failReason(),
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         )));
     }
 
     @Override
     public void markOrphaned(Long id, String reason) {
         findById(id).ifPresent(cp -> save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), "ORPHANED", cp.autonomyLevel(),
+            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.ORPHANED.name(), cp.autonomyLevel(),
             cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
             cp.originalGoal(), cp.failedAt(), cp.completedAt(), reason,
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         )));
     }
 
     @Override
     public void archive(Long id) {
-        transitionStatus(id, "ARCHIVED");
+        transitionStatus(id, CheckpointStatus.ARCHIVED.name());
     }
 
     @Override
@@ -304,15 +312,17 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         Optional<CheckpointDto> existing = findById(id);
         if (existing.isEmpty()) return false;
         CheckpointDto cp = existing.get();
-        if (!"FAILED".equals(cp.status()) && !"ORPHANED".equals(cp.status())) return false;
+        if (!CheckpointStatus.FAILED.name().equals(cp.status()) && !CheckpointStatus.ORPHANED.name().equals(cp.status())) return false;
         save(new CheckpointDto(
-            cp.id(), cp.sessionId(), cp.agentRole(), "IN_PROGRESS", cp.autonomyLevel(),
+            cp.id(), cp.sessionId(), cp.agentRole(), CheckpointStatus.IN_PROGRESS.name(), cp.autonomyLevel(),
             cp.stateJson(), cp.channelPlatformId(), cp.channelType(),
             cp.originalGoal(), null, null, null,
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            null, null, null, cp.createdAt(), Instant.now()
+            null, null, null,
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         ));
         return true;
     }
@@ -324,8 +334,8 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         boolean created = existing.isEmpty();
         CheckpointDto cp = existing.orElse(null);
 
-        String status = (cp != null && ("AWAITING_APPROVAL".equals(cp.status()) || "RESUMING".equals(cp.status())))
-            ? cp.status() : "IN_PROGRESS";
+        String status = (cp != null && (CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status()) || CheckpointStatus.RESUMING.name().equals(cp.status())))
+            ? cp.status() : CheckpointStatus.IN_PROGRESS.name();
         String goal = (originalGoal != null && !originalGoal.isBlank()) ? originalGoal
             : (cp != null ? cp.originalGoal() : null);
 
@@ -335,6 +345,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp != null ? cp.channelPlatformId() : null, cp != null ? cp.channelType() : null,
             goal, null, null, null, null, null, null, null,
             null, iterationsUsed, null, null, contextDataJson, null, null, null,
+            cp != null ? cp.parentCheckpointId() : null, cp != null ? cp.depth() : 0,
             cp != null ? cp.createdAt() : Instant.now(), Instant.now()
         ));
         return new CheckpointUpsertResult(saved, created);
@@ -348,8 +359,8 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         CheckpointDto cp = existing.orElse(null);
 
         Instant now = Instant.now();
-        Instant completedAt = "COMPLETED".equals(finalStatus) ? now : null;
-        Instant failedAt = "FAILED".equals(finalStatus) ? now : null;
+        Instant completedAt = CheckpointStatus.COMPLETED.name().equals(finalStatus) ? now : null;
+        Instant failedAt = CheckpointStatus.FAILED.name().equals(finalStatus) ? now : null;
         String goal = (originalGoal != null && !originalGoal.isBlank()) ? originalGoal
             : (cp != null ? cp.originalGoal() : null);
 
@@ -360,6 +371,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             goal, failedAt, completedAt, null, null, null, null, null,
             cp != null ? cp.maxIterations() : null, cp != null ? cp.iterationsUsed() : 0,
             null, null, contextDataJson, null, null, null,
+            cp != null ? cp.parentCheckpointId() : null, cp != null ? cp.depth() : 0,
             cp != null ? cp.createdAt() : now, now
         ));
         helper.persistSteps(saved.id(), steps);
@@ -373,7 +385,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             markFailed(cp.id(), failReason, "ZOMBIE", null, null);
         }
         return helper.loadAll().stream()
-            .filter(c -> "FAILED".equals(c.status()) && failReason.equals(c.failReason()))
+            .filter(c -> CheckpointStatus.FAILED.name().equals(c.status()) && failReason.equals(c.failReason()))
             .toList();
     }
 
@@ -391,7 +403,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), updatedDecisions, cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         ));
         return true;
     }
@@ -404,7 +418,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
             cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
             cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
-            cp.errorCode(), cp.traceId(), cp.rootCauseClass(), cp.createdAt(), Instant.now()
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
         );
     }
 }

@@ -12,7 +12,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 
 /**
  * Handles complex upsert logic and entity-dto mapping for checkpoints.
@@ -40,7 +40,7 @@ public class CheckpointUpsertService {
     public CheckpointUpsertResult doUpsertWithSteps(String sessionId, String agentRole, 
             String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
         
-        List<AgentCheckpointEntity> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
+        List<AgentCheckpointEntity> existing = checkpointRepo.findAnyBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpointEntity entity;
         boolean created = false;
@@ -84,7 +84,7 @@ public class CheckpointUpsertService {
     public CheckpointUpsertResult doUpsertAndFinalize(String sessionId, String agentRole, 
         String stateJson, String finalStatus, List<ReasoningStepDto> steps, String originalGoal, String contextDataJson) {
         
-        List<AgentCheckpointEntity> existing = checkpointRepo.findBySessionAndRole(sessionId, agentRole);
+        List<AgentCheckpointEntity> existing = checkpointRepo.findAnyBySessionAndRole(sessionId, agentRole);
 
         AgentCheckpointEntity entity;
         boolean created = false;
@@ -165,6 +165,8 @@ public class CheckpointUpsertService {
         entity.setErrorCode(dto.errorCode());
         entity.setTraceId(dto.traceId());
         entity.setRootCauseClass(dto.rootCauseClass());
+        entity.setParentCheckpointId(dto.parentCheckpointId());
+        entity.setDepth(dto.depth());
         entity.setUpdatedAt(dto.updatedAt());
     }
 }

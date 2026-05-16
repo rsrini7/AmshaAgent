@@ -6,6 +6,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.arcclaw.core.message.UserMessages;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 
 public final class AgentErrorMessageUtil {
 
@@ -22,6 +24,8 @@ public final class AgentErrorMessageUtil {
             "^(For input string:|null|Cannot invoke|NullPointerException|NumberFormatException)");
 
     private static final Pattern RETRY_AFTER_HEADER_PATTERN = Pattern.compile("(?i)retry-after:\\s*(\\d+)");
+
+    private static final Logger log = Logger.getLogger(AgentErrorMessageUtil.class);
 
     private AgentErrorMessageUtil() {}
  
@@ -169,6 +173,7 @@ public final class AgentErrorMessageUtil {
             try {
                 seconds = (int) Math.round(Double.parseDouble(s.substring(0, s.length() - 1)));
             } catch (NumberFormatException _) {
+                log.debugf("Failed to parse duration seconds: %s", s);
                 return "a few moments";
             }
         } else {
@@ -216,7 +221,9 @@ public final class AgentErrorMessageUtil {
             if (m.find()) {
                 try {
                     return Long.parseLong(m.group(1)) * 1000L;
-                } catch (NumberFormatException _) {}
+                } catch (NumberFormatException e) {
+                    log.debugf("Failed to parse retry-after header value: %s", ExceptionUtils.getRootCauseMessage(e));
+                }
             }
             // Also check for "try again in X.Ys" format
             Matcher m2 = RETRY_AFTER_PATTERN.matcher(msg);
@@ -225,7 +232,9 @@ public final class AgentErrorMessageUtil {
                 if (wait.endsWith("s")) {
                     try {
                         return (long) (Double.parseDouble(wait.substring(0, wait.length() - 1)) * 1000L);
-                    } catch (NumberFormatException _) {}
+                    } catch (NumberFormatException e) {
+                        log.debugf("Failed to parse retry-after duration: %s", ExceptionUtils.getRootCauseMessage(e));
+                    }
                 }
             }
         }

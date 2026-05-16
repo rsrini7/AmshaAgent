@@ -1,6 +1,7 @@
 package com.arcclaw.core.routing;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -90,14 +91,21 @@ public class LlmModelFactory {
         return factory.create(config);
     }
 
+    private static final Map<String, String> URL_PROVIDER_MAP = Map.of(
+        "openai.com", "openai",
+        "groq.com", "groq",
+        "nvidia.com", "nvidia",
+        "cerebras.ai", "cerebras",
+        "googleapis.com", "gemini",
+        "localhost:11434", "ollama"
+    );
+
     public static String inferProviderFromUrl(String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank()) return "openrouter";
-        if (baseUrl.contains("openai.com"))   return "openai";
-        if (baseUrl.contains("groq.com"))     return "groq";
-        if (baseUrl.contains("nvidia.com"))   return "nvidia";
-        if (baseUrl.contains("cerebras.ai")) return "cerebras";
-        if (baseUrl.contains("googleapis.com")) return "gemini";
-        if (baseUrl.contains("localhost:11434")) return "ollama";
-        return "openrouter"; // default: OpenAI-compatible
+        return URL_PROVIDER_MAP.entrySet().stream()
+            .filter(entry -> baseUrl.contains(entry.getKey()))
+            .map(Map.Entry::getValue)
+            .findFirst()
+            .orElse("openrouter");
     }
 }

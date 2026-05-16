@@ -1,32 +1,251 @@
 # Channel SPI Documentation
 
-Adding a new channel (Discord, Slack, WhatsApp) to ArcClaw requires zero changes to the core engine. You just need to create a new module (or package) that implements the 6-Interface Contract and register it as a ApplicationScoped CDI bean.
+Adding a new channel (Discord, Slack, WhatsApp) to ArcClaw requires zero changes to the core engine. You just need to create a new module that implements the 6-interface contract and registers it as an `@ApplicationScoped` CDI bean.
 
 ## The 6-Interface Contract
 
-| Interface | Module | Responsibility | Required |
-|---|---|---|---|
-| `ChannelPlugin` | `arcclaw-app/channel` | Composite registration bean - wires all 5 below | Yes |
-| `ChannelSender` | `arcclaw-channel-api` | Sends `List<ReplyNode>` to the channel | Yes |
-| `ReplyRenderer` | `arcclaw-channel-api` | Converts `ReplyNode` tree to channel-native format | Yes |
-| `ChannelAllowlist` | `arcclaw-channel-api` | Determines if a `ChannelUser` is authorized | Yes |
-| `ChannelJobNotifier` | `arcclaw-channel-api` | Sends cron and approval timeout notifications | Yes |
-| `ChannelDaemon` | `arcclaw-core/pipeline` | Daemon lifecycle: `isConfigured()`, `start()` | Yes |
+All interfaces live in `arcclaw-channel-api`. The core and app modules depend on these contracts, never on concrete implementations.
 
-## Inbound Message Handling (Daemon -> Pipeline)
+| Interface | Responsibility | Required |
+|---|---|---|
+| `ChannelPlugin` | Composite registration bean - wires all 5 below | Yes |
+| `ChannelSender` | Sends `List<ReplyNode>` to the channel | Yes |
+| `ReplyRenderer` | Converts `ReplyNode` tree to channel-native format | Yes |
+| `ChannelAllowlist` | Determines if a `ChannelUser` is authorized | Yes |
+| `ChannelJobNotifier` | Sends cron and approval timeout notifications | Yes |
+| `ChannelDaemon` | Daemon lifecycle: `channelId()`, `isConfigured()`, `start()` | Yes |
 
-For channels that listen for messages (like Telegram), the `ChannelDaemon.start()` implementation is responsible for bridging the external event to the `MessagePipeline`.
+## Supporting Types
 
-1.  **Implement a Route/Listener**: Use Camel, JDA, or a raw listener to receive messages.
-2.  **Map to ChannelMessage**: Map the native platform message (e.g., `IncomingMessage`) to a `ChannelMessage` type.
-3.  **Dispatch to Pipeline**: Use `@Inject MessagePipeline pipeline` to dispatch a `MessageContext`.
+### `ChannelType` (record)
+
+Identifies the channel. Pre-defined constants: `TELEGRAM`, `DISCORD`, `SLACK`, `WEBSOCKET`, `REST_API`, `CLI`. For a new channel, add a constant or create inline: `new ChannelType("discord")`. The `id` is lowercased and used as the registry key.
+
+### `ChannelUser` (record)
+
+Immutable user identity: `(platformId, channelId, displayName, channel)`. The `platformId` is the platform-native user identifier (e.g. Telegram numeric ID as string). The `channelId` is the chat/channel identifier. Both must be non-null and non-blank.
+
+### `MessageContext`
+
+Wraps a `ChannelUser` + message text + session metadata. This is what gets dispatched to the `MessagePipeline`.
+
+---
+
+## Interface Method Signatures
+
+### `ChannelPlugin`
+
+```java
+public interface ChannelPlugin {
+    ChannelType channelType();      // Unique channel type identifier
+    ChannelSender sender();         // Reply delivery
+    ReplyRenderer renderer();       // ReplyNode → string conversion
+    ChannelAllowlist allowlist();   // Authorization check
+    ChannelJobNotifier jobNotifier(); // Cron/approval notifications
+    ChannelDaemon daemon();         // Daemon lifecycle
+    default boolean isConfigured()  // Delegates to daemon().isConfigured()
+}
+```
+
+### `ChannelSender`
+
+```java
+public interface ChannelSender {
+    ChannelType supports();
+    void send(ChannelUser recipient, List<ReplyNode> nodes);  // Rendered delivery
+    void sendRaw(ChannelUser recipient, String text);          // Pre-rendered plaintext
+    default void sendBySession(String sessionId, String text)  // Session-based delivery (e.g. WebSocket tabs)
+}
+```
+
+### `ReplyRenderer`
+
+```java
+public interface ReplyRenderer {
+    ChannelType supports();
+    String render(List<ReplyNode> nodes);  // ReplyNode tree → channel-native string
+}
+```
+
+### `ChannelAllowlist`
+
+```java
+public interface ChannelAllowlist {
+    boolean isAllowed(String platformUserId, String username);
+    boolean isSilentBlock();     // If true, blocked users get no response
+    String getBlockResponse();   // Message sent to blocked users when not silent
+}
+```
+
+### `ChannelJobNotifier`
+
+```java
+public interface ChannelJobNotifier {
+    boolean supports(ChannelType channelType);
+    void notifyJobCompleted(String recipient, String renderedMessage, String sessionId);
+    default void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage);
+    void notifyApprovalTimeout(String recipient, String sessionId, String pendingToolName, long timeoutMinutes);
+}
+```
+
+### `ChannelDaemon`
+
+```java
+public interface ChannelDaemon {
+    String channelId();           // Canonical lowercase ID (e.g. "telegram")
+    boolean isConfigured();       // Returns false if required config is missing
+    void start() throws Exception; // Starts the daemon (blocking until stopped)
+}
+```
+
+---
+
+## Inbound Message Handling (Daemon → Pipeline)
+
+For channels that listen for messages (like Telegram), the `ChannelDaemon.start()` implementation is responsible for bridging external events to the `MessagePipeline`.
+
+1. **Implement a Route/Listener**: Use Camel, JDA, WebSocket, or a raw listener to receive messages.
+2. **Map to ChannelUser**: Construct a `ChannelUser` from the native platform message.
+3. **Build MessageContext**: Create a `MessageContext` with the `ChannelUser`, message text, and any metadata.
+4. **Dispatch to Pipeline**: Inject `MessagePipeline` and call `pipeline.process(messageContext)`.
+
+The `ChannelPluginRegistry` discovers all `ChannelPlugin` implementations via CDI `@Any Instance<ChannelPlugin>` at startup. Duplicate channel type registrations fail fast.
 
 ---
 
 ## Step-by-Step: Adding Discord as an Example
 
-7. **Step 7: Implement ChannelPlugin**
-   Create the composite registry CDI block.
+### Step 1: Create the Maven module
+
+Create `arcclaw-channel-discord/` with a dependency on `arcclaw-channel-api`:
+
+```xml
+<dependency>
+    <groupId>com.arcclaw</groupId>
+    <artifactId>arcclaw-channel-api</artifactId>
+</dependency>
+```
+
+Add the module to the root `pom.xml` `<modules>` list.
+
+### Step 2: Add configuration properties
+
+```properties
+arcclaw.channel.discord.enabled=true
+arcclaw.channel.discord.token=your-bot-token
+arcclaw.channel.discord.allowed-user-ids=123456789,987654321
+```
+
+### Step 3: Implement `ChannelAllowlist`
+
+```java
+@ApplicationScoped
+public class DiscordAllowlist implements ChannelAllowlist {
+
+    @ConfigProperty(name = "arcclaw.channel.discord.allowed-user-ids")
+    Optional<String> allowedUserIds;
+
+    @Override
+    public boolean isAllowed(String platformUserId, String username) {
+        return allowedUserIds.map(ids -> ids.contains(platformUserId)).orElse(true);
+    }
+
+    @Override public boolean isSilentBlock() { return false; }
+    @Override public String getBlockResponse() { return "Access denied."; }
+}
+```
+
+### Step 4: Implement `ReplyRenderer`
+
+```java
+@ApplicationScoped
+public class DiscordRenderer implements ReplyRenderer {
+
+    @Override
+    public ChannelType supports() { return ChannelType.DISCORD; }
+
+    @Override
+    public String render(List<ReplyNode> nodes) {
+        // Convert ReplyNode tree to Discord markdown
+        return nodes.stream().map(this::renderNode).collect(Collectors.joining());
+    }
+}
+```
+
+### Step 5: Implement `ChannelSender`
+
+```java
+@ApplicationScoped
+public class DiscordChannelSender implements ChannelSender {
+
+    @Inject DiscordRenderer renderer;
+    @Inject DiscordClient client;
+
+    @Override
+    public ChannelType supports() { return ChannelType.DISCORD; }
+
+    @Override
+    public void send(ChannelUser recipient, List<ReplyNode> nodes) {
+        String text = renderer.render(nodes);
+        client.sendMessage(recipient.channelId(), text);
+    }
+
+    @Override
+    public void sendRaw(ChannelUser recipient, String text) {
+        client.sendMessage(recipient.channelId(), text);
+    }
+}
+```
+
+### Step 6: Implement `ChannelJobNotifier`
+
+```java
+@ApplicationScoped
+public class DiscordJobNotifier implements ChannelJobNotifier {
+
+    @Override
+    public boolean supports(ChannelType channelType) {
+        return ChannelType.DISCORD.equals(channelType);
+    }
+
+    @Override
+    public void notifyJobCompleted(String recipient, String renderedMessage, String sessionId) {
+        // Send DM or channel message with job result
+    }
+
+    @Override
+    public void notifyApprovalTimeout(String recipient, String sessionId, String pendingToolName, long timeoutMinutes) {
+        // Notify user that approval window expired
+    }
+}
+```
+
+### Step 7: Implement `ChannelDaemon`
+
+```java
+@ApplicationScoped
+public class DiscordDaemon implements ChannelDaemon {
+
+    @ConfigProperty(name = "arcclaw.channel.discord.token")
+    Optional<String> token;
+
+    @Inject MessagePipeline pipeline;
+
+    @Override
+    public String channelId() { return "discord"; }
+
+    @Override
+    public boolean isConfigured() { return token.isPresent(); }
+
+    @Override
+    public void start() throws Exception {
+        // Connect to Discord gateway, listen for messages
+        // On message: pipeline.process(new MessageContext(...))
+    }
+}
+```
+
+### Step 8: Implement `ChannelPlugin`
 
 ```java
 @ApplicationScoped
@@ -47,24 +266,37 @@ public class DiscordChannelPlugin implements ChannelPlugin {
 }
 ```
 
+### Step 9: Register the module
+
+Add to root `pom.xml`:
+```xml
+<module>arcclaw-channel-discord</module>
+```
+
+That's it. `ChannelPluginRegistry` will discover `DiscordChannelPlugin` via CDI at startup. No changes to `arcclaw-core` or `arcclaw-app` are required.
+
+---
+
 ## Key Config Pattern
 
-It's a best practice to gate the channel via configuration properties. Example:
+Gate the channel via configuration properties. In your `ChannelDaemon.isConfigured()`, return `false` if the token isn't present — this prevents the plugin from crashing ArcClaw startup:
+
 ```properties
+arcclaw.channel.discord.enabled=true
 arcclaw.channel.discord.token=your-bot-token
 ```
-In your `DiscordDaemon`, implement `isConfigured()` returning `false` if the token isn't present to stop the plugin from crashing ArcClaw startup.
 
-## Reference: Telegram Implementation
+## Reference Implementations
 
-Check the reference Telegram implementation inside `arcclaw-channel-telegram/src/main/java/com/arcclaw/channel/telegram/`:
-- `TelegramChannelPlugin.java`
-- `TelegramChannelSender.java`
-- `TelegramMarkdownV2Renderer.java`
-- `TelegramAllowlistGuard.java`
-- `TelegramJobNotifier.java`
-- `TelegramChannelDaemon.java`
+| Channel | Module | Key Classes |
+|---|---|---|
+| Telegram | `arcclaw-channel-telegram` | `TelegramChannelPlugin`, `TelegramChannelSender`, `TelegramMarkdownV2Renderer`, `TelegramAllowlistGuard`, `TelegramJobNotifier`, `TelegramChannelDaemon`, `TelegramChannelRoute`, `TelegramAgentHandler`, `TelegramCallbackHandler` |
+| WebSocket | `arcclaw-channel-web` | `WebChannelPlugin`, `WebChatEndpoint`, `WebChannelSender`, `WebReplyRenderer`, `WebAllowlist`, `WebChannelDaemon` |
 
 ## Testing Your Plugin
 
-At a minimum, verify that your plugin is correctly discovered inside CDI tests, utilizing the `ChannelPluginRegistryTest` as a boilerplate to assert all 5 components start cleanly.
+At a minimum:
+1. Write a CDI test that asserts all 5 components wire cleanly (use `ChannelPluginRegistryTest` as boilerplate).
+2. Verify `isConfigured()` returns `false` when the token is missing.
+3. Verify `ChannelAllowlist.isAllowed()` blocks unauthorized users.
+4. Verify `ReplyRenderer.render()` produces valid output for your platform's markdown format.

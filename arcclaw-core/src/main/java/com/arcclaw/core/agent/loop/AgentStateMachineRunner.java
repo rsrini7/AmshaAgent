@@ -2,10 +2,7 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -15,18 +12,12 @@ import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
-import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
-import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
-import com.arcclaw.core.tools.AgentTool;
-import com.arcclaw.core.tools.ToolRegistry;
-import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
@@ -45,9 +36,6 @@ public class AgentStateMachineRunner {
     private static final int LOG_GOAL_MAX = 80;
     private static final String GOAL_LOG_FMT = "StateMachine starting session=%s goal='%s' maxIterations=%d";
 
-    private static final Pattern URL_PATTERN = Pattern.compile(
-            "https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+");
-
     private final EngineStepHandler engineStepHandler;
     private final ChatMemoryWriter writer;
     private final Instance<AgentObserver> observers;
@@ -59,10 +47,8 @@ public class AgentStateMachineRunner {
     private final CorrectionStrategy correctionStrategy;
     private final int maxRateLimitRetries;
     private final MeterRegistry meterRegistry;
-    private final ToolRegistry toolRegistry;
-    private final ToolInvoker toolInvoker;
     private final StepDecisionRouter stepDecisionRouter;
-    private final ApprovalCheckpointManager checkpointManager;
+    private final BrowserPreflightHandler browserPreflightHandler;
 
     @Inject
     public AgentStateMachineRunner(EngineStepHandler engineStepHandler,
@@ -76,10 +62,8 @@ public class AgentStateMachineRunner {
                                    CorrectionStrategy correctionStrategy,
                                    @ConfigProperty(name = "arcclaw.agent.max-ratelimit-retries", defaultValue = "3") int maxRateLimitRetries,
                                    MeterRegistry meterRegistry,
-                                   ToolRegistry toolRegistry,
-                                    ToolInvoker toolInvoker,
-                                    StepDecisionRouter stepDecisionRouter,
-                                    ApprovalCheckpointManager checkpointManager) {
+                                   StepDecisionRouter stepDecisionRouter,
+                                    BrowserPreflightHandler browserPreflightHandler) {
         this.engineStepHandler = engineStepHandler;
         this.writer = writer;
         this.observers = observers;
@@ -91,10 +75,8 @@ public class AgentStateMachineRunner {
         this.correctionStrategy = correctionStrategy;
         this.maxRateLimitRetries = maxRateLimitRetries;
         this.meterRegistry = meterRegistry;
-        this.toolRegistry = toolRegistry;
-        this.toolInvoker = toolInvoker;
         this.stepDecisionRouter = stepDecisionRouter;
-        this.checkpointManager = checkpointManager;
+        this.browserPreflightHandler = browserPreflightHandler;
     }
 
     /**
@@ -195,7 +177,7 @@ public class AgentStateMachineRunner {
         AgentResult finalResult = null;
 
         try {
-            Optional<AgentResult> preflightResult = runBrowserPreflight(context, history);
+            Optional<AgentResult> preflightResult = browserPreflightHandler.run(context, history);
             if (preflightResult.isPresent()) {
                 finalResult = preflightResult.get();
                 return finalResult;
@@ -236,36 +218,6 @@ public class AgentStateMachineRunner {
             loopExitPublisher.publish(context, res);
             observers.forEach(o -> o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
         }
-    }
-
-    private Optional<AgentResult> runBrowserPreflight(AgentExecutionContext context, List<ReasoningStep> history) {
-        if (history.isEmpty()) {
-            Optional<ReasoningStep> preflightOpt = buildBrowserPreflightStep(context);
-            if (preflightOpt.isPresent()) {
-                ReasoningStep preflightStep = preflightOpt.get();
-                try {
-                    ToolResponse response = WorkspaceContext.run(
-                            context.sessionId(), context.userId(), context.chatId(),
-                            context.autonomyLevel(), context.agentRole(), context.channelType(),
-                            () -> toolInvoker.invoke(preflightStep.action(), preflightStep.actionInput(), context.sessionId()));
-
-                    ReasoningStep completed = preflightStep.withObservation(
-                            response.success() ? response.output() : "Browser navigation failed: " + response.output(),
-                            response.success());
-                    history.add(completed);
-                } catch (RequiresApprovalException e) {
-                    log.infof("[BrowserPreflight] Tool '%s' requires approval for session %s - pausing for human-in-the-loop",
-                            preflightStep.action(), context.sessionId());
-                    List<ReasoningStep> historyAtPause = appendPendingStep(history, preflightStep);
-                    return Optional.of(checkpointManager.persist(context,
-                            e.getFrame(), historyAtPause,
-                            context.channelType(), context.channelPlatformId()));
-                } catch (Exception e) {
-                    log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), e.getMessage());
-                }
-            }
-        }
-        return Optional.empty();
     }
 
     private record IterationResult(
@@ -337,26 +289,5 @@ public class AgentStateMachineRunner {
         }
     }
 
-    private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {
-        List<ReasoningStep> snapshot = new ArrayList<>(history);
-        snapshot.add(step);
-        return List.copyOf(snapshot);
-    }
 
-    private Optional<ReasoningStep> buildBrowserPreflightStep(AgentExecutionContext context) {
-        if (!AgentRoleEnum.RESEARCHER.toScopedName().equalsIgnoreCase(context.agentRole())) return Optional.empty();
-        var toolOpt = toolRegistry.findTool(ToolCapability.BROWSER_NAVIGATE.toolName());
-        if (toolOpt.isEmpty() || !toolOpt.map(AgentTool::isEnabled).orElse(false)) return Optional.empty();
-
-        String goal = context.goal();
-        if (goal == null) return Optional.empty();
-        Matcher m = URL_PATTERN.matcher(goal);
-        if (!m.find()) return Optional.empty();
-
-        String url = m.group();
-        return Optional.of(ReasoningStep.fastPath(
-                "Pre-flight: URL detected in goal, navigating directly.",
-                ToolCapability.BROWSER_NAVIGATE.toolName(),
-                Map.of("url", url, "action", "extract_text")));
-    }
 }

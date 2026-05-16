@@ -12,7 +12,7 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
-import com.arcclaw.persistence.postgres.entity.AgentCronEntity;
+import com.arcclaw.persistence.common.entity.AgentCronEntity;
 import org.jboss.logging.Logger;
 
 /**

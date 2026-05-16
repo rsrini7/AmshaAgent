@@ -1,6 +1,8 @@
 package com.arcclaw.mcp.bridge;
 
-public class McpToolNotAllowedException extends RuntimeException {
+import com.arcclaw.core.exception.ArcClawException;
+
+public class McpToolNotAllowedException extends ArcClawException {
     public McpToolNotAllowedException(String message) {
         super(message);
     }

@@ -25,6 +25,7 @@ import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 /**
  * Component A6 - SerperWebSearchTool.
@@ -59,6 +60,9 @@ public class SerperWebSearchTool implements AgentTool {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    Logger log;
 
     private HttpClient httpClient;
 
@@ -174,7 +178,9 @@ public class SerperWebSearchTool implements AgentTool {
         } else if (cObj instanceof String s) {
             try {
                 return Math.min(10, Math.max(1, Integer.parseInt(s)));
-            } catch (NumberFormatException _) {}
+            } catch (NumberFormatException e) {
+                log.debugf("Failed to parse count parameter: %s", e.getMessage());
+            }
         }
         return 5;
     }

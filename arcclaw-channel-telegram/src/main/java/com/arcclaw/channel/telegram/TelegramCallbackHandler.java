@@ -89,7 +89,14 @@ public class TelegramCallbackHandler {
             // during potentially long-running approvalGate.decide/resume paths §7.35
             answerCallback(query.getId());
 
-            // Resolve full sessionId from 8-char prefix to stay under 64-byte limit §7.25
+            // Decompress base64-encoded UUID back to full session ID
+            String decompressed = BatchHitlKeyboardBuilder.decompressSessionId(sessionId);
+            if (!decompressed.equals(sessionId)) {
+                log.debugf("Decompressed session ID '%s' -> '%s' for user=%s", sessionId, decompressed, userId);
+                sessionId = decompressed;
+            }
+
+            // Fallback: resolve short prefix via DB (for legacy or edge cases)
             if (sessionId.length() < 36) {
                 String originalPrefix = sessionId;
                 sessionId = approvalGateway.resolveSessionIdPrefix(sessionId);

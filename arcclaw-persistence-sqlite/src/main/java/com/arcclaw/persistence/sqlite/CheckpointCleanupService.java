@@ -14,7 +14,7 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.scheduler.Scheduled;
 import org.jboss.logging.Logger;
 

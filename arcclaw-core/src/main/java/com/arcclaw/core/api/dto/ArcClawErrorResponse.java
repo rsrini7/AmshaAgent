@@ -10,16 +10,21 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ArcClawErrorResponse(
+    String code,
     String error,
     String detail,
     String path,
     Instant timestamp
 ) {
     public ArcClawErrorResponse(String error) {
-        this(error, null, null, Instant.now());
+        this(null, error, null, null, Instant.now());
     }
 
     public ArcClawErrorResponse(String error, String detail) {
-        this(error, detail, null, Instant.now());
+        this(null, error, detail, null, Instant.now());
+    }
+
+    public ArcClawErrorResponse(String code, String error, String detail) {
+        this(code, error, detail, null, Instant.now());
     }
 }

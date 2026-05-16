@@ -37,7 +37,7 @@
 
 ## 1. Running the Test Suite
 
-ArcClaw has **535 tests** across two modules: 403 in `arcclaw-core` and 132 in `arcclaw-app`.
+ArcClaw has **1362 tests** across 9 modules: 815 in `arcclaw-core`, 159 in `arcclaw-app`, 71 in `arcclaw-persistence-sqlite`, 55 in `arcclaw-channel-telegram`, 46 in `arcclaw-mcp`, 65 in `arcclaw-channel-api`, 26 in `arcclaw-rag`, 16 in `arcclaw-onboarding`, and 8 in `arcclaw-channel-web`.
 
 ### 1.1 Run all tests
 
@@ -93,17 +93,20 @@ ArcClaw has **535 tests** across two modules: 403 in `arcclaw-core` and 132 in `
 
 When the `%test` profile is active:
 
-- SQLite uses `target/` databases - no file cleanup required between test runs
-- Telegram routes are disabled
-- Context compaction is disabled (`arcclaw.skills.hot-reload: false`)
-- Vault uses a fixed test pepper (`test-pepper-do-not-use-in-production`)
+- SQLite uses `target/` databases with `clean-at-start: true` - fresh schema every run
+- Telegram routes are disabled (`arcclaw.channel.telegram.enabled: false`)
+- MCP server is disabled (`arcclaw.mcp.server-enabled: false`)
+- Context compaction is disabled (`arcclaw.memory.compaction.enabled: false`)
+- Skills hot-reload is disabled (`arcclaw.skills.hot-reload: false`)
 - Sandbox strategy is `NONE` (direct execution, no Podman)
-- `ARCCLAW_API_KEYS_INTERNAL=test-key-internal` (set in `application.yaml %test` block)
+- Vault uses a fixed test pepper (`test-pepper-00000000000000000000000000000000`)
+- OpenTelemetry is disabled (`quarkus.opentelemetry.enabled: false`)
+- Fault tolerance is disabled (`quarkus.smallrye-fault-tolerance.enabled: false`)
 - `DevSecretSeederStartup` bean is absent - it is `@IfBuildProfile("dev")` only (Phase 64-B2)
 
-### 1.6 Target: 535+ green, 0 failures
+### 1.6 Target: 1362+ green, 0 failures
 
-After any code change, the full suite must remain at or above 535 passing tests. Do not accept a lower count - missing tests indicate a compilation failure or a deleted test case.
+After any code change, the full suite must remain at or above 1362 passing tests. Do not accept a lower count - missing tests indicate a compilation failure or a deleted test case.
 
 ---
 
@@ -229,17 +232,14 @@ curl -s http://localhost:8080/api/v1/info | jq .
 **Expect:**
 ```json
 {
-  "version": "1.0.0-SNAPSHOT",
-  "quarkusVersion": "3.27.2",
-  "profile": "dev",
-  "sandboxStrategy": "NONE",
-  "agents": ["coordinator", "researcher", "coder", "debugger", "architect", "synthesizer"],
-  "tools": ["github", "schedule_task", "manage_schedule", "memory_search", "ingest_document"],
-  "buildTime": "2026-03-17T10:00:00Z"
+  "name": "arcclaw",
+  "version": "1.0.0",
+  "environment": "dev",
+  "startedAt": "2026-05-16T10:00:00Z"
 }
 ```
 
-**Validates:** All six agents registered; all built-in tools present; `quarkusVersion` matches `3.27.2`; after Phase 64-D7 `sandbox_exec`/`sandboxexec` must NOT appear.
+**Validates:** Application name, version, active profile, and startup timestamp are populated. Agent roster and tool list are not included in this endpoint — use `GET /api/v1/mcp/tools` for tool discovery or the CDI `ToolRegistry` for programmatic access.
 
 ---
 
@@ -370,7 +370,7 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
   }' | jq .
 ```
 
-**Expect:** Answer contains Java code. **Critically:** no tool invocation log or `TOOL_INVOKED` audit event - the coder role has an **empty tool schema** by design.
+**Expect:** Answer contains Java code. The coder role has `sandbox_exec` and `manage_checklist` in its tool schema — it can execute code but cannot make network calls.
 
 ---
 
@@ -731,7 +731,7 @@ EOF
 
 **Expect:** `201`. Logs: `WARN Unknown ToolCapability 'MEMORY_SEARCH_TYPO' in skill 'bad-caps'`. Only `GITHUB` in the effective capabilities.
 
-> **Phase 64-D7**: After removing `SANDBOX_EXEC` from the `ToolCapability` enum, any skill referencing `SANDBOX_EXEC` in `tool-capabilities` will trigger this warn and silently exclude it.
+> **Note**: `SANDBOX_EXEC` is present in the `ToolCapability` enum. Skills referencing `SANDBOX_EXEC` in `tool-capabilities` will work if the skill's target role has `sandbox_exec` in its tool schema (e.g. `coder`, `debugger`).
 
 ---
 
@@ -846,7 +846,7 @@ curl -s -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/call","id":4,"params":{"name":"sandbox_exec","arguments":{}}}' | jq .error
 ```
 
-**Expect:** JSON-RPC error body - `sandbox_exec` is not in the allowlist. After Phase 64-D7, this capability is also removed from the enum entirely.
+**Expect:** JSON-RPC error body - `sandbox_exec` is not in the MCP tool allowlist.
 
 ---
 
@@ -1838,10 +1838,10 @@ curl -s http://localhost:8080/api/v1/info | jq .
 ```
 
 **Validated fields:**
-- `quarkusVersion: "3.27.2"` - must match BOM in `pom.xml`
-- `agents` array contains exactly 6 roles
-- `tools` contains built-in tools - `sandboxexec` must NOT appear after Phase 64-D7
-- `sandboxStrategy` matches active profile (`NONE` in dev, `PODMAN` in prod)
+- `name: "arcclaw"` - application name
+- `version: "1.0.0"` - must match `pom.xml`
+- `environment` matches active profile (`dev`, `test`, or `prod`)
+- `startedAt` is a valid ISO-8601 timestamp
 
 ---
 
@@ -1915,7 +1915,7 @@ Run after deploying all Phase 64 fixes.
 |---|---|---|
 | D1 | Unicode-safe compaction truncation | Emoji/CJK summaries not garbled after compaction. |
 | D5 | esc() single-pass | `TelegramMarkdownV2RendererTest` passes - all 18 special chars escaped correctly. |
-| D7 | Dead code removed | `GET /api/v1/info` tools list does not include `sandboxexec`. MCP `sandbox_exec` call → allowlist error. |
+| D7 | Tool governance | MCP `sandbox_exec` call → allowlist error (not in MCP allowlist). |
 
 ---
 
@@ -1923,7 +1923,7 @@ Run after deploying all Phase 64 fixes.
 
 Run after any significant code change. Combine automated + manual.
 
-### Automated (535 tests - must remain green)
+### Automated (1362 tests - must remain green)
 
 ```bash
 ./mvnw clean test -pl arcclaw-app -am
@@ -1968,7 +1968,7 @@ Run after any significant code change. Combine automated + manual.
 | # | Test | Expected |
 |---|---|---|
 | 1 | `GET /q/health/ready` | `200 UP` - all checks green |
-| 2 | `GET /api/v1/info` | 6 agents, quarkusVersion=3.27.2, no sandboxexec |
+| 2 | `GET /api/v1/info` | `name=arcclaw`, `version=1.0.0`, `environment` set, `startedAt` populated |
 | 3 | Agent run: `What is 2+2?` | `COMPLETED`, answer=4 |
 | 4 | Coder role, code question | `COMPLETED`, no TOOL_INVOKED audit event |
 | 5 | Debugger role, github task → AWAITING_APPROVAL | Approval prompt appears (debugger HAS github) |
@@ -2023,4 +2023,4 @@ For `ARCCLAW_VAULT_PEPPER` and `ARCCLAW_AUDIT_HMAC_KEY`, use stable 32+ characte
 
 ---
 
-*Last updated: Phase 64 · ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1362 tests · 16 modules*

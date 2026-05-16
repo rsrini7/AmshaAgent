@@ -16,7 +16,7 @@ import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.arc.Unremovable;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -77,6 +77,13 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional(Transactional.TxType.REQUIRED)
     public CheckpointDto doSaveEntity(CheckpointDto checkpointDto) {
         if (checkpointDto.id() == null) {
+            var existing = checkpointRepo.findAnyBySessionAndRole(
+                    checkpointDto.sessionId(), checkpointDto.agentRole());
+            if (!existing.isEmpty()) {
+                AgentCheckpointEntity managed = existing.get(0);
+                upsertService.updateEntityFromDto(managed, checkpointDto);
+                return CheckpointMapper.toDto(checkpointRepo.merge(managed));
+            }
             AgentCheckpointEntity entity = newEntityFromDto(checkpointDto);
             return CheckpointMapper.toDto(checkpointRepo.persist(entity));
         }
@@ -116,6 +123,8 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         entity.setErrorCode(dto.errorCode());
         entity.setTraceId(dto.traceId());
         entity.setRootCauseClass(dto.rootCauseClass());
+        entity.setParentCheckpointId(dto.parentCheckpointId());
+        entity.setDepth(dto.depth());
         entity.setUpdatedAt(dto.updatedAt());
         return entity;
     }

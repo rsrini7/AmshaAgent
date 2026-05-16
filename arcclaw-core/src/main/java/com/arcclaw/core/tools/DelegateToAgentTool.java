@@ -25,6 +25,8 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.arcclaw.persistence.api.CheckpointCrudPort;
+import com.arcclaw.persistence.api.CheckpointDto;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -47,6 +49,7 @@ public class DelegateToAgentTool implements AgentTool {
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
     @Inject CapabilityRegistry capabilityRegistry;
+    @Inject CheckpointCrudPort checkpointCrud;
 
     @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
     int maxDelegationDepth = 2;
@@ -169,11 +172,31 @@ public class DelegateToAgentTool implements AgentTool {
 
         String channelType = ctx.channelType();
         String platformId = ctx.channelPlatformId();
-        return WorkspaceContext.run(
+        AgentResult result = WorkspaceContext.run(
             innerSessionId, userId, chatId, innerLevel, targetRole.toScopedName(),
             channelType, platformId,
             () -> agentLoop.get().run(innerSessionId, targetRole.toScopedName(), goal, reasoningEngine, maxIterations)
         );
+
+        // Link sub-agent checkpoint to parent
+        checkpointCrud.findBySessionAndRole(outerSessionId, ctx.agentRole()).ifPresent(parent -> {
+            checkpointCrud.findBySessionAndRole(innerSessionId, targetRole.toScopedName()).ifPresent(child -> {
+                checkpointCrud.save(new CheckpointDto(
+                    child.id(), child.sessionId(), child.agentRole(), child.status(),
+                    child.autonomyLevel(), child.stateJson(), child.channelPlatformId(),
+                    child.channelType(), child.originalGoal(), child.failedAt(), child.completedAt(),
+                    child.failReason(), child.pendingToolName(), child.batchToolDecisions(),
+                    child.pendingToolParametersJson(), child.preExecutedResults(),
+                    child.maxIterations(), child.iterationsUsed(), child.retryAfterMs(),
+                    child.systemNote(), child.contextDataJson(), child.errorCode(),
+                    child.traceId(), child.rootCauseClass(),
+                    parent.id(), parent.depth() + 1,
+                    child.createdAt(), child.updatedAt()
+                ));
+            });
+        });
+
+        return result;
     }
 
     private ToolResponse handleRunSubAgentException(AgentRoleEnum targetRole, Exception e) {

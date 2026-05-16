@@ -140,11 +140,24 @@ public class ProcessIsolationExecutor {
                                 "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner " +
                                 "-f ./sandbox/Dockerfile.toolrunner .");
 
+                    } catch (PodmanUnavailableException e) {
+                        // Podman not installed or not running
+                        String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                        log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
+
+                        if (allowInsecureFallback) {
+                            log.warnf("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution for session %s", sessionId);
+                            return SandboxResult.success(directExecutor.executeDirectly(
+                                    workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                        }
+                        circuitBreaker.recordFailure(stateAtCall);
+                        return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
+
                     } catch (IOException e) {
                         // Transient or persistent Podman infra failure
                         String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                         log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
-                        
+
                         if (allowInsecureFallback) {
                             log.warnf("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution for session %s", sessionId);
                             return SandboxResult.success(directExecutor.executeDirectly(

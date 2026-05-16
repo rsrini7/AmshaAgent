@@ -1,6 +1,8 @@
 package com.arcclaw.core.agent.reasoning.error;
 
-public abstract sealed class LlmProviderException extends RuntimeException
+import com.arcclaw.core.exception.ArcClawException;
+
+public abstract sealed class LlmProviderException extends ArcClawException
     permits LlmRateLimitException, LlmContextOverflowException, 
             LlmContentFilterException, LlmAuthenticationException, 
             LlmServiceUnavailableException, LlmMalformedResponseException, 

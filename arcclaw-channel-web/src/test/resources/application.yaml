@@ -19,7 +19,9 @@ quarkus:
     schema-management:
       strategy: drop-and-create
     packages:
+      - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
+      - com.arcclaw.core.domain.model
 
   scheduler:
     enabled: false

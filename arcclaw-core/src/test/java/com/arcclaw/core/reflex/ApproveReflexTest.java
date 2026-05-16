@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -18,7 +19,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelMessage;
@@ -30,7 +30,6 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
@@ -80,18 +79,17 @@ class ApproveReflexTest {
     @InjectMock
     DelegateApprovalGuard delegateGuard;
 
-    @SuppressWarnings("unchecked")
-    Event<AgentJobCompleted> jobCompletedEventMock = mock(Event.class);
+    ApprovalNotificationService notificationServiceMock = mock(ApprovalNotificationService.class);
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
-        // Mocking Event injection for ApproveReflex
         ApproveReflex instance = approveReflex;
         if (approveReflex instanceof ClientProxy) {
             instance = (ApproveReflex) ((ClientProxy) approveReflex).arc_contextualInstance();
         }
-        instance.jobCompletedEvent = jobCompletedEventMock;
+        instance.notificationService = notificationServiceMock;
+        lenient().when(notificationServiceMock.createJobNotifier()).thenReturn((cron, result) -> {});
         
         // §7.29 guard: allow tests to proceed by default
         when(statefulAgentStore.claimForResume(anyString(), anyString()))
@@ -149,7 +147,7 @@ class ApproveReflexTest {
         assertEquals("", result.commandResponse().get());
         assertTrue(ctx.isResumeSignal());
         verify(cronStore).markCompleted(eq(cronId), any(Instant.class));
-        verify(jobCompletedEventMock).fire(any(AgentJobCompleted.class));
+        verify(notificationServiceMock).createJobNotifier();
     }
 
     @Test

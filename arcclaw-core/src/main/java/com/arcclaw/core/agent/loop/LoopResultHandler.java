@@ -59,7 +59,7 @@ public class LoopResultHandler {
             }
         });
         agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                sessionId, canonicalRole, "AWAITING_RETRY", Instant.now()
+                sessionId, canonicalRole, CheckpointStatus.AWAITING_RETRY.name(), Instant.now()
         ));
     }
 
@@ -68,19 +68,19 @@ public class LoopResultHandler {
         if (result instanceof AgentResult.Finished) {
             agentStore.saveAndFinalize(sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                    sessionId, canonicalRole, "COMPLETED", Instant.now()
+                    sessionId, canonicalRole, CheckpointStatus.COMPLETED.name(), Instant.now()
             ));
         } else if (result instanceof AgentResult.Failed f) {
             var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), f.reason());
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                    sessionId, canonicalRole, "FAILED", Instant.now()
+                    sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()
             ));
         } else if (result instanceof AgentResult.LoopExceeded l) {
             var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
             agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
             agentSseService.publish(sessionId, new AgentSseService.AgentStatusEvent(
-                    sessionId, canonicalRole, "FAILED", Instant.now()
+                    sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()
             ));
         }
     }

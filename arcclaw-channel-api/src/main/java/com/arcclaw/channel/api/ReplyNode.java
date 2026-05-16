@@ -23,6 +23,13 @@ public sealed interface ReplyNode
                 ReplyNode.ApprovalPrompt,
                 ReplyNode.ErrorMessage {
 
+    /**
+     * Prefix used in {@link ApprovalPrompt#toolName()} to indicate a parallel
+     * multi-tool step. Channel renderers should strip this prefix when
+     * displaying tool names to the user.
+     */
+    String PARALLEL_SENTINEL_PIPE_PREFIX = "parallel|";
+
     // ------------------------------------------------------------------
     // Permit records - exactly 10, no more, no fewer
     // ------------------------------------------------------------------

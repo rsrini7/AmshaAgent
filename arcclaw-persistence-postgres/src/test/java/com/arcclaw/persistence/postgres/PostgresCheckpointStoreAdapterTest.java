@@ -90,7 +90,7 @@ class PostgresCheckpointStoreAdapterTest {
     void testFindBySessionAndRole() {
         store.save(new CheckpointDto(null, "cpt-sr-1", "primary", "IN_PROGRESS", "FULL", "{}",
             "plat-1", "telegram", "goal", null, null, null, null, null, null, null,
-            null, 0, null, null, null, null, null, null, Instant.now(), Instant.now()));
+            null, 0, null, null, null, null, null, null, null, 0, Instant.now(), Instant.now()));
         Optional<CheckpointDto> found = store.findBySessionAndRole("cpt-sr-1", "primary");
         assertTrue(found.isPresent());
     }
@@ -122,6 +122,6 @@ class PostgresCheckpointStoreAdapterTest {
     private CheckpointDto createCheckpoint(String sessionId, String status) {
         return new CheckpointDto(null, sessionId, "role", status, "FULL", "{}",
             "plat-1", "telegram", "goal", null, null, null, null, null, null, null,
-            null, 0, null, null, null, null, null, null, Instant.now(), Instant.now());
+            null, 0, null, null, null, null, null, null, null, 0, Instant.now(), Instant.now());
     }
 }

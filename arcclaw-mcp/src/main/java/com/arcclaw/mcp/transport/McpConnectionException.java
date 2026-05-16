@@ -1,6 +1,8 @@
 package com.arcclaw.mcp.transport;
 
-public class McpConnectionException extends RuntimeException {
+import com.arcclaw.core.exception.ArcClawException;
+
+public class McpConnectionException extends ArcClawException {
     public McpConnectionException(String message) { super(message); }
     public McpConnectionException(String message, Throwable cause) { super(message, cause); }
 }

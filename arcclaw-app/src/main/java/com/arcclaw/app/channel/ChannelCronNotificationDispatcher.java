@@ -36,11 +36,17 @@ public class ChannelCronNotificationDispatcher {
         pluginRegistry.find(event.channelType())
             .map(ChannelPlugin::jobNotifier)
             .ifPresentOrElse(
-                n -> n.notifyJobCompleted(event.channelPlatformId(), event.renderedAnswer(), event.correlationId()),
+                n -> {
+                    if (event.toolName() != null) {
+                        n.notifyApprovalRequired(event.channelPlatformId(), event.cronSessionId(), event.toolName(), event.renderedAnswer());
+                    } else {
+                        n.notifyJobCompleted(event.channelPlatformId(), event.renderedAnswer(), event.correlationId());
+                    }
+                },
                 () -> {
                     if (ChannelType.CLI.id().equalsIgnoreCase(event.channelType().id())) {
                         log.warnf("CRON-UNDELIVERABLE cronId=%s channel=cli - CLI interactive session has no background result receiver. Task completed but not printed to stderr/stdout.", event.cronId());
-                        System.err.println("\n[ArcClaw] Background task completed: " + event.renderedAnswer());
+                        log.warnf("[ArcClaw] Background task completed: %s", event.renderedAnswer());
                     } else {
                         log.warnf("No ChannelPlugin for channelType [%s] - dropping notification", event.channelType());
                     }

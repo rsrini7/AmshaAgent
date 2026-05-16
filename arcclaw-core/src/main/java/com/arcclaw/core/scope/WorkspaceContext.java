@@ -7,6 +7,8 @@ import java.util.concurrent.Callable;
 
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 /**
@@ -14,6 +16,9 @@ import org.jboss.logging.MDC;
  * Eliminates CDI singleton race conditions and secures context propagation.
  */
 public final class WorkspaceContext {
+
+    private static final Logger log = Logger.getLogger(WorkspaceContext.class);
+
 
 
     public static final ScopedValue<String> SESSION_ID = ScopedValue.newInstance();
@@ -238,7 +243,8 @@ public final class WorkspaceContext {
             }
             String mdcUser = (String) MDC.get(MdcKeys.USER_ID);
             return (mdcUser != null && !mdcUser.isBlank()) ? mdcUser : "unknown";
-        } catch (Exception _ ) {
+        } catch (Exception e) {
+            log.warnf("Failed to resolve userId: %s", ExceptionUtils.getRootCauseMessage(e));
             return "unknown";
         }
     }

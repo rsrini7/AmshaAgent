@@ -17,8 +17,8 @@ public class PersistenceDtoTest {
     @Test
     void testCheckpointDtoIntegrity() {
         CheckpointDto dto = new CheckpointDto(
-            1L, "sess-1", "role", "IN_PROGRESS", "FULL", "{}", "plat-1", "telegram", "goal", 
-            null, null, null, "tool-1", null, "{}", null, null, 0, null, null, null, null, null, null, 
+            1L, "sess-1", "role", "IN_PROGRESS", "FULL", "{}", "plat-1", "telegram", "goal",
+            null, null, null, "tool-1", null, "{}", null, null, 0, null, null, null, null, null, null, null, 0,
             Instant.now(), Instant.now()
         );
 

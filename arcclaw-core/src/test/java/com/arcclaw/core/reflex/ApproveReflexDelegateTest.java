@@ -13,8 +13,6 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
-import jakarta.enterprise.event.Event;
-
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
@@ -24,7 +22,6 @@ import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.audit.AuditService;
-import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
@@ -53,7 +50,7 @@ class ApproveReflexDelegateTest {
     @Mock CheckpointApprovalService checkpointApprovalService;
     @Mock CliResultBridge cliResultBridge;
     @Mock WorkspaceManager workspaceManager;
-    @Mock Event<AgentJobCompleted> jobCompletedEvent;
+    @Mock ApprovalNotificationService notificationService;
     @Mock ResumeResultHelper resumeResultHelper;
     
     ApproveReflex reflex;
@@ -62,17 +59,13 @@ class ApproveReflexDelegateTest {
     void setup() {
         reflex = new ApproveReflex();
         reflex.statefulAgentStore = agentStore;
-        reflex.agentLoop = agentLoop;
         reflex.delegateGuard = delegateGuard;
         reflex.checkpointResumeHandler = resumeHandler;
         reflex.cronStore = cronStore;
-        reflex.reasoningEngine = reasoningEngine;
         reflex.auditService = auditService;
         reflex.objectMapper = objectMapper;
         reflex.checkpointApprovalService = checkpointApprovalService;
-        reflex.cliResultBridge = cliResultBridge;
-        reflex.workspaceManager = workspaceManager;
-        reflex.jobCompletedEvent = jobCompletedEvent;
+        reflex.notificationService = notificationService;
         reflex.resumeResultHelper = resumeResultHelper;
         reflex.cronDecisionRouter = createCronRouter();
         reflex.log = mock(Logger.class);

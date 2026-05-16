@@ -152,7 +152,7 @@ class WorkspaceManagerGcSweepTest {
      */
     private void stubCheckpointStorePort(String awaitingSessionId, boolean isAwaitingInBulk) {
         if (isAwaitingInBulk) {
-            CheckpointDto dto = new CheckpointDto(1L, awaitingSessionId, "agent", null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0, null, null, null, null, null, null, null, null);
+            CheckpointDto dto = new CheckpointDto(1L, awaitingSessionId, "agent", null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0, null, null, null, null, null, null, null, 0, null, null);
             when(checkpointStorePortMock.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name()))
                 .thenReturn(List.of(dto));
         } else {

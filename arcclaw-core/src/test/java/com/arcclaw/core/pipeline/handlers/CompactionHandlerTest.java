@@ -3,17 +3,18 @@ package com.arcclaw.core.pipeline.handlers;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-import jakarta.enterprise.event.Event;
-
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -35,7 +36,7 @@ import org.mockito.quality.Strictness;
 class CompactionHandlerTest {
 
     @Mock private CompactionService compactionService;
-    @Mock private Event<CompactionRequest> compactionEvent;
+    @Mock private DomainEventBus eventBus;
     @Mock private CompactionInFlightFlag compactionInFlight;
     @Mock private RateLimitTracker rateLimitTracker;
     @Mock private CompactionEventBridge compactionEventBridge;
@@ -59,8 +60,8 @@ class CompactionHandlerTest {
             when(compactionService.shouldCompact("session1")).thenReturn(true);
             when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
 
-            CompletableFuture<CompactionRequest> future = new CompletableFuture<>();
-            when(compactionEvent.fireAsync(any(CompactionRequest.class))).thenReturn(future);
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            when(eventBus.publishAsync(eq(EventTypeCatalog.COMPACTION_REQUEST), any(CompactionRequest.class))).thenReturn(future);
 
             HandleResult result = handler.handle(ctx);
 
@@ -74,14 +75,14 @@ class CompactionHandlerTest {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
             when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
-            when(compactionEvent.fireAsync(any(CompactionRequest.class)))
+            when(eventBus.publishAsync(eq(EventTypeCatalog.COMPACTION_REQUEST), any(CompactionRequest.class)))
                     .thenReturn(CompletableFuture.completedFuture(null));
 
             handler.handle(ctx);
 
             ArgumentCaptor<CompactionRequest> captor =
                     ArgumentCaptor.forClass(CompactionRequest.class);
-            verify(compactionEvent, times(1)).fireAsync(captor.capture());
+            verify(eventBus, times(1)).publishAsync(eq(EventTypeCatalog.COMPACTION_REQUEST), captor.capture());
             assertEquals("session1", captor.getValue().sessionId());
             assertEquals("user1", captor.getValue().userId());
         });
@@ -96,7 +97,7 @@ class CompactionHandlerTest {
 
             handler.handle(ctx);
 
-            verify(compactionEvent, never()).fireAsync(any());
+            verify(eventBus, never()).publishAsync(any(), any());
         });
     }
 
@@ -108,7 +109,7 @@ class CompactionHandlerTest {
 
             handler.handle(ctx);
 
-            verify(compactionEvent, never()).fireAsync(any());
+            verify(eventBus, never()).publishAsync(any(), any());
             verify(compactionInFlight, never()).compareAndSet(anyString(), anyBoolean(), anyBoolean());
         });
     }
@@ -119,7 +120,7 @@ class CompactionHandlerTest {
             MessageContext ctx = mockContext("session1", "user1");
             when(compactionService.shouldCompact("session1")).thenReturn(true);
             when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
-            when(compactionEvent.fireAsync(any())).thenAnswer(invocation -> {
+            when(eventBus.publishAsync(any(), any())).thenAnswer(invocation -> {
                 Thread.sleep(10);
                 return CompletableFuture.completedFuture(null);
             });
@@ -136,7 +137,7 @@ class CompactionHandlerTest {
             
             // First call
             when(compactionInFlight.compareAndSet("session1", false, true)).thenReturn(true);
-            when(compactionEvent.fireAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
+            when(eventBus.publishAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(null));
 
             handler.handle(ctx);
             
@@ -145,7 +146,7 @@ class CompactionHandlerTest {
 
             handler.handle(ctx);
 
-            verify(compactionEvent, times(1)).fireAsync(any());
+            verify(eventBus, times(1)).publishAsync(any(), any());
         });
     }
 }

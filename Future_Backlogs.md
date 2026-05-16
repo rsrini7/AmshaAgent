@@ -1,42 +1,75 @@
 # ArcClaw Future Backlogs
 
-## 1. Flyway Migration Plan (Long-term Schema Management)
+Prioritized actionable items. Completed items are removed. Items are ordered by impact × urgency.
 
-Currently, some schema elements (Virtual Tables, WORM triggers, Session Registry) are managed via programmatic DDL. We should transition to `quarkus-flyway` for consistent, versioned migrations.
+---
 
-1.  **Add Dependencies**: Add `quarkus-flyway` to `arcclaw-persistence-sqlite` (and future adapter modules).
-2.  **Initial Migration**: Create `src/main/resources/db/migration/V1__initial_schema.sql` capturing current entity tables.
-3.  **WORM & FTS**: Migrate SQLite-specific WORM triggers and FTS5 virtual table creation to Flyway scripts.
-4.  **Specific Migration Task**: 
-    *   Rename `run_once` column to `runonce` in the `agent_cron` table to align with the new `@Column(name="runonce")` mapping.
-    *   This ensures existing databases from the pre-P95 era can be upgraded without data loss.
-5.  **Decommission Enforcers**: Delete `SessionSchemaEnforcer` and `AuditSchemaEnforcer` once Flyway is verified.
-6.  **Architecture Invariant 5.23**: 
-    *   "Schema migrations are managed by Flyway, scoped per persistence adapter module. No class may issue CREATE TABLE via raw JDBC or EntityManager at runtime."
+## Priority 2 — Governance & Policy (Highest Architectural Leverage)
 
-## 2. Future Refactor Backlog (Architectural Debt)
+### 2.1 Policy Externalization via @ConfigMapping
 
-These items were identified during the Tier 3/Tier 4 remediation phase and should be scheduled for a dedicated refactor sprint:
+Move tool governance rules from Java annotations and hardcoded guards to a loadable YAML/JSON policy config.
 
-### 2.1 RAG Module Reorganization
-Move `GlobalKnowledgeBase`, `SessionKnowledgeBase`, and `SqliteMemoryRetrievalAdapter` from `arcclaw-persistence-sqlite` to the `arcclaw-rag` module (or a dedicated `arcclaw-rag-sqlite` adapter). 
-*   **Rationale**: These classes utilize LangChain4j types (`TextSegment`, `EmbeddingStore`) and architecturally belong in the RAG domain rather than a general persistence adapter.
+- **Why**: Current `DestructiveVocabularyFilter` and `ToolGovernanceGuard` are Java business logic — policy changes require code changes + redeploy. Externalized policies can be updated without touching application code.
+- **Effort**: Medium — design YAML schema, implement `@ConfigMapping` policy loader, refactor `ToolGovernanceGuard` to read from config instead of annotations.
+- **Format**: Each tool declares allowed roles, autonomy levels, data access scopes, and blocked patterns in a policy YAML loaded at startup.
+- **When**: Next governance-focused sprint.
 
-### 2.2 Monolithic Adapter Split
-Split `SqliteCheckpointStoreAdapter` (currently 900+ lines) into two focused components:
-*   `SqliteCheckpointCrudAdapter`: Focused on basic entity/DTO mapping and basic persistence.
-*   `SqliteCheckpointLifecycleAdapter`: Focused on complex orchestration like zombie recovery, stale checkpoint pruning, and atomic state transitions.
+### 2.2 Tool Contract Exporter
 
-### 2.3 Cron Test Isolation
-Resolve the `InstantToTextConverter` dependency hazard. 
-*   **Rationale**: Currently, core unit tests for cron job retrieval in `arcclaw-core` rely on the converter registered in the `arcclaw-persistence-sqlite` module. Move the converter to `arcclaw-core` or establish a cleaner explicit dependency to prevent test isolation failures.
+Add a startup utility that serializes each registered tool's `@ToolMetadata` + `ToolCapability` entry to a versioned JSON file.
 
-### 2.4 A16 Guard Consolidation
-De-duplicate the batch tool decision merging logic (Architecture Nuance #16). 
-*   **Rationale**: The logic for merging incoming decisions into the JSON map is currently duplicated between `StatefulAgentStoreImpl` and `SqliteCheckpointStoreAdapter`. It should be consolidated into a single atomic utility in the persistence layer.
+- **Why**: Tool capability scopes aren't queryable as standalone documents. Having inspectable, diffable tool contracts per deployment closes the "no formal contract artifact" gap and serves as auto-generated documentation.
+- **Effort**: Low — one utility class that runs at `@Observes StartupEvent`, reads `ToolRegistry`, writes JSON.
+- **When**: Anytime.
 
-### 2.5 RRF Score Calibration (RAG)
-Calibrate `arcclaw.rag.min-score` for RRF fusion.
-*   **Context**: The current default is `-1.0` to disable filtering because RRF scores (keyword + vector fusion) produce small positive values (e.g. 0.016) that were blocked by the original 0.55 threshold.
-*   **Task**: Once the system has 50+ ingested documents, measure false-positive injection rates for unrelated queries.
-*   **Goal**: Establish a sensible floor (e.g. `0.01`) to filter out noise while still allowing valid RRF matches to reach the agent.
+---
+
+## Priority 3 — Observability & Operations
+
+### 3.1 Active Agent Inventory Endpoint
+
+Expose a `GET /api/v1/agents/active` endpoint showing live agent instances, their current `CheckpointStatus`, role, depth level, and trigger source.
+
+- **Why**: ArcClaw can recover orphaned agents (`SessionReaper`), but cannot answer "how many agents are currently active, what are they doing, and who triggered them?" in real-time. This is a governance and operational visibility gap.
+- **Effort**: Low — query `agent_checkpoint` for non-terminal statuses, expose via REST.
+- **When**: Anytime.
+
+### 3.2 Consent / Data Provenance Tracking
+
+Add lightweight provenance tags to RAG context entries — which source authorized which piece of data to flow to which agent.
+
+- **Why**: Relevant when ArcClaw ingests external data sources (RAG, MCP file servers). Currently, session scoping partially handles this, but there's no explicit provenance tag on ingested chunks.
+- **Effort**: Medium — add `source_session_id` and `ingested_by` fields to `rag_chunk` entity, propagate through `TwoTierMemoryService`.
+- **When**: When MCP file server ingestion or multi-source RAG is implemented.
+
+---
+
+## Priority 4 — RAG & Module Hygiene
+
+### 4.1 RAG Module Reorganization
+
+Move `GlobalKnowledgeBase`, `SessionKnowledgeBase`, and `SqliteMemoryRetrievalAdapter` from `arcclaw-persistence-sqlite` to `arcclaw-rag` (or a dedicated `arcclaw-rag-sqlite` adapter).
+
+- **Why**: These classes use LangChain4j types (`TextSegment`, `EmbeddingStore`) and architecturally belong in the RAG domain, not a general persistence adapter.
+- **Effort**: Medium — module boundary move, dependency adjustments, test updates.
+- **When**: Low priority — cosmetic, no behavioral change.
+
+### 4.2 A16 Batch Decision Consolidation Across Adapters
+
+Unify batch tool decision merging logic across all persistence adapters (SQLite, filesystem, Postgres).
+
+- **Why**: Consolidated within SQLite into `CheckpointBatchOperations`, but `arcclaw-persistence-fs` has its own implementation path. Matters if a third adapter is added.
+- **Effort**: Low-medium — extract shared utility, update fs adapter.
+- **When**: Only if adding a new persistence adapter beyond the existing three.
+
+---
+
+## Completed (Removed from Backlog)
+
+- Parent checkpoint linkage (`parent_checkpoint_id` + `depth` on `agent_checkpoint`, linked in `DelegateToAgentTool`)
+- RRF score calibration (`min-score` default changed from `-1.0` to `0.01` — below minimum RRF score with k=60)
+- AuditSchemaEnforcer cleanup (extracted to `FtsSchemaInitializer`, deleted enforcer)
+- Flyway migration (quarkus-flyway, V1__baseline.sql, SessionSchemaEnforcer deleted, runonce renamed)
+- Monolithic adapter split (SqliteCheckpointStoreAdapter: 900+ → 364 lines, 7 services)
+- Cron test isolation (InstantToTextConverter moved to arcclaw-persistence-common)

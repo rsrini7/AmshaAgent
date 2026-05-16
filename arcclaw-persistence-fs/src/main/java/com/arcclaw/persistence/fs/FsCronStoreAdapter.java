@@ -9,6 +9,7 @@ import java.util.function.UnaryOperator;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import io.quarkus.arc.Unremovable;
@@ -31,7 +32,7 @@ public class FsCronStoreAdapter implements CronStorePort {
     public List<AgentCronDto> findDueCrons() {
         Instant now = Instant.now();
         return loadAll().stream()
-            .filter(dto -> "ACTIVE".equals(dto.status()))
+            .filter(dto -> CronStatus.ACTIVE.name().equals(dto.status()))
             .filter(dto -> dto.nextFireTime() != null && !dto.nextFireTime().isAfter(now))
             .toList();
     }
@@ -47,14 +48,14 @@ public class FsCronStoreAdapter implements CronStorePort {
     public List<AgentCronDto> findAwaitingApprovalByUserId(String userId) {
         return loadAll().stream()
             .filter(dto -> userId.equals(dto.userId()))
-            .filter(dto -> "AWAITING_APPROVAL".equals(dto.status()))
+            .filter(dto -> CronStatus.AWAITING_APPROVAL.name().equals(dto.status()))
             .toList();
     }
 
     @Override
     public List<AgentCronDto> findAllAwaitingApproval() {
         return loadAll().stream()
-            .filter(dto -> "AWAITING_APPROVAL".equals(dto.status()))
+            .filter(dto -> CronStatus.AWAITING_APPROVAL.name().equals(dto.status()))
             .toList();
     }
 
@@ -66,12 +67,12 @@ public class FsCronStoreAdapter implements CronStorePort {
 
     @Override
     public boolean claimForFire(String id) {
-        return atomicStatusUpdate(id, "ACTIVE", "RUNNING");
+        return atomicStatusUpdate(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name());
     }
 
     @Override
     public void releaseClaimToActive(String id) {
-        atomicStatusUpdate(id, "RUNNING", "ACTIVE");
+        atomicStatusUpdate(id, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name());
     }
 
     @Override
@@ -80,7 +81,7 @@ public class FsCronStoreAdapter implements CronStorePort {
             dto.id(), dto.sessionId(), dto.userId(), dto.chatId(),
             dto.channelType(), dto.channelPlatformId(), dto.cronExpression(),
             dto.timezone(), dto.runOnce(), dto.goal(), nextFireTime, lastFireTime,
-            "ACTIVE", dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
+            CronStatus.ACTIVE.name(), dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
             dto.createdAt(), Instant.now()
         ));
     }
@@ -91,7 +92,7 @@ public class FsCronStoreAdapter implements CronStorePort {
             dto.id(), dto.sessionId(), dto.userId(), dto.chatId(),
             dto.channelType(), dto.channelPlatformId(), dto.cronExpression(),
             dto.timezone(), dto.runOnce(), dto.goal(), null, lastFireTime,
-            "COMPLETED", dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
+            CronStatus.COMPLETED.name(), dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
             dto.createdAt(), Instant.now()
         ));
     }
@@ -102,7 +103,7 @@ public class FsCronStoreAdapter implements CronStorePort {
             dto.id(), dto.sessionId(), dto.userId(), dto.chatId(),
             dto.channelType(), dto.channelPlatformId(), dto.cronExpression(),
             dto.timezone(), dto.runOnce(), dto.goal(), dto.nextFireTime(), dto.lastFireTime(),
-            "AWAITING_APPROVAL", dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
+            CronStatus.AWAITING_APPROVAL.name(), dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
             dto.createdAt(), Instant.now()
         ));
     }
@@ -113,7 +114,7 @@ public class FsCronStoreAdapter implements CronStorePort {
             dto.id(), dto.sessionId(), dto.userId(), dto.chatId(),
             dto.channelType(), dto.channelPlatformId(), dto.cronExpression(),
             dto.timezone(), dto.runOnce(), dto.goal(), dto.nextFireTime(), dto.lastFireTime(),
-            "RUNNING", dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
+            CronStatus.RUNNING.name(), dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
             dto.createdAt(), Instant.now()
         ));
     }
@@ -135,7 +136,7 @@ public class FsCronStoreAdapter implements CronStorePort {
             dto.id(), dto.sessionId(), dto.userId(), dto.chatId(),
             dto.channelType(), dto.channelPlatformId(), dto.cronExpression(),
             dto.timezone(), dto.runOnce(), dto.goal(), dto.nextFireTime(), dto.lastFireTime(),
-            "FAILED", dto.executionRole(), errorReason, dto.lastDeliveryId(),
+            CronStatus.FAILED.name(), dto.executionRole(), errorReason, dto.lastDeliveryId(),
             dto.createdAt(), Instant.now()
         ));
     }
@@ -146,7 +147,7 @@ public class FsCronStoreAdapter implements CronStorePort {
             dto.id(), dto.sessionId(), dto.userId(), dto.chatId(),
             dto.channelType(), dto.channelPlatformId(), dto.cronExpression(),
             dto.timezone(), dto.runOnce(), dto.goal(), nextFireTime, dto.lastFireTime(),
-            "SKIPPED", dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
+            CronStatus.SKIPPED.name(), dto.executionRole(), dto.errorReason(), dto.lastDeliveryId(),
             dto.createdAt(), now != null ? now : Instant.now()
         ));
     }
@@ -154,10 +155,10 @@ public class FsCronStoreAdapter implements CronStorePort {
     @Override
     public void reclaimStaleCrons(Instant threshold) {
         for (AgentCronDto dto : loadAll()) {
-            if ("RUNNING".equals(dto.status())) {
+            if (CronStatus.RUNNING.name().equals(dto.status())) {
                 Instant ref = dto.lastFireTime() != null ? dto.lastFireTime() : dto.createdAt();
                 if (ref != null && ref.isBefore(threshold)) {
-                    atomicStatusUpdate(dto.id(), "RUNNING", "ACTIVE");
+                    atomicStatusUpdate(dto.id(), CronStatus.RUNNING.name(), CronStatus.ACTIVE.name());
                 }
             }
         }
@@ -258,8 +259,6 @@ public class FsCronStoreAdapter implements CronStorePort {
         return store.readOptional(List.of(DOMAIN, INDICES, BY_USER, userId + ".json"), UserIndex.class)
             .orElse(new UserIndex());
     }
-
-    @SuppressWarnings("unused")
     private static class UserIndex {
         public List<String> ids = new ArrayList<>();
     }

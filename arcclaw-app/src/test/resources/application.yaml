@@ -82,14 +82,16 @@ quarkus:
     enabled: false
   hibernate-orm:
     schema-management:
-      strategy: update
+      strategy: none
     dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     log:
       sql: false
     jdbc:
       timezone: UTC
     packages:
+      - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.sqlite.entity
+      - com.arcclaw.core.domain.model
 
   langchain4j:
     openai:

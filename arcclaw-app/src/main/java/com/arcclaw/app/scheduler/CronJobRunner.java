@@ -29,6 +29,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -231,7 +232,7 @@ public class CronJobRunner {
                 JsonNode node = new ObjectMapper().readTree(goal);
                 if (node.has("goal")) return node.get("goal").asText().trim();
             } catch (Exception e) {
-                // fallback to original
+                log.warnf("Failed to parse goal JSON, using original: %s", ExceptionUtils.getRootCauseMessage(e));
             }
         }
         

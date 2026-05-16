@@ -40,7 +40,7 @@ class ChannelCronNotificationDispatcherTest {
 
         AgentJobCompleted event = new AgentJobCompleted(
             "cron-1", "user-1", ChannelType.TELEGRAM, "chat-1", 
-            "corr-1", "Hello", null);
+            "corr-1", "Hello", null, null, null);
 
         dispatcher.onJobCompleted(event);
 
@@ -53,7 +53,7 @@ class ChannelCronNotificationDispatcherTest {
 
         AgentJobCompleted event = new AgentJobCompleted(
             "cron-1", "user-1", ChannelType.CLI, "chat-1", 
-            "corr-1", "Hello", null);
+            "corr-1", "Hello", null, null, null);
 
         dispatcher.onJobCompleted(event);
 
@@ -65,7 +65,7 @@ class ChannelCronNotificationDispatcherTest {
     void testNullChannelTypeIsIgnored() {
         AgentJobCompleted event = new AgentJobCompleted(
             "cron-1", "user-1", null, "chat-1", 
-            "corr-1", "Hello", null);
+            "corr-1", "Hello", null, null, null);
 
         dispatcher.onJobCompleted(event);
 

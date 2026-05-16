@@ -13,7 +13,7 @@ import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
-import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,9 +75,9 @@ class StatefulAgentStoreConcurrencyTest {
         );
         
         CheckpointDto incoming = new CheckpointDto(
-            id, "s1", "role", "AWAITING_APPROVAL", null, null, null, null, null, 
-            null, null, null, null, objectMapper.writeValueAsString(incomingDecisions), 
-            null, null, null, 0, null, null, null, null, null, null, Instant.now(), Instant.now()
+            id, "s1", "role", "AWAITING_APPROVAL", null, null, null, null, null,
+            null, null, null, null, objectMapper.writeValueAsString(incomingDecisions),
+            null, null, null, 0, null, null, null, null, null, null, null, 0, Instant.now(), Instant.now()
         );
 
         when(em.find(AgentCheckpointEntity.class, id)).thenReturn((AgentCheckpointEntity) managed);
@@ -89,7 +89,7 @@ class StatefulAgentStoreConcurrencyTest {
         Map<String, ToolDecision> result = objectMapper.readValue(
             managed.getBatchToolDecisions(),
             new TypeReference<Map<String, ToolDecision>>() {});
-        
+
         assertEquals(ToolDecision.APPROVED, result.get("tool1"));
         assertEquals(ToolDecision.PENDING, result.get("tool2"));
     }
@@ -109,11 +109,11 @@ class StatefulAgentStoreConcurrencyTest {
         Map<String, ToolDecision> incomingDecisions = Map.of(
             "tool1", ToolDecision.DENIED
         );
-        
+
         CheckpointDto incoming = new CheckpointDto(
-            id, "s1", "role", "AWAITING_APPROVAL", null, null, null, null, null, 
-            null, null, null, null, objectMapper.writeValueAsString(incomingDecisions), 
-            null, null, null, 0, null, null, null, null, null, null, Instant.now(), Instant.now()
+            id, "s1", "role", "AWAITING_APPROVAL", null, null, null, null, null,
+            null, null, null, null, objectMapper.writeValueAsString(incomingDecisions),
+            null, null, null, 0, null, null, null, null, null, null, null, 0, Instant.now(), Instant.now()
         );
 
         when(em.find(AgentCheckpointEntity.class, id)).thenReturn((AgentCheckpointEntity) managed);

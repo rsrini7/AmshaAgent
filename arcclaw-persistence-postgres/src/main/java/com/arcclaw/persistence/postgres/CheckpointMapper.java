@@ -5,7 +5,7 @@ import java.time.Instant;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
-import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 
 final class CheckpointMapper {
 
@@ -22,6 +22,7 @@ final class CheckpointMapper {
                 c.getPreExecutedResults(), c.getMaxIterations(), c.getIterationsUsed(),
                 c.getRetryAfterMs(), c.getSystemNote(), c.getContextDataJson(),
                 c.getErrorCode(), c.getTraceId(), c.getRootCauseClass(),
+                c.getParentCheckpointId(), c.getDepth(),
                 c.getCreatedAt(), c.getUpdatedAt()
         );
     }
@@ -43,6 +44,8 @@ final class CheckpointMapper {
         entity.setChannelType(dto.channelType());
         entity.setChannelPlatformId(dto.channelPlatformId());
         entity.setSystemNote(dto.systemNote());
+        entity.setParentCheckpointId(dto.parentCheckpointId());
+        entity.setDepth(dto.depth());
         entity.setUpdatedAt(Instant.now());
     }
 }

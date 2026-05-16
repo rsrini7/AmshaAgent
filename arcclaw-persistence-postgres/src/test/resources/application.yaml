@@ -30,13 +30,15 @@ quarkus:
 
   hibernate-orm:
     schema-management:
-      strategy: update
+      strategy: none
     log:
       sql: false
     jdbc:
       timezone: UTC
     packages:
+      - com.arcclaw.persistence.common.entity
       - com.arcclaw.persistence.postgres.entity
+      - com.arcclaw.core.domain.model
 
   opentelemetry:
     enabled: false

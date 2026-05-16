@@ -1,13 +1,14 @@
 package com.arcclaw.core.agent.loop;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import org.jboss.logging.Logger;
 
 /**
@@ -35,7 +36,7 @@ public class LoopExitPublisher {
     private static final Logger log = Logger.getLogger(LoopExitPublisher.class);
 
     @Inject
-    Event<AgentStateChangedEvent> stateChangedEvent;
+    DomainEventBus eventBus;
 
     @Inject
     CliResultBridge cliResultBridge;
@@ -48,7 +49,7 @@ public class LoopExitPublisher {
         // Delegate sub-sessions skip start signals to avoid UI noise
         if (context.sessionId().contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) return;
 
-        stateChangedEvent.fire(new AgentStateChangedEvent(
+        eventBus.publish(EventTypeCatalog.AGENT_STATE_CHANGED, new AgentStateChangedEvent(
                 context.sessionId(), context.agentRole(), "active", context.goal()));
     }
 
@@ -79,7 +80,7 @@ public class LoopExitPublisher {
 
         String status = toWireStatus(result);
         try {
-            stateChangedEvent.fire(
+            eventBus.publish(EventTypeCatalog.AGENT_STATE_CHANGED,
                     new AgentStateChangedEvent(sessionId, agentRole, status, goal));
         } catch (Exception e) {
             // CDI observer failures must never corrupt the result pipeline.

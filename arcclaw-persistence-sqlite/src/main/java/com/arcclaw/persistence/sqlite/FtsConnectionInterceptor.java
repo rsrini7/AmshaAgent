@@ -101,7 +101,7 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                 try {
                     Files.createDirectories(Path.of(dataDir));
                 } catch (IOException e) {
-                    log.warn("Failed to create data directory for FTS: " + dataDir, e);
+                    log.warnf("Failed to create data directory for FTS: %s", dataDir, e);
                 }
                 ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
                 try (Statement stmt = connection.createStatement()) {

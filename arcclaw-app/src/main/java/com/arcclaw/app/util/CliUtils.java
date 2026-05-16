@@ -207,12 +207,12 @@ public class CliUtils {
 
         // 2. Intent/Compaction/Embed and Security keys
         for (VarSpec spec : CORE_VARS) {
-            if (!isSet(spec.key)) missing.add(spec);
+            if (!isSet(spec.key())) missing.add(spec);
         }
 
 
         for (VarSpec spec : TELEGRAM_VARS) {
-            if (!isSet(spec.key)) missing.add(spec);
+            if (!isSet(spec.key())) missing.add(spec);
         }
 
         if (!isSet("ARCCLAW_TOOLS_GITHUB_TOKEN") && !isExplicitOptOut("ARCCLAW_TOOLS_GITHUB_TOKEN")) {
@@ -280,33 +280,21 @@ public class CliUtils {
         boolean dotEnvPresent = Files.exists(Path.of(".env"));
         List<VarSpec> missing = new ArrayList<>();
 
-        // ── Core vars - always required (no provider key here) ───────────────
         for (VarSpec spec : CORE_VARS) {
-            if (!isSet(spec.key)) missing.add(spec);
+            if (!isSet(spec.key())) missing.add(spec);
         }
 
-        // ── Provider-aware API key - selected by ARCCLAW_LLM_PROVIDER ────────
-        // Read the provider from the real environment (not Quarkus config -
-        // the CDI container hasn't started yet at this point in the boot).
         String llmProvider = Optional.ofNullable(System.getenv("ARCCLAW_LLM_PROVIDER"))
                 .map(String::toLowerCase)
-                .orElse("groq");  // groq is the default if unset
-        VarSpec providerKeySpec = switch (llmProvider) {
-            case "openrouter" -> OPENROUTER_KEY_SPEC;
-            case "openai"     -> OPENAI_KEY_SPEC;
-            case "gemini"     -> GEMINI_KEY_SPEC;
-            case "cerebras"   -> CEREBRAS_KEY_SPEC;
-            case "ollama"     -> null;   // Ollama is local - no API key needed
-            default           -> GROQ_KEY_SPEC;  // groq + any unknown provider
-        };
+                .orElse("groq");
+        VarSpec providerKeySpec = resolveProviderKeySpec(llmProvider);
         if (providerKeySpec != null && !isSet(providerKeySpec.key)) {
             missing.add(providerKeySpec);
         }
 
-        // ── Telegram vars - hard required for attach, soft-warn for serve ─────
         if (mode.equals("attach")) {
             for (VarSpec spec : TELEGRAM_VARS) {
-                if (!isSet(spec.key)) missing.add(spec);
+                if (!isSet(spec.key())) missing.add(spec);
             }
         } else if (mode.equals("serve")) {
             warnTelegramIfPartial();
@@ -314,7 +302,22 @@ public class CliUtils {
 
         if (missing.isEmpty()) return;
 
-        // ── Print setup guide and exit ────────────────────────────────────────
+        printSetupGuide(missing, dotEnvPresent, mode);
+        System.exit(1);
+    }
+
+    private static VarSpec resolveProviderKeySpec(String llmProvider) {
+        return switch (llmProvider) {
+            case "openrouter" -> OPENROUTER_KEY_SPEC;
+            case "openai"     -> OPENAI_KEY_SPEC;
+            case "gemini"     -> GEMINI_KEY_SPEC;
+            case "cerebras"   -> CEREBRAS_KEY_SPEC;
+            case "ollama"     -> null;
+            default           -> GROQ_KEY_SPEC;
+        };
+    }
+
+    private static void printSetupGuide(List<VarSpec> missing, boolean dotEnvPresent, String mode) {
         System.err.println();
         System.err.println("  X  ArcClaw cannot start - required configuration is missing.");
         System.err.println();
@@ -335,9 +338,9 @@ public class CliUtils {
 
         for (VarSpec spec : missing) {
             System.err.println();
-            System.err.println("  KEY: " + spec.key);
-            System.err.println("       " + spec.description);
-            for (String step : spec.howToGet) {
+            System.err.println("  KEY: " + spec.key());
+            System.err.println("       " + spec.description());
+            for (String step : spec.howToGet()) {
                 System.err.println("       " + step);
             }
         }
@@ -348,7 +351,6 @@ public class CliUtils {
         System.err.println("    ./arcclaw " + mode + "    (Linux/macOS/WSL2)");
         System.err.println("    .\\arcclaw.exe " + mode + "   (Windows)");
         System.err.println();
-        System.exit(1);
     }
 
     // -------------------------------------------------------------------------
@@ -455,14 +457,18 @@ public class CliUtils {
     // -------------------------------------------------------------------------
 
     public static class VarSpec {
-        public final String key;
-        public final String description;
-        public final String[] howToGet;
+        private final String key;
+        private final String description;
+        private final String[] howToGet;
 
         public VarSpec(String key, String description, String... howToGet) {
             this.key = key;
             this.description = description;
             this.howToGet = howToGet;
         }
+
+        public String key() { return key; }
+        public String description() { return description; }
+        public String[] howToGet() { return howToGet; }
     }
 }

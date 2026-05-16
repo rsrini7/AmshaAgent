@@ -144,7 +144,7 @@ class AsyncPersistenceEngineTest {
         
         exec.submit(() -> {
             engine.submitCritical(PersistenceEvent.critical("blocker", SecurityEventType.TOOL_INVOKED, () -> {
-                try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
+                try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception e) { Thread.currentThread().interrupt(); }
             }));
         });
         
@@ -191,7 +191,7 @@ class AsyncPersistenceEngineTest {
         
         // 1. Submit blocker (since it's telemetry, caller does not block)
         engine.submitTelemetry(PersistenceEvent.telemetry("blocker", SecurityEventType.TOOL_INVOKED, () -> {
-            try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception ignored) {}
+            try { pauseConsumer.await(5, TimeUnit.SECONDS); } catch (Exception e) { Thread.currentThread().interrupt(); }
         }));
         
         Thread.sleep(100);

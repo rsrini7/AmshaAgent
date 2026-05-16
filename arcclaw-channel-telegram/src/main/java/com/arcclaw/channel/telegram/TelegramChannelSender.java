@@ -12,7 +12,6 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
-import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -71,8 +70,8 @@ public class TelegramChannelSender implements ChannelSender {
         if (promptOpt.isPresent()) {
             ReplyNode.ApprovalPrompt prompt = promptOpt.get();
             List<String> toolNames;
-            if (prompt.toolName() != null && prompt.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
-                String toolNamesStr = prompt.toolName().substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length());
+            if (prompt.toolName() != null && prompt.toolName().startsWith(ReplyNode.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+                String toolNamesStr = prompt.toolName().substring(ReplyNode.PARALLEL_SENTINEL_PIPE_PREFIX.length());
                 toolNames = Arrays.asList(toolNamesStr.split(","));
             } else if (prompt.toolName() != null) {
                 toolNames = List.of(prompt.toolName());
@@ -158,7 +157,7 @@ public class TelegramChannelSender implements ChannelSender {
      */
     private void sendRawToChatId(String chatId, String text) {
         if (text == null || text.isBlank()) {
-            log.warn("Attempted to send empty message to " + chatId + " - skipping");
+            log.warnf("Attempted to send empty message to %s - skipping", chatId);
             return;
         }
         if (text.length() <= maxLength) {
