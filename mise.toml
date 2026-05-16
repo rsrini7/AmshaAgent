@@ -1349,6 +1349,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:run-dev-profile"]
+usage = 'arg "[cmd]" help="Command to run: serve|chat|attach|ask (default: serve)"'
 description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1357,7 +1358,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }
-$cmd = '{{arg(i=0, default="serve")}}'
+$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
 if ($cmd -eq 'attach' -and -not $env:TELEGRAM_BOT_TOKEN) {
     Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1
 }
@@ -1380,20 +1381,30 @@ if ($cmd -in @('chat','ask')) {
 }
 if ($cmd -eq 'attach') { $jvmArgs += '-Darcclaw.telegram.enabled=true' }
 Write-Host "▶   Starting JAR in dev profile - mode: $cmd"
-& java @jvmArgs -jar $jar $cmd
-$code = $LASTEXITCODE
-# Ctrl+C sends SIGINT → Java exits non-zero. Exit 0 so mise doesn't report failure.
-if ($code -eq 130 -or $code -eq 143) { exit 0 }
-exit $code
+try {
+    & java @jvmArgs -jar $jar $cmd
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    $code = if ($null -eq $script:exitCode) { 130 } else { $script:exitCode }
+    if ($code -eq 130 -or $code -eq 143) { exit 0 }
+    exit $code
+}
 """
 
 [tasks."jar:run-dev-dep"]
 depends = ["env:recover", "build:full"]
+usage = 'arg "[cmd]" help="Command to run: serve|chat|attach|ask (default: serve)"'
 description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
 shell = "pwsh -NonInteractive -Command"
 dir = "{{config_root}}"
 quiet = true
-run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
+run = """
+$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
+mise run jar:run-dev-profile $cmd
+$code = $LASTEXITCODE
+if ($code -eq 130 -or $code -eq 143) { exit 0 }
+exit $code
+"""
 
 # =============================================================================
 # NATIVE BINARY TASKS
@@ -1548,12 +1559,63 @@ Write-Host '    Build the missing platform binary and re-run: mise run dist'
 """
 
 [tasks."7z:source"]
+usage = 'arg "<password>" help="Encryption password for the 7z archive"'
 description = "Generate source archive (7z) from current folder with standard exclusions"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = '''
 $ErrorActionPreference = 'Stop'
+
+# ── Auto-install 7z if not found ─────────────────────────────────────────────
+$has7z = if ($IsMacOS)   { (Get-Command '7zz' -ErrorAction SilentlyContinue) -or (Get-Command '7z' -ErrorAction SilentlyContinue) } `
+         elseif ($IsWindows) { (Get-Command '7z' -ErrorAction SilentlyContinue) -or
+                               (Test-Path "C:\Program Files\7-Zip\7z.exe") -or
+                               (Test-Path "C:\Program Files (x86)\7-Zip\7z.exe") } `
+         else             { Get-Command '7z' -ErrorAction SilentlyContinue }
+
+if (-not $has7z) {
+    Write-Host '📦  7z not found — installing...'
+    if ($IsMacOS) {
+        if (Get-Command brew -ErrorAction SilentlyContinue) {
+            brew install sevenzip
+        } else {
+            Write-Host '❌  brew not found. Install Homebrew first: https://brew.sh'; exit 1
+        }
+    } elseif ($IsWindows) {
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install --id 7zip.7zip -e --silent
+            $env:PATH += ";C:\Program Files\7-Zip"
+        } else {
+            Write-Host '❌  winget not found. Install 7-Zip manually: https://www.7-zip.org'; exit 1
+        }
+    } else {
+        if (Get-Command apt-get -ErrorAction SilentlyContinue) {
+            sudo apt-get install -y p7zip-full
+        } elseif (Get-Command dnf -ErrorAction SilentlyContinue) {
+            sudo dnf install -y p7zip p7zip-plugins
+        } else {
+            Write-Host '❌  No known package manager found. Install p7zip manually.'; exit 1
+        }
+    }
+    Write-Host '✅  7z installed.'
+}
+
+# ── Resolve 7z binary cross-platform ─────────────────────────────────────────
+$zipPath = if ($IsWindows) {
+    $miePath = (Get-Command '7z' -ErrorAction SilentlyContinue)?.Source
+    if ($miePath) { $miePath } else {
+        @("C:\Program Files\7-Zip\7z.exe","C:\Program Files (x86)\7-Zip\7z.exe") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+} else {
+    (Get-Command '7zz' -ErrorAction SilentlyContinue)?.Source ??
+    (Get-Command '7z'  -ErrorAction SilentlyContinue)?.Source
+}
+if (-not $zipPath) {
+    Write-Host '❌  7z install succeeded but binary still not found in PATH. Open a new shell and retry.'
+    exit 1
+}
 
 # ── Resolve 7z binary cross-platform ─────────────────────────────────────────
 $zipPath = if ($IsWindows) {
@@ -1574,7 +1636,7 @@ if (-not $zipPath) {
 }
 
 $out     = 'arcclaw-source.7z'
-$argPass = '{{ arg(i=0, default="") }}'
+$argPass = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { '' }
 if ([string]::IsNullOrWhiteSpace($argPass)) {
     Write-Host "❌ ERROR: No password provided!" -ForegroundColor Red
     Write-Host "Usage: mise run 7z:source -- YOUR_PASSWORD"
