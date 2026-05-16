@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import org.apache.commons.lang3.exception.ExceptionUtils;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -49,7 +49,7 @@ public class BootstrapOrchestrator {
                     Path p = Path.of(command).toAbsolutePath().normalize().getParent();
                     if (Files.exists(p)) return p;
                 } catch (Exception e) {
-                    log.debugf("Failed to resolve binary dir: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.debugf("Failed to resolve binary dir: %s", LogUtil.rootMessage(e));
                 }
             }
         }

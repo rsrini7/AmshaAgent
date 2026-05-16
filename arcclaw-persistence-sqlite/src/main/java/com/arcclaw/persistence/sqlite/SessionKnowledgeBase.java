@@ -7,6 +7,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
@@ -32,7 +33,7 @@ public class SessionKnowledgeBase {
             Metadata metadata = Metadata.from("id", chunkId);
             store.add(chunkId, embedding, TextSegment.from(text, metadata));
         } catch (Exception e) {
-            log.warnf("SessionKnowledgeBase ingest failed: %s", e.getMessage());
+            log.warnf("SessionKnowledgeBase ingest failed: %s", LogUtil.rootMessage(e));
         }
     }
 
@@ -61,7 +62,7 @@ public class SessionKnowledgeBase {
                             match.score()))
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.warnf("SessionKnowledgeBase search failed: %s", e.getMessage());
+            log.warnf("SessionKnowledgeBase search failed: %s", LogUtil.rootMessage(e));
             return List.of();
         }
     }
@@ -72,7 +73,7 @@ public class SessionKnowledgeBase {
             store = new InMemoryEmbeddingStore<>();
             log.debugf("SessionKnowledgeBase wiped on workspace teardown.");
         } catch (Exception e) {
-            log.warnf("SessionKnowledgeBase destroy failed: %s", e.getMessage());
+            log.warnf("SessionKnowledgeBase destroy failed: %s", LogUtil.rootMessage(e));
         }
     }
 }

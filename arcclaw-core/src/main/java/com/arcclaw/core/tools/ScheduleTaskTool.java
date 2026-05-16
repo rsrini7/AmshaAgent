@@ -23,6 +23,7 @@ import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.state.CronStatus;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
@@ -388,7 +389,7 @@ public class ScheduleTaskTool implements AgentTool {
                             "Cron expression will never fire"))
                     .toInstant();
         } catch (RuntimeException e) {
-            Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Invalid cron '%s': %s", cronExpression, e.getMessage());
+            Logger.getLogger(ScheduleTaskTool.class).warnf("[ScheduleTaskTool] Invalid cron '%s': %s", cronExpression, LogUtil.rootMessage(e));
             return null;
         }
     }

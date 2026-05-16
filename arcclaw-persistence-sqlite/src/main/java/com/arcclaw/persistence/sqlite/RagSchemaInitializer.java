@@ -10,6 +10,7 @@ import jakarta.interceptor.Interceptor;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.util.LogUtil;
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -41,7 +42,7 @@ public class RagSchemaInitializer {
         try (Connection _ = dataSource.getConnection()) {
             log.debugf("RagSchemaInitializer: connection acquired to trigger vec0 load.");
         } catch (Exception e) {
-            log.warnf("RagSchemaInitializer: connection warm-up failed: %s", e.getMessage());
+            log.warnf("RagSchemaInitializer: connection warm-up failed: %s", LogUtil.rootMessage(e));
             return;
         }
 
@@ -76,7 +77,7 @@ public class RagSchemaInitializer {
             ).executeUpdate();
             log.infof("RagSchemaInitializer: fts.vec_global ensured (dims=%d).", embedDimensions);
         } catch (Exception e) {
-            log.warnf("RagSchemaInitializer: Could not create vec_global: %s", e.getMessage());
+            log.warnf("RagSchemaInitializer: Could not create vec_global: %s", LogUtil.rootMessage(e));
         }
     }
 }

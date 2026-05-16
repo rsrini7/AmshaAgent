@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -60,7 +61,7 @@ public class FtsSchemaInitializer {
             stmt.execute("ATTACH DATABASE 'data/arcclaw-fts.db' AS " + SCHEMA_NAME);
             LOG.info("FTS schema attached successfully.");
         } catch (Exception e) {
-            LOG.warnf("Could not attach FTS schema: %s", e.getMessage());
+            LOG.warnf("Could not attach FTS schema: %s", LogUtil.rootMessage(e));
         }
     }
 
@@ -74,7 +75,7 @@ public class FtsSchemaInitializer {
             );
             LOG.infof("FTS5 virtual table '%s.%s' created or verified.", SCHEMA_NAME, FTS5_TABLE);
         } catch (Exception e) {
-            LOG.warnf("Could not create FTS5 virtual table '%s.%s': %s", SCHEMA_NAME, FTS5_TABLE, e.getMessage());
+            LOG.warnf("Could not create FTS5 virtual table '%s.%s': %s", SCHEMA_NAME, FTS5_TABLE, LogUtil.rootMessage(e));
         }
     }
 
@@ -89,7 +90,7 @@ public class FtsSchemaInitializer {
                 }
             }
         } catch (Exception e) {
-            LOG.warnf("Could not verify audit event count: %s", e.getMessage());
+            LOG.warnf("Could not verify audit event count: %s", LogUtil.rootMessage(e));
         }
     }
 }

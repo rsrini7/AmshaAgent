@@ -19,10 +19,10 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -69,7 +69,7 @@ public class CheckpointApprovalService {
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
         } catch (JsonProcessingException e) {
-            log.errorf("HITL-APPROVE: failed to serialize decisions: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("HITL-APPROVE: failed to serialize decisions: %s", LogUtil.rootMessage(e));
         }
         agentStore.save(cp);
 
@@ -95,7 +95,7 @@ public class CheckpointApprovalService {
                 cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
             }
         } catch (JsonProcessingException e) {
-            log.errorf("HITL-APPROVE-ALL: failed to update decisions: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("HITL-APPROVE-ALL: failed to update decisions: %s", LogUtil.rootMessage(e));
         }
 
         agentStore.save(cp);
@@ -137,7 +137,7 @@ public class CheckpointApprovalService {
                 cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
             }
         } catch (JsonProcessingException e) {
-            log.errorf("HITL-DENY-ALL: failed to update decisions: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("HITL-DENY-ALL: failed to update decisions: %s", LogUtil.rootMessage(e));
         }
 
         agentStore.save(cp);
@@ -171,7 +171,7 @@ public class CheckpointApprovalService {
                     sessionId, HitlEventType.APPROVED.wireValue(), toolName, null, null, null, Instant.now()
             ));
         } catch (JsonProcessingException e) {
-            log.errorf("HITL-APPROVE-TOOL: failed to update decision for %s: %s", toolName, ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("HITL-APPROVE-TOOL: failed to update decision for %s: %s", toolName, LogUtil.rootMessage(e));
         }
         return cp;
     }
@@ -200,7 +200,7 @@ public class CheckpointApprovalService {
                     sessionId, HitlEventType.DENIED.wireValue(), toolName, null, null, reason, Instant.now()
             ));
         } catch (JsonProcessingException e) {
-            log.errorf("HITL-DENY-TOOL: failed to update decision for %s: %s", toolName, ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("HITL-DENY-TOOL: failed to update decision for %s: %s", toolName, LogUtil.rootMessage(e));
         }
         return cp;
     }
@@ -234,7 +234,7 @@ public class CheckpointApprovalService {
                 );
             }
         } catch (Exception e) {
-            log.warnf("HITL-RESUME: failed to trigger CheckpointResumeHandler automatically: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.warnf("HITL-RESUME: failed to trigger CheckpointResumeHandler automatically: %s", LogUtil.rootMessage(e));
         }
 
         // Single RESUMED event published after the handler completes (or fails)

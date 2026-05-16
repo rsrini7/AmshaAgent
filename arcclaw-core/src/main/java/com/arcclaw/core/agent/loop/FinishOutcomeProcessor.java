@@ -8,6 +8,7 @@ import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -274,7 +275,7 @@ public class FinishOutcomeProcessor {
                     List<ParallelToolCall> calls = objectMapper.readValue(batchJson, new TypeReference<List<ParallelToolCall>>() {});
                     yield calls.stream().anyMatch(call -> "schedule_task".equals(call.toolName()) && call.success());
                 } catch (Exception e) {
-                    log.debugf("FINISH-HANDLER: failed to parse parallel batch: %s", e.getMessage());
+                    log.debugf("FINISH-HANDLER: failed to parse parallel batch: %s", LogUtil.rootMessage(e));
                     yield false;
                 }
             }

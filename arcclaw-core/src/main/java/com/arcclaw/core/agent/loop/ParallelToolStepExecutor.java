@@ -30,6 +30,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.core.util.PreExecutionFilter;
@@ -285,7 +286,7 @@ public class ParallelToolStepExecutor {
                         "System")));
             } catch (ExecutionException e) {
                 log.errorf("[PARALLEL-EXEC] Unexpected future failure: %s",
-                           e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                           LogUtil.rootMessage(e));
                 ParallelToolCall failedCall = allowedCalls.get(i);
                 allowedCompleted.add(failedCall.withResult("Unexpected execution failure.", false));
                 observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
@@ -331,7 +332,7 @@ public class ParallelToolStepExecutor {
                 log.debugf("[PRE-EXEC] session=%s tool=%s succeeded.", context.sessionId(), call.toolName());
             } catch (Exception e) {
                 log.warnf("[PRE-EXEC] session=%s tool %s failed pre-execution: %s",
-                    context.sessionId(), call.toolName(), e.getMessage());
+                    context.sessionId(), call.toolName(), LogUtil.rootMessage(e));
                 preResults.put(call.toolName(), ToolResponse.failure(1, "Pre-execution failed: " + e.getMessage()));
             }
         }
@@ -357,7 +358,7 @@ public class ParallelToolStepExecutor {
             String batchJson = batchRaw instanceof String s ? s : objectMapper.writeValueAsString(batchRaw);
             return objectMapper.readValue(batchJson, BATCH_TYPE);
         } catch (Exception e) {
-            log.errorf("[PARALLEL] session=%s: batch deserialization failed: %s", sessionId, e.getMessage());
+            log.errorf("[PARALLEL] session=%s: batch deserialization failed: %s", sessionId, LogUtil.rootMessage(e));
             return null;
         }
     }

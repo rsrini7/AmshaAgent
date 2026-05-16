@@ -17,6 +17,7 @@ import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.PathSanitizer;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -102,7 +103,7 @@ public class WorkspaceManager {
             }
         } catch (Exception e) {
             log.warnf("Failed to destroy CDI scope for session=%s: %s",
-                      sessionId, e.getMessage());
+                      sessionId, LogUtil.rootMessage(e));
         }
 
         // 5. Clear any in-flight batch resume flag and bridge state for this session.
@@ -130,7 +131,7 @@ public class WorkspaceManager {
             }
         } catch (Exception e) {
             log.warnf("CDI scope reset failed for session=%s: %s",
-                      sessionId, e.getMessage());
+                      sessionId, LogUtil.rootMessage(e));
         }
     }
 
@@ -162,8 +163,9 @@ public class WorkspaceManager {
             log.debugf("markCheckpointsFailed skipped for session=%s - EntityManager closed (shutdown in progress)", sessionId);
         } catch (Exception e) {
             log.errorf("Failed to mark checkpoints FAILED for session=%s: %s",
-                       sessionId, e.getMessage());
-            log.debugf(e, "Full stacktrace for checkpoint failure marking for session=%s", sessionId);
+                       sessionId, LogUtil.rootMessage(e));
+            log.debugf("Full stacktrace for checkpoint failure marking for session=%s:\n%s",
+                       sessionId, LogUtil.trimmedStack(e));
             throw (e instanceof RuntimeException re)
                 ? re
                 : new RuntimeException(
@@ -194,7 +196,7 @@ public class WorkspaceManager {
             log.infof("Workspace directory wiped: %s", workspaceDir);
         } catch (IOException e) {
             log.warnf("Failed to wipe workspace dir %s: %s",
-                      workspaceDir, e.getMessage());
+                      workspaceDir, LogUtil.rootMessage(e));
         }
     }
 }

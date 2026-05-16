@@ -21,9 +21,9 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -111,8 +111,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             notificationService.flushPendingNotifications(chatId);
             return response != null ? ReflexResult.respond(response, context) : ReflexResult.forward(context);
         } catch (Exception e) {
-            log.errorf("Failed to process %s for session %s: %s", getActionName(), sessionId, ExceptionUtils.getRootCauseMessage(e));
-            return ReflexResult.respond(getErrorMessage() + ": " + ExceptionUtils.getRootCauseMessage(e), context);
+            log.errorf("Failed to process %s for session %s: %s", getActionName(), sessionId, LogUtil.rootMessage(e));
+            return ReflexResult.respond(getErrorMessage() + ": " + LogUtil.rootMessage(e), context);
         }
     }
 
@@ -271,7 +271,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             String cronRes = cronDecisionRouter.execute(cronCtx);
             if (cronRes != null) return cronRes;
         } catch (Exception e) {
-            log.debugf("Cron resolution failed for %s: %s", targetId, e.getMessage());
+            log.debugf("Cron resolution failed for %s: %s", targetId, LogUtil.rootMessage(e));
         }
 
         // 3. Nothing found

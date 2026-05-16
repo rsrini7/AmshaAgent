@@ -12,6 +12,7 @@ import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
 
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -152,7 +153,7 @@ public class TmpfsSecretTransport implements SecretTransport {
                 }
                 Files.deleteIfExists(envFile);
             } catch (Exception e) {
-                log.errorf("Failed secure wipe of tmpfs env-file %s: %s", envFile, e.getMessage());
+                log.errorf("Failed secure wipe of tmpfs env-file %s: %s", envFile, LogUtil.rootMessage(e));
             }
         }
     }
@@ -175,11 +176,11 @@ public class TmpfsSecretTransport implements SecretTransport {
                         Files.delete(p);
                         log.warnf("TmpfsSecretTransport: swept stale secret file from previous JVM crash: %s", p);
                     } catch (IOException e) {
-                        log.warnf("TmpfsSecretTransport: could not delete stale file %s: %s", p, e.getMessage());
+                        log.warnf("TmpfsSecretTransport: could not delete stale file %s: %s", p, LogUtil.rootMessage(e));
                     }
                 });
         } catch (IOException e) {
-            log.warnf("TmpfsSecretTransport: could not sweep stale tmpfs files: %s", e.getMessage());
+            log.warnf("TmpfsSecretTransport: could not sweep stale tmpfs files: %s", LogUtil.rootMessage(e));
         }
     }
 }

@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,7 +63,7 @@ public class CheckpointBatchOperations {
             return true;
         } catch (Exception e) {
             log.errorf("Failed to update batch tool decision for session=%s tool=%s: %s",
-                       sessionId, toolName, e.getMessage());
+                       sessionId, toolName, LogUtil.rootMessage(e));
             return false;
         }
     }

@@ -70,7 +70,7 @@ public class BackoffRetryExecutor {
                 delay = Math.max(strategy.initialDelayMs(), delay);
 
                 log.warnf("[%s] Attempt %d/%d failed (retriable). Retrying in %dms. Cause: %s",
-                          operationName, attempt, limit, delay, e.getMessage());
+                          operationName, attempt, limit, delay, LogUtil.rootMessage(e));
                 Thread.sleep(delay);
             }
         }

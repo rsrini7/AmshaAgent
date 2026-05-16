@@ -19,8 +19,8 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.ClassUtils;
+import com.arcclaw.core.util.LogUtil;
 import io.opentelemetry.api.trace.Span;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 public class LoopResultHandler {
@@ -98,14 +98,16 @@ public class LoopResultHandler {
                     "COMPLIANCE_VIOLATION", traceId, ClassUtils.getCleanName(cve))
             );
         } catch (Exception e) {
-            log.debugf("Failed to mark checkpoint failed for session %s: %s", sessionId, ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Failed to mark checkpoint failed %s: %s",
+                    LogUtil.ctx(sessionId, canonicalRole), LogUtil.rootMessage(e));
         }
         return result;
     }
 
     public AgentResult handleSystemError(String sessionId, String canonicalRole, Exception e) {
         String errMsg = AgentErrorMessageUtil.safeMessage(e);
-        log.errorf("Agent execution failed for session %s: %s", sessionId, errMsg, e);
+        log.errorf("Agent execution failed %s: %s\n%s",
+                LogUtil.ctx(sessionId, canonicalRole), errMsg, LogUtil.trimmedStack(e));
         AgentResult result = AgentResult.failed("SYSTEM_ERROR: " + errMsg,
                 AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
         String traceId = Span.current().getSpanContext().getTraceId();
@@ -115,7 +117,8 @@ public class LoopResultHandler {
                     "SYSTEM_ERROR", traceId, ClassUtils.getCleanName(e))
             );
         } catch (Exception ex) {
-            log.debugf("Failed to mark checkpoint failed for session %s: %s", sessionId, ExceptionUtils.getRootCauseMessage(ex));
+            log.debugf("Failed to mark checkpoint failed %s: %s",
+                    LogUtil.ctx(sessionId, canonicalRole), LogUtil.rootMessage(ex));
         }
         return result;
     }
@@ -135,8 +138,8 @@ public class LoopResultHandler {
             log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
                        sessionId, context.getUser().channel(), context.getUser().platformId());
         } catch (Exception e) {
-            log.warnf("Failed to stamp channel info for session %s - Cause: %s",
-                      sessionId, ExceptionUtils.getRootCauseMessage(e));
+            log.warnf("Failed to stamp channel info %s: %s",
+                      LogUtil.ctx(sessionId, canonicalRole), LogUtil.rootMessage(e));
         }
     }
 

@@ -17,6 +17,7 @@ import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.security.VaultKey;
+import com.arcclaw.core.util.LogUtil;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -210,7 +211,7 @@ public class GithubTool implements AgentTool {
                         Base64.getMimeDecoder().decode(rawOutput.trim()),
                         StandardCharsets.UTF_8);
             } catch (Exception e) {
-                log.errorf("Failed to base64-decode README output for ref='%s': %s", ref, e.getMessage());
+                log.errorf("Failed to base64-decode README output for ref='%s': %s", ref, LogUtil.rootMessage(e));
                 return rawOutput;
             }
         }
@@ -271,7 +272,7 @@ public class GithubTool implements AgentTool {
                 return new String(key.get(), StandardCharsets.UTF_8);
             }
         } catch (Exception e) {
-            log.debugf("Could not resolve GH_TOKEN from vault: %s", e.getMessage());
+            log.debugf("Could not resolve GH_TOKEN from vault: %s", LogUtil.rootMessage(e));
             return null;
         }
     }

@@ -17,6 +17,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -102,7 +103,7 @@ public class VaultStoreReflex implements AgentReflex {
 
             return ReflexResult.respond("🔐 Secret `" + keyName + "` stored in vault.", context);
         } catch (Exception e) {
-            log.errorf("VaultStoreReflex: failed to store '%s': %s", keyName, e.getMessage());
+            log.errorf("VaultStoreReflex: failed to store '%s': %s", keyName, LogUtil.rootMessage(e));
             return ReflexResult.respond("⚠️ Failed to store secret `" + keyName + "`: " + e.getMessage(), context);
         } finally {
             Arrays.fill(secretBytes, (byte) 0);

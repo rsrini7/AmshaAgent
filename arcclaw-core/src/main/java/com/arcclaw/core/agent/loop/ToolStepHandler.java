@@ -24,6 +24,7 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.jboss.logging.Logger;
@@ -345,7 +346,7 @@ public class ToolStepHandler {
                         context.channelType(), context.channelPlatformId())));
         } catch (Exception e) {
             exceptionClass = e.getClass().getSimpleName();
-            log.errorf("Tool invocation failed for '%s': %s", toolName, e.getMessage());
+            log.errorf("Tool invocation failed for '%s': %s", toolName, LogUtil.rootMessage(e));
             return new InvokeResult.Responded(ToolResponse.failure(1, e.getMessage()));
         } finally {
             sample.stop(timer.tag("exception", exceptionClass).register(meterRegistry));

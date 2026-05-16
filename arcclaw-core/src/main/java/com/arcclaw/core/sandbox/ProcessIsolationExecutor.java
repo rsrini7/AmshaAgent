@@ -12,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
+import com.arcclaw.core.util.LogUtil;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -129,7 +130,7 @@ public class ProcessIsolationExecutor {
 
                     } catch (SandboxImageMissingException e) {
                         // do NOT record a circuit-breaker failure for a missing image.
-                        log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, e.getMessage());
+                        log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, LogUtil.rootMessage(e));
                         if (allowInsecureFallback) {
                             log.warnf("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution for session %s", sessionId);
                             return SandboxResult.success(directExecutor.executeDirectly(

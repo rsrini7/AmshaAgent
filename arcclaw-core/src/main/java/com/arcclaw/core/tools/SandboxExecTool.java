@@ -21,10 +21,10 @@ import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -231,7 +231,7 @@ public class SandboxExecTool implements AgentTool {
         } catch (BudgetExceededException e) {
             throw e;
         } catch (TimeoutException e) {
-            log.errorf("[SandboxExecTool] Execution timed out: %s", e.getMessage());
+            log.errorf("[SandboxExecTool] Execution timed out: %s", LogUtil.rootMessage(e));
             return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
         } catch (Exception e) {
             String msg = e.getMessage();
@@ -342,7 +342,7 @@ public class SandboxExecTool implements AgentTool {
                     params.put("language", node.get("language").asText());
                 }
             } catch (Exception e) {
-                log.debugf("Non-fatal (unwrapping): %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Non-fatal (unwrapping): %s", LogUtil.rootMessage(e));
                 // ignore and proceed with raw code if parsing fails
             }
         }

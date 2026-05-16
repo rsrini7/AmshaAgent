@@ -13,6 +13,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.util.ClassUtils;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -73,7 +74,7 @@ public class ReflexRegistry {
                     ? input.substring(0, 200) + "…" : input;
                 log.errorf("REFLEX-FAILURE reflex=%s session=%s user=%s input=%s error=%s",
                     ClassUtils.getCleanName(reflex), sessionId, userId, truncated,
-                    e.getMessage());
+                    LogUtil.rootMessage(e));
                 return ReflexResult.respond("System Error: " + e.getMessage(), context);
             }
         }
@@ -92,8 +93,8 @@ public class ReflexRegistry {
                         reflex.auditDetail(sessionId, before));
                 }
             } catch (Exception e) {
-                log.errorf("REFLEX-SANITIZE-FAILURE reflex=%s session=%s error=%s",
-                    ClassUtils.getCleanName(reflex), sessionId, e.getMessage(), e);
+                log.errorf("REFLEX-SANITIZE-FAILURE reflex=%s session=%s error=%s\n%s",
+                    ClassUtils.getCleanName(reflex), sessionId, LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
             }
         }
         return new ReflexResult(Optional.empty(), sanitized);

@@ -26,10 +26,10 @@ import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -232,7 +232,7 @@ public class CronJobRunner {
                 JsonNode node = new ObjectMapper().readTree(goal);
                 if (node.has("goal")) return node.get("goal").asText().trim();
             } catch (Exception e) {
-                log.warnf("Failed to parse goal JSON, using original: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.warnf("Failed to parse goal JSON, using original: %s", LogUtil.rootMessage(e));
             }
         }
         

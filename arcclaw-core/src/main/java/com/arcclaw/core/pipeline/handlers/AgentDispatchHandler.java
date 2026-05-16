@@ -27,6 +27,7 @@ import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -200,7 +201,7 @@ public class AgentDispatchHandler implements MessageHandler {
         if ("Busy session".equals(e.getMessage())) {
             return HandleResult.STOP;
         }
-        log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, e.getMessage());
+        log.errorf("[AgentDispatch] Error processing command '%s': %s", goal, LogUtil.rootMessage(e));
         log.debug("Full agent dispatch failure stack trace:", e);
         
         channelPluginRegistry.find(context.getChannelType())

@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -73,7 +74,7 @@ public class EnvConfigInitializer {
                 byte[] decoded = Base64.getDecoder().decode(value);
                 valid = decoded.length >= 16;
             } catch (IllegalArgumentException e) {
-                log.warnf("Invalid Base64 for key %s, will regenerate: %s", key, e.getMessage());
+                log.warnf("Invalid Base64 for key %s, will regenerate: %s", key, LogUtil.rootMessage(e));
             }
             if (!valid) {
                 try {
@@ -146,7 +147,7 @@ public class EnvConfigInitializer {
                 Files.writeString(envFile, separator + key + "=" + value + System.lineSeparator(), StandardOpenOption.APPEND);
             }
         } catch (IOException e) {
-            log.warnf("[ArcClaw] Could not update .env: %s", e.getMessage());
+            log.warnf("[ArcClaw] Could not update .env: %s", LogUtil.rootMessage(e));
         }
     }
 
@@ -161,7 +162,7 @@ public class EnvConfigInitializer {
                 Files.copy(in, exampleFile, StandardCopyOption.REPLACE_EXISTING);
                 System.err.println("[ArcClaw] No .env found. Created .env.example next to the binary.");
             } catch (IOException e) {
-                log.warnf("Failed to extract .env.example: %s", e.getMessage());
+                log.warnf("Failed to extract .env.example: %s", LogUtil.rootMessage(e));
             }
         }
     }

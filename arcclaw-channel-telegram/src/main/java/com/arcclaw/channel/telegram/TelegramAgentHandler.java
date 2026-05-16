@@ -10,12 +10,12 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.util.LogUtil;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingMessage;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -104,9 +104,8 @@ public class TelegramAgentHandler {
         channelServices.processAsync(channelMessage)
             .handle((res, ex) -> {
                 if (ex != null) {
-                    log.errorf("Uncaught exception in message processing for chat %s: %s", chatId, ExceptionUtils.getRootCauseMessage(ex));
-                    log.debugf("Full exception trace during async processing: %s", 
-                               ExceptionUtils.getStackTrace(ex).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
+                    log.errorf("Uncaught exception in message processing for chat %s: %s", chatId, LogUtil.rootMessage(ex));
+                    log.debugf("Full exception trace during async processing: %s", LogUtil.trimmedStack(ex));
                     sender.sendRaw(user, "Sorry, an internal error occurred while processing your message.");
                 }
                 if (flagRef != null) {

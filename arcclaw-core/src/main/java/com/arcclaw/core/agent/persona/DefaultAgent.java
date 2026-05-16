@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.structured.StructuredOutputEngine;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
@@ -128,7 +129,7 @@ public class DefaultAgent implements Agent {
             ));
         } catch (Exception e) {
             log.warnf("Failed to serialize synthesis result for session %s: %s",
-                sessionId, e.getMessage());
+                sessionId, LogUtil.rootMessage(e));
         }
 
         return AgentResult.structuredFinished(result.finalResolution(), result, List.copyOf(history));

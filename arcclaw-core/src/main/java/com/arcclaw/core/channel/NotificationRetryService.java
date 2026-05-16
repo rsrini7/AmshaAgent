@@ -10,6 +10,7 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -54,8 +55,8 @@ public class NotificationRetryService {
                     return; // No point in retrying if sender is missing
                 }
             } catch (Exception e) {
-                log.warnf("Notification attempt %d failed for channel %s: %s", 
-                        attempt, channelId, e.getMessage());
+                log.warnf("Notification attempt %d failed for channel %s: %s",
+                        attempt, channelId, LogUtil.rootMessage(e));
                 
                 if (attempt == maxAttempts) break;
                 
@@ -93,8 +94,8 @@ public class NotificationRetryService {
                     return;
                 }
             } catch (Exception e) {
-                log.warnf("Structured notification attempt %d failed for channel %s: %s", 
-                        attempt, channelId, e.getMessage());
+                log.warnf("Structured notification attempt %d failed for channel %s: %s",
+                        attempt, channelId, LogUtil.rootMessage(e));
                 
                 if (attempt == maxAttempts) break;
                 

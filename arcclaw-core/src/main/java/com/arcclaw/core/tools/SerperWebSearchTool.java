@@ -18,6 +18,7 @@ import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -179,7 +180,7 @@ public class SerperWebSearchTool implements AgentTool {
             try {
                 return Math.min(10, Math.max(1, Integer.parseInt(s)));
             } catch (NumberFormatException e) {
-                log.debugf("Failed to parse count parameter: %s", e.getMessage());
+                log.debugf("Failed to parse count parameter: %s", LogUtil.rootMessage(e));
             }
         }
         return 5;

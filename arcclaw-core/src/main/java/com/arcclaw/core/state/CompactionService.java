@@ -17,6 +17,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.governance.SessionBudgetTracker;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -276,8 +277,8 @@ public class CompactionService {
                         newSummary = (summaryNode != null && summaryNode.isTextual()) 
                                 ? summaryNode.asText().trim() : responseText.trim();
                     } catch (Exception e) {
-                        log.warnf("Failed to parse compaction JSON for session %s (attempt %d/%d): %s", 
-                                sessionId, i, maxRetries, e.getMessage());
+                        log.warnf("Failed to parse compaction JSON for session %s (attempt %d/%d): %s",
+                                sessionId, i, maxRetries, LogUtil.rootMessage(e));
                         
                         if (i < maxRetries) {
                             log.info("Retrying compaction with PROMPT_DIRECTIVE fallback to avoid JSON errors.");
@@ -325,7 +326,7 @@ public class CompactionService {
         try {
             return compactionModel.chat(UserMessage.userMessage(prompt)).aiMessage().text();
         } catch (Exception e) {
-            log.warnf("Compaction fallback attempt %d/%d failed: %s", attempt, maxRetries, e.getMessage());
+            log.warnf("Compaction fallback attempt %d/%d failed: %s", attempt, maxRetries, LogUtil.rootMessage(e));
             throw new CompactionAbortedException("Compaction fallback failed", e);
         }
     }

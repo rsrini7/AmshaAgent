@@ -25,6 +25,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.util.ClassUtils;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -193,7 +194,7 @@ public class ToolRegistry {
             return ToolResponse.success(postProcessedOutput);
 
         } catch (IllegalArgumentException e) {
-            log.warnf("Tool '%s' parameter validation failed: %s", toolName, e.getMessage());
+            log.warnf("Tool '%s' parameter validation failed: %s", toolName, LogUtil.rootMessage(e));
             return ToolResponse.failure(1, e.getMessage());
         } catch (SecurityException e) {
             return ToolResponse.failure(1, "Security violation: " + e.getMessage());

@@ -20,10 +20,10 @@ import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.ClassUtils;
+import com.arcclaw.core.util.LogUtil;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
@@ -174,7 +174,7 @@ public class IntentDetectorService implements IntentDetector {
             String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
             return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase()), userMessage);
         } catch (Exception e) {
-            log.warnf("Intent classifier failed: %s. Using fast fallback model.", ExceptionUtils.getRootCauseMessage(e));
+            log.warnf("Intent classifier failed: %s. Using fast fallback model.", LogUtil.rootMessage(e));
             String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
             return destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase()), userMessage);
         }
@@ -199,7 +199,7 @@ public class IntentDetectorService implements IntentDetector {
                 return CompletableFuture.supplyAsync(() -> fallbackModel.get().chat(prompt), managedExecutor)
                     .get(1500, TimeUnit.MILLISECONDS);
             } catch (Exception e) {
-                log.warnf("Intent fallback failed: %s. Using local heuristic.", ExceptionUtils.getRootCauseMessage(e));
+                log.warnf("Intent fallback failed: %s. Using local heuristic.", LogUtil.rootMessage(e));
                 return localHeuristicClassify(userMessage);
             }
         }

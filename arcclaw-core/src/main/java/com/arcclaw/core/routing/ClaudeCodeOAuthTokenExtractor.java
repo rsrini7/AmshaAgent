@@ -7,6 +7,7 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -56,7 +57,7 @@ public class ClaudeCodeOAuthTokenExtractor {
             return Optional.of(tokenNode.asText());
 
         } catch (Exception e) {
-            log.warnf("Failed to parse Claude Code credentials: %s", e.getMessage());
+            log.warnf("Failed to parse Claude Code credentials: %s", LogUtil.rootMessage(e));
             return Optional.empty();
         }
     }

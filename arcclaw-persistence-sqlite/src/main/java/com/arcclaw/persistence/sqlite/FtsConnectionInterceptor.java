@@ -11,9 +11,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.inject.Singleton;
 
+import com.arcclaw.core.util.LogUtil;
 import io.agroal.api.AgroalPoolInterceptor;
 import io.quarkus.arc.Arc;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.sqlite.SQLiteConnection;
@@ -65,9 +65,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
         } catch (Exception e) {
             if (Arc.container() != null) {
                 log.warnf("FtsConnectionInterceptor: Failed to verify/attach " +
-                          "fts schema: %s", ExceptionUtils.getRootCauseMessage(e));
+                          "fts schema: %s", LogUtil.rootMessage(e));
                 log.debugf("Full stacktrace for fts attachment failure: %s",
-                           ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
+                           LogUtil.trimmedStack(e));
             }
         }
     }
@@ -86,12 +86,12 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             try {
                 stmt.execute("PRAGMA busy_timeout=10000");
             } catch (Exception e) {
-                log.debugf("FtsConnectionInterceptor: Could not set busy_timeout=10000: %s", e.getMessage());
+                log.debugf("FtsConnectionInterceptor: Could not set busy_timeout=10000: %s", LogUtil.rootMessage(e));
             }
             try {
                 stmt.execute("PRAGMA synchronous=NORMAL");
             } catch (Exception e) {
-                log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", e.getMessage());
+                log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", LogUtil.rootMessage(e));
             }
         }
         if (!attached) {
@@ -142,9 +142,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                 log.warnf("FtsConnectionInterceptor: sqlite-vec unavailable at " +
                           "path '%s' - vector search degraded to FTS5-only. " +
                           "Root cause: %s",
-                          vecExtensionPath, ExceptionUtils.getRootCauseMessage(e));
+                          vecExtensionPath, LogUtil.rootMessage(e));
                 log.debugf("Full stacktrace for vector load failure: %s",
-                           ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
+                           LogUtil.trimmedStack(e));
             }
         }
     }

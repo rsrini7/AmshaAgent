@@ -1,6 +1,5 @@
 package com.arcclaw.core.tools;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.nio.file.Files;
@@ -14,6 +13,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.quarkus.runtime.StartupEvent;
@@ -42,7 +42,7 @@ public class ToolContractExporter {
         try {
             exportContracts();
         } catch (Exception e) {
-            log.errorf(e, "ToolContractExporter: failed to write tool contracts");
+            log.errorf("ToolContractExporter: failed to write tool contracts:\n%s", LogUtil.trimmedStack(e));
         }
     }
 
@@ -104,8 +104,8 @@ public class ToolContractExporter {
         String path = jdbcUrl.replace("jdbc:sqlite:", "");
         int qIndex = path.indexOf('?');
         if (qIndex > 0) path = path.substring(0, qIndex);
-        int sep = path.lastIndexOf('/');
-        return Path.of(sep > 0 ? path.substring(0, sep) : ".");
+        Path parent = Path.of(path).getParent();
+        return parent != null ? parent : Path.of(".");
     }
 
     private static <T extends Annotation> T findAnnotation(Class<?> clazz, Class<T> ann) {

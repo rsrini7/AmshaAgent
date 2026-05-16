@@ -9,6 +9,7 @@ import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.opentelemetry.api.trace.Span;
@@ -43,6 +44,7 @@ public class ToolInvoker {
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
         Span toolSpan = agentOtelContext.startToolSpan(sessionId, toolName, "invoke");
         Timer.Sample sample = (registry != null) ? Timer.start(registry) : null;
+        log.debugf("[TOOL] invoke start: tool=%s session=%s", toolName, sessionId);
         try (Scope _ = toolSpan.makeCurrent()) {
             ToolResponse response = toolRegistry.invokeTool(toolName, params);
             String rawObservation = response.output();
@@ -66,16 +68,18 @@ public class ToolInvoker {
             throw e;
         } catch (Exception e) {
             toolSpan.recordException(e);
-            toolSpan.setStatus(StatusCode.ERROR, e.getMessage());
+            toolSpan.setStatus(StatusCode.ERROR, LogUtil.rootMessage(e));
             
             if (e instanceof SecurityException) {
-                log.warnf("Tool '%s' blocked by governance in session %s: %s", toolName, sessionId, e.getMessage());
-                return ToolResponse.failure(1, "Security violation: " + e.getMessage());
+                log.warnf("Tool '%s' blocked by governance in session %s: %s",
+                        toolName, sessionId, LogUtil.rootMessage(e));
+                return ToolResponse.failure(1, "Security violation: " + LogUtil.rootMessage(e));
             }
 
-            log.errorf("Tool '%s' threw unexpected exception in session %s: %s", toolName, sessionId, e.getMessage());
-            log.debugf(e, "Full stacktrace for tool failure: %s", toolName);
-            return ToolResponse.failure(1, "Tool execution error: " + e.getMessage());
+            log.errorf("Tool '%s' threw unexpected exception in session %s: %s",
+                    toolName, sessionId, LogUtil.rootMessage(e));
+            log.debugf("Full stacktrace for tool '%s' failure:\n%s", toolName, LogUtil.trimmedStack(e));
+            return ToolResponse.failure(1, "Tool execution error: " + LogUtil.rootMessage(e));
         } finally {
             toolSpan.end();
             if (sample != null && registry != null) {

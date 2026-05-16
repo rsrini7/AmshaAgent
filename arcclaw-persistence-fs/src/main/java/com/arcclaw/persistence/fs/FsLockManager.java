@@ -17,8 +17,8 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -92,7 +92,7 @@ public class FsLockManager implements AdvisoryLockPort {
                 holder.raf.close();
                 Files.deleteIfExists(lockFilePath(lockKey));
             } catch (IOException e) {
-                log.debugf("Lock release failed (best effort): %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Lock release failed (best effort): %s", LogUtil.rootMessage(e));
             }
         }
     }

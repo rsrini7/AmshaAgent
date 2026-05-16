@@ -11,6 +11,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.util.LogUtil;
 import io.quarkus.websockets.next.WebSocketConnection;
 import org.jboss.logging.Logger;
 
@@ -53,7 +54,7 @@ public class WebChannelSender implements ChannelSender {
                 try {
                     conn.sendText(payload).await().atMost(Duration.ofSeconds(5));
                 } catch (Exception e) {
-                    log.warnf("Failed to send to session %s: %s", platformId, e.getMessage());
+                    log.warnf("Failed to send to session %s: %s", platformId, LogUtil.rootMessage(e));
                     sessionStore.unregister(platformId);
                 }
             },
@@ -86,7 +87,7 @@ public class WebChannelSender implements ChannelSender {
                                          sessionId, conn.id(), err.getMessage())
                     );
                 } catch (Exception e) {
-                    log.warnf("Exception pushing result to session %s: %s", sessionId, e.getMessage());
+                    log.warnf("Exception pushing result to session %s: %s", sessionId, LogUtil.rootMessage(e));
                 }
             });
             log.infof("Broadcast result for session %s to %d connection(s)", sessionId, conns.size());

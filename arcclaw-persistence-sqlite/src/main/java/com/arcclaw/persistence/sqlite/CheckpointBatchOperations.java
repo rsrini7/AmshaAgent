@@ -11,6 +11,7 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -103,8 +104,8 @@ public class CheckpointBatchOperations {
             }
             return false;
         } catch (Exception e) {
-            log.errorf("[BatchOps] Failed to update batch tool decision for session=%s tool=%s: %s", sessionId, toolName, e.getMessage());
-            log.debugf(e, "[BatchOps] Exception detail for session=%s tool=%s", sessionId, toolName);
+            log.errorf("[BatchOps] Failed to update batch tool decision for session=%s tool=%s: %s", sessionId, toolName, LogUtil.rootMessage(e));
+            log.debugf("[BatchOps] Exception detail for session=%s tool=%s:\n%s", sessionId, toolName, LogUtil.trimmedStack(e));
             return false;
         }
     }
@@ -160,8 +161,8 @@ public class CheckpointBatchOperations {
             }
 
         } catch (Exception e) {
-            log.warnf("Failed to merge batch decisions for session %s: %s", 
-                    managed.getSessionId(), e.getMessage());
+            log.warnf("Failed to merge batch decisions for session %s: %s",
+                    managed.getSessionId(), LogUtil.rootMessage(e));
             managed.setBatchToolDecisions(incoming.batchToolDecisions());
         }
     }

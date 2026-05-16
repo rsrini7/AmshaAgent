@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.LogUtil;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
@@ -85,7 +86,7 @@ public class FallbackChatModel implements ChatModel {
             try {
                 return fallback.chat(sanitizeRequest(chatRequest));
             } catch (Exception fe) {
-                log.errorf("[ArcClaw] ❌ Fallback model '%s' failed on large history: %s", fallbackName, fe.getMessage());
+                log.errorf("[ArcClaw] ❌ Fallback model '%s' failed on large history: %s", fallbackName, LogUtil.rootMessage(fe));
                 // Let it fall through to primary
             }
         }
@@ -101,7 +102,7 @@ public class FallbackChatModel implements ChatModel {
                 try {
                     return fallback.chat(sanitizeRequest(chatRequest));
                 } catch (Exception fe) {
-                    log.errorf("[ArcClaw] ❌ Fallback model '%s' also failed: %s", fallbackName, fe.getMessage());
+                    log.errorf("[ArcClaw] ❌ Fallback model '%s' also failed: %s", fallbackName, LogUtil.rootMessage(fe));
                     throw fe;
                 }
             }

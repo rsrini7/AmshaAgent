@@ -13,11 +13,11 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.common.entity.AuditEventEntity;
 import io.quarkus.arc.Unremovable;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -44,7 +44,7 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
               .setMaxResults(1)
               .getResultList();
         } catch (Exception e) {
-            log.debugf("Warmup query failed (best effort): %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Warmup query failed (best effort): %s", LogUtil.rootMessage(e));
         }
     }
 

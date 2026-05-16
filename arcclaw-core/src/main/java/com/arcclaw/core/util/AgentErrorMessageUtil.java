@@ -6,7 +6,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.arcclaw.core.message.UserMessages;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 public final class AgentErrorMessageUtil {
@@ -222,7 +221,7 @@ public final class AgentErrorMessageUtil {
                 try {
                     return Long.parseLong(m.group(1)) * 1000L;
                 } catch (NumberFormatException e) {
-                    log.debugf("Failed to parse retry-after header value: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.debugf("Failed to parse retry-after header value: %s", LogUtil.rootMessage(e));
                 }
             }
             // Also check for "try again in X.Ys" format
@@ -233,7 +232,7 @@ public final class AgentErrorMessageUtil {
                     try {
                         return (long) (Double.parseDouble(wait.substring(0, wait.length() - 1)) * 1000L);
                     } catch (NumberFormatException e) {
-                        log.debugf("Failed to parse retry-after duration: %s", ExceptionUtils.getRootCauseMessage(e));
+                        log.debugf("Failed to parse retry-after duration: %s", LogUtil.rootMessage(e));
                     }
                 }
             }

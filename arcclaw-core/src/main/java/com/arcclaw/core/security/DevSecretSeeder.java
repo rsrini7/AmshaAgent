@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -117,7 +118,7 @@ public class DevSecretSeeder {
                 secretVault.storeSystemKey(keyName, hmacKeyBytes);
                 log.infof("DevSecretSeeder: seeded %s (ephemeral, dev/test only)", keyName);
             } catch (Exception e) {
-                log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, e.getMessage());
+                log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, LogUtil.rootMessage(e));
             } finally {
                 Arrays.fill(hmacKeyBytes, (byte) 0);
             }
@@ -153,7 +154,7 @@ public class DevSecretSeeder {
         } catch (IllegalArgumentException e) {
             log.errorf("DevSecretSeeder: ARCCLAW_AUDIT_HMAC_KEY is not valid Base64.");
         } catch (Exception e) {
-            log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, e.getMessage());
+            log.errorf("DevSecretSeeder: failed to seed %s: %s", keyName, LogUtil.rootMessage(e));
         } finally {
             if (keyBytes != null) Arrays.fill(keyBytes, (byte) 0);
         }
@@ -204,7 +205,7 @@ public class DevSecretSeeder {
             log.infof("Secret seeder: %s seeded into system vault from config.", vaultKeyName);
         } catch (Exception e) {
             log.warnf("Secret seeder: failed to seed %s into system vault: %s",
-                      vaultKeyName, e.getMessage());
+                      vaultKeyName, LogUtil.rootMessage(e));
         } finally {
             Arrays.fill(secretBytes, (byte) 0);
         }

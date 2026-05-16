@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.util.LogUtil;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.jboss.logging.Logger;
 
@@ -44,7 +45,7 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
             ChannelUser user = new ChannelUser(recipient, recipient, "user", ChannelType.TELEGRAM);
             sender.sendRaw(user, renderedMessage);
         } catch (Exception e) {
-            log.errorf(e, "CRON-NOTIFY-FAIL recipient=%s sessionId=%s", recipient, sessionId);
+            log.errorf("CRON-NOTIFY-FAIL recipient=%s sessionId=%s:\n%s", recipient, sessionId, LogUtil.trimmedStack(e));
         }
     }
 
@@ -61,7 +62,7 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
             sender.sendWithKeyboard(user, escapeMdV2(renderedMessage), markup);
             log.infof("CRON-APPROVAL-NOTIFY sent to=%s session=%s tool=%s", recipient, cronSessionId, toolName);
         } catch (Exception e) {
-            log.errorf(e, "CRON-APPROVAL-NOTIFY-FAIL recipient=%s session=%s", recipient, cronSessionId);
+            log.errorf("CRON-APPROVAL-NOTIFY-FAIL recipient=%s session=%s:\n%s", recipient, cronSessionId, LogUtil.trimmedStack(e));
         }
     }
 
@@ -82,7 +83,7 @@ public class TelegramJobNotifier implements ChannelJobNotifier {
             sender.sendRaw(user, message);
             log.infof("Notified user chatId=%s of approval timeout for session=%s", recipient, sessionId);
         } catch (Exception e) {
-            log.warnf("Failed to notify approval timeout for session=%s: %s", sessionId, e.getMessage());
+            log.warnf("Failed to notify approval timeout for session=%s: %s", sessionId, LogUtil.rootMessage(e));
         }
     }
 

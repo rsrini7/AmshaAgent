@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.util.BackoffRetryExecutor;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -21,7 +22,6 @@ import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -219,9 +219,9 @@ public class AsyncPersistenceEngine {
                 log.warn("AsyncPersistenceEngine Critical drain interrupted - shutting down.");
             } catch (Exception e) {
                 if (running.get()) {
-                    log.errorf("Unexpected error in critical drain: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.errorf("Unexpected error in critical drain: %s", LogUtil.rootMessage(e));
                     log.debugf("Full stacktrace for critical drain failure: %s", 
-                               ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
+                               LogUtil.trimmedStack(e));
                 }
                 if (event != null && event.getFuture() != null && !event.getFuture().isDone()) {
                     event.getFuture().completeExceptionally(e);
@@ -251,9 +251,9 @@ public class AsyncPersistenceEngine {
             } catch (Exception e) {
                 // telemetry errors are logged and swallowed
                 if (running.get()) {
-                    log.warnf("TELEMETRY event dropped: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.warnf("TELEMETRY event dropped: %s", LogUtil.rootMessage(e));
                     log.debugf("Full stacktrace for telemetry drop: %s", 
-                               ExceptionUtils.getStackTrace(e).lines().limit(10).reduce("", (a, b) -> a + "\n" + b));
+                               LogUtil.trimmedStack(e));
                 }
             }
         }

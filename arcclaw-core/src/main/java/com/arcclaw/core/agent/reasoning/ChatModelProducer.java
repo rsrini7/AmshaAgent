@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.routing.FallbackChatModel;
 import com.arcclaw.core.routing.LlmModelFactory;
+import com.arcclaw.core.util.LogUtil;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
@@ -137,7 +138,7 @@ public class ChatModelProducer {
                 
                 return new FallbackChatModel(primary, fallback, modelName, displayModel, fallbackMessageThreshold);
             } catch (Exception e) {
-                log.errorf("ChatModelProducer: Fallback init failed: %s", e.getMessage());
+                log.errorf("ChatModelProducer: Fallback init failed: %s", LogUtil.rootMessage(e));
                 return primary;
             }
         }

@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.sqlite.entity.RagChunkEntity;
 import dev.langchain4j.data.embedding.Embedding;
@@ -56,7 +57,7 @@ public class GlobalKnowledgeBase {
 
             return chunkId;
         } catch (Exception e) {
-            log.warnf("GlobalKnowledgeBase ingest failed: %s", e.getMessage());
+            log.warnf("GlobalKnowledgeBase ingest failed: %s", LogUtil.rootMessage(e));
             return null;
         }
     }
@@ -90,7 +91,7 @@ public class GlobalKnowledgeBase {
             }
             return results;
         } catch (Exception e) {
-            log.warnf("GlobalKnowledgeBase search failed: %s", e.getMessage());
+            log.warnf("GlobalKnowledgeBase search failed: %s", LogUtil.rootMessage(e));
             return List.of();
         }
     }

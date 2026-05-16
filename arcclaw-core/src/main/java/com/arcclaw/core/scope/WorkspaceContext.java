@@ -6,8 +6,8 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.MdcKeys;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
@@ -244,7 +244,7 @@ public final class WorkspaceContext {
             String mdcUser = (String) MDC.get(MdcKeys.USER_ID);
             return (mdcUser != null && !mdcUser.isBlank()) ? mdcUser : "unknown";
         } catch (Exception e) {
-            log.warnf("Failed to resolve userId: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.warnf("Failed to resolve userId: %s", LogUtil.rootMessage(e));
             return "unknown";
         }
     }

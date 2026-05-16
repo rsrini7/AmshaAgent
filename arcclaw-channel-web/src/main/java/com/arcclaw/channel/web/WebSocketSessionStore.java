@@ -10,8 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.arcclaw.core.util.LogUtil;
 import io.quarkus.websockets.next.WebSocketConnection;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -82,7 +82,7 @@ public class WebSocketSessionStore {
             try {
                 conn.close();
             } catch (Exception e) {
-                log.debugf("Failed to close WebSocket connection: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Failed to close WebSocket connection: %s", LogUtil.rootMessage(e));
             }
         });
         platformToSession.clear();

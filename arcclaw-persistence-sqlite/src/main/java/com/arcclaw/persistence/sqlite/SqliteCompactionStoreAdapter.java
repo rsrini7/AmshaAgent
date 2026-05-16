@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.arcclaw.persistence.sqlite.entity.CompactionSummaryEntity;
@@ -76,7 +77,7 @@ public class SqliteCompactionStoreAdapter implements CompactionStorePort {
                     .setParameter(2, summaryText)
                     .executeUpdate();
         } catch (Exception e) {
-            log.errorf("FTS index failed for sessionId=%s: %s", sessionId, e.getMessage());
+            log.errorf("FTS index failed for sessionId=%s: %s", sessionId, LogUtil.rootMessage(e));
         }
     }
 

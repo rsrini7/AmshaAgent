@@ -27,6 +27,7 @@ import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
@@ -142,7 +143,7 @@ public class AgentCronScheduler {
                 log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
             } else {
                 log.infof("AgentCronScheduler: persistence closed during sweep (app shutting down) - suppression intentional.");
-                log.debugf(e, "Full shutdown race details:");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
             log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
@@ -180,7 +181,7 @@ public class AgentCronScheduler {
                 try {
                     selfProxy.get().executeSoonInternal(jobId);
                 } catch (Exception e) {
-                    log.errorf(e, "CRON-PRECISE-FAIL id=%s", jobId);
+                    log.errorf("CRON-PRECISE-FAIL id=%s:\n%s", jobId, LogUtil.trimmedStack(e));
                 }
             }, Math.max(0, delayMillis), TimeUnit.MILLISECONDS);
         }
@@ -202,7 +203,7 @@ public class AgentCronScheduler {
                      try {
                          jobRunner.execute(job);
                      } catch (Exception e) {
-                          log.errorf(e, "CRON-EXEC-FAIL id=%s", job.getId());
+                          log.errorf("CRON-EXEC-FAIL id=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
                      } finally {
                          MdcCleaner.clearAll();
                      }

@@ -73,3 +73,6 @@ arcclaw-ui/src/api/generated/
 .opencode-memory
 
 .openclaude/
+
+# Test artifacts
+tool-contracts.json

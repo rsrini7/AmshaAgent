@@ -20,9 +20,9 @@ import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -244,7 +244,7 @@ class ResumeStrategyDispatcher {
             try {
                 decisions = objectMapper.readValue(checkpoint.getBatchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
             } catch (Exception e) {
-                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Batch decision parse fallback (non-fatal): %s", LogUtil.rootMessage(e));
             }
         }
 
@@ -253,7 +253,7 @@ class ResumeStrategyDispatcher {
             try {
                 preExecuted = objectMapper.readValue(checkpoint.getPreExecutedResults(), new TypeReference<Map<String, String>>() {});
             } catch (Exception e) {
-                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Pre-executed result parse fallback (non-fatal): %s", LogUtil.rootMessage(e));
             }
         }
 
@@ -269,7 +269,7 @@ class ResumeStrategyDispatcher {
                     });
                     continue;
                 } catch (Exception e) {
-                    log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.debugf("Pre-executed tool response parse fallback (non-fatal): %s", LogUtil.rootMessage(e));
                 }
             }
 

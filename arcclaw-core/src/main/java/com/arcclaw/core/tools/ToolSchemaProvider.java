@@ -6,6 +6,7 @@ import java.util.Map;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
@@ -35,7 +36,7 @@ public class ToolSchemaProvider {
                 : null;
         } catch (Exception e) {
             log.warnf("Could not serialize schema for tool %s: %s",
-                tool.name(), e.getMessage());
+                tool.name(), LogUtil.rootMessage(e));
             return null;
         }
     }

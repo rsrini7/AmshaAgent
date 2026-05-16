@@ -1,7 +1,6 @@
 package com.arcclaw.core.config;
 
 import java.util.List;
-import java.util.Optional;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
