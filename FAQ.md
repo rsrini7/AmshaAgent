@@ -174,6 +174,10 @@ Groq's LPU (Language Processing Unit) inference delivers the lowest token/second
 
 Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for fully air-gapped deployments. Switching is a two-line change in `application.yaml`.
 
+### Q: What is OMLX and when should I use it?
+
+OMLX is a provider for local MLX-based OpenAI-compatible inference servers (e.g., `mlx-lm` serving quantized models on Apple Silicon). It defaults to `http://127.0.0.1:8000/v1` and requires no API key (`api-key=not-needed`). Use OMLX when you want fully local, air-gapped inference with models like `mlx-community/Qwen3.6-35B-A3B-4bit`. It implements both `AgentChatModelProvider` (reasoning) and `RoutingChatModelProvider` (intent classification + compaction), so it can serve as a complete end-to-end provider. Set `ARCCLAW_LLM_PROVIDER=omlx` to activate.
+
 ---
 
 ### Q: Why Apache Camel for the Telegram adapter instead of the Bot4J or TelegramBots library?

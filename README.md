@@ -29,7 +29,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 
 ### Key Capabilities
 
-- **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, or local Ollama models
+- **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, OMLX, or local Ollama models
 - **Six specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
@@ -59,7 +59,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 |---|---|
 | **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces; Session-constrained workspaces |
 | **State** | Hexagonal persistence (port/adapter) with SQLite (WAL), PostgreSQL, and filesystem backends; 100% session persistence and graceful continuity |
-| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch; `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
+| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch across 8 providers (Groq, OpenAI, OpenRouter, Ollama, OMLX, Gemini, Nvidia, Cerebras); `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.78.1 |
@@ -484,11 +484,13 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           PromptTemplateEngine (Qute), SystemPromptBuilder,
 │   │                           ParallelToolCall, ReasoningStep, ReasoningStepParser,
 │   │                           GroqProviderFactory, OpenAiProviderFactory,
-│   │                           OllamaProviderFactory, OpenRouterProviderFactory
+│   │                           OllamaProviderFactory, OpenRouterProviderFactory,
+│   │                           OmlxProviderFactory
 │   ├── agent/role/             AgentRoleEnum, RoleDefinition, RoleRegistry, ToolCapability
 │   ├── api/                    AgentResource, AgentSessionService, AuditResource,
 │   │                           SystemInfoResource, ToolRegistryResource,
 │   │                           GlobalExceptionMapper
+│   ├── api/dto/                ActiveAgentResponse (UI DTO: count + AgentSummary list)
 │   ├── audit/                  AuditService, AuditObserver, AuditHashUtil, AuditEvent,
 │   │                           AuditSchemaEnforcer (WORM triggers), AuditVerifier,
 │   │                           ComplianceAuditService, TelemetryAuditService,
@@ -517,7 +519,8 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           ResetReflex (500), DelegateApprovalGuard, ApprovalNotificationService
 │   ├── routing/                CoderRoutingProvider, DefaultRoutingProvider,
 │   │                           DelegationRoutingProvider, IngestRoutingProvider,
-│   │                           IntentRoutingProvider, SchedulingRoutingProvider
+│   │                           IntentRoutingProvider, SchedulingRoutingProvider,
+│   │                           OmlxLlmProviderFactory
 │   ├── sandbox/                ProcessIsolationExecutor, PodmanContainerExecutor,
 │   │                           NamespaceExecutor, DirectExecutor, SandboxCircuitBreaker,
 │   │                           SandboxCodeSafetyScanner, SandboxSecretResolver,
@@ -531,6 +534,8 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           AutonomyLevel, AutonomyPolicy, StandardAutonomyPolicy,
 │   │                           ToolOperation, RequiresSecret, DestructiveVocabularyFilter,
 │   │                           InputSanitizer, DevSecretSeeder, SessionOwnerResolver
+│   ├── config/                 PolicyConfig (arcclaw.policy.* - destructive vocabulary
+│   │                           patterns, HITL-exempt tools, governance overrides)
 │   ├── skill/                  SkillRegistry, SkillLoader, CompiledSkillEntry,
 │   │                           AgentSkillEntity, SkillSystemPrompt (Qute template)
 │   ├── state/                  StatefulAgentStore, SqliteStatefulAgentStore,
@@ -538,11 +543,13 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           CompactionSummaryEntity, CompactionSummaryRepository
 │   ├── structured/             StructuredOutputEngine, StructuredRetryLoop,
 │   │                           PermissiveJsonExtractor, AgentFunctionRegistry
-│   └── tools/                  ToolRegistry, AgentTool SPI, ToolResponse, ToolOperation,
-│                               ToolCapability, GithubTool, ScheduleTaskTool,
-│                               ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
-│                               SandboxExecTool, CheckListTool, BraveWebSearchTool,
-│                               SerperWebSearchTool, DynamicToolLookup SPI
+│   ├── tools/                  ToolRegistry, AgentTool SPI, ToolResponse, ToolOperation,
+│   │                           ToolCapability, GithubTool, ScheduleTaskTool,
+│   │                           ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
+│   │                           SandboxExecTool, CheckListTool, BraveWebSearchTool,
+│   │                           SerperWebSearchTool, DynamicToolLookup SPI,
+│   │                           ToolContractExporter (writes tool-contracts.json on startup)
+│   ├── util/                   LogUtil (rootMessage, trimmedStack, ctx formatting)
 │
 arcclaw-persistence-sqlite/   ← SQLite adapter implementing all persistence ports
 │   ├── SqliteCheckpointStoreAdapter, SqliteCronStoreAdapter, SqliteSecretStoreAdapter,
@@ -1282,9 +1289,9 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_LLM_API_KEY` | ✅ (provider-conditional) | - | API key for the selected LLM provider (Groq: `gsk_...`, OpenRouter: `sk-or-v1-...`, OpenAI: `sk-...`) |
-| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama` |
+| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama`, `omlx`, `gemini`, `nvidia`, `cerebras` |
 | `ARCCLAW_LLM_MODEL_NAME` | no | `meta-llama/llama-4-scout-17b-16e-instruct` | Primary reasoning model name for the selected provider |
-| `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama) |
+| `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama/OMLX) |
 | `ARCCLAW_LLM_TEMPERATURE` | no | `0.1` | LLM temperature for reasoning |
 | `ARCCLAW_LLM_MAX_OUTPUT_TOKENS` | no | `8192` | Maximum output tokens per LLM call |
 | `ARCCLAW_LLM_TIMEOUT` | no | `PT60S` | LLM call timeout (ISO-8601 duration) |
@@ -1455,4 +1462,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1362 tests passing · 16 modules · 14 tools · 16 reflexes*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1362 tests passing · 16 modules · 14 tools · 16 reflexes · 8 LLM providers*
