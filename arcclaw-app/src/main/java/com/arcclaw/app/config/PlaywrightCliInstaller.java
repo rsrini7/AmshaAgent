@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -60,7 +61,7 @@ public class PlaywrightCliInstaller {
             }
             System.err.println("  ✓ chromium browser installed.");
         } catch (Exception e) {
-            log.warnf("Playwright browser install failed (may already be installed): %s", e.getMessage());
+            log.warnf("Playwright browser install failed (may already be installed): %s", LogUtil.rootMessage(e));
         }
     }
 

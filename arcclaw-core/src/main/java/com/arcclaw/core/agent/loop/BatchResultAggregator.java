@@ -14,6 +14,7 @@ import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
@@ -59,7 +60,7 @@ public class BatchResultAggregator {
         try {
             batchJson = objectMapper.writeValueAsString(completed);
         } catch (Exception e) {
-            log.errorf("[PARALLEL] Failed to serialize completed batch: %s", e.getMessage());
+            log.errorf("[PARALLEL] Failed to serialize completed batch: %s", LogUtil.rootMessage(e));
             return StepDecision.terminal(AgentResult.failed(
                 "Failed to serialize parallel tool results.",
                 AgentResult.FailureCategory.SYSTEM_ERROR,

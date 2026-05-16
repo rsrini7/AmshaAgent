@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -183,7 +184,7 @@ public class ReasoningStepParser {
             try {
                 paramsJson = objectMapper.writeValueAsString(params);
             } catch (Exception e) {
-                log.warnf("Failed to serialize params for tool %s: %s", req.name(), e.getMessage());
+                log.warnf("Failed to serialize params for tool %s: %s", req.name(), LogUtil.rootMessage(e));
             }
             calls.add(ParallelToolCall.pending(callId, req.name(), params, paramsJson));
         }
@@ -193,7 +194,7 @@ public class ReasoningStepParser {
             String batchJson = objectMapper.writeValueAsString(calls);
             batchPayload = Map.of("batch", batchJson);
         } catch (Exception e) {
-            log.errorf("Failed to serialize parallel batch for session %s: %s", sessionId, e.getMessage());
+            log.errorf("Failed to serialize parallel batch for session %s: %s", sessionId, LogUtil.rootMessage(e));
             ToolExecutionRequest req = requests.getFirst();
             Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
             return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
@@ -209,7 +210,7 @@ public class ReasoningStepParser {
         try {
             return doDeserialize(argsJson);
         } catch (Exception e) {
-            log.warnf("Initial JSON parse failed for session %s: %s. Attempting repair.", sessionId, e.getMessage());
+            log.warnf("Initial JSON parse failed for session %s: %s. Attempting repair.", sessionId, LogUtil.rootMessage(e));
             
             // Phase 2: Repair and retry
             try {

@@ -41,9 +41,9 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.MdcManaged;
 import io.quarkus.virtual.threads.VirtualThreads;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -177,7 +177,7 @@ public class AgentSessionService {
         } catch (BudgetExceededException e) {
             return ServiceResult.error("BUDGET", e.getMessage());
         } catch (Exception e) {
-            log.errorf("Sync agent run failed: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("Sync agent run failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
     }
@@ -224,7 +224,7 @@ public class AgentSessionService {
                     return null;
                 });
             } catch (Exception e) {
-                log.errorf("Async agent run failed: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.errorf("Async agent run failed: %s", LogUtil.rootMessage(e));
                 callback.accept(ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error"));
             }
         }));
@@ -256,7 +256,7 @@ public class AgentSessionService {
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            log.errorf("Approve failed: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("Approve failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
     }
@@ -278,7 +278,7 @@ public class AgentSessionService {
             };
             return WorkspaceScopeHolder.call(sessionId, op);
         } catch (Exception e) {
-            log.errorf("Deny failed: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("Deny failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
         }
     }

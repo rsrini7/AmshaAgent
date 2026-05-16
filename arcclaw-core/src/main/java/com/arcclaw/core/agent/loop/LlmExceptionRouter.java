@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -51,7 +52,7 @@ public class LlmExceptionRouter {
             String result = node.asText().strip();
             return result.isBlank() ? null : result;
         } catch (Exception e) {
-            log.debugf("extractFailedGeneration parse failed: %s", e.getMessage());
+            log.debugf("extractFailedGeneration parse failed: %s", LogUtil.rootMessage(e));
             return null;
         }
     }
@@ -74,7 +75,7 @@ public class LlmExceptionRouter {
                 return answerNode.asText().strip();
             }
         } catch (Exception e) {
-            log.debugf("extractFinishAnswer parse failed: %s", e.getMessage());
+            log.debugf("extractFinishAnswer parse failed: %s", LogUtil.rootMessage(e));
         }
         return null;
     }

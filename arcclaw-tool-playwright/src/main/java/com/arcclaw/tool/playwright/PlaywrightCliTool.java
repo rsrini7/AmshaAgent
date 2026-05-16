@@ -25,6 +25,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.LogUtil;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -274,7 +275,7 @@ public class PlaywrightCliTool implements AgentTool {
         try {
             exec("close-all");
         } catch (Exception e) {
-            log.debugf("playwright-cli cleanup: %s", e.getMessage());
+            log.debugf("playwright-cli cleanup: %s", LogUtil.rootMessage(e));
         }
     }
 }

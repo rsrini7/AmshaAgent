@@ -14,6 +14,7 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.LogUtil;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -85,7 +86,7 @@ public class StructuredOutputProcessor {
             throw e;
         } catch (LlmProviderException e) {
             if (e instanceof LlmRateLimitException) {
-                log.warnf("[StructuredOutputProcessor] Rate limit in structured output - %s", e.getMessage());
+                log.warnf("[StructuredOutputProcessor] Rate limit in structured output - %s", LogUtil.rootMessage(e));
                 String clean = AgentErrorMessageUtil.sanitizeErrorMessage(e.getMessage());
                 throw new RuntimeException("Structured output LLM call failed: " + clean, e);
             }

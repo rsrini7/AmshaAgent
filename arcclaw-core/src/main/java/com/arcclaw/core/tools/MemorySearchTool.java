@@ -13,6 +13,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.Fts5QueryUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.arcclaw.persistence.api.MemoryChunkDto;
@@ -137,7 +138,7 @@ public class MemorySearchTool implements AgentTool {
                 combined.append("### Relevant Session Summaries:\n").append(formatted).append("\n\n");
             }
         } catch (Exception e) {
-            log.warnf("Compaction search failed for session %s: %s", sessionId, e.getMessage());
+            log.warnf("Compaction search failed for session %s: %s", sessionId, LogUtil.rootMessage(e));
         }
 
         // TIER B: RAG Knowledge Base (Vector + FTS5)
@@ -153,7 +154,7 @@ public class MemorySearchTool implements AgentTool {
                 }
             }
         } catch (Exception e) {
-            log.warnf("RAG search failed for session %s: %s", sessionId, e.getMessage());
+            log.warnf("RAG search failed for session %s: %s", sessionId, LogUtil.rootMessage(e));
         }
 
         // 5. Format final result

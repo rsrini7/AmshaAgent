@@ -19,6 +19,7 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Scope;
@@ -209,8 +210,10 @@ public class AgentStateMachineRunner {
             finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history));
             return finalResult;
         } catch (Exception e) {
-            log.errorf("StateMachine terminal failure for session %s: %s", context.sessionId(), e.getMessage());
-            finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+            log.errorf("StateMachine terminal failure %s: %s\n%s",
+                    LogUtil.ctx(context.sessionId(), context.agentRole()),
+                    LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
+            finalResult = AgentResult.failed(LogUtil.rootMessage(e), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
             return finalResult;
         } finally {
             AgentResult res = finalResult;

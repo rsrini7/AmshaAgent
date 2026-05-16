@@ -14,6 +14,7 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
+import com.arcclaw.core.util.LogUtil;
 import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;
 
@@ -70,7 +71,7 @@ public class StructuredRetryLoop {
                     retryReasons.add(e);
                     
                     if (attempt > maxRetries) {
-                        log.errorf("Extraction failed after max retries (%d) for %s. Last error: %s", maxRetries, operationName, e.getMessage());
+                        log.errorf("Extraction failed after max retries (%d) for %s. Last error: %s", maxRetries, operationName, LogUtil.rootMessage(e));
                         String userId = WorkspaceScopeHolder.getUserIdOrUnknown();
                         auditService.record(sessionId, userId, agentRole, 
                                 SecurityEventType.STRUCTURED_OUTPUT_RETRY, 
@@ -78,7 +79,7 @@ public class StructuredRetryLoop {
                         throw new StructuredOutputException("Failed to extract structured output after " + maxRetries + " retries: " + e.getMessage(), e);
                     }
                     
-                    log.warnf("Retrying LLM call for %s (attempt %d/%d): %s", operationName, attempt, maxRetries, e.getMessage());
+                    log.warnf("Retrying LLM call for %s (attempt %d/%d): %s", operationName, attempt, maxRetries, LogUtil.rootMessage(e));
                 }
             }
             throw new IllegalStateException("Should not reach here");

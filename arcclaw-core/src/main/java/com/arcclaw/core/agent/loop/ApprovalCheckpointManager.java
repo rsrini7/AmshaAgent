@@ -20,8 +20,8 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -78,7 +78,7 @@ public class ApprovalCheckpointManager {
         try {
             paramsJson = objectMapper.writeValueAsString(frame.params());
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
@@ -94,7 +94,7 @@ public class ApprovalCheckpointManager {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
         } catch (Exception e) {
             log.errorf("Failed to serialize batch decisions for single tool %s: %s",
-                       toolName, e.getMessage());
+                       toolName, LogUtil.rootMessage(e));
         }
 
         cp.setMaxIterations(context.maxIterations());
@@ -131,7 +131,7 @@ public class ApprovalCheckpointManager {
         try {
             params = objectMapper.readValue(paramsJson, Map.class);
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
         ApprovalFrame frame = new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM);
         return persist(context, frame, history, channelType != null ? channelType.toString() : null, channelPlatformId != null ? channelPlatformId.toString() : null);
@@ -161,7 +161,7 @@ public class ApprovalCheckpointManager {
                 decisions.put(call.toolName(), ToolDecision.PENDING);
             }
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
 
         // 2. Load or create checkpoint
@@ -175,7 +175,7 @@ public class ApprovalCheckpointManager {
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
 
         cp.setMaxIterations(context.maxIterations());
@@ -240,7 +240,7 @@ public class ApprovalCheckpointManager {
                 }
             }
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
 
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
@@ -254,7 +254,7 @@ public class ApprovalCheckpointManager {
         try {
             cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
 
         cp.setMaxIterations(context.maxIterations());

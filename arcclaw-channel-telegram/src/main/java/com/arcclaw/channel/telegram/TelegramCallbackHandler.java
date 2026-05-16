@@ -18,6 +18,7 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
@@ -168,7 +169,7 @@ public class TelegramCallbackHandler {
                 return null;
             });
         } catch (Exception e) {
-            log.warnf("Failed to serialize Telegram callback answer: %s", e.getMessage());
+            log.warnf("Failed to serialize Telegram callback answer: %s", LogUtil.rootMessage(e));
         }
     }
 

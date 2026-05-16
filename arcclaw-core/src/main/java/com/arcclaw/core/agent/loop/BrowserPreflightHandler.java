@@ -19,6 +19,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -69,7 +70,7 @@ public class BrowserPreflightHandler {
                     e.getFrame(), historyAtPause,
                     context.channelType(), context.channelPlatformId()));
         } catch (Exception e) {
-            log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), e.getMessage());
+            log.warnf("[BrowserPreflight] Failed for session %s: %s", context.sessionId(), LogUtil.rootMessage(e));
         }
         return Optional.empty();
     }

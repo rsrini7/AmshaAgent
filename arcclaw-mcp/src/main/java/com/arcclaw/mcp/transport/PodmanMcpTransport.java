@@ -20,6 +20,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.mcp.tool.DynamicToolCapability;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;
@@ -72,13 +73,13 @@ public class PodmanMcpTransport {
                     OutputStream w = writers.remove(serverName);
                     if (w != null) w.close();
                 } catch (IOException e) {
-                    log.debugf("Failed to close writer for %s: %s", serverName, e.getMessage());
+                    log.debugf("Failed to close writer for %s: %s", serverName, LogUtil.rootMessage(e));
                 }
                 try {
                     BufferedReader r = readers.remove(serverName);
                     if (r != null) r.close();
                 } catch (IOException e) {
-                    log.debugf("Failed to close reader for %s: %s", serverName, e.getMessage());
+                    log.debugf("Failed to close reader for %s: %s", serverName, LogUtil.rootMessage(e));
                 }
                 activeProcesses.remove(serverName);
             }
@@ -199,7 +200,7 @@ public class PodmanMcpTransport {
                 BufferedReader r = readers.remove(serverName);
                 if (r != null) r.close();
             } catch (IOException e) {
-                log.warnf("Error closing streams for MCP server %s: %s", serverName, e.getMessage());
+                log.warnf("Error closing streams for MCP server %s: %s", serverName, LogUtil.rootMessage(e));
             }
             return null;
         }).replaceWithVoid();

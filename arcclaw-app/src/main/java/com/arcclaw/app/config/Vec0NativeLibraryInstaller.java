@@ -10,6 +10,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 
+import com.arcclaw.core.util.LogUtil;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -64,7 +65,7 @@ public class Vec0NativeLibraryInstaller {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
             log.infof("Vec0 binary installed to [%s].", target.toAbsolutePath());
         } catch (IOException e) {
-            log.warnf("Vec0 auto-install failed: %s. RAG will degrade to FTS5-only.", e.getMessage());
+            log.warnf("Vec0 auto-install failed: %s. RAG will degrade to FTS5-only.", LogUtil.rootMessage(e));
         }
     }
 

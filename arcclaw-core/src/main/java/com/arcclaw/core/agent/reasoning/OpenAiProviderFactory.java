@@ -13,6 +13,10 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
+    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
+                    defaultValue = "https://api.openai.com/v1")
+    String baseUrl;
+
     @ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
     String apiKey;
 
@@ -32,7 +36,7 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     @Override
     public ChatModel create() {
         return ChatModelFactory.createOpenAi(
-                null, apiKey, modelName,
+                baseUrl, apiKey, modelName,
                 agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
                 agentConfig.temperature(), agentConfig.logHttp());
     }

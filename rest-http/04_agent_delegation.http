@@ -1,5 +1,5 @@
 ### ═══════════════════════════════════════════════════════════════
-### 05 - AGENT DELEGATION (Phase 76)
+### 04a - AGENT DELEGATION (Phase 76)
 ###
 ### The Coordinator (Vishnu) delegates complex tasks to domain-expert
 ### sub-agents via the `delegate_to_agent` tool. This file covers:

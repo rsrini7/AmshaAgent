@@ -248,6 +248,12 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findAllActive() {
+        return withRetry(() -> checkpointRepo.findAllActive()
+            .stream().map(CheckpointMapper::toDto).toList(), "find-all-active");
+    }
+
+    @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
         return cleanupService.isCheckpointExpired(sessionId, timeoutHours);
     }
@@ -269,7 +275,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public void markCheckpointsFailed(String sessionId) {
-        log.warnf("[CheckpointAdapter] Marking ALL active checkpoints as FAILED for session=%s", sessionId);
         withRetry(() -> { cleanupService.doMarkCheckpointsFailed(sessionId); return null; }, "mark-failed-all");
     }
 

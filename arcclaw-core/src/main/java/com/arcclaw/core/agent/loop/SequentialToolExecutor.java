@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.LogUtil;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import org.jboss.logging.Logger;
@@ -58,8 +59,8 @@ public class SequentialToolExecutor {
                 );
             } catch (Exception e) {
                 log.errorf("[SEQUENTIAL-EXEC] session=%s tool=%s failed: %s",
-                          context.sessionId(), call.toolName(), e.getMessage());
-                return call.withResult("Internal context or execution error: " + e.getMessage(), false);
+                          context.sessionId(), call.toolName(), LogUtil.rootMessage(e));
+                return call.withResult("Internal context or execution error: " + LogUtil.rootMessage(e), false);
             }
         }
     }

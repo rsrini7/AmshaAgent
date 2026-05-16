@@ -25,6 +25,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
 import com.arcclaw.persistence.api.CheckpointDto;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -203,7 +204,8 @@ public class DelegateToAgentTool implements AgentTool {
         if (e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("unbound")) {
             return ToolResponse.failure(403, "Security violation: tenant context not bound.");
         }
-        log.errorf(e, "[DELEGATE] Failed to delegate to agent %s", targetRole.toScopedName());
+        log.errorf("[DELEGATE] Failed to delegate to agent %s: %s\n%s",
+                targetRole.toScopedName(), LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
         return ToolResponse.failure(500, delegationFailed(targetRole.toScopedName(), e.getMessage()));
     }
 

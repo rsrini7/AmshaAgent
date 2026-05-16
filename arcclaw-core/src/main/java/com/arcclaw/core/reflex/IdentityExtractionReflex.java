@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -109,7 +110,7 @@ public class IdentityExtractionReflex implements AgentReflex {
                     memoryPort.index(dto);
                     log.infof("IdentityExtractionReflex ingested fact silently: label=%s, fact='%s'", label, fullText);
                 } catch (Exception e) {
-                    log.warnf("IdentityExtractionReflex failed to ingest fact: %s", e.getMessage());
+                    log.warnf("IdentityExtractionReflex failed to ingest fact: %s", LogUtil.rootMessage(e));
                 }
             });
         }

@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -61,7 +62,7 @@ public class StructuredOutputEngine {
             }
             return new String(is.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            log.errorf("Error loading schema %s: %s", path, e.getMessage());
+            log.errorf("Error loading schema %s: %s", path, LogUtil.rootMessage(e));
             return "{}";
         }
     }

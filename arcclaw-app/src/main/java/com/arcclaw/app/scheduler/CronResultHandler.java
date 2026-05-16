@@ -25,6 +25,7 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import org.jboss.logging.Logger;
 
@@ -102,7 +103,7 @@ public class CronResultHandler {
                 try {
                     r.run();
                 } catch (Exception e) {
-                    log.errorf(e, "Failed to run queued notification for chatId=%s", chatId);
+                    log.errorf("Failed to run queued notification for chatId=%s:\n%s", chatId, LogUtil.trimmedStack(e));
                 }
             }
         }
@@ -213,7 +214,7 @@ public class CronResultHandler {
                 job.getId(), job.getUserId(), chType, platformId, executionId,
                 answer, category, cronSessionId, toolName));
         } catch (Exception e) {
-            log.warnf(e, "CRON-EVENT-FIRE-FAIL cronId=%s", job.getId());
+            log.warnf("CRON-EVENT-FIRE-FAIL cronId=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
         }
     }
 }

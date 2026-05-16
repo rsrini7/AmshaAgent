@@ -4,7 +4,7 @@
 ### ArcClaw uses a dual-SQLite memory system:
 ###
 ###   arcclaw-meta.db (primary WAL)
-###     └─ chat_memory            - rolling LangChain4J chat window (max 20 msgs)
+###     └─ chat_memory            - rolling LangChain4J chat window (max 100 msgs)
 ###     └─ compaction_summary     - summaries from ContextCompactionService runs
 ###     └─ agent_checkpoint       - per-session ReAct state
 ###     └─ rag_chunk              - RAG document chunks (Phase 64-C3+)
@@ -17,7 +17,7 @@
 ### Only UserMessage and AiMessage entries are persisted.
 ###
 ### Compaction trigger:
-###   When chat window exceeds: max-messages (20) - keep-recent (5) = threshold crossed at 15+
+###   When chat window exceeds: threshold (10 messages) OR max-chars (96000) OR max-tokens (32000)
 ###   → ContextCompactionService summarises the oldest messages via llama-3.1-8b-instant
 ###   → Summary stored in both meta.db (compaction_summary) and fts.db (FTS5 index)
 ###   → Most recent 5 messages kept verbatim in the rolling window
@@ -194,9 +194,11 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # ROLLING WINDOW PRUNING
-# Chat window is capped at 20 messages (configurable).
-# Send 22 sequential messages to see the window prune the oldest 2.
-# Watch logs for: [MemoryPruning] pruned N messages session=...
+# Chat window max: 100 messages (arcclaw.chat-memory.max-messages).
+# Compaction threshold: 10 messages (arcclaw.memory.compaction.threshold).
+# Keep-recent: 5 messages preserved verbatim after compaction.
+# Send 12+ sequential messages to trigger compaction.
+# Watch logs for: [CompactionService] compaction triggered session=...
 # ─────────────────────────────────────────────────────────────────
 
 ### [MEM-4] Create dedicated session for window pruning test

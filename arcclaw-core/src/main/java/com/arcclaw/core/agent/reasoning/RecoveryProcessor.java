@@ -8,10 +8,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -86,7 +86,7 @@ public class RecoveryProcessor {
                     if (pAnswerNode != null && !pAnswerNode.isNull()) return pAnswerNode.asText();
                 }
             } catch (Exception e) {
-                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("JSON parse fallback (non-fatal): %s", LogUtil.rootMessage(e));
             }
             return null;
         }

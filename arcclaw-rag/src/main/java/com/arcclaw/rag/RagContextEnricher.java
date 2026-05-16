@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ContextEnricher;
 import com.arcclaw.core.util.Fts5QueryUtil;
+import com.arcclaw.core.util.LogUtil;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -129,7 +130,7 @@ public class RagContextEnricher implements ContextEnricher {
 
         } catch (Exception e) {
             log.warnf("RagContextEnricher enrichment failed for session %s: %s",
-                    sessionId, e.getMessage());
+                    sessionId, LogUtil.rootMessage(e));
             return basePrompt;
         }
     }

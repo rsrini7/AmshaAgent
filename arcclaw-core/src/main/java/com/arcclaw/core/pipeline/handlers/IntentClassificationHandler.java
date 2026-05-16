@@ -20,6 +20,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.LogUtil;
 import dev.langchain4j.exception.HttpException;
 import org.jboss.logging.Logger;
 
@@ -143,7 +144,7 @@ public class IntentClassificationHandler implements MessageHandler {
     }
 
     private void handleGeneralException(MessageContext context, Exception e) {
-        log.warnf("Intent classification failed for chat %s - defaulting to coordinator: %s", context.getChatId(), e.getMessage());
+        log.warnf("Intent classification failed for chat %s - defaulting to coordinator: %s", context.getChatId(), LogUtil.rootMessage(e));
         context.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
     }
 }

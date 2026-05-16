@@ -13,6 +13,7 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.util.ClassUtils;
+import com.arcclaw.core.util.LogUtil;
 import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 
@@ -57,8 +58,8 @@ public class MessagePipeline {
                 }
             } catch (Exception e) {
                 log.errorf("Pipeline handler %s failed for chat %s: %s",
-                        ClassUtils.getCleanName(handler), context.getChatId(), e.getMessage());
-                log.debugf(e, "Full stacktrace for pipeline failure in handler %s", ClassUtils.getCleanName(handler));                try {
+                        ClassUtils.getCleanName(handler), context.getChatId(), LogUtil.rootMessage(e));
+                log.debugf("Full stacktrace for pipeline failure in handler %s:\n%s", ClassUtils.getCleanName(handler), LogUtil.trimmedStack(e));                try {
                     channelPluginRegistry.find(context.getChannelType())
                         .map(ChannelPlugin::sender)
                         .ifPresentOrElse(

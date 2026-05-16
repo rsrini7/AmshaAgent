@@ -20,6 +20,7 @@ import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
+import com.arcclaw.core.util.LogUtil;
 import io.quarkus.websockets.next.HandshakeRequest;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnError;
@@ -104,7 +105,7 @@ public class WebChatEndpoint {
                 log.infof("WebSocket pending auth: connId=%s platformId=%s", conn.id(), platformId);
             }
         } catch (Exception e) {
-            log.errorf(e, "Failed to initialize WebSocket connection %s: %s", conn.id(), e.getMessage());
+            log.errorf("Failed to initialize WebSocket connection %s: %s\n%s", conn.id(), LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
             // Cleanup and close to prevent orphaned states
             cleanup(conn, "initialization error");
             conn.close().subscribe().with(id -> {}, err -> {});
@@ -190,7 +191,7 @@ public class WebChatEndpoint {
             channelServices.processAsync(msg);
 
         } catch (Exception e) {
-            log.warnf(e, "Failed to process incoming WebSocket message: %s", message);
+            log.warnf("Failed to process incoming WebSocket message: %s\n%s", message, LogUtil.trimmedStack(e));
         }
     }
 

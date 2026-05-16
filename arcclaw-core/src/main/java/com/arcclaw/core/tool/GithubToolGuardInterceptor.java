@@ -17,6 +17,7 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.GithubTool;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -69,7 +70,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
                 }
             }
         } catch (Exception e) {
-            log.warnf("Cross-loop dedup failed for github in session %s: %s", sessionId, e.getMessage());
+            log.warnf("Cross-loop dedup failed for github in session %s: %s", sessionId, LogUtil.rootMessage(e));
         }
 
         // 2. GITHUB INTENT GUARD
@@ -99,7 +100,7 @@ public class GithubToolGuardInterceptor implements ToolGuardInterceptor {
                 }
             } catch (Exception e) {
                 log.debugf("Cross-turn github context check failed for session %s: %s",
-                        sessionId, e.getMessage());
+                        sessionId, LogUtil.rootMessage(e));
             }
         }
 

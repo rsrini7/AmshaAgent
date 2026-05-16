@@ -219,6 +219,15 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findAllActive() {
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status NOT IN :terminal ORDER BY c.updatedAt DESC", AgentCheckpointEntity.class)
+                .setParameter("terminal", CheckpointStatus.terminalStatuses())
+                .getResultStream()
+                .map(CheckpointMapper::toDto)
+                .toList();
+    }
+
+    @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
         Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.updatedAt < :cutoff AND c.status = :status", Long.class)
                 .setParameter("sessionId", sessionId)
@@ -251,7 +260,6 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public void markCheckpointsFailed(String sessionId) {
-        log.warnf("[PostgresCheckpointAdapter] Marking ALL active checkpoints as FAILED for session=%s", sessionId);
         zombieRecoveryService.markCheckpointsFailed(sessionId);
     }
 
@@ -284,7 +292,9 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                     return c;
                 });
 
-        entity.setStatus(CheckpointStatus.IN_PROGRESS);
+        if (entity.getStatus() != CheckpointStatus.AWAITING_APPROVAL && entity.getStatus() != CheckpointStatus.RESUMING) {
+            entity.setStatus(CheckpointStatus.IN_PROGRESS);
+        }
         entity.setAutonomyLevel(autonomy != null ? AutonomyLevel.valueOf(autonomy) : AutonomyLevel.SUPERVISED);
         entity.setIterationsUsed(iterationsUsed);
         entity.setOriginalGoal(originalGoal);

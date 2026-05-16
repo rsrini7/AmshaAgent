@@ -4,13 +4,13 @@ import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -98,7 +98,7 @@ public class PermissiveJsonExtractor {
                 return mapper.writeValueAsString(root.get("properties"));
             }
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Non-fatal: %s", LogUtil.rootMessage(e));
             // Not a schema envelope - return original
         }
         return json;

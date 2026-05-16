@@ -12,6 +12,7 @@ import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -66,7 +67,7 @@ public class TelemetryAuditService {
             if (msg.contains("[TEST-EXPECTED]")) {
                 log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s: %s (EXPECTED)", type, sessionId, msg);
             } else {
-                log.warnf(e, "[AUDIT] Failed to submit TELEMETRY event %s for session %s", type, sessionId);
+                log.warnf("[AUDIT] Failed to submit TELEMETRY event %s for session %s:\n%s", type, sessionId, LogUtil.trimmedStack(e));
             }
         }
     }
@@ -102,7 +103,7 @@ public class TelemetryAuditService {
             if (msg.contains("[TEST-EXPECTED]")) {
                 log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s: %s (EXPECTED)", sessionId, msg);
             } else {
-                log.warnf(e, "[AUDIT] Failed to submit loop completion TELEMETRY for session %s", sessionId);
+                log.warnf("[AUDIT] Failed to submit loop completion TELEMETRY for session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
             }
         }
     }

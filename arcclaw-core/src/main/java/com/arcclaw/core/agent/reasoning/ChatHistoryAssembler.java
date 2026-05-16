@@ -12,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,7 +23,6 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -163,7 +163,7 @@ public class ChatHistoryAssembler {
                             ? (String) input.get("parameters") : objectMapper.writeValueAsString(input);
                     }
                 } catch (JsonProcessingException e) {
-                    log.warnf("Failed to serialize action input: %s", ExceptionUtils.getRootCauseMessage(e));
+                    log.warnf("Failed to serialize action input: %s", LogUtil.rootMessage(e));
                     argsJson = "{}";
                 }
 
@@ -212,7 +212,7 @@ public class ChatHistoryAssembler {
                     try {
                         argsJson = objectMapper.writeValueAsString(call.params());
                     } catch (JsonProcessingException e) {
-                        log.warnf("Failed to serialize parallel batch params: %s", ExceptionUtils.getRootCauseMessage(e));
+                        log.warnf("Failed to serialize parallel batch params: %s", LogUtil.rootMessage(e));
                         argsJson = "{}";
                     }
                     return ToolExecutionRequest.builder()
@@ -269,7 +269,7 @@ public class ChatHistoryAssembler {
                     List<ParallelToolCall>>() {});
         } catch (JsonProcessingException e) {
             log.warnf("ChatHistoryAssembler.deserializeBatch failed: %s",
-                      ExceptionUtils.getRootCauseMessage(e));
+                      LogUtil.rootMessage(e));
             return null;
         }
     }

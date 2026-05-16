@@ -10,6 +10,7 @@ import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -56,12 +57,12 @@ public class ClasspathSkillProvider implements SkillProvider {
                         String content = new String(skillStream.readAllBytes(), StandardCharsets.UTF_8);
                         skills.add(parser.parse(content));
                     } catch (Exception e) {
-                        LOG.warnf("Failed to load static skill %s: %s", resourcePath, e.getMessage());
+                        LOG.warnf("Failed to load static skill %s: %s", resourcePath, LogUtil.rootMessage(e));
                     }
                 }
             }
         } catch (Exception e) {
-            LOG.errorf("Fatal failure reading static skill index %s: %s", INDEX_PATH, e.getMessage());
+            LOG.errorf("Fatal failure reading static skill index %s: %s", INDEX_PATH, LogUtil.rootMessage(e));
         }
         return skills;
     }

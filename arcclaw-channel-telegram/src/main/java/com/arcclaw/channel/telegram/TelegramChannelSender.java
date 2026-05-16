@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.core.util.LogUtil;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -148,7 +149,7 @@ public class TelegramChannelSender implements ChannelSender {
             log.debugf("editMessage sent for chatId=%s msgId=%d", chatId, messageId);
         } catch (Exception e) {
             log.warnf("editMessage failed for chatId=%s msgId=%d: %s",
-                      chatId, messageId, e.getMessage());
+                      chatId, messageId, LogUtil.rootMessage(e));
         }
     }
 

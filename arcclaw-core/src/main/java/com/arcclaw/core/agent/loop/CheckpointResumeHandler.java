@@ -31,11 +31,11 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Arc;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
@@ -144,7 +144,7 @@ public class CheckpointResumeHandler {
                     try {
                         Arc.container().requestContext().deactivate();
                     } catch (Exception e) {
-                        log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                        log.debugf("Request context deactivate (non-fatal): %s", LogUtil.rootMessage(e));
                     }
                 }
             } finally {
@@ -193,7 +193,7 @@ public class CheckpointResumeHandler {
     }
 
     private void handleResumeFailure(String sessionId, MessageContext context, Exception e) {
-        log.errorf(e, "Failed to resume session %s", sessionId);
+        log.errorf("Failed to resume session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
         if (context == null || context.getUser() == null) {
             log.warnf("handleResumeFailure: context is null for session %s - no channel notification sent", sessionId);
             return;
@@ -283,7 +283,7 @@ public class CheckpointResumeHandler {
                         }
                     }
                 } catch (Exception e) {
-                    log.debugf("Failed to format params JSON, using raw: %s", e.getMessage());
+                    log.debugf("Failed to format params JSON, using raw: %s", LogUtil.rootMessage(e));
                     String display = paramsJson.length() > 500 ? paramsJson.substring(0, 500) + "…" : paramsJson;
                     sb.append("\n  ").append(display);
                 }
@@ -301,7 +301,7 @@ public class CheckpointResumeHandler {
                 try {
                     cronStore.markRunning(jobId);
                 } catch (Exception e) {
-                    log.warnf("Failed to sync cron status for job %s: %s", jobId, e.getMessage());
+                    log.warnf("Failed to sync cron status for job %s: %s", jobId, LogUtil.rootMessage(e));
                 }
             }
         }
@@ -315,7 +315,7 @@ public class CheckpointResumeHandler {
                 try {
                     markCronTerminal(jobId, result);
                 } catch (Exception e) {
-                    log.warnf("Failed to sync terminal cron status for job %s: %s", jobId, e.getMessage());
+                    log.warnf("Failed to sync terminal cron status for job %s: %s", jobId, LogUtil.rootMessage(e));
                 }
             }
         }

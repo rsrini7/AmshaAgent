@@ -27,6 +27,7 @@ import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.mcp.tool.DynamicToolCapability;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;
@@ -37,7 +38,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
@@ -113,7 +113,7 @@ public class McpClientService {
                         cleanupStdio(serverName);
                         connectStdio(serverName, cfg.command(), cfg.args(), cfg.env());
                     } catch (Exception e) {
-                        log.errorf("Health check reconnect failed for %s: %s", serverName, e.getMessage());
+                        log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
                     } finally {
                         lock.unlock();
                     }
@@ -392,7 +392,7 @@ public class McpClientService {
             } catch (IOException e) {
                 // F19 Dead Process Guard: cleanup on any transport failure
                 // next retry loop will call connectStdio via invoke() fallback
-                log.warnf("MCP STDIO transport error for %s: %s - tearing down process state", serverName, e.getMessage());
+                log.warnf("MCP STDIO transport error for %s: %s - tearing down process state", serverName, LogUtil.rootMessage(e));
                 cleanupStdio(serverName);
                 throw e;
             }
@@ -406,14 +406,14 @@ public class McpClientService {
             OutputStream out = processWriters.remove(serverName);
             if (out != null) out.close();
         } catch (IOException e) {
-            log.debugf("Failed to close MCP writer for %s: %s", serverName, ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Failed to close MCP writer for %s: %s", serverName, LogUtil.rootMessage(e));
         }
-        
+
         try {
             BufferedReader reader = processReaders.remove(serverName);
             if (reader != null) reader.close();
         } catch (IOException e) {
-            log.debugf("Failed to close MCP reader for %s: %s", serverName, ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Failed to close MCP reader for %s: %s", serverName, LogUtil.rootMessage(e));
         }
         
         Process p = processes.remove(serverName);

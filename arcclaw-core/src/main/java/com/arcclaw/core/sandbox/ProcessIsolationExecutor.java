@@ -12,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
+import com.arcclaw.core.util.LogUtil;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -129,7 +130,7 @@ public class ProcessIsolationExecutor {
 
                     } catch (SandboxImageMissingException e) {
                         // do NOT record a circuit-breaker failure for a missing image.
-                        log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, e.getMessage());
+                        log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, LogUtil.rootMessage(e));
                         if (allowInsecureFallback) {
                             log.warnf("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution for session %s", sessionId);
                             return SandboxResult.success(directExecutor.executeDirectly(
@@ -181,7 +182,20 @@ public class ProcessIsolationExecutor {
 
             // Podman circuit is open (or strategy is NAMESPACE) - fall back to namespace isolation.
             // NOTE: requiredSecrets are NOT injected in namespace mode (see class-level Javadoc).
-            return SandboxResult.success(namespaceExecutor.executeInNamespace(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+            try {
+                return SandboxResult.success(namespaceExecutor.executeInNamespace(
+                        workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+            } catch (Exception nsEx) {
+                // Namespace isolation unavailable (macOS/Windows or missing unshare) -
+                // try direct host execution if insecure fallback is allowed.
+                if (allowInsecureFallback) {
+                    log.warnf("[SANDBOX] Namespace unavailable (%s), allow-insecure-fallback true - degrading to host execution for session %s",
+                            LogUtil.rootMessage(nsEx), sessionId);
+                    return SandboxResult.success(directExecutor.executeDirectly(
+                            workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                }
+                throw nsEx;
+            }
         } catch (ToolExecutionException e) {
             return SandboxResult.failure(e.getMessage());
         } catch (Exception e) {

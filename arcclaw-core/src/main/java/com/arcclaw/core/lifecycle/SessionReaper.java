@@ -24,6 +24,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -92,7 +93,7 @@ public class SessionReaper {
             // FIXED (§FIX 3): No nested REQUIRES_NEW. recoverZombiesAndMarkFailed handles full tx.
             doRecoverZombies();
         } catch (Exception e) {
-            log.errorf("Failed onStartup zombie recovery: %s", e.getMessage());
+            log.errorf("Failed onStartup zombie recovery: %s", LogUtil.rootMessage(e));
             log.debug("Full stacktrace for onStartup zombie recovery failure", e);
         }
     }
@@ -244,7 +245,7 @@ public class SessionReaper {
         try {
             checkpointStore.purgeOldChatHistory(cutoff);
         } catch (Exception e) {
-            log.warnf("Failed to purge old chat history: %s", e.getMessage());
+            log.warnf("Failed to purge old chat history: %s", LogUtil.rootMessage(e));
         }
     }
 }

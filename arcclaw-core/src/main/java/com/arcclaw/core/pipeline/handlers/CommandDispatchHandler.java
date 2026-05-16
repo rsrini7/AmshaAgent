@@ -14,6 +14,7 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.TimeContextInjector;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -133,9 +134,9 @@ public class CommandDispatchHandler implements MessageHandler {
                 context.setGoal(result.sanitizedInput());
             }
         } catch (Exception e) {
-            log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), e.getMessage());
+            log.errorf("[CommandDispatch] Error processing command '%s': %s", u.raw(), LogUtil.rootMessage(e));
             log.debug("Full command dispatch failure stack trace:", e);
-            
+
             channelPluginRegistry.find(context.getChannelType())
                 .map(ChannelPlugin::sender)
                 .ifPresentOrElse(
@@ -144,7 +145,7 @@ public class CommandDispatchHandler implements MessageHandler {
                 );
             return HandleResult.STOP;
         }
-        
+
         if (result != null && result.commandResponse().isPresent()) {
             String response = result.commandResponse().get();
             channelPluginRegistry.find(context.getChannelType())
@@ -188,12 +189,12 @@ public class CommandDispatchHandler implements MessageHandler {
                 sessionId,
                 userId,
                 chatId,
-                AutonomyLevel.FULL, 
+                AutonomyLevel.FULL,
                 AgentRoleEnum.COORDINATOR.toScopedName(),
                 () -> reflexRegistry.processIfReflex(sessionId, userId, chatId, input, context)
             );
         } catch (Exception e) {
-            log.errorf("[CommandDispatch] Error processing command '%s': %s", input, e.getMessage());
+            log.errorf("[CommandDispatch] Error processing command '%s': %s", input, LogUtil.rootMessage(e));
             log.debug("Full command dispatch failure stack trace:", e);
             
             channelPluginRegistry.find(context.getChannelType())

@@ -27,13 +27,23 @@
 
 ### Q: Why is ArcClaw structured as a multi-module Maven reactor instead of a single application?
 
-The reactor enforces strict architectural separation that prevents accidental dependency creep. The six modules are:
+The reactor enforces strict architectural separation that prevents accidental dependency creep. The 16 modules are:
 
-- **`arcclaw-channel-api`** - pure interfaces (`ChannelSender`, `IntentDetector`, `ChannelAllowlist`, structured output types) with no implementation. This allows `arcclaw-core` to reference channel concepts without coupling to Telegram or any specific adapter.
-- **`arcclaw-core`** - domain logic and CDI interfaces. Has zero awareness of REST, Telegram, or CLI. This is the "kernel" that could theoretically be embedded in any JVM runtime.
+- **`arcclaw-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `arcclaw-core` to reference channel concepts without coupling to any specific adapter.
+- **`arcclaw-persistence-api`** - Hexagonal architecture port interfaces (`CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `SkillStorePort`, `AuditEventStorePort`, `AuditSchemaPort`, `CompactionStorePort`, `MemoryRetrievalPort`, `AdvisoryLockPort`, `PersistenceAdapterPort`). Core depends on ports, not implementations.
+- **`arcclaw-persistence-common`** - Shared JPA entities (`AgentCheckpointEntity`, `AgentCronEntity`, `AuditEventEntity`, `ReasoningStepEntity`) used by all persistence adapters.
+- **`arcclaw-core`** - Agent runtime kernel. Domain logic, tools, reflexes, governance, sandbox, pipeline, and CDI interfaces. Has zero awareness of REST, Telegram, or CLI.
+- **`arcclaw-persistence-sqlite`** - SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, FTS5 setup, and `RagSchemaInitializer`.
+- **`arcclaw-persistence-fs`** - Filesystem-based persistence adapter for environments without SQLite.
+- **`arcclaw-persistence-postgres`** - PostgreSQL adapter (partial: checkpoint, cron, and audit operations only).
 - **`arcclaw-mcp`** - MCP server/client logic. Exposes `DynamicToolLookupImpl` behind the `DynamicToolLookup` interface defined in `arcclaw-core`. Keeping it separate means the kernel has no compile-time dependency on MCP transport code.
 - **`arcclaw-rag`** - Two-tier RAG memory (sqlite-vec). The `vec0.so` native extension has platform-specific native image metadata. Isolating it prevents this from polluting the core module.
-- **`arcclaw-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up the custom `@WorkspaceScoped` CDI scope, MCP build steps (`McpBuildStep`), and RAG resource steps (`RagResourcesBuildStep`). Keeping this separate ensures the scope works correctly in native image compilation.
+- **`arcclaw-onboarding`** - First-run setup wizard. Isolated so it can be excluded from headless/CI deployments.
+- **`arcclaw-channel-web`** - WebSocket-based web channel. Can be excluded for Telegram-only or API-only deployments.
+- **`arcclaw-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
+- **`arcclaw-tool-playwright`** - Playwright browser automation tool. Optional; requires Playwright CLI binary.
+- **`arcclaw-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
+- **`arcclaw-ui`** - Frontend (Node.js / React / Lit + Vite + TypeScript). No Java source; excluded from Maven build.
 - **`arcclaw-app`** - the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `arcclaw-app`**.
 
 The rule is: **kernel logic never imports application-layer code**. This makes `arcclaw-core` independently testable with zero Quarkus startup overhead.
@@ -49,6 +59,18 @@ ArcClaw relies on `StatefulAgentStore` to checkpoint the LLM's `ReasoningStep` h
 3. **Portability:** ArcClaw deploys as a single, self-contained binary (118 MB) with no external service dependencies. A PostgreSQL sidecar would eliminate that advantage.
 
 The dual-database design (`arcclaw-meta.db` for structured state, `arcclaw-fts.db` for FTS5 full-text search) keeps the schema clean and prevents FTS index operations from locking the primary checkpoint tables.
+
+---
+
+### Q: What is the hexagonal persistence architecture?
+
+ArcClaw uses a port/adapter (hexagonal) architecture for persistence. The `arcclaw-persistence-api` module defines **port interfaces** (e.g., `CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `AuditEventStorePort`, `CompactionStorePort`, `MemoryRetrievalPort`, `SkillStorePort`, `AdvisoryLockPort`) that the core module depends on. Three adapter modules implement these ports:
+
+- **`arcclaw-persistence-sqlite`** — Full implementation of all ports. Default backend.
+- **`arcclaw-persistence-fs`** — Filesystem-based implementation. Alternative for environments without SQLite.
+- **`arcclaw-persistence-postgres`** — Partial implementation (checkpoint, cron, audit only). For production deployments requiring a server database.
+
+Swapping backends requires zero core changes — the CDI container discovers the active adapter at runtime. `PersistenceAdapterPort` is the composite interface that aggregates all individual ports.
 
 ---
 
@@ -152,6 +174,10 @@ Groq's LPU (Language Processing Unit) inference delivers the lowest token/second
 
 Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for fully air-gapped deployments. Switching is a two-line change in `application.yaml`.
 
+### Q: What is OMLX and when should I use it?
+
+OMLX is a provider for local MLX-based OpenAI-compatible inference servers (e.g., `mlx-lm` serving quantized models on Apple Silicon). It defaults to `http://127.0.0.1:8000/v1` and requires no API key (`api-key=not-needed`). Use OMLX when you want fully local, air-gapped inference with models like `mlx-community/Qwen3.6-35B-A3B-4bit`. It implements both `AgentChatModelProvider` (reasoning) and `RoutingChatModelProvider` (intent classification + compaction), so it can serve as a complete end-to-end provider. Set `ARCCLAW_LLM_PROVIDER=omlx` to activate.
+
 ---
 
 ### Q: Why Apache Camel for the Telegram adapter instead of the Bot4J or TelegramBots library?
@@ -212,6 +238,28 @@ When the user sends `/approve`, the `ApproveReflex` loads the checkpoint from SQ
 After a checkpoint reaches `COMPLETED` or `FAILED`, ArcClaw performs a **Soft Reset**: the internal ReAct loop state (tool call history, reasoning step sequence) is wiped, but the LangChain4J `ChatMemoryStore` (the conversational history visible to the LLM) is preserved.
 
 Without this reset, a "ghost" tool trigger from a previous task can contaminate the next request - the LLM sees a prior `ToolExecutionResultMessage` in context and incorrectly assumes it is still mid-task. The soft reset eliminates this poisoning while keeping the conversation flowing naturally.
+
+---
+
+### Q: How does parallel tool execution work?
+
+When the LLM requests multiple tools in a single reasoning step, `ParallelToolStepExecutor` splits the batch into two categories:
+
+1. **Pre-executable tools**: Tools that can run immediately (configured via `arcclaw.hitl.pre-executable-tools` or in `FULL` autonomy mode). These execute concurrently using `CompletableFuture.allOf()`.
+2. **HITL-pending tools**: Tools requiring human approval. These are held until the user approves them.
+
+The results from both categories are merged before the next iteration. In Telegram, `BatchHitlKeyboardBuilder` generates an inline keyboard with one row per pending tool — the user can approve/deny individually or use "Approve All" / "Deny All" buttons.
+
+---
+
+### Q: How does agent delegation work?
+
+Any agent role can use the `delegate_to_agent` tool to spawn a sub-agent loop for specialist tasks. The `DelegationRoutingProvider` handles routing — it determines which specialist role should handle the delegated goal based on content analysis.
+
+Key constraints:
+- **Non-coordinators** are restricted from delegating to roles they lack capabilities for (e.g., a `researcher` cannot delegate to `coder`).
+- **Delegation depth** is capped by `arcclaw.delegation.max-depth` (default: 2) to prevent infinite delegation chains.
+- Sub-agents run with their own isolated context and report results back to the parent agent as an observation.
 
 ---
 
@@ -566,7 +614,7 @@ public class MyTool implements AgentTool {
     @Override public ToolOperation requiredOperation() { return ToolOperation.READ_FS; }
     @Override public boolean requiresSandbox() { return false; }
     @Override public JsonObjectSchema parametersSchema() { /* define params */ }
-    @Override public ToolResponse execute(Map<String, Object> params) { /* logic */ }
+    @Override public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) { /* logic */ }
 }
 ```
 
@@ -584,12 +632,17 @@ Add your tool's `ToolCapability` entry to the `Set<ToolCapability>` inside the r
 
 ### Q: How do I define a new agent persona?
 
-1. Create a class implementing `Agent` annotated with `@ApplicationScoped` and `@AgentRole("your_role")`.
-2. Add the role to `AgentRoleEnum` with a `RoleDefinition` specifying `maxIterations`, `canUseTools`, and `Set<ToolCapability>`.
-3. Optionally register it in `application.yaml` under `arcclaw.agents.roles` for the REST API description and intent classifier hints.
-4. Add a system prompt template under `src/main/resources/templates/prompts/role-<n>.txt`.
+Per Architecture Invariant §4.4, agent personas are **data-driven via Qute templates**, not class-per-persona inheritance. The steps are:
+
+1. Add the role to `AgentRoleEnum` with a `RoleDefinition` specifying `maxIterations`, `requiresApproval`, `codeCapable`, and capabilities. Tool capabilities are dynamically assembled at startup via `@ToolMetadata` annotations on tool classes — you don't need to list them in `RoleDefinition`.
+2. Create a Qute system prompt template under `src/main/resources/templates/prompts/role-<name>.txt`. The template engine injects `sortedCapabilities`, `roleDef`, and safety/compaction includes automatically.
+3. Tools grant themselves to roles via `@ToolMetadata(defaultRoles = {"your_role", ...})`. Add a case to every exhaustive switch over `AgentRoleEnum` — the compiler will flag missing cases.
+4. Optionally register the role in `application.yaml` under `arcclaw.agents.roles` for REST API description and intent classifier hints.
 
 The new persona is immediately available via `--role your_role` on the CLI and `agentRole: "your_role"` in the REST API.
+
+> [!IMPORTANT]
+> Class-per-persona inheritance (`BrahmaAgent`, `ShivaAgent`, etc.) is **forbidden** by Architecture Invariant §4.4. All six built-in personas use the single `DefaultAgent` implementation with Qute-rendered system prompts.
 
 ---
 
@@ -603,13 +656,16 @@ If your reflex needs to sanitize input before the LLM sees it (like `PiiScanRefl
 
 ### Q: Can I add a new channel adapter (e.g., Discord, Slack)?
 
-Yes. The `arcclaw-channel-api` module defines the `ChannelSender` and `ChannelAllowlist` interfaces. To add a channel:
+Yes. The `arcclaw-channel-api` module defines a **6-interface SPI contract**. To add a channel, implement all six interfaces and wire them in a `ChannelPlugin` composite bean:
 
-1. Implement `ChannelSender` and register it in `ChannelSenderRegistry` with a matching `ChannelType`.
-2. Create a Camel route (or equivalent) that reads messages from the channel and feeds them into `MessagePipeline.process(MessageContext)`.
-3. Register the channel's allowlist by implementing `ChannelAllowlist` and contributing it to the pipeline's `AllowlistHandler`.
+1. **`ChannelPlugin`** — composite registration bean wiring all 5 components together.
+2. **`ChannelSender`** — sends `List<ReplyNode>` to the channel (with chunking, edit support, etc.).
+3. **`ReplyRenderer`** — converts `ReplyNode` AST to channel-native format (e.g., MarkdownV2 for Telegram).
+4. **`ChannelAllowlist`** — determines if a `ChannelUser` is authorized (supports open-access and silent-block modes).
+5. **`ChannelJobNotifier`** — sends cron completion and approval timeout notifications.
+6. **`ChannelDaemon`** — daemon lifecycle: `isConfigured()`, `start()` (e.g., starts Camel route).
 
-The entire reflex system, skill routing, intent classification, session routing, and agent execution are channel-agnostic - your new adapter gets all of these for free.
+The entire reflex system, skill routing, intent classification, session routing, and agent execution are channel-agnostic — your new adapter gets all of these for free. See [`CHANNEL_SPI.md`](./CHANNEL_SPI.md) for a complete step-by-step guide.
 
 ---
 
@@ -685,7 +741,7 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 
 ## 🧪 Testing
 
-### Q: How are the 150+ tests structured across modules?
+### Q: How are the 1362 tests structured across modules?
 
 Tests live in two modules:
 

@@ -32,6 +32,7 @@ import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;
@@ -48,7 +49,6 @@ import com.arcclaw.onboarding.dto.Step5Response;
 import com.arcclaw.onboarding.dto.StepResponse;
 import com.arcclaw.onboarding.spi.OnboardingStepProvider;
 import io.smallrye.common.annotation.RunOnVirtualThread;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.logging.Logger;
@@ -187,7 +187,7 @@ public class OnboardingResource {
             return Response.ok(new Step3Response(4, true, null)).cookie(createCookie(sid)).build();
 
         } catch (Exception e) {
-            log.errorf("Validation error for sid=%s: %s", sid, ExceptionUtils.getRootCauseMessage(e));
+            log.errorf("Validation error for sid=%s: %s", sid, LogUtil.rootMessage(e));
             return Response.status(400).entity(new Step3Response(3, false, e.getMessage())).build();
         }
 
@@ -248,7 +248,7 @@ public class OnboardingResource {
                     }
                     registered.add(s.name());
                 } catch (Exception e) {
-                    log.warnf("MCP registration failed for %s: %s", s.name(), ExceptionUtils.getRootCauseMessage(e));
+                    log.warnf("MCP registration failed for %s: %s", s.name(), LogUtil.rootMessage(e));
                 }
 
             }

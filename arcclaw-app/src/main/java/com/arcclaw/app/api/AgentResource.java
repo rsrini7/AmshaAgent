@@ -1,5 +1,6 @@
 package com.arcclaw.app.api;
 
+import java.util.List;
 import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -23,12 +24,15 @@ import jakarta.ws.rs.core.SecurityContext;
 
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.AgentSessionService;
+import com.arcclaw.core.api.dto.ActiveAgentResponse;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.api.dto.CreateSessionRequest;
 import com.arcclaw.core.api.dto.CreateSessionResponse;
 import com.arcclaw.core.api.dto.RunAgentRequest;
 import com.arcclaw.core.api.dto.ServiceResult;
 import com.arcclaw.core.scope.WorkspaceContext;
+import com.arcclaw.persistence.api.CheckpointCrudPort;
+import com.arcclaw.persistence.api.CheckpointDto;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
@@ -43,6 +47,9 @@ public class AgentResource {
 
     @Inject
     AgentResponseMapper responseMapper;
+
+    @Inject
+    CheckpointCrudPort checkpointCrud;
 
     @Context
     SecurityContext securityContext;
@@ -68,6 +75,23 @@ public class AgentResource {
                 "sessions", sessions.keySet(),
                 "count", sessions.size()
         )).build();
+    }
+
+    @GET
+    @Path("/active")
+    @RunOnVirtualThread
+    @Operation(summary = "List all active agent instances across all sessions")
+    public Response listActiveAgents() {
+        List<CheckpointDto> active = checkpointCrud.findAllActive();
+        List<ActiveAgentResponse.AgentSummary> summaries = active.stream()
+                .map(cp -> new ActiveAgentResponse.AgentSummary(
+                        cp.id(), cp.sessionId(), cp.agentRole(), cp.status(),
+                        cp.autonomyLevel(), cp.depth(), cp.parentCheckpointId(),
+                        cp.originalGoal(), cp.channelType(), cp.channelPlatformId(),
+                        cp.iterationsUsed(), cp.maxIterations(), cp.pendingToolName(),
+                        cp.createdAt(), cp.updatedAt()))
+                .toList();
+        return Response.ok(new ActiveAgentResponse(summaries.size(), summaries)).build();
     }
 
     @POST

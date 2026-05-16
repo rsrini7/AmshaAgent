@@ -68,13 +68,18 @@ public class CheckpointCleanupService {
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void doMarkCheckpointsFailed(String sessionId) {
-        em.createQuery("UPDATE AgentCheckpoint c SET c.status = :failed, c.failedAt = :now, c.updatedAt = :now " +
+        int affected = em.createQuery("UPDATE AgentCheckpoint c SET c.status = :failed, c.failedAt = :now, c.updatedAt = :now " +
                        "WHERE c.sessionId = :sid AND c.status NOT IN (:terminalStatuses)")
                 .setParameter("failed", CheckpointStatus.FAILED)
                 .setParameter("now", Instant.now())
                 .setParameter("sid", sessionId)
                 .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .executeUpdate();
+        if (affected > 0) {
+            log.warnf("[CheckpointCleanup] Marked %d active checkpoints as FAILED for session=%s", affected, sessionId);
+        } else {
+            log.debugf("[CheckpointCleanup] No active checkpoints to fail for session=%s", sessionId);
+        }
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)

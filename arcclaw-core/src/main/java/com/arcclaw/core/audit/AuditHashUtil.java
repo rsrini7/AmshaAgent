@@ -18,9 +18,9 @@ import com.arcclaw.core.security.CryptoConstants;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
+import com.arcclaw.core.util.LogUtil;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.StartupEvent;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -48,7 +48,7 @@ public class AuditHashUtil {
             log.info("AuditHashUtil: HMAC key primed successfully.");
         } catch (Exception e) {
             log.warnf("AuditHashUtil: Failed to primer HMAC key at startup: %s. " +
-                      "It will be lazily initialized on first use.", ExceptionUtils.getRootCauseMessage(e));
+                      "It will be lazily initialized on first use.", LogUtil.rootMessage(e));
         }
     }
 

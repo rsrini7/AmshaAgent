@@ -116,6 +116,19 @@ The `toolName` string must match `AgentTool.name()` exactly. The `ToolRegistry` 
 > [!IMPORTANT]
 > **Tool context binding**: Tools run in the `WorkspaceContext` execution path (`AgentDispatchHandler → AgentLoop → ToolRegistry → tool.execute()`). Tools **must** use `WorkspaceContext` accessors for session/user/chat data. They **must not** read from `WorkspaceScopeHolder`. Violating this causes context-not-active errors on cron and async paths. See Architecture Invariant §2.3.
 
+### AgentTool lifecycle methods
+
+The `AgentTool` interface provides several optional lifecycle and configuration hooks (all have sensible defaults):
+
+| Method | Default | Purpose |
+|---|---|---|
+| `onInit()` | no-op | Called when the tool is registered by `ToolRegistry`. Use for one-time setup (e.g., opening connections). |
+| `onDestroy()` | no-op | Called on application shutdown. Use for cleanup (e.g., closing connections). |
+| `healthCheck()` | returns success | Override to report tool health (e.g., `SandboxExecTool` checks Podman availability). Used by health check endpoints. |
+| `prepareWorkspace(Path, Map)` | no-op | Called on the **host** before the sandbox container starts. Override to write files the sandbox command needs (e.g., `SandboxExecTool` compiles Java sources). |
+| `shouldStripNullParams()` | `true` | Whether `ToolRegistry` strips explicit `null` values from LLM-provided parameters. Set to `false` if the target API differentiates between omitted and `null` fields. |
+| `idempotencyMode()` | `NON_IDEMPOTENT` | Controls deduplication behavior in `ToolInvocationGuard`. Set to `IDEMPOTENT` for tools that produce the same result on repeated calls (e.g., read-only search tools). Per Architecture Invariant §7.38. |
+
 ---
 
 ## 2. Define a New Agent Persona
@@ -416,6 +429,19 @@ ARCCLAW_LLM_MODEL_NAME=my-model-name
 
 > [!NOTE]
 > The model used for **agent reasoning** is configured via `arcclaw.llm.provider` / `ARCCLAW_LLM_PROVIDER`. The model used for **intent classification** is configured via `arcclaw.routing.intent-classifier.model` (defaults to `llama-3.1-8b-instant`). The model for **context compaction** is produced by `CompactionModelProducer` in `arcclaw-app`. All three can be configured independently.
+
+**Built-in LLM providers:**
+
+| Provider | Provider ID | SPI | Module |
+|---|---|---|---|
+| `GroqProviderFactory` | `groq` | `AgentChatModelProvider` | `arcclaw-core` |
+| `OpenAiProviderFactory` | `openai` | `AgentChatModelProvider` | `arcclaw-core` |
+| `OllamaProviderFactory` | `ollama` | `AgentChatModelProvider` | `arcclaw-core` |
+| `OpenRouterProviderFactory` | `openrouter` | `AgentChatModelProvider` | `arcclaw-core` |
+| `ClaudeCodeProviderFactory` | `claude` | `AgentChatModelProvider` | `arcclaw-core` |
+| `OmlxProviderFactory` | `omlx` | `AgentChatModelProvider` | `arcclaw-core` |
+
+Each provider also has a corresponding `RoutingChatModelProvider` implementation in `arcclaw-app` for intent classification and compaction.
 
 ---
 
@@ -785,4 +811,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 8 LLM providers*

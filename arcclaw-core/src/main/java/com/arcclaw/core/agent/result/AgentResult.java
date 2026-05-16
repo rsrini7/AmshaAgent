@@ -7,11 +7,11 @@ import java.util.Map;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.governance.ApprovalFrame;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.qute.TemplateData;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -78,7 +78,7 @@ public sealed interface AgentResult
                 // should be refactored to NOT expose paramsJson.
                 return new ObjectMapper().writeValueAsString(frame.params());
             } catch (Exception e) {
-                log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
                 return "{}";
             }
         }
@@ -125,7 +125,7 @@ public sealed interface AgentResult
         try {
             params = new ObjectMapper().readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
-            log.debugf("Non-fatal: %s", ExceptionUtils.getRootCauseMessage(e));
+            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
         }
         return awaitingApproval(new ApprovalFrame(toolName, params, ApprovalFrame.RiskLevel.MEDIUM), sessionId, steps);
     }

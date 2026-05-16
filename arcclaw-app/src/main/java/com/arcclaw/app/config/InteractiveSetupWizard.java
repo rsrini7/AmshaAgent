@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.arcclaw.app.util.CliUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -50,7 +50,7 @@ public class InteractiveSetupWizard {
             try (InputStream in = InteractiveSetupWizard.class.getResourceAsStream("/env-example")) {
                 if (in != null) Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
-                log.debugf("Failed to seed .env from example: %s", ExceptionUtils.getRootCauseMessage(e));
+                log.debugf("Failed to seed .env from example: %s", LogUtil.rootMessage(e));
             }
         }
 

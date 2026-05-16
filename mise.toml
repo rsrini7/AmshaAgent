@@ -8,10 +8,10 @@
 #
 # BOOTSTRAP SEQUENCE (fresh clone):
 #   1. mise trust --all
-#   2. mise install              ← installs pwsh, java, maven, usage
+#   2. mise install              ← installs pwsh, java, maven, gh, usage
 #   3. mise run setup:profile    ← writes shell profile (activate + completion)
 #   4. reload your shell
-#   5. mise run setup            ← .env, chmod mvnw, JDKs
+#   5. mise run setup            ← .env, chmod mvnw, JDKs, gh CLI
 #   6. mise run dev
 #
 # NOTE: `start` uses run = [...] array (no shell dependency) so it works
@@ -27,6 +27,7 @@ java       = "temurin-25"
 maven      = "3.9"
 powershell = "7.6"
 node       = "22"
+gh         = "latest"
 
 [env]
 _.file = ".env"
@@ -55,19 +56,19 @@ trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
 [tasks.start]
 description = "New here? Run: mise install  then: mise run setup:profile  then: mise run setup"
 run = [
-    "echo.",
+    "echo \"\"",
     "echo   ArcClaw - mise Task Runner",
     "echo   ===========================",
-    "echo.",
+    "echo \"\"",
     "echo   BOOTSTRAP SEQUENCE",
     "echo   1. mise install                installs pwsh + java + maven + usage",
     "echo   2. mise run setup:profile      writes shell profile activate + completion",
     "echo   3. reload your shell",
-    "echo   4. mise run setup              .env + chmod mvnw + JDKs + Playwright Chromium",
+    "echo   4. mise run setup              .env + chmod mvnw + JDKs + gh CLI + Playwright Chromium",
     "echo   5. mise run dev                hot-reload on :8080",
-    "echo.",
+    "echo \"\"",
     "echo   See MISE_SETUP.md for full documentation.",
-    "echo.",
+    "echo \"\"",
 ]
 
 # =============================================================================
@@ -140,12 +141,12 @@ if ($IsWindows) {
     if ($shell -like '*zsh') {
         $rcFile     = "$env:HOME/.zshrc"
         $shellName  = 'zsh'
-        $activateLine   = 'eval "$(~/.local/bin/mise activate zsh)"'
-        $completionLine = 'eval "$(mise completion zsh)"'
+        $activateLine   = 'eval "$(mise activate zsh)"'
+        $completionLine = 'autoload -Uz compinit && compinit; eval "$(mise completion zsh)"'
     } else {
         $rcFile     = "$env:HOME/.bashrc"
         $shellName  = 'bash'
-        $activateLine   = 'eval "$(~/.local/bin/mise activate bash)"'
+        $activateLine   = 'eval "$(mise activate bash)"'
         $completionLine = 'eval "$(mise completion bash --include-bash-completion-lib)"'
     }
     Write-Host "-- Shell detected: $shellName -> $rcFile"
@@ -224,14 +225,24 @@ if ($IsWindows) {
 }
 if (-not (Get-Command dos2unix -ErrorAction SilentlyContinue)) {
     Write-Host '📦 Installing dos2unix...'
-    sudo apt-get install -y dos2unix
+    if ($IsLinux -and (Get-Command apt-get -ErrorAction SilentlyContinue)) {
+        sudo apt-get install -y dos2unix
+    } elseif ($IsMacOS -and (Get-Command brew -ErrorAction SilentlyContinue)) {
+        brew install dos2unix
+    } else {
+        Write-Host '⚠️  dos2unix not found and no known package manager available. Please install it manually.'
+    }
 }
-dos2unix mvnw mise.toml arcclaw-ui/package.json
-chmod +x mvnw
-Get-ChildItem -Path '.mise/' -Recurse -Include '*.sh','*.ps1' | ForEach-Object {
-    dos2unix $_.FullName
-    chmod +x $_.FullName
-    Write-Host "✅  Fixed: $($_.Name)"
+foreach ($f in @('mvnw', 'mise.toml', 'arcclaw-ui/package.json')) {
+    if (Test-Path $f) { dos2unix $f }
+}
+if (Test-Path 'mvnw') { chmod +x mvnw }
+if (Test-Path '.mise') {
+    Get-ChildItem -Path '.mise/' -Recurse -Include '*.sh','*.ps1' | ForEach-Object {
+        dos2unix $_.FullName
+        chmod +x $_.FullName
+        Write-Host "✅  Fixed: $($_.Name)"
+    }
 }
 Write-Host '✅  mvnw + mise.toml + all task scripts CRLF fixed.'
 """
@@ -275,18 +286,67 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
   $ErrorActionPreference = 'Stop'
-  cd arcclaw-ui
-  npm install
-  npm run build
-  cd ..
+  if (-not (Test-Path 'arcclaw-ui')) { Write-Host '❌  arcclaw-ui/ not found.'; exit 1 }
+  Push-Location arcclaw-ui
+  try {
+    npm install
+    npm run build
+  } finally {
+    Pop-Location
+  }
   $target = "arcclaw-app/src/main/resources/META-INF/resources"
   if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
   Copy-Item -Path "arcclaw-ui/dist/*" -Destination $target -Recurse -Force
   Write-Host "✅  UI built and copied to $target"
 """
 
+[tasks."build:ui-copy-dto"]
+description = "Ensure generated TypeScript DTOs exist (create stubs if missing)"
+alias = "buc-dto"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+  $ErrorActionPreference = 'Stop'
+  $modelsDir = "arcclaw-ui/src/api/generated/models"
+  $stubFiles = @(
+    "AgentStatusDto.ts",
+    "AgentEvent.ts",
+    "SkillDto.ts",
+    "McpServerRequest.ts"
+  )
+  $missing = $false
+  foreach ($f in $stubFiles) {
+    if (-not (Test-Path "$modelsDir/$f")) { $missing = $true; break }
+  }
+  if (-not $missing) { Write-Host '✅  Generated DTOs already exist.'; exit 0 }
+
+  Write-Host 'ℹ️   Generated DTOs missing — creating stubs from build output...'
+  try {
+    if (-not (Test-Path 'arcclaw-ui')) { Write-Host '❌  arcclaw-ui/ not found.'; exit 1 }
+    Push-Location arcclaw-ui
+    npm run generate-dto
+  } finally {
+    Pop-Location
+  }
+
+  if (-not (Test-Path $modelsDir)) { New-Item -ItemType Directory -Path $modelsDir -Force | Out-Null }
+
+  foreach ($f in $stubFiles) {
+    if (-not (Test-Path "$modelsDir/$f")) {
+      Write-Host "⚠️   DTO $f still missing after generate-dto — creating manual stub."
+      $name = $f -replace '\\.[^.]*$', ''
+      $content = @"
+export interface $name {
+}
+"@
+      Set-Content -Path "$modelsDir/$f" -Value $content
+    }
+  }
+  Write-Host '✅  All generated DTOs present.'
+"""
+
 [tasks.build-app]
-depends = ["dev:kill", "env:recover", "build:ui-copy"]
+depends = ["dev:kill", "env:recover"]
 description = "JVM build - all modules, skip tests (fast daily driver) - uses temurin-25"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -295,6 +355,23 @@ run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+
+# --- Auto-tune: detect available RAM & CPUs ---
+if ($IsMacOS) {
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+    if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    $cpu = [int](sysctl -n hw.ncpu)
+} elseif ($IsWindows) {
+    $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+    $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+} else {
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    $cpu = [int](nproc)
+}
+$jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
+$threads = [Math]::Max(2, [Math]::Min([Math]::Floor($cpu / 2), 8))
+Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, parallel threads:${threads}"
 
 # --- Shield .env (secrets) from the build ---
 $envBackup = $null
@@ -305,12 +382,33 @@ if (Test-Path '.env') {
 }
 
 try {
-    $env:MAVEN_OPTS = $mOpts
-    & $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress
+    $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
+
+    # Phase 1: Build Maven backend first (generates OpenAPI spec)
+    & $mvnw clean install -pl arcclaw-app -am -DskipTests --no-transfer-progress -T $threads
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host '✅  Maven build complete. OpenAPI spec generated.'
+
+    # Phase 2: Build UI (prebuild auto-generates TypeScript DTOs from OpenAPI spec)
+    try {
+        Push-Location arcclaw-ui
+        npm install
+        npm run build
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Write-Host '✅  UI built.'
+    } finally {
+        Pop-Location
+    }
+
+    # Phase 3: Copy UI dist to Quarkus resources
+    $target = "arcclaw-app/src/main/resources/META-INF/resources"
+    if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
+    Copy-Item -Path "arcclaw-ui/dist/*" -Destination $target -Recurse -Force
+    Write-Host '✅  UI copied to Quarkus resources.'
+
     Write-Host '✅  Build complete: arcclaw-app/target/quarkus-app/quarkus-run.jar'
 } finally {
-    if ($envBackup) {
+    if ($envBackup -and (Test-Path '.env.build-backup')) {
         Rename-Item '.env.build-backup' '.env'
         Write-Host 'ℹ️   .env restored.'
     }
@@ -318,7 +416,7 @@ try {
 """
 
 [tasks."build:full"]
-depends = ["env:recover", "build:ui-copy"]
+depends = ["env:recover"]
 description = "Clean install all modules, skip tests"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -327,6 +425,23 @@ run = """
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+
+# --- Auto-tune: detect available RAM & CPUs ---
+if ($IsMacOS) {
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+    if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    $cpu = [int](sysctl -n hw.ncpu)
+} elseif ($IsWindows) {
+    $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+    $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+} else {
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    $cpu = [int](nproc)
+}
+$jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
+$threads = [Math]::Max(2, [Math]::Min([Math]::Floor($cpu / 2), 8))
+Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, parallel threads:${threads}"
 
 # --- Shield .env (secrets) from the build ---
 $envBackup = $null
@@ -337,12 +452,33 @@ if (Test-Path '.env') {
 }
 
 try {
-    $env:MAVEN_OPTS = $mOpts
-    & $mvnw clean install -am -DskipTests --no-transfer-progress
+    $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
+
+    # Phase 1: Build Maven backend first (generates OpenAPI spec)
+    & $mvnw clean install -am -DskipTests --no-transfer-progress -T $threads
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host '✅  Maven build complete. OpenAPI spec generated.'
+
+    # Phase 2: Build UI (prebuild auto-generates TypeScript DTOs from OpenAPI spec)
+    try {
+        Push-Location arcclaw-ui
+        npm install
+        npm run build
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Write-Host '✅  UI built.'
+    } finally {
+        Pop-Location
+    }
+
+    # Phase 3: Copy UI dist to Quarkus resources
+    $target = "arcclaw-app/src/main/resources/META-INF/resources"
+    if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
+    Copy-Item -Path "arcclaw-ui/dist/*" -Destination $target -Recurse -Force
+    Write-Host '✅  UI copied to Quarkus resources.'
+
     Write-Host '✅  Full build complete.'
 } finally {
-    if ($envBackup) {
+    if ($envBackup -and (Test-Path '.env.build-backup')) {
         Rename-Item '.env.build-backup' '.env'
         Write-Host 'ℹ️   .env restored.'
     }
@@ -360,6 +496,23 @@ $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 
+# --- Auto-tune: detect available RAM & CPUs ---
+if ($IsMacOS) {
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+    if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    $cpu = [int](sysctl -n hw.ncpu)
+} elseif ($IsWindows) {
+    $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+    $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+} else {
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    $cpu = [int](nproc)
+}
+$jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
+$threads = [Math]::Max(2, [Math]::Min([Math]::Floor($cpu / 2), 8))
+Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, parallel threads:${threads}"
+
 # --- Shield .env (secrets) from the tests ---
 $envBackup = $null
 if (Test-Path '.env') {
@@ -369,12 +522,12 @@ if (Test-Path '.env') {
 }
 
     try {
-        $env:MAVEN_OPTS = $mOpts
-        & $mvnw clean verify -am "-Dquarkus.test.profile=test"
+        $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
+        & $mvnw clean verify -am "-Dquarkus.test.profile=test" -T $threads
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '✅  Tests complete.'
     } finally {
-    if ($envBackup) {
+    if ($envBackup -and (Test-Path '.env.build-backup')) {
         Rename-Item '.env.build-backup' '.env'
         Write-Host 'ℹ️   .env restored.'
     }
@@ -452,11 +605,17 @@ if ($strategy -eq 'container') {
     Write-Host 'ℹ️   Container build: host GraalVM not needed - skipping JDK switch.'
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
-        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
-        $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
-        if ($targetGB -lt 4) { $targetGB = 4 }
-        if ($targetGB -gt 16) { $targetGB = 16 }
-        Write-Host "🧠 Allocating ${targetGB}G for native-image (80% of system RAM)..."
+        if ($IsMacOS) {
+            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+            if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+        } elseif ($IsWindows) {
+            $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+        } else {
+            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+        }
+        $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
+        Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
 
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
@@ -464,17 +623,23 @@ if ($strategy -eq 'container') {
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
     } finally {
-        if ($envBackup -eq $true)           { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+        if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
         elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
     }
 } else {
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
-        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
-        $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
-        if ($targetGB -lt 4) { $targetGB = 4 }
-        if ($targetGB -gt 16) { $targetGB = 16 }
-        Write-Host "🧠 Allocating ${targetGB}G for native-image (80% of system RAM)..."
+        if ($IsMacOS) {
+            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+            if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+        } elseif ($IsWindows) {
+            $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+        } else {
+            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+        }
+        $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
+        Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
 
         mise use --path mise.toml java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
@@ -483,7 +648,7 @@ if ($strategy -eq 'container') {
         Write-Host '▶   Assembling dist/ folder...'
         mise run dist
     } finally {
-        if ($envBackup -eq $true)           { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+        if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
         elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
         mise use --path mise.toml java@temurin-25
         Write-Host '✅  Switched back to Temurin 25.'
@@ -531,11 +696,17 @@ if (Test-Path '.env') {
 }
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
-        $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
-        $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
-        if ($targetGB -lt 4) { $targetGB = 4 }
-        if ($targetGB -gt 16) { $targetGB = 16 }
-        Write-Host "🧠 Allocating ${targetGB}G for native-image (80% of system RAM)..."
+        if ($IsMacOS) {
+            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+            if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+        } elseif ($IsWindows) {
+            $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+        } else {
+            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+        }
+        $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
+        Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
 
         mise use --path mise.toml java@graalvm-community-25.0.2
         # ... jenv bypass ...
@@ -550,7 +721,7 @@ if (Test-Path '.env') {
     Write-Host '▶   Assembling dist/ folder...'
     mise run dist
 } finally {
-    if ($envBackup -eq $true)           { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
     mise use --path mise.toml java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
@@ -570,10 +741,19 @@ $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 Write-Host 'ℹ️   build:native-local-slim: local GraalVM, excluding Playwright driver bundle.'
 
 try {
-    $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
-    $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.8)
-    if ($targetGB -lt 4) { $targetGB = 4 }
-    
+    # ── Memory Scaling ──────────────────────────────────────────────────
+    if ($IsMacOS) {
+        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+        if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    } elseif ($IsWindows) {
+        $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+    } else {
+        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    }
+    $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
+    Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
+
     mise use --path mise.toml java@graalvm-community-25.0.2
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
     & $mvnw clean package -Pnative -Dslim -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
@@ -584,18 +764,6 @@ try {
     mise use --path mise.toml java@temurin-25
 }
 """
-
-[tasks."build:native-wsl2-local"]
-description = "Native Linux binary via WSL2 - always local GraalVM, no container (fastest WSL2 build)"
-quiet = true
-dir = "{{config_root}}"
-run = "mise run build:native-wsl2 --local"
-
-[tasks."build:native-wsl2-local-slim"]
-description = "Native Linux binary via WSL2 - local GraalVM + Slim mode"
-quiet = true
-dir = "{{config_root}}"
-run = "mise run build:native-wsl2 --local --slim"
 
 [tasks."build:native-lowmem"]
 depends = ["env:recover", "build:ui-copy"]
@@ -630,11 +798,17 @@ if (Test-Path '.env') {
 }
 try {
     # ── Memory Scaling (Low-Mem Mode) ──────────────────────────────────────
-    $totalKB = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize } elseif ($IsMacOS) { [int64](sysctl -n hw.memsize) / 1024 } else { [int64](grep MemTotal /proc/meminfo | awk '{print $2}') }
-    $targetGB = [Math]::Floor(($totalKB / 1024 / 1024) * 0.6) # Only 60% for low-mem
-    if ($targetGB -lt 2) { $targetGB = 2 }
-    if ($targetGB -gt 6) { $targetGB = 6 } # Cap at 6G
-    Write-Host "🧠 Allocating ${targetGB}G for native-image (Smart Low-Mem mode)..."
+    if ($IsMacOS) {
+        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+        if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    } elseif ($IsWindows) {
+        $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+    } else {
+        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    }
+    $targetGB = [Math]::Max(2, [Math]::Min([Math]::Floor($availGB * 0.6), 6)) # 60%, capped at 6G for lowmem
+    Write-Host "🧠 Allocating ${targetGB}G for native-image (Low-Mem: 60% of ${availGB}G available)..."
 
     mise use --path mise.toml java@graalvm-community-25.0.2
     # ... jenv bypass ...
@@ -652,7 +826,7 @@ try {
     Write-Host '▶   Assembling dist/ folder...'
     mise run dist
 } finally {
-    if ($envBackup -eq $true)           { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
     mise use --path mise.toml java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'
@@ -1339,6 +1513,8 @@ if (-not (Test-Path $src)) {
     exit 1
 }
 
+if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir -Force | Out-Null }
+
 # --- Cleanup dist/ ephemeral data to ensure a clean package ---
 if (Test-Path "$distDir/.playwright-browsers") { 
     Write-Host "ℹ️   Removing .playwright-browsers from $distDir for clean distribution..."
@@ -1725,8 +1901,13 @@ if (-not (Get-Command podman -ErrorAction SilentlyContinue)) {
     Write-Host '❌  podman is not installed or not in PATH.'
     exit 1
 }
+$dockerfile = './sandbox/Dockerfile.toolrunner'
+if (-not (Test-Path $dockerfile)) {
+    Write-Host "❌  Dockerfile not found at $dockerfile"
+    exit 1
+}
 Write-Host '▶   Building arcclaw-tool-runner image via Podman...'
-podman build --no-cache -t arcclaw-tool-runner -f ./sandbox/Dockerfile.toolrunner .
+podman build --no-cache -t arcclaw-tool-runner -f $dockerfile .
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌  Podman build failed (exit $LASTEXITCODE)"
     exit $LASTEXITCODE
@@ -1821,7 +2002,11 @@ Write-Host '-- Java ────────────────────
 java -version 2>&1 | ForEach-Object { Write-Host "  $_" }
 Write-Host '-- Maven wrapper ────────────────────────────────'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-& $mvnw --version 2>&1 | ForEach-Object { Write-Host "  $_" }
+if (Test-Path $mvnw) {
+    & $mvnw --version 2>&1 | ForEach-Object { Write-Host "  $_" }
+} else {
+    Write-Host '  mvnw not found'
+}
 Write-Host '-- Podman ───────────────────────────────────────'
 $pv = podman --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $pv" } else { Write-Host '  podman not installed' }
 Write-Host '-- Docker CLI ───────────────────────────────────'

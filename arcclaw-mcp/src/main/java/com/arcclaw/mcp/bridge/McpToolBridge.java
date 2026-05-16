@@ -20,6 +20,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.tools.ToolSchemaProvider;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
@@ -48,7 +49,7 @@ public class McpToolBridge {
             try {
                 schemaCache.put(name, schemaProvider.getJsonSchema(tool));
             } catch (Exception e) {
-                log.errorf("Failed to cache MCP schema for tool '%s': %s", name, e.getMessage());
+                log.errorf("Failed to cache MCP schema for tool '%s': %s", name, LogUtil.rootMessage(e));
             }
         });
     }
@@ -114,7 +115,7 @@ public class McpToolBridge {
                 }
             );
         } catch (Exception e) {
-            log.errorf("Error invoking tool '%s': %s", toolName, e.getMessage());
+            log.errorf("Error invoking tool '%s': %s", toolName, LogUtil.rootMessage(e));
             return "Error: " + e.getMessage();
         }
     }
@@ -137,7 +138,7 @@ public class McpToolBridge {
             try {
                 return schemaProvider.getJsonSchema(tool);
             } catch (Exception e) {
-                log.errorf("Failed to serialize schema for tool '%s': %s", name, e.getMessage());
+                log.errorf("Failed to serialize schema for tool '%s': %s", name, LogUtil.rootMessage(e));
                 return "{\"type\":\"object\"}";
             }
         });

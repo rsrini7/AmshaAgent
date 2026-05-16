@@ -29,7 +29,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 
 ### Key Capabilities
 
-- **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, or local Ollama models
+- **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, OMLX, or local Ollama models
 - **Six specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
@@ -59,7 +59,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 |---|---|
 | **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces; Session-constrained workspaces |
 | **State** | Hexagonal persistence (port/adapter) with SQLite (WAL), PostgreSQL, and filesystem backends; 100% session persistence and graceful continuity |
-| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch; `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
+| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch across 8 providers (Groq, OpenAI, OpenRouter, Ollama, OMLX, Gemini, Nvidia, Cerebras); `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.78.1 |
@@ -234,12 +234,12 @@ graph TD
 
     subgraph Tool Schema per Role
         AI -->|agentRole filter| Schema{Schema Filter<br/>RoleDefinition.capabilities}
-        Schema -->|coordinator| CT[github + schedule_task + manage_schedule<br/>+ memory_search + delegate_to_agent]
-        Schema -->|researcher| RA[github + memory_search<br/>+ brave_web_search + serper_web_search]
-        Schema -->|architect| AR[github + memory_search]
-        Schema -->|synthesizer| SYN[github + schedule_task + manage_schedule<br/>+ memory_search + web_search]
-        Schema -->|debugger| DB2[github + sandbox_exec + manage_checklist]
-        Schema -->|coder| COD[sandbox_exec + manage_checklist]
+        Schema -->|coordinator| CT[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + delegate_to_agent]
+        Schema -->|researcher| RA[github + memory_search<br/>+ brave_web_search + serper_web_search + delegate_to_agent]
+        Schema -->|architect| AR[github + memory_search + delegate_to_agent]
+        Schema -->|synthesizer| SYN[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + web_search + delegate_to_agent]
+        Schema -->|debugger| DB2[github + sandbox_exec + check_list + add_mcp_server]
+        Schema -->|coder| COD[sandbox_exec + check_list + add_mcp_server]
         Schema -->|dynamic MCP tools| DynT[ExternalMcpToolAdapter<br/>MCP server tools]
     end
 
@@ -364,15 +364,15 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 
 | Role | Deity | Max Iterations | Tools | Description |
 |---|---|---|---|---|
-| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
-| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
-| `coder` | **Brahma** | 15 | `sandbox_exec`, `manage_checklist` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox |
-| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `manage_checklist` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification |
-| `architect` | **Brihaspati** | 7 | `github`, `memory_search` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
-| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `brave_web_search`, `serper_web_search` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
+| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
+| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
+| `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox |
+| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification |
+| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `delegate_to_agent` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
+| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
 
 > [!NOTE]
-> The `coder` role's tool schema is limited to `sandbox_exec` and `manage_checklist` — it cannot make network calls or access external resources. `delegate_to_agent` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. Tool schemas are assembled dynamically at runtime via `@ToolMetadata` annotations and the `CapabilityRegistry`. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
+> Tool schemas are assembled dynamically at runtime via `@ToolMetadata(defaultRoles=...)` annotations on tool classes. `delegate_to_agent` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. The `coder` role has `add_mcp_server` for dynamically registering MCP servers at runtime. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
@@ -383,10 +383,10 @@ graph LR
     subgraph AGENTS["🕉️ THE COSMIC PANTHEON - SIX AGENTS"]
         direction TB
         A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate_to_agent"]:::coordinator
-        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code"]:::researcher
-        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist"]:::coder
-        A4["🔴 debugger - Shiva<br/>Contrarian · Finds blind spots"]:::debugger
-        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code"]:::architect
+        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code · + delegate"]:::researcher
+        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist + MCP + delegate"]:::coder
+        A4["🔴 debugger - Shiva<br/>Contrarian · Finds blind spots · MCP + delegate"]:::debugger
+        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code · + delegate"]:::architect
         A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist"]:::synthesizer
     end
 
@@ -399,7 +399,7 @@ graph LR
         T5["🌐 ExternalMcpTool<br/>Dynamic tools from MCP servers<br/>HTTP_SSE / Podman STDIO transport"]:::tool
         T6["🔀 delegate_to_agent<br/>all roles<br/>Spawns specialist sub-agent loop"]:::tool
         T7["💻 sandbox_exec<br/>Isolated code execution<br/>Python / Java / Node / Go"]:::tool
-        T8["✅ manage_checklist<br/>Task progress tracking"]:::tool
+        T8["✅ check_list<br/>Task progress tracking"]:::tool
         T9["🔍 brave_web_search / serper_web_search<br/>Real-time web search"]:::tool
     end
 
@@ -407,7 +407,7 @@ graph LR
         direction TB
         AU1["FULL - All ops permitted"]:::policy
         AU2["SUPERVISED ← default<br/>NETWORK_OUTBOUND → HITL pause"]:::policy
-        AU3["BACKGROUND - READ_FS only<br/>No scheduling"]:::policy
+        AU3["BACKGROUND - READ_FS + NETWORK_OUTBOUND<br/>+ DELEGATE_AUTONOMOUS"]:::policy
         AU4["READONLY - READ_FS only<br/>Most restricted"]:::policy
     end
 
@@ -418,6 +418,7 @@ graph LR
     A4 --> T1 & T7 & T8 & T6
     A5 --> T1 & T4 & T6
     A6 --> T1 & T2 & T3 & T4 & T9 & T6
+    A3 & A4 -.->|add_mcp_server| T5
     A1 & A2 & A4 & A5 & A6 -.->|MCP tools appended| T5
 ```
 
@@ -445,7 +446,12 @@ arcclaw-channel-api/          ← Channel SPI contracts (zero implementation)
 │                               ConflictSummary, @AgentFunction annotation
 │
 arcclaw-persistence-api/      ← Hexagonal architecture port interfaces
-│   ├── CheckpointStorePort     Checkpoint CRUD + claim + finalize
+│   ├── CheckpointStorePort     Composite: extends CheckpointCrudPort, CheckpointTransitionPort,
+│   │                           CheckpointSessionPort, CheckpointLifecyclePort
+│   ├── CheckpointCrudPort      Checkpoint create/read/update
+│   ├── CheckpointTransitionPort  Checkpoint status transitions (claim, finalize)
+│   ├── CheckpointSessionPort   Checkpoint session queries
+│   ├── CheckpointLifecyclePort Checkpoint lifecycle (reap, GC)
 │   ├── ChatMemoryStorePort     Chat memory persistence
 │   ├── CronStorePort           Cron job persistence
 │   ├── SecretStorePort         Encrypted secret storage
@@ -478,11 +484,13 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           PromptTemplateEngine (Qute), SystemPromptBuilder,
 │   │                           ParallelToolCall, ReasoningStep, ReasoningStepParser,
 │   │                           GroqProviderFactory, OpenAiProviderFactory,
-│   │                           OllamaProviderFactory, OpenRouterProviderFactory
+│   │                           OllamaProviderFactory, OpenRouterProviderFactory,
+│   │                           OmlxProviderFactory
 │   ├── agent/role/             AgentRoleEnum, RoleDefinition, RoleRegistry, ToolCapability
 │   ├── api/                    AgentResource, AgentSessionService, AuditResource,
 │   │                           SystemInfoResource, ToolRegistryResource,
 │   │                           GlobalExceptionMapper
+│   ├── api/dto/                ActiveAgentResponse (UI DTO: count + AgentSummary list)
 │   ├── audit/                  AuditService, AuditObserver, AuditHashUtil, AuditEvent,
 │   │                           AuditSchemaEnforcer (WORM triggers), AuditVerifier,
 │   │                           ComplianceAuditService, TelemetryAuditService,
@@ -511,7 +519,8 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           ResetReflex (500), DelegateApprovalGuard, ApprovalNotificationService
 │   ├── routing/                CoderRoutingProvider, DefaultRoutingProvider,
 │   │                           DelegationRoutingProvider, IngestRoutingProvider,
-│   │                           IntentRoutingProvider, SchedulingRoutingProvider
+│   │                           IntentRoutingProvider, SchedulingRoutingProvider,
+│   │                           OmlxLlmProviderFactory
 │   ├── sandbox/                ProcessIsolationExecutor, PodmanContainerExecutor,
 │   │                           NamespaceExecutor, DirectExecutor, SandboxCircuitBreaker,
 │   │                           SandboxCodeSafetyScanner, SandboxSecretResolver,
@@ -525,6 +534,8 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           AutonomyLevel, AutonomyPolicy, StandardAutonomyPolicy,
 │   │                           ToolOperation, RequiresSecret, DestructiveVocabularyFilter,
 │   │                           InputSanitizer, DevSecretSeeder, SessionOwnerResolver
+│   ├── config/                 PolicyConfig (arcclaw.policy.* - destructive vocabulary
+│   │                           patterns, HITL-exempt tools, governance overrides)
 │   ├── skill/                  SkillRegistry, SkillLoader, CompiledSkillEntry,
 │   │                           AgentSkillEntity, SkillSystemPrompt (Qute template)
 │   ├── state/                  StatefulAgentStore, SqliteStatefulAgentStore,
@@ -532,11 +543,13 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           CompactionSummaryEntity, CompactionSummaryRepository
 │   ├── structured/             StructuredOutputEngine, StructuredRetryLoop,
 │   │                           PermissiveJsonExtractor, AgentFunctionRegistry
-│   └── tools/                  ToolRegistry, AgentTool SPI, ToolResponse, ToolOperation,
-│                               ToolCapability, GithubTool, ScheduleTaskTool,
-│                               ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
-│                               SandboxExecTool, CheckListTool, BraveWebSearchTool,
-│                               SerperWebSearchTool, DynamicToolLookup SPI
+│   ├── tools/                  ToolRegistry, AgentTool SPI, ToolResponse, ToolOperation,
+│   │                           ToolCapability, GithubTool, ScheduleTaskTool,
+│   │                           ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
+│   │                           SandboxExecTool, CheckListTool, BraveWebSearchTool,
+│   │                           SerperWebSearchTool, DynamicToolLookup SPI,
+│   │                           ToolContractExporter (writes tool-contracts.json on startup)
+│   ├── util/                   LogUtil (rootMessage, trimmedStack, ctx formatting)
 │
 arcclaw-persistence-sqlite/   ← SQLite adapter implementing all persistence ports
 │   ├── SqliteCheckpointStoreAdapter, SqliteCronStoreAdapter, SqliteSecretStoreAdapter,
@@ -549,13 +562,15 @@ arcclaw-persistence-sqlite/   ← SQLite adapter implementing all persistence po
 │   ├── GlobalKnowledgeBase     Application-scoped in-memory embedding store
 │   └── SessionKnowledgeBase    @WorkspaceScoped per-session embedding store
 │
-arcclaw-persistence-fs/       ← Filesystem-based persistence adapter (alternative to SQLite)
+arcclaw-persistence-fs/       ← Filesystem-based persistence adapter (alternative to SQLite; missing AdvisoryLockPort)
 │
-arcclaw-persistence-postgres/ ← PostgreSQL persistence adapter
+arcclaw-persistence-postgres/ ← PostgreSQL persistence adapter (PARTIAL: checkpoint, cron, audit only)
 │   ├── PostgresCheckpointStoreAdapter, PostgresCronStoreAdapter,
 │   │   PostgresAuditEventStoreAdapter, PostgresAuditSchemaEnforcer
 │   ├── ZombieRecoveryService   Orphaned checkpoint cleanup
 │   └── CheckpointMapper, CheckpointBatchOperations
+│   NOTE: Missing implementations for SecretStorePort, SkillStorePort, ChatMemoryStorePort,
+│         CompactionStorePort, MemoryRetrievalPort, AdvisoryLockPort
 │
 arcclaw-mcp/                  ← MCP server + client bridge
 │   ├── bridge/                 ExternalMcpToolAdapter, McpToolBridge,
@@ -815,8 +830,9 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `MemorySearchTool` | `memory_search` | `READ_FS` | ❌ In-memory | coordinator, researcher, architect, synthesizer | Two-tier RAG: FTS5 full-text + sqlite-vec vector search of past session compaction summaries |
 | `IngestDocumentTool` | `ingest_document` | `WRITE_MEMORY` | ❌ In-memory | coordinator, synthesizer | Ingest a document into the global or session knowledge base for future vector retrieval |
 | `DelegateToAgentTool` | `delegate_to_agent` | `DELEGATE_AUTONOMOUS` | ❌ In-process | all 6 roles | Spawns a specialist sub-agent loop; non-coordinators are restricted from delegating to roles they lack |
+| `McpSelfRegisterTool` | `add_mcp_server` | `NETWORK_OUTBOUND` | ❌ In-memory | coder, debugger | Dynamically register a new MCP server at runtime; tools become available immediately |
 | `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Go, Node, Bash); falls back to direct execution with `allow-insecure-fallback` |
-| `CheckListTool` | `manage_checklist` | `READ_FS` | ❌ In-memory | coder, debugger | Manage task checklist progress tracking |
+| `CheckListTool` | `check_list` | `READ_FS` | ❌ In-memory | coder, debugger | Manage task checklist progress tracking |
 | `BraveWebSearchTool` | `brave_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time web search via Brave Search API |
 | `SerperWebSearchTool` | `serper_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time Google search results via Serper API |
 | `PlaywrightCliTool` | `browser_navigate` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Headless browser automation via Playwright CLI |
@@ -826,9 +842,14 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 
 | Operation | FULL | SUPERVISED | BACKGROUND | READONLY |
 |---|---|---|---|---|
-| `NETWORK_OUTBOUND` | ✅ | ⚠️ HITL pause | ❌ | ❌ |
-| `SCHEDULE_AUTONOMOUS` | ✅ | ✅ | ❌ | ❌ |
 | `READ_FS` | ✅ | ✅ | ✅ | ✅ |
+| `WRITE_FS` | ✅ | ❌ | ❌ | ❌ |
+| `EXECUTE_SHELL` | ✅ | ❌ | ❌ | ❌ |
+| `NETWORK_OUTBOUND` | ✅ | ⚠️ HITL pause | ✅ | ❌ |
+| `VAULT_ACCESS` | ✅ | ❌ | ❌ | ❌ |
+| `SCHEDULE_AUTONOMOUS` | ✅ | ✅ | ❌ | ❌ |
+| `WRITE_MEMORY` | ✅ | ❌ | ❌ | ❌ |
+| `DELEGATE_AUTONOMOUS` | ✅ | ❌ | ✅ | ❌ |
 
 > [!NOTE]
 > **Secret Injection**: Tools annotate their `sandboxCommand()` method with `@RequiresSecret(envVar="GH_TOKEN", vaultKey="GITHUB_TOKEN")`. The `ToolRegistry` reads these annotations reflectively, resolves secrets from `SecretVault`, and injects them via `TmpfsSecretTransport` - an ephemeral env-file written to RAM-backed tmpfs, zeroed from JVM memory on close. Secrets **never** appear in process arguments.
@@ -876,7 +897,7 @@ Always reference OWASP categories where applicable.
 
 | Source | How | When |
 |---|---|---|
-| **Built-in (classpath)** | `.md` file in `src/main/resources/skills/` + entry in `index.txt` | Compiled into the binary; requires rebuild to add |
+| **Built-in (classpath)** | `.md` file in `src/main/resources/skills/` + entry in `index.txt` | Compiled into the binary; requires rebuild to add. *Currently empty — all active skills come from the database tier.* |
 | **Dynamic (database)** | `POST /api/v1/skills` with `X-ArcClaw-API-Key` | No rebuild needed; stored in `AgentSkillEntity` SQLite table |
 
 Database skills override classpath skills when names conflict - the dynamic tier wins.
@@ -988,7 +1009,7 @@ graph LR
 
 The rolling chat window is controlled by `arcclaw.chat-memory.max-messages` (default: **100 messages**). System messages are always preserved; the window applies only to non-system messages.
 
-When the rolling window exceeds `arcclaw.memory.compaction.threshold` (default: **10 messages**), `CompactionHandler` fires an **asynchronous CDI event** and returns immediately. The actual compaction runs in a background thread:
+When the rolling window exceeds `arcclaw.memory.compaction.threshold` (default: **10 messages**), `CompactionHandler` fires an **asynchronous CDI event** and returns immediately. Compaction also triggers when the combined message character count exceeds `arcclaw.memory.compaction.max-chars` (default: **96,000**) or the estimated token count exceeds `arcclaw.memory.compaction.max-tokens` (default: **32,000**). The actual compaction runs in a background thread:
 
 1. Summarizes the oldest messages using `llama-3.1-8b-instant` into a `CompactionSummaryEntity`
 2. Discards the original messages from the rolling window
@@ -1082,7 +1103,7 @@ sequenceDiagram
     end
 ```
 
-- **`ScheduleTaskTool`**: Creates a cron job using a standard 5-field UNIX expression. The goal must be self-contained (naked-pronoun guard rejects vague references). Tasks are prefixed with `CRON:` to enable structural fork-bomb exclusion.
+- **`ScheduleTaskTool`**: Creates a cron job using a standard 5-field UNIX expression. Parameters: `goal` (required), `cronExpression`, `timezone` (defaults to UTC on invalid input), `runOnce` (default: false), `executionRole` (default: `researcher` — specifies which agent role executes the task). The goal must be self-contained (naked-pronoun guard rejects vague references). Tasks are prefixed with `CRON:` to enable structural fork-bomb exclusion.
 - **`AgentCronScheduler`**: Polls the `agent_cron` table every 30 seconds (configurable via `arcclaw.cron.poll-interval`). Picks up `PENDING` jobs whose next fire time has elapsed.
 - **`CronJobRunner`**: Executes the agent loop for the scheduled goal. Supports up to `arcclaw.cron.max-concurrent` (default: 10) concurrent jobs and `arcclaw.cron.max-iterations` (default: 3) reasoning iterations per job.
 - **`CronResultHandler`**: On job completion or failure, fires a CDI `AgentJobCompleted` event observed by `ChannelCronNotificationDispatcher` which dispatches to the originating channel's `ChannelJobNotifier`.
@@ -1192,7 +1213,7 @@ Every agent action is appended to the `audit_event` table with:
 
 - A **HMAC-SHA256 chain**: Row N's `hmacHash = HMAC-SHA256(prevHash | payload)`. Row 1's `prevHash = SHA256("GENESIS:" + sessionId)`. Tampering any row breaks the chain from that point forward.
 - **SQLite WORM triggers** installed by `AuditSchemaEnforcer` on every startup: `UPDATE` and `DELETE` on `audit_event` are rejected at the database level.
-- **Mandatory events** (agent halts if write fails - fail-closed): `VAULT_ACCESS`, `TOOL_INVOKED`, `BUDGET_EXCEEDED`, `PROMPT_INJECTION_BLOCKED`, `APPROVAL_GRANTED`, `APPROVAL_DENIED`, `CRONFIRED`, `CRONFAILED`
+- **Mandatory events** (agent halts if write fails - fail-closed): `VAULT_ACCESS`, `TOOL_INVOKED`, `TOOL_EXECUTED`, `BUDGET_EXCEEDED`, `PROMPT_INJECTION_BLOCKED`, `APPROVAL_GRANTED`, `APPROVAL_DENIED`, `CRONFIRED`, `CRONFAILED`, `MCP_TOOL_INVOKED`, `DELEGATE_APPROVAL`, `UNAUTHORIZED_ACCESS`, `MEMORY_INGESTED`
 - Chain integrity is verifiable via `GET /api/v1/audit/{sessionId}/verify`
 
 ### Human-in-the-Loop (HITL) Governance
@@ -1252,7 +1273,7 @@ ArcClaw executes AI-generated shell commands inside a three-tier isolation syste
 | `jaeger` | `16686` (UI) | Distributed trace viewer |
 | `prometheus` | `9090` (UI) | Metrics scraper - polls `http://localhost:8080/q/metrics` |
 
-- **Prometheus** (`/q/metrics`): Micrometer metrics for token consumption (`arcclaw.llm.tokens`), agent invocations (`arcclaw.agent.invocations`), audit queue overflow (`arcclaw.audit.queue.overflow`), and Quarkus scheduler metrics.
+- **Prometheus** (`/q/metrics`): Micrometer metrics for token consumption (`arcclaw.agent.tokens`), LLM calls (`arcclaw.agent.llm.calls`), agent invocations (`arcclaw.agent.invocations`), tool calls (`arcclaw.agent.tool.calls`), parallel batches (`arcclaw.agent.parallel.batches`), completions (`arcclaw.agent.completions`), audit queue overflow (`arcclaw.audit.queue.overflow`), and Quarkus scheduler metrics.
 - **Structured Logging**: MDC-enriched log lines include `sessionId`, `userId`, and `chatId` in every log entry.
 - **`MetricsAgentObserver`**: CDI observer wired into `AgentLoop`. Increments Micrometer counters per LLM call, per-session token counters, session lifecycle counters, and reflex invocation counters.
 - **`AgentOtelContext`**: OpenTelemetry span holder for tool execution. HTTP spans are active; internal reasoning spans are no-ops in V1.0.0.
@@ -1268,9 +1289,9 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_LLM_API_KEY` | ✅ (provider-conditional) | - | API key for the selected LLM provider (Groq: `gsk_...`, OpenRouter: `sk-or-v1-...`, OpenAI: `sk-...`) |
-| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama` |
+| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama`, `omlx`, `gemini`, `nvidia`, `cerebras` |
 | `ARCCLAW_LLM_MODEL_NAME` | no | `meta-llama/llama-4-scout-17b-16e-instruct` | Primary reasoning model name for the selected provider |
-| `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama) |
+| `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama/OMLX) |
 | `ARCCLAW_LLM_TEMPERATURE` | no | `0.1` | LLM temperature for reasoning |
 | `ARCCLAW_LLM_MAX_OUTPUT_TOKENS` | no | `8192` | Maximum output tokens per LLM call |
 | `ARCCLAW_LLM_TIMEOUT` | no | `PT60S` | LLM call timeout (ISO-8601 duration) |
@@ -1299,18 +1320,27 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_RAG_EMBED_MODEL` | no | `nomic-embed-text:v1.5` | Embedding model name |
 | `ARCCLAW_RAG_EMBED_BASE_URL` | no | `http://localhost:11434` | Embedding provider base URL |
 | `ARCCLAW_RAG_EMBED_DIMENSIONS` | no | `768` | Embedding vector dimensions |
+| `ARCCLAW_RAG_EMBED_TIMEOUT_SECONDS` | no | `10` | Embedding API call timeout |
 | `ARCCLAW_RAG_VEC_EXTENSION_PATH` | no | `./lib/vec0` | Path to sqlite-vec native extension |
+| `ARCCLAW_RAG_MAX_SOURCE_CHARS` | no | `400` | Max characters per RAG source result |
+| `ARCCLAW_RAG_MAX_CHUNK_CHARS` | no | `300` | Max characters per RAG chunk for context enrichment |
+| `ARCCLAW_RAG_MAX_TOTAL_CHARS` | no | `800` | Max total RAG context characters injected into prompt |
+| `ARCCLAW_RAG_CONTEXT_CHUNKS` | no | `3` | Number of RAG chunks to inject into agent context |
+| `ARCCLAW_RAG_MIN_SCORE` | no | `0.01` | Minimum relevance score for RAG results |
 
 ### Sandbox
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_SANDBOX_ENABLED` | no | `true` | Enable sandboxed tool execution |
+| `ARCCLAW_SANDBOX_STRATEGY` | no | `PODMAN` | Sandbox strategy: `PODMAN`, `NAMESPACE`, `DIRECT`, `NONE` |
 | `ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK` | no | `false` | Allow direct host execution when Podman is unavailable |
 | `ARCCLAW_SANDBOX_PODMAN_IMAGE` | no | `localhost/arcclaw-tool-runner:latest` | Podman sandbox image |
+| `ARCCLAW_SANDBOX_PODMAN_PATH` | no | `podman` | Path to Podman binary |
 | `ARCCLAW_SANDBOX_TIMEOUT_SECONDS` | no | `30` | Sandbox execution timeout |
 | `ARCCLAW_SANDBOX_MEMORY_LIMIT` | no | `512m` | Container memory limit |
 | `ARCCLAW_SANDBOX_CPU_LIMIT` | no | `0.5` | Container CPU limit |
+| `ARCCLAW_SANDBOX_MAX_OUTPUT_CHARS` | no | `8192` | Maximum output characters from sandboxed execution |
 
 ### Telegram
 
@@ -1321,6 +1351,8 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_TELEGRAM_ALLOWED_USER_IDS` | no* | - | Comma-separated numeric Telegram user IDs |
 | `ARCCLAW_TELEGRAM_ALLOWED_USERS` | no* | - | Comma-separated Telegram usernames without `@` |
 | `ARCCLAW_TELEGRAM_SILENT_BLOCK` | no | `false` | Silently ignore non-allowlisted users |
+| `ARCCLAW_TELEGRAM_BLOCK_RESPONSE` | no | `Access denied.` | Response sent to non-allowlisted users when `silent-block=false` |
+| `ARCCLAW_TELEGRAM_MAX_LENGTH` | no | `4096` | Maximum message length before chunking |
 
 ### Tools & Web Search
 
@@ -1337,8 +1369,14 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_SESSION_BUDGET_USD` | no | `10.00` | Hard USD budget per session; agent halts when exceeded |
 | `ARCCLAW_CRON_MAX_ITERATIONS` | no | `3` | Max reasoning iterations per cron job execution |
 | `ARCCLAW_CRON_MAX_CONCURRENT` | no | `10` | Max concurrent cron jobs |
+| `ARCCLAW_CRON_POLL_INTERVAL` | no | `30s` | How often the scheduler polls for pending jobs |
+| `ARCCLAW_CRON_MAX_LOOKBACK_WINDOW` | no | `PT5M` | Max lookback window for stale job recovery (ISO-8601 duration) |
+| `ARCCLAW_CRON_STARTUP_DELAY_MS` | no | `5000` | Delay before scheduler starts after boot (ms) |
 | `ARCCLAW_HITL_TIMEOUT_HOURS` | no | `24` | Hours before pending HITL approvals auto-expire |
+| `ARCCLAW_HITL_PRE_EXECUTABLE_TOOLS` | no | `` | Comma-separated tool names that can execute without HITL in SUPERVISED mode |
 | `ARCCLAW_AGENT_MAX_ITERATIONS` | no | `5` | Default max ReAct loop iterations |
+| `ARCCLAW_AGENT_DEFAULT_TIMEZONE` | no | `Asia/Kolkata` | Default timezone for agent operations |
+| `ARCCLAW_AGENT_MAX_RATELIMIT_RETRIES` | no | `3` | Max retries on LLM rate-limit errors in the agent loop |
 | `ARCCLAW_DELEGATION_MAX_DEPTH` | no | `2` | Max agent delegation depth |
 
 ### Data & Storage
@@ -1348,6 +1386,60 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_DATA_DIR` | no | `./data` | Directory where ArcClaw stores SQLite databases and state files |
 | `ARCCLAW_CHAT_MEMORY_MAX_MESSAGES` | no | `100` | Rolling chat window size |
 | `ARCCLAW_WORKSPACE_SESSION_TTL_MINUTES` | no | `30` | Session idle timeout before cleanup |
+| `ARCCLAW_CHECKPOINT_STALE_CLAIM_MINUTES` | no | `2` | Minutes before a checkpoint claim is considered stale and reclaimable |
+
+### Context Compaction
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_MEMORY_COMPACTION_ENABLED` | no | `true` | Enable context compaction |
+| `ARCCLAW_MEMORY_COMPACTION_THRESHOLD` | no | `10` | Message count threshold to trigger compaction |
+| `ARCCLAW_MEMORY_COMPACTION_KEEP_RECENT` | no | `5` | Number of recent messages to preserve verbatim |
+| `ARCCLAW_MEMORY_COMPACTION_MAX_CHARS` | no | `96000` | Character volume threshold to trigger compaction |
+| `ARCCLAW_MEMORY_COMPACTION_MAX_TOKENS` | no | `32000` | Token volume threshold to trigger compaction |
+| `ARCCLAW_MEMORY_COMPACTION_MAX_BACKOFF_MS` | no | `60000` | Max backoff between compaction retries (ms) |
+
+### Web Channel
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_CHANNEL_WEB_ENABLED` | no | `true` | Enable WebSocket web channel |
+| `ARCCLAW_CHANNEL_WEB_REQUIRE_AUTH` | no | `false` | Require authentication for WebSocket connections |
+
+### MCP
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_MCP_HEALTH_CHECK_INTERVAL_MS` | no | `15000` | Health check interval for MCP connections (ms) |
+
+### API Rate Limiting
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_API_RATE_LIMIT_REQUESTS_PER_MINUTE` | no | `20` | Max API requests per minute per API key |
+| `ARCCLAW_API_RATE_LIMIT_MUTATION_PER_MINUTE` | no | `10` | Max mutation API requests per minute per API key |
+
+### Parallel Tool Execution
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_TOOLS_EXTERNAL_TOOLS` | no | `browser_navigate,web_search` | Comma-separated tool names treated as external for parallel batching |
+| `ARCCLAW_PARALLEL_TOOL_TIMEOUT_SECONDS` | no | `60` | Timeout for parallel tool execution (seconds) |
+
+### Resumption
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_RESUMPTION_STALE_MARK_SECONDS` | no | `60` | Seconds before a resumption mark is considered stale |
+| `ARCCLAW_RESUMPTION_PLAYWRIGHT_STALE_MARK_SECONDS` | no | `300` | Seconds before a Playwright resumption mark is considered stale |
+| `ARCCLAW_RESUME_LOCK_DB_ADVISORY` | no | `false` | Use database advisory locks for resume coordination |
+
+### Notification
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_NOTIFICATION_RETRY_ATTEMPTS` | no | `3` | Number of retry attempts for failed notifications |
+| `ARCCLAW_NOTIFICATION_RETRY_INITIAL_DELAY_MS` | no | `1000` | Initial delay between notification retries (ms) |
 
 Generate required secrets on Linux/macOS: `openssl rand -base64 32`
 Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))`
@@ -1370,4 +1462,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1362 tests passing · 16 modules*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1362 tests passing · 16 modules · 14 tools · 16 reflexes · 8 LLM providers*

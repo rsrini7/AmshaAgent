@@ -8,9 +8,9 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.BackoffRetryExecutor;
+import com.arcclaw.core.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.jboss.logging.Logger;
 
 /**
@@ -84,8 +84,8 @@ public class SqliteRetryTemplate {
                     } catch (Exception e) {
                         // Log cause chain for debugging SR-12 refinements
                         if (log.isTraceEnabled()) {
-                            log.tracef("Persistence attempt failed for [%s]: %s", 
-                                      operationName, ExceptionUtils.getStackTrace(e));
+                            log.tracef("Persistence attempt failed for [%s]: %s",
+                                      operationName, LogUtil.trimmedStack(e));
                         }
                         throw e;
                     }

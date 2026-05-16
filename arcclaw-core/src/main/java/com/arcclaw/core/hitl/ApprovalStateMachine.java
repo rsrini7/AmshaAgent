@@ -22,6 +22,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -152,7 +153,7 @@ public class ApprovalStateMachine implements ApprovalGateway {
         try {
             return objectMapper.readValue(freshJson, new TypeReference<Map<String, ToolDecision>>() {});
         } catch (Exception e) {
-            log.warnf("[ASM] Failed to deserialize decisions for session=%s: %s", sessionId, e.getMessage());
+            log.warnf("[ASM] Failed to deserialize decisions for session=%s: %s", sessionId, LogUtil.rootMessage(e));
             return Map.of(effectiveTool, decisionEnum);
         }
     }

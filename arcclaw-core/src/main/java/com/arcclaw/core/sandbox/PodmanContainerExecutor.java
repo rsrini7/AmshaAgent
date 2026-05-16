@@ -16,6 +16,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.util.LogUtil;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
@@ -91,7 +92,7 @@ public class PodmanContainerExecutor {
                             containerName, stopped ? proc.exitValue() : -1);
                 }
             } catch (Exception e) {
-                log.warnf("Failed to stop container %s: %s", containerName, e.getMessage());
+                log.warnf("Failed to stop container %s: %s", containerName, LogUtil.rootMessage(e));
             }
         }
         activeContainerNames.clear();
@@ -199,7 +200,7 @@ public class PodmanContainerExecutor {
             try {
                 return new String(process.getInputStream().readAllBytes());
             } catch (IOException e) {
-                log.warnf("Failed to drain sandbox stdout: %s", e.getMessage());
+                log.warnf("Failed to drain sandbox stdout: %s", LogUtil.rootMessage(e));
                 return "";
             }
         });
@@ -207,7 +208,7 @@ public class PodmanContainerExecutor {
             try {
                 return new String(process.getErrorStream().readAllBytes());
             } catch (IOException e) {
-                log.warnf("Failed to drain sandbox stderr: %s", e.getMessage());
+                log.warnf("Failed to drain sandbox stderr: %s", LogUtil.rootMessage(e));
                 return "";
             }
         });
@@ -228,7 +229,7 @@ public class PodmanContainerExecutor {
             stdout = stdoutFuture.get(5, TimeUnit.SECONDS);
             stderr = stderrFuture.get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.errorf("Error retrieving sandbox output: %s", e.getMessage());
+            log.errorf("Error retrieving sandbox output: %s", LogUtil.rootMessage(e));
         }
 
         int exitCode = process.exitValue();

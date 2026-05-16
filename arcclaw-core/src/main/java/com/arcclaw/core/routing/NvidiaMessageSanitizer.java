@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.arcclaw.core.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -125,7 +126,7 @@ public class NvidiaMessageSanitizer implements ChatModel {
                             .build());
                 }
             } catch (Exception e) {
-                log.warnf("Failed to normalize Mistral tool call from response: %s", e.getMessage());
+                log.warnf("Failed to normalize Mistral tool call from response: %s", LogUtil.rootMessage(e));
             }
         }
 

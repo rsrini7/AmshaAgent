@@ -5,6 +5,7 @@ import jakarta.enterprise.event.Observes;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.cron.AgentJobCompleted;
+import com.arcclaw.core.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -29,7 +30,7 @@ public class CliCronNotificationObserver {
             System.out.println("\n[⏰ Scheduled Task] " + answer);
             System.out.print("\nYou> "); // re-print prompt so input line isn't lost
         } catch (Exception e) {
-            log.errorf(e, "CLI-CRON-NOTIFY-FAIL cronId=%s", event.cronId());
+            log.errorf("CLI-CRON-NOTIFY-FAIL cronId=%s:\n%s", event.cronId(), LogUtil.trimmedStack(e));
         }
     }
 }

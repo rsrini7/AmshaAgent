@@ -30,6 +30,7 @@ import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.LogUtil;
 import com.arcclaw.core.util.TimeContextInjector;
 import io.quarkus.runtime.ShutdownEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -87,7 +88,7 @@ public class ChatCommand implements Runnable {
                 () -> runChatLoop(sessionId)
             );
         } catch (Exception e) {
-            log.errorf(e, "Fatal error in chat session %s", sessionId);
+            log.errorf("Fatal error in chat session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
             System.err.println("❌ Fatal: " + e.getMessage());
         } finally {
             if (this.currentCliSessionId != null) {
@@ -114,7 +115,7 @@ public class ChatCommand implements Runnable {
             cliResultBridge.cancel(sessionId); // unblocks any HITL virtual thread immediately
             workspaceManager.terminateSession(sessionId);
         } catch (Exception e) {
-            log.warnf("Session cleanup on shutdown incomplete for %s: %s", sessionId, e.getMessage());
+            log.warnf("Session cleanup on shutdown incomplete for %s: %s", sessionId, LogUtil.rootMessage(e));
         }
     }
 
@@ -131,7 +132,7 @@ public class ChatCommand implements Runnable {
                 }
             );
         } catch (Exception e) {
-            log.errorf(e, "Error in WorkspaceContext for session %s", sessionId);
+            log.errorf("Error in WorkspaceContext for session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
             System.err.println("❌ Session error: " + e.getMessage());
         }
     }
@@ -251,7 +252,7 @@ public class ChatCommand implements Runnable {
                             } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
                             } catch (Exception e) {
-                                log.warnf("HITL waiter error for session %s: %s", sessionId, e.getMessage());
+                                log.warnf("HITL waiter error for session %s: %s", sessionId, LogUtil.rootMessage(e));
                             }
                         });
 
@@ -270,7 +271,7 @@ public class ChatCommand implements Runnable {
             }
 
         } catch (Exception e) {
-            log.errorf(e, "Agent error in session %s", sessionId);
+            log.errorf("Agent error in session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
             System.err.println("❌ Error: " + e.getMessage());
         }
     }

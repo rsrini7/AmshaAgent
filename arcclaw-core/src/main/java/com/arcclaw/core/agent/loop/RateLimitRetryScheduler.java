@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -86,7 +87,7 @@ public class RateLimitRetryScheduler {
                         // Offload to background thread via AgentLoop.resume
                         agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
                     } catch (Exception e) {
-                        log.errorf(e, "Failed to resume rate-limited session %s", cp.getSessionId());
+                        log.errorf("Failed to resume rate-limited session %s:\n%s", cp.getSessionId(), LogUtil.trimmedStack(e));
                         agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
                     }
                 } else {
