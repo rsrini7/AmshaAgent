@@ -6,17 +6,18 @@
 ###
 ### Role → Deity        → Tools available
 ### ────────────────────────────────────────────────────────────
-### coordinator → Vishnu     → github, schedule_task, manage_schedule, memory_search
-### researcher  → Saraswati  → github, memory_search
-### coder       → Brahma     → NONE (intentionally empty - structural guarantee)
-### debugger    → Shiva      → github ONLY
-### architect   → Brihaspati → github, memory_search (NOT schedule_task)
-### synthesizer → Dattatreya → github, schedule_task, manage_schedule, memory_search
+### coordinator → Vishnu     → github, schedule_task, manage_schedule, memory_search, ingest_document, delegate_to_agent
+### researcher  → Saraswati  → github, memory_search, brave_web_search, serper_web_search, delegate_to_agent
+### coder       → Brahma     → sandbox_exec, check_list, add_mcp_server, delegate_to_agent
+### debugger    → Shiva      → github, sandbox_exec, check_list, add_mcp_server, delegate_to_agent
+### architect   → Brihaspati → github, memory_search, delegate_to_agent
+### synthesizer → Dattatreya → github, schedule_task, manage_schedule, memory_search, ingest_document, brave_web_search, serper_web_search, delegate_to_agent
 ###
 ### IMPORTANT - coder vs debugger tool schema:
-###   coder:   EMPTY schema. Structurally cannot invoke ANY tool regardless of prompt.
-###   debugger: github ONLY. CAN invoke github (read-only). Cannot schedule or search memory.
-###   The header comment in previous versions incorrectly said both had empty schemas.
+###   coder:   sandbox_exec + check_list + add_mcp_server + delegate_to_agent (no github, no network)
+###   debugger: github + sandbox_exec + check_list + add_mcp_server + delegate_to_agent
+###   Both have delegate_to_agent but non-coordinators are restricted from delegating to roles they lack.
+###   add_mcp_server allows dynamically registering MCP servers at runtime (NETWORK_OUTBOUND, requires HITL).
 ###
 ### Hindu deity aliases (AgentRoleEnum.fromString):
 ###   "vishnu"    → COORDINATOR

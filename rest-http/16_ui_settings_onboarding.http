@@ -1,0 +1,278 @@
+### ═══════════════════════════════════════════════════════════════
+### 16 - UI ENDPOINTS, SETTINGS & ONBOARDING
+###
+### This file covers the remaining REST endpoints not tested in
+### files 01-15: UI/status streams, settings management, onboarding
+### wizard, and WebSocket token generation.
+###
+### Endpoint map:
+###   GET    /api/v1/sessions/active           → active agent sessions
+###   GET    /api/v1/agents                    → all agent statuses
+###   GET    /api/v1/agents/events?sessionId=  → SSE agent state changes
+###   GET    /api/v1/chat/stream               → SSE chat stream + heartbeat
+###   GET    /api/v1/chat/stream/history/{id}  → chat message history
+###   GET    /api/v1/hitl                      → paginated pending approvals
+###   GET    /api/v1/hitl/events?sessionId=    → SSE HITL approval requests
+###   POST   /api/v1/hitl/{taskId}/approve     → approve HITL by task ID
+###   POST   /api/v1/hitl/{taskId}/reject      → reject HITL by task ID
+###   POST   /api/v1/chat/ws-token             → get WebSocket auth token
+###   GET    /api/v1/settings                  → current settings
+###   GET    /api/v1/settings/prompt           → current system prompt
+###   PATCH  /api/v1/settings/provider         → update LLM provider
+###   PATCH  /api/v1/settings/prompt           → update system prompt
+###   POST   /api/v1/settings/reset            → reset settings to defaults
+###   GET    /api/v1/onboarding/status         → onboarding completion status
+###   POST   /api/v1/onboarding/step/1         → start onboarding
+###   POST   /api/v1/onboarding/step/2         → set provider + model
+###   POST   /api/v1/onboarding/step/3         → set API key
+###   POST   /api/v1/onboarding/step/4         → set system prompt
+###   POST   /api/v1/onboarding/step/5         → configure MCP servers
+###   GET    /api/v1/onboarding/complete       → finalize onboarding
+###
+### Note: SSE endpoints use EventSource (browser) or curl --no-buffer.
+###       For VS Code REST Client, SSE responses stream until timeout.
+###       WebSocket (/ws/chat) cannot be tested via .http files.
+###
+### Prerequisites: ArcClaw running in serve mode, API key configured
+### ═══════════════════════════════════════════════════════════════
+
+@baseUrl = http://localhost:8080
+@validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+
+### ═══════════════════════════════════════════════════════════════
+### A. UI & STATUS ENDPOINTS
+### ═══════════════════════════════════════════════════════════════
+
+### [UI-1] List all agent statuses (empty on cold start)
+GET {{baseUrl}}/api/v1/agents
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [UI-2] Get active sessions
+GET {{baseUrl}}/api/v1/sessions/active
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [UI-3] Create a session for UI tests
+# @name uiSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "agentRole": "coordinator"
+}
+
+###
+
+### [UI-4] Chat stream SSE - streams agent events + 20s heartbeat
+### Note: This will stream until timeout. Use curl --no-buffer for CLI testing.
+GET {{baseUrl}}/api/v1/chat/stream?sessionId={{uiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [UI-5] Chat stream history - returns past messages for a session
+GET {{baseUrl}}/api/v1/chat/stream/history/{{uiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [UI-6] Agent events SSE - live agent state changes
+GET {{baseUrl}}/api/v1/agents/events?sessionId={{uiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [UI-7] List pending HITL approvals (paginated)
+GET {{baseUrl}}/api/v1/hitl?page=0&size=20
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [UI-8] HITL events SSE - live approval requests
+GET {{baseUrl}}/api/v1/hitl/events?sessionId={{uiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [UI-9] Get WebSocket auth token
+POST {{baseUrl}}/api/v1/chat/ws-token
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{uiSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+### ═══════════════════════════════════════════════════════════════
+### B. SETTINGS ENDPOINTS
+### ═══════════════════════════════════════════════════════════════
+
+### [SETTINGS-1] Get current settings
+GET {{baseUrl}}/api/v1/settings
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SETTINGS-2] Get current system prompt
+GET {{baseUrl}}/api/v1/settings/prompt
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SETTINGS-3] Update LLM provider
+PATCH {{baseUrl}}/api/v1/settings/provider
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "provider": "groq",
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct"
+}
+
+###
+
+### [SETTINGS-4] Update system prompt
+PATCH {{baseUrl}}/api/v1/settings/prompt
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "systemPrompt": "You are a helpful AI assistant."
+}
+
+###
+
+### [SETTINGS-5] Reset settings to defaults
+POST {{baseUrl}}/api/v1/settings/reset
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [SETTINGS-6] Settings without API key → expect 401
+GET {{baseUrl}}/api/v1/settings
+
+###
+
+### [SETTINGS-7] Prompt without API key → expect 401
+GET {{baseUrl}}/api/v1/settings/prompt
+
+### ═══════════════════════════════════════════════════════════════
+### C. ONBOARDING ENDPOINTS (no API key required)
+### ═══════════════════════════════════════════════════════════════
+
+### [ONBOARD-1] Check onboarding status
+GET {{baseUrl}}/api/v1/onboarding/status
+
+###
+
+### [ONBOARD-2] Start onboarding - Step 1
+# @name onboardStep1
+POST {{baseUrl}}/api/v1/onboarding/step/1
+Content-Type: application/json
+
+###
+
+### [ONBOARD-3] Step 2 - Set provider and model
+POST {{baseUrl}}/api/v1/onboarding/step/2
+Content-Type: application/json
+
+{
+  "provider": "groq",
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct"
+}
+
+###
+
+### [ONBOARD-4] Step 3 - Set API key
+POST {{baseUrl}}/api/v1/onboarding/step/3
+Content-Type: application/json
+
+{
+  "apiKey": "gsk_test_key_for_onboarding"
+}
+
+###
+
+### [ONBOARD-5] Step 4 - Set system prompt
+POST {{baseUrl}}/api/v1/onboarding/step/4
+Content-Type: application/json
+
+{
+  "systemPrompt": "You are a helpful AI assistant."
+}
+
+###
+
+### [ONBOARD-6] Step 5 - Configure MCP servers
+POST {{baseUrl}}/api/v1/onboarding/step/5
+Content-Type: application/json
+
+{
+  "mcpServers": []
+}
+
+###
+
+### [ONBOARD-7] Complete onboarding
+GET {{baseUrl}}/api/v1/onboarding/complete
+
+### ═══════════════════════════════════════════════════════════════
+### D. HITL TASK-ID APPROVAL (new endpoint, different from session-based)
+### ═══════════════════════════════════════════════════════════════
+
+### [HITL-TASK-1] Create session and trigger HITL
+# @name hitlTaskSession
+POST {{baseUrl}}/api/v1/sessions
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "agentRole": "coordinator"
+}
+
+###
+
+### [HITL-TASK-2] Run async to trigger AWAITING_APPROVAL
+POST {{baseUrl}}/api/v1/sessions/{{hitlTaskSession.response.body.sessionId}}/run-async
+Content-Type: application/json
+X-ArcClaw-API-Key: {{validKey}}
+
+{
+  "goal": "Look at the GitHub repository octocat/Hello-World and tell me what languages it uses",
+  "maxIterations": 3
+}
+
+###
+
+### [HITL-TASK-3] List pending approvals to get taskId
+GET {{baseUrl}}/api/v1/hitl?page=0&size=20
+X-ArcClaw-API-Key: {{validKey}}
+
+###
+
+### [HITL-TASK-4] Approve by taskId (replace TASK_ID with actual value from HITL-TASK-3)
+### POST {{baseUrl}}/api/v1/hitl/TASK_ID/approve
+### Content-Type: application/json
+### X-ArcClaw-API-Key: {{validKey}}
+###
+### {}
+
+###
+
+### [HITL-TASK-5] Reject by taskId (replace TASK_ID with actual value)
+### POST {{baseUrl}}/api/v1/hitl/TASK_ID/reject
+### Content-Type: application/json
+### X-ArcClaw-API-Key: {{validKey}}
+###
+### {}
+
+###
+
+DELETE {{baseUrl}}/api/v1/sessions/{{hitlTaskSession.response.body.sessionId}}
+X-ArcClaw-API-Key: {{validKey}}
+
+###

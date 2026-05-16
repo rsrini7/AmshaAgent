@@ -4,7 +4,7 @@
 > **Version**: Phase 64 (current)  
 > **Base URL**: `http://localhost:8080`
 
-This directory contains 16 `.http` files covering every REST API surface of ArcClaw. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
+This directory contains 17 `.http` files covering every REST API surface of ArcClaw. Run them in the order listed below - health and auth first, then the feature-specific flows, and the Phase 64 regression suite last.
 
 ---
 
@@ -67,6 +67,7 @@ GITHUB_TOKEN=ghp_...    # required for GithubTool tests in 04, 05, 09, 12
 | 13 | `13_rag.http` | RAG ingest → approve → recall, RRF dual-tier, isolation | ARCCLAW_LLM_API_KEY | C3: rag_chunk table |
 | 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | ARCCLAW_LLM_API_KEY | A1, A2 |
 | 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | ARCCLAW_LLM_API_KEY | All tiers |
+| 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, onboarding wizard, HITL task-id approval, WS token | ARCCLAW_LLM_API_KEY | Post-Phase 64 |
 
 ---
 
