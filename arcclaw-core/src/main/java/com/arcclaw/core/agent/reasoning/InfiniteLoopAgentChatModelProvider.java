@@ -65,7 +65,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
             try {
                 ChatModel model = provider.create();
                 slots.add(new InfiniteLoopChatModel.Slot(name, model));
-                log.infof("InfiniteLoop: Slot [%s] initialized.", name);
+                log.infof("InfiniteLoop: Slot [%s] initialized (%s).", name, model);
             } catch (Exception e) {
                 log.warnf("InfiniteLoop: Slot [%s] failed to initialize: %s. Skipping.", name, e.getMessage());
             }

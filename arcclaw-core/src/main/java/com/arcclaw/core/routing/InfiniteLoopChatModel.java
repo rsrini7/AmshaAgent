@@ -56,13 +56,14 @@ public class InfiniteLoopChatModel implements ChatModel {
                 Slot slot = slots.get(idx);
                 SlotHealth h = health.get(slot.name());
 
-                if (h.isPermanentlyDisabled()) continue;
-                if (h.isInCooldown()) continue;
+                if (h.isPermanentlyDisabled()) { log.debugf("InfiniteLoop: Slot [%s] permanently disabled, skipping.", slot.name()); continue; }
+                if (h.isInCooldown()) { log.debugf("InfiniteLoop: Slot [%s] in cooldown (%ds remaining), skipping.", slot.name(), h.cooldownRemainingMs() / 1000); continue; }
 
                 try {
                     ChatResponse response = slot.model().chat(request);
                     h.recordSuccess();
                     currentIndex.set(idx);
+                    log.infof("InfiniteLoop: Slot [%s] responded successfully.", slot.name());
                     return response;
                 } catch (Throwable t) {
                     LlmProviderException classified = LlmExceptionClassifier.classify(t);
