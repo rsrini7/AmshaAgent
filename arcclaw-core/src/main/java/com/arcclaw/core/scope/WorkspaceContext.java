@@ -36,11 +36,7 @@ public final class WorkspaceContext {
     }
 
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} for base identity 
-     *             or explicit passing of {@code AgentExecutionContext}.
-     */
-    @Deprecated(since = "P4")
+
     public static <T> T run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, Callable<T> task) throws Exception {
         // WorkspaceScopeHolder.call() binds WORKSPACE_ID first - required for
@@ -56,10 +52,7 @@ public final class WorkspaceContext {
         );
     }
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static <T> T run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, String channelType, String platformId, Callable<T> task) throws Exception {
         return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
@@ -75,20 +68,14 @@ public final class WorkspaceContext {
     }
 
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static <T> T run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, String channelType, Callable<T> task) throws Exception {
         return run(sessionId, userId, chatId, autonomy, role, channelType, null, task);
     }
 
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static void run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, Runnable task) {
         try {
@@ -104,10 +91,7 @@ public final class WorkspaceContext {
     }
 
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static void run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, String channelType, String platformId, Runnable task) {
         try {
@@ -123,66 +107,45 @@ public final class WorkspaceContext {
     }
 
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static void run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, String channelType, Runnable task) {
         run(sessionId, userId, chatId, autonomy, role, channelType, null, task);
     }
 
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static <T> T runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, Callable<T> task) throws Exception {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
     }
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static <T> T runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, String channelType, Callable<T> task) throws Exception {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, task);
     }
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static <T> T runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, String channelType, String platformId, Callable<T> task) throws Exception {
         return run(sessionId, userId, chatId, AutonomyLevel.FULL, role, channelType, platformId, task);
     }
 
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static void runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, Runnable task) {
         run(sessionId, userId, chatId, AutonomyLevel.FULL, role, task);
     }
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static void runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, String channelType, Runnable task) {
         runWithFullAutonomy(sessionId, userId, chatId, role, channelType, null, task);
     }
 
-    /**
-     * @deprecated Replaced by {@link WorkspaceScopeHolder#run(String, String, String, Runnable)} or explicit Context objects.
-     */
-    @Deprecated(since = "P4")
+
     public static void runWithFullAutonomy(String sessionId, String userId,
             String chatId, String role, String channelType, String platformId, Runnable task) {
         try {
@@ -198,18 +161,7 @@ public final class WorkspaceContext {
     }
 
 
-    /**
-     * @deprecated Use {@code SESSION_ID.get()} directly after checking {@code SESSION_ID.isBound()}.
-     */
-    @Deprecated(since = "P4")
-    public static String requireSessionId() {
-        if (!SESSION_ID.isBound() || SESSION_ID.get() == null || SESSION_ID.get().isBlank()) {
-            throw new IllegalStateException("WorkspaceContext SESSION_ID is unbound");
-        }
-        return SESSION_ID.get();
-    }
-
-    // Currently not used anywhere, but need tocheck the usecase and use it during scenario based testing.... 
+    // Currently not used anywhere, but need to check the usecase and use it during scenario based testing....
     public static AutonomyLevel requireAutonomy() {
         if (!AUTONOMY.isBound() || AUTONOMY.get() == null) {
             throw new IllegalStateException("WorkspaceContext AUTONOMY is unbound");
@@ -217,21 +169,7 @@ public final class WorkspaceContext {
         return AUTONOMY.get();
     }
 
-    /**
-     * @deprecated Use {@code AUTONOMY.get()} directly after checking {@code AUTONOMY.isBound()}.
-     */
-    @Deprecated(since = "P4")
-    public static AutonomyLevel requireAutonomyOrSupervised() {
-        if (!AUTONOMY.isBound() || AUTONOMY.get() == null) {
-            return AutonomyLevel.SUPERVISED;
-        }
-        return AUTONOMY.get();
-    }
 
-    /**
-     * @deprecated Use {@code USER_ID.get()} or {@link ToolExecutionContext#userId()}.
-     */
-    @Deprecated(since = "P4")
     public static String resolveUserId() {
         try {
             if (USER_ID.isBound() && USER_ID.get() != null) {
@@ -246,68 +184,12 @@ public final class WorkspaceContext {
         }
     }
 
-    /**
-     * @deprecated Use {@code USER_ID.get()} directly after checking {@code USER_ID.isBound()}.
-     */
-    @Deprecated(since = "P4")
-    public static String requireUserId() {
-        if (!USER_ID.isBound() || USER_ID.get() == null || USER_ID.get().isBlank()) {
-            throw new IllegalStateException("WorkspaceContext USER_ID is unbound");
-        }
-        return USER_ID.get();
-    }
-
-    /**
-     * @deprecated Use {@code CHAT_ID.get()} directly after checking {@code CHAT_ID.isBound()}.
-     */
-    @Deprecated(since = "P4")
-    public static String requireChatId() {
-        if (!CHAT_ID.isBound() || CHAT_ID.get() == null || CHAT_ID.get().isBlank()) {
-            throw new IllegalStateException("WorkspaceContext CHAT_ID is unbound");
-        }
-        return CHAT_ID.get();
-    }
-
-    /**
-     * @deprecated Use {@code CHAT_ID.get()} or {@code USER_ID.get()} directly.
-     */
-    @Deprecated(since = "P4")
-    public static String requireChatIdOrUserId() {
-        if (!CHAT_ID.isBound() || CHAT_ID.get() == null) {
-            return requireUserId();
-        }
-        return CHAT_ID.get();
-    }
- 
-    /**
-     * @deprecated Use {@code AGENT_ROLE.get()} directly after checking {@code AGENT_ROLE.isBound()}.
-     */
-    @Deprecated(since = "P4")
-    public static String requireAgentRole() {
-        if (!AGENT_ROLE.isBound() || AGENT_ROLE.get() == null || AGENT_ROLE.get().isBlank()) {
-            throw new IllegalStateException("WorkspaceContext AGENT_ROLE is unbound");
-        }
-        return AGENT_ROLE.get();
-    }
-
 
     public static Optional<String> channelType() {
         if (CHANNEL_TYPE.isBound() && CHANNEL_TYPE.get() != null) {
             return Optional.of(CHANNEL_TYPE.get());
         }
         return Optional.empty();
-    }
-
-    /**
-     * @deprecated Use {@link #channelType()} Optional.
-     */
-    @Deprecated(since = "P4")
-    public static String requireChannelType() {
-        return channelType().orElseThrow(() ->
-            new IllegalStateException(
-                "CHANNEL_TYPE not bound - violates Architecture_Invariants.md §1.4. " +
-                "Ensure all channel entry points bind ChannelType via " +
-                "WorkspaceContext.run(..., channelType, ...)."));
     }
 
     public static String channelPlatformId() {

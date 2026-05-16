@@ -19,7 +19,7 @@ class WorkspaceContextTest {
 
         Thread t1 = new Thread(() -> {
             WorkspaceContext.runWithFullAutonomy("sess-1", "user-1", "chat-1", "coordinator", () -> {
-                thread1Level.set(WorkspaceContext.requireAutonomyOrSupervised());
+                thread1Level.set(WorkspaceContext.AUTONOMY.get());
                 latch1.countDown();
                 try { latch2.await(); } catch (InterruptedException _) {}
             });
@@ -28,7 +28,7 @@ class WorkspaceContextTest {
         Thread t2 = new Thread(() -> {
             try { latch1.await(); } catch (InterruptedException _) {}
             WorkspaceContext.run("sess-2", "user-2", "chat-2", AutonomyLevel.READONLY, "researcher", () -> {
-                thread2Level.set(WorkspaceContext.requireAutonomyOrSupervised());
+                thread2Level.set(WorkspaceContext.AUTONOMY.get());
                 latch2.countDown();
             });
         });
@@ -43,43 +43,38 @@ class WorkspaceContextTest {
     }
 
     @Test
-    void testSessionIdRequiredThrowsIfUnbound() {
-        IllegalStateException ex = assertThrows(IllegalStateException.class, WorkspaceContext::requireSessionId);
-        assertTrue(ex.getMessage().contains("unbound"));
+    void testUnboundScopedValuesThrow() {
+        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.SESSION_ID.get());
+        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.USER_ID.get());
+        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.CHAT_ID.get());
+        assertThrows(java.util.NoSuchElementException.class, () -> WorkspaceContext.AGENT_ROLE.get());
+        assertThrows(IllegalStateException.class, WorkspaceContext::requireAutonomy);
     }
 
     @Test
     void testNestedScopesDoNotLeak() {
         WorkspaceContext.run("sess-outer", "user-1", "chat-1", AutonomyLevel.SUPERVISED, "coordinator", () -> {
-            assertEquals("sess-outer", WorkspaceContext.requireSessionId());
-            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.requireAutonomyOrSupervised());
+            assertEquals("sess-outer", WorkspaceContext.SESSION_ID.get());
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.AUTONOMY.get());
 
             WorkspaceContext.runWithFullAutonomy("sess-inner", "user-2", "chat-2", "coder", () -> {
-                assertEquals("sess-inner", WorkspaceContext.requireSessionId());
-                assertEquals(AutonomyLevel.FULL, WorkspaceContext.requireAutonomyOrSupervised());
-                assertEquals("user-2", WorkspaceContext.requireUserId());
+                assertEquals("sess-inner", WorkspaceContext.SESSION_ID.get());
+                assertEquals(AutonomyLevel.FULL, WorkspaceContext.AUTONOMY.get());
+                assertEquals("user-2", WorkspaceContext.USER_ID.get());
             });
 
             // Outer restored
-            assertEquals("sess-outer", WorkspaceContext.requireSessionId());
-            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.requireAutonomyOrSupervised());
-            assertEquals("user-1", WorkspaceContext.requireUserId());
+            assertEquals("sess-outer", WorkspaceContext.SESSION_ID.get());
+            assertEquals(AutonomyLevel.SUPERVISED, WorkspaceContext.AUTONOMY.get());
+            assertEquals("user-1", WorkspaceContext.USER_ID.get());
         });
-    }
- 
-    @Test
-    void testRequireMethodsThrowsIfUnbound() {
-        assertThrows(IllegalStateException.class, WorkspaceContext::requireUserId, "USER_ID should fail fast if unbound");
-        assertThrows(IllegalStateException.class, WorkspaceContext::requireChatId, "CHAT_ID should fail fast if unbound");
-        assertThrows(IllegalStateException.class, WorkspaceContext::requireAutonomy, "AUTONOMY should fail fast if unbound");
-        assertThrows(IllegalStateException.class, WorkspaceContext::requireAgentRole, "AGENT_ROLE should fail fast if unbound");
     }
 
     @Test
     void testRunWithFullAutonomyBindsChannelType() throws Exception {
         String channelType = WorkspaceContext.runWithFullAutonomy(
                 "sess-1", "user-1", "chat-1", "coordinator", "telegram",
-                WorkspaceContext::requireChannelType);
+                () -> WorkspaceContext.channelType().orElseThrow(() -> new IllegalStateException("CHANNEL_TYPE not bound")));
 
         assertEquals("telegram", channelType);
     }
