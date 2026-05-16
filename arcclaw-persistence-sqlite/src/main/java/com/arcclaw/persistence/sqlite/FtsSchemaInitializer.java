@@ -6,6 +6,7 @@ import java.sql.Statement;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.runtime.StartupEvent;
@@ -29,7 +30,7 @@ public class FtsSchemaInitializer {
 
     AgroalDataSource dataSource;
 
-    @jakarta.inject.Inject
+    @Inject
     public FtsSchemaInitializer(AgroalDataSource dataSource) {
         this.dataSource = dataSource;
     }

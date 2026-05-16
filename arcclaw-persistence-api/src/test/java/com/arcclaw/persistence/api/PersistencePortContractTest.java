@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -83,8 +84,20 @@ class PersistencePortContractTest {
         assertEquals("thought", loaded.get(0).thoughtJson());
     }
 
-    @Test
-    void checkpointFindActiveBySession() {
+        @Test
+        void checkpointFindAllActive() {
+            checkpointStore.save(createCheckpoint("sess-active-1", "IN_PROGRESS"));
+            checkpointStore.save(createCheckpoint("sess-active-2", "AWAITING_APPROVAL"));
+            checkpointStore.save(createCheckpoint("sess-terminal-1", "COMPLETED"));
+            checkpointStore.save(createCheckpoint("sess-terminal-2", "FAILED"));
+            List<CheckpointDto> active = checkpointStore.findAllActive();
+            assertEquals(2, active.size());
+            assertTrue(active.stream().allMatch(c ->
+                "IN_PROGRESS".equals(c.status()) || "AWAITING_APPROVAL".equals(c.status())));
+        }
+
+        @Test
+        void checkpointFindActiveBySession() {
         checkpointStore.save(createCheckpoint("sess-6", "IN_PROGRESS"));
         checkpointStore.save(createCheckpointWithId("sess-6", "COMPLETED"));
         checkpointStore.save(createCheckpointWithId("sess-6", "IN_PROGRESS"));
@@ -284,6 +297,10 @@ class PersistencePortContractTest {
     // ── In-memory mock implementations ──
 
     static class InMemoryCheckpointStore implements CheckpointStorePort {
+        private static final Set<String> TERMINAL_STATUSES = Set.of(
+            "COMPLETED", "FAILED", "LOOP_EXCEEDED", "DENIED", "COMPROMISED", "ARCHIVED", "ORPHANED", "RESUMING"
+        );
+
         final Map<Long, CheckpointDto> store = new ConcurrentHashMap<>();
         final Map<Long, List<ReasoningStepDto>> stepsStore = new ConcurrentHashMap<>();
         final AtomicLong idSeq = new AtomicLong(1);
@@ -343,6 +360,11 @@ class PersistencePortContractTest {
         @Override public List<ReasoningStepDto> loadSteps(Long checkpointId) { return stepsStore.getOrDefault(checkpointId, List.of()); }
         @Override public void deleteSteps(Long checkpointId) { stepsStore.remove(checkpointId); }
         @Override public List<CheckpointDto> findByStatus(String status) { return List.of(); }
+        @Override public List<CheckpointDto> findAllActive() {
+            return store.values().stream()
+                .filter(c -> !TERMINAL_STATUSES.contains(c.status()))
+                .collect(Collectors.toList());
+        }
         @Override public boolean isCheckpointExpired(String sessionId, long timeoutHours) { return false; }
         @Override public boolean isSessionActive(String sessionId) { return true; }
         @Override public Optional<CheckpointDto> findLatestAwaitingApproval(String sessionId) { return Optional.empty(); }

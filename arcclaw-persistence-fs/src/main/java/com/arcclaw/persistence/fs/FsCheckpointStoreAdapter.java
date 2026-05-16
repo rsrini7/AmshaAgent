@@ -189,6 +189,14 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findAllActive() {
+        return helper.loadAll().stream()
+            .filter(c -> !CheckpointStatus.terminalStatuses()
+                .contains(CheckpointStatus.valueOf(c.status())))
+            .toList();
+    }
+
+    @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
         return findLatestBySession(sessionId)
             .map(cp -> cp.updatedAt() != null && cp.updatedAt().plusSeconds(timeoutHours * 3600).isBefore(Instant.now()))

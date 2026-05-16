@@ -15,6 +15,8 @@ public interface CheckpointCrudPort {
 
     List<CheckpointDto> findByStatus(String status);
 
+    List<CheckpointDto> findAllActive();
+
     void deleteCheckpoint(String sessionId, String role);
 
     void saveSteps(Long checkpointId, List<ReasoningStepDto> steps);

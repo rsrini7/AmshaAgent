@@ -14,6 +14,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 
+import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
@@ -142,6 +143,14 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     public List<CheckpointDto> findByStatus(String status) {
         return store.values().stream()
                 .filter(c -> status.equals(c.status()))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<CheckpointDto> findAllActive() {
+        return store.values().stream()
+                .filter(c -> !CheckpointStatus.terminalStatuses()
+                        .contains(CheckpointStatus.valueOf(c.status())))
                 .collect(Collectors.toList());
     }
 

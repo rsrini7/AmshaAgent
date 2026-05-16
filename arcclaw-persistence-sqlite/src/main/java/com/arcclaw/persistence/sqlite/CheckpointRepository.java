@@ -125,6 +125,14 @@ public class CheckpointRepository {
                 .getResultList();
     }
 
+    public List<AgentCheckpointEntity> findAllActive() {
+        return em.createQuery(
+                "SELECT c FROM AgentCheckpoint c WHERE c.status NOT IN :terminal ORDER BY c.updatedAt DESC",
+                AgentCheckpointEntity.class)
+                .setParameter("terminal", CheckpointStatus.terminalStatuses())
+                .getResultList();
+    }
+
     public List<AgentCheckpointEntity> findLatestBySession(String sessionId) {
         log.debugf("[Query] findLatestBySession(session=%s)", sessionId);
         List<AgentCheckpointEntity> result = em.createQuery(

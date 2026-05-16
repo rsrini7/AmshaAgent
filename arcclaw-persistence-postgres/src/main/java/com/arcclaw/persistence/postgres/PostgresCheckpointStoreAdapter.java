@@ -219,6 +219,15 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findAllActive() {
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status NOT IN :terminal ORDER BY c.updatedAt DESC", AgentCheckpointEntity.class)
+                .setParameter("terminal", CheckpointStatus.terminalStatuses())
+                .getResultStream()
+                .map(CheckpointMapper::toDto)
+                .toList();
+    }
+
+    @Override
     public boolean isCheckpointExpired(String sessionId, long timeoutHours) {
         Long count = em.createQuery("SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.updatedAt < :cutoff AND c.status = :status", Long.class)
                 .setParameter("sessionId", sessionId)

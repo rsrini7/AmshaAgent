@@ -6,14 +6,6 @@ Prioritized actionable items. Completed items are removed. Items are ordered by 
 
 ## Priority 2 — Observability & Operations
 
-### 2.1 Active Agent Inventory Endpoint
-
-Expose a `GET /api/v1/agents/active` endpoint showing live agent instances, their current `CheckpointStatus`, role, depth level, and trigger source.
-
-- **Why**: ArcClaw can recover orphaned agents (`SessionReaper`), but cannot answer "how many agents are currently active, what are they doing, and who triggered them?" in real-time. This is a governance and operational visibility gap.
-- **Effort**: Low — query `agent_checkpoint` for non-terminal statuses, expose via REST.
-- **When**: Anytime.
-
 ### 2.2 Consent / Data Provenance Tracking
 
 Add lightweight provenance tags to RAG context entries — which source authorized which piece of data to flow to which agent.
@@ -46,6 +38,7 @@ Unify batch tool decision merging logic across all persistence adapters (SQLite,
 
 ## Completed (Removed from Backlog)
 
+- Active agent inventory endpoint — `GET /sessions/active` returns live agent instances with status, role, depth, parent linkage, iterations, and pending tool
 - Policy externalization via @ConfigMapping — `PolicyConfig` interface with `arcclaw.policy.*` config, refactored `DestructiveVocabularyFilter` and `ToolGovernanceGuard` to load from config
 - Tool contract exporter — `ToolContractExporter` writes `data/tool-contracts.json` at startup with schema, governance metadata, secrets, and role grants
 - Parent checkpoint linkage (`parent_checkpoint_id` + `depth` on `agent_checkpoint`, linked in `DelegateToAgentTool`)

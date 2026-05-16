@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,6 +26,8 @@ import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.api.CheckpointCrudPort;
+import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -50,6 +53,9 @@ class AgentResourceTest {
 
         @InjectMock
         SessionHeartbeatTracker heartbeatTracker;
+
+        @InjectMock
+        CheckpointCrudPort checkpointCrud;
 
         @BeforeEach
         void setupMock() {
@@ -79,6 +85,18 @@ class AgentResourceTest {
                     ReasoningStep.pending("Calculated final answer", ReasoningStep.FINISH, Map.of("response", "42"), 0, 0)
                 ));
                 
+                // Mock active agents endpoint
+                Mockito.when(checkpointCrud.findAllActive()).thenReturn(List.of(
+                    new CheckpointDto(1L, "sess-active-1", "coordinator", "IN_PROGRESS", "FULL", "{}",
+                        "plat-1", "telegram", "goal-1", null, null, null, null, null, null, null,
+                        null, 0, null, null, null, null, null, null, null, 0,
+                        Instant.now(), Instant.now()),
+                    new CheckpointDto(2L, "sess-active-2", "researcher", "AWAITING_APPROVAL", "SUPERVISED", "{}",
+                        "plat-2", "slack", "goal-2", null, null, null, "gh-tool", null, null, null,
+                        null, 3, null, null, null, null, null, null, null, 1,
+                        Instant.now(), Instant.now())
+                ));
+
                 // Explicitly mock session-not-found for 404 compliance tests
                 Mockito.when(heartbeatTracker.exists(Mockito.eq("fake-id-123"))).thenReturn(false);
                 Mockito.when(agentStore.load(Mockito.eq("fake-id-123"), anyString())).thenReturn(Optional.empty());
@@ -301,6 +319,26 @@ class AgentResourceTest {
                                 .body("sessionId", equalTo("sess-123"));
         }
         
+        @Test
+        void testListActiveAgents() {
+                given()
+                        .header("X-ArcClaw-API-Key", "test-key")
+                        .when().get("/api/v1/sessions/active")
+                        .then()
+                        .statusCode(200)
+                        .body("count", equalTo(2))
+                        .body("agents[0].sessionId", equalTo("sess-active-1"))
+                        .body("agents[0].agentRole", equalTo("coordinator"))
+                        .body("agents[0].status", equalTo("IN_PROGRESS"))
+                        .body("agents[0].depth", equalTo(0))
+                        .body("agents[0].pendingToolName", equalTo(null))
+                        .body("agents[1].sessionId", equalTo("sess-active-2"))
+                        .body("agents[1].agentRole", equalTo("researcher"))
+                        .body("agents[1].status", equalTo("AWAITING_APPROVAL"))
+                        .body("agents[1].depth", equalTo(1))
+                        .body("agents[1].pendingToolName", equalTo("gh-tool"));
+        }
+
         @Test
         void testDefaultRoleMatchesCoordinatorEnum() {
                 assertEquals("coordinator",AgentRoleEnum.COORDINATOR.id(),"JAX-RS @DefaultValue in AgentResource must match coordinator ID");

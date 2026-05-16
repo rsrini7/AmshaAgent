@@ -7,6 +7,9 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
+import jakarta.enterprise.inject.Vetoed;
 
 import com.arcclaw.core.security.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,7 +55,7 @@ class ToolContractExporterTest {
 
     // Minimal fakes for testing without CDI
 
-    @jakarta.enterprise.inject.Vetoed
+    @Vetoed
     static class FakeTool implements AgentTool {
         @Override public String name() { return "fake_tool"; }
         @Override public String description() { return "A fake tool"; }
@@ -63,21 +66,21 @@ class ToolContractExporterTest {
         }
     }
 
-    @jakarta.enterprise.inject.Vetoed
+    @Vetoed
     static class FakeToolRegistry extends ToolRegistry {
         private final Map<String, AgentTool> tools = new LinkedHashMap<>();
         FakeToolRegistry(AgentTool... toolList) {
             for (AgentTool t : toolList) tools.put(t.name(), t);
         }
-        @Override public java.util.Optional<AgentTool> findTool(String name) {
-            return java.util.Optional.ofNullable(tools.get(name));
+        @Override public Optional<AgentTool> findTool(String name) {
+            return Optional.ofNullable(tools.get(name));
         }
         @Override public List<String> listTools() {
             return List.copyOf(tools.keySet());
         }
     }
 
-    @jakarta.enterprise.inject.Vetoed
+    @Vetoed
     static class FakeDiscoveryService extends ToolDiscoveryService {
         private final Map<String, ToolRegistry.ToolDescriptor> descriptors = new LinkedHashMap<>();
         private final Map<String, Map<String, String>> secrets = new LinkedHashMap<>();
