@@ -4,30 +4,9 @@ Prioritized actionable items. Completed items are removed. Items are ordered by 
 
 ---
 
-## Priority 2 — Governance & Policy (Highest Architectural Leverage)
+## Priority 2 — Observability & Operations
 
-### 2.1 Policy Externalization via @ConfigMapping
-
-Move tool governance rules from Java annotations and hardcoded guards to a loadable YAML/JSON policy config.
-
-- **Why**: Current `DestructiveVocabularyFilter` and `ToolGovernanceGuard` are Java business logic — policy changes require code changes + redeploy. Externalized policies can be updated without touching application code.
-- **Effort**: Medium — design YAML schema, implement `@ConfigMapping` policy loader, refactor `ToolGovernanceGuard` to read from config instead of annotations.
-- **Format**: Each tool declares allowed roles, autonomy levels, data access scopes, and blocked patterns in a policy YAML loaded at startup.
-- **When**: Next governance-focused sprint.
-
-### 2.2 Tool Contract Exporter
-
-Add a startup utility that serializes each registered tool's `@ToolMetadata` + `ToolCapability` entry to a versioned JSON file.
-
-- **Why**: Tool capability scopes aren't queryable as standalone documents. Having inspectable, diffable tool contracts per deployment closes the "no formal contract artifact" gap and serves as auto-generated documentation.
-- **Effort**: Low — one utility class that runs at `@Observes StartupEvent`, reads `ToolRegistry`, writes JSON.
-- **When**: Anytime.
-
----
-
-## Priority 3 — Observability & Operations
-
-### 3.1 Active Agent Inventory Endpoint
+### 2.1 Active Agent Inventory Endpoint
 
 Expose a `GET /api/v1/agents/active` endpoint showing live agent instances, their current `CheckpointStatus`, role, depth level, and trigger source.
 
@@ -35,7 +14,7 @@ Expose a `GET /api/v1/agents/active` endpoint showing live agent instances, thei
 - **Effort**: Low — query `agent_checkpoint` for non-terminal statuses, expose via REST.
 - **When**: Anytime.
 
-### 3.2 Consent / Data Provenance Tracking
+### 2.2 Consent / Data Provenance Tracking
 
 Add lightweight provenance tags to RAG context entries — which source authorized which piece of data to flow to which agent.
 
@@ -45,9 +24,9 @@ Add lightweight provenance tags to RAG context entries — which source authoriz
 
 ---
 
-## Priority 4 — RAG & Module Hygiene
+## Priority 3 — RAG & Module Hygiene
 
-### 4.1 RAG Module Reorganization
+### 3.1 RAG Module Reorganization
 
 Move `GlobalKnowledgeBase`, `SessionKnowledgeBase`, and `SqliteMemoryRetrievalAdapter` from `arcclaw-persistence-sqlite` to `arcclaw-rag` (or a dedicated `arcclaw-rag-sqlite` adapter).
 
@@ -55,7 +34,7 @@ Move `GlobalKnowledgeBase`, `SessionKnowledgeBase`, and `SqliteMemoryRetrievalAd
 - **Effort**: Medium — module boundary move, dependency adjustments, test updates.
 - **When**: Low priority — cosmetic, no behavioral change.
 
-### 4.2 A16 Batch Decision Consolidation Across Adapters
+### 3.2 A16 Batch Decision Consolidation Across Adapters
 
 Unify batch tool decision merging logic across all persistence adapters (SQLite, filesystem, Postgres).
 
@@ -67,6 +46,8 @@ Unify batch tool decision merging logic across all persistence adapters (SQLite,
 
 ## Completed (Removed from Backlog)
 
+- Policy externalization via @ConfigMapping — `PolicyConfig` interface with `arcclaw.policy.*` config, refactored `DestructiveVocabularyFilter` and `ToolGovernanceGuard` to load from config
+- Tool contract exporter — `ToolContractExporter` writes `data/tool-contracts.json` at startup with schema, governance metadata, secrets, and role grants
 - Parent checkpoint linkage (`parent_checkpoint_id` + `depth` on `agent_checkpoint`, linked in `DelegateToAgentTool`)
 - RRF score calibration (`min-score` default changed from `-1.0` to `0.01` — below minimum RRF score with k=60)
 - AuditSchemaEnforcer cleanup (extracted to `FtsSchemaInitializer`, deleted enforcer)

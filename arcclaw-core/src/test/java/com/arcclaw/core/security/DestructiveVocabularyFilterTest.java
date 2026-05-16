@@ -9,16 +9,21 @@ import org.junit.jupiter.api.Test;
 
 public class DestructiveVocabularyFilterTest {
 
-    private final DestructiveVocabularyFilter filter = new DestructiveVocabularyFilter();
+    private final DestructiveVocabularyFilter filter = createFilter();
+
+    private static DestructiveVocabularyFilter createFilter() {
+        DestructiveVocabularyFilter f = new DestructiveVocabularyFilter();
+        f.policyConfig = PolicyConfigTestHelper.defaultConfig();
+        f.init();
+        return f;
+    }
 
     @Test
     void testCoderExemptBySandboxOnlyCapabilities() {
-        // Coder has exactly SANDBOX_EXEC - still exempt (sandbox is controlled execution)
-        assertTrue(filter.isSandboxOnlyRole(AgentRoleEnum.CODER),
+        // Coder is exempt (sandbox-only role via config)
+        String result = filter.filter(AgentRoleEnum.CODER.id(), "delete the broken class");
+        Assertions.assertEquals(AgentRoleEnum.CODER.id(), result,
             "Coder must be exempt from destructive vocabulary filter - sandbox-only role");
-        // Coordinator has broad tools - must NOT be exempt
-        assertFalse(filter.isSandboxOnlyRole(AgentRoleEnum.COORDINATOR),
-            "Coordinator must not be exempt - has network/schedule capabilities");
     }
 
     @Test

@@ -1,11 +1,16 @@
 package com.arcclaw.core.security;
 
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.config.PolicyConfig;
 import org.jboss.logging.Logger;
 
 /**
@@ -14,24 +19,45 @@ import org.jboss.logging.Logger;
  * If a message routed to a tool-capable role (non-empty capabilities)
  * contains destructive keywords, this filter overrides the role to
  * 'coordinator' (which typically triggers verification or safe fallback).
+ * <p>
+ * Patterns and exemptions are loaded from {@code arcclaw.policy.destructive-vocabulary}
+ * config at startup.
  */
 @ApplicationScoped
 public class DestructiveVocabularyFilter {
 
     private static final Logger Log = Logger.getLogger(DestructiveVocabularyFilter.class);
 
-    // Single-word destructive tokens - word boundary anchoring is reliable here
-    private static final Pattern DESTRUCTIVE_WORDS = Pattern.compile(
-            "(?i)\\b(delete|remove|purge|drop|chmod|truncate|wipe|erase|destroy|archive|rename)\\b"
-    );
+    @Inject PolicyConfig policyConfig;
 
-    // rm -rf variants - word boundary unreliable for multi-word tokens
-    // Match: rm-rf, rm -rf, rm  -rf, rm\t-rf, rmrf (no separator)
-    private static final Pattern RM_RF_PATTERN = Pattern.compile(
-            "(?i)\\brm\\s*-?\\s*rf\\b"
-    );
+    private List<Pattern> compiledPatterns;
+    private Set<AgentRoleEnum> exemptRoles;
+    private Set<AgentRoleEnum> sandboxOnlyRoles;
+    private String overrideRole;
 
-    private static final Set<AgentRoleEnum> EXEMPT_ROLES = Set.of(AgentRoleEnum.DEBUGGER);
+    @PostConstruct
+    void init() {
+        var vocab = policyConfig.destructiveVocabulary();
+        this.compiledPatterns = vocab.patterns().stream()
+                .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
+                .toList();
+        this.exemptRoles = toRoleSet(vocab.exemptRoles());
+        this.sandboxOnlyRoles = toRoleSet(vocab.sandboxOnlyRoles());
+        this.overrideRole = vocab.overrideRole();
+    }
+
+    private Set<AgentRoleEnum> toRoleSet(List<String> roleIds) {
+        return roleIds.stream()
+                .map(id -> {
+                    try { return AgentRoleEnum.fromString(id); }
+                    catch (IllegalArgumentException e) {
+                        Log.warnf("Unknown role '%s' in policy config — ignoring", id);
+                        return null;
+                    }
+                })
+                .filter(r -> r != null)
+                .collect(Collectors.toUnmodifiableSet());
+    }
 
     /**
      * Returns true if the message contains destructive vocabulary,
@@ -40,8 +66,10 @@ public class DestructiveVocabularyFilter {
      */
     public boolean isDestructive(String userMessage) {
         if (userMessage == null || userMessage.isBlank()) return false;
-        return DESTRUCTIVE_WORDS.matcher(userMessage).find()
-                || RM_RF_PATTERN.matcher(userMessage).find();
+        for (Pattern p : compiledPatterns) {
+            if (p.matcher(userMessage).find()) return true;
+        }
+        return false;
     }
 
     /**
@@ -49,35 +77,24 @@ public class DestructiveVocabularyFilter {
      *
      * @param role         The role name (e.g., "researcher").
      * @param userMessage  The raw user message.
-     * @return The filtered role (either the original or "coordinator").
+     * @return The filtered role (either the original or the configured override).
      */
     public String filter(String role, String userMessage) {
         AgentRoleEnum resolvedRole;
         try {
             resolvedRole = AgentRoleEnum.fromString(role);
         } catch (IllegalArgumentException e) {
-            // Fallback for unknown roles - cannot safely determine capability
             return role;
         }
 
-        // Rule: if the role has ANY tool capabilities, it must pass the destructive check.
-        if (!EXEMPT_ROLES.contains(resolvedRole)
-            && !isSandboxOnlyRole(resolvedRole)
+        if (!exemptRoles.contains(resolvedRole)
+            && !sandboxOnlyRoles.contains(resolvedRole)
                 && isDestructive(userMessage)) {
             Log.warnf("Destructive vocabulary detected in message routed to '%s' (%s). " +
-                    "Overriding to 'coordinator' with no-tool mode.",
-                    role, resolvedRole.toScopedName());
-            return AgentRoleEnum.COORDINATOR.id();
+                    "Overriding to '%s' with no-tool mode.",
+                    role, resolvedRole.toScopedName(), overrideRole);
+            return overrideRole;
         }
         return role;
-    }
-
-    /**
-     * Returns true if the role's primary mission is writing code (CODER).
-     * These roles are exempt from the destructive vocabulary filter because code creation 
-     * often requires using words that would otherwise be flagged.
-     */
-    boolean isSandboxOnlyRole(AgentRoleEnum role) {
-        return role == AgentRoleEnum.CODER;
     }
 }

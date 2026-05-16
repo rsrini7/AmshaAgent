@@ -1,14 +1,17 @@
 package com.arcclaw.core.tools;
 
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.CapabilityRegistry;
-import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.config.PolicyConfig;
 import com.arcclaw.core.governance.ApprovalFrame;
 import com.arcclaw.core.governance.RequiresApprovalException;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -29,6 +32,19 @@ public class ToolGovernanceGuard {
     @Inject AuditService auditService;
     @Inject ObjectMapper objectMapper;
     @Inject CapabilityRegistry capabilityRegistry;
+    @Inject PolicyConfig policyConfig;
+
+    private Set<String> hitlExemptTools;
+    private Set<ToolOperation> supervisedSalvageOps;
+
+    @PostConstruct
+    void init() {
+        var gov = policyConfig.governance();
+        this.hitlExemptTools = Set.copyOf(gov.hitlExemptTools());
+        this.supervisedSalvageOps = gov.supervisedSalvageOperations().stream()
+                .map(ToolOperation::valueOf)
+                .collect(Collectors.toUnmodifiableSet());
+    }
 
     /**
      * Verifies if the active agent role is allowed to execute the given tool.
@@ -68,23 +84,14 @@ public class ToolGovernanceGuard {
         // 1. HARD BLOCK check: if the policy says "not allowed" (e.g., READONLY level),
         // we throw SecurityException (403).
         if (!autonomyPolicy.isAllowed(level, requiredOp)) {
-            
-            // 2. HITL EXEMPTION: schedule_task and manage_schedule bypass approval
-            // checks in SUPERVISED mode (they are allowed by policy anyway, but
-            // we keep the check explicit to fulfill invariant §4.10).
-            boolean isSchedulingTool = 
-                    ToolCapability.SCHEDULE_TASK.toolName().equals(toolName)
-                    || ToolCapability.MANAGE_SCHEDULE.toolName().equals(toolName);
 
-            // 3. SUPERVISED SALVAGE: If it's blocked by policy but we are in SUPERVISED
-            // mode, we might pivot to a PauseForApproval (409) instead of a hard 403.
-            if (level == AutonomyLevel.SUPERVISED && !isSchedulingTool &&
-                    (requiredOp == ToolOperation.NETWORK_OUTBOUND
-                            || requiredOp == ToolOperation.VAULT_ACCESS
-                            || requiredOp == ToolOperation.EXECUTE_SHELL
-                            || requiredOp == ToolOperation.WRITE_MEMORY
-                            || requiredOp == ToolOperation.DELEGATE_AUTONOMOUS
-                            || requiredOp == ToolOperation.WRITE_FS)) {
+            // 2. HITL EXEMPTION: configured tools bypass approval in SUPERVISED mode.
+            boolean isHitlExempt = hitlExemptTools.contains(toolName);
+
+            // 3. SUPERVISED SALVAGE: If blocked by policy but in SUPERVISED mode,
+            // pivot to PauseForApproval (409) instead of hard 403 for configured ops.
+            if (level == AutonomyLevel.SUPERVISED && !isHitlExempt
+                    && supervisedSalvageOps.contains(requiredOp)) {
                 log.infof("Tool '%s' requires approval at level %s (operation=%s)",
                           toolName, level, requiredOp);
                 
