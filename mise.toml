@@ -333,7 +333,7 @@ run = """
   foreach ($f in $stubFiles) {
     if (-not (Test-Path "$modelsDir/$f")) {
       Write-Host "⚠️   DTO $f still missing after generate-dto — creating manual stub."
-      $name = $f -replace '\\[^.]*$', ''
+      $name = $f -replace '\\.[^.]*$', ''
       $content = @"
 export interface $name {
 }
@@ -357,15 +357,15 @@ $mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.i
 
 # --- Auto-tune: detect available RAM & CPUs ---
 if ($IsMacOS) {
-    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
     if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     $cpu = [int](sysctl -n hw.ncpu)
 } elseif ($IsWindows) {
     $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
     $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
 } else {
-    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     $cpu = [int](nproc)
 }
 $jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
@@ -427,15 +427,15 @@ $mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.i
 
 # --- Auto-tune: detect available RAM & CPUs ---
 if ($IsMacOS) {
-    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
     if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     $cpu = [int](sysctl -n hw.ncpu)
 } elseif ($IsWindows) {
     $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
     $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
 } else {
-    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     $cpu = [int](nproc)
 }
 $jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
@@ -497,15 +497,15 @@ $mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.i
 
 # --- Auto-tune: detect available RAM & CPUs ---
 if ($IsMacOS) {
-    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
     if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     $cpu = [int](sysctl -n hw.ncpu)
 } elseif ($IsWindows) {
     $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
     $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
 } else {
-    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     $cpu = [int](nproc)
 }
 $jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
@@ -605,13 +605,13 @@ if ($strategy -eq 'container') {
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
         if ($IsMacOS) {
-            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
             if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
         } elseif ($IsWindows) {
             $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
         } else {
-            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
         }
         $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
         Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
@@ -629,13 +629,13 @@ if ($strategy -eq 'container') {
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
         if ($IsMacOS) {
-            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
             if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
         } elseif ($IsWindows) {
             $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
         } else {
-            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
         }
         $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
         Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
@@ -696,13 +696,13 @@ if (Test-Path '.env') {
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
         if ($IsMacOS) {
-            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+            $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+            $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
             if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
         } elseif ($IsWindows) {
             $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
         } else {
-            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+            $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
         }
         $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
         Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
@@ -742,13 +742,13 @@ Write-Host 'ℹ️   build:native-local-slim: local GraalVM, excluding Playwrigh
 try {
     # ── Memory Scaling ──────────────────────────────────────────────────
     if ($IsMacOS) {
-        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
         if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     } elseif ($IsWindows) {
         $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
     } else {
-        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     }
     $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
     Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
@@ -798,13 +798,13 @@ if (Test-Path '.env') {
 try {
     # ── Memory Scaling (Low-Mem Mode) ──────────────────────────────────────
     if ($IsMacOS) {
-        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\+)').Matches[0].Groups[1].Value)
-        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\+(\\+)\\','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\+(\\+)\\','$1')) * $ps / 1GB)
+        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
         if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     } elseif ($IsWindows) {
         $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
     } else {
-        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\+(\\+)\\+kB','$1') / 1MB)
+        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     }
     $targetGB = [Math]::Max(2, [Math]::Min([Math]::Floor($availGB * 0.6), 6)) # 60%, capped at 6G for lowmem
     Write-Host "🧠 Allocating ${targetGB}G for native-image (Low-Mem: 60% of ${availGB}G available)..."
