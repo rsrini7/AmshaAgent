@@ -31,7 +31,7 @@ class ToolContractExporterTest {
         ToolContractExporter exporter = new ToolContractExporter();
         exporter.toolRegistry = registry;
         exporter.discoveryService = discovery;
-        exporter.dataDir = tempDir.toString();
+        exporter.jdbcUrl = "jdbc:sqlite:" + tempDir.resolve("arcclaw-meta.db");
 
         exporter.onStart(null);
 

@@ -1,5 +1,6 @@
 package com.arcclaw.core.tools;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.nio.file.Files;
@@ -34,8 +35,8 @@ public class ToolContractExporter {
     @Inject ToolRegistry toolRegistry;
     @Inject ToolDiscoveryService discoveryService;
 
-    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
-    String dataDir;
+    @ConfigProperty(name = "quarkus.datasource.jdbc.url", defaultValue = "jdbc:sqlite:./data/arcclaw-meta.db")
+    String jdbcUrl;
 
     void onStart(@Observes StartupEvent ev) {
         try {
@@ -46,7 +47,7 @@ public class ToolContractExporter {
     }
 
     private void exportContracts() throws IOException {
-        Path dir = Path.of(dataDir);
+        Path dir = dataDir();
         Files.createDirectories(dir);
         Path out = dir.resolve("tool-contracts.json");
 
@@ -97,6 +98,14 @@ public class ToolContractExporter {
         }
 
         return contract;
+    }
+
+    private Path dataDir() {
+        String path = jdbcUrl.replace("jdbc:sqlite:", "");
+        int qIndex = path.indexOf('?');
+        if (qIndex > 0) path = path.substring(0, qIndex);
+        int sep = path.lastIndexOf('/');
+        return Path.of(sep > 0 ? path.substring(0, sep) : ".");
     }
 
     private static <T extends Annotation> T findAnnotation(Class<?> clazz, Class<T> ann) {
