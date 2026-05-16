@@ -182,7 +182,20 @@ public class ProcessIsolationExecutor {
 
             // Podman circuit is open (or strategy is NAMESPACE) - fall back to namespace isolation.
             // NOTE: requiredSecrets are NOT injected in namespace mode (see class-level Javadoc).
-            return SandboxResult.success(namespaceExecutor.executeInNamespace(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+            try {
+                return SandboxResult.success(namespaceExecutor.executeInNamespace(
+                        workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+            } catch (Exception nsEx) {
+                // Namespace isolation unavailable (macOS/Windows or missing unshare) -
+                // try direct host execution if insecure fallback is allowed.
+                if (allowInsecureFallback) {
+                    log.warnf("[SANDBOX] Namespace unavailable (%s), allow-insecure-fallback true - degrading to host execution for session %s",
+                            LogUtil.rootMessage(nsEx), sessionId);
+                    return SandboxResult.success(directExecutor.executeDirectly(
+                            workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                }
+                throw nsEx;
+            }
         } catch (ToolExecutionException e) {
             return SandboxResult.failure(e.getMessage());
         } catch (Exception e) {
