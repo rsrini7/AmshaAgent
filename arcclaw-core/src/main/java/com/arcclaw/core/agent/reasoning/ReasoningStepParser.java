@@ -30,6 +30,11 @@ import org.jboss.logging.Logger;
 public class ReasoningStepParser {
 
     private static final Logger log = Logger.getLogger(ReasoningStepParser.class);
+
+    /** Strips <think>...</think> blocks from Qwen/DeepSeek-style thinking models. */
+    private static final Pattern THINKING_TAG_PATTERN =
+            Pattern.compile("(?s)<think>.*?</think>\\s*", Pattern.DOTALL);
+
     private static final Pattern LANGUAGE_FIELD_PATTERN =
             Pattern.compile("\"language\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern RELATIVE_SCHEDULE_PATTERN =
@@ -65,10 +70,22 @@ public class ReasoningStepParser {
                 return handleMultipleToolCalls(sessionId, agentRole, aiMessage, requests, inputTokens, outputTokens);
             }
         }
-        
-        return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH,
-                Map.of("answer", aiMessage.text() != null ? aiMessage.text() : ""),
+
+        String text = aiMessage.text();
+        String answer = stripThinkingTags(text);
+
+        return ReasoningStep.pending(text, ReasoningStep.FINISH,
+                Map.of("answer", answer != null ? answer : ""),
                 inputTokens, outputTokens);
+    }
+
+    /**
+     * Strips {@code <think>...</think>} blocks produced by Qwen/DeepSeek-style thinking models.
+     * Returns only the content after the closing tag (the actual answer).
+     */
+    static String stripThinkingTags(String text) {
+        if (text == null) return null;
+        return THINKING_TAG_PATTERN.matcher(text).replaceAll("").strip();
     }
 
     private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
