@@ -55,19 +55,19 @@ trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
 [tasks.start]
 description = "New here? Run: mise install  then: mise run setup:profile  then: mise run setup"
 run = [
-    "echo.",
+    "echo \"\"",
     "echo   ArcClaw - mise Task Runner",
     "echo   ===========================",
-    "echo.",
+    "echo \"\"",
     "echo   BOOTSTRAP SEQUENCE",
     "echo   1. mise install                installs pwsh + java + maven + usage",
     "echo   2. mise run setup:profile      writes shell profile activate + completion",
     "echo   3. reload your shell",
     "echo   4. mise run setup              .env + chmod mvnw + JDKs + Playwright Chromium",
     "echo   5. mise run dev                hot-reload on :8080",
-    "echo.",
+    "echo \"\"",
     "echo   See MISE_SETUP.md for full documentation.",
-    "echo.",
+    "echo \"\"",
 ]
 
 # =============================================================================
@@ -140,12 +140,12 @@ if ($IsWindows) {
     if ($shell -like '*zsh') {
         $rcFile     = "$env:HOME/.zshrc"
         $shellName  = 'zsh'
-        $activateLine   = 'eval "$(~/.local/bin/mise activate zsh)"'
-        $completionLine = 'eval "$(mise completion zsh)"'
+        $activateLine   = 'eval "$(mise activate zsh)"'
+        $completionLine = 'autoload -Uz compinit && compinit; eval "$(mise completion zsh)"'
     } else {
         $rcFile     = "$env:HOME/.bashrc"
         $shellName  = 'bash'
-        $activateLine   = 'eval "$(~/.local/bin/mise activate bash)"'
+        $activateLine   = 'eval "$(mise activate bash)"'
         $completionLine = 'eval "$(mise completion bash --include-bash-completion-lib)"'
     }
     Write-Host "-- Shell detected: $shellName -> $rcFile"
@@ -224,7 +224,13 @@ if ($IsWindows) {
 }
 if (-not (Get-Command dos2unix -ErrorAction SilentlyContinue)) {
     Write-Host '📦 Installing dos2unix...'
-    sudo apt-get install -y dos2unix
+    if ($IsLinux -and (Get-Command apt-get -ErrorAction SilentlyContinue)) {
+        sudo apt-get install -y dos2unix
+    } elseif ($IsMacOS -and (Get-Command brew -ErrorAction SilentlyContinue)) {
+        brew install dos2unix
+    } else {
+        Write-Host '⚠️  dos2unix not found and no known package manager available. Please install it manually.'
+    }
 }
 dos2unix mvnw mise.toml arcclaw-ui/package.json
 chmod +x mvnw
