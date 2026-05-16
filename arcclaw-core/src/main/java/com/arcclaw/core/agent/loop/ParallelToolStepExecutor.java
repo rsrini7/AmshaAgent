@@ -99,12 +99,14 @@ public class ParallelToolStepExecutor {
         this(null, null, null, null, null, null, null, null, null, Optional.empty(), List.of(), 60);
     }
 
+    @SuppressWarnings("resource") // CDI Instance.select() does not implement AutoCloseable
     private ManagedExecutor getInternalExecutor() {
         return managedExecutors.select(NamedLiteral.of("internal-tool-executor"))
                 .stream().findFirst()
                 .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
     }
 
+    @SuppressWarnings("resource") // CDI Instance.select() does not implement AutoCloseable
     private ManagedExecutor getExternalExecutor() {
         return managedExecutors.select(NamedLiteral.of("external-tool-executor"))
                 .stream().findFirst()

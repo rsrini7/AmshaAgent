@@ -58,6 +58,7 @@ public class McpClientService {
     @Inject MeterRegistry meterRegistry;
     @Inject Instance<ManagedExecutor> managedExecutors;
 
+    @SuppressWarnings("resource") // CDI Instance.select() does not implement AutoCloseable
     private ManagedExecutor getExecutor() {
         return managedExecutors.select(Identifier.Literal.of("external-tool-executor"))
                 .stream().findFirst()
