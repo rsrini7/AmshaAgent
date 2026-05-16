@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -39,9 +40,11 @@ public class OmlxProviderFactory implements AgentChatModelProvider {
     public ChatModel create() {
         String model = modelName.orElseThrow(() -> new IllegalStateException(
                 "OMLX requires ARCCLAW_OMLX_MODEL"));
+        // Disable Qwen/DeepSeek thinking mode — puts chain-of-thought in content field
+        Map<String, Object> customParams = Map.of("enable_thinking", false);
         return ChatModelFactory.createOpenAi(
                 baseUrl, apiKey, model,
                 agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
-                agentConfig.temperature(), agentConfig.logHttp());
+                agentConfig.temperature(), agentConfig.logHttp(), customParams);
     }
 }

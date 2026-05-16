@@ -75,10 +75,29 @@ public final class ChatModelFactory {
             String baseUrl, String apiKey, String modelName,
             int maxTokens, Duration timeout, int maxRetries,
             double temperature, boolean logHttp) {
-        return openAiBuilder(baseUrl, apiKey, modelName,
+        return createOpenAi(baseUrl, apiKey, modelName,
+                maxTokens, timeout, maxRetries, temperature, logHttp, null);
+    }
+
+    /**
+     * Builds an OpenAI-compatible ChatModel with optional custom request parameters.
+     * Used by AgentChatModelProvider implementations that need extra body params (e.g. enable_thinking).
+     */
+    public static ChatModel createOpenAi(
+            String baseUrl, String apiKey, String modelName,
+            int maxTokens, Duration timeout, int maxRetries,
+            double temperature, boolean logHttp,
+            Map<String, Object> customParameters) {
+        var builder = openAiBuilder(baseUrl, apiKey, modelName,
                 maxTokens, timeout, maxRetries,
-                temperature, logHttp, logHttp)
-                .build();
+                temperature, logHttp, logHttp);
+        if (customParameters != null && !customParameters.isEmpty()) {
+            builder.defaultRequestParameters(
+                    dev.langchain4j.model.openai.OpenAiChatRequestParameters.builder()
+                            .customParameters(customParameters)
+                            .build());
+        }
+        return builder.build();
     }
 
     /**

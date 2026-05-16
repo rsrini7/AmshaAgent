@@ -35,6 +35,15 @@ public class ReasoningStepParser {
     private static final Pattern THINKING_TAG_PATTERN =
             Pattern.compile("(?s)<think>.*?</think>\\s*", Pattern.DOTALL);
 
+    /** Max answer length before we suspect chain-of-thought thinking leaked into the answer. */
+    private static final int MAX_ANSWER_LENGTH = 4000;
+
+    /** Marks the boundary between chain-of-thought reasoning and the actual answer. */
+    private static final Pattern THINKING_ANSWER_BOUNDARY = Pattern.compile(
+            "(?m)^\\s*(?:Response|Final (?:Answer|Decision|Response)|Output)\\s*[:.]\\s*$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE
+    );
+
     private static final Pattern LANGUAGE_FIELD_PATTERN =
             Pattern.compile("\"language\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern RELATIVE_SCHEDULE_PATTERN =
@@ -80,12 +89,41 @@ public class ReasoningStepParser {
     }
 
     /**
-     * Strips {@code <think>...</think>} blocks produced by Qwen/DeepSeek-style thinking models.
-     * Returns only the content after the closing tag (the actual answer).
+     * Strips thinking/reasoning from LLM responses.
+     * Handles:
+     * 1. Explicit {@code <think>...</think>} tags (Qwen/DeepSeek structured thinking)
+     * 2. Untagged chain-of-thought: when the answer exceeds {@value MAX_ANSWER_LENGTH} chars,
+     *    looks for a "Final Response:" / "Response:" boundary, or takes the last portion.
      */
     static String stripThinkingTags(String text) {
         if (text == null) return null;
-        return THINKING_TAG_PATTERN.matcher(text).replaceAll("").strip();
+
+        // 1. Strip explicit <think>...</think> tags
+        String stripped = THINKING_TAG_PATTERN.matcher(text).replaceAll("").strip();
+        if (!stripped.isEmpty() && stripped.length() <= MAX_ANSWER_LENGTH) {
+            return stripped;
+        }
+
+        // 2. If still too long, check for a thinking/answer boundary marker
+        if (text.length() > MAX_ANSWER_LENGTH) {
+            Matcher boundary = THINKING_ANSWER_BOUNDARY.matcher(text);
+            int lastBoundary = -1;
+            while (boundary.find()) {
+                lastBoundary = boundary.end();
+            }
+            if (lastBoundary > 0 && lastBoundary < text.length() - 1) {
+                String afterBoundary = text.substring(lastBoundary).strip();
+                if (!afterBoundary.isEmpty() && afterBoundary.length() <= MAX_ANSWER_LENGTH) {
+                    return afterBoundary;
+                }
+            }
+
+            // 3. No boundary found — take the last chunk as the answer
+            // (LLM thinking usually comes first, answer at the end)
+            return text.substring(text.length() - MAX_ANSWER_LENGTH).strip();
+        }
+
+        return stripped;
     }
 
     private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
