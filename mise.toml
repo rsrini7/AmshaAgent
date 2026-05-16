@@ -8,10 +8,10 @@
 #
 # BOOTSTRAP SEQUENCE (fresh clone):
 #   1. mise trust --all
-#   2. mise install              ← installs pwsh, java, maven, usage
+#   2. mise install              ← installs pwsh, java, maven, gh, usage
 #   3. mise run setup:profile    ← writes shell profile (activate + completion)
 #   4. reload your shell
-#   5. mise run setup            ← .env, chmod mvnw, JDKs
+#   5. mise run setup            ← .env, chmod mvnw, JDKs, gh CLI
 #   6. mise run dev
 #
 # NOTE: `start` uses run = [...] array (no shell dependency) so it works
@@ -27,6 +27,7 @@ java       = "temurin-25"
 maven      = "3.9"
 powershell = "7.6"
 node       = "22"
+gh         = "latest"
 
 [env]
 _.file = ".env"
@@ -63,7 +64,7 @@ run = [
     "echo   1. mise install                installs pwsh + java + maven + usage",
     "echo   2. mise run setup:profile      writes shell profile activate + completion",
     "echo   3. reload your shell",
-    "echo   4. mise run setup              .env + chmod mvnw + JDKs + Playwright Chromium",
+    "echo   4. mise run setup              .env + chmod mvnw + JDKs + gh CLI + Playwright Chromium",
     "echo   5. mise run dev                hot-reload on :8080",
     "echo \"\"",
     "echo   See MISE_SETUP.md for full documentation.",
