@@ -43,7 +43,7 @@ class FtsConnectionInterceptorTest {
     @BeforeEach
     void setUp() {
         interceptor = new FtsConnectionInterceptor();
-        interceptor.dataDir    = "target/";
+        interceptor.jdbcUrl = "jdbc:sqlite:target/test.db";
         interceptor.vecExtensionPath = "target/lib/vec0-test";
     }
 

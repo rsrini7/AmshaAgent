@@ -27,9 +27,7 @@ class FtsConnectionInterceptorVecFallbackTest {
             FtsConnectionInterceptor interceptor = new FtsConnectionInterceptor();
 
             // Set config properties via reflection (they're package-private fields)
-            var dataDirField = FtsConnectionInterceptor.class.getDeclaredField("dataDir");
-            dataDirField.setAccessible(true);
-            dataDirField.set(interceptor, tempDir.toAbsolutePath().toString());
+            interceptor.jdbcUrl = "jdbc:sqlite:" + tempDir.resolve("test.db").toAbsolutePath();
 
             var vecPathField = FtsConnectionInterceptor.class.getDeclaredField("vecExtensionPath");
             vecPathField.setAccessible(true);

@@ -1,5 +1,6 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,8 +42,8 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
     private static final Logger log = Logger.getLogger(FtsConnectionInterceptor.class);
 
-    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
-    String dataDir;
+    @ConfigProperty(name = "quarkus.datasource.jdbc.url", defaultValue = "jdbc:sqlite:./data/arcclaw-meta.db")
+    String jdbcUrl;
 
     @ConfigProperty(name = "arcclaw.rag.vec-extension-path", defaultValue = "./lib/vec0")
     String vecExtensionPath;
@@ -97,13 +98,13 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             if (!connection.getAutoCommit()) {
                 log.debug("FtsConnectionInterceptor: Cannot ATTACH fts (transaction active). Will retry on next acquire.");
             } else {
-                String ftsPath;
+                File ftsDb = ftsDbFile();
                 try {
-                    Files.createDirectories(Path.of(dataDir));
+                    Files.createDirectories(ftsDb.getParentFile().toPath());
                 } catch (IOException e) {
-                    log.warnf("Failed to create data directory for FTS: %s", dataDir, e);
+                    log.warnf("Failed to create data directory for FTS: %s", ftsDb.getParent(), e);
                 }
-                ftsPath = Path.of(dataDir, "arcclaw-fts.db").toAbsolutePath().toString().replace("\\", "/");
+                String ftsPath = ftsDb.getAbsolutePath().replace("\\", "/");
                 try (Statement stmt = connection.createStatement()) {
                     stmt.execute("ATTACH DATABASE '" + ftsPath + "' AS fts");
                 }
@@ -150,5 +151,14 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
     public boolean isVectorSearchEnabled() {
         return vectorSearchEnabled.get();
+    }
+
+    private File ftsDbFile() {
+        String path = jdbcUrl.replace("jdbc:sqlite:", "");
+        int qIndex = path.indexOf('?');
+        if (qIndex > 0) path = path.substring(0, qIndex);
+        int sep = path.lastIndexOf('/');
+        String dir = sep > 0 ? path.substring(0, sep) : ".";
+        return Path.of(dir, "arcclaw-fts.db").toFile();
     }
 }

@@ -1,6 +1,7 @@
 package com.arcclaw.persistence.sqlite;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -33,8 +34,8 @@ public class SqliteWalConfigurer {
 
     @Inject DataSource dataSource;
 
-    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = ".")
-    String dataDir;
+    @ConfigProperty(name = "quarkus.datasource.jdbc.url", defaultValue = "jdbc:sqlite:./data/arcclaw-meta.db")
+    String jdbcUrl;
 
     /**
      * Boot-time configuration - fires BEFORE RagSchemaInitializer.
@@ -43,7 +44,7 @@ public class SqliteWalConfigurer {
     void onStartup(@Observes @Priority(10) StartupEvent event) {
         log.info("SQLite: Configuring WAL mode and FTS cross-database ATTACH...");
         
-        File ftsDb = new File(dataDir, "arcclaw-fts.db");
+        File ftsDb = ftsDbPath();
 
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
@@ -75,5 +76,14 @@ public class SqliteWalConfigurer {
         } catch (SQLException e) {
             log.error("SQLite: Failed to configure WAL/ATTACH on startup", e);
         }
+    }
+
+    private File ftsDbPath() {
+        String path = jdbcUrl.replace("jdbc:sqlite:", "");
+        int qIndex = path.indexOf('?');
+        if (qIndex > 0) path = path.substring(0, qIndex);
+        int sep = path.lastIndexOf('/');
+        String dir = sep > 0 ? path.substring(0, sep) : ".";
+        return Path.of(dir, "arcclaw-fts.db").toFile();
     }
 }
