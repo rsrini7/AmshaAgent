@@ -614,7 +614,7 @@ mp:
 "%dev":
   quarkus:
     flyway:
-      clean-at-start: true    # recreate schema from scratch on every dev restart
+      clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}   # set to false to keep existing data across restarts
     mcp:
       server:
         stdio:
@@ -841,7 +841,7 @@ mp:
       baseline-on-migrate: true
       # PostgreSQL-specific migrations under db/migration/postgresql/
       locations: db/migration/postgresql
-      clean-at-start: true   # fresh schema on every start — no data migration needed
+      clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}   # set to false to keep existing data across restarts
     hibernate-orm:
       database:
         default-schema: public

@@ -1384,6 +1384,7 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_DATA_DIR` | no | `./data` | Directory where ArcClaw stores SQLite databases and state files |
+| `ARCCLAW_FLYWAY_CLEAN_AT_START` | no | `true` | Dev/PostgreSQL profiles only. Set `false` to keep existing data across restarts |
 | `ARCCLAW_CHAT_MEMORY_MAX_MESSAGES` | no | `100` | Rolling chat window size |
 | `ARCCLAW_WORKSPACE_SESSION_TTL_MINUTES` | no | `30` | Session idle timeout before cleanup |
 | `ARCCLAW_CHECKPOINT_STALE_CLAIM_MINUTES` | no | `2` | Minutes before a checkpoint claim is considered stale and reclaimable |
