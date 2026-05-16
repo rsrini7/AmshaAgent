@@ -887,6 +887,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -907,6 +908,8 @@ try {
     }
 
     Write-Host '[dev] Terminal restored. Press Enter if cursor is missing.'
+    # Ctrl+C → exit 130. Don't let mise report "ERROR task failed".
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -948,6 +951,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -968,6 +972,7 @@ try {
     }
 
     Write-Host '[dev:chat] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1015,6 +1020,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -1035,6 +1041,7 @@ try {
     }
 
     Write-Host '[dev:attach] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1086,6 +1093,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -1106,6 +1114,7 @@ try {
     }
 
     Write-Host '[dev:ask] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1150,6 +1159,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -1170,6 +1180,7 @@ try {
     }
 
     Write-Host '[dev:no-ui] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1347,11 +1358,6 @@ $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }
 $cmd = '{{arg(i=0, default="serve")}}'
-if ($cmd -notin @('serve','chat','attach','ask')) {
-    Write-Host "❌  Unknown command: $cmd"
-    Write-Host '    Valid: serve | chat | attach | ask'
-    exit 1
-}
 if ($cmd -eq 'attach' -and -not $env:TELEGRAM_BOT_TOKEN) {
     Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1
 }
@@ -1375,7 +1381,10 @@ if ($cmd -in @('chat','ask')) {
 if ($cmd -eq 'attach') { $jvmArgs += '-Darcclaw.telegram.enabled=true' }
 Write-Host "▶   Starting JAR in dev profile - mode: $cmd"
 & java @jvmArgs -jar $jar $cmd
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$code = $LASTEXITCODE
+# Ctrl+C sends SIGINT → Java exits non-zero. Exit 0 so mise doesn't report failure.
+if ($code -eq 130 -or $code -eq 143) { exit 0 }
+exit $code
 """
 
 [tasks."jar:run-dev-dep"]
@@ -1384,7 +1393,6 @@ description = "Build and run packaged jar with dev profile. Usage: mise run jar:
 shell = "pwsh -NonInteractive -Command"
 dir = "{{config_root}}"
 quiet = true
-# We call mise directly, passing the argument the user provided (or defaulting to 'serve')
 run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
 
 # =============================================================================
