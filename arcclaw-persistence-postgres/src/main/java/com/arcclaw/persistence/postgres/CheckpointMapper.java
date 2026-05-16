@@ -3,15 +3,15 @@ package com.arcclaw.persistence.postgres;
 import java.time.Instant;
 
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
 
 final class CheckpointMapper {
 
     private CheckpointMapper() {}
 
-    static CheckpointDto toDto(AgentCheckpoint c) {
+    static CheckpointDto toDto(AgentCheckpointEntity c) {
         return new CheckpointDto(
                 c.getId(), c.getSessionId(), c.getAgentRole(),
                 c.getStatus() != null ? c.getStatus().name() : null,
@@ -26,7 +26,7 @@ final class CheckpointMapper {
         );
     }
 
-    static void updateEntity(AgentCheckpoint entity, CheckpointDto dto) {
+    static void updateEntity(AgentCheckpointEntity entity, CheckpointDto dto) {
         entity.setSessionId(dto.sessionId());
         entity.setAgentRole(dto.agentRole());
         entity.setStatus(dto.status() != null ? CheckpointStatus.valueOf(dto.status()) : null);
@@ -46,3 +46,4 @@ final class CheckpointMapper {
         entity.setUpdatedAt(Instant.now());
     }
 }
+

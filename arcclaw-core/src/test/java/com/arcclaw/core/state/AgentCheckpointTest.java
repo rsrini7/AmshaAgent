@@ -3,6 +3,7 @@ package com.arcclaw.core.state;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,7 @@ public class AgentCheckpointTest {
 
     @Test
     void testFieldPrivacyAndJsonIgnore() throws NoSuchFieldException {
-        Class<AgentCheckpoint> clazz = AgentCheckpoint.class;
+        Class<AgentCheckpointRecord> clazz = AgentCheckpointRecord.class;
         
         // 1. Verify fields are private
         Field stateJson = clazz.getDeclaredField("stateJson");

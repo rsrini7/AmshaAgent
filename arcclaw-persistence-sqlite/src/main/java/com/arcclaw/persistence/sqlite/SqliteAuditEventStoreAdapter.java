@@ -10,11 +10,12 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -46,7 +47,7 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
     @Override
     @Transactional(Transactional.TxType.MANDATORY)
     public void save(AuditEventDto dto) {
-        AuditEvent entity = toEntity(dto);
+        AuditEventEntity entity = toEntity(dto);
         em.persist(entity);
     }
 
@@ -68,7 +69,7 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
     public List<AuditEventDto> findBySessionId(String sessionId) {
         return em.createQuery(
                 "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid ORDER BY a.sequence ASC",
-                AuditEvent.class)
+                AuditEventEntity.class)
                 .setParameter("sid", sessionId)
                 .getResultList()
                 .stream()
@@ -109,49 +110,50 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
         return maxSeqResult.isEmpty() ? 0L : maxSeqResult.get(0);
     }
 
-    private AuditEvent toEntity(AuditEventDto dto) {
-        AuditEvent entity = new AuditEvent();
-        entity.id = dto.id();
-        entity.sessionId = dto.sessionId();
-        entity.userId = dto.userId();
-        entity.agentRole = dto.agentRole();
-        entity.goalHash = dto.goalHash();
-        entity.outcome = dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null;
-        entity.eventType = dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null;
-        entity.eventDetail = dto.eventDetail();
-        entity.inputTokens = dto.inputTokens();
-        entity.outputTokens = dto.outputTokens();
-        entity.usdCost = dto.usdCost();
-        entity.timestamp = dto.timestamp();
-        entity.iterationsUsed = dto.iterationsUsed();
-        entity.appVersion = dto.appVersion();
-        entity.idempotencyKey = dto.idempotencyKey();
-        entity.sequence = dto.sequence();
-        entity.hmacHash = dto.hmacHash();
-        entity.prevHash = dto.prevHash();
+    private AuditEventEntity toEntity(AuditEventDto dto) {
+        AuditEventEntity entity = new AuditEventEntity();
+        entity.setId(dto.id());
+        entity.setSessionId(dto.sessionId());
+        entity.setUserId(dto.userId());
+        entity.setAgentRole(dto.agentRole());
+        entity.setGoalHash(dto.goalHash());
+        entity.setOutcome(dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null);
+        entity.setEventType(dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null);
+        entity.setEventDetail(dto.eventDetail());
+        entity.setInputTokens(dto.inputTokens());
+        entity.setOutputTokens(dto.outputTokens());
+        entity.setUsdCost(dto.usdCost());
+        entity.setTimestamp(dto.timestamp());
+        entity.setIterationsUsed(dto.iterationsUsed());
+        entity.setAppVersion(dto.appVersion());
+        entity.setIdempotencyKey(dto.idempotencyKey());
+        entity.setSequence(dto.sequence());
+        entity.setHmacHash(dto.hmacHash());
+        entity.setPrevHash(dto.prevHash());
         return entity;
     }
 
     private AuditEventDto toDto(AuditEvent entity) {
         return new AuditEventDto(
-            entity.id,
-            entity.sessionId,
-            entity.userId,
-            entity.agentRole,
-            entity.goalHash,
-            entity.outcome != null ? entity.outcome.name() : null,
-            entity.eventType != null ? entity.eventType.name() : null,
-            entity.eventDetail,
-            entity.inputTokens,
-            entity.outputTokens,
-            entity.usdCost,
-            entity.timestamp,
-            entity.iterationsUsed,
-            entity.appVersion,
-            entity.idempotencyKey,
-            entity.sequence,
-            entity.hmacHash,
-            entity.prevHash
+            entity.getId(),
+            entity.getSessionId(),
+            entity.getUserId(),
+            entity.getAgentRole(),
+            entity.getGoalHash(),
+            entity.getOutcome() != null ? entity.getOutcome().name() : null,
+            entity.getEventType() != null ? entity.getEventType().name() : null,
+            entity.getEventDetail(),
+            entity.getInputTokens(),
+            entity.getOutputTokens(),
+            entity.getUsdCost(),
+            entity.getTimestamp(),
+            entity.getIterationsUsed(),
+            entity.getAppVersion(),
+            entity.getIdempotencyKey(),
+            entity.getSequence(),
+            entity.getHmacHash(),
+            entity.getPrevHash()
         );
     }
 }
+

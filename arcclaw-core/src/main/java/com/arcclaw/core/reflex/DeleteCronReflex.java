@@ -11,7 +11,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.persistence.api.CronStorePort;
 
 /**
  * Fast-path reflex for deleting a specific cron job by ID.
@@ -25,7 +25,7 @@ import com.arcclaw.core.state.AgentCronRepository;
 public class DeleteCronReflex implements AgentReflex {
 
     @Inject
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @Inject
     AuditService auditService;
@@ -73,7 +73,7 @@ public class DeleteCronReflex implements AgentReflex {
         }
 
         // Tenant-isolated delete - user B cannot delete user A's job
-        int deleted = cronRepository.deleteByIdAndUserId(cronId, uid);
+        int deleted = cronStore.deleteByIdAndUserId(cronId, uid);
         if (deleted == 0) {
             return ReflexResult.respond(
                     UserMessages.cronNotFound(cronId), context);

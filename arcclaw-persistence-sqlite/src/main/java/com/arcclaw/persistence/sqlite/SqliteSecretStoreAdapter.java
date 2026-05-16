@@ -7,9 +7,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.security.EncryptedSecret;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
+import com.arcclaw.persistence.sqlite.entity.EncryptedSecretEntity;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -26,11 +26,12 @@ public class SqliteSecretStoreAdapter implements SecretStorePort {
     @Override
     @Transactional
     public void save(SecretDto dto) {
-        EncryptedSecret entity = new EncryptedSecret();
-        entity.id = new EncryptedSecret.EncryptedSecretId(dto.sessionId(), dto.keyName());
+        EncryptedSecretEntity entity = new EncryptedSecretEntity();
+        entity.setSessionId(dto.sessionId());
+        entity.setKeyName(dto.keyName());
         entity.setEncryptionKeyVersion(dto.encryptionKeyVersion());
-        entity.ciphertext = dto.ciphertext();
-        entity.nonce = dto.nonce();
+        entity.setCiphertext(dto.ciphertext());
+        entity.setNonce(dto.nonce());
         
         em.merge(entity);
     }
@@ -39,8 +40,8 @@ public class SqliteSecretStoreAdapter implements SecretStorePort {
     @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<SecretDto> find(String sessionId, String keyName) {
         em.clear();
-        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
-        EncryptedSecret entity = em.find(EncryptedSecret.class, id);
+        EncryptedSecretEntity.EncryptedSecretId id = new EncryptedSecretEntity.EncryptedSecretId(sessionId, keyName);
+        EncryptedSecretEntity entity = em.find(EncryptedSecretEntity.class, id);
         return Optional.ofNullable(entity).map(this::toDto);
     }
 
@@ -48,8 +49,8 @@ public class SqliteSecretStoreAdapter implements SecretStorePort {
     @Transactional
     public void delete(String sessionId, String keyName) {
         em.clear();
-        EncryptedSecret.EncryptedSecretId id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
-        EncryptedSecret entity = em.find(EncryptedSecret.class, id);
+        EncryptedSecretEntity.EncryptedSecretId id = new EncryptedSecretEntity.EncryptedSecretId(sessionId, keyName);
+        EncryptedSecretEntity entity = em.find(EncryptedSecretEntity.class, id);
         if (entity != null) {
             em.remove(entity);
         }
@@ -58,18 +59,19 @@ public class SqliteSecretStoreAdapter implements SecretStorePort {
     @Override
     @Transactional
     public void deleteBySessionId(String sessionId) {
-        em.createQuery("DELETE FROM EncryptedSecret s WHERE s.id.sessionId = :sessionId")
+        em.createQuery("DELETE FROM EncryptedSecretEntity s WHERE s.id.sessionId = :sessionId")
           .setParameter("sessionId", sessionId)
           .executeUpdate();
     }
 
-    private SecretDto toDto(EncryptedSecret entity) {
+    private SecretDto toDto(EncryptedSecretEntity entity) {
         return new SecretDto(
-            entity.id.sessionId,
-            entity.id.keyName,
+            entity.getSessionId(),
+            entity.getKeyName(),
             entity.getEncryptionKeyVersion(),
-            entity.ciphertext,
-            entity.nonce
+            entity.getCiphertext(),
+            entity.getNonce()
         );
     }
 }
+

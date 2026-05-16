@@ -60,4 +60,12 @@ public class MockAuditEventStorePort implements AuditEventStorePort {
                 .max()
                 .orElse(0L);
     }
+
+    /** Test helper: replace the DTO at a given index for a session. */
+    public void replaceDto(String sessionId, int index, AuditEventDto dto) {
+        List<AuditEventDto> dtos = store.get(sessionId);
+        if (dtos != null && index >= 0 && index < dtos.size()) {
+            dtos.set(index, dto);
+        }
+    }
 }

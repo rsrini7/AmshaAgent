@@ -31,13 +31,14 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.audit.AuditHashUtil;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -160,7 +161,7 @@ class AgentLoopTest {
                 ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "h", "foo", Instant.now());
                 MessageContext ctx = new MessageContext("foo", user, msg);
 
-                AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
+                AgentCheckpoint checkpoint = mock(AgentCheckpointRecord.class);
                 when(checkpoint.getStatus()).thenReturn(CheckpointStatus.IN_PROGRESS);
 
                 when(agentStore.load(any(), any())).thenReturn(Optional.of(checkpoint));

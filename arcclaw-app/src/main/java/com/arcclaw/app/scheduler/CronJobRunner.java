@@ -21,12 +21,12 @@ import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -56,7 +56,7 @@ public class CronJobRunner {
     CronResultHandler resultHandler;
 
     @Inject
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
@@ -66,31 +66,28 @@ public class CronJobRunner {
 
 
 
-    public void execute(AgentCronEntity job) {
+    public void execute(AgentCron job) {
         String executionId = UUID.randomUUID().toString();
         
-        cronRepository.setDeliveryId(job.id, executionId);
+        cronStore.setDeliveryId(job.getId(), executionId);
 
-        String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.id + "-" + executionId;
+        String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.getId() + "-" + executionId;
 
-        // §Issue 4: Align heartbeat autonomy with execution context to ensure consistent HITL
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
         
         try {
-            String stripped = job.goal != null ? CRON_PREFIX_PATTERN.matcher(job.goal).replaceFirst("").trim() : "";
+            String stripped = job.getGoal() != null ? CRON_PREFIX_PATTERN.matcher(job.getGoal()).replaceFirst("").trim() : "";
             
-            // §Bug2: Short-circuit pure announcements to direct send, bypassing agent loop
             if (isPureAnnouncement(stripped)) {
                 String announcement = stripAnnouncementPrefix(stripped);
-                log.infof("CRON-SHORT-CIRCUIT cronId=%s announcement='%s'", job.id, announcement);
+                log.infof("CRON-SHORT-CIRCUIT cronId=%s announcement='%s'", job.getId(), announcement);
                 AgentResult result = AgentResult.finished(announcement, Collections.emptyList());
                 resultHandler.handleSuccess(job, cronSessionId, executionId, result);
                 return;
             }
 
-            // §Bug1: Short-circuit time checks to avoid code-gen failures in researcher role
             if (isTimeCheck(stripped.toLowerCase())) {
-                log.infof("CRON-SHORT-CIRCUIT cronId=%s time-check", job.id);
+                log.infof("CRON-SHORT-CIRCUIT cronId=%s time-check", job.getId());
                 String time = ZonedDateTime.now(ZoneOffset.UTC)
                     .format(DateTimeFormatter.RFC_1123_DATE_TIME);
                 AgentResult result = AgentResult.finished("The current time is " + time, Collections.emptyList());
@@ -98,16 +95,15 @@ public class CronJobRunner {
                 return;
             }
 
-            // §New Issue 1: Unwrap goals stored as tool-call strings
             String finalGoal = unwrapToolCallGoal(stripped);
             if (!finalGoal.equals(stripped)) {
-                log.infof("CRON-UNWRAP cronId=%s: extracted goal '%s'", job.id, finalGoal);
+                log.infof("CRON-UNWRAP cronId=%s: extracted goal '%s'", job.getId(), finalGoal);
             }
 
             String systemNote = "CRON MODE";
 
-            ChannelType type = ChannelType.fromString(job.channelType).orElse(ChannelType.TELEGRAM);
-            String role = resolveRole(finalGoal, job.executionRole);
+            ChannelType type = ChannelType.fromString(job.getChannelType()).orElse(ChannelType.TELEGRAM);
+            String role = resolveRole(finalGoal, job.getExecutionRole());
             String channel = type.name();
 
             Callable<AgentResult> op = () -> {
@@ -124,7 +120,7 @@ public class CronJobRunner {
             };
 
             AgentResult result = WorkspaceContext.<AgentResult>run(
-                cronSessionId, job.userId, job.chatId, AutonomyLevel.SUPERVISED, role, channel, op
+                cronSessionId, job.getUserId(), job.getChatId(), AutonomyLevel.SUPERVISED, role, channel, op
             );
 
             resultHandler.handleSuccess(job, cronSessionId, executionId, result);
@@ -293,9 +289,9 @@ public class CronJobRunner {
         return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 
-    private MessageContext createCronContext(AgentCronEntity job, String sessionId, String executionId, String goal, ChannelType channelType) {
-        ChannelUser user = new ChannelUser(job.userId, job.userId, "Cron User", channelType);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.id, Instant.now());
-        return new MessageContext(job.chatId, user, msg);
+    private MessageContext createCronContext(AgentCron job, String sessionId, String executionId, String goal, ChannelType channelType) {
+        ChannelUser user = new ChannelUser(job.getUserId(), job.getUserId(), "Cron User", channelType);
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.getId(), Instant.now());
+        return new MessageContext(job.getChatId(), user, msg);
     }
 }

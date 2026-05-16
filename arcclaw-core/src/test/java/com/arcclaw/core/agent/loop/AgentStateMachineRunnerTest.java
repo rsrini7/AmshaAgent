@@ -31,6 +31,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.governance.ApprovalFrame;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceStrategy;
@@ -42,7 +43,6 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.AgentTool;
@@ -259,7 +259,7 @@ class AgentStateMachineRunnerTest {
                     .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
                             new ApprovalFrame("protected-tool", Map.of(), ApprovalFrame.RiskLevel.MEDIUM)));
             when(agentStore.load(anyString(), anyString()))
-                    .thenReturn(Optional.of(new AgentCheckpoint()));
+                    .thenReturn(Optional.of(new AgentCheckpointRecord()));
 
             AgentExecutionContext ctx = new AgentExecutionContext(
                     "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE, 5, 0, "telegram", "platform-1", null, null);

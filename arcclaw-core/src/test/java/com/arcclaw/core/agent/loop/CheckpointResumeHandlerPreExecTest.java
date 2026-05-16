@@ -19,16 +19,17 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +43,7 @@ class CheckpointResumeHandlerPreExecTest {
     @Mock StatefulAgentStore agentStore;
     @Mock ToolRegistry toolRegistry;
     @Mock AgentStateMachineRunner stateMachineRunner;
-    @Mock AgentCronRepository cronRepository;
+    @Mock CronStorePort cronStore;
     @Mock ReasoningEngine reasoningEngine;
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -50,7 +51,7 @@ class CheckpointResumeHandlerPreExecTest {
 
     @BeforeEach
     void setup() {
-        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, reasoningEngine, null, null, cronRepository);
+        handler = new CheckpointResumeHandler(agentStore, toolRegistry, objectMapper, null, reasoningEngine, null, null, cronStore);
     }
 
     @Test
@@ -61,7 +62,7 @@ class CheckpointResumeHandlerPreExecTest {
         AgentExecutionContext context = new AgentExecutionContext(
             sessionId, "user1", "chat1", agentRole, "goal", AutonomyLevel.SUPERVISED, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
 
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId(sessionId);
         cp.setAgentRole(agentRole);
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);

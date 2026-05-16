@@ -10,8 +10,8 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.RagChunkEntity;
 import com.arcclaw.persistence.api.MemoryChunkDto;
+import com.arcclaw.persistence.sqlite.entity.RagChunkEntity;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -107,3 +107,4 @@ public class GlobalKnowledgeBase {
         return sb.toString();
     }
 }
+

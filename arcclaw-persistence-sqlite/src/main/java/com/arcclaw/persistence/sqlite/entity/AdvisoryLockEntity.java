@@ -1,0 +1,45 @@
+package com.arcclaw.persistence.sqlite.entity;
+
+import java.time.Instant;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+/**
+ * Entity for table-based distributed locks (┬ºT5-3).
+ * Used for SQLite which lacks native advisory locks.
+ */
+@Entity
+@Table(name = "advisory_lock")
+public class AdvisoryLockEntity {
+
+    @Id
+    @Column(name = "lock_key")
+    private String lockKey;
+
+    @Column(name = "owner_id")
+    private String ownerId;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    public AdvisoryLockEntity() {}
+
+    public AdvisoryLockEntity(String lockKey, String ownerId, Instant expiresAt) {
+        this.lockKey = lockKey;
+        this.ownerId = ownerId;
+        this.expiresAt = expiresAt;
+    }
+
+    public String getLockKey() { return lockKey; }
+    public void setLockKey(String lockKey) { this.lockKey = lockKey; }
+
+    public String getOwnerId() { return ownerId; }
+    public void setOwnerId(String ownerId) { this.ownerId = ownerId; }
+
+    public Instant getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+}
+

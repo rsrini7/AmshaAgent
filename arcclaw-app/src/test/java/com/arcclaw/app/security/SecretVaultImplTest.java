@@ -21,16 +21,16 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AesGcmSivCipher;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.security.EncryptedSecret;
-import com.arcclaw.core.security.EncryptedSecretRepository;
 import com.arcclaw.core.security.SecretVaultImpl;
 import com.arcclaw.core.security.VaultKey;
+import com.arcclaw.persistence.api.SecretDto;
+import com.arcclaw.persistence.api.SecretStorePort;
+import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +44,7 @@ public class SecretVaultImplTest {
     AesGcmSivCipher cipher;
 
     @Inject
-    EncryptedSecretRepository repository;
+    SecretStorePort secretStore;
 
     @Inject
     AuditService auditService;
@@ -60,8 +60,8 @@ public class SecretVaultImplTest {
     void cleanDb() {
         // Wait for background audit writes to finish
         auditService.waitForIdle();
-        repository.deleteBySessionId(TEST_SESSION_ID);
-        repository.delete("SYSTEM", "test-system-key");
+        secretStore.deleteBySessionId(TEST_SESSION_ID);
+        secretStore.delete("SYSTEM", "test-system-key");
     }
 
     @Test
@@ -95,12 +95,15 @@ public class SecretVaultImplTest {
             auditService.waitForIdle();
 
             // 2. Tamper: Direct DB access to flip a bit in ciphertext
-            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
-            assertNotNull(entity);
+            SecretDto dto = secretStore.find(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
+            assertNotNull(dto);
 
             // Flip the last bit of the ciphertext
-            entity.ciphertext[entity.ciphertext.length - 1] ^= 1;
-            saveEntity(entity);
+            byte[] ct = dto.ciphertext();
+            ct[ct.length - 1] ^= 1;
+            secretStore.save(new SecretDto(
+                dto.sessionId(), dto.keyName(), dto.encryptionKeyVersion(), ct, dto.nonce()
+            ));
 
             // 3. Retrieve - Expect SecurityException (AEAD failure)
             assertThrows(SecurityException.class, () -> vault.get(API_KEY_NAME));
@@ -124,10 +127,10 @@ public class SecretVaultImplTest {
             auditService.waitForIdle();
 
             // 2. Steal ciphertext/nonce
-            EncryptedSecret sorceEntity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
+            SecretDto sourceDto = secretStore.find(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
 
             // 3. Inject into GITHUB_TOKEN slot
-            insertForgedSecret(TEST_SESSION_ID, targetKeyName, sorceEntity.ciphertext, sorceEntity.nonce);
+            insertForgedSecret(TEST_SESSION_ID, targetKeyName, sourceDto.ciphertext(), sourceDto.nonce());
 
             // 4. Retrieve GITHUB_TOKEN - Expect SecurityException
             assertThrows(SecurityException.class, () -> vault.get(targetKeyName));
@@ -135,22 +138,8 @@ public class SecretVaultImplTest {
     }
 
     @Transactional
-    void saveEntity(EncryptedSecret entity) {
-        entityManager.merge(entity);
-        entityManager.flush();
-        entityManager.clear();
-    }
-
-    @Transactional
     void insertForgedSecret(String sessionId, String keyName, byte[] ciphertext, byte[] nonce) {
-        EncryptedSecret forged = new EncryptedSecret();
-        forged.id = new EncryptedSecret.EncryptedSecretId(sessionId, keyName);
-        forged.ciphertext = ciphertext.clone();
-        forged.nonce = nonce.clone();
-        forged.setEncryptionKeyVersion(1);
-        repository.persist(forged);
-        entityManager.flush();
-        entityManager.clear();
+        secretStore.save(new SecretDto(sessionId, keyName, 1, ciphertext.clone(), nonce.clone()));
     }
 
     @Test
@@ -161,9 +150,9 @@ public class SecretVaultImplTest {
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
 
             // 2. Assert versions
-            EncryptedSecret entity = repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
-            assertNotNull(entity);
-            assertEquals(1, entity.getEncryptionKeyVersion(), "Application key version must be 1");
+            SecretDto dto = secretStore.find(TEST_SESSION_ID, API_KEY_NAME).orElse(null);
+            assertNotNull(dto);
+            assertEquals(1, dto.encryptionKeyVersion(), "Application key version must be 1");
         });
     }
 
@@ -203,7 +192,7 @@ public class SecretVaultImplTest {
         assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should finish");
         
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
-            assertNotNull(repository.findByKey(TEST_SESSION_ID, key).orElse(null));
+            assertNotNull(secretStore.find(TEST_SESSION_ID, key).orElse(null));
         });
     }
 
@@ -241,7 +230,7 @@ public class SecretVaultImplTest {
         });
         
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
-            assertNotNull(repository.findByKey(TEST_SESSION_ID, API_KEY_NAME).orElse(null));
+            assertNotNull(secretStore.find(TEST_SESSION_ID, API_KEY_NAME).orElse(null));
         });
     }
 
@@ -270,7 +259,7 @@ public class SecretVaultImplTest {
         assertTrue(latch.await(15, TimeUnit.SECONDS), "All threads should finish without deadlock");
         
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
-            assertNotNull(repository.findByKey(TEST_SESSION_ID, key).orElse(null));
+            assertNotNull(secretStore.find(TEST_SESSION_ID, key).orElse(null));
         });
     }
     @Test
@@ -303,13 +292,13 @@ public class SecretVaultImplTest {
 
         // Verify audit record has correct user ID
         WorkspaceContext.runWithFullAutonomy(testSessionId, testUserId, "test-chat", "test-role", () -> {
-            List<AuditEvent> events = entityManager.createQuery("SELECT a FROM AuditEvent a WHERE a.sessionId = :sid AND a.eventType = :type", AuditEvent.class)
+            List<AuditEventEntity> events = entityManager.createQuery("SELECT a FROM AuditEvent a WHERE a.sessionId = :sid AND a.eventType = :type", AuditEventEntity.class)
                     .setParameter("sid", testSessionId)
                     .setParameter("type", SecurityEventType.VAULT_STORE)
                     .getResultList();
             
             assertFalse(events.isEmpty(), "Audit event should be recorded");
-            assertEquals(testUserId, events.get(0).userId);
+            assertEquals(testUserId, events.get(0).getUserId());
         });
 
         // Cleanup on test thread with transaction
@@ -318,8 +307,6 @@ public class SecretVaultImplTest {
 
     @Transactional
     void deleteSession(String sid) {
-        repository.deleteBySessionId(sid);
-        entityManager.flush();
-        entityManager.clear();
+        secretStore.deleteBySessionId(sid);
     }
 }

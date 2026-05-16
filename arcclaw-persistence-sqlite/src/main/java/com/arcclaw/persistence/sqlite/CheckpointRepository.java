@@ -8,12 +8,12 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import org.jboss.logging.Logger;
 
 /**
- * Handles core JPA operations for AgentCheckpoint entities.
+ * Handles core JPA operations for AgentCheckpointEntity entities.
  */
 @ApplicationScoped
 public class CheckpointRepository {
@@ -32,33 +32,33 @@ public class CheckpointRepository {
     }
 
     @Transactional(Transactional.TxType.REQUIRED)
-    public AgentCheckpoint persist(AgentCheckpoint entity) {
+    public AgentCheckpointEntity persist(AgentCheckpointEntity entity) {
         em.persist(entity);
         em.flush();
         return entity;
     }
 
     @Transactional(Transactional.TxType.REQUIRED)
-    public AgentCheckpoint merge(AgentCheckpoint entity) {
-        AgentCheckpoint merged = em.merge(entity);
+    public AgentCheckpointEntity merge(AgentCheckpointEntity entity) {
+        AgentCheckpointEntity merged = em.merge(entity);
         em.flush();
         return merged;
     }
 
-    public Optional<AgentCheckpoint> findById(Long id) {
+    public Optional<AgentCheckpointEntity> findById(Long id) {
         em.clear();
-        return Optional.ofNullable(em.find(AgentCheckpoint.class, id));
+        return Optional.ofNullable(em.find(AgentCheckpointEntity.class, id));
     }
 
-    public List<AgentCheckpoint> findBySessionAndRole(String sessionId, String agentRole) {
+    public List<AgentCheckpointEntity> findBySessionAndRole(String sessionId, String agentRole) {
         log.debugf("[Query] findBySessionAndRole(session=%s, role=%s)", sessionId, agentRole);
-        List<AgentCheckpoint> result = em.createQuery(
+        List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
                 "  AND c.agentRole = :role " +
                 "  AND c.status <> :archived " +
                 "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("role", agentRole)
                 .setParameter("archived", CheckpointStatus.ARCHIVED)
@@ -68,26 +68,26 @@ public class CheckpointRepository {
         return result;
     }
 
-    public List<AgentCheckpoint> findActiveBySession(String sessionId) {
+    public List<AgentCheckpointEntity> findActiveBySession(String sessionId) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
                 "  AND c.status NOT IN (:terminalStatuses) " +
                 "ORDER BY c.id ASC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("terminalStatuses", CheckpointStatus.terminalStatuses())
                 .getResultList();
     }
 
-    public List<AgentCheckpoint> findLatestAwaiting(String sessionId) {
+    public List<AgentCheckpointEntity> findLatestAwaiting(String sessionId) {
         log.debugf("[Query] findLatestAwaiting(session=%s)", sessionId);
         em.clear();
-        List<AgentCheckpoint> result = em.createQuery(
+        List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid " +
                 "  AND c.status IN (:s1, :s2, :s3) " +
                 "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("s1", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("s2", CheckpointStatus.RESUMING)
@@ -101,19 +101,19 @@ public class CheckpointRepository {
         return result;
     }
 
-    public List<AgentCheckpoint> findByStatus(String status) {
+    public List<AgentCheckpointEntity> findByStatus(String status) {
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("status", CheckpointStatus.valueOf(status))
                 .getResultList();
     }
 
-    public List<AgentCheckpoint> findLatestBySession(String sessionId) {
+    public List<AgentCheckpointEntity> findLatestBySession(String sessionId) {
         log.debugf("[Query] findLatestBySession(session=%s)", sessionId);
-        List<AgentCheckpoint> result = em.createQuery(
+        List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setMaxResults(1)
                 .getResultList();
@@ -121,11 +121,11 @@ public class CheckpointRepository {
         return result;
     }
 
-    public List<AgentCheckpoint> findLatestNonArchived(String sessionId) {
+    public List<AgentCheckpointEntity> findLatestNonArchived(String sessionId) {
         log.debugf("[Query] findLatestNonArchived(session=%s)", sessionId);
-        List<AgentCheckpoint> result = em.createQuery(
+        List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status <> :archived ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("archived", CheckpointStatus.ARCHIVED)
                 .setMaxResults(1)
@@ -134,11 +134,11 @@ public class CheckpointRepository {
         return result;
     }
 
-    public List<AgentCheckpoint> findLatestBySessionAndStatus(String sessionId, String status) {
+    public List<AgentCheckpointEntity> findLatestBySessionAndStatus(String sessionId, String status) {
         log.debugf("[Query] findLatestBySessionAndStatus(session=%s, status=%s)", sessionId, status);
-        List<AgentCheckpoint> result = em.createQuery(
+        List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status = :status ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("sid", sessionId)
                 .setParameter("status", CheckpointStatus.valueOf(status))
                 .setMaxResults(1)
@@ -147,14 +147,14 @@ public class CheckpointRepository {
         return result;
     }
 
-    public List<AgentCheckpoint> findLatestAwaitingBySegment(String segment) {
+    public List<AgentCheckpointEntity> findLatestAwaitingBySegment(String segment) {
         log.debugf("[Query] findLatestAwaitingBySegment(segment=%s)", segment);
         em.clear();
-        List<AgentCheckpoint> result = em.createQuery(
+        List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment " +
                 "  AND c.status IN (:s1, :s2, :s3) " +
                 "ORDER BY c.id DESC",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("segment", "%" + segment + "%")
                 .setParameter("s1", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("s2", CheckpointStatus.RESUMING)
@@ -173,10 +173,11 @@ public class CheckpointRepository {
         em.clear();
         return !em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.channelPlatformId = :chatId AND c.status = :s AND c.sessionId NOT LIKE 'cron-%'",
-                AgentCheckpoint.class)
+                AgentCheckpointEntity.class)
                 .setParameter("chatId", chatId)
                 .setParameter("s", CheckpointStatus.AWAITING_APPROVAL)
                 .getResultList()
                 .isEmpty();
     }
 }
+

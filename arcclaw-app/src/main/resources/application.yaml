@@ -99,10 +99,8 @@ quarkus:
       halt-on-error: false 
     sql-load-script: no-file
     packages:
-      - com.arcclaw.core.state
-      - com.arcclaw.core.security
-      - com.arcclaw.core.audit
-      - com.arcclaw.core.skill
+      - com.arcclaw.persistence.sqlite.entity
+      - com.arcclaw.core.domain.model
       - com.arcclaw.core.routing
       - com.arcclaw.app.session
     log:
@@ -809,3 +807,53 @@ mp:
       strategy: PODMAN
     autonomy:
       default-level: SUPERVISED
+
+# =============================================================================
+# ALTERNATIVE PERSISTENCE BACKENDS
+# =============================================================================
+# To switch persistence backends:
+#   1. Replace the `arcclaw-persistence-sqlite` dependency in arcclaw-app/pom.xml
+#      with the desired adapter: `arcclaw-persistence-fs` or `arcclaw-persistence-postgres`.
+#   2. For Postgres, also replace `quarkus-jdbc-sqlite` with `quarkus-jdbc-postgresql`
+#      and add `quarkus-hibernate-orm-panache` if not already present.
+#   3. Uncomment the corresponding profile section below.
+#   4. Activate the profile: `-Dquarkus.profile=postgresql` or `-Dquarkus.profile=filesystem`.
+# Only ONE persistence adapter should be on the classpath at a time to avoid CDI ambiguity.
+# ---------------------------------------------------------------------------
+
+#"%postgresql":
+#  quarkus:
+#    datasource:
+#      db-kind: postgresql
+#      jdbc:
+#        url: "jdbc:postgresql://${ARCCLAW_PG_HOST:localhost}:${ARCCLAW_PG_PORT:5432}/${ARCCLAW_PG_DB:arcclaw}"
+#        username: "${ARCCLAW_PG_USER:arcclaw}"
+#        password: "${ARCCLAW_PG_PASSWORD:changeme}"
+#        min-size: 2
+#        max-size: 10
+#        transactions: enabled
+#        background-validation-interval: PT30S
+#        validation-query-sql: "SELECT 1"
+#        acquisition-timeout: 30
+#    hibernate-orm:
+#      database:
+#        default-schema: public
+#      schema-management:
+#        strategy: update
+#        halt-on-error: false
+#      sql-load-script: no-file
+#      packages:
+#        - com.arcclaw.persistence.sqlite.entity
+#        - com.arcclaw.core.domain.model
+#        - com.arcclaw.core.routing
+#        - com.arcclaw.app.session
+#      log:
+#        sql: false
+
+#"%filesystem":
+#  # File-based persistence — no JDBC datasource or Hibernate required.
+#  # arcclaw-fs-data-dir defaults to ./arcclaw-data if omitted.
+#  arcclaw:
+#    fs:
+#      data-dir: "${ARCCLAW_FS_DATA_DIR:./data/fs}"
+#      lock-timeout-seconds: 30

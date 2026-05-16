@@ -21,7 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ComplianceAuditServiceTest {
 
     @Mock
-    AuditEventRepository auditEventRepository;
+    AuditEventRecorder auditEventRecorder;
 
     @Mock
     AsyncPersistenceEngine persistenceEngine;
@@ -30,7 +30,7 @@ class ComplianceAuditServiceTest {
 
     @BeforeEach
     void setUp() {
-        complianceAuditService = new ComplianceAuditService(auditEventRepository, persistenceEngine);
+        complianceAuditService = new ComplianceAuditService(auditEventRecorder, persistenceEngine);
     }
 
     @Test

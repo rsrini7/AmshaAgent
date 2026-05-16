@@ -10,13 +10,13 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.core.state.ReasoningStepEntity;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
+import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.postgres.entity.ReasoningStepEntity;
 import org.jboss.logging.Logger;
 
 /**
@@ -35,9 +35,9 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional
     public CheckpointDto save(CheckpointDto dto) {
         log.infof("[PostgresCheckpointAdapter] Saving checkpoint session=%s role=%s", dto.sessionId(), dto.agentRole());
-        AgentCheckpoint entity = dto.id() != null ? em.find(AgentCheckpoint.class, dto.id()) : null;
+        AgentCheckpointEntity entity = dto.id() != null ? em.find(AgentCheckpointEntity.class, dto.id()) : null;
         if (entity == null) {
-            entity = new AgentCheckpoint();
+            entity = new AgentCheckpointEntity();
         }
         CheckpointMapper.updateEntity(entity, dto);
         entity = em.merge(entity);
@@ -56,12 +56,12 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public Optional<CheckpointDto> findById(Long id) {
         log.debugf("[PostgresCheckpointAdapter] Finding checkpoint by id=%d", id);
-        return Optional.ofNullable(em.find(AgentCheckpoint.class, id)).map(CheckpointMapper::toDto);
+        return Optional.ofNullable(em.find(AgentCheckpointEntity.class, id)).map(CheckpointMapper::toDto);
     }
 
     @Override
     public Optional<CheckpointDto> findBySessionAndRole(String sessionId, String agentRole) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.agentRole = :role ORDER BY c.id DESC", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.agentRole = :role ORDER BY c.id DESC", AgentCheckpointEntity.class)
                 .setParameter("sessionId", sessionId)
                 .setParameter("role", agentRole)
                 .setMaxResults(1)
@@ -72,7 +72,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public List<CheckpointDto> findActiveBySession(String sessionId) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.status NOT IN (:terminal)", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.status NOT IN (:terminal)", AgentCheckpointEntity.class)
                 .setParameter("sessionId", sessionId)
                 .setParameter("terminal", List.of(CheckpointStatus.COMPLETED, CheckpointStatus.FAILED, CheckpointStatus.DENIED))
                 .getResultStream()
@@ -122,7 +122,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment AND c.status = :status ORDER BY c.id DESC", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId LIKE :segment AND c.status = :status ORDER BY c.id DESC", AgentCheckpointEntity.class)
                 .setParameter("segment", "%" + segment + "%")
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setMaxResults(1)
@@ -133,7 +133,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public Optional<CheckpointDto> findLatestBySession(String sessionId) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId ORDER BY c.id DESC", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId ORDER BY c.id DESC", AgentCheckpointEntity.class)
                 .setParameter("sessionId", sessionId)
                 .setMaxResults(1)
                 .getResultStream()
@@ -143,7 +143,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public Optional<CheckpointDto> findLatestNonArchivedBySession(String sessionId) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.status != :archived ORDER BY c.id DESC", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.status != :archived ORDER BY c.id DESC", AgentCheckpointEntity.class)
                 .setParameter("sessionId", sessionId)
                 .setParameter("archived", CheckpointStatus.ARCHIVED)
                 .setMaxResults(1)
@@ -154,7 +154,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public Optional<CheckpointDto> findLatestBySessionAndStatus(String sessionId, String status) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.status = :status ORDER BY c.id DESC", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.status = :status ORDER BY c.id DESC", AgentCheckpointEntity.class)
                 .setParameter("sessionId", sessionId)
                 .setParameter("status", CheckpointStatus.valueOf(status))
                 .setMaxResults(1)
@@ -211,7 +211,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public List<CheckpointDto> findByStatus(String status) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status", AgentCheckpointEntity.class)
                 .setParameter("status", CheckpointStatus.valueOf(status))
                 .getResultStream()
                 .map(CheckpointMapper::toDto)
@@ -271,14 +271,14 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Transactional
     public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole, String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
         log.infof("[PostgresCheckpointAdapter] Upserting checkpoint for session=%s role=%s", sessionId, agentRole);
-        AgentCheckpoint entity = em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.agentRole = :role", AgentCheckpoint.class)
+        AgentCheckpointEntity entity = em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sessionId AND c.agentRole = :role", AgentCheckpointEntity.class)
                 .setParameter("sessionId", sessionId)
                 .setParameter("role", agentRole)
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
                 .orElseGet(() -> {
-                    AgentCheckpoint c = new AgentCheckpoint();
+                    AgentCheckpointEntity c = new AgentCheckpointEntity();
                     c.setSessionId(sessionId);
                     c.setAgentRole(agentRole);
                     return c;
@@ -388,3 +388,5 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
 }
+
+

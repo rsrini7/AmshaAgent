@@ -8,9 +8,9 @@ import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.message.UserMessages;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.util.AgentResultFormatter;
 
 @ApplicationScoped
@@ -25,9 +25,9 @@ public class DenyReflex extends AbstractDecisionReflex {
     @Override public String getTargetNotAwaitingMessage() { return TARGET_SESSION_NOT_AWAITING; }
 
     @Override public String getAlreadyProcessingMessage() { return ALREADY_PROCESSING_DENIAL; }
-    @Override protected String getSingleCronFallbackMessage(AgentCronEntity cron) { 
-        return "⚠️ No active denial in this chat session.\n\nA background task is waiting:\n• " + cron.goal + 
-               "\n\nUse: `/deny " + cron.id + "` to cancel it.";
+    @Override protected String getSingleCronFallbackMessage(AgentCron cron) { 
+        return "⚠️ No active denial in this chat session.\n\nA background task is waiting:\n• " + cron.getGoal() + 
+               "\n\nUse: `/deny " + cron.getId() + "` to cancel it.";
     }
     @Override public String getMultipleCronFallbackMessage(String list) { return cronMultipleAwaiting(list); }
     @Override public String getCronSuccessResponse(AgentResult result) { return AgentResultFormatter.format(result); }
@@ -58,13 +58,13 @@ public class DenyReflex extends AbstractDecisionReflex {
     }
 
     @Override
-    protected void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result) {
+    protected void postProcessCronDecision(AgentCron cron, String reason, AgentResult result) {
         // §Direct Cron Path: handleCronDecision runs synchronously. This preserves
         // the user's /deny <reason> text as the failure message — markTerminal()
         // would lose it since it uses AgentResult.Failed.reason() instead.
         if (result instanceof AgentResult.AwaitingRetry) {
             return; // No-op - retry handled by RateLimitRetryScheduler (#736)
         }
-        cronRepository.markFailed(cron.id, reason != null ? reason : "User denied tool execution.");
+        cronStore.markFailed(cron.getId(), reason != null ? reason : "User denied tool execution.");
     }
 }

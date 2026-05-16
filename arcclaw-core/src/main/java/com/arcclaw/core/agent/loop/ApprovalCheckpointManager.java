@@ -13,8 +13,9 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.agent.sse.HitlEventType;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.governance.ApprovalFrame;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
@@ -54,7 +55,7 @@ public class ApprovalCheckpointManager {
                            && cp.getStatus() != CheckpointStatus.FAILED
                            && cp.getStatus() != CheckpointStatus.DENIED)
                 .orElseGet(() -> {
-                    AgentCheckpoint c = new AgentCheckpoint();
+                    AgentCheckpoint c = new AgentCheckpointRecord();
                     c.setSessionId(sessionId);
                     c.setAgentRole(agentRole);
                     return c;

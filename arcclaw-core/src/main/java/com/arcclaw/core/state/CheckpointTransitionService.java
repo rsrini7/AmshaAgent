@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import org.jboss.logging.Logger;

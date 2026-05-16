@@ -9,10 +9,10 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -113,7 +113,7 @@ public class CheckpointBatchOperations {
      * A16 - Stale Join Guard: merge batch decisions to prevent overwriting active decisions
      * from a concurrent update turn.
      */
-    public void mergeBatchDecisions(AgentCheckpoint managed, CheckpointDto incoming) {
+    public void mergeBatchDecisions(AgentCheckpointEntity managed, CheckpointDto incoming) {
         log.debugf("[BatchOps] Merging batch decisions for session %s", managed.getSessionId());
         if (incoming.batchToolDecisions() == null) {
             log.debugf("[BatchOps] Incoming batchToolDecisions is null for session %s, skipping merge", managed.getSessionId());
@@ -166,3 +166,4 @@ public class CheckpointBatchOperations {
         }
     }
 }
+

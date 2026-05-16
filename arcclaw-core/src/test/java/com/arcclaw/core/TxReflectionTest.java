@@ -7,8 +7,8 @@ import java.lang.reflect.Modifier;
 
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.lifecycle.SessionReaper;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.StatefulAgentStoreImpl;
 import org.junit.jupiter.api.Test;
 

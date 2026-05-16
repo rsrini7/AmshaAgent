@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import com.arcclaw.channel.api.hitl.PendingApprovalChecker;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.security.AutonomyLevel;
 
 /**

@@ -36,10 +36,7 @@ quarkus:
     jdbc:
       timezone: UTC
     packages:
-      - com.arcclaw.core.state
-      - com.arcclaw.core.security
-      - com.arcclaw.core.audit
-      - com.arcclaw.core.skill
+      - com.arcclaw.persistence.postgres.entity
 
   opentelemetry:
     enabled: false

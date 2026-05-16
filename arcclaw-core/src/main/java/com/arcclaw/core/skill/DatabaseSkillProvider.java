@@ -6,6 +6,8 @@ import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.persistence.api.SkillDto;
+import com.arcclaw.persistence.api.SkillStorePort;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -14,7 +16,7 @@ public class DatabaseSkillProvider implements SkillProvider {
     private static final Logger LOG = Logger.getLogger(DatabaseSkillProvider.class);
 
     @Inject
-    AgentSkillRepository repository;
+    SkillStorePort skillStore;
 
     @Inject
     SkillDefinitionParser parser;
@@ -33,12 +35,12 @@ public class DatabaseSkillProvider implements SkillProvider {
     public List<SkillDefinition> load() {
         List<SkillDefinition> skills = new ArrayList<>();
         try {
-            List<AgentSkillEntity> dbSkills = repository.findAllSkills();
-            for (AgentSkillEntity entity : dbSkills) {
+            List<SkillDto> dbSkills = skillStore.findAll();
+            for (SkillDto dto : dbSkills) {
                 try {
-                    skills.add(parser.parse(entity.getDefinitionYaml()));
+                    skills.add(parser.parse(dto.definitionYaml()));
                 } catch (Exception e) {
-                    LOG.warnf("Failed to load database skill '%s': %s", entity.getName(), e.getMessage());
+                    LOG.warnf("Failed to load database skill '%s': %s", dto.name(), e.getMessage());
                 }
             }
         } catch (Exception e) {

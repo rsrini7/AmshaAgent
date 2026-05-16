@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.arcclaw.core.config.SystemMetadataRegistry;
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class TelemetryAuditServiceTest {
 
     @Mock
-    AuditEventRepository auditEventRepository;
+    AuditEventRecorder auditEventRecorder;
 
     @Mock
     AsyncPersistenceEngine persistenceEngine;
@@ -34,7 +35,7 @@ class TelemetryAuditServiceTest {
 
     @BeforeEach
     void setUp() {
-        telemetryAuditService = new TelemetryAuditService(auditEventRepository, persistenceEngine, registry);
+        telemetryAuditService = new TelemetryAuditService(auditEventRecorder, persistenceEngine, registry);
     }
 
     @Test
@@ -51,8 +52,8 @@ class TelemetryAuditServiceTest {
         // Capture the event created inside the callback
         ArgumentCaptor<AuditEvent> eventCaptor = ArgumentCaptor.forClass(AuditEvent.class);
         captor.getValue().getDbAction().execute(); // Execute the lambda (no null arg)
-        verify(auditEventRepository).record(eventCaptor.capture());
-        assertEquals("1.0.0", eventCaptor.getValue().appVersion);
+        verify(auditEventRecorder).record(eventCaptor.capture());
+        assertEquals("1.0.0", eventCaptor.getValue().getAppVersion());
     }
 
     @Test

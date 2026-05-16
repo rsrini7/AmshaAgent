@@ -8,8 +8,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.core.audit.TelemetryAuditService;
-import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;
+import com.arcclaw.persistence.api.SkillStorePort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class SkillApiTest {
 
     @Inject
-    AgentSkillRepository repository;
+    SkillStorePort skillStore;
 
     @InjectMock
     TelemetryAuditService telemetryAuditService;
@@ -31,7 +31,7 @@ class SkillApiTest {
     void setup() {
         apiKeyRegistry.register("test-key", "key-internal-changeme");
         // Run in a programmatic transaction to ensure it's committed before REST calls
-        repository.deleteAll();
+        skillStore.deleteAll();
         // Defensive refresh to start with empty registry
         given()
             .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")

@@ -7,11 +7,12 @@ import java.util.UUID;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
-import com.arcclaw.core.audit.AuditEvent;
-import com.arcclaw.core.audit.AuditEventRepository;
+import com.arcclaw.core.audit.AuditEventRecorder;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
+import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.persistence.sqlite.entity.AuditEventEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,7 @@ import org.junit.jupiter.api.Test;
 public class AuditIdempotencyTest {
 
     @Inject
-    AuditEventRepository repository;
+    AuditEventRecorder recorder;
 
     @Inject
     AuditService auditService;
@@ -38,20 +39,19 @@ public class AuditIdempotencyTest {
         SecurityEventType type = SecurityEventType.CHECKPOINT_CREATED;
         String idempotencyKey = "TEST_IDEMPOTENCY:" + sessionId;
 
-        // Create two events with the same idempotency key
-        AuditEvent event1 = AuditEvent.securityEvent(sessionId, userId, agentRole, type, "attempt 1");
-        event1.idempotencyKey = idempotencyKey;
-        event1.prevHash = "genesis"; // manually set to avoid complexity
+        AuditEventEntity event1 = AuditEventEntity.securityEvent(sessionId, userId, agentRole, type, "attempt 1");
+        event1.setIdempotencyKey(idempotencyKey);
+        event1.setPrevHash("genesis");
 
-        AuditEvent event2 = AuditEvent.securityEvent(sessionId, userId, agentRole, type, "attempt 2");
-        event2.idempotencyKey = idempotencyKey;
-        event2.prevHash = "logic-would-be-ignored";
+        AuditEventEntity event2 = AuditEventEntity.securityEvent(sessionId, userId, agentRole, type, "attempt 2");
+        event2.setIdempotencyKey(idempotencyKey);
+        event2.setPrevHash("logic-would-be-ignored");
 
         // Record first one
-        repository.record(event1);
+        recorder.record(event1);
         
         // Record second one (should be skipped)
-        repository.record(event2);
+        recorder.record(event2);
 
         // Verify only one event exists for this session
         long count = em.createQuery(
@@ -62,11 +62,11 @@ public class AuditIdempotencyTest {
         assertEquals(1, count, "Should have only one audit event due to idempotencyKey deduplication");
         
         AuditEvent recorded = em.createQuery(
-                "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid", AuditEvent.class)
+                "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid", AuditEventEntity.class)
             .setParameter("sid", sessionId)
             .getSingleResult();
             
-        assertEquals("attempt 1", recorded.eventDetail, "Should have preserved the first attempt's detail");
+        assertEquals("attempt 1", recorded.getEventDetail(), "Should have preserved the first attempt's detail");
     }
 
     @Test

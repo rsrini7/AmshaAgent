@@ -6,27 +6,28 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.persistence.api.AuditEventStorePort;
 
 @ApplicationScoped
 public class AuditService {
 
     private final TelemetryAuditService telemetryAuditService;
     private final ComplianceAuditService complianceAuditService;
-    private final AuditEventRepository auditEventRepository;
+    private final AuditEventStorePort auditStore;
 
     protected AuditService() {
         this.telemetryAuditService = null;
         this.complianceAuditService = null;
-        this.auditEventRepository = null;
+        this.auditStore = null;
     }
 
     @Inject
     public AuditService(TelemetryAuditService telemetryAuditService,
                         ComplianceAuditService complianceAuditService,
-                        AuditEventRepository auditEventRepository) {
+                        AuditEventStorePort auditStore) {
         this.telemetryAuditService = telemetryAuditService;
         this.complianceAuditService = complianceAuditService;
-        this.auditEventRepository = auditEventRepository;
+        this.auditStore = auditStore;
     }
 
     public void record(String sessionId, String userId, String agentRole, SecurityEventType type, String detail) {
@@ -61,7 +62,7 @@ public class AuditService {
     }
 
     public boolean hasEventInSession(String sessionId, SecurityEventType eventType) {
-        return auditEventRepository.hasEventInSession(sessionId, eventType);
+        return auditStore.countEventsByType(sessionId, eventType.name()) > 0;
     }
     
 }

@@ -12,9 +12,10 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.AuditEventResponse;
-import com.arcclaw.core.audit.AuditEvent;
-import com.arcclaw.core.audit.AuditEventRepository;
 import com.arcclaw.core.audit.AuditVerifier;
+import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.core.domain.model.AuditEventRecord;
+import com.arcclaw.persistence.api.AuditEventStorePort;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 @Path("/audit")
@@ -23,7 +24,7 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 public class AuditResource {
 
     @Inject
-    AuditEventRepository auditEventRepository;
+    AuditEventStorePort auditStore;
 
     @Inject
     AuditVerifier auditVerifier;
@@ -38,8 +39,10 @@ public class AuditResource {
         var authError = sessionService.validateSession(sessionId);
         if (authError.isPresent()) return authError.get();
 
-        List<AuditEvent> events = auditEventRepository.findBySessionId(sessionId);
-        
+        var events = auditStore.findBySessionId(sessionId).stream()
+                .map(AuditEventRecord::fromDto)
+                .toList();
+
         List<AuditEventResponse> responseRows = events.stream()
                 .map(this::toResponse)
                 .toList();
@@ -60,10 +63,10 @@ public class AuditResource {
 
     private AuditEventResponse toResponse(AuditEvent e) {
         return new AuditEventResponse(
-                e.id, e.sessionId, e.userId, e.agentRole, e.goalHash,
-                e.outcome, e.eventType, e.eventDetail,
-                e.inputTokens, e.outputTokens, e.usdCost, e.iterationsUsed,
-                e.timestamp, e.hmacHash
+                e.getId(), e.getSessionId(), e.getUserId(), e.getAgentRole(), e.getGoalHash(),
+                e.getOutcome(), e.getEventType(), e.getEventDetail(),
+                e.getInputTokens(), e.getOutputTokens(), e.getUsdCost(), e.getIterationsUsed(),
+                e.getTimestamp(), e.getHmacHash()
         );
     }
 }

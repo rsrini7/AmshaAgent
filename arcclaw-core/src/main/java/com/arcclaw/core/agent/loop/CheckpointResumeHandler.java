@@ -1,7 +1,9 @@
 package com.arcclaw.core.agent.loop;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
@@ -18,16 +20,19 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.persistence.api.CronStorePort;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Arc;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -48,7 +53,8 @@ public class CheckpointResumeHandler {
     private final ReasoningEngine reasoningEngine;
     private final ChannelPluginRegistry channelPluginRegistry;
     private final CliResultBridge cliResultBridge;
-    private final AgentCronRepository cronRepository;
+    private final CronStorePort cronStore;
+    private final ObjectMapper objectMapper;
     private final ResumeStrategyDispatcher strategyDispatcher;
 
     protected CheckpointResumeHandler() {
@@ -57,7 +63,8 @@ public class CheckpointResumeHandler {
         this.reasoningEngine = null;
         this.channelPluginRegistry = null;
         this.cliResultBridge = null;
-        this.cronRepository = null;
+        this.cronStore = null;
+        this.objectMapper = null;
         this.strategyDispatcher = null;
     }
 
@@ -69,13 +76,14 @@ public class CheckpointResumeHandler {
                                    ReasoningEngine reasoningEngine,
                                    ChannelPluginRegistry channelPluginRegistry,
                                    CliResultBridge cliResultBridge,
-                                   AgentCronRepository cronRepository) {
+                                   CronStorePort cronStore) {
         this.agentStore = agentStore;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
         this.channelPluginRegistry = channelPluginRegistry;
         this.cliResultBridge = cliResultBridge;
-        this.cronRepository = cronRepository;
+        this.cronStore = cronStore;
+        this.objectMapper = objectMapper;
         this.strategyDispatcher = new ResumeStrategyDispatcher(agentStore, toolRegistry, objectMapper, reasoningEngine);
     }
 
@@ -125,10 +133,11 @@ public class CheckpointResumeHandler {
                     ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
                     context = prepareResumeMessageContext(chatId, user, cType, resumeGoal);
          
-                    AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
-                    if (result != null) {
-                        dispatchResumeResult(context, result, cType, user, sessionId);
-                    }
+                String toolInfo = buildToolInfoPart(checkpoint);
+                AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
+                if (result != null) {
+                    dispatchResumeResult(context, result, cType, user, sessionId, toolInfo);
+                }
                 } catch (Exception e) {
                     handleResumeFailure(sessionId, context, e);
                 } finally {
@@ -197,7 +206,7 @@ public class CheckpointResumeHandler {
             );
     }
 
-    private void dispatchResumeResult(MessageContext context, AgentResult result, ChannelType cType, ChannelUser user, String sessionId) {
+    private void dispatchResumeResult(MessageContext context, AgentResult result, ChannelType cType, ChannelUser user, String sessionId, String toolInfo) {
         syncCronTerminalStatus(sessionId, result);
 
         if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
@@ -205,11 +214,19 @@ public class CheckpointResumeHandler {
             return;
         }
 
-        String output = AgentResultFormatter.format(result);
+        String baseOutput = AgentResultFormatter.format(result);
+        String finalOutput;
+        if (toolInfo != null && !toolInfo.isBlank()) {
+            boolean wasDenied = baseOutput.contains("denied") || baseOutput.contains("cancelled");
+            String header = "---\n" + (wasDenied ? "❌ Denied" : "✅ Approved") + " — " + toolInfo + "\n---";
+            finalOutput = header + "\n\n" + baseOutput;
+        } else {
+            finalOutput = baseOutput;
+        }
         channelPluginRegistry.find(cType.id())
             .map(ChannelPlugin::sender)
             .ifPresentOrElse(
-                s -> sendFormattedResult(s, user, result, output, sessionId, cType),
+                s -> sendFormattedResult(s, user, result, finalOutput, sessionId, cType),
                 () -> fallbackResultDispatch(sessionId, result, cType)
             );
     }
@@ -231,13 +248,57 @@ public class CheckpointResumeHandler {
         }
     }
 
+    private String buildToolInfoPart(AgentCheckpoint checkpoint) {
+        if (checkpoint == null) return null;
+        String toolName = checkpoint.getPendingToolName();
+        if (toolName == null || toolName.isBlank()) return null;
+
+        StringBuilder sb = new StringBuilder();
+
+        if (checkpoint.isParallelBatch()) {
+            String[] tools = toolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length()).split(",");
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            for (String t : tools) {
+                counts.put(t, counts.getOrDefault(t, 0) + 1);
+            }
+            boolean first = true;
+            for (Map.Entry<String, Integer> e : counts.entrySet()) {
+                if (!first) sb.append(", ");
+                first = false;
+                sb.append(e.getKey());
+                if (e.getValue() > 1) sb.append(" (").append(e.getValue()).append("x)");
+            }
+        } else {
+            sb.append(toolName);
+            String paramsJson = checkpoint.getPendingToolParametersJson();
+            if (paramsJson != null && !paramsJson.isBlank()) {
+                try {
+                    Map<String, Object> params = objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
+                    if (!params.isEmpty()) {
+                        sb.append("\n");
+                        for (Map.Entry<String, Object> e : params.entrySet()) {
+                            String val = e.getValue() instanceof String s ? s : objectMapper.writeValueAsString(e.getValue());
+                            if (val.length() > 200) val = val.substring(0, 200) + "…";
+                            sb.append("  ").append(e.getKey()).append(": ").append(val).append("\n");
+                        }
+                    }
+                } catch (Exception _) {
+                    String display = paramsJson.length() > 500 ? paramsJson.substring(0, 500) + "…" : paramsJson;
+                    sb.append("\n  ").append(display);
+                }
+            }
+        }
+
+        return sb.toString().stripTrailing();
+    }
+
     private void syncCronStatus(String sessionId) {
         if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
             if (sub.length() >= 36) {
                 String jobId = sub.substring(0, 36);
                 try {
-                    cronRepository.markRunning(jobId);
+                    cronStore.markRunning(jobId);
                 } catch (Exception e) {
                     log.warnf("Failed to sync cron status for job %s: %s", jobId, e.getMessage());
                 }
@@ -251,11 +312,33 @@ public class CheckpointResumeHandler {
             if (sub.length() >= 36) {
                 String jobId = sub.substring(0, 36);
                 try {
-                    cronRepository.markTerminal(jobId, result);
+                    markCronTerminal(jobId, result);
                 } catch (Exception e) {
                     log.warnf("Failed to sync terminal cron status for job %s: %s", jobId, e.getMessage());
                 }
             }
+        }
+    }
+
+    private void markCronTerminal(String id, AgentResult result) {
+        var dto = cronStore.findById(id).orElse(null);
+        if (dto == null || result == null) return;
+        var cron = AgentCronRecord.fromDto(dto);
+
+        switch (result) {
+            case AgentResult.Finished _ -> {
+                if (cron.isRunOnce()) cronStore.markCompleted(id, Instant.now());
+                else cronStore.markFired(id, Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
+            }
+            case AgentResult.StructuredFinished _ -> {
+                if (cron.isRunOnce()) cronStore.markCompleted(id, Instant.now());
+                else cronStore.markFired(id, Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
+            }
+            case AgentResult.Failed f -> cronStore.markFailed(id, f.reason());
+            case AgentResult.AwaitingApproval _ -> cronStore.markAwaitingApproval(id);
+            case AgentResult.AwaitingRetry _ -> {}
+            case AgentResult.LoopExceeded _ -> cronStore.markFailed(id, "Loop exceeded");
+            default -> {}
         }
     }
 

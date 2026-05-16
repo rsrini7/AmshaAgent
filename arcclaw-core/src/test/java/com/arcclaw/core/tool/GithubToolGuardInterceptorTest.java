@@ -11,8 +11,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.GithubTool;
@@ -55,7 +56,7 @@ class GithubToolGuardInterceptorTest {
 
     @Test
     void testGithubPreApprovedReturnsEmpty() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setPendingToolName(GithubTool.NAME);
         when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));

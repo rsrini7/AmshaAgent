@@ -8,9 +8,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
+import com.arcclaw.persistence.postgres.entity.AgentCheckpointEntity;
 
 @ApplicationScoped
 public class ZombieRecoveryService {
@@ -18,7 +18,7 @@ public class ZombieRecoveryService {
     @Inject EntityManager em;
 
     public List<CheckpointDto> findStaleApprovals(Instant cutoff) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff", AgentCheckpointEntity.class)
                 .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
                 .setParameter("cutoff", cutoff)
                 .getResultStream()
@@ -35,7 +35,7 @@ public class ZombieRecoveryService {
     }
 
     public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
-        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff", AgentCheckpoint.class)
+        return em.createQuery("SELECT c FROM AgentCheckpoint c WHERE c.status = :status AND c.updatedAt < :cutoff", AgentCheckpointEntity.class)
                 .setParameter("status", CheckpointStatus.IN_PROGRESS)
                 .setParameter("cutoff", cutoff)
                 .getResultStream()
@@ -85,3 +85,4 @@ public class ZombieRecoveryService {
                 .executeUpdate();
     }
 }
+

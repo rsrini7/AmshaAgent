@@ -14,10 +14,11 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.domain.model.AgentCron;
+import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
+import com.arcclaw.persistence.api.CronStorePort;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 
@@ -36,7 +37,7 @@ import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 public class ManageScheduleTool implements AgentTool {
 
     @Inject
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @Inject
     AuditService auditService;
@@ -104,12 +105,14 @@ public class ManageScheduleTool implements AgentTool {
  
             return switch (action.trim().toLowerCase()) {
                 case "list" -> {
-                    List<AgentCronEntity> jobs = cronRepository.findByUserId(userId);
+                    List<AgentCron> jobs = cronStore.findByUserId(userId).stream()
+                            .map(AgentCronRecord::fromDto)
+                            .collect(Collectors.toList());
                     if (jobs.isEmpty()) {
                         yield ToolResponse.success(NO_SCHEDULE_FOUND);
                     }
                     String listing = jobs.stream()
-                            .map(AgentCronEntity::toDisplayString)
+                            .map(AgentCron::toDisplayString)
                             .collect(Collectors.joining("\n\n---\n\n"));
                     yield ToolResponse.success(listing);
                 }
@@ -119,7 +122,7 @@ public class ManageScheduleTool implements AgentTool {
                         yield ToolResponse.failure(400, "cronId is required for delete action.");
                     }
  
-                    int deleted = cronRepository.deleteByIdAndUserId(cronId, userId); // ← capture result
+                    int deleted = cronStore.deleteByIdAndUserId(cronId, userId); // ← capture result
  
                     if (deleted == 0) {
                         yield ToolResponse.failure(404,

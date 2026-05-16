@@ -9,10 +9,10 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCronEntity;
 import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
+import com.arcclaw.persistence.postgres.entity.AgentCronEntity;
 import org.jboss.logging.Logger;
 
 /**
@@ -248,3 +248,4 @@ public class PostgresCronStoreAdapter implements CronStorePort {
         );
     }
 }
+

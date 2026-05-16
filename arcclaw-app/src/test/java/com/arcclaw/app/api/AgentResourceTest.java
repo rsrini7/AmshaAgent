@@ -21,10 +21,11 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.api.dto.RunAgentRequest;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.state.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -67,7 +68,7 @@ class AgentResourceTest {
                 Mockito.when(apiKeyRegistry.isMutationAllowed(anyString())).thenReturn(true);
 
                 // Mock store to return a valid (completed) checkpoint for status checks
-                AgentCheckpoint checkpoint = new AgentCheckpoint();
+                AgentCheckpoint checkpoint = new AgentCheckpointEntity();
                 checkpoint.setSessionId("any-session");
                 checkpoint.setAgentRole("coordinator");
                 checkpoint.setStatus(CheckpointStatus.COMPLETED);

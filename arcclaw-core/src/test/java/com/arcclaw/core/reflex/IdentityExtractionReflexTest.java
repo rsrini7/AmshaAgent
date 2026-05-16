@@ -3,6 +3,7 @@ package com.arcclaw.core.reflex;
 import static org.mockito.Mockito.verify;
 
 import java.time.Instant;
+import java.util.stream.Collectors;
 
 import jakarta.inject.Inject;
 
@@ -78,7 +79,7 @@ public class IdentityExtractionReflexTest {
         var allValues = captor.getAllValues();
         Assertions.assertEquals(3, allValues.size());
 
-        var texts = allValues.stream().map(MemoryEntryDto::text).collect(java.util.stream.Collectors.toSet());
+        var texts = allValues.stream().map(MemoryEntryDto::text).collect(Collectors.toSet());
         Assertions.assertTrue(texts.contains("The user's name is Srini."), "Missing name fact");
         Assertions.assertTrue(texts.contains("The user enjoys to Study a lot."), "Missing like fact");
         Assertions.assertTrue(texts.contains("The user's role involves kids."), "Missing role fact");

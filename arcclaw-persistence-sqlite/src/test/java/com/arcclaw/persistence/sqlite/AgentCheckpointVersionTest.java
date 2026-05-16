@@ -11,8 +11,9 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.persistence.sqlite.entity.AgentCheckpointEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +33,7 @@ class AgentCheckpointVersionTest {
     @Test
     @Transactional
     void testAgentCheckpoint_versionStartsAtZero() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("v0-" + UUID.randomUUID());
         cp.setAgentRole("coordinator");
         cp.setStatus(CheckpointStatus.IN_PROGRESS);
@@ -47,7 +48,7 @@ class AgentCheckpointVersionTest {
     @Test
     @Transactional
     void testAgentCheckpoint_versionIncrementsOnUpdate() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("v1-" + UUID.randomUUID());
         cp.setAgentRole("coordinator");
         cp.setStatus(CheckpointStatus.IN_PROGRESS);
@@ -63,7 +64,7 @@ class AgentCheckpointVersionTest {
 
         // Clear L1 cache and re-read from DB to verify version
         em.clear();
-        AgentCheckpoint reloaded = em.find(AgentCheckpoint.class, id);
+        AgentCheckpoint reloaded = em.find(AgentCheckpointEntity.class, id);
         assertNotNull(reloaded, "Checkpoint should be readable after flush+clear");
         assertEquals(1, reloaded.getVersion(), "Version should increment to 1 after update");
     }
@@ -71,7 +72,7 @@ class AgentCheckpointVersionTest {
     @Test
     @Transactional
     void testAgentCheckpoint_optimisticLockExceptionOnStaleUpdate() {
-        AgentCheckpoint cp = new AgentCheckpoint();
+        AgentCheckpoint cp = new AgentCheckpointEntity();
         cp.setSessionId("ole-" + UUID.randomUUID());
         cp.setAgentRole("coordinator");
         cp.setStatus(CheckpointStatus.IN_PROGRESS);

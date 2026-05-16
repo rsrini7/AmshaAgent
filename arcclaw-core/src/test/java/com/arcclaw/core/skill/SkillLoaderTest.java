@@ -12,6 +12,8 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.audit.TelemetryAuditService;
+import com.arcclaw.persistence.api.SkillDto;
+import com.arcclaw.persistence.api.SkillStorePort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +32,7 @@ class SkillLoaderTest {
     RoleRegistry roleRegistry;
 
     @Inject
-    AgentSkillRepository repository;
+    SkillStorePort skillStore;
 
     @InjectMock
     TelemetryAuditService telemetryAuditService;
@@ -38,7 +40,7 @@ class SkillLoaderTest {
     @BeforeEach
     @Transactional
     void setup() {
-        repository.deleteAll();
+        skillStore.deleteAll();
         skillLoader.reloadAll(false);
     }
 
@@ -65,8 +67,7 @@ class SkillLoaderTest {
                 ---
                 Systems Prompt
                 """;
-        AgentSkillEntity entity = new AgentSkillEntity("id", "code-reviewer", yaml, Instant.now(), Instant.now());
-        repository.saveOrUpdate(entity);
+        skillStore.save(new SkillDto("id", "code-reviewer", yaml, Instant.now(), Instant.now()));
 
         skillLoader.reloadAll(false);
 
@@ -97,8 +98,7 @@ class SkillLoaderTest {
                 ---
                 Systems Prompt
                 """;
-        AgentSkillEntity entity = new AgentSkillEntity("id2", "bad-tool-skill", yaml, Instant.now(), Instant.now());
-        repository.saveOrUpdate(entity);
+        skillStore.save(new SkillDto("id2", "bad-tool-skill", yaml, Instant.now(), Instant.now()));
 
         skillLoader.reloadAll(false);
 
@@ -113,8 +113,7 @@ class SkillLoaderTest {
     @Test
     @Transactional
     void testMalformedYamlSkillIsSkipped() {
-        AgentSkillEntity entity = new AgentSkillEntity("id3", "broken-skill", "--- \n broken yaml", Instant.now(), Instant.now());
-        repository.saveOrUpdate(entity);
+        skillStore.save(new SkillDto("id3", "broken-skill", "--- \n broken yaml", Instant.now(), Instant.now()));
 
         skillLoader.reloadAll(false);
         // Should not crash, just warn and leave registry empty

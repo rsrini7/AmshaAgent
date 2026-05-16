@@ -8,11 +8,12 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.audit.AuditEvent;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
+import com.arcclaw.persistence.postgres.entity.AuditEventEntity;
 
 /**
  * PostgreSQL implementation of the AuditEventStorePort with WORM enforcement triggers.
@@ -25,26 +26,26 @@ public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
     @Override
     @Transactional
     public void save(AuditEventDto dto) {
-        AuditEvent entity = new AuditEvent();
-        entity.id = dto.id();
-        entity.sessionId = dto.sessionId();
-        entity.userId = dto.userId();
-        entity.agentRole = dto.agentRole();
-        entity.goalHash = dto.goalHash();
-        entity.outcome = dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null;
-        entity.eventType = dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null;
-        entity.eventDetail = dto.eventDetail();
-        entity.inputTokens = dto.inputTokens();
-        entity.outputTokens = dto.outputTokens();
-        entity.usdCost = dto.usdCost();
-        entity.timestamp = dto.timestamp();
-        entity.iterationsUsed = dto.iterationsUsed();
-        entity.appVersion = dto.appVersion();
-        entity.idempotencyKey = dto.idempotencyKey();
-        entity.sequence = dto.sequence();
-        entity.hmacHash = dto.hmacHash();
-        entity.prevHash = dto.prevHash();
-        
+        AuditEventEntity entity = new AuditEventEntity();
+        entity.setId(dto.id());
+        entity.setSessionId(dto.sessionId());
+        entity.setUserId(dto.userId());
+        entity.setAgentRole(dto.agentRole());
+        entity.setGoalHash(dto.goalHash());
+        entity.setOutcome(dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null);
+        entity.setEventType(dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null);
+        entity.setEventDetail(dto.eventDetail());
+        entity.setInputTokens(dto.inputTokens());
+        entity.setOutputTokens(dto.outputTokens());
+        entity.setUsdCost(dto.usdCost());
+        entity.setTimestamp(dto.timestamp());
+        entity.setIterationsUsed(dto.iterationsUsed());
+        entity.setAppVersion(dto.appVersion());
+        entity.setIdempotencyKey(dto.idempotencyKey());
+        entity.setSequence(dto.sequence());
+        entity.setHmacHash(dto.hmacHash());
+        entity.setPrevHash(dto.prevHash());
+
         em.persist(entity);
     }
 
@@ -59,7 +60,7 @@ public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
 
     @Override
     public List<AuditEventDto> findBySessionId(String sessionId) {
-        return em.createQuery("SELECT e FROM AuditEvent e WHERE e.sessionId = :sessionId ORDER BY e.sequence ASC", AuditEvent.class)
+        return em.createQuery("SELECT e FROM AuditEvent e WHERE e.sessionId = :sessionId ORDER BY e.sequence ASC", AuditEventEntity.class)
                 .setParameter("sessionId", sessionId)
                 .getResultStream()
                 .map(this::toDto)
@@ -91,12 +92,13 @@ public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
 
     private AuditEventDto toDto(AuditEvent e) {
         return new AuditEventDto(
-                e.id, e.sessionId, e.userId, e.agentRole, e.goalHash,
-                e.outcome != null ? e.outcome.name() : null,
-                e.eventType != null ? e.eventType.name() : null,
-                e.eventDetail, e.inputTokens, e.outputTokens, e.usdCost,
-                e.timestamp, e.iterationsUsed, e.appVersion, e.idempotencyKey,
-                e.sequence, e.hmacHash, e.prevHash
+                e.getId(), e.getSessionId(), e.getUserId(), e.getAgentRole(), e.getGoalHash(),
+                e.getOutcome() != null ? e.getOutcome().name() : null,
+                e.getEventType() != null ? e.getEventType().name() : null,
+                e.getEventDetail(), e.getInputTokens(), e.getOutputTokens(), e.getUsdCost(),
+                e.getTimestamp(), e.getIterationsUsed(), e.getAppVersion(), e.getIdempotencyKey(),
+                e.getSequence(), e.getHmacHash(), e.getPrevHash()
         );
     }
 }
+

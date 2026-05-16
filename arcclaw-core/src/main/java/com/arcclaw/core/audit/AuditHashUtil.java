@@ -13,6 +13,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.security.CryptoConstants;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
@@ -132,16 +133,13 @@ public class AuditHashUtil {
      * @param lastHash The HMAC hash of the previous event in the session chain (nullable for genesis).
      */
     public void calculateChainFields(AuditEvent event, String lastHash) {
-        // Step 1: Genesis-safe prevHash resolution
         String prevHash = lastHash;
         if (prevHash == null) {
-            // First event in session: use a deterministic genesis seed derived from sessionId
-            prevHash = sha256hex("GENESIS:" + event.sessionId);
+            prevHash = sha256hex("GENESIS:" + event.getSessionId());
         }
-        event.prevHash = prevHash;
+        event.setPrevHash(prevHash);
 
-        // Step 2: Compute HMAC over (prevHash + payload)
         String payload = event.computePayloadStr();
-        event.hmacHash = hmacHex(prevHash + "|" + payload);
+        event.setHmacHash(hmacHex(prevHash + "|" + payload));
     }
 }

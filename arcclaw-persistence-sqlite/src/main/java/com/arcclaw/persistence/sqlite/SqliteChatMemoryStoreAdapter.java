@@ -9,9 +9,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.state.ChatMemoryEntity;
 import com.arcclaw.persistence.api.ChatMemoryDto;
 import com.arcclaw.persistence.api.ChatMemoryStorePort;
+import com.arcclaw.persistence.sqlite.entity.ChatMemoryEntity;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -70,3 +70,4 @@ public class SqliteChatMemoryStoreAdapter implements ChatMemoryStorePort {
         );
     }
 }
+

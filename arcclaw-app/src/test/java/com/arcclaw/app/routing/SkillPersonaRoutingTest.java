@@ -12,9 +12,9 @@ import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.channel.api.IntentDetector;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.routing.IntentDetectorService;
-import com.arcclaw.core.skill.AgentSkillEntity;
-import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.util.HttpConstants;
+import com.arcclaw.persistence.api.SkillDto;
+import com.arcclaw.persistence.api.SkillStorePort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +26,7 @@ import org.mockito.Mockito;
 class SkillPersonaRoutingTest {
 
     @Inject
-    AgentSkillRepository repository;
+    SkillStorePort skillStore;
 
     @Inject
     IntentDetector detector;
@@ -44,7 +44,7 @@ class SkillPersonaRoutingTest {
     void setup() {
         apiKeyRegistry.register("test-key", "key-internal-changeme");
 
-        repository.deleteAll();
+        skillStore.deleteAll();
         
         String yaml = """
                 ---
@@ -56,8 +56,7 @@ class SkillPersonaRoutingTest {
                 ---
                 PROMPT
                 """;
-        AgentSkillEntity entity = new AgentSkillEntity("u1", "code-reviewer", yaml, Instant.now(), Instant.now());
-        repository.saveOrUpdate(entity);
+        skillStore.save(new SkillDto("u1", "code-reviewer", yaml, Instant.now(), Instant.now()));
 
         // Mock the LLM fallback to avoid log noise and real network calls
         Mockito.when(intentDetectorService.classify(ArgumentMatchers.anyString()))

@@ -14,7 +14,6 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.StatefulAgentStore;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -41,9 +40,6 @@ class CheckpointResumeHandlerTest {
 
     @InjectMock
     CliResultBridge cliResultBridge;
-
-    @InjectMock
-    AgentCronRepository cronRepository;
 
     @InjectMock
     ManagedExecutor executor;

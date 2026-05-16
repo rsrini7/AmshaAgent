@@ -18,11 +18,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
-import com.arcclaw.core.skill.AgentSkillEntity;
-import com.arcclaw.core.skill.AgentSkillRepository;
 import com.arcclaw.core.skill.SkillDefinitionParser;
 import com.arcclaw.core.skill.SkillLoader;
 import com.arcclaw.core.skill.SkillRegistry;
+import com.arcclaw.persistence.api.SkillDto;
+import com.arcclaw.persistence.api.SkillStorePort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
@@ -37,7 +37,7 @@ public class SkillResource {
     SkillRegistry registry;
 
     @Inject
-    AgentSkillRepository repository;
+    SkillStorePort skillStore;
 
     @Inject
     SkillLoader skillLoader;
@@ -47,9 +47,9 @@ public class SkillResource {
 
     @GET
     @Operation(summary = "List all active agent skills")
-    public List<SkillDto> listSkills() {
+    public List<SkillResponse> listSkills() {
         return registry.getAll().stream()
-            .map(e -> new SkillDto(
+            .map(e -> new SkillResponse(
                 e.definition().id(),
                 e.definition().name(),
                 e.definition().description(),
@@ -68,24 +68,26 @@ public class SkillResource {
             // Pre-validate that it parses correctly before saving
             var def = parser.parse(rawYamlDoc);
 
-            var existingOptional = repository.findByName(def.name());
-            
-            AgentSkillEntity entity;
+            var existingOptional = skillStore.findByName(def.name());
+
             if (existingOptional.isPresent()) {
-                entity = existingOptional.get();
-                entity.setDefinitionYaml(rawYamlDoc);
-                entity.setUpdatedAt(Instant.now());
+                var existing = existingOptional.get();
+                skillStore.save(new SkillDto(
+                    existing.id(),
+                    existing.name(),
+                    rawYamlDoc,
+                    existing.createdAt(),
+                    Instant.now()
+                ));
             } else {
-                entity = new AgentSkillEntity(
+                skillStore.save(new SkillDto(
                     def.id(),
                     def.name(),
                     rawYamlDoc,
                     Instant.now(),
                     Instant.now()
-                );
+                ));
             }
-
-            repository.saveOrUpdate(entity);
             
             // Reload the registry to make it active immediately
             skillLoader.reloadAll(false);
@@ -106,14 +108,14 @@ public class SkillResource {
     @Transactional
     @Operation(summary = "Delete a skill and reload registry")
     public Response deleteSkill(@PathParam("name") String name) {
-        var existing = repository.findByName(name);
+        var existing = skillStore.findByName(name);
         if (existing.isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND)
                            .entity(new ArcClawErrorResponse("Database skill not found", "name: " + name))
                            .build();
         }
 
-        repository.deleteSkillById(existing.get().getId());
+        skillStore.deleteById(existing.get().id());
         skillLoader.reloadAll(false);
 
         return Response.ok(new MessageResponse("Deleted and reloaded: " + name)).build();
@@ -127,9 +129,7 @@ public class SkillResource {
         return Response.ok(new MessageResponse("Skill registry refreshed")).build();
     }
 
-    // --- DTOs ---
-
-    public record SkillDto(
+    public record SkillResponse(
         String id,
         String name,
         String description,

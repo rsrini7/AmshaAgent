@@ -19,11 +19,7 @@ quarkus:
     schema-management:
       strategy: drop-and-create
     packages:
-      - com.arcclaw.core.state
-      - com.arcclaw.core.security
-      - com.arcclaw.core.audit
-      - com.arcclaw.core.skill
-      - com.arcclaw.app.session
+      - com.arcclaw.persistence.sqlite.entity
 
   scheduler:
     enabled: false

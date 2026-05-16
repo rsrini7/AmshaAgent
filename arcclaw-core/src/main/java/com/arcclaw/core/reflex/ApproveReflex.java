@@ -9,8 +9,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.state.AgentCheckpoint;
-import com.arcclaw.core.state.AgentCronEntity;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.util.CronScheduleUtil;
 
 @ApplicationScoped
@@ -25,7 +25,7 @@ public class ApproveReflex extends AbstractDecisionReflex {
     @Override public String getTargetNotAwaitingMessage() { return TARGET_SESSION_NOT_AWAITING; }
 
     @Override public String getAlreadyProcessingMessage() { return ALREADY_PROCESSING_APPROVAL; }
-    @Override public String getSingleCronFallbackMessage(AgentCronEntity cron) { return cronSingleAwaitingGuide(cron.goal, cron.id); }
+    @Override public String getSingleCronFallbackMessage(AgentCron cron) { return cronSingleAwaitingGuide(cron.getGoal(), cron.getId()); }
     @Override public String getMultipleCronFallbackMessage(String list) { return cronMultipleAwaiting(list); }
     @Override public String getCronSuccessResponse(AgentResult result) { return ""; }
     @Override public String getFailedRetryMessage() {
@@ -58,24 +58,24 @@ public class ApproveReflex extends AbstractDecisionReflex {
     }
 
     @Override
-    protected void postProcessCronDecision(AgentCronEntity cron, String reason, AgentResult result) {
+    protected void postProcessCronDecision(AgentCron cron, String reason, AgentResult result) {
         // §Direct Cron Path: handleCronDecision runs synchronously and never reaches
         // CheckpointResumeHandler.dispatchResumeResult(). This is the only place
         // terminal state is set for direct /approve <cronId> commands.
         // syncCronTerminalStatus in CheckpointResumeHandler covers the async delegation path.
         switch (result) {
             case AgentResult.Finished _ -> {
-                if (cron.runOnce) cronRepository.markCompleted(cron.id, Instant.now());
-                else cronRepository.markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
+                if (cron.isRunOnce()) cronStore.markCompleted(cron.getId(), Instant.now());
+                else cronStore.markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
             }
             case AgentResult.StructuredFinished _ -> {
-                if (cron.runOnce) cronRepository.markCompleted(cron.id, Instant.now());
-                else cronRepository.markFired(cron.id, Instant.now(), CronScheduleUtil.computeNext(cron.cronExpression, cron.timezone));
+                if (cron.isRunOnce()) cronStore.markCompleted(cron.getId(), Instant.now());
+                else cronStore.markFired(cron.getId(), Instant.now(), CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
             }
-            case AgentResult.Failed f  -> cronRepository.markFailed(cron.id, f.reason());
-            case AgentResult.AwaitingApproval _ -> cronRepository.markAwaitingApproval(cron.id);
+            case AgentResult.Failed f  -> cronStore.markFailed(cron.getId(), f.reason());
+            case AgentResult.AwaitingApproval _ -> cronStore.markAwaitingApproval(cron.getId());
             case AgentResult.AwaitingRetry _    -> {} // No-op - retry handled by RateLimitRetryScheduler
-            case AgentResult.LoopExceeded _ -> cronRepository.markFailed(cron.id, "Loop exceeded");
+            case AgentResult.LoopExceeded _ -> cronStore.markFailed(cron.getId(), "Loop exceeded");
             default -> {}
         }
     }

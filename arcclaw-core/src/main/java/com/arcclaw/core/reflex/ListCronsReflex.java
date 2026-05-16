@@ -9,12 +9,13 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.domain.model.AgentCron;
+import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import com.arcclaw.core.state.AgentCronEntity;
-import com.arcclaw.core.state.AgentCronRepository;
 import com.arcclaw.core.state.CronStatus;
+import com.arcclaw.persistence.api.CronStorePort;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -26,7 +27,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class ListCronsReflex implements AgentReflex {
 
     @Inject
-    AgentCronRepository cronRepository;
+    CronStorePort cronStore;
 
     @ConfigProperty(name = "arcclaw.cron.list-retention-hours", defaultValue = "24")
     int retentionHours;
@@ -54,22 +55,24 @@ public class ListCronsReflex implements AgentReflex {
             return ReflexResult.respond(UserMessages.LIST_CONTEXT_NOT_AVAILABLE, context);
         }
         String uid = WorkspaceScopeHolder.USER_ID.get();
-        List<AgentCronEntity> jobs = cronRepository.findByUserId(uid);
+        List<AgentCron> jobs = cronStore.findByUserId(uid).stream()
+                .map(AgentCronRecord::fromDto)
+                .collect(Collectors.toList());
         if (jobs.isEmpty()) {
             return ReflexResult.respond(UserMessages.NO_SCHEDULE_FOUND, context);
         }
 
         Instant threshold = Instant.now().minus(retentionHours, ChronoUnit.HOURS);
         
-        List<AgentCronEntity> filtered = jobs.stream()
-                .filter(j -> j.status == CronStatus.ACTIVE 
-                          || j.status == CronStatus.AWAITING_APPROVAL
-                          || j.status == CronStatus.RUNNING
-                          || (j.updatedAt != null && j.updatedAt.isAfter(threshold)))
+        List<AgentCron> filtered = jobs.stream()
+                .filter(j -> j.getStatus() == CronStatus.ACTIVE 
+                          || j.getStatus() == CronStatus.AWAITING_APPROVAL
+                          || j.getStatus() == CronStatus.RUNNING
+                          || (j.getUpdatedAt() != null && j.getUpdatedAt().isAfter(threshold)))
                 .toList();
 
         String output = filtered.stream()
-                .map(AgentCronEntity::toDisplayString)
+                .map(AgentCron::toDisplayString)
                 .collect(Collectors.joining("\n\n---\n\n"));
 
         int hidden = jobs.size() - filtered.size();

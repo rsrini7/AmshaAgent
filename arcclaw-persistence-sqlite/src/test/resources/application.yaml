@@ -72,10 +72,7 @@ quarkus:
     jdbc:
       timezone: UTC
     packages:
-      - com.arcclaw.core.state
-      - com.arcclaw.core.security
-      - com.arcclaw.core.audit
-      - com.arcclaw.core.skill
+      - com.arcclaw.persistence.sqlite.entity
 
   langchain4j:
     openai:
