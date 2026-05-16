@@ -67,8 +67,7 @@ arcclaw-app/src/main/resources/env-example
 arcclaw-source.zip
 arcclaw-source.7z
 
-# Generated
-arcclaw-ui/src/api/generated/
+# Type stubs maintained manually (OpenAPI spec has no schemas — Response return types)
 
 .opencode-memory
 
