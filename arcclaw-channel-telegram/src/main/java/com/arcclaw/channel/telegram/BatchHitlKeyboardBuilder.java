@@ -4,9 +4,12 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 import org.apache.camel.component.telegram.model.InlineKeyboardButton;
@@ -25,6 +28,7 @@ class BatchHitlKeyboardBuilder {
     private static final Base64.Decoder B64_DECODER = Base64.getUrlDecoder();
     private static final Set<String> KNOWN_PREFIXES = Set.of("cron-");
     private static final String COMPRESSED_CRON_PREFIX = "c-";
+    private static final Map<String, String> sessionCache = new ConcurrentHashMap<>();
 
     /**
      * @param sessionId the active session ID (embedded in callback data)
@@ -40,8 +44,8 @@ class BatchHitlKeyboardBuilder {
 
         for (String toolName : toolNames) {
             String safeToolName = toolName.replace("|", "_").replace(":", "_");
-            String approveCb = truncateCb("A|" + compressedId + "|" + safeToolName);
-            String denyCb = truncateCb("D|" + compressedId + "|" + safeToolName);
+            String approveCb = truncateOrCache("A|" + compressedId + "|" + safeToolName, sessionId);
+            String denyCb = truncateOrCache("D|" + compressedId + "|" + safeToolName, sessionId);
             
             List<InlineKeyboardButton> row = new ArrayList<>();
             
@@ -64,12 +68,12 @@ class BatchHitlKeyboardBuilder {
 
             InlineKeyboardButton appAll = new InlineKeyboardButton();
             appAll.setText("✅ Approve All");
-            appAll.setCallbackData(truncateCb("A|" + compressedId + "|all"));
+            appAll.setCallbackData(truncateOrCache("A|" + compressedId + "|all", sessionId));
             lastRow.add(appAll);
 
             InlineKeyboardButton denAll = new InlineKeyboardButton();
             denAll.setText("🚫 Deny All");
-            denAll.setCallbackData(truncateCb("D|" + compressedId + "|all"));
+            denAll.setCallbackData(truncateOrCache("D|" + compressedId + "|all", sessionId));
             lastRow.add(denAll);
 
             rows.add(lastRow);
@@ -214,28 +218,44 @@ class BatchHitlKeyboardBuilder {
     }
 
     /**
-     * Structure-aware truncation: preserves the action prefix and tool name,
-     * truncating the session ID portion as last resort (since the session ID
-     * can be partially resolved via DB lookup, but the tool name must match exactly).
+     * Ensures callback data fits within Telegram's 64-byte limit. Normally the
+     * compressed session ID keeps things small, but for very long non-UUID session
+     * IDs (e.g. delegate SIDs) the data may still overflow. In that case we cache
+     * the session ID under a short random token and use the token in the callback.
      */
-    private static String truncateCb(String cbInfo) {
+    private static String truncateOrCache(String cbInfo, String originalSessionId) {
         if (cbInfo.length() <= 64) return cbInfo;
-        log.warnf("Callback data exceeded 64 bytes and will be truncated: %s", cbInfo);
+        String token = generateShortToken();
+        sessionCache.put(token, originalSessionId);
+        log.warnf("Callback data (%d bytes) exceeded limit for session '%s'. Cached under token '%s'",
+            cbInfo.length(), originalSessionId, token);
         int firstPipe = cbInfo.indexOf('|');
         if (firstPipe > 0) {
             int secondPipe = cbInfo.indexOf('|', firstPipe + 1);
             if (secondPipe > 0) {
-                String actionPortion = cbInfo.substring(0, firstPipe + 1);
-                String toolName = cbInfo.substring(secondPipe + 1);
-                int remaining = 64 - actionPortion.length() - toolName.length() - 1;
-                if (remaining > 0) {
-                    String sessionPart = cbInfo.substring(firstPipe + 1, secondPipe);
-                    String truncatedSession = sessionPart.substring(0, Math.min(remaining, sessionPart.length()));
-                    return actionPortion + truncatedSession + "|" + toolName;
-                }
+                return cbInfo.substring(0, firstPipe + 1) + token + cbInfo.substring(secondPipe);
             }
         }
         return cbInfo.substring(0, 64);
+    }
+
+    private static String generateShortToken() {
+        return Integer.toHexString(ThreadLocalRandom.current().nextInt());
+    }
+
+    /**
+     * Resolves a cached short token back to the original session ID.
+     * Returns null if the token is not found in the cache.
+     */
+    static String resolveCachedSessionId(String token) {
+        return sessionCache.get(token);
+    }
+
+    /**
+     * Removes a short token from the session cache after successful resolution.
+     */
+    static void removeCachedSessionId(String token) {
+        sessionCache.remove(token);
     }
 
     /**

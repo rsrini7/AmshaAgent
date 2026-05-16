@@ -26,6 +26,10 @@
         </dependency>
         <dependency>
             <groupId>com.arcclaw</groupId>
+            <artifactId>arcclaw-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.arcclaw</groupId>
             <artifactId>arcclaw-core</artifactId>
         </dependency>
 
