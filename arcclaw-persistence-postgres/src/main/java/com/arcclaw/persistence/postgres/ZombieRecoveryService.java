@@ -11,9 +11,12 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class ZombieRecoveryService {
+
+    private static final Logger log = Logger.getLogger(ZombieRecoveryService.class);
 
     @Inject EntityManager em;
 
@@ -54,11 +57,16 @@ public class ZombieRecoveryService {
 
     @Transactional
     public void markCheckpointsFailed(String sessionId) {
-        em.createQuery("UPDATE AgentCheckpoint c SET c.status = :failed WHERE c.sessionId = :sessionId AND c.status NOT IN (:terminal)")
+        int affected = em.createQuery("UPDATE AgentCheckpoint c SET c.status = :failed WHERE c.sessionId = :sessionId AND c.status NOT IN (:terminal)")
                 .setParameter("failed", CheckpointStatus.FAILED)
                 .setParameter("sessionId", sessionId)
                 .setParameter("terminal", List.of(CheckpointStatus.COMPLETED, CheckpointStatus.FAILED, CheckpointStatus.DENIED, CheckpointStatus.ARCHIVED))
                 .executeUpdate();
+        if (affected > 0) {
+            log.warnf("[ZombieRecovery] Marked %d active checkpoints as FAILED for session=%s", affected, sessionId);
+        } else {
+            log.debugf("[ZombieRecovery] No active checkpoints to fail for session=%s", sessionId);
+        }
     }
 
     @Transactional

@@ -122,6 +122,12 @@ class ResumeStrategyDispatcher {
     }
 
     private AgentResult executePendingTool(AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint, String channelType, AgentStateMachineRunner stateMachineRunner) {
+        List<ReasoningStep> restoredSteps = agentStore.deserializeSteps(checkpoint);
+        if (restoredSteps != null && !restoredSteps.isEmpty()) {
+            history.addAll(0, restoredSteps);
+            log.infof("[ResumeStrategy] Prepended %d restored steps from checkpoint for session %s to preserve HITL context",
+                    restoredSteps.size(), context.sessionId());
+        }
         context.setCheckpointRestoreOffset(history.size());
         String toolName = checkpoint.getPendingToolName();
         String paramsJson = checkpoint.getPendingToolParametersJson();

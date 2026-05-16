@@ -260,7 +260,6 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     @Transactional
     public void markCheckpointsFailed(String sessionId) {
-        log.warnf("[PostgresCheckpointAdapter] Marking ALL active checkpoints as FAILED for session=%s", sessionId);
         zombieRecoveryService.markCheckpointsFailed(sessionId);
     }
 

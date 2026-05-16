@@ -275,7 +275,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public void markCheckpointsFailed(String sessionId) {
-        log.warnf("[CheckpointAdapter] Marking ALL active checkpoints as FAILED for session=%s", sessionId);
         withRetry(() -> { cleanupService.doMarkCheckpointsFailed(sessionId); return null; }, "mark-failed-all");
     }
 
