@@ -20,7 +20,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import dev.langchain4j.exception.HttpException;
 import org.jboss.logging.Logger;
 

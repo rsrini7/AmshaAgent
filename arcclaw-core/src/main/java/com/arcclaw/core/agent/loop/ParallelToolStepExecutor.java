@@ -30,7 +30,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.core.util.PreExecutionFilter;

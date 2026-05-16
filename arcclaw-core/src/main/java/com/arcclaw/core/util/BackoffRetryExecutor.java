@@ -3,6 +3,7 @@ package com.arcclaw.core.util;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
+import com.arcclaw.common.util.LogUtil;
 
 import org.jboss.logging.Logger;
 

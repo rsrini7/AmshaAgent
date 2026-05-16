@@ -20,7 +20,7 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 

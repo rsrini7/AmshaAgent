@@ -4,7 +4,7 @@ import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;

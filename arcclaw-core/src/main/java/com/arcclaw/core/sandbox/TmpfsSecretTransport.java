@@ -12,7 +12,7 @@ import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
 
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**

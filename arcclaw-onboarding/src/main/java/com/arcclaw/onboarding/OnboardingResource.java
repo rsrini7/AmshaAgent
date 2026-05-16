@@ -32,7 +32,7 @@ import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.arcclaw.app.util.CliUtils;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**

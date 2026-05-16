@@ -13,7 +13,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.role.ToolMetadata;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.quarkus.runtime.StartupEvent;

@@ -27,7 +27,7 @@ import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.mcp.tool.DynamicToolCapability;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;

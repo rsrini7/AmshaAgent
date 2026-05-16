@@ -14,7 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

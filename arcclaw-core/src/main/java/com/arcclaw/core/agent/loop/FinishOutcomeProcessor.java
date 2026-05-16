@@ -8,7 +8,7 @@ import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

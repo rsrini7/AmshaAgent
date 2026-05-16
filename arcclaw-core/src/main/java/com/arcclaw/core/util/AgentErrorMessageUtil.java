@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import com.arcclaw.core.message.UserMessages;
 import org.jboss.logging.Logger;
+import com.arcclaw.common.util.LogUtil;
 
 public final class AgentErrorMessageUtil {
 

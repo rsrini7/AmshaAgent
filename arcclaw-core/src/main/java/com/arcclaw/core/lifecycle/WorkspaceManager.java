@@ -17,7 +17,7 @@ import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.scope.WorkspaceScopeContext;
 import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.PathSanitizer;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;

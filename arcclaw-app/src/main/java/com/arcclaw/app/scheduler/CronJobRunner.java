@@ -26,7 +26,7 @@ import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

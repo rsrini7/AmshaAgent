@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.inject.Singleton;
 
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import io.agroal.api.AgroalPoolInterceptor;
 import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

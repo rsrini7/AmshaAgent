@@ -17,7 +17,7 @@ import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.security.VaultKey;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

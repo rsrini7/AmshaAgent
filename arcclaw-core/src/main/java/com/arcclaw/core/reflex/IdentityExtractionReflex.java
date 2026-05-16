@@ -8,7 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
 import org.eclipse.microprofile.context.ManagedExecutor;

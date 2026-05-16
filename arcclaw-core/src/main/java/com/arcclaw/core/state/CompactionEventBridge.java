@@ -10,7 +10,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**

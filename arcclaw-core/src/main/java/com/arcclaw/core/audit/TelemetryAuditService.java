@@ -12,7 +12,7 @@ import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

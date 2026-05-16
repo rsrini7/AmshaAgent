@@ -21,7 +21,7 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;

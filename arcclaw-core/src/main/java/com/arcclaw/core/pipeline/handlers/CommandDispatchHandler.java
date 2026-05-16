@@ -14,7 +14,7 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.TimeContextInjector;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

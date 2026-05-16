@@ -5,7 +5,7 @@ import jakarta.enterprise.event.Observes;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.core.cron.AgentJobCompleted;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**

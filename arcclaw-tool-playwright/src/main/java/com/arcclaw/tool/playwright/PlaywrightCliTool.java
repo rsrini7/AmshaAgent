@@ -25,7 +25,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

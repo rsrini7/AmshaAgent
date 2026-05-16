@@ -10,7 +10,7 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

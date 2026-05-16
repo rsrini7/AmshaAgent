@@ -27,7 +27,7 @@ import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**

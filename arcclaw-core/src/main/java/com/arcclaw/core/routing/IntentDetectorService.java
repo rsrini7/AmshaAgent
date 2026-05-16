@@ -20,7 +20,7 @@ import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.ClassUtils;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;

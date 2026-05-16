@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import org.jboss.logging.Logger;

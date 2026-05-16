@@ -7,7 +7,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceScoped;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
