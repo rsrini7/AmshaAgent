@@ -174,7 +174,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         }
 
         String auditMsg = "Admin %s performed %s on session %s: %s".formatted(adminId, getActionName(), targetSid, reason);
-        auditService.logSecurityEvent(SecurityEventType.DELEGATE_APPROVAL, adminId, auditMsg);
+        auditService.recordMandatory(targetSid, adminId, activeRole, SecurityEventType.DELEGATE_APPROVAL, auditMsg);
 
         checkpointResumeHandler.resumeAfterBatchDecision(targetSid, activeRole, adminId, adminChatId, context.getUser().channel().name());
         return MSG_RESUMING_TASK;

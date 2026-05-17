@@ -271,11 +271,19 @@ public class AsyncPersistenceEngine {
                 new BackoffRetryExecutor.Strategy(3, 100, 500, 0.0), // Fixed delay-like for HMAC wait
                 e -> e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("HMAC key unavailable"),
                 () -> {
-                    WorkspaceScopeHolder.run(event.getSessionId(),
-                        () -> persistenceAdapter.execute(
-                                event.getSessionId(),
+                    String sid = event.getSessionId();
+                    if (sid == null || sid.isBlank()) {
+                        persistenceAdapter.execute(
+                                sid,
                                 event.getEventType().toString(),
-                                event.getDbAction()));
+                                event.getDbAction());
+                    } else {
+                        WorkspaceScopeHolder.run(sid,
+                            () -> persistenceAdapter.execute(
+                                    sid,
+                                    event.getEventType().toString(),
+                                    event.getDbAction()));
+                    }
                 }
             );
             if (event.getFuture() != null) event.getFuture().complete(null);

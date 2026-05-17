@@ -47,7 +47,7 @@ public class SqliteCronRunStoreAdapter implements CronRunStorePort {
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional(Transactional.TxType.REQUIRED)
     public Optional<CronRunDto> findById(String id) {
         if (id == null || id.isBlank()) return Optional.empty();
         CronRunEntity entity = em.find(CronRunEntity.class, id);
@@ -55,7 +55,7 @@ public class SqliteCronRunStoreAdapter implements CronRunStorePort {
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional(Transactional.TxType.REQUIRED)
     public List<CronRunDto> findByCronId(String cronId, int offset, int limit) {
         em.clear();
         return em.createQuery(
@@ -69,7 +69,7 @@ public class SqliteCronRunStoreAdapter implements CronRunStorePort {
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional(Transactional.TxType.REQUIRED)
     public long countByCronId(String cronId) {
         em.clear();
         return em.createQuery(
@@ -79,7 +79,7 @@ public class SqliteCronRunStoreAdapter implements CronRunStorePort {
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional(Transactional.TxType.REQUIRED)
     public List<CronRunDto> findAll(String status, int offset, int limit) {
         em.clear();
         if (status != null && !status.isBlank()) {
@@ -102,7 +102,7 @@ public class SqliteCronRunStoreAdapter implements CronRunStorePort {
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
+    @Transactional(Transactional.TxType.REQUIRED)
     public long countAll(String status) {
         em.clear();
         if (status != null && !status.isBlank()) {
