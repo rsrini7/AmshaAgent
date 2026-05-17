@@ -97,7 +97,13 @@ public enum ToolCapability {
      */
     WEB_SEARCH_SERPER("serper_web_search",
         "Search the web for real-time Google results using the Serper API. " +
-        "Prefer this when ARCCLAW_TOOLS_SERPER_API_KEY is set (2500 free calls).");
+        "Prefer this when ARCCLAW_TOOLS_SERPER_API_KEY is set (2500 free calls)."),
+
+    /**
+     * Lightweight web fetch — HTTP GET + HTML-to-text. No browser, no LLM tokens.
+     * Use for reading articles, documentation, and static pages.
+     */
+    WEB_FETCH("web_fetch", "Fetch a URL and return its content as plain text (lightweight HTTP GET).");
 
     private final String toolName;
     private final String description;

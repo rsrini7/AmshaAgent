@@ -17,6 +17,9 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.config.ConfigurationChangedEvent;
+import com.arcclaw.core.event.DomainEventBus;
+import com.arcclaw.core.event.EventTypeCatalog;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
@@ -36,6 +39,7 @@ public class SettingsResource {
     @Inject SecretVault vault;
     @Inject LlmValidationGateway llmValidationGateway;
     @Inject OnboardingSessionRegistry registry;
+    @Inject DomainEventBus eventBus;
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
@@ -118,6 +122,12 @@ public class SettingsResource {
             vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
         }
 
+        eventBus.publish(EventTypeCatalog.CONFIGURATION_CHANGED,
+            ConfigurationChangedEvent.of("settings/provider", Map.of(
+                "provider", req.provider(),
+                "model", req.model() != null ? req.model() : ""
+            )));
+
         return Response.ok(Map.of("updated", true)).build();
     }
 
@@ -132,6 +142,12 @@ public class SettingsResource {
                 .entity(new ArcClawErrorResponse("systemPrompt is required")).build();
         }
         vault.storeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY, req.systemPrompt().getBytes(StandardCharsets.UTF_8));
+
+        eventBus.publish(EventTypeCatalog.CONFIGURATION_CHANGED,
+            ConfigurationChangedEvent.of("settings/prompt", Map.of(
+                "systemPrompt", "(updated)"
+            )));
+
         return Response.ok(Map.of("updated", true)).build();
     }
 

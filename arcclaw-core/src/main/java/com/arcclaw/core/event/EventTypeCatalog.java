@@ -3,6 +3,7 @@ package com.arcclaw.core.event;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.core.agent.event.AgentStateChangedEvent;
 import com.arcclaw.core.compaction.CompactionRequest;
+import com.arcclaw.core.config.ConfigurationChangedEvent;
 import com.arcclaw.core.cron.AgentJobCompleted;
 import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.lifecycle.ApprovalTimedOutEvent;
@@ -40,6 +41,9 @@ public final class EventTypeCatalog {
 
     /** Fired when a CheckListTool creates or updates a checklist. */
     public static final Class<CheckListEvent> CHECK_LIST = CheckListEvent.class;
+
+    /** Fired when runtime configuration is updated (provider, prompt, policy, etc.). */
+    public static final Class<ConfigurationChangedEvent> CONFIGURATION_CHANGED = ConfigurationChangedEvent.class;
 
     /** Fired when context compaction should be triggered for a session. */
     public static final Class<CompactionRequest> COMPACTION_REQUEST = CompactionRequest.class;
