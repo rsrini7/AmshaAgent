@@ -11,6 +11,8 @@ import './arc-chat-interface';
 import './arc-agent-status';
 import './arc-hitl-panel';
 import './arc-skills-panel';
+import './arc-scheduler-panel';
+import './arc-audit-panel';
 import './arc-settings';
 import './arc-theme-toggle';
 
@@ -339,6 +341,14 @@ export class ArcShell extends LitElement {
 
       ${this._route === '#/skills' ? html`
         <arc-skills-panel class="content-area" .apiKey="${this._apiKey}"></arc-skills-panel>
+      ` : nothing}
+
+      ${this._route === '#/scheduler' ? html`
+        <arc-scheduler-panel class="content-area"></arc-scheduler-panel>
+      ` : nothing}
+
+      ${this._route === '#/audit' ? html`
+        <arc-audit-panel class="content-area"></arc-audit-panel>
       ` : nothing}
 
       ${this._route === '#/settings' ? html`

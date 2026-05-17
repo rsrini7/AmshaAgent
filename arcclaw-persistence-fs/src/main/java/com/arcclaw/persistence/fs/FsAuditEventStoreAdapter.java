@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -81,6 +82,58 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
     @Override
     public long getMaxSequence(String sessionId) {
         return loadIndex(sessionId).maxSequence;
+    }
+
+    @Override
+    public Optional<AuditEventDto> findById(UUID id) {
+        if (id == null) return Optional.empty();
+        List<String> sessions = store.listDirs(List.of(DOMAIN));
+        for (String session : sessions) {
+            Optional<AuditEventDto> found = store.readOptional(
+                List.of(DOMAIN, session, id.toString() + ".json"), AuditEventDto.class);
+            if (found.isPresent()) return found;
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+        List<AuditEventDto> results = new ArrayList<>();
+        if (sessionId != null && !sessionId.isBlank()) {
+            results.addAll(findBySessionId(sessionId));
+        } else {
+            List<String> sessions = store.listDirs(List.of(DOMAIN));
+            for (String session : sessions) {
+                results.addAll(findBySessionId(session));
+            }
+        }
+        // Apply filters
+        if (eventType != null && !eventType.isBlank()) {
+            results = results.stream().filter(e -> eventType.equals(e.eventType())).toList();
+        }
+        if (from != null) {
+            results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isBefore(from)).toList();
+        }
+        if (to != null) {
+            results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isAfter(to)).toList();
+        }
+        // Sort by timestamp descending
+        results = results.stream()
+            .sorted((a, b) -> {
+                if (a.timestamp() == null && b.timestamp() == null) return 0;
+                if (a.timestamp() == null) return 1;
+                if (b.timestamp() == null) return -1;
+                return b.timestamp().compareTo(a.timestamp());
+            })
+            .toList();
+        int end = Math.min(offset + limit, results.size());
+        if (offset >= results.size()) return List.of();
+        return results.subList(offset, end);
+    }
+
+    @Override
+    public long countAll(String sessionId, String eventType, Instant from, Instant to) {
+        return findAll(sessionId, eventType, from, to, 0, Integer.MAX_VALUE).size();
     }
 
     private SessionIndex loadIndex(String sessionId) {

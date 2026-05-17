@@ -281,11 +281,7 @@ public class SqliteCronStoreAdapter implements CronStorePort {
         entity.lastDeliveryId = dto.lastDeliveryId();
         entity.updatedAt = Instant.now();
 
-        if (em.contains(entity)) {
-            em.merge(entity);
-        } else {
-            em.persist(entity);
-        }
+        em.merge(entity);
     }
 
     @Override
@@ -315,6 +311,43 @@ public class SqliteCronStoreAdapter implements CronStorePort {
                 "DELETE FROM AgentCronEntity c WHERE c.sessionId = :sessionId")
                  .setParameter("sessionId", sessionId)
                  .executeUpdate();
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<AgentCronDto> findAll(String status, int offset, int limit) {
+        em.clear();
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT c FROM AgentCronEntity c WHERE c.status = :status ORDER BY c.nextFireTime ASC",
+                    AgentCronEntity.class)
+             .setParameter("status", CronStatus.valueOf(status))
+             .setFirstResult(offset)
+             .setMaxResults(limit)
+             .getResultList()
+             .stream().map(this::toDto).collect(Collectors.toList());
+        }
+        return em.createQuery(
+                "SELECT c FROM AgentCronEntity c ORDER BY c.nextFireTime ASC",
+                AgentCronEntity.class)
+         .setFirstResult(offset)
+         .setMaxResults(limit)
+         .getResultList()
+         .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public long countAll(String status) {
+        em.clear();
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT COUNT(c) FROM AgentCronEntity c WHERE c.status = :status", Long.class)
+             .setParameter("status", CronStatus.valueOf(status))
+             .getSingleResult();
+        }
+        return em.createQuery("SELECT COUNT(c) FROM AgentCronEntity c", Long.class)
+         .getSingleResult();
     }
 
     private AgentCronDto toDto(AgentCronEntity entity) {

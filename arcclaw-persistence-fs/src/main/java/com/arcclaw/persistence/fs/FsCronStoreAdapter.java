@@ -206,6 +206,37 @@ public class FsCronStoreAdapter implements CronStorePort {
         return count;
     }
 
+    @Override
+    public List<AgentCronDto> findAll(String status, int offset, int limit) {
+        List<AgentCronDto> all = loadAll();
+        if (status != null && !status.isBlank()) {
+            all = all.stream()
+                .filter(dto -> status.equals(dto.status()))
+                .toList();
+        }
+        all = all.stream()
+            .sorted((a, b) -> {
+                if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
+                if (a.nextFireTime() == null) return 1;
+                if (b.nextFireTime() == null) return -1;
+                return a.nextFireTime().compareTo(b.nextFireTime());
+            })
+            .toList();
+        int end = Math.min(offset + limit, all.size());
+        if (offset >= all.size()) return List.of();
+        return all.subList(offset, end);
+    }
+
+    @Override
+    public long countAll(String status) {
+        if (status != null && !status.isBlank()) {
+            return loadAll().stream()
+                .filter(dto -> status.equals(dto.status()))
+                .count();
+        }
+        return loadAll().size();
+    }
+
     private List<AgentCronDto> loadAll() {
         return store.list(List.of(DOMAIN, BY_ID), ".json").stream()
             .map(f -> store.readOptional(List.of(DOMAIN, BY_ID, f), AgentCronDto.class))

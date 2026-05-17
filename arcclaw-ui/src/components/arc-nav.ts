@@ -113,6 +113,12 @@ export class ArcNav extends LitElement {
         <a href="#/skills" class="${this.route === '#/skills' ? 'active' : ''}" aria-current="${this.route === '#/skills' ? 'page' : nothing}">
           <span class="icon">🔧</span> Skills
         </a>
+        <a href="#/scheduler" class="${this.route === '#/scheduler' ? 'active' : ''}" aria-current="${this.route === '#/scheduler' ? 'page' : nothing}">
+          <span class="icon">⏰</span> Scheduler
+        </a>
+        <a href="#/audit" class="${this.route === '#/audit' ? 'active' : ''}" aria-current="${this.route === '#/audit' ? 'page' : nothing}">
+          <span class="icon">📋</span> Audit
+        </a>
         <a href="#/settings" class="${this.route === '#/settings' ? 'active' : ''}" aria-current="${this.route === '#/settings' ? 'page' : nothing}">
           <span class="icon">⚙</span> Settings
         </a>

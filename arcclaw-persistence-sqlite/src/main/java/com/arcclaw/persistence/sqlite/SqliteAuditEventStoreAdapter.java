@@ -1,7 +1,10 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
@@ -112,6 +115,87 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
             .setParameter("sid", sessionId)
             .getResultList();
         return maxSeqResult.isEmpty() ? 0L : maxSeqResult.get(0);
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public Optional<AuditEventDto> findById(UUID id) {
+        if (id == null) return Optional.empty();
+        AuditEventEntity entity = em.find(AuditEventEntity.class, id);
+        return Optional.ofNullable(entity).map(this::toDto);
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+        StringBuilder jpql = new StringBuilder("SELECT a FROM AuditEvent a WHERE 1=1");
+        List<Object[]> params = new ArrayList<>();
+
+        if (sessionId != null && !sessionId.isBlank()) {
+            jpql.append(" AND a.sessionId = ?1");
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            jpql.append(" AND a.eventType = ?2");
+        }
+        if (from != null) {
+            jpql.append(" AND a.timestamp >= ?3");
+        }
+        if (to != null) {
+            jpql.append(" AND a.timestamp <= ?4");
+        }
+        jpql.append(" ORDER BY a.timestamp DESC");
+
+        var query = em.createQuery(jpql.toString(), AuditEventEntity.class);
+        if (sessionId != null && !sessionId.isBlank()) {
+            query.setParameter(1, sessionId);
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            query.setParameter(2, SecurityEventType.valueOf(eventType));
+        }
+        if (from != null) {
+            query.setParameter(3, from);
+        }
+        if (to != null) {
+            query.setParameter(4, to);
+        }
+        query.setFirstResult(offset);
+        query.setMaxResults(limit);
+
+        return query.getResultList().stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public long countAll(String sessionId, String eventType, Instant from, Instant to) {
+        StringBuilder jpql = new StringBuilder("SELECT COUNT(a) FROM AuditEvent a WHERE 1=1");
+
+        if (sessionId != null && !sessionId.isBlank()) {
+            jpql.append(" AND a.sessionId = ?1");
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            jpql.append(" AND a.eventType = ?2");
+        }
+        if (from != null) {
+            jpql.append(" AND a.timestamp >= ?3");
+        }
+        if (to != null) {
+            jpql.append(" AND a.timestamp <= ?4");
+        }
+
+        var query = em.createQuery(jpql.toString(), Long.class);
+        if (sessionId != null && !sessionId.isBlank()) {
+            query.setParameter(1, sessionId);
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            query.setParameter(2, SecurityEventType.valueOf(eventType));
+        }
+        if (from != null) {
+            query.setParameter(3, from);
+        }
+        if (to != null) {
+            query.setParameter(4, to);
+        }
+        return query.getSingleResult();
     }
 
     private AuditEventEntity toEntity(AuditEventDto dto) {

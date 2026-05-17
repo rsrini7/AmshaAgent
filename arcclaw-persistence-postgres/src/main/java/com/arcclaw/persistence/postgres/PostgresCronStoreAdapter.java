@@ -164,7 +164,8 @@ public class PostgresCronStoreAdapter implements CronStorePort {
     @Transactional
     public void markSkipped(String id, Instant nextFireTime, Instant now) {
         log.debugf("Postgres: Marking cron task %s as skipped. next=%s", id, nextFireTime);
-        em.createQuery("UPDATE AgentCronEntity e SET e.nextFireTime = :next, e.lastFireTime = :now WHERE e.id = :id")
+        em.createQuery("UPDATE AgentCronEntity e SET e.status = :skipped, e.nextFireTime = :next, e.lastFireTime = :now WHERE e.id = :id")
+                .setParameter("skipped", CronStatus.SKIPPED)
                 .setParameter("next", nextFireTime)
                 .setParameter("now", now)
                 .setParameter("id", id)
@@ -237,6 +238,39 @@ public class PostgresCronStoreAdapter implements CronStorePort {
         return em.createQuery("DELETE FROM AgentCronEntity e WHERE e.sessionId = :sessionId")
                 .setParameter("sessionId", sessionId)
                 .executeUpdate();
+    }
+
+    @Override
+    public List<AgentCronDto> findAll(String status, int offset, int limit) {
+        log.debugf("Postgres: Finding all cron tasks (status=%s, offset=%d, limit=%d)", status, offset, limit);
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT e FROM AgentCronEntity e WHERE e.status = :status ORDER BY e.nextFireTime ASC",
+                    AgentCronEntity.class)
+             .setParameter("status", CronStatus.valueOf(status))
+             .setFirstResult(offset)
+             .setMaxResults(limit)
+             .getResultStream().map(this::toDto).toList();
+        }
+        return em.createQuery(
+                "SELECT e FROM AgentCronEntity e ORDER BY e.nextFireTime ASC",
+                AgentCronEntity.class)
+         .setFirstResult(offset)
+         .setMaxResults(limit)
+         .getResultStream().map(this::toDto).toList();
+    }
+
+    @Override
+    public long countAll(String status) {
+        log.debugf("Postgres: Counting all cron tasks (status=%s)", status);
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT COUNT(e) FROM AgentCronEntity e WHERE e.status = :status", Long.class)
+             .setParameter("status", CronStatus.valueOf(status))
+             .getSingleResult();
+        }
+        return em.createQuery("SELECT COUNT(e) FROM AgentCronEntity e", Long.class)
+         .getSingleResult();
     }
 
     private AgentCronDto toDto(AgentCronEntity e) {
