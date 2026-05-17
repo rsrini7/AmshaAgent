@@ -63,7 +63,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.78.1 |
-| **Memory** | Context compaction via `ContextCompactionService` + SQLite FTS5 + sqlite-vec two-tier RAG |
+| **Memory** | Hexagonal persistence (3 backends: SQLite WAL, PostgreSQL, filesystem); rolling chat window (20 messages) via `PersistentChatMemoryStore`; LLM-summarized context compaction via `CompactionService`; two-tier RAG (FTS5 keyword + sqlite-vec vector embeddings merged via Reciprocal Rank Fusion k=60); `MemorySearchTool` for cross-session retrieval; `AsyncPersistenceEngine` with critical/telemetry dual-queue; checkpoint state machine with 12 statuses |
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
@@ -274,10 +274,50 @@ graph TD
         CronJobRunner -->|notifies| CronObs[CronNotificationObserver<br/>Telegram / CLI]
     end
 
-    subgraph RAG - Two-Tier Memory
-        RAG --> FTS5T[FTS5 keyword search<br/>CompactionSummaryRepository]
-        RAG --> VecT[sqlite-vec vector search<br/>GlobalKnowledgeBase + SessionKnowledgeBase]
-        FTS5T & VecT --> RRF[Reciprocal Rank Fusion<br/>k=60]
+    subgraph Memory Subsystem
+        direction TB
+        subgraph Persistence["Hexagonal Persistence (Port/Adapter)"]
+            direction LR
+            SQLite[(SQLite WAL<br/>Default Backend)]
+            Pg[(PostgreSQL<br/>Production)]
+            FS[(Filesystem<br/>No-DB)]
+        end
+        subgraph ChatMem["Chat Memory"]
+            direction LR
+            PCM[PersistentChatMemoryStore<br/>Rolling Window 20 msgs]
+            CMSP[ChatMemoryStorePort]
+            PCM --> CMSP
+        end
+        subgraph Compaction["Context Compaction"]
+            direction LR
+            CS[CompactionService<br/>LLM-summarized history]
+            CEB[CompactionEventBridge<br/>Async CDI events]
+            CSP[CompactionStorePort]
+            CEB --> CS --> CSP
+        end
+        subgraph RAG["Two-Tier RAG"]
+            direction LR
+            FTS5T[FTS5 keyword search<br/>compaction_summary_fts]
+            VecT[sqlite-vec vector search<br/>GlobalKnowledgeBase + SessionKnowledgeBase]
+            RRF[Reciprocal Rank Fusion<br/>k=60]
+            FTS5T & VecT --> RRF
+        end
+        subgraph Async["Async Persistence Engine"]
+            direction LR
+            CRIT[Critical Queue<br/>500 cap - blocks on write]
+            TELE[Telemetry Queue<br/>5000 cap - fire-and-forget]
+            DRAIN[Drain Threads<br/>Virtual threads per tier]
+            CRIT & TELE --> DRAIN
+        end
+        subgraph Search["Memory Search"]
+            direction LR
+            MST[MemorySearchTool<br/>FTS5 + RRF cross-session]
+            RCE[RagContextEnricher<br/>Prompt injection]
+        end
+        ChatMem --> Compaction
+        Compaction --> RAG
+        RAG --> Search
+        Persistence --> ChatMem & Compaction & RAG & Async
     end
 ```
 </details>
