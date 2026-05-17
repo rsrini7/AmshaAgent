@@ -350,6 +350,48 @@ public class SqliteCronStoreAdapter implements CronStorePort {
          .getSingleResult();
     }
 
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit) {
+        em.clear();
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = :status ORDER BY c.nextFireTime ASC",
+                    AgentCronEntity.class)
+             .setParameter("userId", userId)
+             .setParameter("status", CronStatus.valueOf(status))
+             .setFirstResult(offset)
+             .setMaxResults(limit)
+             .getResultList()
+             .stream().map(this::toDto).collect(Collectors.toList());
+        }
+        return em.createQuery(
+                "SELECT c FROM AgentCronEntity c WHERE c.userId = :userId ORDER BY c.nextFireTime ASC",
+                AgentCronEntity.class)
+         .setParameter("userId", userId)
+         .setFirstResult(offset)
+         .setMaxResults(limit)
+         .getResultList()
+         .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public long countByUserId(String userId, String status) {
+        em.clear();
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT COUNT(c) FROM AgentCronEntity c WHERE c.userId = :userId AND c.status = :status", Long.class)
+             .setParameter("userId", userId)
+             .setParameter("status", CronStatus.valueOf(status))
+             .getSingleResult();
+        }
+        return em.createQuery(
+                "SELECT COUNT(c) FROM AgentCronEntity c WHERE c.userId = :userId", Long.class)
+         .setParameter("userId", userId)
+         .getSingleResult();
+    }
+
     private AgentCronDto toDto(AgentCronEntity entity) {
         if (entity == null) return null;
         return new AgentCronDto(

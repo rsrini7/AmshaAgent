@@ -123,6 +123,10 @@ export class ArcShell extends LitElement {
         if (this._sseStatus !== 'connected') {
           this._sseManager?.connect();
         }
+        if (this._route === '#/chat') {
+          this._chatWsStatus = 'connecting';
+          (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect();
+        }
         this._fetchAgents();
         this._fetchApprovals();
       }

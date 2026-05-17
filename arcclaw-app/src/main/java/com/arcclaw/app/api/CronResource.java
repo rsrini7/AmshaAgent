@@ -44,17 +44,18 @@ public class CronResource {
     SecurityContext securityContext;
 
     @GET
-    @Operation(summary = "List all cron jobs with pagination and optional status filter")
+    @Operation(summary = "List cron jobs for current user with pagination and optional status filter")
     public Response listCrons(
             @QueryParam("status") String status,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("50") int size) {
 
+        String userId = resolveUserId();
         int limit = Math.min(200, Math.max(1, size));
         int offset = Math.max(0, page) * limit;
 
-        List<AgentCronDto> crons = cronStore.findAll(status, offset, limit);
-        long total = cronStore.countAll(status);
+        List<AgentCronDto> crons = cronStore.findByUserId(userId, status, offset, limit);
+        long total = cronStore.countByUserId(userId, status);
 
         return Response.ok(Map.of(
             "crons", crons,

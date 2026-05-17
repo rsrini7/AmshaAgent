@@ -43,4 +43,14 @@ public interface CronStorePort {
      * Returns total count of cron jobs, optionally filtered by status.
      */
     long countAll(String status);
+
+    /**
+     * Returns cron jobs for a specific user, optionally filtered by status.
+     */
+    List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit);
+
+    /**
+     * Returns total count of cron jobs for a specific user, optionally filtered by status.
+     */
+    long countByUserId(String userId, String status);
 }

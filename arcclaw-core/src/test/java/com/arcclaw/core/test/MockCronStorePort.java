@@ -213,6 +213,33 @@ public class MockCronStorePort implements CronStorePort {
         return store.size();
     }
 
+    @Override
+    public List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit) {
+        List<AgentCronDto> all = store.values().stream()
+            .filter(c -> userId.equals(c.userId()))
+            .filter(c -> status == null || status.isBlank() || status.equals(c.status()))
+            .sorted((a, b) -> {
+                if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
+                if (a.nextFireTime() == null) return 1;
+                if (b.nextFireTime() == null) return -1;
+                return a.nextFireTime().compareTo(b.nextFireTime());
+            })
+            .collect(Collectors.toList());
+        int end = Math.min(offset + limit, all.size());
+        if (offset >= all.size()) return List.of();
+        return all.subList(offset, end);
+    }
+
+    @Override
+    public long countByUserId(String userId, String status) {
+        if (status != null && !status.isBlank()) {
+            return store.values().stream()
+                .filter(c -> userId.equals(c.userId()) && status.equals(c.status()))
+                .count();
+        }
+        return store.values().stream().filter(c -> userId.equals(c.userId())).count();
+    }
+
     private AgentCronDto copyWithStatus(AgentCronDto c, String status) {
         return new AgentCronDto(
             c.id(), c.sessionId(), c.userId(), c.chatId(), c.channelType(), c.channelPlatformId(),
