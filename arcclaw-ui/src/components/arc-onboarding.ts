@@ -235,6 +235,12 @@ export class ArcOnboarding extends LitElement {
 
   private _onStepEvent(e: CustomEvent) {
     switch (this._currentStep) {
+      case 1: {
+        if (e.type === 'next') {
+          this._next();
+        }
+        break;
+      }
       case 2: {
         const { provider, model } = (e as CustomEvent<{ provider: string; model: string }>).detail || {};
         if (e.type === 'provider-change') {
