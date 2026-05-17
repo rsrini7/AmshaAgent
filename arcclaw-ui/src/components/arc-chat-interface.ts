@@ -360,11 +360,13 @@ export class ArcChatInterface extends LitElement {
       this._isTyping = false;
       
       // We now have the server-assigned internal session ID
-      if (frame.sessionId && frame.sessionId !== this.sessionId) {
-        this.sessionId = frame.sessionId;
-        // Dispatch to parent shell to update SSE subscriptions
-        this.dispatchEvent(new CustomEvent('session-ready', { detail: { sessionId: frame.sessionId } }));
-        // Now we can safely load history
+      if (frame.sessionId) {
+        if (frame.sessionId !== this.sessionId) {
+          this.sessionId = frame.sessionId;
+          // Dispatch to parent shell to update SSE subscriptions
+          this.dispatchEvent(new CustomEvent('session-ready', { detail: { sessionId: frame.sessionId } }));
+        }
+        // Always reload history on connect/reconnect (handles page refresh)
         this._loadHistory();
       }
     } else if (frame.type === 'session_terminated') {
