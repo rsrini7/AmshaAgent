@@ -201,6 +201,21 @@ export class ArcAuditPanel extends LitElement {
     return html`<span class="outcome outcome-${outcome}">${outcome}</span>`;
   }
 
+  private renderPayloadJson(detail: string | null) {
+    if (!detail) return nothing;
+    try {
+      const parsed = JSON.parse(detail);
+      return html`
+        <div class="drawer-field">
+          <div class="drawer-label">Structured Payload</div>
+          <pre class="drawer-json">${JSON.stringify(parsed, null, 2)}</pre>
+        </div>
+      `;
+    } catch {
+      return nothing;
+    }
+  }
+
   private renderDrawer() {
     const event = this.selectedEvent;
     if (!event) return nothing;
@@ -241,6 +256,7 @@ export class ArcAuditPanel extends LitElement {
           <div class="drawer-label">Event Detail</div>
           <div class="drawer-value">${event.eventDetail || '—'}</div>
         </div>
+        ${this.renderPayloadJson(event.eventDetail)}
         <div class="drawer-field">
           <div class="drawer-label">Tokens (In / Out)</div>
           <div class="drawer-value">${event.inputTokens.toLocaleString()} / ${event.outputTokens.toLocaleString()}</div>
@@ -260,6 +276,15 @@ export class ArcAuditPanel extends LitElement {
         <div class="drawer-field">
           <div class="drawer-label">HMAC Chain</div>
           <div class="drawer-value hmac-chain">${event.hmacHash}</div>
+        </div>
+        <h3 style="margin-top: var(--space-4)">Related</h3>
+        <div style="display: flex; gap: var(--space-2); flex-wrap: wrap">
+          <a href="#/chat" @click=${() => { this.selectedEvent = null; }}
+            style="color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 13px">Chat</a>
+          <a href="#/hitl" @click=${() => { this.selectedEvent = null; }}
+            style="color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 13px">Approvals</a>
+          <a href="#/scheduler" @click=${() => { this.selectedEvent = null; }}
+            style="color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 13px">Scheduler</a>
         </div>
         <div class="drawer-actions">
           <button @click=${() => {

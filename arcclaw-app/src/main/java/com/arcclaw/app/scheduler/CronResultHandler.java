@@ -26,6 +26,8 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
+import com.arcclaw.persistence.api.CronRunDto;
+import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.api.CronStorePort;
 import org.jboss.logging.Logger;
 
@@ -39,6 +41,7 @@ public class CronResultHandler {
     private static final Logger log = Logger.getLogger(CronResultHandler.class);
 
     private final CronStorePort cronStore;
+    private final CronRunStorePort cronRunStore;
     private final AuditService auditService;
     private final WorkspaceManager workspaceManager;
     private final Event<AgentJobCompleted> jobCompletedEvent;
@@ -46,6 +49,7 @@ public class CronResultHandler {
 
     protected CronResultHandler() {
         this.cronStore = null;
+        this.cronRunStore = null;
         this.auditService = null;
         this.workspaceManager = null;
         this.jobCompletedEvent = null;
@@ -54,11 +58,13 @@ public class CronResultHandler {
 
     @Inject
     public CronResultHandler(CronStorePort cronStore,
+                             CronRunStorePort cronRunStore,
                              AuditService auditService,
                              WorkspaceManager workspaceManager,
                              Event<AgentJobCompleted> jobCompletedEvent,
                              StatefulAgentStore statefulAgentStore) {
         this.cronStore = cronStore;
+        this.cronRunStore = cronRunStore;
         this.auditService = auditService;
         this.workspaceManager = workspaceManager;
         this.jobCompletedEvent = jobCompletedEvent;
@@ -69,11 +75,29 @@ public class CronResultHandler {
         if (result instanceof AgentResult.AwaitingApproval a) {
             handleApprovalPause(job, cronSessionId, executionId, a);
         } else if (result instanceof AgentResult.AwaitingRetry) {
+            updateRunStatus(executionId, "AWAITING_RETRY", null, result);
             log.infof("CronResultHandler: Session kept alive for cron=%s AWAITING_RETRY (rate limit).", cronSessionId);
-            // No-op termination - let the RateLimitRetryScheduler pick it up
         } else {
             handleNormalCompletion(job, cronSessionId, executionId, result);
         }
+    }
+
+    private void updateRunStatus(String executionId, String status, String errorReason, AgentResult result) {
+        cronRunStore.findById(executionId).ifPresent(existing -> {
+            int inputTokens = 0;
+            int outputTokens = 0;
+            if (result != null) {
+                inputTokens = result.totalInputTokens();
+                outputTokens = result.totalOutputTokens();
+            }
+            CronRunDto updated = new CronRunDto(
+                existing.id(), existing.cronId(), existing.sessionId(), status,
+                existing.startedAt(), Instant.now(), errorReason,
+                existing.iterationsUsed(), inputTokens, outputTokens,
+                existing.usdCost(), existing.createdAt()
+            );
+            cronRunStore.save(updated);
+        });
     }
 
     // Handles Finished, Failed, LoopExceeded - always terminates session
@@ -82,6 +106,12 @@ public class CronResultHandler {
         String finalAnswer = answer.trim().isEmpty()
                 ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.getGoal()
                 : answer;
+
+        if (result instanceof AgentResult.Finished) {
+            updateRunStatus(executionId, "COMPLETED", null, result);
+        } else {
+            updateRunStatus(executionId, "FAILED", answer, result);
+        }
 
         handleFinalResult(job, cronSessionId, result);
 
@@ -115,6 +145,7 @@ public class CronResultHandler {
 
     // Handles AwaitingApproval - session must stay alive for ApproveReflex
     private void handleApprovalPause(AgentCron job, String cronSessionId, String executionId, AgentResult.AwaitingApproval result) {
+        updateRunStatus(executionId, "AWAITING_APPROVAL", null, null);
         cronStore.markAwaitingApproval(job.getId());
         log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
                 job.getId(), result.toolName());
@@ -141,6 +172,7 @@ public class CronResultHandler {
     }
 
     public void handleFailure(AgentCron job, String cronSessionId, String executionId, Throwable t) {
+        updateRunStatus(executionId, "FAILED", t.getMessage(), null);
         cronStore.markFailed(job.getId(), t.getMessage());
         
         auditService.record(cronSessionId, job.getUserId(),

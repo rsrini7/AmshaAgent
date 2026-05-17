@@ -29,6 +29,21 @@ interface CronListResponse {
   size: number;
 }
 
+interface CronRun {
+  id: string;
+  cronId: string;
+  sessionId: string;
+  status: string;
+  startedAt: string;
+  finishedAt: string;
+  errorReason: string;
+  iterationsUsed: number;
+  inputTokens: number;
+  outputTokens: number;
+  usdCost: number;
+  createdAt: string;
+}
+
 @customElement('arc-scheduler-panel')
 export class ArcSchedulerPanel extends LitElement {
   @state() private crons: CronJob[] = [];
@@ -37,6 +52,9 @@ export class ArcSchedulerPanel extends LitElement {
   @state() private loading = false;
   @state() private statusFilter = '';
   @state() private selectedCron: CronJob | null = null;
+  @state() private cronRuns: CronRun[] = [];
+  @state() private cronRunsTotal = 0;
+  @state() private loadingRuns = false;
 
   static styles = css`
     :host {
@@ -194,6 +212,24 @@ export class ArcSchedulerPanel extends LitElement {
     }
   }
 
+  private async loadCronRuns(cronId: string) {
+    this.loadingRuns = true;
+    try {
+      const r = await fetch(`/api/v1/cron/${cronId}/runs?size=20`, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!r.ok) throw new Error(`Failed to load runs: ${r.status}`);
+      const data = await r.json();
+      this.cronRuns = data.runs;
+      this.cronRunsTotal = data.total;
+    } catch (e) {
+      console.error('Failed to load cron runs:', e);
+      this.cronRuns = [];
+    } finally {
+      this.loadingRuns = false;
+    }
+  }
+
   private formatDate(iso: string | null): string {
     if (!iso) return '—';
     try {
@@ -205,6 +241,11 @@ export class ArcSchedulerPanel extends LitElement {
 
   private renderStatus(status: string) {
     return html`<span class="status status-${status}">${status}</span>`;
+  }
+
+  private selectCron(cron: CronJob) {
+    this.selectedCron = cron;
+    this.loadCronRuns(cron.id);
   }
 
   private renderDrawer() {
@@ -270,7 +311,46 @@ export class ArcSchedulerPanel extends LitElement {
             <button @click=${() => this.resumeCron(cron.id)}>Resume</button>
           ` : nothing}
           <button class="danger" @click=${() => this.deleteCron(cron.id)}>Delete</button>
-          <button @click=${() => this.selectedCron = null}>Close</button>
+          <button @click=${() => { this.selectedCron = null; this.cronRuns = []; }}>Close</button>
+        </div>
+
+        <h3 style="margin-top: var(--space-6)">Execution History (${this.cronRunsTotal})</h3>
+        ${this.loadingRuns ? html`<div style="color: var(--text-muted); padding: var(--space-3)">Loading...</div>` :
+          this.cronRuns.length === 0 ? html`<div style="color: var(--text-muted); padding: var(--space-3)">No executions yet.</div>` : html`
+          <table style="font-size: 12px">
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Tokens</th>
+                <th>Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${this.cronRuns.map(run => html`
+                <tr>
+                  <td>${this.formatDate(run.startedAt)}</td>
+                  <td>${this.renderStatus(run.status)}</td>
+                  <td>${run.finishedAt && run.startedAt ?
+                    Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000) + 's' : '—'}</td>
+                  <td>${(run.inputTokens + run.outputTokens).toLocaleString()}</td>
+                  <td>${run.usdCost > 0 ? '$' + run.usdCost.toFixed(4) : '—'}</td>
+                </tr>
+                ${run.errorReason ? html`<tr><td colspan="5" style="color: var(--error, #ef4444); font-size: 11px; padding-top: 0">${run.errorReason}</td></tr>` : nothing}
+              `)}
+            </tbody>
+          </table>
+        `}
+
+        <h3 style="margin-top: var(--space-4)">Related</h3>
+        <div style="display: flex; gap: var(--space-2); flex-wrap: wrap">
+          <a href="#/chat" @click=${() => { this.selectedCron = null; this.cronRuns = []; }}
+            style="color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 13px">Chat</a>
+          <a href="#/hitl" @click=${() => { this.selectedCron = null; this.cronRuns = []; }}
+            style="color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 13px">Approvals</a>
+          <a href="#/audit" @click=${() => { this.selectedCron = null; this.cronRuns = []; }}
+            style="color: var(--accent); text-decoration: underline; cursor: pointer; font-size: 13px">Audit Log</a>
         </div>
       </div>
     `;
@@ -316,7 +396,7 @@ export class ArcSchedulerPanel extends LitElement {
           </thead>
           <tbody>
             ${this.crons.map(cron => html`
-              <tr @click=${() => this.selectedCron = cron} style="cursor:pointer">
+              <tr @click=${() => this.selectCron(cron)} style="cursor:pointer">
                 <td class="goal" title="${cron.goal}">${cron.goal}</td>
                 <td>${this.renderStatus(cron.status)}</td>
                 <td>${this.formatDate(cron.nextFireTime)}</td>

@@ -21,6 +21,8 @@ import jakarta.ws.rs.core.SecurityContext;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.AgentCronDto;
+import com.arcclaw.persistence.api.CronRunDto;
+import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.api.CronStorePort;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.logging.Logger;
@@ -34,6 +36,9 @@ public class CronResource {
 
     @Inject
     CronStorePort cronStore;
+
+    @Inject
+    CronRunStorePort cronRunStore;
 
     @Context
     SecurityContext securityContext;
@@ -166,6 +171,33 @@ public class CronResource {
                 cronStore.releaseClaimToActive(id);
                 log.infof("Force-triggered cron job %s", id);
                 return Response.ok(Map.of("triggered", true, "id", id)).build();
+            })
+            .orElse(Response.status(Response.Status.NOT_FOUND)
+                .entity(new ArcClawErrorResponse("Cron job not found: " + id))
+                .build());
+    }
+
+    @GET
+    @Path("/{id}/runs")
+    @Operation(summary = "Get execution history for a cron job")
+    public Response getCronRuns(
+            @PathParam("id") String id,
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("20") int size) {
+
+        String userId = resolveUserId();
+        return cronStore.findById(id)
+            .map(cron -> {
+                if (!userId.equals(cron.userId())) {
+                    return Response.status(Response.Status.FORBIDDEN)
+                        .entity(new ArcClawErrorResponse("Not authorized to view this cron job"))
+                        .build();
+                }
+                int limit = Math.min(100, Math.max(1, size));
+                int offset = Math.max(0, page) * limit;
+                List<CronRunDto> runs = cronRunStore.findByCronId(id, offset, limit);
+                long total = cronRunStore.countByCronId(id);
+                return Response.ok(Map.of("runs", runs, "total", total, "page", page, "size", limit)).build();
             })
             .orElse(Response.status(Response.Status.NOT_FOUND)
                 .entity(new ArcClawErrorResponse("Cron job not found: " + id))

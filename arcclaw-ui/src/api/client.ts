@@ -180,6 +180,13 @@ export class ArcClient {
     return r.json();
   }
 
+  async getCronRuns(id: string, page = 0, size = 20): Promise<{ runs: any[]; total: number; page: number; size: number }> {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    const r = await fetch(`${this.baseUrl}/cron/${id}/runs?${params}`, { headers: this.headers() });
+    if (!r.ok) throw new Error(`GET /cron/${id}/runs failed: ${r.status}`);
+    return r.json();
+  }
+
   // Audit
   async getAuditEvents(filters?: {
     sessionId?: string;

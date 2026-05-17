@@ -1,5 +1,6 @@
 package com.arcclaw.app.scheduler;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -27,6 +28,8 @@ import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.persistence.api.CronRunDto;
+import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,6 +63,9 @@ public class CronJobRunner {
     CronStorePort cronStore;
 
     @Inject
+    CronRunStorePort cronRunStore;
+
+    @Inject
     SessionHeartbeatTracker heartbeatTracker;
 
     @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
@@ -69,13 +75,20 @@ public class CronJobRunner {
 
     public void execute(AgentCron job) {
         String executionId = UUID.randomUUID().toString();
-        
+
         cronStore.setDeliveryId(job.getId(), executionId);
 
         String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.getId() + "-" + executionId;
 
+        // Record cron run start
+        CronRunDto run = new CronRunDto(
+            executionId, job.getId(), cronSessionId, "RUNNING",
+            Instant.now(), null, null, 0, 0, 0, BigDecimal.ZERO, Instant.now()
+        );
+        cronRunStore.save(run);
+
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
-        
+
         try {
             String stripped = job.getGoal() != null ? CRON_PREFIX_PATTERN.matcher(job.getGoal()).replaceFirst("").trim() : "";
             
