@@ -181,6 +181,35 @@
       <version>1.15.0</version>
     </dependency>
 
+    <!-- Server-side Markdown (CommonMark) -->
+    <dependency>
+      <groupId>org.commonmark</groupId>
+      <artifactId>commonmark</artifactId>
+      <version>0.24.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.commonmark</groupId>
+      <artifactId>commonmark-ext-gfm-tables</artifactId>
+      <version>0.24.0</version>
+    </dependency>
+
+    <!-- Lucene — dynamic tool search index -->
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-core</artifactId>
+      <version>10.4.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>10.4.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-analysis-common</artifactId>
+      <version>10.4.0</version>
+    </dependency>
+
     <!-- Observability -->
     <dependency>
       <groupId>io.quarkus</groupId>

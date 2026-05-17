@@ -100,6 +100,11 @@ public enum ToolCapability {
         "Prefer this when ARCCLAW_TOOLS_SERPER_API_KEY is set (2500 free calls)."),
 
     /**
+     * Task management — create, list, update, and transition agent task files.
+     */
+    AGENT_TASK("agent_task", "Create, list, update, and transition markdown-based agent task files."),
+
+    /**
      * Lightweight web fetch — HTTP GET + HTML-to-text. No browser, no LLM tokens.
      * Use for reading articles, documentation, and static pages.
      */
