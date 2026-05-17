@@ -233,7 +233,7 @@ export class ArcOnboarding extends LitElement {
     }
   }
 
-  private _onStepEvent(e: CustomEvent) {
+  private _onStepEvent = (e: CustomEvent) => {
     switch (this._currentStep) {
       case 1: {
         if (e.type === 'next') {
@@ -288,11 +288,11 @@ export class ArcOnboarding extends LitElement {
         break;
       }
     }
-  }
+  };
 
-  private _onFinish() {
+  private _onFinish = () => {
     this._finish();
-  }
+  };
 
   render() {
     return html`
