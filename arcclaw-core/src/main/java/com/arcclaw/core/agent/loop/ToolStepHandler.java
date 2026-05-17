@@ -217,8 +217,7 @@ public class ToolStepHandler {
                     toolName, context.sessionId(), failure.output());
             history.add(step.withObservation("INFRA_FAILURE: " + failure.output()));
             return StepDecision.terminal(AgentResult.failed(
-                    "⚠️ The sandbox execution environment is currently offline. " +
-                    "Your code was not executed. Please try again later.",
+                    "⚠️ " + failure.output(),
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(history)));
         }

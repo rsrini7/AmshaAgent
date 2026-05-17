@@ -77,6 +77,10 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.allow-insecure-fallback", defaultValue = "false")
     boolean allowInsecureFallback;
 
+    public boolean isAllowInsecureFallback() {
+        return allowInsecureFallback;
+    }
+
     public int getPodmanFailureThreshold() {
         return circuitBreaker.getPodmanFailureThreshold();
     }
@@ -152,6 +156,7 @@ public class ProcessIsolationExecutor {
             if (e instanceof TimeoutException || (msg != null && msg.contains("exceeded"))) {
                 msg = "Execution timed out.";
             }
+            log.errorf(e, "[SANDBOX] Unexpected infrastructure failure (sessionId=%s): %s", sessionId, msg);
             return SandboxResult.infraFailure("SANDBOX_OFFLINE: " + (msg != null ? msg : "Unknown error"));
         }
     }

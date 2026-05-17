@@ -260,9 +260,8 @@ class SandboxExecToolTest {
             Map<String, Object> params = Map.of("code", "sleep 999", "language", "bash");
             ToolResponse r = tool.execute(ctx(), params);
 
-            // SandboxExecTool returns a generic SANDBOX_OFFLINE_MSG for infra failures
-            assertTrue(r.isInfraFailure());
-            assertTrue(r.output().contains("SANDBOX_OFFLINE"), "Actual: " + r.output());
+            // SandboxExecTool returns a dynamic message for infra failures via buildSandboxOfflineMsg()
+            assertTrue(r.isInfraFailure());            assertTrue(r.output().contains("SANDBOX_OFFLINE"), "Actual: " + r.output());
             return null;
         });
     }

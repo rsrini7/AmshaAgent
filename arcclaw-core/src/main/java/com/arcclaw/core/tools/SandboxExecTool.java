@@ -54,11 +54,17 @@ public class SandboxExecTool implements AgentTool {
     // ── Single source of truth for the infra-failure user message.
     // Never copy-paste this string - always reference this constant.
     // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
-    private static final String SANDBOX_OFFLINE_MSG =
-        "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed. " +
-        "The code was NOT run. Inform the user gracefully that the execution " +
-        "environment is currently offline, or set " +
-        "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
+    private String buildSandboxOfflineMsg(String reason) {
+        String msg = "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed. ";
+        if (isolationExecutor.isAllowInsecureFallback()) {
+            msg += "Direct host fallback also failed: " + reason + ". ";
+        } else {
+            msg += "The code was NOT run. Inform the user gracefully that the execution " +
+                   "environment is currently offline, or set " +
+                   "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
+        }
+        return msg;
+    }
 
     @Inject ProcessIsolationExecutor isolationExecutor;
     @Inject HostJavaCompiler hostJavaCompiler;
@@ -232,7 +238,7 @@ public class SandboxExecTool implements AgentTool {
             throw e;
         } catch (TimeoutException e) {
             log.errorf("[SandboxExecTool] Execution timed out: %s", LogUtil.rootMessage(e));
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            return ToolResponse.infraFailure(buildSandboxOfflineMsg("Timeout"));
         } catch (Exception e) {
             String msg = e.getMessage();
             return ToolResponse.failure(1, msg != null && !msg.isBlank()
@@ -261,7 +267,7 @@ public class SandboxExecTool implements AgentTool {
         if (result == null || result.isInfraFailure()) {
             String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (java-fallback) sessionId=%s: %s", sessionId, reason);
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            return ToolResponse.infraFailure(buildSandboxOfflineMsg(reason));
         }
         if (!result.success()) {
             return ToolResponse.failure(1, result.reason());
@@ -283,7 +289,7 @@ public class SandboxExecTool implements AgentTool {
         if (result == null || result.isInfraFailure()) {
             String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s", lang, sessionId, reason);
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            return ToolResponse.infraFailure(buildSandboxOfflineMsg(reason));
         }
         if (!result.success()) {
             return ToolResponse.failure(1, result.reason());
@@ -303,7 +309,7 @@ public class SandboxExecTool implements AgentTool {
             if (result == null || result.isInfraFailure()) {
                 String reason = result != null ? result.reason() : "Sandbox executor returned null";
                 log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s", sessionId, reason);
-                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+                return ToolResponse.infraFailure(buildSandboxOfflineMsg(reason));
             }
             if (!result.success()) {
                 return ToolResponse.failure(1, result.reason());

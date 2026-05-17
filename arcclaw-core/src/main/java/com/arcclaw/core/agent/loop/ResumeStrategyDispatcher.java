@@ -151,7 +151,7 @@ class ResumeStrategyDispatcher {
                         () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
                 if (response instanceof ToolResponse.ToolFailure failure && failure.isInfraFailure()) {
-                    return AgentResult.failed("⚠️ The sandbox execution environment is currently offline.",
+                    return AgentResult.failed("⚠️ " + failure.output(),
                             AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
                 }
 
