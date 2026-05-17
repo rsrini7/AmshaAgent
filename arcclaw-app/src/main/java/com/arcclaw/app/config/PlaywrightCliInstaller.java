@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -67,8 +67,8 @@ public class PlaywrightCliInstaller {
 
     private static boolean isChromiumInstalled() {
         try {
-            String out = exec(List.of("playwright-cli", "browser-path", "chromium"));
-            return out != null && !out.isBlank();
+            String out = exec(List.of("playwright-cli", "install-browser", "--list"));
+            return out != null && out.contains("chromium");
         } catch (Exception e) {
             return false;
         }

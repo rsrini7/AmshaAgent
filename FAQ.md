@@ -27,7 +27,7 @@
 
 ### Q: Why is ArcClaw structured as a multi-module Maven reactor instead of a single application?
 
-The reactor enforces strict architectural separation that prevents accidental dependency creep. The 16 modules are:
+The reactor enforces strict architectural separation that prevents accidental dependency creep. The 17 modules are:
 
 - **`arcclaw-channel-api`** - Channel SPI contracts (6 interfaces: `ChannelPlugin`, `ChannelSender`, `ReplyRenderer`, `ChannelAllowlist`, `ChannelJobNotifier`, `ChannelDaemon`) plus structured output types. Zero implementation — allows `arcclaw-core` to reference channel concepts without coupling to any specific adapter.
 - **`arcclaw-persistence-api`** - Hexagonal architecture port interfaces (`CheckpointStorePort`, `ChatMemoryStorePort`, `CronStorePort`, `SecretStorePort`, `SkillStorePort`, `AuditEventStorePort`, `AuditSchemaPort`, `CompactionStorePort`, `MemoryRetrievalPort`, `AdvisoryLockPort`, `PersistenceAdapterPort`). Core depends on ports, not implementations.
@@ -741,7 +741,7 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 
 ## 🧪 Testing
 
-### Q: How are the 1362 tests structured across modules?
+### Q: How are the 1361 tests structured across modules?
 
 Tests live in two modules:
 

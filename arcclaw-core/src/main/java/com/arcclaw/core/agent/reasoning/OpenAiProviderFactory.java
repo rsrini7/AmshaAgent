@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -13,15 +15,15 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.base-url",
+    @ConfigProperty(name = "ARCCLAW_OPENAI_API_KEY")
+    Optional<String> apiKey;
+
+    @ConfigProperty(name = "ARCCLAW_OPENAI_BASE_URL",
                     defaultValue = "https://api.openai.com/v1")
     String baseUrl;
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
-    String apiKey;
-
-    @ConfigProperty(name = "quarkus.langchain4j.openai.chat-model.model-name")
-    String modelName;
+    @ConfigProperty(name = "ARCCLAW_OPENAI_MODEL")
+    Optional<String> modelName;
 
     @Override
     public String providerName() {
@@ -35,8 +37,12 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
 
     @Override
     public ChatModel create() {
+        String key = apiKey.orElseThrow(() -> new IllegalStateException(
+                "OpenAI requires ARCCLAW_OPENAI_API_KEY"));
+        String model = modelName.orElseThrow(() -> new IllegalStateException(
+                "OpenAI requires ARCCLAW_OPENAI_MODEL"));
         return ChatModelFactory.createOpenAi(
-                baseUrl, apiKey, modelName,
+                baseUrl, key, model,
                 agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
                 agentConfig.temperature(), agentConfig.logHttp());
     }

@@ -8,7 +8,7 @@ import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +33,18 @@ public class FinishOutcomeProcessor {
 
     private static final Pattern TOOL_CALL_JSON_LEAK =
             Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId)\"\\s*:.*?\\}", Pattern.DOTALL);
+
+    /** Detects claims of having stored/saved/remembered user information without an actual tool call. */
+    private static final Pattern HALLUCINATED_STORAGE_CLAIM = Pattern.compile(
+            "(?i)\\b(?:I (?:have |'ve )?(?:stored|saved|remembered|noted|recorded|kept)|(?:your|the) (?:name|identity|interest|preference|information) (?:is|has been|was) (?:stored|saved|remembered|noted))\\b",
+            Pattern.MULTILINE
+    );
+
+    /** Detects knowledge disclaimers when memory_search results should have been synthesized. */
+    private static final Pattern KNOWLEDGE_DISCLAIMER = Pattern.compile(
+            "(?i)(?:I (?:do(?:n't| not) (?:have|know|possess|store|remember|recall)|(?:have|possess) (?:no|not)) (?:any )?(?:information|data|knowledge|record|detail|identity|name|preference)|(?:no|not? any) (?:information|data|knowledge|record) (?:about|regarding|on|of) (?:you|the user|their))",
+            Pattern.MULTILINE
+    );
 
     private static final Pattern PREFIX_TOKEN_LEAK = Pattern.compile(
             "(?i)^(\\s*[*_]*(FINISH:?|Action:\\s*FINISH|Answer:|Final Answer:|Response:)[*_]*\\s*)+",
@@ -114,6 +126,43 @@ public class FinishOutcomeProcessor {
                 return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
             }
         }
+
+        // Detect hallucinated memory storage claims
+        if (answer != null && HALLUCINATED_STORAGE_CLAIM.matcher(answer).find()) {
+            boolean actuallyStored = historyContainsIngestDocument(history);
+            if (!actuallyStored) {
+                log.warnf("FINISH-HANDLER: Hallucinated memory storage claim detected for session %s. " +
+                          "No 'ingest_document' call found in history.", sessionId);
+
+                ReasoningStep cleanStep = step.withObservation("Detected hallucinated memory storage claim in FINISH answer");
+                String hint = "System: STOP. You claimed to have stored/remembered user information but you did NOT call " +
+                    "the ingest_document tool. You CANNOT store information without calling ingest_document. " +
+                    "Either: (1) Call ingest_document NOW with the information, or (2) Answer honestly that " +
+                    "you have NOT stored anything. NEVER claim a tool action you did not perform.";
+
+                return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+            }
+        }
+
+        // Detect memory_search synthesis failure: tool returned results but LLM disclaims knowledge
+        if (answer != null && KNOWLEDGE_DISCLAIMER.matcher(answer).find()) {
+            String memoryResult = findMemorySearchResult(history);
+            if (memoryResult != null) {
+                log.warnf("FINISH-HANDLER: Memory search synthesis failure detected for session %s. " +
+                          "memory_search returned results but answer disclaims knowledge.", sessionId);
+
+                ReasoningStep cleanStep = step.withObservation("Detected memory_search synthesis failure");
+                String hint = "System: STOP. You just searched your memory and found information about this user. " +
+                    "Your memory_search tool returned these results:\n---\n" +
+                    memoryResult + "\n---\n" +
+                    "You MUST synthesize these results into a natural, conversational answer. " +
+                    "Do NOT say 'I don't have information' when your memory search just returned it. " +
+                    "Read the tool results above and answer the user directly.";
+
+                return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+            }
+        }
+
         return null;
     }
 
@@ -212,10 +261,14 @@ public class FinishOutcomeProcessor {
             ReasoningStep cleanStep = step.withObservation(cleanThought);
 
             String leakedTool = qualityGuard.extractLeakedToolName(candidateAnswer);
-            String correctionHint = "System: Your last response was a raw tool call JSON or TOOLCALLS format "
-                    + "written as plain text, not a valid FINISH answer. You MUST invoke tools through the tool "
-                    + "mechanism - NEVER write TOOLCALLS or raw JSON in your answer text. Retry now: call "
-                    + leakedTool + " properly using the tool calling API, or FINISH with a plain text answer.";
+            String severity = llmSchemaErrorCount >= 2 ? "CRITICAL" : "WARNING";
+            String correctionHint = "System: " + severity + ". Your last response contained raw JSON/tool-call "
+                    + "text instead of a proper FINISH answer. This is attempt " + (llmSchemaErrorCount + 1) + ". "
+                    + "RULES: (1) NEVER write TOOLCALLS, raw JSON, or tool syntax in your FINISH answer text. "
+                    + (leakedTool != null ? "(2) If you need to call '" + leakedTool + "', use the TOOL CALLING API, not plain text. " : "")
+                    + "(3) If the information you need is already in the conversation history above, "
+                    + "read it carefully and answer DIRECTLY in plain text using FINISH. "
+                    + "Do NOT call any tools. Do NOT output JSON. Just answer the user's question.";
 
             return new FinishActionHandler.FinishOutcome.RetryLeak(cleanStep, correctionHint, leakedTool);
         }
@@ -263,6 +316,26 @@ public class FinishOutcomeProcessor {
 
     private boolean historyContainsSuccessfulSchedule(List<ReasoningStep> history) {
         return history.stream().anyMatch(this::stepContainsSuccessfulSchedule);
+    }
+
+    private boolean historyContainsIngestDocument(List<ReasoningStep> history) {
+        return history.stream().anyMatch(step -> step instanceof ReasoningStep.ToolCallStep tc
+                && "ingest_document".equals(tc.action())
+                && Boolean.TRUE.equals(tc.success()));
+    }
+
+    private String findMemorySearchResult(List<ReasoningStep> history) {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ReasoningStep step = history.get(i);
+            if (step instanceof ReasoningStep.ToolCallStep tc
+                    && "memory_search".equals(tc.action())
+                    && Boolean.TRUE.equals(tc.success())
+                    && tc.observation() != null
+                    && !tc.observation().isBlank()) {
+                return tc.observation();
+            }
+        }
+        return null;
     }
 
     private boolean stepContainsSuccessfulSchedule(ReasoningStep step) {

@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -21,7 +22,8 @@ public class DirectExecutor {
     private long timeoutSeconds;
 
     /** Dev mode: no isolation, direct execution. */
-    public String executeDirectly(Path workspaceRoot, List<String> command) throws Exception {
+    public String executeDirectly(Path workspaceRoot, List<String> command,
+                                   Map<String, byte[]> secrets) throws Exception {
         List<String> finalCommand = fixupCommandForWindows(command);
         var pb = new ProcessBuilder(finalCommand);
         File workspaceDir = workspaceRoot.toFile();
@@ -31,6 +33,11 @@ public class DirectExecutor {
         }
         pb.directory(workspaceDir);
         pb.redirectErrorStream(true);
+        if (secrets != null && !secrets.isEmpty()) {
+            for (var entry : secrets.entrySet()) {
+                pb.environment().put(entry.getKey(), new String(entry.getValue(), StandardCharsets.UTF_8));
+            }
+        }
         var process = pb.start();
         
         // Drain stdout BEFORE waitFor() to avoid missing buffered output on Windows

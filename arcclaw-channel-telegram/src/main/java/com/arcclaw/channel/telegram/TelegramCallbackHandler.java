@@ -18,9 +18,10 @@ import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalGateway;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.channel.api.hitl.ApprovalResult;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -90,19 +91,7 @@ public class TelegramCallbackHandler {
             // during potentially long-running approvalGate.decide/resume paths §7.35
             answerCallback(query.getId());
 
-            // Decompress base64-encoded UUID back to full session ID
-            String decompressed = BatchHitlKeyboardBuilder.decompressSessionId(sessionId);
-            if (!decompressed.equals(sessionId)) {
-                log.debugf("Decompressed session ID '%s' -> '%s' for user=%s", sessionId, decompressed, userId);
-                sessionId = decompressed;
-            }
-
-            // Fallback: resolve short prefix via DB (for legacy or edge cases)
-            if (sessionId.length() < 36) {
-                String originalPrefix = sessionId;
-                sessionId = approvalGateway.resolveSessionIdPrefix(sessionId);
-                log.infof("Resolved session prefix '%s' -> '%s' for user=%s", originalPrefix, sessionId, userId);
-            }
+            sessionId = resolveSessionId(sessionId, userId);
 
             ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");
             log.infof("ApprovalResult: session=%s tool=%s outcome=%s remaining=%d pending=%s user=%s",
@@ -142,6 +131,26 @@ public class TelegramCallbackHandler {
             log.error("Failed to process callback", e);
             sender.sendRaw(user, "❌ Failed to process callback");
         }
+    }
+
+    private String resolveSessionId(String rawSessionId, String userId) {
+        String cached = BatchHitlKeyboardBuilder.resolveCachedSessionId(rawSessionId);
+        if (cached != null) {
+            log.debugf("Resolved cached token '%s' -> session '%s' for user=%s", rawSessionId, cached, userId);
+            BatchHitlKeyboardBuilder.removeCachedSessionId(rawSessionId);
+            return cached;
+        }
+        String decompressed = BatchHitlKeyboardBuilder.decompressSessionId(rawSessionId);
+        if (!decompressed.equals(rawSessionId)) {
+            log.debugf("Decompressed session ID '%s' -> '%s' for user=%s", rawSessionId, decompressed, userId);
+            return decompressed;
+        }
+        if (rawSessionId.length() < 36) {
+            String resolved = approvalGateway.resolveSessionIdPrefix(rawSessionId);
+            log.infof("Resolved session prefix '%s' -> '%s' for user=%s", rawSessionId, resolved, userId);
+            return resolved;
+        }
+        return rawSessionId;
     }
 
     private void answerCallback(String callbackQueryId, String text) {

@@ -41,7 +41,7 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.MdcManaged;
 import io.quarkus.virtual.threads.VirtualThreads;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

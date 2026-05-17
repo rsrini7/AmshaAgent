@@ -9,10 +9,6 @@ quarkiverse:
         enabled: false
 
 arcclaw:
-  llm:
-    gemini:
-      api-key: "dummy-gemini-key"
-      model-name: "gemini-2.5-flash-lite"
   auto-seed-secrets: false
   api:
     keys:

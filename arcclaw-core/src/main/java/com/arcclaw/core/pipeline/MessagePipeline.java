@@ -13,7 +13,7 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.util.ClassUtils;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 

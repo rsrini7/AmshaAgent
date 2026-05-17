@@ -34,6 +34,7 @@ export class ArcOnboarding extends LitElement {
     nvidia: 'mistralai/devstral-2-123b-instruct-2512',
     cerebras: 'qwen-3-235b-a22b-instruct-2507',
     gemini: 'gemini-2.5-flash-lite',
+    omlx: 'mlx-community/Qwen3.6-35B-A3B-4bit',
   };
 
   static styles = css`

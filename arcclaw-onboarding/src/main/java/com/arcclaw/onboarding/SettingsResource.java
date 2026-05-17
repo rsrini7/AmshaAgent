@@ -43,6 +43,7 @@ public class SettingsResource {
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "dev-key")
     String internalApiKey;
 
+    @SuppressWarnings("resource") // Response ownership transfers to WebApplicationException
     private void checkAuth(String key) {
         if (key == null || !key.equals(internalApiKey)) {
             throw new WebApplicationException(
@@ -91,8 +92,9 @@ public class SettingsResource {
 
         boolean isClaudeCode = "claude-code".equals(req.provider());
         boolean isOllama     = "ollama".equals(req.provider());
+        boolean isOmlx       = "omlx".equals(req.provider());
 
-        if (!isClaudeCode && !isOllama) {
+        if (!isClaudeCode && !isOllama && !isOmlx) {
             if (req.apiKey() == null || req.apiKey().isBlank()) {
                 return Response.status(400)
                     .entity(new ArcClawErrorResponse("apiKey is required for " + req.provider())).build();

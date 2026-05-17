@@ -440,6 +440,10 @@ ARCCLAW_LLM_MODEL_NAME=my-model-name
 | `OpenRouterProviderFactory` | `openrouter` | `AgentChatModelProvider` | `arcclaw-core` |
 | `ClaudeCodeProviderFactory` | `claude` | `AgentChatModelProvider` | `arcclaw-core` |
 | `OmlxProviderFactory` | `omlx` | `AgentChatModelProvider` | `arcclaw-core` |
+| `GeminiProviderFactory` | `gemini` | `AgentChatModelProvider` | `arcclaw-core` |
+| `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `arcclaw-core` |
+| `CerebrasProviderFactory` | `cerebras` | `AgentChatModelProvider` | `arcclaw-core` |
+| `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `arcclaw-core` |
 
 Each provider also has a corresponding `RoutingChatModelProvider` implementation in `arcclaw-app` for intent classification and compaction.
 
@@ -811,4 +815,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 8 LLM providers*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 10 LLM providers*

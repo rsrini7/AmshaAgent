@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.arcclaw.app.util.CliUtils;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**
@@ -25,12 +25,14 @@ public class InteractiveSetupWizard {
     private static final Logger log = Logger.getLogger(InteractiveSetupWizard.class);
 
     private static final Set<String> SENSITIVE_KEYS = Set.of(
-        "ARCCLAW_LLM_API_KEY", "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
+        "ARCCLAW_GROQ_API_KEY", "ARCCLAW_OPENROUTER_API_KEY", "ARCCLAW_OPENAI_API_KEY",
+        "ARCCLAW_GEMINI_API_KEY", "ARCCLAW_NVIDIA_API_KEY", "ARCCLAW_CEREBRAS_API_KEY",
+        "ARCCLAW_OMLX_API_KEY",
+        "ARCCLAW_EMBED_API_KEY", "ARCCLAW_VAULT_PEPPER",
         "ARCCLAW_AUDIT_HMAC_KEY", "ARCCLAW_API_KEYS_INTERNAL", "ARCCLAW_API_KEYS_CI",
         "TELEGRAM_BOT_TOKEN",
         "ARCCLAW_TOOLS_BRAVE_API_KEY", "ARCCLAW_TOOLS_SERPER_API_KEY", "ARCCLAW_TOOLS_GITHUB_TOKEN",
-        "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY",
-        "ARCCLAW_LLM_FALLBACK_API_KEY"
+        "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY"
     );
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
@@ -86,7 +88,6 @@ public class InteractiveSetupWizard {
                 if (spec.key().equals("ARCCLAW_TOOLS_GITHUB_TOKEN") && !promptOptionalModule(spec.key(), "GitHub repository access")) continue;
                 if (spec.key().equals("ARCCLAW_TOOLS_SERPER_API_KEY") && !promptOptionalModule(spec.key(), "Serper Search Integration")) continue;
                 if (spec.key().equals("ARCCLAW_TOOLS_BRAVE_API_KEY") && !promptOptionalModule(spec.key(), "Brave Search Integration")) continue;
-                if (spec.key().equals("ARCCLAW_LLM_FALLBACK_API_KEY") && !promptFallbackLlm(envFile)) continue;
 
                 promptVariable(envFile, spec);
             }
@@ -103,8 +104,9 @@ public class InteractiveSetupWizard {
         System.err.println("  │  5. NVIDIA - high performance NIMs");
         System.err.println("  │  6. Gemini - Google AI (free tier available)");
         System.err.println("  │  7. Cerebras - Ultra-fast LPU inference");
+        System.err.println("  │  8. OMLX - Local MLX-based server (no API key needed)");
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-7, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-8, Default: 1]: ");
         String provider = switch (choice != null ? choice.trim() : "") {
             case "2" -> "openrouter";
             case "3" -> "openai";
@@ -112,41 +114,21 @@ public class InteractiveSetupWizard {
             case "5" -> "nvidia";
             case "6" -> "gemini";
             case "7" -> "cerebras";
+            case "8" -> "omlx";
             default  -> "groq";
         };
         System.setProperty("ARCCLAW_LLM_PROVIDER", provider);
-
-        String baseUrl = switch (provider) {
-            case "openrouter" -> "https://openrouter.ai/api/v1";
-            case "openai"     -> "https://api.openai.com/v1";
-            case "ollama"     -> "http://localhost:11434";
-            case "nvidia"     -> "https://integrate.api.nvidia.com/v1";
-            case "gemini"     -> "https://generativelanguage.googleapis.com/v1beta/openai/";
-            case "cerebras"   -> "https://api.cerebras.ai/v1";
-            default           -> "https://api.groq.com/openai/v1";
-        };
-        System.setProperty("ARCCLAW_LLM_BASE_URL", baseUrl);
-
-        String modelName = switch (provider) {
-            case "openrouter" -> "openai/gpt-oss-20b:free";
-            case "nvidia"     -> "mistralai/devstral-2-123b-instruct-2512";
-            case "gemini"     -> "gemini-2.5-flash-lite";
-            case "cerebras"   -> "qwen-3-235b-a22b-instruct-2507";
-            default           -> "meta-llama/llama-4-scout-17b-16e-instruct";
-        };
-        System.setProperty("ARCCLAW_LLM_MODEL_NAME", modelName);
         System.setProperty("ARCCLAW_COMPACTION_PROVIDER", provider);
         System.setProperty("ARCCLAW_INTENT_CLASSIFIER_PROVIDER", provider);
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
         EnvConfigInitializer.patchEnvFile(envFile, "ARCCLAW_LLM_PROVIDER", System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"), EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(envFile, "ARCCLAW_LLM_BASE_URL", System.getProperty("ARCCLAW_LLM_BASE_URL", "https://api.groq.com/openai/v1"), EnvConfigInitializer.PatchMode.UPDATE);
-        EnvConfigInitializer.patchEnvFile(envFile, "ARCCLAW_LLM_MODEL_NAME", System.getProperty("ARCCLAW_LLM_MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct"), EnvConfigInitializer.PatchMode.UPDATE);
     }
 
     private static boolean shouldPromptUnifiedKey(List<CliUtils.VarSpec> missing) {
-        boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_LLM_API_KEY"));
+        String llmKeyName = llmApiKeyForProvider(System.getProperty("ARCCLAW_LLM_PROVIDER", "groq"));
+        boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals(llmKeyName));
         boolean intentKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY"));
         boolean compactionKeyMissing = missing.stream().anyMatch(s -> s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
         return llmKeyMissing && (intentKeyMissing || compactionKeyMissing);
@@ -161,18 +143,32 @@ public class InteractiveSetupWizard {
             String key = readPasswordWithFallback(System.console(), "  └─ Enter " + provider.toUpperCase() + " API key: ");
             if (key != null && !key.isBlank()) {
                 applyUnifiedKey(envFile, key, provider);
-                missing.removeIf(s -> s.key().equals("ARCCLAW_LLM_API_KEY") || s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") || s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
+                String llmKeyName = llmApiKeyForProvider(provider);
+                missing.removeIf(s -> s.key().equals(llmKeyName) || s.key().equals("ARCCLAW_INTENT_CLASSIFIER_API_KEY") || s.key().equals("ARCCLAW_COMPACTION_API_KEY"));
             }
         }
     }
 
     private static void applyUnifiedKey(Path envFile, String key, String provider) {
-        String[] keys = {"ARCCLAW_LLM_API_KEY", "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY"};
+        String llmKeyName = llmApiKeyForProvider(provider);
+        String[] keys = {llmKeyName, "ARCCLAW_INTENT_CLASSIFIER_API_KEY", "ARCCLAW_COMPACTION_API_KEY"};
         for (String k : keys) {
             System.setProperty(k, key);
             EnvConfigInitializer.patchEnvFile(envFile, k, key, EnvConfigInitializer.PatchMode.UPDATE);
         }
         System.err.println("     ✓ Unified key saved.");
+    }
+
+    private static String llmApiKeyForProvider(String provider) {
+        return switch (provider.toLowerCase()) {
+            case "openrouter" -> "ARCCLAW_OPENROUTER_API_KEY";
+            case "openai"     -> "ARCCLAW_OPENAI_API_KEY";
+            case "gemini"     -> "ARCCLAW_GEMINI_API_KEY";
+            case "cerebras"   -> "ARCCLAW_CEREBRAS_API_KEY";
+            case "nvidia"     -> "ARCCLAW_NVIDIA_API_KEY";
+            case "omlx"       -> "ARCCLAW_OMLX_API_KEY";
+            default           -> "ARCCLAW_GROQ_API_KEY";
+        };
     }
 
     private static boolean promptTelegramEnablement(Path envFile) {
@@ -188,13 +184,6 @@ public class InteractiveSetupWizard {
         System.err.println("  ┌─ " + label);
         String response = readLineWithFallback(System.console(), "  └─ Configure " + key + "? [y/N]: ");
         return response != null && response.trim().toLowerCase().startsWith("y");
-    }
-
-    private static boolean promptFallbackLlm(Path envFile) {
-        if (!promptOptionalModule("ARCCLAW_LLM_FALLBACK", "Fallback LLM")) return false;
-        // Simplified provider/model prompting for brevity
-        EnvConfigInitializer.patchEnvFile(envFile, "ARCCLAW_LLM_FALLBACK_PROVIDER", "openrouter", EnvConfigInitializer.PatchMode.UPDATE);
-        return true;
     }
 
     private static void promptVariable(Path envFile, CliUtils.VarSpec spec) {

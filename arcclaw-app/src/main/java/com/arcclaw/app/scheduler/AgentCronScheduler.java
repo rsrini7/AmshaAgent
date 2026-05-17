@@ -27,7 +27,7 @@ import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.util.CronScheduleUtil;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.persistence.api.AdvisoryLockPort;

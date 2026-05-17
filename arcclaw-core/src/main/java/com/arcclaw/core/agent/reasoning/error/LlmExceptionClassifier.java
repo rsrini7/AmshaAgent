@@ -61,7 +61,7 @@ public class LlmExceptionClassifier {
                 String msg = t.getMessage();
                 if (msg != null && (msg.contains("Invalid REST Client URL") || msg.contains("chat/completions"))) {
                     return new LlmServiceUnavailableException("Malformed LLM Base URL. " +
-                            "Check if ARCCLAW_LLM_BASE_URL is correct for this provider: " + msg, throwable);
+                            "Check if the provider's base URL is correct. " + msg, throwable);
                 }
             }
             

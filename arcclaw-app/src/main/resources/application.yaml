@@ -117,8 +117,6 @@ quarkus:
   # LANGCHAIN4J
   # ---------------------------------------------------------------------------
   langchain4j:
-    chat-model:
-      provider: openai
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       embedding-model:
@@ -131,20 +129,12 @@ quarkus:
         log-responses: false
         enabled: false
     openai:
-      base-url: "${ARCCLAW_LLM_BASE_URL:https://api.groq.com/openai/v1}"
-      api-key: "${ARCCLAW_LLM_API_KEY}"
       timeout: 120s
       max-retries: 3
-      embedding-model:
-        log-requests: false
-        log-responses: false
       chat-model:
-        #model-name: "${OLLAMA_MODEL:llama3.2:1b}"
-        model-name: "${ARCCLAW_LLM_MODEL_NAME:meta-llama/llama-4-scout-17b-16e-instruct}"
-        temperature: 0.1
-        log-requests: false
-        log-responses: false
-        enabled: true
+        enabled: false
+      embedding-model:
+        enabled: false
     anthropic:
       chat-model:
         enabled: false
@@ -347,19 +337,14 @@ arcclaw:
     context-window: ${ARCCLAW_LLM_CONTEXT_WINDOW:128000}
     compact-prompt-enabled: ${ARCCLAW_LLM_COMPACT_PROMPT_ENABLED:false}
     structured-output-mode: ${ARCCLAW_LLM_STRUCTURED_OUTPUT_MODE:NATIVE}
-    fallback-model: ${ARCCLAW_LLM_FALLBACK_MODEL}
-    fallback-provider: ${ARCCLAW_LLM_FALLBACK_PROVIDER}
-    fallback-base-url: ${ARCCLAW_LLM_FALLBACK_BASE_URL}
-    fallback-api-key: ${ARCCLAW_LLM_FALLBACK_API_KEY}
-    fallback-message-threshold: ${ARCCLAW_LLM_FALLBACK_MESSAGE_THRESHOLD:14}
-    fallback-ollama-base-url: ${ARCCLAW_LLM_FALLBACK_OLLAMA_BASE_URL:http://localhost:11434}
-    fallback-ollama-model: ${ARCCLAW_LLM_FALLBACK_OLLAMA_MODEL:llama3.2}
-    gemini:
-      api-key: ${ARCCLAW_LLM_API_KEY}
-      model-name: ${ARCCLAW_LLM_MODEL_NAME:gemini-2.5-flash-lite}
     openrouter:
       app-name: "${ARCCLAW_OPENROUTER_APP_NAME:https://github.com/rsrini7/arcclaw}"
       site-url: "${ARCCLAW_OPENROUTER_SITE_URL:https://github.com/rsrini7/arcclaw}"
+  infinite-loop:
+    models: ${ARCCLAW_INFINITE_LOOP_MODELS_LIST:omlx,groq,openrouter}
+    cooldown-base-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_BASE_SECONDS:30}
+    cooldown-max-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:300}
+    cooldown-transient-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS:5}
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:
@@ -409,8 +394,8 @@ arcclaw:
       keep-recent: 5
       max-output-tokens: 1024
       max-chars: 96000 
-      api-key: "${ARCCLAW_COMPACTION_API_KEY:${ARCCLAW_LLM_API_KEY}}"
-      base-url: "${ARCCLAW_COMPACTION_BASE_URL:${ARCCLAW_LLM_BASE_URL}}"
+      api-key: "${ARCCLAW_COMPACTION_API_KEY}"
+      base-url: "${ARCCLAW_COMPACTION_BASE_URL:https://api.groq.com/openai/v1}"
       provider: "${ARCCLAW_COMPACTION_PROVIDER:groq}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
       ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
@@ -629,7 +614,7 @@ mp:
 "%dev":
   quarkus:
     flyway:
-      clean-at-start: true    # recreate schema from scratch on every dev restart
+      clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}   # set to false to keep existing data across restarts
     mcp:
       server:
         stdio:
@@ -856,7 +841,7 @@ mp:
       baseline-on-migrate: true
       # PostgreSQL-specific migrations under db/migration/postgresql/
       locations: db/migration/postgresql
-      clean-at-start: true   # fresh schema on every start — no data migration needed
+      clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}   # set to false to keep existing data across restarts
     hibernate-orm:
       database:
         default-schema: public

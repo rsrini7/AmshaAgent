@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1362_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1361_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
@@ -59,11 +59,11 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 |---|---|
 | **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces; Session-constrained workspaces |
 | **State** | Hexagonal persistence (port/adapter) with SQLite (WAL), PostgreSQL, and filesystem backends; 100% session persistence and graceful continuity |
-| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch across 8 providers (Groq, OpenAI, OpenRouter, Ollama, OMLX, Gemini, Nvidia, Cerebras); `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
+| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch across 10 providers (Groq, OpenAI, OpenRouter, Ollama, OMLX, Gemini, Nvidia, Cerebras, Claude, InfiniteLoop); `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.78.1 |
-| **Memory** | Context compaction via `ContextCompactionService` + SQLite FTS5 + sqlite-vec two-tier RAG |
+| **Memory** | Hexagonal persistence (3 backends: SQLite WAL, PostgreSQL, filesystem); rolling chat window (20 messages) via `PersistentChatMemoryStore`; LLM-summarized context compaction via `CompactionService`; two-tier RAG (FTS5 keyword + sqlite-vec vector embeddings merged via Reciprocal Rank Fusion k=60); `MemorySearchTool` for cross-session retrieval; `AsyncPersistenceEngine` with critical/telemetry dual-queue; checkpoint state machine with 12 statuses |
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
@@ -274,10 +274,50 @@ graph TD
         CronJobRunner -->|notifies| CronObs[CronNotificationObserver<br/>Telegram / CLI]
     end
 
-    subgraph RAG - Two-Tier Memory
-        RAG --> FTS5T[FTS5 keyword search<br/>CompactionSummaryRepository]
-        RAG --> VecT[sqlite-vec vector search<br/>GlobalKnowledgeBase + SessionKnowledgeBase]
-        FTS5T & VecT --> RRF[Reciprocal Rank Fusion<br/>k=60]
+    subgraph Memory Subsystem
+        direction TB
+        subgraph Persistence["Hexagonal Persistence (Port/Adapter)"]
+            direction LR
+            SQLite[(SQLite WAL<br/>Default Backend)]
+            Pg[(PostgreSQL<br/>Production)]
+            FS[(Filesystem<br/>No-DB)]
+        end
+        subgraph ChatMem["Chat Memory"]
+            direction LR
+            PCM[PersistentChatMemoryStore<br/>Rolling Window 20 msgs]
+            CMSP[ChatMemoryStorePort]
+            PCM --> CMSP
+        end
+        subgraph Compaction["Context Compaction"]
+            direction LR
+            CS[CompactionService<br/>LLM-summarized history]
+            CEB[CompactionEventBridge<br/>Async CDI events]
+            CSP[CompactionStorePort]
+            CEB --> CS --> CSP
+        end
+        subgraph RAG["Two-Tier RAG"]
+            direction LR
+            FTS5T[FTS5 keyword search<br/>compaction_summary_fts]
+            VecT[sqlite-vec vector search<br/>GlobalKnowledgeBase + SessionKnowledgeBase]
+            RRF[Reciprocal Rank Fusion<br/>k=60]
+            FTS5T & VecT --> RRF
+        end
+        subgraph Async["Async Persistence Engine"]
+            direction LR
+            CRIT[Critical Queue<br/>500 cap - blocks on write]
+            TELE[Telemetry Queue<br/>5000 cap - fire-and-forget]
+            DRAIN[Drain Threads<br/>Virtual threads per tier]
+            CRIT & TELE --> DRAIN
+        end
+        subgraph Search["Memory Search"]
+            direction LR
+            MST[MemorySearchTool<br/>FTS5 + RRF cross-session]
+            RCE[RagContextEnricher<br/>Prompt injection]
+        end
+        ChatMem --> Compaction
+        Compaction --> RAG
+        RAG --> Search
+        Persistence --> ChatMem & Compaction & RAG & Async
     end
 ```
 </details>
@@ -671,7 +711,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-api` | Allows `arcclaw-core` to reference channel concepts (sender, allowlist) without coupling to Telegram or any concrete adapter. Swapping channels requires zero core changes. |
 | `arcclaw-persistence-api` | Hexagonal architecture port interfaces. Core depends on ports, not implementations. Enables swapping SQLite for Postgres or filesystem without core changes. |
 | `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters. Avoids entity duplication across SQLite, Postgres, and filesystem adapters. |
-| `arcclaw-core` | Independently testable. All ~1362 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
+| `arcclaw-core` | Independently testable. All ~1361 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
 | `arcclaw-persistence-sqlite` | SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, and FTS5 setup. |
 | `arcclaw-persistence-fs` | Filesystem-based persistence adapter for environments without SQLite. |
 | `arcclaw-persistence-postgres` | PostgreSQL adapter for production deployments requiring a server database. |
@@ -1289,7 +1329,7 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_LLM_API_KEY` | ✅ (provider-conditional) | - | API key for the selected LLM provider (Groq: `gsk_...`, OpenRouter: `sk-or-v1-...`, OpenAI: `sk-...`) |
-| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama`, `omlx`, `gemini`, `nvidia`, `cerebras` |
+| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama`, `omlx`, `gemini`, `nvidia`, `cerebras`, `claude`, `infiniteloop` |
 | `ARCCLAW_LLM_MODEL_NAME` | no | `meta-llama/llama-4-scout-17b-16e-instruct` | Primary reasoning model name for the selected provider |
 | `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama/OMLX) |
 | `ARCCLAW_LLM_TEMPERATURE` | no | `0.1` | LLM temperature for reasoning |
@@ -1384,6 +1424,7 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_DATA_DIR` | no | `./data` | Directory where ArcClaw stores SQLite databases and state files |
+| `ARCCLAW_FLYWAY_CLEAN_AT_START` | no | `true` | Dev/PostgreSQL profiles only. Set `false` to keep existing data across restarts |
 | `ARCCLAW_CHAT_MEMORY_MAX_MESSAGES` | no | `100` | Rolling chat window size |
 | `ARCCLAW_WORKSPACE_SESSION_TTL_MINUTES` | no | `30` | Session idle timeout before cleanup |
 | `ARCCLAW_CHECKPOINT_STALE_CLAIM_MINUTES` | no | `2` | Minutes before a checkpoint claim is considered stale and reclaimable |
@@ -1462,4 +1503,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1362 tests passing · 16 modules · 14 tools · 16 reflexes · 8 LLM providers*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests passing · 17 modules · 13 tools · 16 reflexes · 10 LLM providers*

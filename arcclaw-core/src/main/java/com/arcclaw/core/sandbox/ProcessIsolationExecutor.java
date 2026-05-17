@@ -2,6 +2,7 @@ package com.arcclaw.core.sandbox;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -12,7 +13,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
-import com.arcclaw.core.util.LogUtil;
+import com.arcclaw.common.util.LogUtil;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -37,6 +38,10 @@ import org.jboss.logging.Logger;
  * not support the tmpfs secret transport used by Podman. Tool calls requiring secrets
  * will receive empty environment variables in namespace mode. This is a known
  * security degradation accepted as part of the fallback trade-off.
+ * <p>
+ * When namespace isolation is unavailable and {@code allowInsecureFallback} is true,
+ * secrets ARE resolved and injected into the direct (host-level) execution via
+ * {@link DirectExecutor#executeDirectly(Path, List, Map)}.
  */
 @ApplicationScoped
 public class ProcessIsolationExecutor {
@@ -55,6 +60,9 @@ public class ProcessIsolationExecutor {
 
     @Inject
     DirectExecutor directExecutor;
+
+    @Inject
+    SandboxSecretResolver secretResolver;
 
     @ConfigProperty(name = "arcclaw.sandbox.strategy", defaultValue = "PODMAN")
     SandboxStrategy sandboxStrategy;
@@ -115,69 +123,13 @@ public class ProcessIsolationExecutor {
 
         try {
             if (!sandboxEnabled || SandboxStrategy.NONE == sandboxStrategy || SandboxStrategy.DIRECT == sandboxStrategy) {
-                return SandboxResult.success(directExecutor.executeDirectly(workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                return SandboxResult.success(directExecutor.executeDirectly(
+                        workspaceRoot, rewriteContainerPaths(command, workspaceRoot),
+                        resolveFallbackSecrets(requiredSecrets)));
             }
 
-            if (SandboxStrategy.PODMAN == sandboxStrategy) {
-
-                if (circuitBreaker.shouldAttemptPodman()) {
-                    CircuitBreakerState stateAtCall = circuitBreaker.getState();
-                    try {
-                        String result = podmanExecutor.executeInContainer(
-                                sessionId, workspaceRoot, command, requiredSecrets);
-                        circuitBreaker.recordSuccess();
-                        return SandboxResult.success(result);
-
-                    } catch (SandboxImageMissingException e) {
-                        // do NOT record a circuit-breaker failure for a missing image.
-                        log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, LogUtil.rootMessage(e));
-                        if (allowInsecureFallback) {
-                            log.warnf("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution for session %s", sessionId);
-                            return SandboxResult.success(directExecutor.executeDirectly(
-                                    workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
-                        }
-                        return SandboxResult.infraFailure(
-                                "SANDBOX_OFFLINE: The sandbox image is missing. " +
-                                "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner " +
-                                "-f ./sandbox/Dockerfile.toolrunner .");
-
-                    } catch (PodmanUnavailableException e) {
-                        // Podman not installed or not running
-                        String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                        log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
-
-                        if (allowInsecureFallback) {
-                            log.warnf("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution for session %s", sessionId);
-                            return SandboxResult.success(directExecutor.executeDirectly(
-                                    workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
-                        }
-                        circuitBreaker.recordFailure(stateAtCall);
-                        return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
-
-                    } catch (IOException e) {
-                        // Transient or persistent Podman infra failure
-                        String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                        log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
-
-                        if (allowInsecureFallback) {
-                            log.warnf("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution for session %s", sessionId);
-                            return SandboxResult.success(directExecutor.executeDirectly(
-                                    workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
-                        }
-                        circuitBreaker.recordFailure(stateAtCall);
-                        return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
-
-                    } catch (ToolExecutionException e) {
-                        // Tool logic failure (non-zero exit from user code) - not an infra error.
-                        throw e;
-
-                    } catch (Exception e) {
-                        // Other unexpected failures
-                        String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                        log.errorf("Sandbox execution failed unexpectedly (session=%s): %s", sessionId, errMsg);
-                        return SandboxResult.infraFailure("SANDBOX_OFFLINE: Unexpected error - " + errMsg);
-                    }
-                }
+            if (SandboxStrategy.PODMAN == sandboxStrategy && circuitBreaker.shouldAttemptPodman()) {
+                return tryPodmanExecution(sessionId, workspaceRoot, command, requiredSecrets);
             }
 
             // Podman circuit is open (or strategy is NAMESPACE) - fall back to namespace isolation.
@@ -186,13 +138,10 @@ public class ProcessIsolationExecutor {
                 return SandboxResult.success(namespaceExecutor.executeInNamespace(
                         workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
             } catch (Exception nsEx) {
-                // Namespace isolation unavailable (macOS/Windows or missing unshare) -
-                // try direct host execution if insecure fallback is allowed.
                 if (allowInsecureFallback) {
-                    log.warnf("[SANDBOX] Namespace unavailable (%s), allow-insecure-fallback true - degrading to host execution for session %s",
-                            LogUtil.rootMessage(nsEx), sessionId);
-                    return SandboxResult.success(directExecutor.executeDirectly(
-                            workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                    log.warnf("[SANDBOX] Namespace unavailable (%s) - degrading to host execution",
+                            LogUtil.rootMessage(nsEx));
+                    return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
                 }
                 throw nsEx;
             }
@@ -222,5 +171,77 @@ public class ProcessIsolationExecutor {
                         ? hostRoot + arg.substring(containerRoot.length())
                         : arg)
                 .toList();
+    }
+
+    private SandboxResult tryPodmanExecution(
+            String sessionId, Path workspaceRoot, List<String> command,
+            Map<String, String> requiredSecrets) throws Exception {
+
+        if (!circuitBreaker.shouldAttemptPodman()) {
+            return null;
+        }
+        CircuitBreakerState stateAtCall = circuitBreaker.getState();
+        try {
+            String result = podmanExecutor.executeInContainer(
+                    sessionId, workspaceRoot, command, requiredSecrets);
+            circuitBreaker.recordSuccess();
+            return SandboxResult.success(result);
+
+        } catch (SandboxImageMissingException e) {
+            log.errorf("[SANDBOX] Image missing (session=%s): %s", sessionId, LogUtil.rootMessage(e));
+            if (allowInsecureFallback) {
+                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
+            }
+            return SandboxResult.infraFailure(
+                    "SANDBOX_OFFLINE: The sandbox image is missing. " +
+                    "Please rebuild it: podman build --no-cache -t arcclaw-tool-runner " +
+                    "-f ./sandbox/Dockerfile.toolrunner .");
+
+        } catch (PodmanUnavailableException e) {
+            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
+            if (allowInsecureFallback) {
+                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
+            }
+            circuitBreaker.recordFailure(stateAtCall);
+            return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
+
+        } catch (IOException e) {
+            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            log.warnf("Podman unavailable (%s) - checking fallback for session %s", errMsg, sessionId);
+            if (allowInsecureFallback) {
+                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
+            }
+            circuitBreaker.recordFailure(stateAtCall);
+            return SandboxResult.infraFailure("SANDBOX_OFFLINE: Podman is unavailable - " + errMsg);
+
+        } catch (ToolExecutionException e) {
+            throw e;
+        } catch (Exception e) {
+            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            log.errorf("Sandbox execution failed unexpectedly (session=%s): %s", sessionId, errMsg);
+            return SandboxResult.infraFailure("SANDBOX_OFFLINE: Unexpected error - " + errMsg);
+        }
+    }
+
+    private SandboxResult fallbackToHostExecution(
+            Path workspaceRoot, List<String> command,
+            Map<String, String> requiredSecrets) throws Exception {
+        log.warn("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution");
+        return SandboxResult.success(directExecutor.executeDirectly(
+                workspaceRoot, rewriteContainerPaths(command, workspaceRoot),
+                resolveFallbackSecrets(requiredSecrets)));
+    }
+
+    private Map<String, byte[]> resolveFallbackSecrets(Map<String, String> requiredSecrets) {
+        if (requiredSecrets == null || requiredSecrets.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return secretResolver.resolveSecrets(requiredSecrets);
+        } catch (Exception e) {
+            log.warnf("Failed to resolve sandbox secrets for fallback: %s", LogUtil.rootMessage(e));
+            return Collections.emptyMap();
+        }
     }
 }

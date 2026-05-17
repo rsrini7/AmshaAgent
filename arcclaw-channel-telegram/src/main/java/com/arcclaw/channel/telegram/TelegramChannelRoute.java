@@ -55,12 +55,18 @@ public class TelegramChannelRoute extends RouteBuilder {
 
         from("telegram:bots?timeout=10&backoffErrorThreshold=3&backoffMultiplier=2")
                 .routeId("telegram-bot")
+                .onException(org.apache.camel.RuntimeCamelException.class)
+                    .onWhen(new isSocketException())
+                    .process(new logTransientError())
+                    .handled(true)
+                    .maximumRedeliveries(0)
+                .end()
                 .choice()
                     .when(body().isInstanceOf(IncomingCallbackQuery.class))
                         .bean(TelegramCallbackHandler.class, "handleCallback")
                     .otherwise()
                         .bean(TelegramAgentHandler.class, "receiveMessage")
-                .end(); // Added .end() here
+                .end();
     }
 
     
@@ -96,5 +102,26 @@ public class TelegramChannelRoute extends RouteBuilder {
         return botToken == null || botToken.isBlank()
             || botToken.startsWith("mock")
             || botToken.equals("mock-telegram-token");
+    }
+
+    /** Matches only when the root cause is a transient SocketException (connection reset, etc.) */
+    private static class isSocketException implements org.apache.camel.Predicate {
+        @Override
+        public boolean matches(org.apache.camel.Exchange exchange) {
+            Throwable cause = exchange.getProperty(org.apache.camel.Exchange.EXCEPTION_CAUGHT, Throwable.class);
+            while (cause != null && cause.getCause() != null && cause != cause.getCause()) {
+                cause = cause.getCause();
+            }
+            return cause instanceof java.net.SocketException;
+        }
+    }
+
+    /** Logs a single WARN line instead of a full stack trace for transient poll errors */
+    private class logTransientError implements org.apache.camel.Processor {
+        @Override
+        public void process(org.apache.camel.Exchange exchange) {
+            Throwable ex = exchange.getProperty(org.apache.camel.Exchange.EXCEPTION_CAUGHT, Throwable.class);
+            log.warnf("Telegram poll transient error: %s — will retry", ex.getMessage());
+        }
     }
 }

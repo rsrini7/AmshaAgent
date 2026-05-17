@@ -38,8 +38,9 @@ export class ArcOnboardingStep3 extends LitElement {
 
   render() {
     const isOllama = this.provider === 'ollama';
+    const isOmlx = this.provider === 'omlx';
     const isClaudeCode = this.provider === 'claude-code';
-    const canValidate = this.loading || (!this.apiKey?.trim() && !isClaudeCode);
+    const canValidate = this.loading || (!this.apiKey?.trim() && !isClaudeCode && !isOmlx);
 
     return html`
       <div style="margin-bottom:var(--space-5)">
@@ -71,6 +72,11 @@ export class ArcOnboardingStep3 extends LitElement {
         ${isClaudeCode ? html`
           <p style="margin-top:var(--space-2);font-size:var(--font-size-xs);color:var(--text-muted)">
             💡 Claude Code uses the CLI - no API key required
+          </p>
+        ` : ''}
+        ${isOmlx ? html`
+          <p style="margin-top:var(--space-2);font-size:var(--font-size-xs);color:var(--text-muted)">
+            💡 OMLX runs locally — enter any value (e.g. <code>not-needed</code>)
           </p>
         ` : ''}
       </div>

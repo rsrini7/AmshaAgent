@@ -887,6 +887,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -907,6 +908,8 @@ try {
     }
 
     Write-Host '[dev] Terminal restored. Press Enter if cursor is missing.'
+    # Ctrl+C → exit 130. Don't let mise report "ERROR task failed".
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -948,6 +951,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -968,6 +972,7 @@ try {
     }
 
     Write-Host '[dev:chat] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1015,6 +1020,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -1035,6 +1041,7 @@ try {
     }
 
     Write-Host '[dev:attach] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1086,6 +1093,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -1106,6 +1114,7 @@ try {
     }
 
     Write-Host '[dev:ask] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1150,6 +1159,7 @@ try {
         '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
         '-Darcclaw.data-dir=../data' `
         '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
 
 } finally {
     Get-Process -Name java -ErrorAction SilentlyContinue |
@@ -1170,6 +1180,7 @@ try {
     }
 
     Write-Host '[dev:no-ui] Terminal restored. Press Enter if cursor is missing.'
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
 
@@ -1338,6 +1349,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:run-dev-profile"]
+usage = 'arg "[cmd]" help="Command to run: serve|chat|attach|ask (default: serve)"'
 description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1346,12 +1358,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }
-$cmd = '{{arg(i=0, default="serve")}}'
-if ($cmd -notin @('serve','chat','attach','ask')) {
-    Write-Host "❌  Unknown command: $cmd"
-    Write-Host '    Valid: serve | chat | attach | ask'
-    exit 1
-}
+$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
 if ($cmd -eq 'attach' -and -not $env:TELEGRAM_BOT_TOKEN) {
     Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1
 }
@@ -1374,18 +1381,30 @@ if ($cmd -in @('chat','ask')) {
 }
 if ($cmd -eq 'attach') { $jvmArgs += '-Darcclaw.telegram.enabled=true' }
 Write-Host "▶   Starting JAR in dev profile - mode: $cmd"
-& java @jvmArgs -jar $jar $cmd
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+try {
+    & java @jvmArgs -jar $jar $cmd
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    $code = if ($null -eq $script:exitCode) { 130 } else { $script:exitCode }
+    if ($code -eq 130 -or $code -eq 143) { exit 0 }
+    exit $code
+}
 """
 
 [tasks."jar:run-dev-dep"]
 depends = ["env:recover", "build:full"]
+usage = 'arg "[cmd]" help="Command to run: serve|chat|attach|ask (default: serve)"'
 description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
 shell = "pwsh -NonInteractive -Command"
 dir = "{{config_root}}"
 quiet = true
-# We call mise directly, passing the argument the user provided (or defaulting to 'serve')
-run = "mise run jar:run-dev-profile {{arg(i=0, default='serve')}}"
+run = """
+$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
+mise run jar:run-dev-profile $cmd
+$code = $LASTEXITCODE
+if ($code -eq 130 -or $code -eq 143) { exit 0 }
+exit $code
+"""
 
 # =============================================================================
 # NATIVE BINARY TASKS
@@ -1540,17 +1559,53 @@ Write-Host '    Build the missing platform binary and re-run: mise run dist'
 """
 
 [tasks."7z:source"]
-description = "Generate source archive (7z) from current folder with standard exclusions"
+description = "Generate source archive (7z). Usage: ARCCLAW_7Z_PASS=secret mise run 7z:source"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = '''
 $ErrorActionPreference = 'Stop'
 
-# ── Resolve 7z binary cross-platform ─────────────────────────────────────────
+$argPass = $env:ARCCLAW_7Z_PASS
+if ([string]::IsNullOrWhiteSpace($argPass)) {
+    Write-Host "❌ ERROR: No password provided!" -ForegroundColor Red
+    Write-Host "Usage: ARCCLAW_7Z_PASS=secret mise run 7z:source"
+    exit 1
+}
+
+# ── Auto-install 7z if not found ──────────────────────────────────────────────
+$has7z = if ($IsMacOS)      { (Get-Command '7zz' -ErrorAction SilentlyContinue) -or
+                               (Get-Command '7z'  -ErrorAction SilentlyContinue) }
+         elseif ($IsWindows) { (Get-Command '7z'  -ErrorAction SilentlyContinue) -or
+                               (Test-Path "C:\Program Files\7-Zip\7z.exe") -or
+                               (Test-Path "C:\Program Files (x86)\7-Zip\7z.exe") }
+         else                { Get-Command '7z' -ErrorAction SilentlyContinue }
+
+if (-not $has7z) {
+    Write-Host '📦  7z not found — installing...'
+    if ($IsMacOS) {
+        if (Get-Command brew -ErrorAction SilentlyContinue) { brew install sevenzip }
+        else { Write-Host '❌  brew not found. Install Homebrew: https://brew.sh'; exit 1 }
+    } elseif ($IsWindows) {
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install --id 7zip.7zip -e --silent
+            $env:PATH += ";C:\Program Files\7-Zip"
+        } else { Write-Host '❌  winget not found. Install 7-Zip: https://www.7-zip.org'; exit 1 }
+    } else {
+        if      (Get-Command apt-get -ErrorAction SilentlyContinue) { sudo apt-get install -y p7zip-full }
+        elseif  (Get-Command dnf     -ErrorAction SilentlyContinue) { sudo dnf install -y p7zip p7zip-plugins }
+        else    { Write-Host '❌  No known package manager. Install p7zip manually.'; exit 1 }
+    }
+    Write-Host '✅  7z installed.'
+}
+
+# ── Resolve 7z binary ─────────────────────────────────────────────────────────
 $zipPath = if ($IsWindows) {
-    @("C:\Program Files\7-Zip\7z.exe","C:\Program Files (x86)\7-Zip\7z.exe") |
-        Where-Object { Test-Path $_ } | Select-Object -First 1
+    $p = (Get-Command '7z' -ErrorAction SilentlyContinue)?.Source
+    if ($p) { $p } else {
+        @("C:\Program Files\7-Zip\7z.exe","C:\Program Files (x86)\7-Zip\7z.exe") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
 } elseif ($IsMacOS) {
     @('7zz','7z') | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue)?.Source } |
         Where-Object { $_ } | Select-Object -First 1
@@ -1558,22 +1613,13 @@ $zipPath = if ($IsWindows) {
     (Get-Command '7z' -ErrorAction SilentlyContinue)?.Source
 }
 if (-not $zipPath) {
-    Write-Host "❌ 7z not found. Install it:" -ForegroundColor Red
-    if ($IsWindows)      { Write-Host "   winget install 7zip.7zip" }
-    elseif ($IsMacOS)    { Write-Host "   brew install sevenzip" }
-    else                 { Write-Host "   sudo apt install p7zip-full" }
+    Write-Host '❌  7z binary not found in PATH after install. Open a new shell and retry.'
     exit 1
 }
 
-$out     = 'arcclaw-source.7z'
-$argPass = '{{ arg(i=0, default="") }}'
-if ([string]::IsNullOrWhiteSpace($argPass)) {
-    Write-Host "❌ ERROR: No password provided!" -ForegroundColor Red
-    Write-Host "Usage: mise run 7z:source -- YOUR_PASSWORD"
-    exit 1
-}
+$out = 'arcclaw-source.7z'
 
-# ── Exclusion lists (script-scoped so functions can see them) ─────────────────
+# ── Exclusion lists ───────────────────────────────────────────────────────────
 $script:root = (Get-Location).Path
 
 $script:excludeDirs = @(
@@ -1601,7 +1647,6 @@ $script:excludeRelPaths = @(
     'scratch'
 )
 
-# ── Include lists - these override exclusions above ──────────────────────────
 $script:includeFiles = @(
     'Architecture_Invariants.md',
     'Flyway-Migration.md'
@@ -1612,25 +1657,19 @@ $script:includeRelPaths = @(
 )
 
 function ShouldExclude($item, $relPath) {
-    # ✅ Include list overrides everything - check FIRST
     if (-not $item.PSIsContainer) {
         if ($script:includeFiles -contains $item.Name) { return $false }
     }
     foreach ($rp in $script:includeRelPaths) {
         if ($relPath -eq $rp) { return $false }
-        # ✅ If this dir is a parent of an included path, allow recursion into it
         if ($item.PSIsContainer -and $rp.StartsWith("$relPath/")) { return $false }
     }
-
-    # Specific relative path prefixes
     foreach ($rp in $script:excludeRelPaths) {
         if ($relPath -eq $rp -or $relPath.StartsWith("$rp/")) { return $true }
     }
-    # Any segment of the path matches an excluded dir name
     foreach ($seg in $relPath.Split('/')) {
         if ($script:excludeDirs -contains $seg) { return $true }
     }
-    # File-level checks
     if (-not $item.PSIsContainer) {
         if ($script:excludeFiles -contains $item.Name)      { return $true }
         if ($script:excludeExts  -contains $item.Extension) { return $true }
@@ -1641,10 +1680,7 @@ function ShouldExclude($item, $relPath) {
 function CopyFiltered($sourceDir, $destDir) {
     Get-ChildItem -Path $sourceDir | ForEach-Object {
         $relPath = $_.FullName.Substring($script:root.Length).TrimStart('\\/').Replace('\','/')
-        if (ShouldExclude $_ $relPath) {
-            Write-Verbose "  skip: $relPath"
-            return
-        }
+        if (ShouldExclude $_ $relPath) { Write-Verbose "  skip: $relPath"; return }
         if ($_.PSIsContainer) {
             $dest = Join-Path $destDir $_.Name
             New-Item -ItemType Directory -Path $dest -Force | Out-Null
@@ -1665,7 +1701,7 @@ try {
 
     if (Test-Path $out) { Remove-Item $out -Force }
     Write-Host "📦  Creating encrypted archive: $out"
-    & $zipPath a "$out" "$stage\*" "-p$argPass" -mhe=on -mx=5 | Out-Null
+    & $zipPath a "$out" "$stage/*" "-p$argPass" -mhe=on -mx=5 | Out-Null
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     if (Test-Path $out) {
