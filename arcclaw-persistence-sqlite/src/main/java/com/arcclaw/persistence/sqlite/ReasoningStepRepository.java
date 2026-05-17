@@ -30,7 +30,10 @@ public class ReasoningStepRepository {
 
     @Transactional(Transactional.TxType.REQUIRED)
     public void persistSteps(Long checkpointId, List<ReasoningStepDto> steps) {
-        em.clear();
+        // NOTE: Do NOT call em.clear() here. persistSteps is called inside
+        // doSaveCheckpointWithSteps which shares the same REQUIRED transaction.
+        // em.clear() would detach the just-saved checkpoint entity, silently
+        // losing the AWAITING_APPROVAL status update on commit.
         em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
                 .setParameter("id", checkpointId)
                 .executeUpdate();
