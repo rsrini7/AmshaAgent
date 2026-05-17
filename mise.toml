@@ -1212,12 +1212,12 @@ Write-Host 'Found:'
 $procs | ForEach-Object { Write-Host "  $_" }
 Write-Host ''
 $procs | ForEach-Object {
-    $pid = ($_ -split '\\s+')[0]
+    $procId = ($_ -split '\\s+')[0]
     try {
-        Stop-Process -Id $pid -Force
-        Write-Host "✅  Killed PID $pid"
+        Stop-Process -Id $procId -Force
+        Write-Host "✅  Killed PID $procId"
     } catch {
-        Write-Host "⚠️   Could not kill PID $pid (already gone?)"
+        Write-Host "⚠️   Could not kill PID $procId (already gone?)"
     }
 }
 Write-Host '────────────────────────────────────────────────────────────────'
@@ -1392,7 +1392,7 @@ try {
 """
 
 [tasks."jar:run-dev-dep"]
-depends = ["env:recover", "build:full"]
+depends = ["env:recover", "dev:kill", "build:full"]
 usage = 'arg "[cmd]" help="Command to run: serve|chat|attach|ask (default: serve)"'
 description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
 shell = "pwsh -NonInteractive -Command"
