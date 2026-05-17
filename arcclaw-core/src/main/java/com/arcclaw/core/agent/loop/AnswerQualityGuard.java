@@ -355,6 +355,14 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
             return "I wasn't able to generate a clean response. Please try again.";
         }
 
+        // Guard 6: system instruction echo (delegates pattern ref to AgentSentinels)
+        // The model echoes back formatting instructions ("Response must be 1-2 sentences") 
+        // as meta-commentary instead of answering the user's question.
+        if (AgentSentinels.SYSTEM_INSTRUCTION_ECHO_PATTERN.matcher(stripped).find()) {
+            log.warnf("ANSWER-GUARD detected system instruction echo in answer for session %s - rejecting", sessionId);
+            return "I wasn't able to generate a meaningful response. Please try again.";
+        }
+
         return stripped;
     }
 

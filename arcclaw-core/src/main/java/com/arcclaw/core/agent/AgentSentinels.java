@@ -69,6 +69,20 @@ public final class AgentSentinels {
         Pattern.CASE_INSENSITIVE
     );
 
+    // System instruction echo guard
+    // The LLM occasionally echoes back system prompt formatting instructions
+    // (e.g. "Response must be 1-2 sentences maximum") as part of the answer
+    // instead of answering the user's question.
+    public static final Pattern SYSTEM_INSTRUCTION_ECHO_PATTERN = Pattern.compile(
+            "(?i)(?:Response must be\\s+\\d+\\s+sentences?" +
+            "|STRICT\\s+(?:TOOL\\s+BINDING\\s+CONTRACT|MODE\\s*-\\s*SIMPLE\\s+CONVERSATION)" +
+            "|Do\\s+NOT\\s+(?:call\\s+any\\s+tools|use\\s+the\\s+tool\\s+calling\\s+API)" +
+            "|I will output the response" +
+            "|One final check)" +
+            "",
+            Pattern.MULTILINE
+    );
+
     // System prompt echo guard
     // The LLM occasionally echoes back its own system prompt (persona, environment
     // metadata, tool list) as part of the FINISH answer. This leaks internal host
