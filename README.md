@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1362_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1361_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
@@ -59,7 +59,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 |---|---|
 | **Isolation** | OS-level sandboxing via Podman rootless or Linux Namespaces; Session-constrained workspaces |
 | **State** | Hexagonal persistence (port/adapter) with SQLite (WAL), PostgreSQL, and filesystem backends; 100% session persistence and graceful continuity |
-| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch across 8 providers (Groq, OpenAI, OpenRouter, Ollama, OMLX, Gemini, Nvidia, Cerebras); `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
+| **Intelligence** | LLM Intent Routing (`llama-3.1-8b-instant`) for dynamic specialist dispatch across 10 providers (Groq, OpenAI, OpenRouter, Ollama, OMLX, Gemini, Nvidia, Cerebras, Claude, InfiniteLoop); `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens) |
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.78.1 |
@@ -671,7 +671,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-api` | Allows `arcclaw-core` to reference channel concepts (sender, allowlist) without coupling to Telegram or any concrete adapter. Swapping channels requires zero core changes. |
 | `arcclaw-persistence-api` | Hexagonal architecture port interfaces. Core depends on ports, not implementations. Enables swapping SQLite for Postgres or filesystem without core changes. |
 | `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters. Avoids entity duplication across SQLite, Postgres, and filesystem adapters. |
-| `arcclaw-core` | Independently testable. All ~1362 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
+| `arcclaw-core` | Independently testable. All ~1361 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
 | `arcclaw-persistence-sqlite` | SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, and FTS5 setup. |
 | `arcclaw-persistence-fs` | Filesystem-based persistence adapter for environments without SQLite. |
 | `arcclaw-persistence-postgres` | PostgreSQL adapter for production deployments requiring a server database. |
@@ -1289,7 +1289,7 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_LLM_API_KEY` | ✅ (provider-conditional) | - | API key for the selected LLM provider (Groq: `gsk_...`, OpenRouter: `sk-or-v1-...`, OpenAI: `sk-...`) |
-| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama`, `omlx`, `gemini`, `nvidia`, `cerebras` |
+| `ARCCLAW_LLM_PROVIDER` | no | `groq` | LLM provider: `groq`, `openai`, `openrouter`, `ollama`, `omlx`, `gemini`, `nvidia`, `cerebras`, `claude`, `infiniteloop` |
 | `ARCCLAW_LLM_MODEL_NAME` | no | `meta-llama/llama-4-scout-17b-16e-instruct` | Primary reasoning model name for the selected provider |
 | `ARCCLAW_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | LLM provider base URL (override for OpenRouter/OpenAI/Ollama/OMLX) |
 | `ARCCLAW_LLM_TEMPERATURE` | no | `0.1` | LLM temperature for reasoning |
@@ -1463,4 +1463,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1362 tests passing · 16 modules · 14 tools · 16 reflexes · 8 LLM providers*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests passing · 17 modules · 13 tools · 16 reflexes · 10 LLM providers*
