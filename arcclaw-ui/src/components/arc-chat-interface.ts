@@ -39,6 +39,9 @@ export class ArcChatInterface extends LitElement {
   private _intentionalClose = false;
   private _reconnectAttempts = 0;
   private _reconnectTimeoutId: any = null;
+  private _wsToken = '';
+  private _wsTokenFetchedAt = 0;
+  private static readonly WS_TOKEN_TTL = 30_000; // reuse same token within 30s window
 
   static styles = css`
     :host { 
@@ -272,8 +275,9 @@ export class ArcChatInterface extends LitElement {
     if (this._intentionalClose) return;
     this._connecting = true;
 
-    let token = '';
-    if (this.apiKey) {
+    let token = this._wsToken && Date.now() - this._wsTokenFetchedAt < ArcChatInterface.WS_TOKEN_TTL
+      ? this._wsToken : '';
+    if (!token && this.apiKey) {
       try {
         const res = await fetch('/api/v1/chat/ws-token', {
           method: 'POST',
@@ -281,7 +285,9 @@ export class ArcChatInterface extends LitElement {
         });
         if (res.ok) {
           const data = await res.json();
-          token = data.token;
+          this._wsToken = data.token;
+          this._wsTokenFetchedAt = Date.now();
+          token = this._wsToken;
         }
       } catch (e) {
         console.warn('Failed to obtain WS token', e);
