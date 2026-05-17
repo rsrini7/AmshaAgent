@@ -27,12 +27,12 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;

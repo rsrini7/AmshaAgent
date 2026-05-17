@@ -6,6 +6,7 @@ import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
@@ -14,7 +15,6 @@ import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.common.util.LogUtil;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;

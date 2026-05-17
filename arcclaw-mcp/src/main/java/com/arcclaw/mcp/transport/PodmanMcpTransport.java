@@ -19,8 +19,8 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.sandbox.SandboxCircuitBreaker;
 import com.arcclaw.mcp.tool.DynamicToolCapability;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;

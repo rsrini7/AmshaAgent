@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
@@ -21,7 +22,6 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;

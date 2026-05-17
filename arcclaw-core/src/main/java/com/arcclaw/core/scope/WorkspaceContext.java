@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;

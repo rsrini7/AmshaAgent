@@ -15,8 +15,8 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.observability.AgentOtelContext;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;

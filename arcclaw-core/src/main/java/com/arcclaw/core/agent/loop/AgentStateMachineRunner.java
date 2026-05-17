@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -19,7 +20,6 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.common.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Scope;

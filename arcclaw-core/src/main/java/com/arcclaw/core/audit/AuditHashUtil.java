@@ -13,12 +13,12 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.core.security.CryptoConstants;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
-import com.arcclaw.common.util.LogUtil;
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.StartupEvent;
 import org.jboss.logging.Logger;

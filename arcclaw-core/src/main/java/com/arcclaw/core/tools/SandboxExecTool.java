@@ -14,6 +14,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.governance.BudgetExceededException;
@@ -21,7 +22,6 @@ import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;

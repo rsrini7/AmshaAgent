@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
@@ -14,7 +15,6 @@ import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.TimeContextInjector;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

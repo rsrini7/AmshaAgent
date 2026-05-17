@@ -21,7 +21,6 @@ import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;

@@ -10,11 +10,11 @@ import java.util.stream.Collectors;
 
 import jakarta.enterprise.inject.Instance;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.observability.AgentObserver;
-import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 

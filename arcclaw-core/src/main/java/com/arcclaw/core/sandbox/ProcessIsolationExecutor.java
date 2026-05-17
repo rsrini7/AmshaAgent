@@ -12,8 +12,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 

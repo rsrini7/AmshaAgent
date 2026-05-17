@@ -9,11 +9,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.util.ClassUtils;
-import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

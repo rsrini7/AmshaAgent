@@ -8,9 +8,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
-import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**

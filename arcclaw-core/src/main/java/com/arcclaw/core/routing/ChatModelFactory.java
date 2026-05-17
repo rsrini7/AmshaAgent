@@ -7,6 +7,7 @@ import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 
 /**
  * Shared factory for building LangChain4j ChatModel instances.
@@ -93,7 +94,7 @@ public final class ChatModelFactory {
                 temperature, logHttp, logHttp);
         if (customParameters != null && !customParameters.isEmpty()) {
             builder.defaultRequestParameters(
-                    dev.langchain4j.model.openai.OpenAiChatRequestParameters.builder()
+                    OpenAiChatRequestParameters.builder()
                             .customParameters(customParameters)
                             .build());
         }

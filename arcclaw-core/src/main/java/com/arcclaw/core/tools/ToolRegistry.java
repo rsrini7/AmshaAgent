@@ -15,6 +15,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
@@ -25,7 +26,6 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.AutonomyPolicy;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.util.ClassUtils;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.PathSanitizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -17,7 +18,6 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.tools.GithubTool;
-import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;

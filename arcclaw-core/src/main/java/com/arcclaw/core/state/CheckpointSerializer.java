@@ -6,9 +6,9 @@ import java.util.Map;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;

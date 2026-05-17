@@ -6,9 +6,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.BackoffRetryExecutor;
-import com.arcclaw.common.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 import org.jboss.logging.Logger;

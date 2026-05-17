@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -19,7 +20,6 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.ClassUtils;
-import com.arcclaw.common.util.LogUtil;
 import io.opentelemetry.api.trace.Span;
 import org.jboss.logging.Logger;
 

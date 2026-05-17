@@ -12,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -25,7 +26,6 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
 import com.arcclaw.persistence.api.CheckpointDto;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;

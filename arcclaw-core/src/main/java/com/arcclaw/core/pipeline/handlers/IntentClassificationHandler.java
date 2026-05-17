@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.IntentDetector;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentRoleCache;
@@ -20,7 +21,6 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
 import com.arcclaw.core.security.DestructiveVocabularyFilter;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.common.util.LogUtil;
 import dev.langchain4j.exception.HttpException;
 import org.jboss.logging.Logger;
 

@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -27,7 +28,6 @@ import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
-import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 /**

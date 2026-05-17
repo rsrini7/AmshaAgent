@@ -8,12 +8,12 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.Fts5QueryUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.arcclaw.persistence.api.MemoryChunkDto;
