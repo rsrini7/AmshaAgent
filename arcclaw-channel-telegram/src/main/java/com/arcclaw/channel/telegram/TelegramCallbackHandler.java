@@ -103,15 +103,14 @@ public class TelegramCallbackHandler {
                 case REJECTED -> popupText = "❌ Rejected: " + toolName;
                 case EXPIRED -> popupText = "⏱ Approval expired";
                 case NOT_FOUND -> {
-                    log.infof("Stale callback for session %s - editing message to show expired", sessionId);
+                    log.infof("Stale callback for session %s - ignoring NOT_FOUND", sessionId);
                     // Edit the message to remove stale inline keyboard and show expired notice
                     try {
-                        String expiredText = "⏱ Approval expired (session was reset or new message received)";
-                        sender.editMessage(chatId, messageId, expiredText, null);
+                        sender.editMessage(chatId, messageId, "ignoring session NOT_FOUND", null);
                     } catch (Exception editEx) {
-                        log.debugf("Failed to edit stale approval message: %s", editEx.getMessage());
+                        log.debugf("Failed to edit stale NOT_FOUND message: %s", editEx.getMessage());
                     }
-                    answerCallback(query.getId(), "⏱ Approval expired");
+                    answerCallback(query.getId(), "ignoring session NOT_FOUND");
                     return;
                 }
                 case ALREADY_DECIDED -> popupText = "Already decided";
