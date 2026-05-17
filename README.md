@@ -159,11 +159,13 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 4. **Skill System:** Inside `IntentClassificationHandler`, `SkillAwareIntentDetector` checks `SkillRegistry.findMatch()` first. If matched, the skill's system prompt is injected and the agent runs directly - bypassing LLM intent classification entirely (zero additional classification tokens).
 5. **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 6. **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or budget-exceeded).
+7. **ToolSearchIndex:** An in-memory Lucene index over all registered tools enables dynamic tool discovery. Instead of injecting every tool definition into every prompt, the agent queries this index with its task description to find the most relevant tools, reducing prompt bloat when many tools, MCP servers, and skills are registered.
 7. **Parallel Tool Execution:** When the LLM requests multiple tools in one step, `ParallelToolStepExecutor` executes them concurrently. Pre-executable tools (FULL autonomy or configured safe list) run immediately; remaining tools are held for batch HITL approval with Telegram inline keyboard.
 8. **Agent Delegation:** Any role can use the `delegate_to_agent` tool to spin up a sub-agent loop for specialist tasks. Non-coordinators are restricted from delegating to roles they lack capabilities for. The sub-agent runs with its own isolated context and reports results back.
 9. **ProcessIsolationExecutor:** Three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in test mode only (`strategy: NONE`).
 10. **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 11. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
+12. **Answer Quality Guard:** Before returning a final answer, `AnswerQualityGuard` validates it against multiple checks: system instruction echo detection, naked tool call injection, compaction context leaks, and minimum quality thresholds. Failed answers trigger automatic retry with corrective hints.
 
 > [!NOTE]
 > **Sandbox Degradation Details**: The `ProcessIsolationExecutor` operates in three tiers:
@@ -589,7 +591,8 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           ToolCapability, GithubTool, ScheduleTaskTool,
 │   │                           ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
 │   │                           SandboxExecTool, CheckListTool, BraveWebSearchTool,
-│   │                           SerperWebSearchTool, DynamicToolLookup SPI,
+│   │                           SerperWebSearchTool, SmartWebFetchTool, AgentTaskTool,
+│   │                           DynamicToolLookup SPI, ToolSearchIndex (Lucene),
 │   │                           ToolContractExporter (writes tool-contracts.json on startup)
 │   ├── util/                   LogUtil (rootMessage, trimmedStack, ctx formatting)
 │
@@ -838,7 +841,7 @@ This matters for three reasons:
 |---|---|---|---|
 | `PromptInjectionReflex` | every message | 10 | Blocks jailbreak patterns (fake approvals, "reveal system prompt", CONTEXT_WIPE, auto-approve bypass attempts); writes mandatory `PROMPT_INJECTION_BLOCKED` audit event |
 | `PiiScanReflex` | every message | 20 | Detects emails, phone numbers, Aadhaar, PAN, credit cards, SSNs, IPs, JWTs; redacts or blocks per `arcclaw.pii.mode` |
-| `ApproveReflex` | `/approve [sessionId] [toolName]` | 100 | Resumes a paused `AWAITING_APPROVAL` checkpoint; per-tool or all-tools; admin delegation supported |
+| `ApproveReflex` | `/approve [sessionId] [toolName]` | 100 | Resumes a paused `AWAITING_APPROVAL` checkpoint; per-tool or all-tools; admin delegation supported; cron jobs owned by the approver are auto-approved via fast path |
 | `DenyReflex` | `/deny [sessionId] [toolName]` | 200 | Marks checkpoint `FAILED`, wipes state; per-tool granularity supported |
 | `RetryReflex` | `/retry` | 10 | Retries the last failed checkpoint from the current session |
 | `IdentityExtractionReflex` | every message | 250 | Extracts user identity facts (name, role, preferences) silently via NLP for persona adaptation |
