@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 interface AuditEvent {
   id: string;
@@ -27,6 +27,8 @@ interface AuditListResponse {
 
 @customElement('arc-audit-panel')
 export class ArcAuditPanel extends LitElement {
+  @property({ type: String }) apiKey = '';
+
   @state() private events: AuditEvent[] = [];
   @state() private total = 0;
   @state() private page = 0;
@@ -126,7 +128,7 @@ export class ArcAuditPanel extends LitElement {
     .drawer h3 { margin: 0 0 var(--space-4); }
     .drawer-field { margin-bottom: var(--space-3); }
     .drawer-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .drawer-value { font-size: 14px; margin-top: 2px; word-break: break-all; }
+    .drawer-value { font-size: 14px; margin-top: 2px; word-break: break-all; white-space: pre-wrap; }
     .drawer-json {
       background: var(--bg-code, #1a1a2e);
       border: 1px solid var(--border);
@@ -155,9 +157,9 @@ export class ArcAuditPanel extends LitElement {
       if (this.filterFrom) params.set('from', this.filterFrom);
       if (this.filterTo) params.set('to', this.filterTo);
 
-      const r = await fetch(`/api/v1/audit?${params}`, {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.apiKey) headers['X-ARCCLAW-API-KEY'] = this.apiKey;
+      const r = await fetch(`/api/v1/audit?${params}`, { headers });
       if (!r.ok) throw new Error(`Failed to load audit events: ${r.status}`);
       const data: AuditListResponse = await r.json();
       this.events = data.events;

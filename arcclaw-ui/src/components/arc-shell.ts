@@ -348,7 +348,7 @@ export class ArcShell extends LitElement {
       ` : nothing}
 
       ${this._route === '#/audit' ? html`
-        <arc-audit-panel class="content-area"></arc-audit-panel>
+        <arc-audit-panel class="content-area" .apiKey="${this._apiKey}"></arc-audit-panel>
       ` : nothing}
 
       ${this._route === '#/settings' ? html`

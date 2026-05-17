@@ -434,7 +434,7 @@ export class ArcChatInterface extends LitElement {
       return unsafeHTML(this._markdownCache.get(messageId)!);
     }
 
-    const rawHtml = marked.parse(text) as string;
+    const rawHtml = marked.parse(text, { breaks: true }) as string;
     const cleanHtml = DOMPurify.sanitize(rawHtml);
     
     // Update cache (limit size to 200 items)
