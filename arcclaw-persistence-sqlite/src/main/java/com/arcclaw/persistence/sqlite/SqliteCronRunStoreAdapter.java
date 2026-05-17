@@ -1,6 +1,5 @@
 package com.arcclaw.persistence.sqlite;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
