@@ -235,7 +235,7 @@ public class CheckpointResumeHandler {
         if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
             s.send(user, List.of(new ReplyNode.Text(output), new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
         } else if (ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
-            s.sendBySession(sessionId, output);
+            s.sendRaw(user, output);
         } else {
             s.sendRaw(user, output);
         }
