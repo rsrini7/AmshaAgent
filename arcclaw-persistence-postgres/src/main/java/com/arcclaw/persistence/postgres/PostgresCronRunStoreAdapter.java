@@ -24,6 +24,7 @@ public class PostgresCronRunStoreAdapter implements CronRunStorePort {
     @Override
     @Transactional
     public void save(CronRunDto dto) {
+        log.debugf("save: dto=%s", dto);
         CronRunEntity entity = em.find(CronRunEntity.class, dto.id());
         if (entity == null) {
             entity = new CronRunEntity();
@@ -46,6 +47,7 @@ public class PostgresCronRunStoreAdapter implements CronRunStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRED)
     public Optional<CronRunDto> findById(String id) {
+        log.debugf("findById: id=%s", id);
         if (id == null || id.isBlank()) return Optional.empty();
         CronRunEntity entity = em.find(CronRunEntity.class, id);
         return Optional.ofNullable(entity).map(this::toDto);
@@ -54,6 +56,7 @@ public class PostgresCronRunStoreAdapter implements CronRunStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRED)
     public List<CronRunDto> findByCronId(String cronId, int offset, int limit) {
+        log.debugf("findByCronId: cronId=%s, offset=%d, limit=%d", cronId, offset, limit);
         return em.createQuery(
                 "SELECT r FROM CronRunEntity r WHERE r.cronId = :cronId ORDER BY r.startedAt DESC",
                 CronRunEntity.class)
@@ -66,6 +69,7 @@ public class PostgresCronRunStoreAdapter implements CronRunStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRED)
     public long countByCronId(String cronId) {
+        log.debugf("countByCronId: cronId=%s", cronId);
         return em.createQuery(
                 "SELECT COUNT(r) FROM CronRunEntity r WHERE r.cronId = :cronId", Long.class)
          .setParameter("cronId", cronId)
@@ -75,6 +79,7 @@ public class PostgresCronRunStoreAdapter implements CronRunStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRED)
     public List<CronRunDto> findAll(String status, int offset, int limit) {
+        log.debugf("findAll: status=%s, offset=%d, limit=%d", status, offset, limit);
         if (status != null && !status.isBlank()) {
             return em.createQuery(
                     "SELECT r FROM CronRunEntity r WHERE r.status = :status ORDER BY r.startedAt DESC",
@@ -95,6 +100,7 @@ public class PostgresCronRunStoreAdapter implements CronRunStorePort {
     @Override
     @Transactional(Transactional.TxType.REQUIRED)
     public long countAll(String status) {
+        log.debugf("countAll: status=%s", status);
         if (status != null && !status.isBlank()) {
             return em.createQuery(
                     "SELECT COUNT(r) FROM CronRunEntity r WHERE r.status = :status", Long.class)
