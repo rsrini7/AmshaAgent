@@ -308,11 +308,18 @@ export class ArcChatInterface extends LitElement {
           composed: true
         }));
         if (status === 'open') {
-          this._reconnectAttempts = 0;
           if (token) this._ws?.send({ type: 'AUTH', token });
+          // Defer resetting backoff — WS must stay open for 5s first
+          // to prevent rapid open/close loops from resetting the counter
+          setTimeout(() => {
+            if (this._wsStatus === 'open') {
+              this._reconnectAttempts = 0;
+            }
+          }, 5000);
         }
         if (status === 'closed' || status === 'error') {
           this._ws = null;
+          this._reconnectAttempts++;
           this._scheduleReconnect();
         }
       }
@@ -323,23 +330,25 @@ export class ArcChatInterface extends LitElement {
 
   private _scheduleReconnect() {
     if (this._intentionalClose || this._connecting) return;
-    
-    // Exponential backoff with jitter
+    if (this._reconnectAttempts >= 10) {
+      console.warn('ArcClaw: Too many reconnect failures, stopping');
+      return;
+    }
+
+    // Exponential backoff with jitter (square at attempt so delay grows fast)
     const baseDelay = 1000;
     const maxDelay = 30000;
-    const delay = Math.min(maxDelay, baseDelay * Math.pow(2, this._reconnectAttempts));
+    const exponent = Math.min(this._reconnectAttempts, 5); // cap exponent to avoid overflow
+    const delay = Math.min(maxDelay, baseDelay * Math.pow(2, exponent));
     const jitter = delay * 0.2 * (Math.random() * 2 - 1);
     const finalDelay = Math.max(baseDelay, delay + jitter);
 
-    console.log(`ArcClaw: Reconnecting in ${Math.round(finalDelay)}ms (attempt ${this._reconnectAttempts + 1})`);
-    
+    console.log(`ArcClaw: Reconnecting in ${Math.round(finalDelay)}ms (attempt ${this._reconnectAttempts})`);
+
     if (this._reconnectTimeoutId) clearTimeout(this._reconnectTimeoutId);
     this._reconnectTimeoutId = setTimeout(() => {
         this._reconnectTimeoutId = null;
-        // Re-check before connecting — _connect() may have already been
-        // triggered by updated() or another path since this was scheduled.
         if (this._connecting || this._ws) return;
-        this._reconnectAttempts++;
         this._connect();
     }, finalDelay);
   }
@@ -462,6 +471,7 @@ export class ArcChatInterface extends LitElement {
       clearTimeout(this._reconnectTimeoutId);
       this._reconnectTimeoutId = null;
     }
+    this._reconnectAttempts = 0;
     this._ws = null; 
     this._intentionalClose = false; 
     this._connecting = true;
