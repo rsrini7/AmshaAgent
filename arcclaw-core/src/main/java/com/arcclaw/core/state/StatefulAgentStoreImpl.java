@@ -194,6 +194,9 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override public void archive(Long checkpointId)
         { storeAdapter.archive(checkpointId); }
 
+    @Override public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId)
+        { storeAdapter.stampChannelInfo(checkpointId, channelType, channelPlatformId); }
+
 
     // ── Resume guard (§3.4 / §7.29 - all delegated, public API stays here) ───
 

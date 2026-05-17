@@ -397,6 +397,17 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
         return batchOps.hasPendingApprovalForChat(chatId);
     }
 
+    @Override
+    @Transactional
+    public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
+        log.infof("[PostgresCheckpointAdapter] Stamping channel info for checkpoint=%d", checkpointId);
+        em.createQuery("UPDATE AgentCheckpoint c SET c.channelType = :type, c.channelPlatformId = :platform, c.updatedAt = :now, c.version = c.version + 1 WHERE c.id = :id")
+                .setParameter("type", channelType)
+                .setParameter("platform", channelPlatformId)
+                .setParameter("now", Instant.now())
+                .setParameter("id", checkpointId)
+                .executeUpdate();
+    }
 }
 
 

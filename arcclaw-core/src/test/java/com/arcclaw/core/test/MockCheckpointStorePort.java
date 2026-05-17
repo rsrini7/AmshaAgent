@@ -333,4 +333,20 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     public boolean hasPendingApprovalForChat(String chatId) {
         return false;
     }
+
+    @Override
+    public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
+        CheckpointDto existing = store.get(checkpointId);
+        if (existing != null) {
+            CheckpointDto updated = new CheckpointDto(existing.id(), existing.sessionId(), existing.agentRole(),
+                    existing.status(), existing.autonomyLevel(), existing.stateJson(), channelPlatformId,
+                    channelType, existing.originalGoal(), existing.failedAt(), existing.completedAt(),
+                    existing.failReason(), existing.pendingToolName(), existing.batchToolDecisions(),
+                    existing.pendingToolParametersJson(), existing.preExecutedResults(), existing.maxIterations(),
+                    existing.iterationsUsed(), existing.retryAfterMs(), existing.systemNote(), existing.contextDataJson(),
+                    existing.errorCode(), existing.traceId(), existing.rootCauseClass(),
+                    existing.parentCheckpointId(), existing.depth(), existing.createdAt(), Instant.now());
+            store.put(checkpointId, updated);
+        }
+    }
 }

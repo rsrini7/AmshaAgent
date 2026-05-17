@@ -384,6 +384,7 @@ class PersistencePortContractTest {
         @Override public void releaseResumeClaim(String sessionId, String agentRole) {}
         @Override public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) { return false; }
         @Override public boolean hasPendingApprovalForChat(String chatId) { return false; }
+        @Override public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {}
     }
 
     static class InMemoryCronStore implements CronStorePort {

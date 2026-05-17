@@ -131,9 +131,15 @@ public class LoopResultHandler {
         }
         try {
             agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
-                cp.setChannelPlatformId(context.getUser().platformId());
-                cp.setChannelType(context.getUser().channel().name());
-                agentStore.save(cp);
+                // CRITICAL: Only update channel fields. Do NOT re-save the entire
+                // checkpoint — the load() may return stale status (e.g. FAILED from
+                // a previous run) which would overwrite the AWAITING_APPROVAL status
+                // that was just persisted by saveCheckpointWithSteps().
+                String platformId = context.getUser().platformId();
+                String channelType = context.getUser().channel().name();
+                if (cp.getId() != null) {
+                    agentStore.stampChannelInfo(cp.getId(), channelType, platformId);
+                }
             });
             log.debugf("Stamped channel info on checkpoint session=%s channel=%s platformId=%s",
                        sessionId, context.getUser().channel(), context.getUser().platformId());

@@ -45,6 +45,94 @@ public class CheckpointRepository {
         return merged;
     }
 
+    /**
+     * Native SQL full-row update — bypasses JPA persistence context.
+     * JPA em.merge() silently fails to commit through Narayana JTA with SQLite.
+     * Native SQL executeUpdate() works reliably (proven by CheckpointStatusService).
+     */
+    @Transactional(Transactional.TxType.REQUIRED)
+    public void nativeUpdate(AgentCheckpointEntity e) {
+        String now = com.arcclaw.core.util.TemporalUtils.formatIsoLex(java.time.Instant.now());
+        int updated = em.createNativeQuery(
+                "UPDATE agent_checkpoint SET " +
+                "status = :status, " +
+                "autonomy_level = :autonomy, " +
+                "state_json = :stateJson, " +
+                "channel_platform_id = :channelPlatformId, " +
+                "channel_type = :channelType, " +
+                "original_goal = :originalGoal, " +
+                "failed_at = :failedAt, " +
+                "completed_at = :completedAt, " +
+                "fail_reason = :failReason, " +
+                "pending_tool_name = :pendingToolName, " +
+                "pending_tool_role = :pendingToolRole, " +
+                "batch_tool_decisions = :batchDecisions, " +
+                "pending_tool_parameters = :pendingParams, " +
+                "pre_executed_results = :preExec, " +
+                "max_iterations = :maxIter, " +
+                "iterations_used = :iterUsed, " +
+                "retry_after_ms = :retryMs, " +
+                "system_note = :sysNote, " +
+                "context_data = :ctxData, " +
+                "error_code = :errCode, " +
+                "trace_id = :traceId, " +
+                "root_cause_class = :rootCause, " +
+                "parent_checkpoint_id = :parentId, " +
+                "depth = :depth, " +
+                "version = version + 1, " +
+                "updated_at = :now " +
+                "WHERE checkpoint_id = :id")
+                .setParameter("status", e.getStatus() != null ? e.getStatus().name() : null)
+                .setParameter("autonomy", e.getAutonomyLevel() != null ? e.getAutonomyLevel().name() : null)
+                .setParameter("stateJson", e.getStateJson())
+                .setParameter("channelPlatformId", e.getChannelPlatformId())
+                .setParameter("channelType", e.getChannelType())
+                .setParameter("originalGoal", e.getOriginalGoal())
+                .setParameter("failedAt", e.getFailedAt() != null ? com.arcclaw.core.util.TemporalUtils.formatIsoLex(e.getFailedAt()) : null)
+                .setParameter("completedAt", e.getCompletedAt() != null ? com.arcclaw.core.util.TemporalUtils.formatIsoLex(e.getCompletedAt()) : null)
+                .setParameter("failReason", e.getFailReason())
+                .setParameter("pendingToolName", e.getPendingToolName())
+                .setParameter("pendingToolRole", e.getPendingToolRole())
+                .setParameter("batchDecisions", e.getBatchToolDecisions())
+                .setParameter("pendingParams", e.getPendingToolParametersJson())
+                .setParameter("preExec", e.getPreExecutedResults())
+                .setParameter("maxIter", e.getMaxIterations())
+                .setParameter("iterUsed", e.getIterationsUsed())
+                .setParameter("retryMs", e.getRetryAfterMs())
+                .setParameter("sysNote", e.getSystemNote())
+                .setParameter("ctxData", e.getContextDataJson())
+                .setParameter("errCode", e.getErrorCode())
+                .setParameter("traceId", e.getTraceId())
+                .setParameter("rootCause", e.getRootCauseClass())
+                .setParameter("parentId", e.getParentCheckpointId())
+                .setParameter("depth", e.getDepth())
+                .setParameter("now", now)
+                .setParameter("id", e.getId())
+                .executeUpdate();
+        log.infof("[Repo] nativeUpdate: checkpoint_id=%d status=%s updated=%d", e.getId(), e.getStatus(), updated);
+        // Clear persistence context so subsequent JPA reads see the native SQL changes
+        em.clear();
+    }
+
+    @Transactional(Transactional.TxType.REQUIRED)
+    public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
+        String now = com.arcclaw.core.util.TemporalUtils.formatIsoLex(java.time.Instant.now());
+        int updated = em.createNativeQuery(
+                "UPDATE agent_checkpoint SET " +
+                "channel_type = :type, " +
+                "channel_platform_id = :platform, " +
+                "updated_at = :now, " +
+                "version = version + 1 " +
+                "WHERE checkpoint_id = :id")
+                .setParameter("type", channelType)
+                .setParameter("platform", channelPlatformId)
+                .setParameter("now", now)
+                .setParameter("id", checkpointId)
+                .executeUpdate();
+        log.infof("[Repo] stampChannelInfo: checkpoint_id=%d updated=%d", checkpointId, updated);
+        em.clear();
+    }
+
     public Optional<AgentCheckpointEntity> findById(Long id) {
         em.clear();
         return Optional.ofNullable(em.find(AgentCheckpointEntity.class, id));

@@ -419,6 +419,21 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
         return true;
     }
 
+    @Override
+    public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
+        findById(checkpointId).ifPresent(cp -> save(new CheckpointDto(
+            cp.id(), cp.sessionId(), cp.agentRole(), cp.status(), cp.autonomyLevel(),
+            cp.stateJson(), channelPlatformId, channelType,
+            cp.originalGoal(), cp.failedAt(), cp.completedAt(), cp.failReason(),
+            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
+            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
+            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
+        )));
+    }
+
     private static CheckpointDto withNewStatus(CheckpointDto cp, String newStatus) {
         return new CheckpointDto(
             cp.id(), cp.sessionId(), cp.agentRole(), newStatus, cp.autonomyLevel(),

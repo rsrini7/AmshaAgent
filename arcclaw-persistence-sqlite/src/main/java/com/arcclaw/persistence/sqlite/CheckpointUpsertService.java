@@ -75,7 +75,8 @@ public class CheckpointUpsertService {
         if (created) {
             entity = checkpointRepo.persist(entity);
         } else {
-            entity = checkpointRepo.merge(entity);
+            // Native SQL: JPA merge silently fails to commit via Narayana JTA + SQLite
+            checkpointRepo.nativeUpdate(entity);
         }
         
         return new CheckpointUpsertResult(CheckpointMapper.toDto(entity), created);
@@ -120,7 +121,8 @@ public class CheckpointUpsertService {
         if (created) {
             entity = checkpointRepo.persist(entity);
         } else {
-            entity = checkpointRepo.merge(entity);
+            // Native SQL: JPA merge silently fails to commit via Narayana JTA + SQLite
+            checkpointRepo.nativeUpdate(entity);
         }
         
         CheckpointDto savedDto = CheckpointMapper.toDto(entity);

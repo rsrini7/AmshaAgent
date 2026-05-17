@@ -40,4 +40,6 @@ public interface CheckpointCrudPort {
     boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision);
 
     boolean hasPendingApprovalForChat(String chatId);
+
+    void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId);
 }

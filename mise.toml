@@ -23,11 +23,12 @@
 # =============================================================================
 
 [tools]
-java       = "temurin-25"
-maven      = "3.9"
+java = "temurin-25"
+maven = "3.9"
 powershell = "7.6"
-node       = "22"
-gh         = "latest"
+node = "22"
+gh = "latest"
+go = "1.26"
 
 [env]
 _.file = ".env"
@@ -56,19 +57,19 @@ trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
 [tasks.start]
 description = "New here? Run: mise install  then: mise run setup:profile  then: mise run setup"
 run = [
-    "echo \"\"",
-    "echo   ArcClaw - mise Task Runner",
-    "echo   ===========================",
-    "echo \"\"",
-    "echo   BOOTSTRAP SEQUENCE",
-    "echo   1. mise install                installs pwsh + java + maven + usage",
-    "echo   2. mise run setup:profile      writes shell profile activate + completion",
-    "echo   3. reload your shell",
-    "echo   4. mise run setup              .env + chmod mvnw + JDKs + gh CLI + Playwright Chromium",
-    "echo   5. mise run dev                hot-reload on :8080",
-    "echo \"\"",
-    "echo   See MISE_SETUP.md for full documentation.",
-    "echo \"\"",
+  "echo \"\"",
+  "echo   ArcClaw - mise Task Runner",
+  "echo   ===========================",
+  "echo \"\"",
+  "echo   BOOTSTRAP SEQUENCE",
+  "echo   1. mise install                installs pwsh + java + maven + usage",
+  "echo   2. mise run setup:profile      writes shell profile activate + completion",
+  "echo   3. reload your shell",
+  "echo   4. mise run setup              .env + chmod mvnw + JDKs + gh CLI + Playwright Chromium",
+  "echo   5. mise run dev                hot-reload on :8080",
+  "echo \"\"",
+  "echo   See MISE_SETUP.md for full documentation.",
+  "echo \"\"",
 ]
 
 # =============================================================================
@@ -254,7 +255,10 @@ Write-Host '✅  mvnw + mise.toml + all task scripts CRLF fixed.'
 [tasks."jdk:graalvm"]
 description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
 dir = "{{config_root}}"
-run = ["mise use --path mise.toml java@graalvm-community-25.0.2", "java -version"]
+run = [
+  "mise use --path mise.toml java@graalvm-community-25.0.2",
+  "java -version"
+]
 
 [tasks."jdk:temurin"]
 description = "Switch active JDK back to Temurin 25 (default - dev, build, jar tasks)"
@@ -265,9 +269,9 @@ run = ["mise use --path mise.toml java@temurin-25", "java -version"]
 description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) - safe to re-run"
 dir = "{{config_root}}"
 run = [
-    "mise install",
-    "mise install java@graalvm-community-25.0.2 --quiet",
-    "mise ls java",
+  "mise install",
+  "mise install java@graalvm-community-25.0.2 --quiet",
+  "mise ls java",
 ]
 
 [tasks."jdk:status"]
@@ -976,7 +980,6 @@ try {
 }
 """
 
-
 [tasks."dev:attach"]
 depends = ["env:recover"]
 description = "Dev mode - Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
@@ -1044,7 +1047,6 @@ try {
     if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
-
 
 [tasks."dev:ask"]
 depends = ["env:recover"]
@@ -1117,7 +1119,6 @@ try {
     if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
-
 
 [tasks."dev:no-ui"]
 depends = ["env:recover"]
