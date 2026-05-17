@@ -43,7 +43,7 @@ The reactor enforces strict architectural separation that prevents accidental de
 - **`arcclaw-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
 - **`arcclaw-tool-playwright`** - Playwright browser automation tool. Optional; requires Playwright CLI binary.
 - **`arcclaw-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
-- **`arcclaw-ui`** - Frontend (Node.js / React / Lit + Vite + TypeScript). No Java source; excluded from Maven build.
+- **`arcclaw-ui`** - Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build.
 - **`arcclaw-app`** - the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `arcclaw-app`**.
 
 The rule is: **kernel logic never imports application-layer code**. This makes `arcclaw-core` independently testable with zero Quarkus startup overhead.
@@ -194,12 +194,12 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 |---|---|---|---|
 | `coordinator` | Vishnu | Can use all tools | General tasks, delegation, scheduling |
 | `researcher` | Saraswati | Read-only tools only; never fabricates | External data retrieval, GitHub lookups |
-| `coder` | Brahma | Empty tool schema - no tools | Pure code generation, math, logic |
+| `coder` | Brahma | sandbox_exec + check_list + add_mcp_server | Code execution, engineering tasks |
 | `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
 | `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
 
-The `IntentDetectorService` uses `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
+The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
 ---
 

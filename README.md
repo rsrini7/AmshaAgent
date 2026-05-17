@@ -494,6 +494,7 @@ arcclaw-persistence-api/      ← Hexagonal architecture port interfaces
 │   ├── CheckpointLifecyclePort Checkpoint lifecycle (reap, GC)
 │   ├── ChatMemoryStorePort     Chat memory persistence
 │   ├── CronStorePort           Cron job persistence
+│   ├── CronRunStorePort        Cron execution history persistence
 │   ├── SecretStorePort         Encrypted secret storage
 │   ├── SkillStorePort          Skill CRUD
 │   ├── AuditEventStorePort     Audit event append + query
@@ -506,6 +507,7 @@ arcclaw-persistence-api/      ← Hexagonal architecture port interfaces
 arcclaw-persistence-common/   ← Shared JPA entities (used by all persistence adapters)
 │   ├── AgentCheckpointEntity   JPA entity for agent checkpoints
 │   ├── AgentCronEntity         JPA entity for cron jobs
+│   ├── CronRunEntity           JPA entity for cron execution history
 │   ├── AuditEventEntity        JPA entity for audit events
 │   ├── ReasoningStepEntity     JPA entity for reasoning steps
 │   └── Converters              CronStatusConverter, InstantToTextConverter
@@ -528,7 +530,7 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           OmlxProviderFactory
 │   ├── agent/role/             AgentRoleEnum, RoleDefinition, RoleRegistry, ToolCapability
 │   ├── api/                    AgentResource, AgentSessionService, AuditResource,
-│   │                           SystemInfoResource, ToolRegistryResource,
+│   │                           CronResource, SystemInfoResource, ToolRegistryResource,
 │   │                           GlobalExceptionMapper
 │   ├── api/dto/                ActiveAgentResponse (UI DTO: count + AgentSummary list)
 │   ├── audit/                  AuditService, AuditObserver, AuditHashUtil, AuditEvent,
@@ -670,7 +672,7 @@ arcclaw-deployment/           ← Build-time Quarkus extension (@BuildStep proce
 │   ├── RagResourcesBuildStep   RAG resource registration
 │   └── ArcClawDeploymentInfo   Deployment metadata
 │
-arcclaw-ui/                   ← Frontend (Node.js / React) - no Java source
+arcclaw-ui/                   ← Frontend (Lit 3.x Web Components + TypeScript + Vite) - no Java source
 │
 arcclaw-app/                  ← Application entrypoint and wiring
     ├── ArcClawCli              Quarkus + Picocli entry point
@@ -722,7 +724,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-telegram` | The Telegram channel is a full Maven module with its own test suite. It can be excluded from the build for deployments that don't need Telegram. |
 | `arcclaw-tool-playwright` | Playwright browser automation tool. Optional; requires Playwright CLI binary. |
 | `arcclaw-deployment` | The `@WorkspaceScoped` CDI scope, `AgentFunctionProcessor`, `RestResourceBuildStep`, and RAG resource steps are registered at Quarkus build time via `@BuildStep`. Separating this ensures the scope works correctly in native image compilation. |
-| `arcclaw-ui` | Frontend (Node.js / React). No Java source; excluded from Maven build. |
+| `arcclaw-ui` | Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build. |
 | `arcclaw-app` | The only module that knows about external protocols (HTTP, Telegram, CLI). Keeps protocol concerns out of the kernel. |
 
 ### `@WorkspaceScoped` - Custom CDI Scope
@@ -876,6 +878,8 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `BraveWebSearchTool` | `brave_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time web search via Brave Search API |
 | `SerperWebSearchTool` | `serper_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time Google search results via Serper API |
 | `PlaywrightCliTool` | `browser_navigate` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Headless browser automation via Playwright CLI |
+| `SmartWebFetchTool` | `web_fetch` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Fetch a URL and return content as plain text; for JS-heavy sites, use `browser_navigate` instead |
+| `AgentTaskTool` | `agent_task` | `READ_FS` | ❌ In-memory | coordinator, synthesizer, researcher | Create, list, update, and transition markdown-based task files with YAML frontmatter |
 | `ExternalMcpToolAdapter` | *(dynamic name)* | Varies | ❌ In-process | *(dynamic)* | Wraps tools from connected external MCP servers; registered dynamically via `DynamicToolCapabilityRegistry` |
 
 ### Tool Governance - Autonomy Levels
@@ -1503,4 +1507,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests passing · 17 modules · 13 tools · 16 reflexes · 10 LLM providers*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests passing · 17 modules · 15 tools · 16 reflexes · 10 LLM providers · 19 UI components*

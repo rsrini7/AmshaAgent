@@ -1186,6 +1186,54 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
 
 ---
 
+### 11.8 Cron Run History API
+
+Each cron execution is tracked in the `agent_cron_run` table. Use the REST API to query execution history:
+
+```bash
+# Get execution history for a cron job (paginated)
+curl -s "http://localhost:8080/api/v1/cron/$CRON_ID/runs?page=0&size=20" \
+  -H "X-ArcClaw-API-Key: key-internal-changeme" | jq .
+```
+
+**Response schema:**
+```json
+{
+  "runs": [
+    {
+      "id": "...",
+      "cronId": "...",
+      "sessionId": "...",
+      "status": "SUCCESS|FAILURE",
+      "startedAt": "2026-05-17T10:00:00Z",
+      "finishedAt": "2026-05-17T10:00:05Z",
+      "errorReason": null,
+      "iterationsUsed": 3,
+      "inputTokens": 1500,
+      "outputTokens": 800,
+      "usdCost": 0.00023
+    }
+  ],
+  "total": 42,
+  "page": 0,
+  "size": 20
+}
+```
+
+**Other cron REST endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/cron` | List cron jobs (paginated, filterable by `?status=`) |
+| `GET` | `/api/v1/cron/{id}` | Get single cron job |
+| `DELETE` | `/api/v1/cron/{id}` | Delete a cron job |
+| `POST` | `/api/v1/cron/{id}/pause` | Pause a cron job |
+| `POST` | `/api/v1/cron/{id}/resume` | Resume a paused cron job |
+| `POST` | `/api/v1/cron/{id}/trigger` | Force-fire immediately |
+| `GET` | `/api/v1/cron/{id}/runs` | Execution history (above) |
+
+---
+
 ## 12. PII Redaction Tests
 
 `PiiScanReflex` runs in the sanitize pass (pass 1) of `ReflexRegistry` on every non-command, non-`store` message. The LLM never receives raw PII.
@@ -2023,4 +2071,4 @@ For `ARCCLAW_VAULT_PEPPER` and `ARCCLAW_AUDIT_HMAC_KEY`, use stable 32+ characte
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests · 17 modules*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests · 17 modules · 15 tools · 10 LLM providers · Cron run history API*
