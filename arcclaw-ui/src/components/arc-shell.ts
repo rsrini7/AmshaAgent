@@ -344,7 +344,7 @@ export class ArcShell extends LitElement {
       ` : nothing}
 
       ${this._route === '#/scheduler' ? html`
-        <arc-scheduler-panel class="content-area"></arc-scheduler-panel>
+        <arc-scheduler-panel class="content-area" .apiKey="${this._apiKey}"></arc-scheduler-panel>
       ` : nothing}
 
       ${this._route === '#/audit' ? html`

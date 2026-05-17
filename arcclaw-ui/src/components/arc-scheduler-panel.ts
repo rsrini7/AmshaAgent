@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 interface CronJob {
   id: string;
@@ -52,6 +52,8 @@ export class ArcSchedulerPanel extends LitElement {
   @state() private loading = false;
   @state() private statusFilter = '';
   @state() private selectedCron: CronJob | null = null;
+  @property({ type: String }) apiKey = '';
+
   @state() private cronRuns: CronRun[] = [];
   @state() private cronRunsTotal = 0;
   @state() private loadingRuns = false;
@@ -145,7 +147,7 @@ export class ArcSchedulerPanel extends LitElement {
       const params = new URLSearchParams({ page: String(this.page), size: '50' });
       if (this.statusFilter) params.set('status', this.statusFilter);
       const r = await fetch(`/api/v1/cron?${params}`, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: this._headers
       });
       if (!r.ok) throw new Error(`Failed to load crons: ${r.status}`);
       const data: CronListResponse = await r.json();
@@ -158,12 +160,18 @@ export class ArcSchedulerPanel extends LitElement {
     }
   }
 
+  private get _headers(): Record<string, string> {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.apiKey) h['X-ARCCLAW-API-KEY'] = this.apiKey;
+    return h;
+  }
+
   private async deleteCron(id: string) {
     if (!confirm('Delete this scheduled job?')) return;
     try {
       const r = await fetch(`/api/v1/cron/${id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
+        headers: this._headers
       });
       if (!r.ok) throw new Error('Delete failed');
       this.selectedCron = null;
@@ -177,7 +185,7 @@ export class ArcSchedulerPanel extends LitElement {
     try {
       const r = await fetch(`/api/v1/cron/${id}/trigger`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: this._headers
       });
       if (!r.ok) throw new Error('Trigger failed');
       this.loadCrons();
@@ -190,7 +198,7 @@ export class ArcSchedulerPanel extends LitElement {
     try {
       const r = await fetch(`/api/v1/cron/${id}/pause`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: this._headers
       });
       if (!r.ok) throw new Error('Pause failed');
       this.loadCrons();
@@ -203,7 +211,7 @@ export class ArcSchedulerPanel extends LitElement {
     try {
       const r = await fetch(`/api/v1/cron/${id}/resume`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: this._headers
       });
       if (!r.ok) throw new Error('Resume failed');
       this.loadCrons();
@@ -216,7 +224,7 @@ export class ArcSchedulerPanel extends LitElement {
     this.loadingRuns = true;
     try {
       const r = await fetch(`/api/v1/cron/${cronId}/runs?size=20`, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: this._headers
       });
       if (!r.ok) throw new Error(`Failed to load runs: ${r.status}`);
       const data = await r.json();
