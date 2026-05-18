@@ -326,7 +326,7 @@ smallrye:
 arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
   delegation:
-    max-depth: ${ARCCLAW_DELEGATION_MAX_DEPTH:2}
+    max-depth: ${ARCCLAW_DELEGATION_MAX_DEPTH:3}
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}

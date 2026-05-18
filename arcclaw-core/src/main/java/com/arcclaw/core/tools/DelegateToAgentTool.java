@@ -48,8 +48,8 @@ public class DelegateToAgentTool implements AgentTool {
     @Inject Instance<AgentLoop> agentLoop;
     @Inject CheckpointCrudPort checkpointCrud;
 
-    @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
-    int maxDelegationDepth = 2;
+    @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "3")
+    int maxDelegationDepth = 3;
 
     @Override
     public String name() {
