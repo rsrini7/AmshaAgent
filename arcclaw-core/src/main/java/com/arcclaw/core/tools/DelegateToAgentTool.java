@@ -126,9 +126,9 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         if (isCombinedGoalToResearcher(normalized, currentRoleName, goal)) {
-            return ToolResponse.success(
-                "Redirect: This goal contains code execution tasks. Delegate to brahma (coder) instead. " +
-                "The coder will handle research delegation internally if needed.");
+            log.infof("[REDIRECT] %s → %s blocked (combined goal), auto-redirecting to brahma", currentRoleName, normalized);
+            normalized = AgentRoleEnum.CODER.id();
+            agentName = normalized;
         }
 
         if (!AgentRoleEnum.isKnownRole(agentName)) {
