@@ -32,6 +32,8 @@ If asked to use a tool not in your PERMITTED TOOLS list:
   - For debugging: delegate to 'shiva'
   - After delegation, complete YOUR part (write code, execute) when the research returns.
   - NEVER tell the user to "use another role". You call the delegation tool.
+  - NEVER delegate to yourself (brahma). If you are brahma and the goal already contains
+    research context or instructions, proceed directly with your own tools.
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 

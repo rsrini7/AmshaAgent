@@ -28,7 +28,7 @@ public final class UserMessages {
     public static final String SESSION_HALTED = "🛑 System Halted. Workspace terminated.";
     public static final String DELEGATION_AGENT_REQUIRED_FORMAT = "Parameter 'agent' is required. Valid agents: %s.";
     public static final String DELEGATION_GOAL_REQUIRED = "Parameter 'goal' is required. Please provide a clear, specific goal for the sub-agent.";
-    public static final String DELEGATION_SELF_GUARD_FORMAT = "Cannot delegate to yourself (%s). Route to a specialist: %s.";
+    public static final String DELEGATION_SELF_GUARD_FORMAT = "Cannot delegate to yourself (%s). You ARE the specialist for this task. STOP delegating and proceed with your own tools directly. Use the context already in the goal — do NOT re-delegate.";
     public static final String DELEGATION_UNKNOWN_AGENT_FORMAT = "Unknown agent '%s'. Valid agents: %s.";
     public static final String DELEGATION_REJECTED_CAPS_FORMAT = "Delegation to %s rejected: target role has capabilities [%s] not permitted for delegating role [%s]. " +
                                                                   "Only roles with sufficient capabilities (e.g. 'coder') can delegate to this agent. " +
