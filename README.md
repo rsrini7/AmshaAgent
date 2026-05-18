@@ -37,7 +37,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation, with namespace and direct-execution fallbacks
 - **Web search tools** - Brave Search and Serper API integration for real-time information retrieval
-- **Code execution** - `sandbox_exec` tool for running Python, Java, Node.js, and Go in isolated containers
+- **Code execution** - `sandbox_exec` tool for running Python, Java, Node.js, and Go in isolated containers, with auto-heal: sandbox failures are automatically routed to Shiva (debugger) for self-correction before surfacing errors
 - **AES-256-GCM-SIV secret vault** with Argon2id key derivation - secrets are never stored in plaintext
 - **Tamper-evident HMAC audit chain** - every agent action is logged as an append-only, verifiable record
 - **Autonomous cron scheduler** - agents can schedule future tasks using a 5-field UNIX cron expression
@@ -67,7 +67,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
-| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability |
+| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability; sandbox failures auto-delegated to Shiva via `ExecutionFailureRecoveryService` |
 
 - **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files - never as process arguments.
 - **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
@@ -409,7 +409,7 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 | `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
 | `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
 | `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox |
-| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification |
+| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification. Auto-heal target: sandbox_exec failures are delegated to Shiva for self-correction |
 | `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `delegate_to_agent` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
 | `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
 
@@ -427,7 +427,7 @@ graph LR
         A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate_to_agent"]:::coordinator
         A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code · + delegate"]:::researcher
         A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist + MCP + delegate"]:::coder
-        A4["🔴 debugger - Shiva<br/>Contrarian · Finds blind spots · MCP + delegate"]:::debugger
+        A4["🔴 debugger - Shiva<br/>Contrarian · Finds blind spots · Auto-heal · MCP + delegate"]:::debugger
         A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code · + delegate"]:::architect
         A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist"]:::synthesizer
     end
@@ -876,7 +876,7 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `IngestDocumentTool` | `ingest_document` | `WRITE_MEMORY` | ❌ In-memory | coordinator, synthesizer | Ingest a document into the global or session knowledge base for future vector retrieval |
 | `DelegateToAgentTool` | `delegate_to_agent` | `DELEGATE_AUTONOMOUS` | ❌ In-process | all 6 roles | Spawns a specialist sub-agent loop; non-coordinators are restricted from delegating to roles they lack |
 | `McpSelfRegisterTool` | `add_mcp_server` | `NETWORK_OUTBOUND` | ❌ In-memory | coder, debugger | Dynamically register a new MCP server at runtime; tools become available immediately |
-| `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Go, Node, Bash); falls back to direct execution with `allow-insecure-fallback` |
+| `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Go, Node, Bash); falls back to direct execution with `allow-insecure-fallback`. Failures auto-heal via `ExecutionFailureRecoveryService` → Shiva debugger |
 | `CheckListTool` | `check_list` | `READ_FS` | ❌ In-memory | coder, debugger | Manage task checklist progress tracking |
 | `BraveWebSearchTool` | `brave_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time web search via Brave Search API |
 | `SerperWebSearchTool` | `serper_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time Google search results via Serper API |
@@ -1424,6 +1424,8 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_AGENT_MAX_ITERATIONS` | no | `5` | Default max ReAct loop iterations |
 | `ARCCLAW_AGENT_DEFAULT_TIMEZONE` | no | `Asia/Kolkata` | Default timezone for agent operations |
 | `ARCCLAW_AGENT_MAX_RATELIMIT_RETRIES` | no | `3` | Max retries on LLM rate-limit errors in the agent loop |
+| `ARCCLAW_AGENT_AUTO_HEAL_ENABLED` | no | `true` | Enable auto-heal: sandbox_exec failures are delegated to Shiva (debugger) for self-correction |
+| `ARCCLAW_AGENT_AUTO_HEAL_MAX_ATTEMPTS` | no | `2` | Max Shiva delegation attempts per sandbox_exec failure |
 | `ARCCLAW_DELEGATION_MAX_DEPTH` | no | `2` | Max agent delegation depth |
 
 ### Data & Storage

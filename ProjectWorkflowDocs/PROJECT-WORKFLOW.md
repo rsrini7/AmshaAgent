@@ -208,6 +208,7 @@ If `context.isResumeSignal()` and checkpoint is `AWAITING_APPROVAL`:
 - **Denial** → mark checkpoint `FAILED`, set fail reason, return `AgentResult.finished("Tool execution was denied")`.
 - **Single-tool approval** → `WorkspaceContext.runWithFullAutonomy()` → `toolRegistry.invokeTool(toolName, params)`; append observation to history; reset checkpoint to `IN_PROGRESS`; return `null` (continue main loop).
 - **Parallel batch approval** → `resumeParallelBatch()`: reads `batchToolDecisions` map; skips DENIED tools (fills "User denied" observation); re-invokes APPROVED tools or restores pre-executed results from checkpoint JSON; aggregates into `CompletedBatch` step; continues.
+- **Auto-heal on resume failure** → `ResumeStrategyDispatcher` intercepts `sandbox_exec` failures for the coder role on the resume path. If `ExecutionFailureRecoveryService.shouldAttemptRecovery()` returns true, it delegates to Shiva (debugger) in an isolated `:heal:` sub-session, extracts fixed code from Shiva's response, and re-executes the tool. On success, the loop continues via `runFinishPass()`. On failure, returns `AgentResult.failed()`.
 
 ### 6.4 Fast-Path: `delegate_to_agent` Finish
 
@@ -278,6 +279,29 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token b
    - && autonomy is NOT FULL
          → GuardDecision.PauseForApproval(toolName, paramsJson)
 5. Default → GuardDecision.Allow
+```
+
+### Step C.1: ToolStepHandler - Auto-Heal Hook
+
+After tool execution, `ToolStepHandler` intercepts `sandbox_exec` failures for the coder role before returning the error to the LLM:
+
+```
+sandbox_exec → ToolFailure (coder role only)
+  → ExecutionFailureRecoveryService.shouldAttemptRecovery()
+     - auto-heal enabled (arcclaw.agent.auto-heal.enabled=true)
+     - agentRole == CODER
+     - toolName == sandbox_exec
+     - NOT an infra failure
+  → attemptRecovery(sessionId, userId, chatId, originalCode, language, errorOutput, ...)
+     - Spawns isolated Shiva (debugger) sub-session with :heal: sentinel
+     - Max attempts configurable (default 2)
+     - Accumulates errors across attempts
+  → RecoveryResult.success(fixedCode)
+     - Re-executes sandbox_exec with fixed code
+     - On success: continues loop with new observation
+     - On failure: falls through to normal error path
+  → RecoveryResult.failure()
+     - Falls through to normal error path
 ```
 
 ### Step D: ToolStepHandler - Parallel Batch Execution
@@ -579,6 +603,31 @@ Coordinator: THINK → ACTION: delegate_to_agent(agent="brahma", goal="Write uni
 
 `Dattatreya` (synthesizer) uses a structured output path via `SynthesisFunction` returning `SynthesisResult` (contributions from each sub-agent + `ConflictSummary` + `finalResolution`). Implemented via `StructuredOutputEngine` + `StructuredRetryLoop` with `PermissiveJsonExtractor`.
 
+### Auto-Heal: Shiva as Code Fixer
+
+`ExecutionFailureRecoveryService` automatically delegates sandbox execution failures to Shiva (debugger) for self-correction:
+
+```
+Brahma (coder) → sandbox_exec → FAIL
+  → ExecutionFailureRecoveryService intercepts (ToolStepHandler or ResumeStrategyDispatcher)
+  → Auto-delegate to Shiva with: original code + language + full error output
+  → Shiva analyzes, fixes, returns corrected code in a single fenced code block
+  → RecoveryService extracts fixed code via regex (```lang\n...\n```)
+  → Re-executes sandbox_exec with fixed code
+  → On success: continues agent loop
+  → On failure after max attempts: returns error to user
+```
+
+**Configuration:**
+| Property | Default | Description |
+|---|---|---|
+| `arcclaw.agent.auto-heal.enabled` | `true` | Enable/disable auto-heal |
+| `arcclaw.agent.auto-heal.max-attempts` | `2` | Max Shiva delegation attempts per failure |
+
+**Session sentinel:** `HEAL_SESSION_SENTINEL` (`:heal:`) in `AgentSentinels` marks auto-heal sub-sessions. Format: `{parent_sid}:heal:{agentName}:{currentTimeMillis}:a{attempt}`.
+
+**Debugger persona:** `debugger.txt` includes `AUTO-HEAL MODE` instructions — Shiva returns only a single fenced code block with the corrected code, no explanations.
+
 ---
 
 ## Phase 15: LLM Provider Architecture
@@ -587,7 +636,7 @@ Coordinator: THINK → ACTION: delegate_to_agent(agent="brahma", goal="Write uni
 
 | Provider ID | Implementation | Notes |
 |---|---|---|
-| `groq` | `GroqProviderFactory` | OpenAI-compatible API at `api.groq.com`; default `llama-3.3-70b-versatile` |
+| `groq` | `GroqProviderFactory` | OpenAI-compatible API at `api.groq.com`; default `meta-llama/llama-4-scout-17b-16e-instruct` |
 | `openai` | `OpenAiProviderFactory` | Official OpenAI API |
 | `ollama` | `OllamaProviderFactory` | Local inference; default `llama3.2` |
 | `openrouter` | `OpenRouterProviderFactory` | Unified multi-model API |
@@ -809,6 +858,9 @@ External Input
   │              → AwaitingApproval result ← loop exits             │
   │    → ToolInvoker → AgentTool.execute(params)                    │
   │         └─ ToolObservationSanitizer (PII / injection / truncate)│
+  │    → Auto-Heal (sandbox_exec failure, coder role)               │
+  │         └─ ExecutionFailureRecoveryService → Shiva :heal: sub   │
+  │            → re-exec with fixed code → continue or fall through │
   │    → ChatMemoryWriter.saveStep()                                 │
   └─────────────────────────────────────────────────────────────────┘
          │
