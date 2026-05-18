@@ -1,5 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -200,11 +202,30 @@ public class PersonaEscalationService {
                                         String errorOutput, String originalGoal,
                                         String originalCode, String language,
                                         String channelType, String channelPlatformId, int depth) {
+        return attemptEscalation(outerSessionId, userId, chatId, sourceRole, targetRole,
+                errorOutput, originalGoal, originalCode, language, channelType, channelPlatformId, depth, new ArrayList<>());
+    }
+
+    EscalationResult attemptEscalation(String outerSessionId, String userId, String chatId,
+                                        String sourceRole, String targetRole,
+                                        String errorOutput, String originalGoal,
+                                        String originalCode, String language,
+                                        String channelType, String channelPlatformId, int depth,
+                                        List<String> escalationChain) {
 
         if (depth > maxEscalationDepth) {
             log.warnf("[PersonaEscalation] Max depth %d reached for session %s, aborting",
                     maxEscalationDepth, outerSessionId);
             return EscalationResult.failure("Max escalation depth reached");
+        }
+
+        // Circuit breaker: detect A→B→A→B ping-pong
+        String pair = sourceRole + "->" + targetRole;
+        escalationChain.add(pair);
+        if (isPingPong(escalationChain)) {
+            log.warnf("[PersonaEscalation] Ping-pong detected: %s — aborting escalation for session %s",
+                    escalationChain, outerSessionId);
+            return EscalationResult.failure("Escalation ping-pong detected: " + escalationChain);
         }
 
         AgentRoleEnum targetEnum;
@@ -247,7 +268,8 @@ public class PersonaEscalationService {
                 if (secondaryTarget != null && !secondaryTarget.equals(sourceRole)) {
                     log.infof("[PersonaEscalation] %s needs further escalation to %s", targetRole, secondaryTarget);
                     return attemptEscalation(outerSessionId, userId, chatId, targetRole, secondaryTarget,
-                            f.answer(), escalationGoal, originalCode, language, channelType, channelPlatformId, depth + 1);
+                            f.answer(), escalationGoal, originalCode, language, channelType, channelPlatformId,
+                            depth + 1, escalationChain);
                 }
             }
 
@@ -328,6 +350,19 @@ public class PersonaEscalationService {
         if (text == null) return "";
         if (text.length() <= maxLen) return text;
         return text.substring(0, maxLen) + "\n... [truncated]";
+    }
+
+    /**
+     * Detects A→B→A→B ping-pong patterns in the escalation chain.
+     * Returns true if the last 4 entries form a repeating pair.
+     */
+    private boolean isPingPong(List<String> chain) {
+        if (chain.size() < 4) return false;
+        String a = chain.get(chain.size() - 4);
+        String b = chain.get(chain.size() - 3);
+        String c = chain.get(chain.size() - 2);
+        String d = chain.get(chain.size() - 1);
+        return a.equals(c) && b.equals(d);
     }
 
     String formatAgentResultError(AgentResult result) {

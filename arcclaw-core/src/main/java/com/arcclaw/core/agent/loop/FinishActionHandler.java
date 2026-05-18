@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
@@ -230,7 +231,7 @@ public class FinishActionHandler {
         // Case 1: Refusal + research goal → inject search
         if (isRefusal && AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
             String searchTool = findSearchTool(availableTools);
-            if (searchTool != null) {
+            if (searchTool != null && isToolPermitted(context.agentRole(), searchTool)) {
                 log.infof("TOOL-INJECT session %s: agent finished without searching, injecting %s", sessionId, searchTool);
                 Map<String, Object> args = new HashMap<>();
                 args.put("query", goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
@@ -242,7 +243,7 @@ public class FinishActionHandler {
 
         // Case 2: Execution goal + no code in answer + sandbox available → retry with correction
         if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
-                && availableTools.contains(ToolCapability.SANDBOX_EXEC.toolName())
+                && isToolPermitted(context.agentRole(), ToolCapability.SANDBOX_EXEC.toolName())
                 && !answer.contains("```")) {
             log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
             return new FinishOutcome.Correction(
@@ -265,6 +266,12 @@ public class FinishActionHandler {
             if (availableTools.contains(name)) return name;
         }
         return null;
+    }
+
+    private boolean isToolPermitted(String agentRole, String toolName) {
+        var role = AgentRoleEnum.fromString(agentRole);
+        return role.definition().capabilities().stream()
+                .anyMatch(cap -> cap.toolName().equals(toolName));
     }
 
 }

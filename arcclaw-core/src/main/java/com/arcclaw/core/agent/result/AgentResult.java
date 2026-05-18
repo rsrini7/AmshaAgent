@@ -38,7 +38,8 @@ public sealed interface AgentResult
         SCHEMA_ERROR,
         USER_DENIED,
         RATE_LIMIT,
-        SECURITY_POLICY
+        SECURITY_POLICY,
+        USER_ABORT
     }
 
     @TemplateData

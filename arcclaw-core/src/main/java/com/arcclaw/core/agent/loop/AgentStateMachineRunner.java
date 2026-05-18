@@ -15,8 +15,10 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
@@ -185,6 +187,17 @@ public class AgentStateMachineRunner {
             }
 
             while (iteration < context.maxIterations() || (iteration == context.maxIterations() && context.isForceFinishRetry())) {
+                // Halt check — session was terminated by /halt command
+                if (WorkspaceManager.isSessionHalted(context.sessionId())) {
+                    log.warnf("Session %s halted — stopping agent loop at iteration %d", context.sessionId(), iteration);
+                    return AgentResult.failed("Session halted by user", AgentResult.FailureCategory.USER_ABORT, List.copyOf(history));
+                }
+                // Global iteration budget check across all nested state machines
+                if (!WorkspaceContext.incrementAndCheckGlobalIterations()) {
+                    log.warnf("Global iteration budget (%d) exceeded for session %s — terminating",
+                            WorkspaceContext.DEFAULT_GLOBAL_MAX_ITERATIONS, context.sessionId());
+                    return AgentResult.loopExceeded(iteration, List.copyOf(history));
+                }
                 iteration++;
                 IterationResult iterRes = processSingleIteration(context, engine, history, iteration, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount, transientError);
 

@@ -119,7 +119,7 @@ public class InfiniteLoopChatModel implements ChatModel {
                     if (maxLatencyMs > 0 && elapsedMs > maxLatencyMs) {
                         log.warnf("InfiniteLoop: Slot [%s] responded in %dms (threshold %dms), treating as slow failure.",
                                 slot.name(), elapsedMs, maxLatencyMs);
-                        h.recordTransientFailure(cooldownTransientSeconds);
+                        h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
                         continue;
                     }
                     h.recordSuccess();
@@ -137,9 +137,14 @@ public class InfiniteLoopChatModel implements ChatModel {
                         log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s",
                                 slot.name(), classified.getMessage());
                     } else if (classified instanceof LlmServiceUnavailableException) {
-                        h.recordTransientFailure(cooldownTransientSeconds);
-                        log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
-                                slot.name(), cooldownTransientSeconds, classified.getMessage());
+                        h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+                        if (h.isPermanentlyDisabled()) {
+                            log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
+                                    slot.name(), MAX_CONSECUTIVE_TRANSIENT_FAILURES, classified.getMessage());
+                        } else {
+                            log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
+                                    slot.name(), h.cooldownRemainingMs() / 1000, classified.getMessage());
+                        }
                     } else {
                         h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
                         log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
@@ -177,15 +182,19 @@ public class InfiniteLoopChatModel implements ChatModel {
         }
     }
 
+    private static final int MAX_CONSECUTIVE_TRANSIENT_FAILURES = 3;
+
     private static class SlotHealth {
         private volatile long cooldownUntilEpochMs;
         private volatile int consecutiveFailures;
         private volatile int qualityFailures;
+        private volatile int consecutiveTransientFailures;
         private volatile boolean permanentlyDisabled;
 
         synchronized void recordSuccess() {
             consecutiveFailures = 0;
             qualityFailures = 0;
+            consecutiveTransientFailures = 0;
             cooldownUntilEpochMs = 0;
         }
 
@@ -209,9 +218,19 @@ public class InfiniteLoopChatModel implements ChatModel {
             cooldownUntilEpochMs = 0;
         }
 
-        synchronized void recordTransientFailure(int transientSeconds) {
+        synchronized void recordTransientFailure(int transientSeconds, int baseSeconds, int maxSeconds) {
             consecutiveFailures++;
-            cooldownUntilEpochMs = System.currentTimeMillis() + (long) transientSeconds * 1000;
+            consecutiveTransientFailures++;
+            if (consecutiveTransientFailures >= MAX_CONSECUTIVE_TRANSIENT_FAILURES) {
+                permanentlyDisabled = true;
+                cooldownUntilEpochMs = 0;
+                return;
+            }
+            // Exponential backoff: base * 2^(failures-1), capped at max
+            long delay = (long) baseSeconds * (1L << Math.min(consecutiveTransientFailures - 1, 30));
+            if (delay > maxSeconds) delay = maxSeconds;
+            if (delay < transientSeconds) delay = transientSeconds; // at least transientSeconds
+            cooldownUntilEpochMs = System.currentTimeMillis() + delay * 1000;
         }
 
         synchronized void recordUnknownFailure(int baseSeconds, int maxSeconds) {

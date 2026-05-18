@@ -84,6 +84,26 @@ public class ExecutionFailureRecoveryService {
         }
     }
 
+    // Filesystem/environment errors that Shiva cannot fix (cross-platform: Linux, macOS, Windows)
+    private static final Pattern NON_CODE_ERRORS = Pattern.compile(
+            // Linux / POSIX
+            "File name too long|ENAMETOOLONG|" +
+            "Permission denied|EACCES|Operation not permitted|EPERM|" +
+            "No space left on device|ENOSPC|Read-only file system|EROFS|" +
+            "Connection refused|ECONNREFUSED|" +
+            "Cannot allocate memory|ENOMEM|Too many open files|EMFILE|ENFILE|" +
+            "No such file or directory|ENOENT|" +
+            // macOS specific
+            "Operation not supported|" +
+            // Windows
+            "The filename or extension is too long|" +
+            "Access is denied|Access denied|" +
+            "There is not enough space on the disk|" +
+            "The system cannot find the path specified|" +
+            "The file is being used by another process|" +
+            "The directory is not empty",
+            Pattern.CASE_INSENSITIVE);
+
     /**
      * Checks if auto-heal should be attempted for this failure.
      */
@@ -98,7 +118,14 @@ public class ExecutionFailureRecoveryService {
             return false;
         }
         if (response instanceof ToolResponse.ToolFailure failure) {
-            return !failure.isInfraFailure();
+            if (failure.isInfraFailure()) return false;
+            // Skip non-code errors — Shiva can't fix filesystem/environment issues
+            String output = failure.output();
+            if (output != null && NON_CODE_ERRORS.matcher(output).find()) {
+                log.infof("[AutoHeal] Skipping recovery for non-code error: %s", output);
+                return false;
+            }
+            return true;
         }
         return false;
     }

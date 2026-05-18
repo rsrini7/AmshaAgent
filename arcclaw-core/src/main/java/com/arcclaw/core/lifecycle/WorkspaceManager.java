@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -39,6 +40,29 @@ public class WorkspaceManager {
 
     private static final Logger log = Logger.getLogger(WorkspaceManager.class);
 
+    /** TTL for halted session entries — auto-evicted after this duration. */
+    private static final long HALTED_SESSION_TTL_MS = 5 * 60 * 1000L; // 5 minutes
+
+    /** Tracks sessions that have been halted — agent loops check this before each iteration. */
+    private static final ConcurrentHashMap<String, Long> HALTED_SESSIONS = new ConcurrentHashMap<>();
+
+    /** Returns true if the session has been halted and the entry hasn't expired. */
+    public static boolean isSessionHalted(String sessionId) {
+        if (sessionId == null) return false;
+        Long haltedAt = HALTED_SESSIONS.get(sessionId);
+        if (haltedAt == null) return false;
+        if (System.currentTimeMillis() - haltedAt > HALTED_SESSION_TTL_MS) {
+            HALTED_SESSIONS.remove(sessionId);
+            return false;
+        }
+        return true;
+    }
+
+    /** Clears the halted flag for a session (used on fresh start). */
+    public static void clearHalted(String sessionId) {
+        HALTED_SESSIONS.remove(sessionId);
+    }
+
     @Inject WorkspaceManager self;
     @Inject GovernanceStrategy governanceLayer;
     @Inject ChatMemoryStore chatMemoryStore;
@@ -61,6 +85,10 @@ public class WorkspaceManager {
      * Terminate a workspace session completely.
      */
     public void terminateSession(String sessionId) {
+        // Mark session as halted FIRST — agent loop will check this before each iteration
+        HALTED_SESSIONS.put(sessionId, System.currentTimeMillis());
+        log.infof("[Halt] Session %s marked as halted — agent loop will stop at next iteration check", sessionId);
+
         // F12: Safety guard to prevent termination during an active resume.
         // If the session is currently resuming its batch (e.g., calling tools),
         // we must not delete the workspace yet.

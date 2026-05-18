@@ -53,6 +53,9 @@ public class ResetReflex implements AgentReflex {
         String trimmed = input.trim().toLowerCase();
         boolean isHardReset = trimmed.contains("hard") || trimmed.contains("clear all");
 
+        // 0. Clear halted flag — allows fresh start after /halt
+        WorkspaceManager.clearHalted(sessionId);
+
         // 1. Soft workspace reset - clears memory, workspace dir, CDI scope
         //    Does NOT remove heartbeat. Does NOT clear governance budget.
         workspaceManager.resetSessionState(sessionId);
