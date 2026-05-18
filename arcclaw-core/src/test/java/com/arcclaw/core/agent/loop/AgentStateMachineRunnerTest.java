@@ -123,7 +123,7 @@ class AgentStateMachineRunnerTest {
 
         EngineStepHandler engineStepHandler = new EngineStepHandler(governanceLayer, observers, agentStore, new ResponseRecoveryHintBuilder(), exceptionRouter, 4, 6, 15, 10);
 
-        ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor, new SimpleMeterRegistry(), mock(ExecutionFailureRecoveryService.class));
+        ToolStepHandler toolStepHandler = new ToolStepHandler(toolRegistry, observers, guard, invoker, writer, dynamicToolLookup, checkpointManager, parallelExecutor, new SimpleMeterRegistry(), mock(ExecutionFailureRecoveryService.class), mock(PersonaEscalationService.class));
 
         StepDecisionRouter stepDecisionRouter = new StepDecisionRouter(finishActionHandler, toolStepHandler, writer, engineStepHandler);
 

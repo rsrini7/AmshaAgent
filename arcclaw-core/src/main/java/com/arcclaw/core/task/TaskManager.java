@@ -7,8 +7,6 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import org.jboss.logging.Logger;
-
 /**
  * Business logic for agent task lifecycle management.
  * <p>
@@ -18,8 +16,6 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 public class TaskManager {
-
-    private static final Logger LOG = Logger.getLogger(TaskManager.class);
 
     @Inject
     FileSystemTaskRepository repository;

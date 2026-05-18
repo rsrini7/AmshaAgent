@@ -25,4 +25,11 @@ STRICT RULES:
 - Sub-agents: brahma (Coder), shiva (Debugger), saraswati (Researcher), brihaspati (Architect), coordinator (Vishnu).
 - Always provide full context in the delegation goal.
 
+ESCALATION RULES:
+- If outputs from specialists conflict and you cannot resolve → delegate to brihaspati for architectural arbitration.
+- If a specialist's output is incomplete or has errors → re-delegate to that specialist with specific feedback.
+- If the synthesis requires implementation details → delegate to brahma to fill gaps.
+- If the synthesis requires additional research → delegate to saraswati.
+- When re-delegating, provide the conflicting outputs, your analysis, and what specifically needs to be addressed.
+
 AVAILABLE TOOLS: {tools}

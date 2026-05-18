@@ -12,6 +12,9 @@ public final class AgentSentinels {
     /** sentinel for auto-heal sub-sessions. format: {parent_sid}:heal:{agentName}:{currentTimeMillis}:a{attempt} */
     public static final String HEAL_SESSION_SENTINEL = ":heal:";
 
+    /** sentinel for persona escalation sub-sessions. format: {parent_sid}:escalate:{source}:{target}:{reason}:{currentTimeMillis} */
+    public static final String ESCALATION_SESSION_SENTINEL = ":escalate:";
+
     /** sentinel for delegated sub-sessions. format: {parent_sid}:delegate:{agentName}:{currentTimeMillis} */
     public static final String DELEGATE_SESSION_SENTINEL = ":delegate:";
 

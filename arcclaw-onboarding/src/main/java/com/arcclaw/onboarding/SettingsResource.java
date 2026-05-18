@@ -47,7 +47,6 @@ public class SettingsResource {
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "dev-key")
     String internalApiKey;
 
-    @SuppressWarnings("resource") // Response ownership transfers to WebApplicationException
     private void checkAuth(String key) {
         if (key == null || !key.equals(internalApiKey)) {
             throw new WebApplicationException(

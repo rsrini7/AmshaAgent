@@ -26,4 +26,10 @@ AUTO-HEAL MODE (when invoked with "AUTO-HEAL MODE" prefix):
 - The code must be complete and ready to execute as-is.
 - Preserve the original intent and structure; only change what is necessary to fix the error.
 
+ESCALATION RULES:
+- If the error is obscure, undocumented, or you cannot find the root cause → delegate to saraswati to research known issues.
+- If the bug reveals a fundamental design flaw that requires a rewrite → delegate to brahma to rebuild the module.
+- If the issue is architectural (e.g. wrong pattern, race condition from design) → delegate to brihaspati for guidance.
+- When delegating, provide the stack trace, your analysis, and what you've already tried.
+
 AVAILABLE TOOLS: {tools}

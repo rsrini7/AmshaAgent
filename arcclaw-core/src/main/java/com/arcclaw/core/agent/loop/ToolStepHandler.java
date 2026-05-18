@@ -67,6 +67,7 @@ public class ToolStepHandler {
     private final MeterRegistry meterRegistry;
     private final ToolResultProcessor resultProcessor;
     private final ExecutionFailureRecoveryService recoveryService;
+    private final PersonaEscalationService escalationService;
 
     @Inject
     public ToolStepHandler(ToolRegistry toolRegistry,
@@ -78,7 +79,8 @@ public class ToolStepHandler {
                            ApprovalCheckpointManager checkpointManager,
                            ParallelToolStepExecutor parallelExecutor,
                            MeterRegistry meterRegistry,
-                           ExecutionFailureRecoveryService recoveryService) {
+                           ExecutionFailureRecoveryService recoveryService,
+                           PersonaEscalationService escalationService) {
         this.toolRegistry = toolRegistry;
         this.observers = observers;
         this.guard = guard;
@@ -89,6 +91,7 @@ public class ToolStepHandler {
         this.meterRegistry = meterRegistry;
         this.resultProcessor = new ToolResultProcessor(writer);
         this.recoveryService = recoveryService;
+        this.escalationService = escalationService;
     }
 
     // ── Validation
@@ -247,16 +250,25 @@ public class ToolStepHandler {
                 ToolResponse retriedResponse = invokeToolWithParams(context, history, step, toolName, fixedParams);
 
                 if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure && !retryFailure.isInfraFailure()) {
-                    log.warnf("[AutoHeal] Re-execution also failed, falling through to error path");
-                    return handleToolFailureAfterHealAttempt(context, history, step, toolName, params,
-                            retryFailure, consecutiveFailures);
+                    log.warnf("[AutoHeal] Re-execution also failed, attempting persona escalation");
+                    response = attemptEscalationAfterHealFailure(context, step, toolName, params, failure, retryFailure, history);
+                } else {
+                    response = retriedResponse;
                 }
-
-                response = retriedResponse;
             } else {
-                log.warnf("[AutoHeal] Recovery failed: %s, falling through to error path", recovery.errorIfFailed());
-                return handleToolFailureAfterHealAttempt(context, history, step, toolName, params,
-                        failure, consecutiveFailures);
+                log.warnf("[AutoHeal] Recovery failed: %s, attempting persona escalation", recovery.errorIfFailed());
+                response = attemptEscalationAfterHealFailure(context, step, toolName, params, failure, failure, history);
+            }
+        }
+
+        // Persona escalation hook: intercept failures that match escalation patterns
+        if (response instanceof ToolResponse.ToolFailure failure
+                && escalationService.shouldAttemptEscalation(context.agentRole(), toolName, response)) {
+            String targetRole = escalationService.determineEscalationTarget(context.agentRole(), failure.output(), context.goal());
+            if (targetRole != null) {
+                log.infof("[PersonaEscalation] Detected escalation pattern for session %s, routing %s → %s",
+                        context.sessionId(), context.agentRole(), targetRole);
+                response = attemptEscalation(context, step, toolName, params, failure, targetRole, history);
             }
         }
 
@@ -405,23 +417,40 @@ public class ToolStepHandler {
         return ((InvokeResult.Responded) result).response();
     }
 
-    private StepDecision handleToolFailureAfterHealAttempt(AgentExecutionContext context,
-            List<ReasoningStep> history, ReasoningStep step,
-            String toolName, Map<String, Object> params,
-            ToolResponse.ToolFailure failure, int consecutiveFailures) {
-        history.add(step.withObservation(failure.output(), false));
-        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
-                step.withObservation(failure.output(), false)));
+    private ToolResponse attemptEscalationAfterHealFailure(AgentExecutionContext context,
+            ReasoningStep step, String toolName, Map<String, Object> params,
+            ToolResponse.ToolFailure originalFailure, ToolResponse.ToolFailure retryFailure,
+            List<ReasoningStep> history) {
+        String targetRole = escalationService.determineEscalationTarget(context.agentRole(),
+                retryFailure.output(), context.goal());
+        if (targetRole != null) {
+            log.infof("[PersonaEscalation] Auto-heal failed, escalating %s → %s for session %s",
+                    context.agentRole(), targetRole, context.sessionId());
+            return attemptEscalation(context, step, toolName, params, retryFailure, targetRole, history);
+        }
+        return retryFailure;
+    }
 
-        if (failure.isInfraFailure()) {
-            return StepDecision.terminal(AgentResult.failed(
-                    "⚠️ " + failure.output(),
-                    AgentResult.FailureCategory.SYSTEM_ERROR,
-                    List.copyOf(history)));
+    private ToolResponse attemptEscalation(AgentExecutionContext context,
+            ReasoningStep step, String toolName, Map<String, Object> params,
+            ToolResponse.ToolFailure failure, String targetRole, List<ReasoningStep> history) {
+        String originalCode = extractParam(params, "code");
+        String language = extractParam(params, "language");
+        String originalGoal = context.goal();
+
+        PersonaEscalationService.EscalationResult escalation = escalationService.attemptEscalation(
+                context.sessionId(), context.userId(), context.chatId(),
+                context.agentRole(), targetRole,
+                failure.output(), originalGoal, originalCode, language,
+                context.channelType(), context.channelPlatformId());
+
+        if (escalation.success()) {
+            log.infof("[PersonaEscalation] Escalation succeeded, returning result from %s", escalation.targetPersona());
+            return ToolResponse.success(escalation.result());
         }
 
-        return resultProcessor.resolveOutcome(context, toolName, params, failure, failure.output(),
-                step.withObservation(failure.output(), false), history, consecutiveFailures);
+        log.warnf("[PersonaEscalation] Escalation failed: %s, returning original failure", escalation.errorIfFailed());
+        return failure;
     }
 
     private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {

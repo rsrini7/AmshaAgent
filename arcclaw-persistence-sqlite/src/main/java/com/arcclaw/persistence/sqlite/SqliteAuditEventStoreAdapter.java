@@ -1,7 +1,6 @@
 package com.arcclaw.persistence.sqlite;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -129,7 +128,6 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
         StringBuilder jpql = new StringBuilder("SELECT a FROM AuditEvent a WHERE 1=1");
-        List<Object[]> params = new ArrayList<>();
 
         if (sessionId != null && !sessionId.isBlank()) {
             jpql.append(" AND a.sessionId = ?1");

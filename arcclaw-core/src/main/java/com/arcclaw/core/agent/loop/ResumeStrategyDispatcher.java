@@ -39,18 +39,21 @@ class ResumeStrategyDispatcher {
     private final ObjectMapper objectMapper;
     private final ReasoningEngine reasoningEngine;
     private final ExecutionFailureRecoveryService recoveryService;
+    private final PersonaEscalationService escalationService;
 
     ResumeStrategyDispatcher(
             StatefulAgentStore agentStore,
             ToolRegistry toolRegistry,
             ObjectMapper objectMapper,
             ReasoningEngine reasoningEngine,
-            ExecutionFailureRecoveryService recoveryService) {
+            ExecutionFailureRecoveryService recoveryService,
+            PersonaEscalationService escalationService) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
         this.reasoningEngine = reasoningEngine;
         this.recoveryService = recoveryService;
+        this.escalationService = escalationService;
     }
 
     AgentResult handle(AgentExecutionContext context,
@@ -179,6 +182,11 @@ class ResumeStrategyDispatcher {
                     if (healResult != null) {
                         return healResult;
                     }
+                    // Persona escalation hook for HITL resume path
+                    AgentResult escalationResult = tryEscalationOnResume(response, paramsJson, effectiveRole, toolName, sessionId, context, history, channelType, checkpoint, stateMachineRunner);
+                    if (escalationResult != null) {
+                        return escalationResult;
+                    }
                     String failMsg = response.output() != null ? response.output() : "Tool execution failed";
                     return AgentResult.failed(failMsg,
                             AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
@@ -259,7 +267,7 @@ class ResumeStrategyDispatcher {
                     AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
         }
 
-        if (retriedResponse instanceof ToolResponse.ToolSuccess success) {
+        if (retriedResponse instanceof ToolResponse.ToolSuccess _) {
             recordReasoningStep(toolName, fixedParamsJson, retriedResponse.output(), true, history, sessionId);
             completeInProgressCheckpoint(checkpoint);
             return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
@@ -268,6 +276,41 @@ class ResumeStrategyDispatcher {
             String failMsg = retryFailure.output() != null ? retryFailure.output() : "Tool execution failed after auto-heal";
             return AgentResult.failed(failMsg, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
         }
+        return null;
+    }
+
+    private AgentResult tryEscalationOnResume(ToolResponse response, String paramsJson, String effectiveRole, String toolName,
+            String sessionId, AgentExecutionContext context, List<ReasoningStep> history, String channelType,
+            AgentCheckpoint checkpoint, AgentStateMachineRunner stateMachineRunner) {
+        if (!(response instanceof ToolResponse.ToolFailure failure) || !escalationService.shouldAttemptEscalation(effectiveRole, toolName, response)) {
+            return null;
+        }
+
+        String targetRole = escalationService.determineEscalationTarget(effectiveRole, failure.output(), context.goal());
+        if (targetRole == null) {
+            return null;
+        }
+
+        log.infof("[PersonaEscalation-Resume] Detected escalation pattern for session %s, routing %s → %s",
+                sessionId, effectiveRole, targetRole);
+
+        String originalCode = extractParam(paramsJson, "code");
+        String language = extractParam(paramsJson, "language");
+
+        PersonaEscalationService.EscalationResult escalation = escalationService.attemptEscalation(
+                sessionId, context.userId(), context.chatId(),
+                effectiveRole, targetRole,
+                failure.output(), context.goal(), originalCode, language,
+                context.channelType(), context.channelPlatformId());
+
+        if (escalation.success()) {
+            log.infof("[PersonaEscalation-Resume] Escalation to %s succeeded for session %s", targetRole, sessionId);
+            recordReasoningStep("escalation:" + effectiveRole + "→" + targetRole, paramsJson, escalation.result(), true, history, sessionId);
+            completeInProgressCheckpoint(checkpoint);
+            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+        }
+
+        log.warnf("[PersonaEscalation-Resume] Escalation failed: %s, returning original failure", escalation.errorIfFailed());
         return null;
     }
 

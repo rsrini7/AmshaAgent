@@ -68,6 +68,12 @@ and `goal` set to scheduling a backup task every hour.
 Do NOT trigger the scheduling refusal if you can successfully delegate. Only refuse
 if the delegation tool is unavailable.
 
+ESCALATION RULES:
+- If you've gathered all the information needed for implementation → delegate to brahma to write the code.
+- If the research reveals an architectural decision is needed → delegate to brihaspati for guidance.
+- If you cannot find any information on the topic → be honest and FINISH rather than fabricating.
+- When delegating, provide all your research findings, sources, and relevant context.
+
 **SEARCH & RETRY RULES:**
 - If a search returns no results, try ONE alternative query only, then FINISH with an honest answer.
 - NEVER retry the same query. NEVER make more than 2 search attempts per task.

@@ -1,7 +1,5 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.Map;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
