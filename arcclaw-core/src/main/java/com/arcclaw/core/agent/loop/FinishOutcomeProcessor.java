@@ -1,15 +1,16 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.List;
-import java.util.regex.Pattern;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.routing.InfiniteLoopChatModel;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -66,7 +67,9 @@ public class FinishOutcomeProcessor {
     );
 
     private static final List<String> SEARCH_TOOL_NAMES = List.of(
-            "serper_web_search", "brave_web_search", "web_search", "search");
+            ToolCapability.WEB_SEARCH_SERPER.toolName(),
+            ToolCapability.WEB_SEARCH_BRAVE.toolName(),
+            "web_search", "search");
 
     private final AnswerGuardStrategy qualityGuard;
     private final CodeGenerationPolicy codePolicy;
@@ -369,7 +372,7 @@ public class FinishOutcomeProcessor {
         for (int i = history.size() - 1; i >= 0; i--) {
             ReasoningStep step = history.get(i);
             if (step instanceof ReasoningStep.ToolCallStep tc
-                    && "memory_search".equals(tc.action())
+                    && ToolCapability.MEMORY_SEARCH.toolName().equals(tc.action())
                     && Boolean.TRUE.equals(tc.success())
                     && tc.observation() != null
                     && !tc.observation().isBlank()) {
@@ -408,8 +411,10 @@ public class FinishOutcomeProcessor {
     }
 
     /**
-     * If the answer is a refusal and the goal suggests a tool should have been used,
-     * inject the appropriate tool call. Returns null if no injection is needed.
+     * If the agent finished without using the right tool, inject it.
+     * Handles two cases:
+     * 1. Refusal + research goal → inject search tool
+     * 2. Execution goal + no code in answer + sandbox available → inject sandbox_exec
      */
     private FinishActionHandler.FinishOutcome tryInjectOnRefusal(String answer, String goal,
                                                                   String sessionId, ReasoningStep step) {
@@ -417,14 +422,12 @@ public class FinishOutcomeProcessor {
             log.debugf("TOOL-INJECT skip: goal is null for session %s", sessionId);
             return null;
         }
-        if (!AgentSentinels.REFUSAL_PATTERN.matcher(answer).find()) {
-            log.debugf("TOOL-INJECT skip: no refusal pattern in answer for session %s", sessionId);
-            return null;
-        }
 
         String availableTools = String.join(",", toolRegistry.listTools());
+        boolean isRefusal = AgentSentinels.REFUSAL_PATTERN.matcher(answer).find();
 
-        if (AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
+        // Case 1: Refusal + research goal → inject search
+        if (isRefusal && AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
             String searchTool = findSearchTool(availableTools);
             if (searchTool != null) {
                 log.infof("TOOL-INJECT session %s: salvaged refusal detected, injecting %s", sessionId, searchTool);
@@ -435,6 +438,18 @@ public class FinishOutcomeProcessor {
                         step.withObservation("Injecting search tool — salvaged answer was a refusal"));
             }
         }
+
+        // Case 2: Execution goal + no code in answer + sandbox available → retry with correction
+        if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
+                && availableTools.contains(ToolCapability.SANDBOX_EXEC.toolName())
+                && !answer.contains("```")) {
+            log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
+            return new FinishActionHandler.FinishOutcome.Correction(
+                    step.withObservation("Agent finished without writing code for an execution goal"),
+                    "STOP. You MUST write a complete program and call sandbox_exec to execute it. " +
+                    "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
+        }
+
         return null;
     }
 }

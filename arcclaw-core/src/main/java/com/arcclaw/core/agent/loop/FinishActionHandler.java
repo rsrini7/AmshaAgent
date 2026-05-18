@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -210,24 +211,24 @@ public class FinishActionHandler {
     }
 
     /**
-     * If the agent finished with a refusal, but the goal suggests a tool should have been used,
-     * inject a synthetic tool call. This handles small models that refuse instead of using available tools.
+     * If the agent finished without using the right tool, inject it.
+     * Handles two cases:
+     * 1. Refusal + research goal → inject search tool
+     * 2. Execution goal + no code in answer + sandbox available → inject sandbox_exec
      */
     private FinishOutcome tryInjectToolCall(AgentExecutionContext context,
                                             List<ReasoningStep> history,
                                             ReasoningStep.FinishStep step,
                                             String answer,
                                             String sessionId) {
-        // Only inject if the answer looks like a refusal
-        if (!AgentSentinels.REFUSAL_PATTERN.matcher(answer).find()) return null;
-
         String goal = context.goal();
         if (goal == null || goal.isBlank()) return null;
 
         String availableTools = String.join(",", toolRegistry.listTools());
+        boolean isRefusal = AgentSentinels.REFUSAL_PATTERN.matcher(answer).find();
 
-        // Research goal + search tool available → inject search
-        if (AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
+        // Case 1: Refusal + research goal → inject search
+        if (isRefusal && AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
             String searchTool = findSearchTool(availableTools);
             if (searchTool != null) {
                 log.infof("TOOL-INJECT session %s: agent finished without searching, injecting %s", sessionId, searchTool);
@@ -239,12 +240,25 @@ public class FinishActionHandler {
             }
         }
 
+        // Case 2: Execution goal + no code in answer + sandbox available → retry with correction
+        if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
+                && availableTools.contains(ToolCapability.SANDBOX_EXEC.toolName())
+                && !answer.contains("```")) {
+            log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
+            return new FinishOutcome.Correction(
+                    step.withObservation("Agent finished without writing code for an execution goal"),
+                    "STOP. You MUST write a complete Java program and call sandbox_exec to execute it. " +
+                    "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
+        }
+
         // Execution goal + sandbox available → inject sandbox_exec
-        if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find() && availableTools.contains("sandbox_exec")) {
-            log.infof("TOOL-INJECT session %s: agent finished without executing, injecting sandbox_exec", sessionId);
+        if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
+                && availableTools.contains(ToolCapability.SANDBOX_EXEC.toolName())) {
+            log.infof("TOOL-INJECT session %s: agent finished without executing, injecting %s",
+                    sessionId, ToolCapability.SANDBOX_EXEC.toolName());
             Map<String, Object> args = new HashMap<>();
-            args.put("code", answer);  // Use the agent's text answer as the code
-            return new FinishOutcome.InjectToolCall("sandbox_exec", args,
+            args.put("code", answer);
+            return new FinishOutcome.InjectToolCall(ToolCapability.SANDBOX_EXEC.toolName(), args,
                     step.withObservation("Injecting sandbox_exec that was missed"));
         }
 
@@ -252,7 +266,9 @@ public class FinishActionHandler {
     }
 
     private static final List<String> SEARCH_TOOL_NAMES = List.of(
-            "serper_web_search", "brave_web_search", "web_search", "search");
+            ToolCapability.WEB_SEARCH_SERPER.toolName(),
+            ToolCapability.WEB_SEARCH_BRAVE.toolName(),
+            "web_search", "search");
 
     private String findSearchTool(String availableTools) {
         for (String name : SEARCH_TOOL_NAMES) {
