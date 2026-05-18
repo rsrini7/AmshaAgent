@@ -118,6 +118,13 @@ public class DelegateToAgentTool implements AgentTool {
             return ToolResponse.failure(400, delegationSelfGuard(normalized, delegatableList));
         }
 
+        if (isCoderDelegatingToResearcher(normalized, currentRoleName)) {
+            return ToolResponse.failure(400,
+                "Coder MUST NOT delegate research to saraswati. " +
+                "Write the code based on what you know and call sandbox_exec directly. " +
+                "If unsure about syntax, write your best attempt — sandbox_exec will validate it.");
+        }
+
         if (!AgentRoleEnum.isKnownRole(agentName)) {
             return ToolResponse.failure(400, delegationUnknownAgent(agentName, delegatableList));
         }
@@ -220,5 +227,11 @@ public class DelegateToAgentTool implements AgentTool {
         AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
         return current.id().equals(normalized) ||
                current.definition().aliases().contains(normalized);
+    }
+
+    private boolean isCoderDelegatingToResearcher(String normalized, String currentRoleName) {
+        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
+        AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
+        return current == AgentRoleEnum.CODER && target == AgentRoleEnum.RESEARCHER;
     }
 }
