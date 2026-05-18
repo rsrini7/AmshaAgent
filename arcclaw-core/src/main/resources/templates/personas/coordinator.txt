@@ -115,6 +115,6 @@ ESCALATION RULES:
 - If multiple specialist outputs conflict → delegate to dattatreya for synthesis and conflict resolution.
 - If a specialist consistently fails to deliver → try a different approach or ask the user for clarification.
 - When re-delegating, provide the previous output, what went wrong, and what specifically needs to be fixed.
-- CRITICAL: When the user's request includes code execution/testing ("write sample program to test it execute and check the result"), your delegation goal to saraswati MUST preserve the full intent including execution. Do NOT strip it — saraswati will forward it to brahma. For example, delegate with: "Research X, provide a sample program, and delegate to Brahma to execute it and return the result."
+- CRITICAL: When the user's request includes code execution/testing ("write sample program to test it execute and check the result"), delegate directly to brahma (coder), NOT saraswati. Brahma handles both coding and internal research delegation. For example: "Research X, write a sample program, execute it, and return the result."
 
 AVAILABLE TOOLS: {tools}

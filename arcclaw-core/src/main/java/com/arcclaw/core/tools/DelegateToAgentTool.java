@@ -125,6 +125,12 @@ public class DelegateToAgentTool implements AgentTool {
                 "If unsure about syntax, write your best attempt — sandbox_exec will validate it.");
         }
 
+        if (isCombinedGoalToResearcher(normalized, currentRoleName, goal)) {
+            return ToolResponse.success(
+                "Redirect: This goal contains code execution tasks. Delegate to brahma (coder) instead. " +
+                "The coder will handle research delegation internally if needed.");
+        }
+
         if (!AgentRoleEnum.isKnownRole(agentName)) {
             return ToolResponse.failure(400, delegationUnknownAgent(agentName, delegatableList));
         }
@@ -233,5 +239,18 @@ public class DelegateToAgentTool implements AgentTool {
         AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
         AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
         return current == AgentRoleEnum.CODER && target == AgentRoleEnum.RESEARCHER;
+    }
+
+    private static final Pattern CODE_EXECUTION_KEYWORDS = Pattern.compile(
+        "\\b(execute|compile|sandbox_exec|sample program|write.*program|write.*code|run.*code|run.*program|demo)\\b",
+        Pattern.CASE_INSENSITIVE);
+
+    private boolean isCombinedGoalToResearcher(String normalized, String currentRoleName, String goal) {
+        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
+        AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
+        return current == AgentRoleEnum.COORDINATOR
+            && target == AgentRoleEnum.RESEARCHER
+            && goal != null
+            && CODE_EXECUTION_KEYWORDS.matcher(goal).find();
     }
 }
