@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1361_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1434_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
@@ -32,6 +32,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, OMLX, or local Ollama models
 - **Six specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
+- **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
 - **Reflex system** - 16 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
 - **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
@@ -67,7 +68,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
-| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability; sandbox failures auto-delegated to Shiva via `ExecutionFailureRecoveryService` |
+| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability; sandbox failures auto-delegated to Shiva via `ExecutionFailureRecoveryService`; cross-persona escalation via `PersonaEscalationService` |
 
 - **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files - never as process arguments.
 - **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
@@ -406,12 +407,12 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 
 | Role | Deity | Max Iterations | Tools | Description |
 |---|---|---|---|---|
-| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
-| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
-| `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox |
-| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification. Auto-heal target: sandbox_exec failures are delegated to Shiva for self-correction |
-| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `delegate_to_agent` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
-| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
+| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output. Escalates conflicting outputs to Dattatreya |
+| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code. Escalates to Brahma for implementation, Brihaspati for architecture |
+| `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox. Escalates unknown APIs to Saraswati, design decisions to Brihaspati, bugs to Shiva |
+| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification. Auto-heal target; escalates obscure errors to Saraswati, fundamental flaws to Brahma |
+| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `delegate_to_agent` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code. Escalates implementation to Brahma, research to Saraswati |
+| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains. Escalates conflicts to Brihaspati, gaps to Brahma/Saraswati |
 
 > [!NOTE]
 > Tool schemas are assembled dynamically at runtime via `@ToolMetadata(defaultRoles=...)` annotations on tool classes. `delegate_to_agent` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. The `coder` role has `add_mcp_server` for dynamically registering MCP servers at runtime. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
@@ -424,12 +425,12 @@ graph LR
 
     subgraph AGENTS["🕉️ THE COSMIC PANTHEON - SIX AGENTS"]
         direction TB
-        A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate_to_agent"]:::coordinator
-        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code · + delegate"]:::researcher
-        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist + MCP + delegate"]:::coder
-        A4["🔴 debugger - Shiva<br/>Contrarian · Finds blind spots · Auto-heal · MCP + delegate"]:::debugger
-        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code · + delegate"]:::architect
-        A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist"]:::synthesizer
+        A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate + escalation"]:::coordinator
+        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code<br/>+ delegate + escalation"]:::researcher
+        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist<br/>+ MCP + delegate + escalation"]:::coder
+        A4["🔴 debugger - Shiva<br/>Contrarian · Auto-heal · Escalation<br/>MCP + delegate"]:::debugger
+        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code<br/>+ delegate + escalation"]:::architect
+        A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist<br/>+ escalation"]:::synthesizer
     end
 
     subgraph TOOLS["🛠️ TOOLS"]
@@ -1426,6 +1427,8 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_AGENT_MAX_RATELIMIT_RETRIES` | no | `3` | Max retries on LLM rate-limit errors in the agent loop |
 | `ARCCLAW_AGENT_AUTO_HEAL_ENABLED` | no | `true` | Enable auto-heal: sandbox_exec failures are delegated to Shiva (debugger) for self-correction |
 | `ARCCLAW_AGENT_AUTO_HEAL_MAX_ATTEMPTS` | no | `2` | Max Shiva delegation attempts per sandbox_exec failure |
+| `ARCCLAW_AGENT_ESCALATION_ENABLED` | no | `true` | Enable cross-persona escalation: auto-route tasks to the right specialist when a persona hits its capability boundary |
+| `ARCCLAW_AGENT_ESCALATION_MAX_DEPTH` | no | `2` | Max escalation chain depth (prevents infinite routing loops) |
 | `ARCCLAW_DELEGATION_MAX_DEPTH` | no | `2` | Max agent delegation depth |
 
 ### Data & Storage

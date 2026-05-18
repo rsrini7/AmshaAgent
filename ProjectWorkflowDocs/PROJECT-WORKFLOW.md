@@ -208,7 +208,8 @@ If `context.isResumeSignal()` and checkpoint is `AWAITING_APPROVAL`:
 - **Denial** → mark checkpoint `FAILED`, set fail reason, return `AgentResult.finished("Tool execution was denied")`.
 - **Single-tool approval** → `WorkspaceContext.runWithFullAutonomy()` → `toolRegistry.invokeTool(toolName, params)`; append observation to history; reset checkpoint to `IN_PROGRESS`; return `null` (continue main loop).
 - **Parallel batch approval** → `resumeParallelBatch()`: reads `batchToolDecisions` map; skips DENIED tools (fills "User denied" observation); re-invokes APPROVED tools or restores pre-executed results from checkpoint JSON; aggregates into `CompletedBatch` step; continues.
-- **Auto-heal on resume failure** → `ResumeStrategyDispatcher` intercepts `sandbox_exec` failures for the coder role on the resume path. If `ExecutionFailureRecoveryService.shouldAttemptRecovery()` returns true, it delegates to Shiva (debugger) in an isolated `:heal:` sub-session, extracts fixed code from Shiva's response, and re-executes the tool. On success, the loop continues via `runFinishPass()`. On failure, returns `AgentResult.failed()`.
+- **Auto-heal on resume failure** → `ResumeStrategyDispatcher` intercepts `sandbox_exec` failures for the coder role on the resume path. If `ExecutionFailureRecoveryService.shouldAttemptRecovery()` returns true, it delegates to Shiva (debugger) in an isolated `:heal:` sub-session, extracts fixed code from Shiva's response, and re-executes the tool. On success, the loop continues via `runFinishPass()`. If auto-heal also fails, falls through to persona escalation (Step C.2).
+- **Persona escalation on resume** → `ResumeStrategyDispatcher.tryEscalationOnResume()` checks if the failure matches an escalation pattern (unknown API, architecture decision, obscure error). If `PersonaEscalationService.determineEscalationTarget()` returns a target, it spawns an isolated `:escalate:` sub-session with the target persona. On success, the result is merged back and the loop continues via `runFinishPass()`. On failure, returns `AgentResult.failed()`.
 
 ### 6.4 Fast-Path: `delegate_to_agent` Finish
 
@@ -299,8 +300,36 @@ sandbox_exec → ToolFailure (coder role only)
   → RecoveryResult.success(fixedCode)
      - Re-executes sandbox_exec with fixed code
      - On success: continues loop with new observation
-     - On failure: falls through to normal error path
+     - On failure: falls through to escalation (Step C.2)
   → RecoveryResult.failure()
+     - Falls through to escalation (Step C.2)
+```
+
+### Step C.2: ToolStepHandler - Persona Escalation Hook
+
+After auto-heal (or directly for non-sandbox failures), `ToolStepHandler` checks if the failure matches a cross-persona escalation pattern:
+
+```
+ToolFailure (any role, any tool)
+  → PersonaEscalationService.shouldAttemptEscalation()
+     - escalation enabled (arcclaw.agent.escalation.enabled=true)
+     - NOT an infra failure
+  → determineEscalationTarget(sourceRole, errorOutput, originalGoal)
+     - Pattern matching on error content and goal:
+       Brahma → Saraswati (unknown API/dependency)
+       Brahma → Brihaspati (architecture/trade-off decision)
+       Shiva → Saraswati (obscure error needing research)
+       Shiva → Brahma (fundamental flaw needing rewrite)
+       Saraswati → Brahma (research complete, needs implementation)
+       Brihaspati → Brahma (architecture decided, needs coding)
+       Brihaspati → Saraswati (needs external research)
+  → attemptEscalation(sessionId, userId, chatId, sourceRole, targetRole, ...)
+     - Spawns isolated target persona sub-session with :escalate: sentinel
+     - Max depth configurable (default 2, prevents infinite loops)
+     - Supports chained escalation (target can escalate further)
+  → EscalationResult.success(target, result, depth)
+     - Returns result as ToolResponse.success() — loop continues
+  → EscalationResult.failure()
      - Falls through to normal error path
 ```
 
@@ -628,6 +657,42 @@ Brahma (coder) → sandbox_exec → FAIL
 
 **Debugger persona:** `debugger.txt` includes `AUTO-HEAL MODE` instructions — Shiva returns only a single fenced code block with the corrected code, no explanations.
 
+### Cross-Persona Escalation
+
+`PersonaEscalationService` detects when a persona hits its capability boundary and auto-routes the task to a more suitable specialist:
+
+```
+Source persona → tool call → FAIL / knowledge gap
+  → PersonaEscalationService.shouldAttemptEscalation()
+  → determineEscalationTarget() via pattern matching:
+     Brahma (coder)    → Saraswati (researcher)   : unknown API/dependency
+     Brahma (coder)    → Brihaspati (architect)   : architecture/trade-off decision
+     Shiva (debugger)  → Saraswati (researcher)   : obscure error needing research
+     Shiva (debugger)  → Brahma (coder)           : fundamental flaw needing rewrite
+     Saraswati (researcher) → Brahma (coder)      : research complete, needs implementation
+     Brihaspati (architect) → Brahma (coder)      : architecture decided, needs coding
+     Brihaspati (architect) → Saraswati (researcher): needs external research
+     Dattatreya (synthesizer) → any               : conflicting outputs need re-specialization
+  → Isolated sub-session with :escalate: sentinel
+  → Target persona handles and returns result
+  → Result merged back into source persona's context
+  → Chained escalation: target can escalate further (up to max depth)
+```
+
+**Configuration:**
+| Property | Default | Description |
+|---|---|---|
+| `arcclaw.agent.escalation.enabled` | `true` | Enable/disable cross-persona escalation |
+| `arcclaw.agent.escalation.max-depth` | `2` | Max escalation chain depth (prevents infinite routing loops) |
+
+**Session sentinel:** `ESCALATION_SESSION_SENTINEL` (`:escalate:`) in `AgentSentinels` marks escalation sub-sessions. Format: `{parent_sid}:escalate:{source}:{target}:{currentTimeMillis}`.
+
+**Persona templates:** All 6 persona templates include `ESCALATION RULES` sections defining when and how to escalate to other personas.
+
+**Integration points:**
+- `ToolStepHandler` — escalation hook after tool failure (and after auto-heal failure)
+- `ResumeStrategyDispatcher` — escalation hook on HITL resume path failure
+
 ---
 
 ## Phase 15: LLM Provider Architecture
@@ -861,6 +926,9 @@ External Input
   │    → Auto-Heal (sandbox_exec failure, coder role)               │
   │         └─ ExecutionFailureRecoveryService → Shiva :heal: sub   │
   │            → re-exec with fixed code → continue or fall through │
+  │    → Persona Escalation (any failure, any role)                 │
+  │         └─ PersonaEscalationService → target :escalate: sub     │
+  │            → pattern match → delegate → merge → continue        │
   │    → ChatMemoryWriter.saveStep()                                 │
   └─────────────────────────────────────────────────────────────────┘
          │
