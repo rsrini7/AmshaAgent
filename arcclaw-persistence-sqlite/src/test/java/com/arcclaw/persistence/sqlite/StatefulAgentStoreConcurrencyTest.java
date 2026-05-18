@@ -1,6 +1,8 @@
 package com.arcclaw.persistence.sqlite;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
@@ -8,6 +10,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
@@ -30,12 +33,17 @@ class StatefulAgentStoreConcurrencyTest {
     @Spy ObjectMapper objectMapper = new ObjectMapper();
     @Mock EntityManager em;
     @Mock SqliteRetryTemplate retryTemplate;
+    @Mock Query nativeQuery;
 
     @InjectMocks
     SqliteCheckpointStoreAdapter adapter;
 
     @BeforeEach
     void setup() throws Exception {
+        // Mock native query to avoid NPE when nativeUpdate() is called
+        when(em.createNativeQuery(anyString())).thenReturn(nativeQuery);
+        when(nativeQuery.setParameter(anyString(), any())).thenReturn(nativeQuery);
+        when(nativeQuery.executeUpdate()).thenReturn(1);
         setField(adapter, "self", adapter);
         
         CheckpointRepository checkpointRepo = new CheckpointRepository(em);
