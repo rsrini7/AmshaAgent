@@ -168,7 +168,8 @@ case "java" -> {
 
         if ("java".equals(lang)) {
             if (!codeLanguageDetector.containsTypeDeclaration(code)) {
-                throw new IllegalArgumentException("Java execution failed: Code must contain a class declaration. Bare methods are not supported.");
+                code = "public class Main {\n    public static void main(String[] args) {\n"
+                        + code.indent(8) + "    }\n}\n";
             }
             Files.createDirectories(workspaceRoot);
             String className = codeLanguageDetector.extractJavaClassName(code);
@@ -214,7 +215,8 @@ case "java" -> {
             if (violation != null) return ToolResponse.failure(1, "🚫 Execution blocked: " + violation);
 
             if ("java".equals(lang) && !codeLanguageDetector.containsTypeDeclaration(code)) {
-                return ToolResponse.failure(1, "Java execution failed: Code must contain a class declaration. Bare methods are not supported.");
+                code = "public class Main {\n    public static void main(String[] args) {\n"
+                        + code.indent(8) + "    }\n}\n";
             }
 
             // Secrets are intentionally empty on the direct-execution fallback path.

@@ -248,18 +248,8 @@ public class FinishActionHandler {
             return new FinishOutcome.Correction(
                     step.withObservation("Agent finished without writing code for an execution goal"),
                     "STOP. You MUST write a complete Java program and call sandbox_exec to execute it. " +
+                    "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. " +
                     "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
-        }
-
-        // Execution goal + sandbox available → inject sandbox_exec
-        if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
-                && availableTools.contains(ToolCapability.SANDBOX_EXEC.toolName())) {
-            log.infof("TOOL-INJECT session %s: agent finished without executing, injecting %s",
-                    sessionId, ToolCapability.SANDBOX_EXEC.toolName());
-            Map<String, Object> args = new HashMap<>();
-            args.put("code", answer);
-            return new FinishOutcome.InjectToolCall(ToolCapability.SANDBOX_EXEC.toolName(), args,
-                    step.withObservation("Injecting sandbox_exec that was missed"));
         }
 
         return null;

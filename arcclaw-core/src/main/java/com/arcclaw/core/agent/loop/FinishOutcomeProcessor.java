@@ -447,6 +447,7 @@ public class FinishOutcomeProcessor {
             return new FinishActionHandler.FinishOutcome.Correction(
                     step.withObservation("Agent finished without writing code for an execution goal"),
                     "STOP. You MUST write a complete program and call sandbox_exec to execute it. " +
+                    "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. " +
                     "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
         }
 
