@@ -2,9 +2,7 @@ package com.arcclaw.core.tools;
 
 import static com.arcclaw.core.message.UserMessages.*;
 
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -18,7 +16,6 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.governance.BudgetExceededException;
@@ -49,7 +46,6 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
-    @Inject CapabilityRegistry capabilityRegistry;
     @Inject CheckpointCrudPort checkpointCrud;
 
     @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
@@ -128,24 +124,6 @@ public class DelegateToAgentTool implements AgentTool {
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
         AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
-
-        if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
-            Set<String> currentCaps = capabilityRegistry.getSupplementalTools(currentRoleName);
-            Set<String> targetCaps = capabilityRegistry.getSupplementalTools(targetRole.id());
-
-            Set<String> unauthorizedCaps = new HashSet<>(targetCaps);
-            unauthorizedCaps.removeAll(currentCaps);
-
-            if (!unauthorizedCaps.isEmpty()) {
-                String unauthorizedList = unauthorizedCaps.stream()
-                    .sorted()
-                    .collect(Collectors.joining(", "));
-                
-                return ToolResponse.failure(403,
-                    delegationRejectedCaps(targetRole.toScopedName(), unauthorizedList, currentRoleName)
-                );
-            }
-        }
 
         AgentResult result;
         try {

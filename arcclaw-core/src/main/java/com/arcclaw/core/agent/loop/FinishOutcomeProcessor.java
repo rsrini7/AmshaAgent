@@ -166,13 +166,20 @@ public class FinishOutcomeProcessor {
         return null;
     }
 
-    public FinishActionHandler.FinishOutcome applyCodePolicy(String sessionId, String agentRole, List<ReasoningStep> history, String answer) {
+    public FinishActionHandler.FinishOutcome applyCodePolicy(String sessionId, String agentRole, List<ReasoningStep> history, String answer, ReasoningStep step) {
         if (answer != null && codePolicy.isGeneratedCodeBlock(answer, agentRole)
                 && !codePolicy.canGenerateCode(agentRole)) {
-            String refusal = codePolicy.buildRefusalMessage(agentRole);
             log.infof("FINISH-HANDLER code-gen blocked for role '%s' in session %s", agentRole, sessionId);
-            AgentResult result = AgentResult.finished(refusal, List.copyOf(history));
-            return new FinishActionHandler.FinishOutcome.Completed(result, refusal);
+
+            ReasoningStep cleanStep = step.withObservation("Code generation blocked for " + agentRole);
+            String hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
+                    + ") cannot generate code. " + codePolicy.buildRefusalMessage(agentRole)
+                    + " Do NOT tell the user to ask them separately. "
+                    + "Instead, use the `delegate_to_agent` tool NOW with agent='coder' and a complete goal "
+                    + "that includes the full code generation, execution, and result-checking request. "
+                    + "Wait for coder's response, then FINISH with the result.";
+
+            return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
         }
         return null;
     }

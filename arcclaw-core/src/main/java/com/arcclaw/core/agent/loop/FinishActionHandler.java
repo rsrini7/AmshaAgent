@@ -147,8 +147,12 @@ public class FinishActionHandler {
         }
 
         // --- Code-generation policy ---
-        FinishOutcome codePolicyOutcome = resultProcessor.applyCodePolicy(sessionId, agentRole, history, answer);
+        FinishOutcome codePolicyOutcome = resultProcessor.applyCodePolicy(sessionId, agentRole, history, answer, step);
         if (codePolicyOutcome != null) {
+            // Correction: LLM will retry with delegation instead of completing with refusal
+            if (codePolicyOutcome instanceof FinishOutcome.Correction) {
+                context.setForceFinishRetry(true);
+            }
             return codePolicyOutcome;
         }
 
