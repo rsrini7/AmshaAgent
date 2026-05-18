@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.AnswerGuardStrategy.LeakedToolCall;
@@ -38,7 +39,7 @@ public class LeakedToolCallParser {
 
     public LeakedToolCallParser(ToolRegistry toolRegistry) {
         this.toolRegistry = toolRegistry;
-        String toolNames = toolRegistry.listTools().stream().sorted().collect(java.util.stream.Collectors.joining("|"));
+        String toolNames = toolRegistry.listTools().stream().sorted().collect(Collectors.joining("|"));
         this.nakedFunctionCallPattern = Pattern.compile(
                 "\\b(" + toolNames + ")\\s*\\(\\s*[a-z0-9_]+\\s*=\\s*[\"'].*?[\"']\\s*\\)",
                 Pattern.CASE_INSENSITIVE);

@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import io.quarkus.runtime.StartupEvent;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
@@ -127,7 +128,7 @@ public class TelegramChannelRoute extends RouteBuilder {
         @Override
         public void process(Exchange exchange) {
             Throwable ex = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
-            log.warnf("Telegram poll transient error: %s — will retry", ex.getMessage());
+            log.warnf("Telegram poll transient error: %s — will retry", LogUtil.rootMessage(ex));
         }
     }
 }

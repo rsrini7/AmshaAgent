@@ -108,7 +108,7 @@ public class TelegramCallbackHandler {
                     try {
                         sender.editMessage(chatId, messageId, "ignoring session NOT_FOUND", null);
                     } catch (Exception editEx) {
-                        log.debugf("Failed to edit stale NOT_FOUND message: %s", editEx.getMessage());
+                        log.debugf("Failed to edit stale NOT_FOUND message: %s", LogUtil.rootMessage(editEx));
                     }
                     answerCallback(query.getId(), "ignoring session NOT_FOUND");
                     return;
@@ -180,7 +180,7 @@ public class TelegramCallbackHandler {
                 HttpResponse.BodyHandlers.discarding())
             .exceptionally(ex -> {
                 log.warnf("Failed to answer Telegram callback %s: %s",
-                    callbackQueryId, ex.getMessage());
+                    callbackQueryId, LogUtil.rootMessage(ex));
                 return null;
             });
         } catch (Exception e) {

@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -181,7 +182,7 @@ public class ExecutionFailureRecoveryService {
                     () -> agentLoop.get().run(innerSessionId, AgentRoleEnum.DEBUGGER.toScopedName(),
                             goal, reasoningEngine, maxIterations));
         } catch (Exception e) {
-            log.errorf("[AutoHeal] Shiva delegation failed: %s", e.getMessage());
+            log.errorf("[AutoHeal] Shiva delegation failed: %s", LogUtil.rootMessage(e));
             return RecoveryResult.failure("Debug delegation failed: " + e.getMessage());
         }
 

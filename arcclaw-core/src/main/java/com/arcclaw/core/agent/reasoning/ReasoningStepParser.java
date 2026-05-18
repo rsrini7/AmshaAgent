@@ -296,7 +296,7 @@ public class ReasoningStepParser {
                         return recovered;
                     }
                 }
-                log.errorf("JSON repair failed for session %s: %s", sessionId, e2.getMessage());
+                log.errorf("JSON repair failed for session %s: %s", sessionId, LogUtil.rootMessage(e2));
                 return Map.of("__error", e.getMessage(), "parameters", argsJson);
             }
         }

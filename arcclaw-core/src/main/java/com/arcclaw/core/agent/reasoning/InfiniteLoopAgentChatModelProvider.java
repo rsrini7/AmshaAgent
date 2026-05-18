@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.routing.InfiniteLoopChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -70,7 +71,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
                 slots.add(new InfiniteLoopChatModel.Slot(name, model));
                 log.infof("InfiniteLoop: Slot [%s] initialized (%s).", name, model);
             } catch (Exception e) {
-                log.warnf("InfiniteLoop: Slot [%s] failed to initialize: %s. Skipping.", name, e.getMessage());
+                log.warnf("InfiniteLoop: Slot [%s] failed to initialize: %s. Skipping.", name, LogUtil.rootMessage(e));
             }
         }
 
