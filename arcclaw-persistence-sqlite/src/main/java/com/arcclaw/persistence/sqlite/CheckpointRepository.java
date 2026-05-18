@@ -1,5 +1,6 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -9,6 +10,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.state.CheckpointStatus;
+import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import org.jboss.logging.Logger;
 
@@ -52,7 +54,7 @@ public class CheckpointRepository {
      */
     @Transactional(Transactional.TxType.REQUIRED)
     public void nativeUpdate(AgentCheckpointEntity e) {
-        String now = com.arcclaw.core.util.TemporalUtils.formatIsoLex(java.time.Instant.now());
+        String now = TemporalUtils.formatIsoLex(Instant.now());
         int updated = em.createNativeQuery(
                 "UPDATE agent_checkpoint SET " +
                 "status = :status, " +
@@ -88,8 +90,8 @@ public class CheckpointRepository {
                 .setParameter("channelPlatformId", e.getChannelPlatformId())
                 .setParameter("channelType", e.getChannelType())
                 .setParameter("originalGoal", e.getOriginalGoal())
-                .setParameter("failedAt", e.getFailedAt() != null ? com.arcclaw.core.util.TemporalUtils.formatIsoLex(e.getFailedAt()) : null)
-                .setParameter("completedAt", e.getCompletedAt() != null ? com.arcclaw.core.util.TemporalUtils.formatIsoLex(e.getCompletedAt()) : null)
+                .setParameter("failedAt", e.getFailedAt() != null ? TemporalUtils.formatIsoLex(e.getFailedAt()) : null)
+                .setParameter("completedAt", e.getCompletedAt() != null ? TemporalUtils.formatIsoLex(e.getCompletedAt()) : null)
                 .setParameter("failReason", e.getFailReason())
                 .setParameter("pendingToolName", e.getPendingToolName())
                 .setParameter("pendingToolRole", e.getPendingToolRole())
@@ -116,7 +118,7 @@ public class CheckpointRepository {
 
     @Transactional(Transactional.TxType.REQUIRED)
     public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
-        String now = com.arcclaw.core.util.TemporalUtils.formatIsoLex(java.time.Instant.now());
+        String now = TemporalUtils.formatIsoLex(Instant.now());
         int updated = em.createNativeQuery(
                 "UPDATE agent_checkpoint SET " +
                 "channel_type = :type, " +

@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -245,7 +246,7 @@ public class ToolStepHandler {
             if (recovery.success()) {
                 log.infof("[AutoHeal] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
                         recovery.attemptsUsed());
-                Map<String, Object> fixedParams = new java.util.HashMap<>(params);
+                Map<String, Object> fixedParams = new HashMap<>(params);
                 fixedParams.put("code", recovery.fixedCode());
                 ToolResponse retriedResponse = invokeToolWithParams(context, history, step, toolName, fixedParams);
 
