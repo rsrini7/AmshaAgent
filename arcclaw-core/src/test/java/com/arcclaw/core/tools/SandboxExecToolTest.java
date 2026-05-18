@@ -226,7 +226,7 @@ class SandboxExecToolTest {
             ToolResponse r = tool.execute(ctx(), params);
 
             assertTrue(r.success());
-            assertEquals("[execution produced no output]", r.output());
+            assertEquals("[Execution completed successfully - no output produced]", r.output());
             return null;
         });
     }

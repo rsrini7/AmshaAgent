@@ -138,9 +138,9 @@ public class SandboxExecTool implements AgentTool {
         }
 
         return switch (lang) {
-            case "java" -> {
+case "java" -> {
                 String className = codeLanguageDetector.extractJavaClassName(code);
-                yield List.of("java", "-cp", CONTAINER_WORKSPACE, className);
+                yield List.of("java", "--enable-preview", "-cp", CONTAINER_WORKSPACE, className);
             }
             case "python", "python3" -> List.of("python3", CONTAINER_WORKSPACE + "/script.py");
             case "bash"              -> List.of("bash",    CONTAINER_WORKSPACE + "/script.sh");
