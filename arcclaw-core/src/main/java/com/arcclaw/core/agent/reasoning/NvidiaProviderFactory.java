@@ -24,7 +24,7 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
     String baseUrl;
 
     @ConfigProperty(name = "ARCCLAW_NVIDIA_MODEL",
-                    defaultValue = "mistralai/devstral-2-123b-instruct-2512")
+                    defaultValue = "bytedance/seed-oss-36b-instruct")
     String modelName;
 
     @Override

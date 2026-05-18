@@ -32,7 +32,7 @@ if ($provider -eq 'groq') {
     $key = Read-Host "  NVIDIA API KEY (starts with nvapi-)"
     Set-EnvLine $envPath 'ARCCLAW_LLM_API_KEY' $key
     Set-EnvLine $envPath 'ARCCLAW_LLM_BASE_URL' 'https://integrate.api.nvidia.com/v1'
-    Set-EnvLine $envPath 'ARCCLAW_LLM_MODEL_NAME' 'mistralai/devstral-2-123b-instruct-2512'
+    Set-EnvLine $envPath 'ARCCLAW_LLM_MODEL_NAME' 'bytedance/seed-oss-36b-instruct'
 } elseif ($provider -eq 'openrouter') {
     do {
         $key = Read-Host "  OPENROUTER API KEY (starts with sk-or-)"

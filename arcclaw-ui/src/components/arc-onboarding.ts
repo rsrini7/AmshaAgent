@@ -31,7 +31,7 @@ export class ArcOnboarding extends LitElement {
     anthropic: 'claude-haiku-4-5',
     'claude-code': 'claude-sonnet-4-5',
     openrouter: 'openai/gpt-oss-20b:free',
-    nvidia: 'mistralai/devstral-2-123b-instruct-2512',
+    nvidia: 'bytedance/seed-oss-36b-instruct',
     cerebras: 'qwen-3-235b-a22b-instruct-2507',
     gemini: 'gemini-2.5-flash-lite',
     omlx: 'mlx-community/Qwen3.6-35B-A3B-4bit',

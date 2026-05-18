@@ -79,7 +79,7 @@ public class OnboardingResource {
         "anthropic",   "claude-haiku-4-5",
         "claude-code", "claude-sonnet-4-5",
         "openrouter",  "openai/gpt-oss-20b:free",
-        "nvidia",      "mistralai/devstral-2-123b-instruct-2512"
+        "nvidia",      "bytedance/seed-oss-36b-instruct"
     );
 
     @GET @Path("/status")
