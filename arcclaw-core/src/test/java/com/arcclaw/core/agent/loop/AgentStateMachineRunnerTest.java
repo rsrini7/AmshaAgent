@@ -115,7 +115,9 @@ class AgentStateMachineRunnerTest {
         objectMapper = mock(ObjectMapper.class);
         TextPatternUtils textPatternUtils = new TextPatternUtils();
 
-        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper, textPatternUtils);
+        ToolRegistry toolRegistryForHandler = mock(ToolRegistry.class);
+        org.mockito.Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of("sandbox_exec", "serper_web_search", "memory_search"));
+        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper, textPatternUtils, toolRegistryForHandler);
 
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager(agentStore, agentSseService, new ObjectMapper());
 

@@ -107,5 +107,22 @@ public final class AgentSentinels {
     public static final String SYSTEM_USER = "system";
     public static final String SYSTEM_SESSION = "system";
 
+    // Goal keyword patterns — shared across DelegateToAgentTool, FinishActionHandler, etc.
+    public static final Pattern RESEARCH_KEYWORDS = Pattern.compile(
+            "\\b(research|search|find|look.?up|latest|news|current|recent|what is|who is|how to)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    public static final Pattern CODE_EXECUTION_KEYWORDS = Pattern.compile(
+            "\\b(execute|compile|sandbox_exec|sample.?program|write.*program|write.*code|run.*code|run.*program|demo)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    public static final Pattern EXECUTION_KEYWORDS = Pattern.compile(
+            "\\b(execute|run|compile|test|sample.?program|write.*program|demo|sandbox)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    public static final Pattern REFUSAL_PATTERN = Pattern.compile(
+            "\\b(I cannot|I can't|I don't have|I'm unable|falls outside my role|not present in.*context|should be handled by|delegate to|I recommend)\\b",
+            Pattern.CASE_INSENSITIVE);
+
 }
 

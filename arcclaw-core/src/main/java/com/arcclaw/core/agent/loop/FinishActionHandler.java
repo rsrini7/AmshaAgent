@@ -1,16 +1,20 @@
 package com.arcclaw.core.agent.loop;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,6 +54,7 @@ public class FinishActionHandler {
     private final AnswerGuardStrategy qualityGuard;
     private final Instance<AgentObserver> observers;
     private final FinishOutcomeProcessor resultProcessor;
+    private final ToolRegistry toolRegistry;
 
     @Inject
     public FinishActionHandler(AnswerGuardStrategy qualityGuard,
@@ -58,9 +63,11 @@ public class FinishActionHandler {
                                Instance<AgentObserver> observers,
                                CorrectionStrategy correctionStrategy,
                                ObjectMapper objectMapper,
-                               TextPatternUtils textPatternUtils) {
+                               TextPatternUtils textPatternUtils,
+                               ToolRegistry toolRegistry) {
         this.qualityGuard = qualityGuard;
         this.observers = observers;
+        this.toolRegistry = toolRegistry;
         this.resultProcessor = new FinishOutcomeProcessor(
                 qualityGuard, codePolicy, rateLimitTracker, correctionStrategy, objectMapper, textPatternUtils);
     }
@@ -70,7 +77,7 @@ public class FinishActionHandler {
      * decide what to do next without inspecting answer text directly.
      */
     public sealed interface FinishOutcome
-            permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.Correction, FinishOutcome.SalvageFailed, FinishOutcome.ExecuteLeakedTool {
+            permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.Correction, FinishOutcome.SalvageFailed, FinishOutcome.ExecuteLeakedTool, FinishOutcome.InjectToolCall {
 
         /**
          * The answer passed all guards - return it as the session result.
@@ -102,6 +109,14 @@ public class FinishActionHandler {
         record ExecuteLeakedTool(String toolName,
                                  Map<String, Object> arguments,
                                  ReasoningStep correctedStep) implements FinishOutcome {}
+
+        /**
+         * The agent finished without calling any tools, but the goal suggests a tool should have been used.
+         * The router should inject and execute the tool call, then continue the loop.
+         */
+        record InjectToolCall(String toolName,
+                              Map<String, Object> arguments,
+                              ReasoningStep correctedStep) implements FinishOutcome {}
     }
 
     public FinishOutcome handle(AgentExecutionContext context,
@@ -180,6 +195,12 @@ public class FinishActionHandler {
             return new FinishOutcome.Correction(correctedStep, hint);
         }
 
+        // --- Tool injection: if agent finished without calling tools, inject the appropriate one ---
+        FinishOutcome injected = tryInjectToolCall(context, history, step, answer, sessionId);
+        if (injected != null) {
+            return injected;
+        }
+
         // --- Observers ---
         final String finalAnswer = answer;
         final ReasoningStep completedStep = step.withObservation("Task completed.");
@@ -187,6 +208,45 @@ public class FinishActionHandler {
 
         AgentResult result = AgentResult.finished(finalAnswer, List.copyOf(history));
         return new FinishOutcome.Completed(result, finalAnswer);
+    }
+
+    /**
+     * If the agent finished with a refusal, but the goal suggests a tool should have been used,
+     * inject a synthetic tool call. This handles small models that refuse instead of using available tools.
+     */
+    private FinishOutcome tryInjectToolCall(AgentExecutionContext context,
+                                            List<ReasoningStep> history,
+                                            ReasoningStep.FinishStep step,
+                                            String answer,
+                                            String sessionId) {
+        // Only inject if the answer looks like a refusal
+        if (!AgentSentinels.REFUSAL_PATTERN.matcher(answer).find()) return null;
+
+        String goal = context.goal();
+        if (goal == null || goal.isBlank()) return null;
+
+        String availableTools = String.join(",", toolRegistry.listTools());
+
+        // Research goal + search tool available → inject search
+        if (AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find() && availableTools.contains("serper_web_search")) {
+            log.infof("TOOL-INJECT session %s: agent finished without searching, injecting serper_web_search", sessionId);
+            Map<String, Object> args = new HashMap<>();
+            args.put("query", goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
+            args.put("count", 5);
+            return new FinishOutcome.InjectToolCall("serper_web_search", args,
+                    step.withObservation("Injecting search tool call that was missed"));
+        }
+
+        // Execution goal + sandbox available → inject sandbox_exec
+        if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find() && availableTools.contains("sandbox_exec")) {
+            log.infof("TOOL-INJECT session %s: agent finished without executing, injecting sandbox_exec", sessionId);
+            Map<String, Object> args = new HashMap<>();
+            args.put("code", answer);  // Use the agent's text answer as the code
+            return new FinishOutcome.InjectToolCall("sandbox_exec", args,
+                    step.withObservation("Injecting sandbox_exec that was missed"));
+        }
+
+        return null;
     }
 
 }

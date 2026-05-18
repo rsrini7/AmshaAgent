@@ -36,7 +36,10 @@
       "Bash(xxd:*)",
       "Bash(sed:*)",
       "Bash(python3:*)",
-      "Bash(mvn test:*)"
+      "Bash(mvn test:*)",
+      "Bash(java -version)",
+      "Bash(mvn compile:*)",
+      "Bash(mvn test-compile:*)"
     ]
   }
 }

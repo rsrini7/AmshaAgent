@@ -9,6 +9,7 @@ import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.routing.InfiniteLoopChatModel;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -260,6 +261,9 @@ public class FinishOutcomeProcessor {
             return new FinishActionHandler.FinishOutcome.Completed(
                     AgentResult.finished(finalAnswer, List.copyOf(history)), finalAnswer);
         }
+
+        // Record quality failure for the slot that produced this leak
+        InfiniteLoopChatModel.getLastUsedSlot().ifPresent(InfiniteLoopChatModel::recordQualityFailure);
 
         // Try to parse the leaked tool call and execute it directly
         var leakedCall = qualityGuard.extractLeakedToolCall(candidateAnswer);

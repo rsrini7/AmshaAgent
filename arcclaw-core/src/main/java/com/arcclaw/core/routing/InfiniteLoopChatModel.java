@@ -2,6 +2,7 @@ package com.arcclaw.core.routing;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -19,8 +20,13 @@ public class InfiniteLoopChatModel implements ChatModel {
 
     private static final Logger log = Logger.getLogger(InfiniteLoopChatModel.class);
     private static final long MAX_COOLDOWN_WAIT_MS = 300_000L;
+    private static final int QUALITY_FAILURE_THRESHOLD = 3;
 
     public record Slot(String name, ChatModel model) {}
+
+    // Static registry for quality failure reporting from outside (e.g., FinishOutcomeProcessor)
+    private static final ConcurrentHashMap<String, InfiniteLoopChatModel> instances = new ConcurrentHashMap<>();
+    private static final ScopedValue<String> LAST_USED_SLOT = ScopedValue.newInstance();
 
     private final List<Slot> slots;
     private final Map<String, SlotHealth> health;
@@ -38,12 +44,52 @@ public class InfiniteLoopChatModel implements ChatModel {
         this.health = new ConcurrentHashMap<>();
         for (Slot s : slots) {
             health.put(s.name(), new SlotHealth());
+            instances.put(s.name(), this);
         }
         this.currentIndex = new AtomicInteger(0);
         this.cooldownBaseSeconds = cooldownBaseSeconds;
         this.cooldownMaxSeconds = cooldownMaxSeconds;
         this.cooldownTransientSeconds = cooldownTransientSeconds;
         this.maxLatencyMs = maxLatencyMs;
+    }
+
+    /** Returns the slot name that served the most recent chat() call in this scope. */
+    public static Optional<String> getLastUsedSlot() {
+        if (LAST_USED_SLOT.isBound() && LAST_USED_SLOT.get() != null) {
+            return Optional.of(LAST_USED_SLOT.get());
+        }
+        return Optional.empty();
+    }
+
+    /** Records a quality failure for the given slot. After threshold failures, the slot enters cooldown. */
+    public static void recordQualityFailure(String slotName) {
+        InfiniteLoopChatModel instance = instances.get(slotName);
+        if (instance == null) return;
+        SlotHealth h = instance.health.get(slotName);
+        if (h == null) return;
+        h.recordQualityFailure(instance.cooldownTransientSeconds);
+        if (h.qualityFailures >= QUALITY_FAILURE_THRESHOLD) {
+            log.warnf("InfiniteLoop: Slot [%s] hit %d quality failures — cooling down %ds.",
+                    slotName, h.qualityFailures, instance.cooldownTransientSeconds);
+        } else {
+            log.infof("InfiniteLoop: Slot [%s] quality failure %d/%d.",
+                    slotName, h.qualityFailures, QUALITY_FAILURE_THRESHOLD);
+        }
+    }
+
+    /** Returns a summary of slot health for debugging. */
+    public static String getSlotStats() {
+        StringBuilder sb = new StringBuilder();
+        for (var entry : instances.entrySet()) {
+            SlotHealth h = entry.getValue().health.get(entry.getKey());
+            if (h != null) {
+                sb.append(entry.getKey()).append(":qf=").append(h.qualityFailures)
+                  .append(":cf=").append(h.consecutiveFailures)
+                  .append(":disabled=").append(h.permanentlyDisabled)
+                  .append(" ");
+            }
+        }
+        return sb.toString().trim();
     }
 
     public InfiniteLoopChatModel(List<Slot> slots, int cooldownBaseSeconds, int cooldownMaxSeconds, int cooldownTransientSeconds) {
@@ -67,7 +113,8 @@ public class InfiniteLoopChatModel implements ChatModel {
 
                 try {
                     long startMs = System.currentTimeMillis();
-                    ChatResponse response = slot.model().chat(request);
+                    ChatResponse response = ScopedValue.where(LAST_USED_SLOT, slot.name())
+                            .call(() -> slot.model().chat(request));
                     long elapsedMs = System.currentTimeMillis() - startMs;
                     if (maxLatencyMs > 0 && elapsedMs > maxLatencyMs) {
                         log.warnf("InfiniteLoop: Slot [%s] responded in %dms (threshold %dms), treating as slow failure.",
@@ -133,11 +180,21 @@ public class InfiniteLoopChatModel implements ChatModel {
     private static class SlotHealth {
         private volatile long cooldownUntilEpochMs;
         private volatile int consecutiveFailures;
+        private volatile int qualityFailures;
         private volatile boolean permanentlyDisabled;
 
         synchronized void recordSuccess() {
             consecutiveFailures = 0;
+            qualityFailures = 0;
             cooldownUntilEpochMs = 0;
+        }
+
+        synchronized void recordQualityFailure(int cooldownSeconds) {
+            qualityFailures++;
+            if (qualityFailures >= QUALITY_FAILURE_THRESHOLD) {
+                cooldownUntilEpochMs = System.currentTimeMillis() + (long) cooldownSeconds * 1000;
+                qualityFailures = 0;
+            }
         }
 
         synchronized void recordRateLimit(int baseSeconds, int maxSeconds) {

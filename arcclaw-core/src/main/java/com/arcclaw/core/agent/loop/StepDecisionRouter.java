@@ -157,6 +157,17 @@ public class StepDecisionRouter {
             history.add(elt.correctedStep());
             RoutingOutcome invocationResult = handleToolInvocation(context, history, syntheticStep, 0, List.of());
             return Optional.of(invocationResult);
+        } else if (outcome instanceof FinishActionHandler.FinishOutcome.InjectToolCall itc) {
+            log.infof("TOOL-INJECT session %s: injecting tool '%s' that agent missed",
+                    context.sessionId(), itc.toolName());
+            ReasoningStep.ToolCallStep syntheticStep = new ReasoningStep.ToolCallStep(
+                    "Injected tool call — agent finished without using available tools",
+                    itc.toolName(),
+                    itc.arguments(),
+                    null, 0, 0, null, null, null, null, false, false);
+            history.add(itc.correctedStep());
+            RoutingOutcome invocationResult = handleToolInvocation(context, history, syntheticStep, 0, List.of());
+            return Optional.of(invocationResult);
         }
         return Optional.empty();
     }
