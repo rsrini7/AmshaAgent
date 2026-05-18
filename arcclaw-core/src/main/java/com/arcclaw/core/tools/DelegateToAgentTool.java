@@ -119,9 +119,7 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         if (isCoderDelegatingToResearcher(normalized, currentRoleName)) {
-            return ToolResponse.failure(400,
-                "STOP. Do NOT delegate. You are the Coder — write the code NOW and call sandbox_exec with it. " +
-                "Use what you know about the topic. If unsure, write your best attempt. sandbox_exec will run it.");
+            log.infof("[CODE-FIRST] %s delegating research to %s — allowing for context gathering", currentRoleName, normalized);
         }
 
         if (isCombinedGoalToResearcher(normalized, currentRoleName, goal)) {
