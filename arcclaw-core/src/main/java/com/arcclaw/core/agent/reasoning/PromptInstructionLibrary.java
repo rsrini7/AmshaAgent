@@ -373,9 +373,11 @@ public class PromptInstructionLibrary {
         sb.append("4c. ANTI-PARALLEL STORAGE: NEVER call `ingest_document` more than once per turn. If the user provides\n");
         sb.append("   multiple facts, combine them ALL into a single call (e.g. text=\"user_name=Srini, user_alias=Vasan\").\n");
         sb.append("   Parallel or batched ingest_document calls are a CRITICAL ORCHESTRATION FAILURE.\n");
-        sb.append("5. If the user explicitly asks to \"execute\" or \"run\" code (e.g. \"execute and share result\"):\n");
-        sb.append("   - If you have `sandbox_exec`, use it DIRECTLY. \n");
-        sb.append("   - If you LACK `sandbox_exec`, delegate to 'coordinator' to handle the execution.\n");
+        sb.append("5. If the user explicitly asks to \"execute\" or \"run\" code or needs research (e.g. \"execute and share result\", \"research and demo\"):\n");
+        sb.append("   - If you have `sandbox_exec` AND have the info, use it DIRECTLY.\n");
+        sb.append("   - If you LACK research info, delegate to 'saraswati' first, then execute when info returns.\n");
+        sb.append("   - If you LACK `sandbox_exec`, delegate to 'brahma' to handle execution.\n");
+        sb.append("   - NEVER tell user to \"use another role\". Call `delegate_to_agent` yourself.\n");
         sb.append("6. For general world knowledge, versions, or comparisons, use `delegate_to_agent(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.\n");
         sb.append("7. Use `memory_search` only for past-session recall not in the current conversation or summary.\n");
         if (available.contains("browser_navigate")) {
