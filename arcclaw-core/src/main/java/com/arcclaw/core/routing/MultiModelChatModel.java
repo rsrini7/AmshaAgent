@@ -100,45 +100,17 @@ public class MultiModelChatModel implements ChatModel {
                     log.infof("MultiModel: [%s] served by %s (%dms)", providerName, entry.label(), elapsedMs);
                     return response;
                 } catch (Throwable t) {
-                    LlmProviderException classified = LlmExceptionClassifier.classify(t);
-                    if (classified instanceof LlmRateLimitException) {
-                        // Detect daily/per-day quota exhaustion — permanently disable
-                        String msg = classified.getMessage();
-                        if (msg != null && msg.toLowerCase().contains("per day")) {
-                            h.disablePermanently();
-                            log.errorf("MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s",
-                                    providerName, entry.label(), msg);
-                        } else {
-                            // Per-minute rate limit: short cooldown then try next key
-                            // Key rotation IS the retry — no exponential backoff needed
-                            h.recordRateLimit(1, cooldownMaxSeconds);
-                            log.infof("MultiModel: [%s] %s rate-limited, trying next key. %s",
-                                    providerName, entry.label(), msg);
-                        }
-                    } else if (classified instanceof LlmAuthenticationException) {
-                        h.disablePermanently();
-                        log.errorf("MultiModel: [%s] %s permanently disabled (auth error): %s",
-                                providerName, entry.label(), classified.getMessage());
-                    } else if (classified instanceof LlmServiceUnavailableException) {
-                        h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-                        if (h.isPermanentlyDisabled()) {
-                            log.errorf("MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
-                                    providerName, entry.label(), MAX_CONSECUTIVE_FAILURES, classified.getMessage());
-                        } else {
-                            log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
-                                    providerName, entry.label(), h.cooldownRemainingMs() / 1000, classified.getMessage());
-                        }
-                    } else {
-                        h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
-                        log.warnf("MultiModel: [%s] %s unclassified error, cooling down %ds. %s",
-                                providerName, entry.label(), h.cooldownRemainingMs() / 1000, classified.getMessage());
-                    }
+                    classifyAndHandle(entry.label(), h, t);
                 }
             }
 
             // All entries exhausted
             if (health.values().stream().allMatch(ModelHealth::isPermanentlyDisabled)) {
                 throw new RuntimeException("MultiModel: [" + providerName + "] all models permanently disabled");
+            }
+            // All entries blocked by TPM — request too large for any model in this provider
+            if (health.values().stream().allMatch(h -> h.isTpmBlocked() || h.isPermanentlyDisabled())) {
+                throw new RuntimeException("MultiModel: [" + providerName + "] all models blocked — request too large for TPM limits");
             }
 
             long shortestMs = Long.MAX_VALUE;
@@ -157,6 +129,43 @@ public class MultiModelChatModel implements ChatModel {
             }
 
             interruptibleSleep(shortestMs);
+        }
+    }
+
+    private void classifyAndHandle(String label, ModelHealth h, Throwable t) {
+        LlmProviderException classified = LlmExceptionClassifier.classify(t);
+        if (classified instanceof LlmRateLimitException) {
+            String msg = classified.getMessage();
+            if (msg != null && msg.toLowerCase().contains("per day")) {
+                h.disablePermanently();
+                log.errorf("MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s",
+                        providerName, label, msg);
+            } else if (msg != null && msg.toLowerCase().contains("request too large")) {
+                h.markTpmBlocked();
+                log.infof("MultiModel: [%s] %s request too large for TPM, skipping. %s",
+                        providerName, label, msg);
+            } else {
+                h.recordRateLimit(1, cooldownMaxSeconds);
+                log.infof("MultiModel: [%s] %s rate-limited, trying next key. %s",
+                        providerName, label, msg);
+            }
+        } else if (classified instanceof LlmAuthenticationException) {
+            h.disablePermanently();
+            log.errorf("MultiModel: [%s] %s permanently disabled (auth error): %s",
+                    providerName, label, classified.getMessage());
+        } else if (classified instanceof LlmServiceUnavailableException) {
+            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+            if (h.isPermanentlyDisabled()) {
+                log.errorf("MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
+                        providerName, label, MAX_CONSECUTIVE_FAILURES, classified.getMessage());
+            } else {
+                log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
+                        providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage());
+            }
+        } else {
+            h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
+            log.warnf("MultiModel: [%s] %s unclassified error, cooling down %ds. %s",
+                    providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage());
         }
     }
 
@@ -182,11 +191,21 @@ public class MultiModelChatModel implements ChatModel {
         private volatile int consecutiveFailures;
         private volatile int consecutiveTransientFailures;
         private volatile boolean permanentlyDisabled;
+        private volatile boolean tpmBlocked;
 
         synchronized void recordSuccess() {
             consecutiveFailures = 0;
             consecutiveTransientFailures = 0;
+            tpmBlocked = false;
             cooldownUntilEpochMs = 0;
+        }
+
+        synchronized void markTpmBlocked() {
+            tpmBlocked = true;
+        }
+
+        boolean isTpmBlocked() {
+            return tpmBlocked;
         }
 
         synchronized void recordRateLimit(int baseSeconds, int maxSeconds) {
