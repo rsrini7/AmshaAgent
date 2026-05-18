@@ -25,9 +25,12 @@ public class LlmExceptionClassifier {
                     return new LlmToolCallException(msg, throwable);
                 }
                 
-                if (msg != null && (msg.contains("model_not_found") || msg.contains("does not exist") 
+                if (msg != null && (msg.contains("model_not_found") || msg.contains("does not exist")
                         || msg.contains("invalid_api_key") || msg.contains("API_KEY_INVALID"))) {
-                    return new LlmAuthenticationException(msg, throwable);
+                    String hint = msg.contains("model_not_found") || msg.contains("does not exist")
+                            ? " MODEL MAY HAVE BEEN REMOVED — check provider's model list and update ARCCLAW_*_MODEL."
+                            : "";
+                    return new LlmAuthenticationException(msg + hint, throwable);
                 }
 
                 if (msg != null && (msg.toLowerCase().contains("degraded") || msg.toLowerCase().contains("cannot be invoked") || msg.toLowerCase().contains("overloaded"))) {
@@ -43,6 +46,11 @@ public class LlmExceptionClassifier {
                 }
                 if (status == 401 || status == 403) {
                     return new LlmAuthenticationException(msg != null ? msg : "Authentication failed", throwable);
+                }
+                if (status == 404) {
+                    return new LlmAuthenticationException(
+                            "Model not found (404). MODEL MAY HAVE BEEN REMOVED — check provider's model list and update ARCCLAW_*_MODEL. "
+                            + (msg != null ? msg : ""), throwable);
                 }
                 if (status >= 500) {
                     return new LlmServiceUnavailableException(msg != null ? msg : "Service unavailable", throwable);

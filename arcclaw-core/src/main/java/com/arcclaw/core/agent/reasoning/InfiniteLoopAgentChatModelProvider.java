@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.routing.InfiniteLoopChatModel;
+import com.arcclaw.core.routing.MultiModelChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -82,6 +83,21 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
         log.infof("InfiniteLoop: Ready with %d slot(s): %s.",
                 slots.size(), slots.stream().map(InfiniteLoopChatModel.Slot::name).collect(Collectors.joining(", ")));
+
+        // Log model summary for visibility
+        for (InfiniteLoopChatModel.Slot slot : slots) {
+            String modelStr = slot.model().toString();
+            String display = modelStr.length() > 120 ? modelStr.substring(0, 120) + "..." : modelStr;
+            if (slot.model() instanceof MultiModelChatModel) {
+                log.infof("InfiniteLoop:   [%s] → MULTI-MODEL: %s", slot.name(), display);
+            } else {
+                log.infof("InfiniteLoop:   [%s] → %s", slot.name(), display);
+            }
+        }
+
+        log.infof("InfiniteLoop: TIP — Free models change frequently. If a slot starts failing with " +
+                "'model not found' or 404, check the provider's model list and update ARCCLAW_*_MODEL.");
+
         return new InfiniteLoopChatModel(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
     }
 

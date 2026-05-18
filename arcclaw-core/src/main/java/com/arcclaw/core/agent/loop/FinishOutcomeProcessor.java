@@ -245,6 +245,17 @@ public class FinishOutcomeProcessor {
             log.warnf("FINISH-HANDLER: Detected broken JSON fragment in answer for session %s - treating as leak.", sessionId);
         }
 
+        // Try to parse the leaked tool call FIRST — before early salvage strips it
+        var leakedCall = qualityGuard.extractLeakedToolCall(candidateAnswer);
+        if (leakedCall.isPresent()) {
+            var call = leakedCall.get();
+            log.infof("LEAKED-TOOL-EXEC session %s: parsed leaked tool call '%s' from FINISH answer - executing directly",
+                    sessionId, call.toolName());
+            InfiniteLoopChatModel.getLastUsedSlot().ifPresent(InfiniteLoopChatModel::recordQualityFailure);
+            ReasoningStep cleanStep = step.withObservation(cleanThought);
+            return new FinishActionHandler.FinishOutcome.ExecuteLeakedTool(call.toolName(), call.arguments(), cleanStep);
+        }
+
         if ((llmSchemaErrorCount >= 1 || isBrokenFragment)
                 && !cleanThought.isBlank()
                 && !isBrokenFragment
@@ -287,16 +298,6 @@ public class FinishOutcomeProcessor {
 
         // Record quality failure for the slot that produced this leak
         InfiniteLoopChatModel.getLastUsedSlot().ifPresent(InfiniteLoopChatModel::recordQualityFailure);
-
-        // Try to parse the leaked tool call and execute it directly
-        var leakedCall = qualityGuard.extractLeakedToolCall(candidateAnswer);
-        if (leakedCall.isPresent()) {
-            var call = leakedCall.get();
-            log.infof("LEAKED-TOOL-EXEC session %s: parsed leaked tool call '%s' from FINISH answer - executing directly",
-                    sessionId, call.toolName());
-            ReasoningStep cleanStep = step.withObservation(cleanThought);
-            return new FinishActionHandler.FinishOutcome.ExecuteLeakedTool(call.toolName(), call.arguments(), cleanStep);
-        }
 
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
             log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON - retrying (attempt %d)",
