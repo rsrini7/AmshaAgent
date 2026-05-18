@@ -413,7 +413,14 @@ public class FinishOutcomeProcessor {
      */
     private FinishActionHandler.FinishOutcome tryInjectOnRefusal(String answer, String goal,
                                                                   String sessionId, ReasoningStep step) {
-        if (goal == null || !AgentSentinels.REFUSAL_PATTERN.matcher(answer).find()) return null;
+        if (goal == null) {
+            log.debugf("TOOL-INJECT skip: goal is null for session %s", sessionId);
+            return null;
+        }
+        if (!AgentSentinels.REFUSAL_PATTERN.matcher(answer).find()) {
+            log.debugf("TOOL-INJECT skip: no refusal pattern in answer for session %s", sessionId);
+            return null;
+        }
 
         String availableTools = String.join(",", toolRegistry.listTools());
 
