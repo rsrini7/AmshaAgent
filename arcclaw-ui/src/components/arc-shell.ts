@@ -409,7 +409,7 @@ export class ArcShell extends LitElement {
                         : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'};
                         box-shadow: 0 0 0 6px color-mix(in srgb, ${this._sseStatus === 'connected' ? 'var(--accent-secondary)' : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'} 18%, transparent);"
                     ></div>
-                    ${this._sseStatus === 'connected' ? 'Connected to ArcClaw Agent Cluster' : 'ArcClaw Agent Cluster (Offline)'}
+                    ${this._sseStatus === 'connected' ? 'Connected to ArcClaw' : 'ArcClaw (Offline)'}
                   </div>
                   <arc-theme-toggle></arc-theme-toggle>
                 </div>
