@@ -97,8 +97,9 @@ public class ToolResultProcessor {
 
     private StepDecision handleDelegateOutcome(AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
         if (res != null && res.success() && !obs.startsWith("⚠️") && !obs.startsWith("⏳") && !obs.startsWith("Tool execution failed")) {
-            writer.saveAnswer(ctx.sessionId(), obs);
-            return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
+            // Don't terminate — let the parent agent process the sub-agent's result.
+            // The LLM will decide whether to delegate again, write code, or finish.
+            return null;
         }
         // Delegation paused for human approval — terminal with message, don't retry.
         // The delegate checkpoint is AWAITING_APPROVAL with channel info so the user
