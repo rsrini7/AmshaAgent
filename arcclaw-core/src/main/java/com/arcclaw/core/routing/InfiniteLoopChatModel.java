@@ -28,8 +28,9 @@ public class InfiniteLoopChatModel implements ChatModel {
     private final int cooldownBaseSeconds;
     private final int cooldownMaxSeconds;
     private final int cooldownTransientSeconds;
+    private final long maxLatencyMs;
 
-    public InfiniteLoopChatModel(List<Slot> slots, int cooldownBaseSeconds, int cooldownMaxSeconds, int cooldownTransientSeconds) {
+    public InfiniteLoopChatModel(List<Slot> slots, int cooldownBaseSeconds, int cooldownMaxSeconds, int cooldownTransientSeconds, long maxLatencyMs) {
         if (slots == null || slots.isEmpty()) {
             throw new IllegalArgumentException("InfiniteLoopChatModel requires at least one slot");
         }
@@ -42,6 +43,11 @@ public class InfiniteLoopChatModel implements ChatModel {
         this.cooldownBaseSeconds = cooldownBaseSeconds;
         this.cooldownMaxSeconds = cooldownMaxSeconds;
         this.cooldownTransientSeconds = cooldownTransientSeconds;
+        this.maxLatencyMs = maxLatencyMs;
+    }
+
+    public InfiniteLoopChatModel(List<Slot> slots, int cooldownBaseSeconds, int cooldownMaxSeconds, int cooldownTransientSeconds) {
+        this(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, 60_000L);
     }
 
     @Override
@@ -60,10 +66,18 @@ public class InfiniteLoopChatModel implements ChatModel {
                 if (h.isInCooldown()) { log.debugf("InfiniteLoop: Slot [%s] in cooldown (%ds remaining), skipping.", slot.name(), h.cooldownRemainingMs() / 1000); continue; }
 
                 try {
+                    long startMs = System.currentTimeMillis();
                     ChatResponse response = slot.model().chat(request);
+                    long elapsedMs = System.currentTimeMillis() - startMs;
+                    if (maxLatencyMs > 0 && elapsedMs > maxLatencyMs) {
+                        log.warnf("InfiniteLoop: Slot [%s] responded in %dms (threshold %dms), treating as slow failure.",
+                                slot.name(), elapsedMs, maxLatencyMs);
+                        h.recordTransientFailure(cooldownTransientSeconds);
+                        continue;
+                    }
                     h.recordSuccess();
                     currentIndex.set(idx);
-                    log.infof("InfiniteLoop: Slot [%s] responded successfully.", slot.name());
+                    log.infof("InfiniteLoop: Slot [%s] responded successfully (%dms).", slot.name(), elapsedMs);
                     return response;
                 } catch (Throwable t) {
                     LlmProviderException classified = LlmExceptionClassifier.classify(t);

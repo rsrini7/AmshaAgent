@@ -345,6 +345,7 @@ arcclaw:
     cooldown-base-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_BASE_SECONDS:30}
     cooldown-max-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:300}
     cooldown-transient-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS:5}
+    max-latency-ms: ${ARCCLAW_INFINITE_LOOP_MAX_LATENCY_MS:60000}
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:

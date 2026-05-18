@@ -31,6 +31,9 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
     @ConfigProperty(name = "arcclaw.infinite-loop.cooldown-transient-seconds", defaultValue = "5")
     int cooldownTransientSeconds;
 
+    @ConfigProperty(name = "arcclaw.infinite-loop.max-latency-ms", defaultValue = "60000")
+    long maxLatencyMs;
+
     @Inject
     @Any
     Instance<AgentChatModelProvider> allProviders;
@@ -78,7 +81,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
         log.infof("InfiniteLoop: Ready with %d slot(s): %s.",
                 slots.size(), slots.stream().map(InfiniteLoopChatModel.Slot::name).collect(Collectors.joining(", ")));
-        return new InfiniteLoopChatModel(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds);
+        return new InfiniteLoopChatModel(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
     }
 
     private AgentChatModelProvider findProvider(String name) {
