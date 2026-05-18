@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mvnw compile:*)",
+      "Bash(playwright-cli --help)",
+      "Bash(playwright-cli install-browser:*)",
+      "WebSearch",
+      "WebFetch(domain:mise.jdx.dev)",
+      "WebFetch(domain:github.com)",
+      "Bash(mise:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//Users/srinivasanragothaman/ws/ArcClawInternal/**)",
+      "Bash(./mvnw test:*)",
+      "Bash(git diff :*)",
+      "Bash(git log :*)",
+      "Bash(git status :*)",
+      "Bash(git show :*)",
+      "Bash(find /Users/srinivasanragothaman/ws/ArcClawInternal :*)",
+      "Bash(python3 :*)",
+      "Bash(curl :*)",
+      "Bash(jar :*)",
+      "Bash(javap :*)",
+      "Bash(find . -name :*)",
+      "Bash(grep -r :*)",
+      "Bash(./mvnw install:*)",
+      "Bash(npm run:*)",
+      "Bash(while read:*)",
+      "Bash(do echo :*)",
+      "Bash(done)",
+      "Bash(mvn compile:*)",
+      "Bash(sqlite3:*)",
+      "Bash(ls:*)",
+      "Bash(/usr/bin/sqlite3 *)",
+      "Bash(grep:*)",
+      "Bash(rg:*)"
+    ]
+  }
+}
