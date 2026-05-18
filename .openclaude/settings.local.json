@@ -32,6 +32,7 @@
       "Bash(ls:*)",
       "Bash(/usr/bin/sqlite3:*)",
       "Bash(grep:*)",
+      "Bash(awk:*)",
       "Bash(rg:*)",
       "Bash(xxd:*)",
       "Bash(sed:*)",

@@ -3,7 +3,6 @@ package com.arcclaw.core.agent.loop;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -69,7 +68,7 @@ public class FinishActionHandler {
         this.observers = observers;
         this.toolRegistry = toolRegistry;
         this.resultProcessor = new FinishOutcomeProcessor(
-                qualityGuard, codePolicy, rateLimitTracker, correctionStrategy, objectMapper, textPatternUtils);
+                qualityGuard, codePolicy, rateLimitTracker, correctionStrategy, objectMapper, textPatternUtils, toolRegistry);
     }
 
     /**
@@ -154,7 +153,7 @@ public class FinishActionHandler {
 
         // --- Raw tool-call leak detection ---
         if (qualityGuard.isRawToolCallLeak(candidateAnswer)) {
-            FinishOutcome outcome = resultProcessor.handleLeak(candidateAnswer, step, history, llmSchemaErrorCount, sessionId);
+            FinishOutcome outcome = resultProcessor.handleLeak(candidateAnswer, step, history, llmSchemaErrorCount, sessionId, context.goal());
             if (outcome instanceof FinishOutcome.RetryLeak) {
                 context.setForceFinishRetry(true);
             }
@@ -228,13 +227,16 @@ public class FinishActionHandler {
         String availableTools = String.join(",", toolRegistry.listTools());
 
         // Research goal + search tool available → inject search
-        if (AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find() && availableTools.contains("serper_web_search")) {
-            log.infof("TOOL-INJECT session %s: agent finished without searching, injecting serper_web_search", sessionId);
-            Map<String, Object> args = new HashMap<>();
-            args.put("query", goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
-            args.put("count", 5);
-            return new FinishOutcome.InjectToolCall("serper_web_search", args,
-                    step.withObservation("Injecting search tool call that was missed"));
+        if (AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
+            String searchTool = findSearchTool(availableTools);
+            if (searchTool != null) {
+                log.infof("TOOL-INJECT session %s: agent finished without searching, injecting %s", sessionId, searchTool);
+                Map<String, Object> args = new HashMap<>();
+                args.put("query", goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
+                args.put("count", 5);
+                return new FinishOutcome.InjectToolCall(searchTool, args,
+                        step.withObservation("Injecting search tool call that was missed"));
+            }
         }
 
         // Execution goal + sandbox available → inject sandbox_exec
@@ -246,6 +248,16 @@ public class FinishActionHandler {
                     step.withObservation("Injecting sandbox_exec that was missed"));
         }
 
+        return null;
+    }
+
+    private static final List<String> SEARCH_TOOL_NAMES = List.of(
+            "serper_web_search", "brave_web_search", "web_search", "search");
+
+    private String findSearchTool(String availableTools) {
+        for (String name : SEARCH_TOOL_NAMES) {
+            if (availableTools.contains(name)) return name;
+        }
         return null;
     }
 

@@ -2,6 +2,8 @@ package com.arcclaw.core.agent.loop;
 
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
@@ -10,6 +12,7 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.routing.InfiniteLoopChatModel;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,25 +65,38 @@ public class FinishOutcomeProcessor {
             Pattern.CASE_INSENSITIVE
     );
 
+    private static final List<String> SEARCH_TOOL_NAMES = List.of(
+            "serper_web_search", "brave_web_search", "web_search", "search");
+
     private final AnswerGuardStrategy qualityGuard;
     private final CodeGenerationPolicy codePolicy;
     private final RateLimitTracker rateLimitTracker;
     private final CorrectionStrategy correctionStrategy;
     private final ObjectMapper objectMapper;
     private final TextPatternUtils textPatternUtils;
+    private final ToolRegistry toolRegistry;
 
     public FinishOutcomeProcessor(AnswerGuardStrategy qualityGuard,
                                   CodeGenerationPolicy codePolicy,
                                   RateLimitTracker rateLimitTracker,
                                   CorrectionStrategy correctionStrategy,
                                   ObjectMapper objectMapper,
-                                  TextPatternUtils textPatternUtils) {
+                                  TextPatternUtils textPatternUtils,
+                                  ToolRegistry toolRegistry) {
         this.qualityGuard = qualityGuard;
         this.codePolicy = codePolicy;
         this.rateLimitTracker = rateLimitTracker;
         this.correctionStrategy = correctionStrategy;
         this.objectMapper = objectMapper;
         this.textPatternUtils = textPatternUtils;
+        this.toolRegistry = toolRegistry;
+    }
+
+    private String findSearchTool(String availableTools) {
+        for (String name : SEARCH_TOOL_NAMES) {
+            if (availableTools.contains(name)) return name;
+        }
+        return null;
     }
 
     public String extractCandidateAnswer(ReasoningStep step) {
@@ -203,7 +219,8 @@ public class FinishOutcomeProcessor {
                                      ReasoningStep step,
                                      List<ReasoningStep> history,
                                      int llmSchemaErrorCount,
-                                     String sessionId) {
+                                     String sessionId,
+                                     String goal) {
 
         boolean isLeak = qualityGuard.isRawToolCallLeak(candidateAnswer);
 
@@ -257,6 +274,9 @@ public class FinishOutcomeProcessor {
 
             AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(cleanThought, history);
             String finalAnswer = guardResult.answer();
+
+            FinishActionHandler.FinishOutcome injected = tryInjectOnRefusal(finalAnswer, goal, sessionId, step);
+            if (injected != null) return injected;
 
             return new FinishActionHandler.FinishOutcome.Completed(
                     AgentResult.finished(finalAnswer, List.copyOf(history)), finalAnswer);
@@ -385,5 +405,29 @@ public class FinishOutcomeProcessor {
                     raw.length() - stripped.length());
         }
         return stripped;
+    }
+
+    /**
+     * If the answer is a refusal and the goal suggests a tool should have been used,
+     * inject the appropriate tool call. Returns null if no injection is needed.
+     */
+    private FinishActionHandler.FinishOutcome tryInjectOnRefusal(String answer, String goal,
+                                                                  String sessionId, ReasoningStep step) {
+        if (goal == null || !AgentSentinels.REFUSAL_PATTERN.matcher(answer).find()) return null;
+
+        String availableTools = String.join(",", toolRegistry.listTools());
+
+        if (AgentSentinels.RESEARCH_KEYWORDS.matcher(goal).find()) {
+            String searchTool = findSearchTool(availableTools);
+            if (searchTool != null) {
+                log.infof("TOOL-INJECT session %s: salvaged refusal detected, injecting %s", sessionId, searchTool);
+                Map<String, Object> args = new HashMap<>();
+                args.put("query", goal.replaceAll("(?i)^(do )?research (on )?(use )?", "").trim());
+                args.put("count", 5);
+                return new FinishActionHandler.FinishOutcome.InjectToolCall(searchTool, args,
+                        step.withObservation("Injecting search tool — salvaged answer was a refusal"));
+            }
+        }
+        return null;
     }
 }

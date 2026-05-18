@@ -58,6 +58,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -116,7 +117,7 @@ class AgentStateMachineRunnerTest {
         TextPatternUtils textPatternUtils = new TextPatternUtils();
 
         ToolRegistry toolRegistryForHandler = mock(ToolRegistry.class);
-        org.mockito.Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of("sandbox_exec", "serper_web_search", "memory_search"));
+        Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of("sandbox_exec", "serper_web_search", "memory_search"));
         finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper, textPatternUtils, toolRegistryForHandler);
 
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager(agentStore, agentSseService, new ObjectMapper());
