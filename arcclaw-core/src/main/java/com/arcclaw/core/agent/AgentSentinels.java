@@ -9,6 +9,9 @@ import java.util.regex.Pattern;
 public final class AgentSentinels {
     private AgentSentinels() {}
     
+    /** sentinel for auto-heal sub-sessions. format: {parent_sid}:heal:{agentName}:{currentTimeMillis}:a{attempt} */
+    public static final String HEAL_SESSION_SENTINEL = ":heal:";
+
     /** sentinel for delegated sub-sessions. format: {parent_sid}:delegate:{agentName}:{currentTimeMillis} */
     public static final String DELEGATE_SESSION_SENTINEL = ":delegate:";
 

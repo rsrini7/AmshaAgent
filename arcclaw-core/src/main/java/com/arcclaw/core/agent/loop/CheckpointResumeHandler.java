@@ -75,8 +75,9 @@ public class CheckpointResumeHandler {
                                    AgentLoop agentLoop,
                                    ReasoningEngine reasoningEngine,
                                    ChannelPluginRegistry channelPluginRegistry,
+                                   CronStorePort cronStore,
                                    CliResultBridge cliResultBridge,
-                                   CronStorePort cronStore) {
+                                   ExecutionFailureRecoveryService recoveryService) {
         this.agentStore = agentStore;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
@@ -84,7 +85,7 @@ public class CheckpointResumeHandler {
         this.cliResultBridge = cliResultBridge;
         this.cronStore = cronStore;
         this.objectMapper = objectMapper;
-        this.strategyDispatcher = new ResumeStrategyDispatcher(agentStore, toolRegistry, objectMapper, reasoningEngine);
+        this.strategyDispatcher = new ResumeStrategyDispatcher(agentStore, toolRegistry, objectMapper, reasoningEngine, recoveryService);
     }
 
     @Inject

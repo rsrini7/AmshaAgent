@@ -23,7 +23,7 @@ public class GroqProviderFactory implements AgentChatModelProvider {
     String baseUrl;
 
     @ConfigProperty(name = "ARCCLAW_GROQ_MODEL",
-                    defaultValue = "llama-3.3-70b-versatile")
+                    defaultValue = "meta-llama/llama-4-scout-17b-16e-instruct")
     String modelName;
 
     @Override

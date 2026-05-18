@@ -43,6 +43,7 @@ class ToolStepHandlerGuardTest {
     @Mock Instance<DynamicToolLookup> dynamicToolLookup;
     @Mock ApprovalCheckpointManager checkpointManager;
     @Mock ParallelToolStepExecutor parallelExecutor;
+    @Mock ExecutionFailureRecoveryService recoveryService;
     @InjectMocks ToolStepHandler handler;
 
     private AgentExecutionContext createCtx(String role, String goal) {

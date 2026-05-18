@@ -66,6 +66,7 @@ public class ToolStepHandler {
     private final ParallelToolStepExecutor parallelExecutor;
     private final MeterRegistry meterRegistry;
     private final ToolResultProcessor resultProcessor;
+    private final ExecutionFailureRecoveryService recoveryService;
 
     @Inject
     public ToolStepHandler(ToolRegistry toolRegistry,
@@ -76,7 +77,8 @@ public class ToolStepHandler {
                            Instance<DynamicToolLookup> dynamicToolLookup,
                            ApprovalCheckpointManager checkpointManager,
                            ParallelToolStepExecutor parallelExecutor,
-                           MeterRegistry meterRegistry) {
+                           MeterRegistry meterRegistry,
+                           ExecutionFailureRecoveryService recoveryService) {
         this.toolRegistry = toolRegistry;
         this.observers = observers;
         this.guard = guard;
@@ -86,6 +88,7 @@ public class ToolStepHandler {
         this.parallelExecutor = parallelExecutor;
         this.meterRegistry = meterRegistry;
         this.resultProcessor = new ToolResultProcessor(writer);
+        this.recoveryService = recoveryService;
     }
 
     // ── Validation
@@ -222,6 +225,41 @@ public class ToolStepHandler {
                     List.copyOf(history)));
         }
 
+        // Auto-heal hook: intercept sandbox_exec failures for coder and delegate to Shiva
+        if (response instanceof ToolResponse.ToolFailure failure
+                && recoveryService.shouldAttemptRecovery(context.agentRole(), toolName, response)) {
+            log.infof("[AutoHeal] Detected recoverable sandbox_exec failure for session %s, invoking Shiva debugger",
+                    context.sessionId());
+            String originalCode = extractParam(params, "code");
+            String language = extractParam(params, "language");
+            String originalGoal = context.goal();
+
+            ExecutionFailureRecoveryService.RecoveryResult recovery = recoveryService.attemptRecovery(
+                    context.sessionId(), context.userId(), context.chatId(),
+                    originalCode, language, failure.output(),
+                    context.channelType(), context.channelPlatformId(), originalGoal);
+
+            if (recovery.success()) {
+                log.infof("[AutoHeal] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
+                        recovery.attemptsUsed());
+                Map<String, Object> fixedParams = new java.util.HashMap<>(params);
+                fixedParams.put("code", recovery.fixedCode());
+                ToolResponse retriedResponse = invokeToolWithParams(context, history, step, toolName, fixedParams);
+
+                if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure && !retryFailure.isInfraFailure()) {
+                    log.warnf("[AutoHeal] Re-execution also failed, falling through to error path");
+                    return handleToolFailureAfterHealAttempt(context, history, step, toolName, params,
+                            retryFailure, consecutiveFailures);
+                }
+
+                response = retriedResponse;
+            } else {
+                log.warnf("[AutoHeal] Recovery failed: %s, falling through to error path", recovery.errorIfFailed());
+                return handleToolFailureAfterHealAttempt(context, history, step, toolName, params,
+                        failure, consecutiveFailures);
+            }
+        }
+
         // Phase 3 - Observe
         String observation = resultProcessor.buildObservation(response);
         final ReasoningStep completedStep = step.withObservation(observation, response instanceof ToolResponse.ToolSuccess);
@@ -350,6 +388,40 @@ public class ToolStepHandler {
         } finally {
             sample.stop(timer.tag("exception", exceptionClass).register(meterRegistry));
         }
+    }
+
+    private String extractParam(Map<String, Object> params, String key) {
+        Object val = params.get(key);
+        return val instanceof String s ? s : (val != null ? val.toString() : "");
+    }
+
+    private ToolResponse invokeToolWithParams(AgentExecutionContext context,
+            List<ReasoningStep> history, ReasoningStep step,
+            String toolName, Map<String, Object> params) {
+        InvokeResult result = invokeTool(context, history, step, toolName, params);
+        if (result instanceof InvokeResult.ShortCircuit sc) {
+            return ToolResponse.failure(1, "Auto-heal re-execution blocked by guard: " + sc.decision());
+        }
+        return ((InvokeResult.Responded) result).response();
+    }
+
+    private StepDecision handleToolFailureAfterHealAttempt(AgentExecutionContext context,
+            List<ReasoningStep> history, ReasoningStep step,
+            String toolName, Map<String, Object> params,
+            ToolResponse.ToolFailure failure, int consecutiveFailures) {
+        history.add(step.withObservation(failure.output(), false));
+        observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(),
+                step.withObservation(failure.output(), false)));
+
+        if (failure.isInfraFailure()) {
+            return StepDecision.terminal(AgentResult.failed(
+                    "⚠️ " + failure.output(),
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(history)));
+        }
+
+        return resultProcessor.resolveOutcome(context, toolName, params, failure, failure.output(),
+                step.withObservation(failure.output(), false), history, consecutiveFailures);
     }
 
     private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {
