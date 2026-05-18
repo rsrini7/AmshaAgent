@@ -126,13 +126,28 @@ public class ReasoningStepParser {
         return stripped;
     }
 
+    /**
+     * Strips model-artifact suffixes like {@code <|channel|>commentary} from tool names.
+     * Some free models (e.g. OpenRouter) append these to function-call names.
+     */
+    private static String sanitizeToolName(String name) {
+        if (name == null) return null;
+        int idx = name.indexOf("<|");
+        return idx > 0 ? name.substring(0, idx) : name;
+    }
+
     private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
-        log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
+        String rawName = req.name();
+        String toolName = sanitizeToolName(rawName);
+        if (!rawName.equals(toolName)) {
+            log.infof("Sanitized tool name: '%s' -> '%s'", rawName, toolName);
+        }
+        log.infof("LLM is attempting to call tool: '%s' with args: %s", toolName, req.arguments());
 
         String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
                 ? WorkspaceContext.RAW_USER_GOAL.get() : null;
 
-        if (ToolCapability.SANDBOX_EXEC.toolName().equals(req.name()) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
+        if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
             String code = recoverCodeForDisplay(req.arguments());
             if (code != null && !code.isBlank()) {
                 log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
@@ -143,7 +158,7 @@ public class ReasoningStepParser {
             }
         }
 
-        Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
+        Map<String, Object> actionInput = deserializeParams(sessionId, toolName, req.arguments());
         if (actionInput.containsKey("__error")) {
             return ReasoningStep.schemaError(
                     "System: Your previous response contained invalid JSON. " +
@@ -152,7 +167,7 @@ public class ReasoningStepParser {
             );
         }
 
-        if (ToolCapability.MEMORY_SEARCH.toolName().equals(req.name())) {
+        if (ToolCapability.MEMORY_SEARCH.toolName().equals(toolName)) {
             String query = (String) actionInput.get("query");
             if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
                 String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
@@ -165,16 +180,16 @@ public class ReasoningStepParser {
             }
 
             if (query == null || query.isBlank()) {
-                log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", req.name(), sessionId);
+                log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", toolName, sessionId);
                 return ReasoningStep.schemaError(
-                    "System: The 'query' parameter for '" + req.name() + "' cannot be blank. " +
+                    "System: The 'query' parameter for '" + toolName + "' cannot be blank. " +
                     "Please provide factual keywords for the search.",
                     inputTokens, outputTokens
                 );
             }
         }
 
-        return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
+        return ReasoningStep.pending(aiMessage.text(), toolName, actionInput, inputTokens, outputTokens);
     }
 
     private ReasoningStep handleMultipleToolCalls(String sessionId, String agentRole, AiMessage aiMessage, List<ToolExecutionRequest> requests, int inputTokens, int outputTokens) {
@@ -182,7 +197,7 @@ public class ReasoningStepParser {
                   "tool calls: %s - routing to ParallelToolStepExecutor.",
                   sessionId, agentRole, requests.size(),
                   requests.stream()
-                      .map(ToolExecutionRequest::name)
+                      .map(r -> sanitizeToolName(r.name()))
                       .collect(Collectors.joining(", ")));
 
         List<ParallelToolCall> calls = new ArrayList<>();
@@ -233,15 +248,16 @@ public class ReasoningStepParser {
 
         for (int i = 0; i < requests.size(); i++) {
             ToolExecutionRequest req = requests.get(i);
-            String callId = req.id() != null ? req.id() : req.name() + "-" + UUID.randomUUID();
-            Map<String, Object> params = deserializeParams(sessionId, req.name(), req.arguments());
+            String name = sanitizeToolName(req.name());
+            String callId = req.id() != null ? req.id() : name + "-" + UUID.randomUUID();
+            Map<String, Object> params = deserializeParams(sessionId, name, req.arguments());
             String paramsJson = "{}";
             try {
                 paramsJson = objectMapper.writeValueAsString(params);
             } catch (Exception e) {
-                log.warnf("Failed to serialize params for tool %s: %s", req.name(), LogUtil.rootMessage(e));
+                log.warnf("Failed to serialize params for tool %s: %s", name, LogUtil.rootMessage(e));
             }
-            calls.add(ParallelToolCall.pending(callId, req.name(), params, paramsJson));
+            calls.add(ParallelToolCall.pending(callId, name, params, paramsJson));
         }
 
         Map<String, Object> batchPayload;
@@ -251,8 +267,9 @@ public class ReasoningStepParser {
         } catch (Exception e) {
             log.errorf("Failed to serialize parallel batch for session %s: %s", sessionId, LogUtil.rootMessage(e));
             ToolExecutionRequest req = requests.getFirst();
-            Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
-            return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
+            String name = sanitizeToolName(req.name());
+            Map<String, Object> actionInput = deserializeParams(sessionId, name, req.arguments());
+            return ReasoningStep.pending(aiMessage.text(), name, actionInput, inputTokens, outputTokens);
         }
 
         return ReasoningStep.parallelBatch(aiMessage.text(), batchPayload, inputTokens, outputTokens);

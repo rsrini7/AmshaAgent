@@ -146,6 +146,17 @@ public class StepDecisionRouter {
                 ? AgentResult.failed(f.reason(), f.category(), List.copyOf(history))
                 : sf.result();
             return Optional.of(RoutingOutcome.terminal(failedResult));
+        } else if (outcome instanceof FinishActionHandler.FinishOutcome.ExecuteLeakedTool elt) {
+            log.infof("LEAKED-TOOL-EXEC session %s: executing parsed tool '%s' from leaked FINISH answer",
+                    context.sessionId(), elt.toolName());
+            ReasoningStep.ToolCallStep syntheticStep = new ReasoningStep.ToolCallStep(
+                    "Executing leaked tool call from FINISH answer",
+                    elt.toolName(),
+                    elt.arguments(),
+                    null, 0, 0, null, null, null, null, false, false);
+            history.add(elt.correctedStep());
+            RoutingOutcome invocationResult = handleToolInvocation(context, history, syntheticStep, 0, List.of());
+            return Optional.of(invocationResult);
         }
         return Optional.empty();
     }

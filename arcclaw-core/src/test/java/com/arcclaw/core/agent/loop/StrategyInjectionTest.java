@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Alternative;
@@ -48,6 +49,7 @@ public class StrategyInjectionTest {
         @Override public boolean isRawToolCallLeak(String answer) { return false; }
         @Override public String stripRawToolJson(String answer) { return answer; }
         @Override public String extractLeakedToolName(String answer) { return "alt"; }
+        @Override public Optional<LeakedToolCall> extractLeakedToolCall(String answer) { return Optional.empty(); }
     }
 
     @Alternative

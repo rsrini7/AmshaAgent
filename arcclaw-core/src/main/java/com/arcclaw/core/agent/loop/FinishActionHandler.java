@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.List;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -69,7 +70,7 @@ public class FinishActionHandler {
      * decide what to do next without inspecting answer text directly.
      */
     public sealed interface FinishOutcome
-            permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.Correction, FinishOutcome.SalvageFailed {
+            permits FinishOutcome.Completed, FinishOutcome.RetryLeak, FinishOutcome.Correction, FinishOutcome.SalvageFailed, FinishOutcome.ExecuteLeakedTool {
 
         /**
          * The answer passed all guards - return it as the session result.
@@ -93,6 +94,14 @@ public class FinishActionHandler {
          * answer remains.
          */
         record SalvageFailed(AgentResult result) implements FinishOutcome {}
+
+        /**
+         * A raw tool-call leak was detected and parsed into an executable tool call.
+         * The router should execute the tool and continue the loop.
+         */
+        record ExecuteLeakedTool(String toolName,
+                                 Map<String, Object> arguments,
+                                 ReasoningStep correctedStep) implements FinishOutcome {}
     }
 
     public FinishOutcome handle(AgentExecutionContext context,

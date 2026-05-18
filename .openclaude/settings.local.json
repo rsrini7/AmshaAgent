@@ -35,7 +35,8 @@
       "Bash(rg:*)",
       "Bash(xxd:*)",
       "Bash(sed:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(mvn test:*)"
     ]
   }
 }

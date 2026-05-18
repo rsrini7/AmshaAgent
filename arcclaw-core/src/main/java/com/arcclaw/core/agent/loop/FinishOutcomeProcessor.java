@@ -261,6 +261,16 @@ public class FinishOutcomeProcessor {
                     AgentResult.finished(finalAnswer, List.copyOf(history)), finalAnswer);
         }
 
+        // Try to parse the leaked tool call and execute it directly
+        var leakedCall = qualityGuard.extractLeakedToolCall(candidateAnswer);
+        if (leakedCall.isPresent()) {
+            var call = leakedCall.get();
+            log.infof("LEAKED-TOOL-EXEC session %s: parsed leaked tool call '%s' from FINISH answer - executing directly",
+                    sessionId, call.toolName());
+            ReasoningStep cleanStep = step.withObservation(cleanThought);
+            return new FinishActionHandler.FinishOutcome.ExecuteLeakedTool(call.toolName(), call.arguments(), cleanStep);
+        }
+
         if (correctionStrategy.withinBudget(llmSchemaErrorCount)) {
             log.warnf("STATE-MACHINE session %s FINISH answer contains raw tool call JSON - retrying (attempt %d)",
                     sessionId, llmSchemaErrorCount + 1);

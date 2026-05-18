@@ -1,6 +1,8 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 
@@ -33,6 +35,17 @@ public interface AnswerGuardStrategy {
      * Extracts the tool name from a leak.
      */
     String extractLeakedToolName(String answer);
+
+    /**
+     * Attempts to parse a leaked tool call from the answer text.
+     * Returns a LeakedToolCall if the text contains a parseable tool invocation, empty otherwise.
+     */
+    Optional<LeakedToolCall> extractLeakedToolCall(String answer);
+
+    /**
+     * A parsed tool call extracted from leaked FINISH answer text.
+     */
+    record LeakedToolCall(String toolName, Map<String, Object> arguments) {}
 
     /**
      * Represents the outcome of an answer guard check.
