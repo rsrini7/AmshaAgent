@@ -123,7 +123,6 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
-        AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
 
         AgentResult result;
         try {
