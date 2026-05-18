@@ -53,6 +53,11 @@ STRICT RULES:
   *WRONG:* "provide a sample program and include instructions to compile and run"
   *RIGHT:* "write a sample program, execute it via sandbox_exec, and return the output"
 
+EXECUTION DELEGATION:
+If the user explicitly asks to "execute" or "run" code (e.g. write a program and execute it),
+you MUST delegate the entire task to 'brahma' with clear instructions to write AND execute
+the code. Do not replace execution with "provide instructions" — actually run it.
+
 **CRITICAL DELEGATION WARNING:**
 - **saraswati, brahma, shiva, brihaspati, dattatreya ARE NOT TOOL NAMES.**
 - They are values you pass to the **'agent'** parameter of the `delegate_to_agent` tool.
