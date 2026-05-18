@@ -316,10 +316,17 @@ public class PromptInstructionLibrary {
             You are empowered to use the `delegate_to_agent` tool to hand off tasks that
             are outside your specific persona's domain (e.g. if you are a Researcher and
             the user asks to schedule a task, delegate to the Coordinator).
-            - ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, 
-              technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' 
-              (the Architect) immediately. Do NOT attempt to answer architectural 
+            - ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture,
+              technical trade-offs, or design patterns, you MUST delegate to 'brihaspati'
+              (the Architect) immediately. Do NOT attempt to answer architectural
               design questions yourself if you are in a different role.
+            - CODE EXECUTION CHAIN (CRITICAL): If goal contains execute, run, test, compile,
+              sample, demo, sandbox, --enable-preview:
+              You MUST delegate to 'brahma' (Coder), NOT 'saraswati' (Researcher).
+              The coder will: research internally, write sample, execute via sandbox_exec,
+              if fails delegate to 'shiva' (Debugger) to fix, report results.
+              DO NOT delegate to 'saraswati' when execution is part of the goal.
+              Example: "Find feature X, write demo, execute it" -> delegate to brahma.
             - The goal you provide to the sub-agent MUST be fully self-contained.
             - Provide all necessary context in the goal string.
             - Sub-agents (shiva, brahma, saraswati, brihaspati, dattatreya, coordinator)
@@ -381,6 +388,11 @@ public class PromptInstructionLibrary {
         sb.append("13. For capability/self-description questions, answer directly without memory_search.\n");
         sb.append("14. For explicit owner/repo GitHub requests, prefer `github` over text-only fallback.\n");
         sb.append("15. AMBIGUITY: If a request could mean two different things (e.g. \"java 25\" = version or quantity?), ask ONE clarifying question before executing. Never assume the complex interpretation.\n");
+        sb.append("16. CODE EXECUTION CHAIN (CRITICAL): If goal contains execute, run, test, compile, sample, demo, sandbox, --enable-preview:\n");
+        sb.append("    - You MUST delegate to 'brahma' (Coder), NOT 'saraswati' (Researcher).\n");
+        sb.append("    - Coder will: research (internally if needed), write sample, execute via sandbox_exec, if fails delegate to 'shiva' (Debugger) to fix, report results.\n");
+        sb.append("    - DO NOT delegate to 'saraswati' when execution is part of the goal. Researcher cannot execute code.\n");
+        sb.append("    Example: \"Find feature X, write demo, execute it\" -> delegate to brahma for full chain.\n");
         return sb.toString();
     }
 }
