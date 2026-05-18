@@ -11,6 +11,7 @@ import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmServiceUnavailableException;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -129,9 +130,18 @@ public class InfiniteLoopChatModel implements ChatModel {
                 } catch (Throwable t) {
                     LlmProviderException classified = LlmExceptionClassifier.classify(t);
                     if (classified instanceof LlmRateLimitException) {
-                        h.recordRateLimit(cooldownBaseSeconds, cooldownMaxSeconds);
-                        log.warnf("InfiniteLoop: Slot [%s] rate-limited, cooling down %ds. %s",
-                                slot.name(), h.cooldownRemainingMs() / 1000, classified.getMessage());
+                        // Detect daily/per-day quota exhaustion — permanently disable
+                        String rateMsg = classified.getMessage();
+                        if (rateMsg != null && rateMsg.toLowerCase().contains("per day")) {
+                            h.disablePermanently();
+                            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (daily quota exhausted): %s",
+                                    slot.name(), rateMsg);
+                        } else {
+                            // Per-minute rate limit: short cooldown then try next slot
+                            h.recordRateLimit(1, cooldownMaxSeconds);
+                            log.infof("InfiniteLoop: Slot [%s] rate-limited, trying next slot. %s",
+                                    slot.name(), rateMsg);
+                        }
                     } else if (classified instanceof LlmAuthenticationException) {
                         h.disablePermanently();
                         log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s",
@@ -172,13 +182,24 @@ public class InfiniteLoopChatModel implements ChatModel {
                         + shortestMs + "ms exceeds maximum. Giving up.");
             }
 
-            log.debugf("InfiniteLoop: All slots in cooldown, waiting %dms...", shortestMs);
-            try {
-                Thread.sleep(shortestMs);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("InfiniteLoop: Interrupted while waiting for cooldown", e);
+            interruptibleSleep(shortestMs, "InfiniteLoop");
+        }
+    }
+
+    private static void interruptibleSleep(long ms, String label) {
+        log.infof("%s: All slots in cooldown, waiting %dms...", label, ms);
+        try {
+            long remaining = ms;
+            while (remaining > 0) {
+                Thread.sleep(Math.min(remaining, 5000));
+                remaining -= 5000;
+                if (WorkspaceManager.isAnySessionHalted()) {
+                    throw new RuntimeException(label + ": Session halted during cooldown wait");
+                }
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(label + ": Interrupted while waiting for cooldown", e);
         }
     }
 

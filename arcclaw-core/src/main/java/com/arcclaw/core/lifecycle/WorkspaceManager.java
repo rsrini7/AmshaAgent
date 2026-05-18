@@ -58,6 +58,13 @@ public class WorkspaceManager {
         return true;
     }
 
+    /** Returns true if any session has been halted (for interrupting blocking waits). */
+    public static boolean isAnySessionHalted() {
+        long now = System.currentTimeMillis();
+        return HALTED_SESSIONS.entrySet().stream()
+                .anyMatch(e -> now - e.getValue() <= HALTED_SESSION_TTL_MS);
+    }
+
     /** Clears the halted flag for a session (used on fresh start). */
     public static void clearHalted(String sessionId) {
         HALTED_SESSIONS.remove(sessionId);

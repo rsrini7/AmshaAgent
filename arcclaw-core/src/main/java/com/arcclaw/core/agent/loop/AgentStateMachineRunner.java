@@ -231,8 +231,10 @@ public class AgentStateMachineRunner {
         } finally {
             AgentResult res = finalResult;
             meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole()).record(iteration - context.startingIteration());
-            loopExitPublisher.publish(context, res);
-            observers.forEach(o -> o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
+            if (res != null) {
+                loopExitPublisher.publish(context, res);
+                observers.forEach(o -> o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
+            }
         }
     }
 

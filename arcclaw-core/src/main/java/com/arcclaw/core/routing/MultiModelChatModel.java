@@ -10,6 +10,7 @@ import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmServiceUnavailableException;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -101,9 +102,19 @@ public class MultiModelChatModel implements ChatModel {
                 } catch (Throwable t) {
                     LlmProviderException classified = LlmExceptionClassifier.classify(t);
                     if (classified instanceof LlmRateLimitException) {
-                        h.recordRateLimit(cooldownBaseSeconds, cooldownMaxSeconds);
-                        log.warnf("MultiModel: [%s] %s rate-limited, cooling down %ds. %s",
-                                providerName, entry.label(), h.cooldownRemainingMs() / 1000, classified.getMessage());
+                        // Detect daily/per-day quota exhaustion — permanently disable
+                        String msg = classified.getMessage();
+                        if (msg != null && msg.toLowerCase().contains("per day")) {
+                            h.disablePermanently();
+                            log.errorf("MultiModel: [%s] %s permanently disabled (daily quota exhausted): %s",
+                                    providerName, entry.label(), msg);
+                        } else {
+                            // Per-minute rate limit: short cooldown then try next key
+                            // Key rotation IS the retry — no exponential backoff needed
+                            h.recordRateLimit(1, cooldownMaxSeconds);
+                            log.infof("MultiModel: [%s] %s rate-limited, trying next key. %s",
+                                    providerName, entry.label(), msg);
+                        }
                     } else if (classified instanceof LlmAuthenticationException) {
                         h.disablePermanently();
                         log.errorf("MultiModel: [%s] %s permanently disabled (auth error): %s",
@@ -145,13 +156,24 @@ public class MultiModelChatModel implements ChatModel {
                         + shortestMs + "ms exceeds maximum");
             }
 
-            log.infof("MultiModel: [%s] all models in cooldown, waiting %dms...", providerName, shortestMs);
-            try {
-                Thread.sleep(shortestMs);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("MultiModel: [" + providerName + "] interrupted while waiting for cooldown", e);
+            interruptibleSleep(shortestMs);
+        }
+    }
+
+    private void interruptibleSleep(long ms) {
+        log.infof("MultiModel: [%s] all models in cooldown, waiting %dms...", providerName, ms);
+        try {
+            long remaining = ms;
+            while (remaining > 0) {
+                Thread.sleep(Math.min(remaining, 5000));
+                remaining -= 5000;
+                if (WorkspaceManager.isAnySessionHalted()) {
+                    throw new RuntimeException("MultiModel: [" + providerName + "] session halted during cooldown wait");
+                }
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("MultiModel: [" + providerName + "] interrupted while waiting for cooldown", e);
         }
     }
 
