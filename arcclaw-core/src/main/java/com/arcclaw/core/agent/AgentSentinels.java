@@ -121,7 +121,7 @@ public final class AgentSentinels {
             Pattern.CASE_INSENSITIVE);
 
     public static final Pattern REFUSAL_PATTERN = Pattern.compile(
-            "\\b(I cannot|I can't|I don't have|I'm unable|falls outside my role|not present in.*context|should be handled by|delegate to|I recommend)\\b",
+            "\\b(I cannot|I can't|I don't have|I'm unable|falls outside|outside.*scope|not present in.*context|should be handled by|delegat[eing]+|I recommend|I am not able|beyond my|outside my)\\b",
             Pattern.CASE_INSENSITIVE);
 
 }

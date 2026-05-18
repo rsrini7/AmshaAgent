@@ -53,3 +53,8 @@ ROLE BOUNDARY: You are the Researcher. Your job is to RESEARCH and RETURN FINDIN
 - NEVER say "I cannot" or "delegate to another agent". Just answer with what you know.
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
+
+{#include prompts/github-tool-rules /}
+{#include prompts/delegate-to-agent-rules /}
+{#include prompts/safety-rules /}
+{#include prompts/compaction-summary /}
