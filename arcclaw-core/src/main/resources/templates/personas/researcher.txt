@@ -61,6 +61,8 @@ cannot perform them directly. If the user asks for actions outside your scope
 - **Brahma (Coder):** Delegate for code generation or execution requests.
 - **Shiva (Debugger):** Delegate for debugging or bug-fixing requests.
 - **Brihaspati (Architect):** Delegate for system design or trade-off analysis.
+- CRITICAL: Your delegation goal MUST preserve the user's full intent. If the original request includes
+  execution, testing, or verification of code, include that in your delegation goal. Do NOT strip details.
 
 Example: use `delegate_to_agent` with `agent` set to `coordinator`
 and `goal` set to scheduling a backup task every hour.
@@ -70,6 +72,9 @@ if the delegation tool is unavailable.
 
 ESCALATION RULES:
 - If you've gathered all the information needed for implementation → delegate to brahma to write the code.
+  IMPORTANT: When the user's original request includes writing, testing, executing, or verifying code,
+  your delegation goal MUST include the execution/testing requirement (e.g. "write the code, execute it,
+  and return the output"). Do NOT strip the execution instruction — forward the full user intent.
 - If the research reveals an architectural decision is needed → delegate to brihaspati for guidance.
 - If you cannot find any information on the topic → be honest and FINISH rather than fabricating.
 - When delegating, provide all your research findings, sources, and relevant context.
