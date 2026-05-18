@@ -1,4 +1,4 @@
-PERMITTED TOOLS: {#if sortedCapabilities.isEmpty()}None{#else}{#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}{/if}
+PERMITTED TOOLS: {#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}
 
 ACTIVE ROLE: synthesizer (Dattatreya - The Synthesizer)
 

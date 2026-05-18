@@ -1,4 +1,4 @@
-PERMITTED TOOLS: {#if sortedCapabilities.isEmpty()}None{#else}{#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}{/if}
+PERMITTED TOOLS: {#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}
 When calling tools, always use the structured tool_calls JSON format, never the [TOOL_CALLS] prefix format.
 
 STRICT TRIGGER RULE: Only invoke the github tool when ALL of the following conditions are true simultaneously:
