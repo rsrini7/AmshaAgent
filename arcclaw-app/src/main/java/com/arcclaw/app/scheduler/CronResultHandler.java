@@ -211,11 +211,26 @@ public class CronResultHandler {
                 log.infof("CRON-FIRED cronId=%s nextFire=%s", job.getId(), next);
             }
         } else {
-            cronStore.markFailed(job.getId(), AgentResultFormatter.format(result));
-            auditService.record(cronSessionId, job.getUserId(),
-                    AgentRoleEnum.COORDINATOR.toScopedName(),
-                    SecurityEventType.CRONFAILED,
-                    "cronId=" + job.getId() + " status=FAILED result=" + result.getClass().getSimpleName());
+            if (!job.isRunOnce() && job.getCronExpression() != null && !job.getCronExpression().isBlank()) {
+                // Recurring job failed — reschedule instead of permanent failure.
+                // Free-tier LLMs fail intermittently; marking permanently FAILED
+                // would kill the recurring schedule after the first transient error.
+                Instant next = CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone());
+                cronStore.markFired(job.getId(), Instant.now(), next);
+                log.warnf("CRON-RETRY recurring cronId=%s failed (will retry at %s): %s",
+                        job.getId(), next, AgentResultFormatter.format(result));
+                auditService.record(cronSessionId, job.getUserId(),
+                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        SecurityEventType.CRONFAILED,
+                        "cronId=" + job.getId() + " status=RETRY nextFire=" + next
+                        + " result=" + result.getClass().getSimpleName());
+            } else {
+                cronStore.markFailed(job.getId(), AgentResultFormatter.format(result));
+                auditService.record(cronSessionId, job.getUserId(),
+                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        SecurityEventType.CRONFAILED,
+                        "cronId=" + job.getId() + " status=FAILED result=" + result.getClass().getSimpleName());
+            }
         }
     }
 

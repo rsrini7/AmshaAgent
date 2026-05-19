@@ -111,6 +111,21 @@ public class GithubTool implements AgentTool {
         String target  = (String) params.get("target");
         String ref     = (String) params.get("ref");
 
+        // ── SMART NORMALIZATION: LLMs frequently confuse action vs command.
+        // e.g. {"action":"view","command":"view"} → normalize to {"action":"repo","command":"view"}
+        if (!ALLOWED_ACTIONS.contains(action) && ALLOWED_COMMANDS.contains(action)) {
+            String normalizedCommand = action; // "view" or "list"
+            if ("repo".equals(command) || "gist".equals(command)) {
+                action = command; // swap: LLM put resource type in command
+                command = normalizedCommand;
+            } else {
+                // Default: treat action="view" as action="repo", command="view"
+                command = normalizedCommand;
+                action = "repo";
+            }
+            log.infof("GithubTool: normalized LLM params → action=%s, command=%s", action, command);
+        }
+
         // ── ALLOWLIST GUARD
         // This is the hard runtime enforcement. Must always match ALLOWED_ACTIONS
         // and ALLOWED_COMMANDS above and the schema advertised to the LLM.

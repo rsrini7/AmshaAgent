@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.compaction.CompactionRequest;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -31,7 +32,8 @@ public class CompactionEventBridge {
 
     private static final Logger log = Logger.getLogger(CompactionEventBridge.class);
 
-    private static final int AWAIT_TIMEOUT_SECONDS = 30;
+    @ConfigProperty(name = "arcclaw.compaction.await-timeout-seconds", defaultValue = "60")
+    int awaitTimeoutSeconds;
 
     /**
      * Per-session latches. Registered synchronously by CompactionHandler BEFORE
@@ -96,7 +98,7 @@ public class CompactionEventBridge {
         // Self-deadlock guard: the compaction thread must never wait on its own latch.
         // Without this, compactionService.compact() calls getMessages() internally,
         // which calls awaitIfInFlight(), which blocks on a latch the caller owns -
-        // resulting in a 30-second timeout stall on every compaction that reads history.
+        // resulting in a timeout stall on every compaction that reads history.
         Long ownerThreadId = compactionThreadIds.get(sessionId);
         if (ownerThreadId != null && ownerThreadId == Thread.currentThread().threadId()) {
             log.tracef("CompactionEventBridge: skipping self-wait for compaction thread " +
@@ -108,7 +110,7 @@ public class CompactionEventBridge {
         if (latch == null) return;
 
         try {
-            boolean completed = latch.await(AWAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            boolean completed = latch.await(awaitTimeoutSeconds, TimeUnit.SECONDS);
             if (!completed) {
                 log.warnf("CompactionEventBridge: timed out waiting for compaction " +
                           "of session %s - proceeding with potentially stale state", sessionId);
