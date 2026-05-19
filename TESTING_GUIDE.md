@@ -1972,7 +1972,7 @@ Run after deploying all Phase 64 fixes.
 
 Run after any significant code change. Combine automated + manual.
 
-### Automated (1361 tests - must remain green)
+### Automated (1454 tests - must remain green)
 
 ```bash
 ./mvnw clean test -pl arcclaw-app -am
@@ -2134,4 +2134,4 @@ For `ARCCLAW_VAULT_PEPPER` and `ARCCLAW_AUDIT_HMAC_KEY`, use stable 32+ characte
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests · 17 modules · 15 tools · 10 LLM providers · Cron run history API · Answer Quality Guard*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests · 17 modules · 15 tools · 10 LLM providers · Cron run history API · Answer Quality Guard*

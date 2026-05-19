@@ -1055,7 +1055,7 @@ graph LR
 
 ### Context Compaction (`ContextCompactionService`)
 
-The rolling chat window is controlled by `arcclaw.chat-memory.max-messages` (default: **100 messages**). System messages are always preserved; the window applies only to non-system messages.
+The rolling chat window is controlled by `arcclaw.chat-memory.max-messages` (default: **20 messages**). System messages are always preserved; the window applies only to non-system messages.
 
 When the rolling window exceeds `arcclaw.memory.compaction.threshold` (default: **10 messages**), `CompactionHandler` fires an **asynchronous CDI event** and returns immediately. Compaction also triggers when the combined message character count exceeds `arcclaw.memory.compaction.max-chars` (default: **96,000**) or the estimated token count exceeds `arcclaw.memory.compaction.max-tokens` (default: **32,000**). The actual compaction runs in a background thread:
 
