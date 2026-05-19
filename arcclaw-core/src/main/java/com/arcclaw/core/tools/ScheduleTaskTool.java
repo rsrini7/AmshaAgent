@@ -32,6 +32,7 @@ import com.cronutils.model.CronType;
 import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.model.time.ExecutionTime;
 import com.cronutils.parser.CronParser;
+import dev.langchain4j.model.chat.request.json.JsonAnyOfSchema;
 import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
@@ -144,9 +145,13 @@ public class ScheduleTaskTool implements AgentTool {
                                 "Example: 'Asia/Kolkata', 'America/New_York'. " +
                                 "Omit or use 'UTC' if unknown - do NOT pass an empty string.")
                         .build())
-                .addProperty("runOnce", JsonBooleanSchema.builder()
+                .addProperty("runOnce", JsonAnyOfSchema.builder()
+                        .anyOf(
+                            JsonBooleanSchema.builder().build(),
+                            JsonStringSchema.builder().build()
+                        )
                         .description("true for a one-time task, false for recurring. " +
-                                "Must be JSON boolean literal true or false, NOT a string.")
+                                "Use a JSON boolean or string 'true'/'false'.")
                         .build())
                 .addProperty("executionRole", JsonStringSchema.builder()
                         .description("The agent role that will EXECUTE this task when it fires. " +

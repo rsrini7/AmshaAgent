@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.request.json.JsonAnyOfSchema;
 import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import dev.langchain4j.model.chat.request.json.JsonEnumSchema;
@@ -93,6 +94,14 @@ public class ToolSchemaProvider {
                 m.put("type", "string");
                 m.put("enum", e.enumValues());
                 if (e.description() != null) m.put("description", e.description());
+                yield m;
+            }
+            case JsonAnyOfSchema a -> {
+                var m = new LinkedHashMap<String, Object>();
+                m.put("anyOf", a.anyOf().stream()
+                        .map(this::elementToMap)
+                        .toList());
+                if (a.description() != null) m.put("description", a.description());
                 yield m;
             }
             default -> Map.of("type", "any");

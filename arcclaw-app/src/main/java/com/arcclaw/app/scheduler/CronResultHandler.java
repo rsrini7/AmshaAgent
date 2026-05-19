@@ -9,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
@@ -71,6 +72,7 @@ public class CronResultHandler {
         this.statefulAgentStore = statefulAgentStore;
     }
 
+    @ActivateRequestContext
     public void handleSuccess(AgentCron job, String cronSessionId, String executionId, AgentResult result) {
         if (result instanceof AgentResult.AwaitingApproval a) {
             handleApprovalPause(job, cronSessionId, executionId, a);

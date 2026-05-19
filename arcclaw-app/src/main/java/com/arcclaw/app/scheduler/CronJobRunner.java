@@ -183,11 +183,11 @@ public class CronJobRunner {
 
     private boolean isTimeCheck(String normalized) {
         if (normalized == null || normalized.isBlank()) return false;
-        return normalized.contains("what is the current time") || 
+        return normalized.contains("current time") ||
+               normalized.contains("current utc time") ||
+               normalized.contains("current system time") ||
                normalized.contains("what time is it") ||
                normalized.contains("tell me the time") ||
-               normalized.contains("with the current time") ||
-               normalized.contains("show the current time") ||
                normalized.equals("check: what is the current time?");
     }
 
