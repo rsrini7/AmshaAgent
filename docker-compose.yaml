@@ -131,9 +131,24 @@ services:
     profiles:
       - builder # Keeps this dormant during normal operations
 
+  postgres:
+    image: postgres:17-alpine
+    container_name: arcclaw-postgres
+    environment:
+      - POSTGRES_DB=arcclaw
+      - POSTGRES_USER=arcclaw
+      - POSTGRES_PASSWORD=arcclawpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - arcclaw-net
+
 volumes:
   arcclaw_data:
   ollama_data:
+  postgres_data:
 
 networks:
   arcclaw-net:
