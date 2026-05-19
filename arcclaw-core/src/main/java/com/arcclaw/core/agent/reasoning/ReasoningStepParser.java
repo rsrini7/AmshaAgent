@@ -350,24 +350,38 @@ public class ReasoningStepParser {
      * Attempts to repair common LLM tool-calling JSON errors:
      * 1. Unescaped newlines within string values
      * 2. Unescaped double-quotes within what looks like a code field
+     *
+     * Heuristic for interior-quote detection: when inside a JSON string value
+     * and an unescaped {@code "} is found, look ahead one character. If the
+     * following character is NOT a JSON structural delimiter ({@code ,}]}:) or
+     * whitespace, the quote is likely interior and should be escaped as {@code \"}.
      */
     private String sanitizeJson(String json) {
         if (json == null) return null;
-        
-        // Replace literal newlines with \n ONLY if they are not escaped
-        // This is a naive heuristic but works for code blocks.
-        // We look for a newline that is preceded by something other than \
+
         StringBuilder sb = new StringBuilder();
         boolean inString = false;
         char prev = 0;
-        
+
         for (int i = 0; i < json.length(); i++) {
             char c = json.charAt(i);
-            
+
+            boolean isUnescapedQuote = (c == '"' && prev != '\\');
+            if (isUnescapedQuote && inString) {
+                char next = i + 1 < json.length() ? json.charAt(i + 1) : 0;
+                if (next != ',' && next != '}' && next != ']' && next != ':'
+                        && !Character.isWhitespace(next) && next != 0) {
+                    sb.append('\\');
+                    sb.append(c);
+                    prev = c;
+                    continue;
+                }
+            }
+
             if (c == '"' && prev != '\\') {
                 inString = !inString;
             }
-            
+
             if (inString && (c == '\n' || c == '\r')) {
                 sb.append("\\n");
             } else {
@@ -375,7 +389,7 @@ public class ReasoningStepParser {
             }
             prev = c;
         }
-        
+
         return sb.toString();
     }
 

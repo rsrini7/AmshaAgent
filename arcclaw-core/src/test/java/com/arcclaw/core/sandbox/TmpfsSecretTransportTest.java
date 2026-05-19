@@ -77,7 +77,7 @@ public class TmpfsSecretTransportTest {
     @Test
     @EnabledOnOs(OS.LINUX)
     void testSweepStaleTmpFiles(@TempDir Path tempDir) throws IOException {
-        Path staleSecret = tempDir.resolve("arcclaw-secrets-old.env");
+        Path staleSecret = tempDir.resolve("secrets-old.env");
         Path otherFile = tempDir.resolve("other-file.txt");
         
         Files.writeString(staleSecret, "stale content");

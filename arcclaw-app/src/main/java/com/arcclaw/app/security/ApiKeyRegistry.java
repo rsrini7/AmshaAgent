@@ -88,12 +88,33 @@ public class ApiKeyRegistry {
 
     public boolean isValidKey(String key) {
         if (key == null) return false;
-        return hmacToKeyName.containsKey(toHex(hmac(key)));
+        String inputHex = toHex(hmac(key));
+        boolean found = false;
+        for (String storedHex : hmacToKeyName.keySet()) {
+            found |= constantTimeEquals(storedHex, inputHex);
+        }
+        return found;
     }
 
     public String getKeyName(String key) {
         if (key == null) return null;
-        return hmacToKeyName.get(toHex(hmac(key)));
+        String inputHex = toHex(hmac(key));
+        String result = null;
+        for (Map.Entry<String, String> entry : hmacToKeyName.entrySet()) {
+            if (constantTimeEquals(entry.getKey(), inputHex)) {
+                result = entry.getValue();
+            }
+        }
+        return result;
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a.length() != b.length()) return false;
+        int xor = 0;
+        for (int i = 0; i < a.length(); i++) {
+            xor |= a.charAt(i) ^ b.charAt(i);
+        }
+        return xor == 0;
     }
 
     public boolean isAllowed(String key) {

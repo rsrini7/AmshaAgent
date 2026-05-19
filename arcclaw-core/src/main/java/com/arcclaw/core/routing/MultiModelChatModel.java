@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
+import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
@@ -162,6 +163,8 @@ public class MultiModelChatModel implements ChatModel {
                 log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
                         providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage());
             }
+        } else if (classified instanceof LlmContentFilterException) {
+            throw classified;
         } else {
             h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
             log.warnf("MultiModel: [%s] %s unclassified error, cooling down %ds. %s",

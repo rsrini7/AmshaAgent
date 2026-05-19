@@ -165,6 +165,9 @@ public class ProcessIsolationExecutor {
      * Rewrites container-side /workspace paths to the actual host workspaceRoot.
      * Only needed for NONE/NAMESPACE strategies where execution is NOT inside a container.
      * Podman mounts workspaceRoot as /workspace itself, so no rewriting needed there.
+     *
+     * Handles both standalone args (e.g. {@code /workspace/script.py}) and embedded
+     * paths inside shell command strings (e.g. {@code sh -c "javac ... /workspace/X.java"}).
      */
     private List<String> rewriteContainerPaths(List<String> command, Path workspaceRoot) {
         final String containerRoot = "/workspace";
@@ -172,9 +175,15 @@ public class ProcessIsolationExecutor {
                 .replace("\\", "/");   // normalize Windows backslashes → forward slashes
 
         return command.stream()
-                .map(arg -> arg.startsWith(containerRoot)
-                        ? hostRoot + arg.substring(containerRoot.length())
-                        : arg)
+                .map(arg -> {
+                    if (arg.startsWith(containerRoot)) {
+                        return hostRoot + arg.substring(containerRoot.length());
+                    }
+                    if (arg.contains(containerRoot)) {
+                        return arg.replace(containerRoot, hostRoot);
+                    }
+                    return arg;
+                })
                 .toList();
     }
 

@@ -1,5 +1,6 @@
 package com.arcclaw.core.routing;
 
+import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -7,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
+import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
 import com.arcclaw.core.agent.reasoning.error.LlmExceptionClassifier;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
@@ -26,7 +28,8 @@ public class InfiniteLoopChatModel implements ChatModel {
     public record Slot(String name, ChatModel model) {}
 
     // Static registry for quality failure reporting from outside (e.g., FinishOutcomeProcessor)
-    private static final ConcurrentHashMap<String, InfiniteLoopChatModel> instances = new ConcurrentHashMap<>();
+    // Uses WeakReference so old instances can be GC'd when replaced (H8).
+    private static final ConcurrentHashMap<String, WeakReference<InfiniteLoopChatModel>> instances = new ConcurrentHashMap<>();
     private static final ScopedValue<String> LAST_USED_SLOT = ScopedValue.newInstance();
 
     private final List<Slot> slots;
@@ -45,7 +48,7 @@ public class InfiniteLoopChatModel implements ChatModel {
         this.health = new ConcurrentHashMap<>();
         for (Slot s : slots) {
             health.put(s.name(), new SlotHealth());
-            instances.put(s.name(), this);
+            instances.put(s.name(), new WeakReference<>(this));
         }
         this.currentIndex = new AtomicInteger(0);
         this.cooldownBaseSeconds = cooldownBaseSeconds;
@@ -64,8 +67,17 @@ public class InfiniteLoopChatModel implements ChatModel {
 
     /** Records a quality failure for the given slot. After threshold failures, the slot enters cooldown. */
     public static void recordQualityFailure(String slotName) {
-        InfiniteLoopChatModel instance = instances.get(slotName);
-        if (instance == null) return;
+        WeakReference<InfiniteLoopChatModel> ref = instances.get(slotName);
+        if (ref == null) {
+            log.warnf("InfiniteLoop: recordQualityFailure called for unknown slot [%s] — check slot registration or ScopedValue propagation", slotName);
+            return;
+        }
+        InfiniteLoopChatModel instance = ref.get();
+        if (instance == null) {
+            instances.remove(slotName, ref);
+            log.warnf("InfiniteLoop: recordQualityFailure stale reference for slot [%s] — removed", slotName);
+            return;
+        }
         SlotHealth h = instance.health.get(slotName);
         if (h == null) return;
         h.recordQualityFailure(instance.cooldownTransientSeconds);
@@ -81,8 +93,15 @@ public class InfiniteLoopChatModel implements ChatModel {
     /** Returns a summary of slot health for debugging. */
     public static String getSlotStats() {
         StringBuilder sb = new StringBuilder();
-        for (var entry : instances.entrySet()) {
-            SlotHealth h = entry.getValue().health.get(entry.getKey());
+        var it = instances.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            InfiniteLoopChatModel instance = entry.getValue().get();
+            if (instance == null) {
+                it.remove();
+                continue;
+            }
+            SlotHealth h = instance.health.get(entry.getKey());
             if (h != null) {
                 sb.append(entry.getKey()).append(":qf=").append(h.qualityFailures)
                   .append(":cf=").append(h.consecutiveFailures)
@@ -155,6 +174,8 @@ public class InfiniteLoopChatModel implements ChatModel {
                             log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
                                     slot.name(), h.cooldownRemainingMs() / 1000, classified.getMessage());
                         }
+                    } else if (classified instanceof LlmContentFilterException) {
+                        throw classified;
                     } else {
                         h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
                         log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",

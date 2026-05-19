@@ -115,10 +115,12 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     // sandboxCommand() - returns the command that runs INSIDE the Podman container.
     //
-    // Java path: prepareWorkspace() already compiled .java → .class on the host.
-    //            The container just runs:  java -cp /workspace ClassName
-    //            This only needs the JRE - no compiler required inside the image.
-    //            See class-level Javadoc for why we chose this over java --source.
+    // Java path: uses java --source with --enable-preview via sh -c that
+    //            auto-detects the JDK major version at runtime (H4).
+    //            This works across JDK 21 (container) and JDK 25 (host fallback)
+    //            since --enable-preview requires --source matching the current
+    //            release. The embedded /workspace path is handled by
+    //            rewriteContainerPaths() in ProcessIsolationExecutor.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
@@ -140,7 +142,10 @@ public class SandboxExecTool implements AgentTool {
         return switch (lang) {
 case "java" -> {
                 String className = codeLanguageDetector.extractJavaClassName(code);
-                yield List.of("java", "--enable-preview", "-cp", CONTAINER_WORKSPACE, className);
+                String srcPath = CONTAINER_WORKSPACE + "/" + className + ".java";
+                yield List.of("sh", "-c",
+                    "ver=$(java -version 2>&1); ver=${ver#*\\\"}; ver=${ver%%.*} && " +
+                    "exec java --enable-preview --source \"$ver\" " + srcPath);
             }
             case "python", "python3" -> List.of("python3", CONTAINER_WORKSPACE + "/script.py");
             case "bash"              -> List.of("bash",    CONTAINER_WORKSPACE + "/script.sh");
@@ -153,10 +158,10 @@ case "java" -> {
     // ─────────────────────────────────────────────────────────────────────────
     // prepareWorkspace() - runs on the HOST before the container is launched.
     //
-    // Java: write .java file, then compile it to .class using the host JDK's
-    //       javac (resolved from java.home - always present since Quarkus needs JDK).
-    //       If compilation fails, throws IOException with the full javac error output
-    //       so ToolRegistry surfaces it as a proper tool failure to the LLM.
+    // Java: write .java file only (H4). Compilation now happens inside the
+    //       container via java --source in sandboxCommand(). The host-side javac
+    //       call is removed to prevent sandbox boundary bypass.
+    //       executeJavaFallback() still compiles on host for the non-sandbox path.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {
@@ -175,7 +180,6 @@ case "java" -> {
             String className = codeLanguageDetector.extractJavaClassName(code);
             Path javaFile = workspaceRoot.resolve(className + ".java");
             Files.writeString(javaFile, code, StandardCharsets.UTF_8);
-            hostJavaCompiler.compile(javaFile, workspaceRoot);
 
         } else if ("python".equals(lang) || "python3".equals(lang)) {
             // Write to file - avoids shell quote-stripping of f-strings, 

@@ -155,7 +155,7 @@ public class DelegateToAgentTool implements AgentTool {
         AutonomyLevel outerLevel = ctx.autonomyLevel();
         AutonomyLevel innerLevel = switch (outerLevel) {
             case READONLY -> AutonomyLevel.READONLY;
-            default -> AutonomyLevel.FULL;
+            default -> outerLevel;
         };
 
         String channelType = ctx.channelType();

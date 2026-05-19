@@ -170,7 +170,7 @@ public class TmpfsSecretTransport implements SecretTransport {
         }
         try (var stream = Files.list(shmDir)) {
             stream
-                .filter(p -> p.getFileName().toString().startsWith("arcclaw-secrets-"))
+                .filter(p -> p.getFileName().toString().startsWith("secrets-"))
                 .forEach(p -> {
                     try {
                         Files.delete(p);

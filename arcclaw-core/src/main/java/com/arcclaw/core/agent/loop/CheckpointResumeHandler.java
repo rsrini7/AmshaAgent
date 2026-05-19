@@ -35,6 +35,7 @@ import com.arcclaw.core.util.CronScheduleUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
@@ -91,6 +92,9 @@ public class CheckpointResumeHandler {
 
     @Inject
     ManagedExecutor executor;
+
+    @Inject
+    MeterRegistry meterRegistry;
 
     @ActivateRequestContext
     public void resumeAfterBatchDecision(
@@ -196,6 +200,8 @@ public class CheckpointResumeHandler {
 
     private void handleResumeFailure(String sessionId, MessageContext context, Exception e) {
         log.errorf("Failed to resume session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
+        meterRegistry.counter("arcclaw.agent.resume.failure",
+            "sessionId", sessionId != null ? sessionId : "unknown").increment();
         if (context == null || context.getUser() == null) {
             log.warnf("handleResumeFailure: context is null for session %s - no channel notification sent", sessionId);
             return;
