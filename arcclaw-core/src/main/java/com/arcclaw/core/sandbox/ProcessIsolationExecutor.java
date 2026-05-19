@@ -104,7 +104,8 @@ public class ProcessIsolationExecutor {
                     circuitBreaker.openCircuit();
                 }
             } catch (Exception e) {
-                log.warn("Podman not found on PATH - isolation degraded to NAMESPACE strategy", e);
+                log.warnf("Podman not found on PATH - isolation degraded to NAMESPACE strategy (error: %s)", LogUtil.rootMessage(e));
+                log.debugf("Podman check exception details: %s", LogUtil.trimmedStack(e));
                 circuitBreaker.openCircuit();
             }
         }
@@ -156,7 +157,8 @@ public class ProcessIsolationExecutor {
             if (e instanceof TimeoutException || (msg != null && msg.contains("exceeded"))) {
                 msg = "Execution timed out.";
             }
-            log.errorf(e, "[SANDBOX] Unexpected infrastructure failure (sessionId=%s): %s", sessionId, msg);
+            log.errorf("[SANDBOX] Unexpected infrastructure failure (sessionId=%s): %s", sessionId, msg);
+            log.debugf("Detailed infrastructure failure stack trace: %s", LogUtil.trimmedStack(e));
             return SandboxResult.infraFailure("SANDBOX_OFFLINE: " + (msg != null ? msg : "Unknown error"));
         }
     }

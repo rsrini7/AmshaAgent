@@ -10,8 +10,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import jakarta.annotation.PostConstruct;
-
 import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
@@ -24,7 +22,14 @@ public class TmpfsSecretTransport implements SecretTransport {
 
     private static final Logger log = Logger.getLogger(TmpfsSecretTransport.class);
 
-    private static final String SECRET_DIR = resolveSecretDir();
+    private static String secretDir;
+
+    private static synchronized String getSecretDir() {
+        if (secretDir == null) {
+            secretDir = resolveSecretDir();
+        }
+        return secretDir;
+    }
 
     private static String resolveSecretDir() {
         String override = System.getenv("ARCCLAW_SANDBOX_SECRET_TRANSPORT");
@@ -59,7 +64,7 @@ public class TmpfsSecretTransport implements SecretTransport {
      */
     TmpfsSecretTransport(String sessionId, Path manualPath) {
         this.sessionId = sessionId;
-        this.tmpfsMountPath = (manualPath != null) ? manualPath : Path.of(SECRET_DIR);
+        this.tmpfsMountPath = (manualPath != null) ? manualPath : Path.of(getSecretDir());
     }
 
     @Override
@@ -158,12 +163,16 @@ public class TmpfsSecretTransport implements SecretTransport {
         }
     }
 
-    @PostConstruct
-    void sweepStaleTmpFiles() {
-        sweepStaleTmpFiles(Path.of("/dev/shm"));
+    public static void sweepStaleTmpFilesStatic() {
+        // Sweep /dev/shm (legacy location) and SECRET_DIR (current runtime location)
+        sweepStaleTmpFilesStatic(Path.of("/dev/shm"));
+        Path secretDir = Path.of(getSecretDir());
+        if (!secretDir.equals(Path.of("/dev/shm"))) {
+            sweepStaleTmpFilesStatic(secretDir);
+        }
     }
 
-    void sweepStaleTmpFiles(Path shmDir) {
+    static void sweepStaleTmpFilesStatic(Path shmDir) {
         if (!Files.exists(shmDir)) {
             log.debugf("TmpfsSecretTransport: %s not present - skipping stale file sweep (non-Linux?)", shmDir);
             return;

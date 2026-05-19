@@ -14,11 +14,9 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIf;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
-@EnabledIf("com.arcclaw.persistence.postgres.DockerAvailableCondition#isDockerAvailable")
 class PostgresCheckpointStoreAdapterTest {
 
     @Inject
@@ -72,16 +70,16 @@ class PostgresCheckpointStoreAdapterTest {
 
     @Test
     void testFindActiveBySession() {
-        store.save(createCheckpoint("cpt-active-1", "IN_PROGRESS"));
-        store.save(createCheckpoint("cpt-active-1", "IN_PROGRESS"));
-        store.save(createCheckpoint("cpt-active-1", "COMPLETED"));
+        store.save(createCheckpoint("cpt-active-1", "role-1", "IN_PROGRESS"));
+        store.save(createCheckpoint("cpt-active-1", "role-2", "IN_PROGRESS"));
+        store.save(createCheckpoint("cpt-active-1", "role-3", "COMPLETED"));
         assertEquals(2, store.findActiveBySession("cpt-active-1").size());
     }
 
     @Test
     void testFindByStatus() {
-        store.save(createCheckpoint("cpt-status-1", "AWAITING_APPROVAL"));
-        store.save(createCheckpoint("cpt-status-1", "IN_PROGRESS"));
+        store.save(createCheckpoint("cpt-status-1", "role-1", "AWAITING_APPROVAL"));
+        store.save(createCheckpoint("cpt-status-1", "role-2", "IN_PROGRESS"));
         List<CheckpointDto> awaiting = store.findByStatus("AWAITING_APPROVAL");
         assertEquals(1, awaiting.size());
     }
@@ -106,9 +104,9 @@ class PostgresCheckpointStoreAdapterTest {
 
     @Test
     void testHasPendingApproval() {
-        store.save(createCheckpoint("cpt-approve-1", "AWAITING_APPROVAL"));
+        store.save(createCheckpoint("cpt-approve-1", "role-1", "AWAITING_APPROVAL"));
         assertTrue(store.hasPendingApproval("cpt-approve-1"));
-        store.save(createCheckpoint("cpt-approve-1", "COMPLETED"));
+        store.save(createCheckpoint("cpt-approve-1", "role-2", "COMPLETED"));
         assertTrue(store.hasPendingApproval("cpt-approve-1"));
     }
 
@@ -120,7 +118,11 @@ class PostgresCheckpointStoreAdapterTest {
     }
 
     private CheckpointDto createCheckpoint(String sessionId, String status) {
-        return new CheckpointDto(null, sessionId, "role", status, "FULL", "{}",
+        return createCheckpoint(sessionId, "role", status);
+    }
+
+    private CheckpointDto createCheckpoint(String sessionId, String role, String status) {
+        return new CheckpointDto(null, sessionId, role, status, "FULL", "{}",
             "plat-1", "telegram", "goal", null, null, null, null, null, null, null,
             null, 0, null, null, null, null, null, null, null, 0, Instant.now(), Instant.now());
     }

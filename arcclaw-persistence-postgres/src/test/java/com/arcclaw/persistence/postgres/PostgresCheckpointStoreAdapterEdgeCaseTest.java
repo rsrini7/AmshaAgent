@@ -13,11 +13,9 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIf;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
-@EnabledIf("com.arcclaw.persistence.postgres.DockerAvailableCondition#isDockerAvailable")
 class PostgresCheckpointStoreAdapterEdgeCaseTest {
 
     @Inject

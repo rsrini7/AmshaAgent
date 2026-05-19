@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
@@ -20,6 +21,7 @@ import com.arcclaw.core.observability.AgentOtelContext;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
+import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -67,6 +69,10 @@ public class PodmanContainerExecutor {
     private static final String CONTAINER_PIDS_LIMIT = "128";
 
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
+
+    void onStartup(@Observes StartupEvent ev) {
+        TmpfsSecretTransport.sweepStaleTmpFilesStatic();
+    }
 
     /**
      * Graceful container shutdown on JVM SIGTERM / @ApplicationScoped destroy.

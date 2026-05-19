@@ -128,7 +128,7 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             if (!alreadyLoaded) {
                 SQLiteConnection sqliteConn = connection.unwrap(SQLiteConnection.class);
                 sqliteConn.getDatabase().enable_load_extension(true);
-                String absoluteVecPath = Path.of(vecExtensionPath).toAbsolutePath().toString().replace("\\", "/");
+                String absoluteVecPath = resolveExtensionPath(vecExtensionPath).toAbsolutePath().toString().replace("\\", "/");
                 try (Statement vecStmt = connection.createStatement()) {
                     vecStmt.execute("SELECT load_extension('" + absoluteVecPath + "')");
                 }
@@ -147,6 +147,45 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                            LogUtil.trimmedStack(e));
             }
         }
+    }
+
+    private Path resolveExtensionPath(String rawPath) {
+        Path p = Path.of(rawPath);
+        if (p.isAbsolute()) {
+            return p;
+        }
+        if (fileExistsWithOsExtension(p)) {
+            return p;
+        }
+
+        // Traverse upwards from current working directory (up to 4 levels) to search for the extension.
+        Path current = Path.of(".").toAbsolutePath().normalize();
+        for (int i = 0; i < 4; i++) {
+            Path candidate = current.resolve(rawPath);
+            if (fileExistsWithOsExtension(candidate)) {
+                return candidate.normalize();
+            }
+            Path parent = current.getParent();
+            if (parent == null) {
+                break;
+            }
+            current = parent;
+        }
+        return p;
+    }
+
+    private boolean fileExistsWithOsExtension(Path path) {
+        if (Files.exists(path)) {
+            return true;
+        }
+        String filename = path.getFileName().toString();
+        Path parent = path.getParent();
+        if (parent == null || !Files.exists(parent)) {
+            return false;
+        }
+        return Files.exists(parent.resolve(filename + ".dylib")) ||
+               Files.exists(parent.resolve(filename + ".so")) ||
+               Files.exists(parent.resolve(filename + ".dll"));
     }
 
     public boolean isVectorSearchEnabled() {

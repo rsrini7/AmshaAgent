@@ -10,8 +10,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 public class TmpfsSecretTransportTest {
@@ -75,7 +73,6 @@ public class TmpfsSecretTransportTest {
     }
 
     @Test
-    @EnabledOnOs(OS.LINUX)
     void testSweepStaleTmpFiles(@TempDir Path tempDir) throws IOException {
         Path staleSecret = tempDir.resolve("secrets-old.env");
         Path otherFile = tempDir.resolve("other-file.txt");
@@ -86,9 +83,7 @@ public class TmpfsSecretTransportTest {
         assertTrue(Files.exists(staleSecret));
         assertTrue(Files.exists(otherFile));
         
-        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test", tempDir)) {
-            transport.sweepStaleTmpFiles(tempDir);
-        }
+        TmpfsSecretTransport.sweepStaleTmpFilesStatic(tempDir);
         
         assertFalse(Files.exists(staleSecret), "Stale secret should be swept");
         assertTrue(Files.exists(otherFile), "Other file should NOT be swept");
@@ -97,9 +92,7 @@ public class TmpfsSecretTransportTest {
     @Test
     void testSweepStaleTmpFilesNonExistentDir() {
         Path nonExistent = Path.of("/tmp/this-dir-should-not-exist-12345");
-        try (TmpfsSecretTransport transport = new TmpfsSecretTransport("test")) {
-            assertDoesNotThrow(() -> transport.sweepStaleTmpFiles(nonExistent));
-        }
+        assertDoesNotThrow(() -> TmpfsSecretTransport.sweepStaleTmpFilesStatic(nonExistent));
     }
 
 }

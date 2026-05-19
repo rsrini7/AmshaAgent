@@ -30,7 +30,7 @@ quarkus:
 
   hibernate-orm:
     schema-management:
-      strategy: none
+      strategy: update
     log:
       sql: false
     jdbc:

@@ -1,5 +1,6 @@
 package com.arcclaw.app.security;
 
+import java.security.Security;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,6 +33,12 @@ public class StartupSecurityValidator {
     Optional<List<String>> allowedUsers;
 
     void onStart(@Observes StartupEvent ev) {
+        // Enforce a minimum DNS caching TTL to prevent DNS Rebinding/SSRF TOCTOU exploits on outbound HTTP requests
+        String existingTtl = Security.getProperty("networkaddress.cache.ttl");
+        if (existingTtl == null || "0".equals(existingTtl) || existingTtl.isBlank()) {
+            Security.setProperty("networkaddress.cache.ttl", "30");
+        }
+
         if (!"dev".equals(profile) && !"test".equals(profile)) {
             // 1. pepper check -> throws IllegalStateException
             if (pepper.startsWith("dev-pepper")) {
