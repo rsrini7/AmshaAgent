@@ -233,12 +233,14 @@ public class DelegateToAgentTool implements AgentTool {
     }
 
     private boolean isCoderDelegatingToResearcher(String normalized, String currentRoleName) {
+        if (!AgentRoleEnum.isKnownRole(normalized)) return false;
         AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
         AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
         return current == AgentRoleEnum.CODER && target == AgentRoleEnum.RESEARCHER;
     }
 
     private boolean isCombinedGoalToResearcher(String normalized, String currentRoleName, String goal) {
+        if (!AgentRoleEnum.isKnownRole(normalized)) return false;
         AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
         AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
         return current == AgentRoleEnum.COORDINATOR

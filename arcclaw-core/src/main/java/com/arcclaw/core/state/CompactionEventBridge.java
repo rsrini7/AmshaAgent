@@ -81,6 +81,18 @@ public class CompactionEventBridge {
     }
 
     /**
+     * Releases and removes the in-flight latch for a session.
+     * Used for cleanup during registration/publishing failures.
+     */
+    public void releaseLatch(String sessionId) {
+        CountDownLatch latch = inFlightLatches.remove(sessionId);
+        if (latch != null) {
+            latch.countDown();
+        }
+        log.debugf("Compaction bridge manually released in-flight latch for session %s", sessionId);
+    }
+
+    /**
      * Blocks the calling thread until any in-flight compaction for the given
      * session completes, then returns immediately.
      * <p>

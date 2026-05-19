@@ -58,9 +58,9 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
                 .sorted()
                 .collect(Collectors.joining("|"));
 
-        // Dynamic pattern: \b(tool1|tool2|...)\s*\(\s*[a-z0-9_]+\s*=\s*["'].*?["']\s*\)
+        // Dynamic pattern: \b(tool1|tool2|...)\s*\(([^)]*)\)
         this.nakedFunctionCallPattern = Pattern.compile(
-                "\\b(" + toolNames + ")\\s*\\(\\s*[a-z0-9_]+\\s*=\\s*[\"'].*?[\"']\\s*\\)",
+                "\\b(" + toolNames + ")\\s*\\(([^)]*)\\)",
                 Pattern.CASE_INSENSITIVE
         );
         this.leakedToolCallParser = new LeakedToolCallParser(toolRegistry);

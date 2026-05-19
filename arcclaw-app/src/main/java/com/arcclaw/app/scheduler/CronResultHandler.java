@@ -7,9 +7,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
@@ -173,6 +173,7 @@ public class CronResultHandler {
         }
     }
 
+    @ActivateRequestContext
     public void handleFailure(AgentCron job, String cronSessionId, String executionId, Throwable t) {
         updateRunStatus(executionId, "FAILED", t.getMessage(), null);
         cronStore.markFailed(job.getId(), t.getMessage());

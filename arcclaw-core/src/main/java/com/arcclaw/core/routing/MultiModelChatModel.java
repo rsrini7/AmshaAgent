@@ -12,6 +12,7 @@ import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmServiceUnavailableException;
 import com.arcclaw.core.lifecycle.WorkspaceManager;
+import com.arcclaw.core.scope.WorkspaceContext;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -179,8 +180,11 @@ public class MultiModelChatModel implements ChatModel {
             while (remaining > 0) {
                 Thread.sleep(Math.min(remaining, 5000));
                 remaining -= 5000;
-                if (WorkspaceManager.isAnySessionHalted()) {
-                    throw new RuntimeException("MultiModel: [" + providerName + "] session halted during cooldown wait");
+                if (WorkspaceContext.SESSION_ID.isBound()) {
+                    String sessionId = WorkspaceContext.SESSION_ID.get();
+                    if (WorkspaceManager.isSessionHalted(sessionId)) {
+                        throw new RuntimeException("MultiModel: [" + providerName + "] session " + sessionId + " halted during cooldown wait");
+                    }
                 }
             }
         } catch (InterruptedException e) {

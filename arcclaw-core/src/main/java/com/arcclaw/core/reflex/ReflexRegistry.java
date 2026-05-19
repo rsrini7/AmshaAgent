@@ -2,6 +2,7 @@ package com.arcclaw.core.reflex;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import jakarta.annotation.PostConstruct;
@@ -85,7 +86,7 @@ public class ReflexRegistry {
             try {
                 String before = sanitized;
                 sanitized = reflex.sanitize(sessionId, userId, sanitized);
-                if (reflex.emitsSanitizeAudit() && !sanitized.equals(before)) {
+                if (reflex.emitsSanitizeAudit() && !Objects.equals(before, sanitized)) {
                     auditService.record(
                         sessionId, userId,
                         ClassUtils.getCleanName(reflex),
@@ -93,8 +94,8 @@ public class ReflexRegistry {
                         reflex.auditDetail(sessionId, before));
                 }
             } catch (Exception e) {
-                log.errorf("REFLEX-SANITIZE-FAILURE reflex=%s session=%s error=%s\n%s",
-                    ClassUtils.getCleanName(reflex), sessionId, LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
+                log.errorf("REFLEX-SANITIZE-FAILURE reflex=%s session=%s error=%s",
+                    ClassUtils.getCleanName(reflex), sessionId, LogUtil.rootMessage(e));
             }
         }
         return new ReflexResult(Optional.empty(), sanitized);

@@ -41,7 +41,7 @@ public class LeakedToolCallParser {
         this.toolRegistry = toolRegistry;
         String toolNames = toolRegistry.listTools().stream().sorted().collect(Collectors.joining("|"));
         this.nakedFunctionCallPattern = Pattern.compile(
-                "\\b(" + toolNames + ")\\s*\\(\\s*[a-z0-9_]+\\s*=\\s*[\"'].*?[\"']\\s*\\)",
+                "\\b(" + toolNames + ")\\s*\\(([^)]*)\\)",
                 Pattern.CASE_INSENSITIVE);
     }
 
@@ -186,9 +186,11 @@ public class LeakedToolCallParser {
 
     private Map<String, Object> parseNakedArgs(String argsBlock) {
         Map<String, Object> args = new HashMap<>();
-        Matcher m = Pattern.compile("([a-zA-Z_][a-zA-Z0-9_]*)\\s*=\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(argsBlock);
+        Matcher m = Pattern.compile("([a-zA-Z_][a-zA-Z0-9_]*)\\s*=\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|'((?:[^'\\\\]|\\\\.)*)')").matcher(argsBlock);
         while (m.find()) {
-            args.put(m.group(1), m.group(2));
+            String key = m.group(1);
+            String val = m.group(2) != null ? m.group(2) : m.group(3);
+            args.put(key, val);
         }
         return args;
     }

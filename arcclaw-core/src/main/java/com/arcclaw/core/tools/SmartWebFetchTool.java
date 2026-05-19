@@ -215,11 +215,9 @@ public class SmartWebFetchTool implements AgentTool {
 
         try {
             // Post-response IP validation: catch DNS rebinding + redirects to internal IPs
-            if (!responseUrl.equals(url)) {
-                String rebindError = rejectPrivateHost(responseUrl);
-                if (rebindError != null) {
-                    return ToolResponse.failure(403, rebindError);
-                }
+            String rebindError = rejectPrivateHost(responseUrl);
+            if (rebindError != null) {
+                return ToolResponse.failure(403, rebindError);
             }
 
             // Manual redirect following with SSRF re-check
@@ -273,9 +271,11 @@ public class SmartWebFetchTool implements AgentTool {
             String host = uri.getHost();
             if (host == null) return null;
 
-            InetAddress addr = InetAddress.getByName(host);
-            if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
-                return "Access to private/internal network hosts is not allowed: " + host;
+            InetAddress[] addrs = InetAddress.getAllByName(host);
+            for (InetAddress addr : addrs) {
+                if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
+                    return "Access to private/internal network hosts is not allowed: " + host;
+                }
             }
         } catch (IllegalArgumentException e) {
             return "Invalid URL: " + e.getMessage();

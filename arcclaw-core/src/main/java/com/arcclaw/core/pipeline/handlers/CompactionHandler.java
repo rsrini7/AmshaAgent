@@ -51,8 +51,14 @@ public class CompactionHandler implements MessageHandler {
 
             if (compactionInFlight.compareAndSet(sessionId, false, true)) {
                 compactionEventBridge.registerLatch(sessionId);
-                eventBus.publishAsync(EventTypeCatalog.COMPACTION_REQUEST, new CompactionRequest(sessionId, userId));
-                log.debugf("Async compaction triggered for session %s", sessionId);
+                try {
+                    eventBus.publishAsync(EventTypeCatalog.COMPACTION_REQUEST, new CompactionRequest(sessionId, userId));
+                    log.debugf("Async compaction triggered for session %s", sessionId);
+                } catch (Throwable t) {
+                    compactionInFlight.set(sessionId, false);
+                    compactionEventBridge.releaseLatch(sessionId);
+                    throw t;
+                }
             } else {
                 log.debugf("Compaction already in-flight for session %s, skipping", sessionId);
             }

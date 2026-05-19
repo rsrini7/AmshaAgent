@@ -43,8 +43,9 @@
     <bouncycastle.version>1.78.1</bouncycastle.version>
     <archunit.version>1.4.1</archunit.version>
     <camel.quarkus.version>3.27.3</camel.quarkus.version>
+    <maven.surefire.argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</maven.surefire.argLine>
   </properties>
-
+ 
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -68,7 +69,7 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
-
+ 
       <!-- Internal Modules -->
       <dependency>
         <groupId>com.arcclaw</groupId>
@@ -120,7 +121,7 @@
         <artifactId>arcclaw-channel-web</artifactId>
         <version>${project.version}</version>
       </dependency>
-
+ 
       <!-- Others -->
       <dependency>
         <groupId>org.bouncycastle</groupId>
@@ -134,7 +135,7 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
-
+ 
   <!-- Inherited test dependencies for all modules -->
   <dependencies>
     <dependency>
@@ -144,7 +145,7 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
-
+ 
   <build>
     <pluginManagement>
       <plugins>
@@ -175,6 +176,7 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.5.0</version>
           <configuration>
+            <argLine>${maven.surefire.argLine}</argLine>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
@@ -184,6 +186,9 @@
         <plugin>
           <artifactId>maven-failsafe-plugin</artifactId>
           <version>3.5.0</version>
+          <configuration>
+            <argLine>${maven.surefire.argLine}</argLine>
+          </configuration>
           <executions>
             <execution>
               <goals>

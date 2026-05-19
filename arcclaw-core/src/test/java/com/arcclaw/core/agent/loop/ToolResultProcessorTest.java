@@ -153,14 +153,14 @@ class ToolResultProcessorTest {
     }
 
     @Test
-    void resolveOutcome_DelegateSuccessWithoutWarning_TriggersTerminal() {
+    void resolveOutcome_DelegateSuccessWithoutWarning_TriggersProceed() {
         var ctx = ctx();
         var step = ReasoningStep.pending("", "delegate_to_agent", Map.of());
         var res = ToolResponse.success("task delegated");
         var obs = processor.buildObservation(res);
 
         StepDecision decision = processor.resolveOutcome(ctx, "delegate_to_agent", Map.of(), res, obs, step, List.of(), 0);
-        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertEquals(DecisionType.PROCEED, decision.type());
     }
 
     @Test
