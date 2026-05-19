@@ -38,7 +38,7 @@
 
 ## 1. Running the Test Suite
 
-ArcClaw has **1361 tests** across 9 modules: 815 in `arcclaw-core`, 159 in `arcclaw-app`, 71 in `arcclaw-persistence-sqlite`, 55 in `arcclaw-channel-telegram`, 46 in `arcclaw-mcp`, 65 in `arcclaw-channel-api`, 26 in `arcclaw-rag`, 16 in `arcclaw-onboarding`, and 8 in `arcclaw-channel-web`.
+ArcClaw has **1454 tests** across the multi-module reactor.
 
 ### 1.1 Run all tests
 
@@ -105,9 +105,9 @@ When the `%test` profile is active:
 - Fault tolerance is disabled (`quarkus.smallrye-fault-tolerance.enabled: false`)
 - `DevSecretSeederStartup` bean is absent - it is `@IfBuildProfile("dev")` only (Phase 64-B2)
 
-### 1.6 Target: 1361+ green, 0 failures
+### 1.6 Target: 1454+ green, 0 failures
 
-After any code change, the full suite must remain at or above 1361 passing tests. Do not accept a lower count - missing tests indicate a compilation failure or a deleted test case.
+After any code change, the full suite must remain at or above 1454 passing tests. Do not accept a lower count - missing tests indicate a compilation failure or a deleted test case.
 
 ---
 

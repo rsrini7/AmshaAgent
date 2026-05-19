@@ -474,7 +474,7 @@ ArcClaw's `TwoTierMemoryService` merges results from two sources using **Recipro
 
 ### Q: What is sqlite-vec and how does ArcClaw use it?
 
-`sqlite-vec` (the `vec0.so` extension) adds vector similarity search to SQLite as a virtual table extension. ArcClaw uses it for the second tier of RAG. The extension is loaded at runtime by `FtsConnectionInterceptor` using `arcclaw.rag.vec-extension-path` (dev: `../lib/vec0`, native Docker: `/app/lib/vec0`).
+`sqlite-vec` (the `vec0.so` extension) adds vector similarity search to SQLite as a virtual table extension. ArcClaw uses it for the second tier of RAG. The extension is loaded at runtime by `FtsConnectionInterceptor` using `arcclaw.rag.vec-extension-path` (default: `./lib/vec0`, native Docker: `/app/lib/vec0`). The `FtsConnectionInterceptor` automatically performs a recursive parent-directory lookup (up to 4 levels) to resolve the extension's absolute path if executing inside a submodule directory during testing or local development.
 
 **Native image requirement**: `vec0.so` links against `libm.so.6` for math functions (`sqrtf`). GraalVM native image does not statically link `libm`, so `LD_PRELOAD=/lib64/libm.so.6` must be set before the native binary starts. Without it, `dlopen(vec0.so)` fails with `undefined symbol: sqrtf` and vector search degrades silently to FTS5-only.
 
@@ -741,7 +741,7 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 
 ## 🧪 Testing
 
-### Q: How are the 1361 tests structured across modules?
+### Q: How are the 1454 tests structured across modules?
 
 Tests live in two modules:
 

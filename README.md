@@ -717,7 +717,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-api` | Allows `arcclaw-core` to reference channel concepts (sender, allowlist) without coupling to Telegram or any concrete adapter. Swapping channels requires zero core changes. |
 | `arcclaw-persistence-api` | Hexagonal architecture port interfaces. Core depends on ports, not implementations. Enables swapping SQLite for Postgres or filesystem without core changes. |
 | `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters. Avoids entity duplication across SQLite, Postgres, and filesystem adapters. |
-| `arcclaw-core` | Independently testable. All ~1361 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
+| `arcclaw-core` | Independently testable. All ~1454 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
 | `arcclaw-persistence-sqlite` | SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, and FTS5 setup. |
 | `arcclaw-persistence-fs` | Filesystem-based persistence adapter for environments without SQLite. |
 | `arcclaw-persistence-postgres` | PostgreSQL adapter for production deployments requiring a server database. |
@@ -1081,7 +1081,7 @@ Long-term memory search merges results from **two** retrieval tiers using **Reci
 
 **Graceful degradation**: If `FtsConnectionInterceptor.isVectorSearchEnabled()` returns `false` (sqlite-vec extension unavailable), `TwoTierMemoryService` skips the RRF merge entirely and returns FTS5 results directly - no error, no downtime.
 
-The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`).
+The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`). The `FtsConnectionInterceptor` dynamically resolves relative paths by recursively searching up parent directories (up to 4 levels) to support seamless execution inside submodule directories (e.g. during Maven tests).
 
 ### Long-Term Memory (`MemorySearchTool`)
 
@@ -1515,4 +1515,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests passing · 17 modules · 15 tools · 16 reflexes · 10 LLM providers · 19 UI components*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 16 reflexes · 10 LLM providers · 19 UI components*
