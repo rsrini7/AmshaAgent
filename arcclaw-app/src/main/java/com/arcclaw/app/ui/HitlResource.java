@@ -38,7 +38,6 @@ import org.jboss.resteasy.reactive.RestStreamElementType;
 
 @ApplicationScoped
 @Path("hitl")
-@RunOnVirtualThread
 @Produces(MediaType.APPLICATION_JSON)
 public class HitlResource {
 
@@ -84,6 +83,7 @@ public class HitlResource {
     }
 
     @GET
+    @RunOnVirtualThread
     @Operation(summary = "List all pending tool execution approvals for the current user")
     public Response listPending(
             @QueryParam("page") @DefaultValue("0") int page,
@@ -121,6 +121,7 @@ public class HitlResource {
     @POST
     @Path("{taskId}/approve")
     @Consumes(MediaType.APPLICATION_JSON)
+    @RunOnVirtualThread
     @Operation(summary = "Approve a pending tool execution")
     public Response approve(
             @PathParam("taskId") String taskId,
@@ -147,6 +148,7 @@ public class HitlResource {
     @POST
     @Path("{taskId}/reject")
     @Consumes(MediaType.APPLICATION_JSON)
+    @RunOnVirtualThread
     @Operation(summary = "Reject a pending tool execution")
     public Response reject(
             @PathParam("taskId") String taskId,

@@ -30,7 +30,6 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 @Path("/skills")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@RunOnVirtualThread
 public class SkillResource {
 
     @Inject
@@ -62,6 +61,7 @@ public class SkillResource {
     @POST
     @Consumes(MediaType.TEXT_PLAIN)
     @Transactional
+    @RunOnVirtualThread
     @Operation(summary = "Create or update a skill from YAML definition")
     public Response upsertSkill(String rawYamlDoc) {
         try {
@@ -106,6 +106,7 @@ public class SkillResource {
     @DELETE
     @Path("/{name}")
     @Transactional
+    @RunOnVirtualThread
     @Operation(summary = "Delete a skill and reload registry")
     public Response deleteSkill(@PathParam("name") String name) {
         var existing = skillStore.findByName(name);
@@ -123,6 +124,7 @@ public class SkillResource {
 
     @GET
     @Path("/refresh")
+    @RunOnVirtualThread
     @Operation(summary = "Force reload of all skills from filesystem and database")
     public Response refresh() {
         skillLoader.reloadAll(true);

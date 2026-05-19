@@ -5,7 +5,6 @@ import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
@@ -90,12 +89,5 @@ public class Argon2idKeyDerivation {
     // test-only — used by Argon2idKeyDerivationTest.setUp() to inject pepper without CDI
     void setPepperChars(char[] pepperChars) {
         this.pepperChars = pepperChars;
-    }
-
-    @PreDestroy
-    void cleanup() {
-        if (pepperChars != null) {
-            Arrays.fill(pepperChars, '\0');
-        }
     }
 }

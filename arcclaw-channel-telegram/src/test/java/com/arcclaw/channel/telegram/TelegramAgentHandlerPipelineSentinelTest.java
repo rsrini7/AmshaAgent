@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import jakarta.inject.Inject;
 
@@ -59,7 +61,14 @@ class TelegramAgentHandlerPipelineSentinelTest {
         failed.completeExceptionally(new RuntimeException("Core pipeline exploded"));
         when(channelServices.processAsync(any())).thenReturn(failed);
 
-        handler.receiveMessage(exchange);
+        // Suppress expected stack traces in the test logs
+        var julLogger = Logger.getLogger(TelegramAgentHandler.class.getName());
+        julLogger.setLevel(Level.OFF);
+        try {
+            handler.receiveMessage(exchange);
+        } finally {
+            julLogger.setLevel(null); // Restore to parent logging level configuration
+        }
 
         // Verify user IS notified of the internal error
         verify(sender).sendRaw(argThat(u -> chatId.equals(u.channelId())), contains("internal error occurred"));

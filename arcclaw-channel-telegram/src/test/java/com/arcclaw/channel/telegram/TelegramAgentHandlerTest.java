@@ -19,6 +19,8 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import jakarta.inject.Inject;
 
@@ -119,7 +121,14 @@ class TelegramAgentHandlerTest {
         failed.completeExceptionally(new RuntimeException("SPI error"));
         when(channelServices.processAsync(any())).thenReturn(failed);
 
-        assertDoesNotThrow(() -> handler.receiveMessage(exchange));
+        // Suppress expected stack traces in the test logs
+        var julLogger = Logger.getLogger(TelegramAgentHandler.class.getName());
+        julLogger.setLevel(Level.OFF);
+        try {
+            assertDoesNotThrow(() -> handler.receiveMessage(exchange));
+        } finally {
+            julLogger.setLevel(null); // Restore to parent logging level configuration
+        }
         
         verify(sender, atLeastOnce()).sendRaw(argThat(user -> "456".equals(user.platformId())), contains("internal error occurred"));
     }
