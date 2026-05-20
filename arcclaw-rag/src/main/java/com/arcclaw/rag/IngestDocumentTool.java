@@ -51,7 +51,9 @@ public class IngestDocumentTool implements AgentTool {
     public String description() {
         return "Ingest a text document into the RAG knowledge base for future retrieval. " +
                "Use this when the user provides a document, code, or reference material " +
-               "that should be stored and searchable in future queries.";
+               "that should be stored and searchable in future queries. " +
+               "Required param: 'text' (the document content). " +
+               "For storing short key-value pairs (name, phone, etc), use the /store reflex instead.";
     }
 
     @Override

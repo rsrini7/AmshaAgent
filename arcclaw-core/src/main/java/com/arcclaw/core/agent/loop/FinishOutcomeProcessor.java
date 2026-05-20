@@ -37,7 +37,7 @@ public class FinishOutcomeProcessor {
     );
 
     private static final Pattern TOOL_CALL_JSON_LEAK =
-            Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId)\"\\s*:.*?\\}", Pattern.DOTALL);
+            Pattern.compile("(?s)\\{\\s*\"(tool|action|function|callId|content|metadata)\"\\s*:.*?\\}", Pattern.DOTALL);
 
     /** Detects claims of having stored/saved/remembered user information without an actual tool call. */
     private static final Pattern HALLUCINATED_STORAGE_CLAIM = Pattern.compile(
