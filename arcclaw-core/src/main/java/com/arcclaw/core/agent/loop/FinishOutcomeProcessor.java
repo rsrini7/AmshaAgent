@@ -390,7 +390,7 @@ public class FinishOutcomeProcessor {
 
     private boolean historyContainsIngestDocument(List<ReasoningStep> history) {
         return history.stream().anyMatch(step -> step instanceof ReasoningStep.ToolCallStep tc
-                && "ingest_document".equals(tc.action())
+                && ToolCapability.INGEST_DOCUMENT.toolName().equals(tc.action())
                 && Boolean.TRUE.equals(tc.success()));
     }
 
@@ -410,13 +410,13 @@ public class FinishOutcomeProcessor {
 
     private boolean stepContainsSuccessfulSchedule(ReasoningStep step) {
         return switch (step) {
-            case ReasoningStep.ToolCallStep toolCall -> "schedule_task".equals(toolCall.action()) && Boolean.TRUE.equals(toolCall.success());
+            case ReasoningStep.ToolCallStep toolCall -> ToolCapability.SCHEDULE_TASK.toolName().equals(toolCall.action()) && Boolean.TRUE.equals(toolCall.success());
             case ReasoningStep.ParallelStep parallel -> {
                 Object batchRaw = parallel.actionInput().get("batch");
                 if (!(batchRaw instanceof String batchJson) || batchJson.isBlank()) yield false;
                 try {
                     List<ParallelToolCall> calls = objectMapper.readValue(batchJson, new TypeReference<List<ParallelToolCall>>() {});
-                    yield calls.stream().anyMatch(call -> "schedule_task".equals(call.toolName()) && call.success());
+                    yield calls.stream().anyMatch(call -> ToolCapability.SCHEDULE_TASK.toolName().equals(call.toolName()) && call.success());
                 } catch (Exception e) {
                     log.debugf("FINISH-HANDLER: failed to parse parallel batch: %s", LogUtil.rootMessage(e));
                     yield false;

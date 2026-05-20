@@ -99,7 +99,7 @@ public class PromptSectionBuilder {
                 .filter(name -> toolRegistry.findTool(name)
                         .map(AgentTool::isEnabled).orElse(false))
                 .filter(name -> !isBackground ||
-                        (!"schedule_task".equals(name) && !"manage_schedule".equals(name)))
+                        (!ToolCapability.SCHEDULE_TASK.toolName().equals(name) && !ToolCapability.MANAGE_SCHEDULE.toolName().equals(name)))
                 .toList();
     }
 }
