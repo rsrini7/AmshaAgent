@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.pipeline.MessageContext;
-import com.arcclaw.core.util.ClassUtils;
 
 /**
  * Lists all registered reflexes with their priority and trigger pattern.
@@ -33,21 +32,15 @@ public class ListReflexesReflex implements AgentReflex {
 
         StringBuilder sb = new StringBuilder();
         sb.append("**Registered Reflexes (").append(reflexes.size()).append(")**\n\n");
-        sb.append("| # | Reflex | Priority | Trigger | Type |\n");
-        sb.append("|---|--------|----------|---------|------|\n");
+        sb.append("| Command | Purpose |\n");
+        sb.append("|---------|--------|\n");
 
-        int i = 1;
         for (AgentReflex reflex : reflexes) {
-            String name = ClassUtils.getCleanName(reflex);
-            int priority = reflex.priority();
             String trigger = resolveTrigger(reflex);
-            String type = resolveType(reflex);
+            String purpose = resolvePurpose(reflex);
 
-            sb.append(String.format("| %d | `%s` | %d | %s | %s |\n",
-                    i++, name, priority, trigger, type));
+            sb.append(String.format("| %s | %s |\n", trigger, purpose));
         }
-
-        sb.append("\n_Type: **Cmd** = slash command, **Auto** = automatic detection, **Sanitize** = input transformation_");
 
         return ReflexResult.respond(sb.toString(), context);
     }
@@ -57,28 +50,42 @@ public class ListReflexesReflex implements AgentReflex {
         if (reflex instanceof DeleteCronReflex) return "`/delete-cron`";
         if (reflex instanceof StatusReflex) return "`/status`";
         if (reflex instanceof HistoryReflex) return "`/history`";
-        if (reflex instanceof ResetReflex) return "`/reset` `/resethard` `clear all`";
+        if (reflex instanceof ResetReflex) return "`/reset` `/resethard`";
         if (reflex instanceof HaltReflex) return "`/halt`";
         if (reflex instanceof RetryReflex) return "`/retry`";
         if (reflex instanceof ApproveReflex) return "`/approve`";
         if (reflex instanceof DenyReflex) return "`/deny`";
         if (reflex instanceof StoreReflex) return "`/store`";
-        if (reflex instanceof VaultStoreReflex) return "`/vault` `/vault-store`";
-        if (reflex instanceof ListReflexesReflex) return "`/reflex` `/reflexes` `/commands` `/help`";
-        if (reflex instanceof PromptInjectionReflex) return "injection patterns";
-        if (reflex instanceof PiiScanReflex) return "any message";
-        if (reflex instanceof IdentityExtractionReflex) return "identity patterns";
-        // Cross-module reflexes (skill, mcp) — check by class name to avoid circular imports
+        if (reflex instanceof VaultStoreReflex) return "`/vault`";
+        if (reflex instanceof ListReflexesReflex) return "`/reflex` `/commands` `/help`";
+        if (reflex instanceof PromptInjectionReflex) return "(auto)";
+        if (reflex instanceof PiiScanReflex) return "(auto)";
+        if (reflex instanceof IdentityExtractionReflex) return "(auto)";
         String simpleName = reflex.getClass().getSimpleName();
         if (simpleName.equals("SkillReflex")) return "`/skills`";
         if (simpleName.equals("McpReflex")) return "`/mcp`";
         return "—";
     }
 
-    private String resolveType(AgentReflex reflex) {
-        if (reflex instanceof PromptInjectionReflex) return "Auto";
-        if (reflex instanceof PiiScanReflex) return "Sanitize";
-        if (reflex instanceof IdentityExtractionReflex) return "Auto";
-        return "Cmd";
+    private String resolvePurpose(AgentReflex reflex) {
+        if (reflex instanceof ListCronsReflex) return "List scheduled jobs";
+        if (reflex instanceof DeleteCronReflex) return "Delete a scheduled job";
+        if (reflex instanceof StatusReflex) return "Show agent status";
+        if (reflex instanceof HistoryReflex) return "Show recent chat history";
+        if (reflex instanceof ResetReflex) return "Reset session";
+        if (reflex instanceof HaltReflex) return "Stop current task";
+        if (reflex instanceof RetryReflex) return "Retry last action";
+        if (reflex instanceof ApproveReflex) return "Approve pending action";
+        if (reflex instanceof DenyReflex) return "Deny pending action";
+        if (reflex instanceof StoreReflex) return "Store key-value pair";
+        if (reflex instanceof VaultStoreReflex) return "Store encrypted secret";
+        if (reflex instanceof ListReflexesReflex) return "List all commands";
+        if (reflex instanceof PromptInjectionReflex) return "Block prompt injection";
+        if (reflex instanceof PiiScanReflex) return "Scan/redact PII";
+        if (reflex instanceof IdentityExtractionReflex) return "Extract user identity";
+        String simpleName = reflex.getClass().getSimpleName();
+        if (simpleName.equals("SkillReflex")) return "List available skills";
+        if (simpleName.equals("McpReflex")) return "Show MCP server status";
+        return "—";
     }
 }
