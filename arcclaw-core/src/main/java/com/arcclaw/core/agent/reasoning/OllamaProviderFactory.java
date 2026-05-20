@@ -16,7 +16,7 @@ public class OllamaProviderFactory implements AgentChatModelProvider {
     @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = "http://localhost:11434")
     String baseUrl;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.chat-model.model-id", defaultValue = "llama3.2")
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.chat-model.model-id", defaultValue = "mistral-small:latest")
     String modelId;
 
     @Override

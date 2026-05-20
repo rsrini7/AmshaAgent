@@ -27,7 +27,7 @@ export class ArcOnboarding extends LitElement {
   private readonly DEFAULT_MODELS: Record<string, string> = {
     groq: 'meta-llama/llama-4-scout-17b-16e-instruct',
     openai: 'gpt-4o-mini',
-    ollama: 'llama3.2',
+    ollama: 'mistral-small:latest',
     anthropic: 'claude-haiku-4-5',
     'claude-code': 'claude-sonnet-4-5',
     openrouter: 'openai/gpt-oss-20b:free',

@@ -46,7 +46,7 @@ public class CompactionModelProducer {
     @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = "http://localhost:11434")
     String ollamaBaseUrl;
 
-    @ConfigProperty(name = "arcclaw.memory.compaction.ollama-model", defaultValue = "llama3.2")
+    @ConfigProperty(name = "arcclaw.memory.compaction.ollama-model", defaultValue = "mistral-small:latest")
     String ollamaModelId;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.max-retries", defaultValue = "3")

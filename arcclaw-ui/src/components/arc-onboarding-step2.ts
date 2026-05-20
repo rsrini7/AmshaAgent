@@ -48,7 +48,7 @@ export class ArcOnboardingStep2 extends LitElement {
   render() {
     const placeholder = this.provider === 'groq' ? 'meta-llama/llama-4-scout-17b-16e-instruct'
       : this.provider === 'openai' ? 'gpt-4o-mini'
-      : this.provider === 'ollama' ? 'llama3.2'
+      : this.provider === 'ollama' ? 'mistral-small:latest'
       : this.provider === 'anthropic' ? 'claude-haiku-4-5'
       : this.provider === 'openrouter' ? 'openai/gpt-oss-20b:free'
       : 'claude-sonnet-4-5';

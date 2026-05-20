@@ -721,7 +721,7 @@ Source persona → tool call → FAIL / knowledge gap
 |---|---|---|
 | `groq` | `GroqProviderFactory` | OpenAI-compatible API at `api.groq.com`; default `meta-llama/llama-4-scout-17b-16e-instruct` |
 | `openai` | `OpenAiProviderFactory` | Official OpenAI API |
-| `ollama` | `OllamaProviderFactory` | Local inference; default `llama3.2` |
+| `ollama` | `OllamaProviderFactory` | Local inference; default `mistral-small:latest` |
 | `openrouter` | `OpenRouterProviderFactory` | Unified multi-model API |
 | `claude-code` | `ClaudeCodeProviderFactory` | `ClaudeCodeOAuthTokenExtractor` reads OAuth token from local Claude Code CLI installation |
 | `cerebras` | `CerebrasLlmProviderFactory` | Cerebras inference API; daily quota detection disables slot permanently |

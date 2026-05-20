@@ -40,7 +40,8 @@
       "Bash(mvn test:*)",
       "Bash(java -version)",
       "Bash(mvn compile:*)",
-      "Bash(mvn test-compile:*)"
+      "Bash(mvn test-compile:*)",
+      "Bash(ollama list:*)"
     ]
   }
 }

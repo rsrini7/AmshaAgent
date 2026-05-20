@@ -123,7 +123,7 @@ quarkus:
         log-requests: false
         log-responses: false
       chat-model:
-        model-id: ${OLLAMA_MODEL:llama3.2}
+        model-id: ${OLLAMA_MODEL:mistral-small:latest}
         temperature: 0.7
         log-requests: false
         log-responses: false
@@ -383,7 +383,7 @@ arcclaw:
       # Specific model alias for free tier ensures structured mode support (§OpenRouter-Fix)
       provider: ${ARCCLAW_INTENT_CLASSIFIER_PROVIDER:groq}
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
-      ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
+      ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:mistral-small:latest}
       structured-output-mode: ${ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE:NATIVE}
       timeout-seconds: 5
       max-retries: ${ARCCLAW_INTENT_CLASSIFIER_MAX_RETRIES:3}
@@ -399,7 +399,7 @@ arcclaw:
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:https://api.groq.com/openai/v1}"
       provider: "${ARCCLAW_COMPACTION_PROVIDER:groq}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
-      ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
+      ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:mistral-small:latest}"
       structured-output-mode: ${ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE:NATIVE}
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
       max-backoff-ms: ${ARCCLAW_MEMORY_COMPACTION_MAX_BACKOFF_MS:60000}

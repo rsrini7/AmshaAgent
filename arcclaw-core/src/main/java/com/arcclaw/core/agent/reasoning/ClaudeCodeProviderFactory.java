@@ -71,7 +71,7 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
         }
 
         String resolvedModel = modelName;
-        if (resolvedModel == null || resolvedModel.isBlank() || "llama3.2".equalsIgnoreCase(resolvedModel)) {
+        if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
             resolvedModel = "claude-sonnet-4-5";
         }
 
