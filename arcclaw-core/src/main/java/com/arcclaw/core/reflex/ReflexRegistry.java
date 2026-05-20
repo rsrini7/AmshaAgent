@@ -57,6 +57,13 @@ public class ReflexRegistry {
         return annotation != null ? annotation.value() : reflex.priority();
     }
 
+    /**
+     * Returns the sorted list of registered reflexes (read-only).
+     */
+    public List<AgentReflex> getSortedReflexes() {
+        return sortedReflexes;
+    }
+
     public ReflexResult processIfReflex(String sessionId, String userId, String chatId,
                                         String input, MessageContext context) {
 

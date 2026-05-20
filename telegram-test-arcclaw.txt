@@ -197,6 +197,10 @@ what is my email
 
 /pii scan test@example.com and 4111111111111111
 
+/reflex
+
+/commands
+
 /halt
 
 /status
