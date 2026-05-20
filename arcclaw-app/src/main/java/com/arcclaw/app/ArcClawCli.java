@@ -45,7 +45,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
     @Inject
     CommandLine.IFactory factory;
 
-    // Static bootstrap - runs BEFORE Quarkus CDI container starts
+    private static volatile int exitStatus = 0;
 
     public static void main(String... args) {
 
@@ -64,6 +64,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
 
         // 4. Boot Quarkus - config system, CDI, and all extensions start here.
         Quarkus.run(ArcClawCli.class, args);
+        System.exit(exitStatus);
     }
 
     private static void printUsageGuide() {
@@ -92,6 +93,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
     @Override
     public int run(String... args) {
         int exitCode = new CommandLine(this, factory).execute(args);
+        exitStatus = exitCode;
         return exitCode;
     }
 
