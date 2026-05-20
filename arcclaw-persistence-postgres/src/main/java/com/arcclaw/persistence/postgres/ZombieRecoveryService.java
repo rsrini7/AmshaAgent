@@ -11,9 +11,11 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class ZombieRecoveryService {
 
     private static final Logger log = Logger.getLogger(ZombieRecoveryService.class);

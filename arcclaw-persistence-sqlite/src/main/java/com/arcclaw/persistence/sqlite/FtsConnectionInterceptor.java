@@ -14,6 +14,7 @@ import jakarta.inject.Singleton;
 import com.arcclaw.common.util.LogUtil;
 import io.agroal.api.AgroalPoolInterceptor;
 import io.quarkus.arc.Arc;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.sqlite.SQLiteConnection;
@@ -32,12 +33,14 @@ import org.sqlite.SQLiteConnection;
  *       "error during initialization:" because the module is already registered.</li>
  *   <li>Fix: check pragma_module_list on each connection before loading -
  *       skip if vec0 is already registered on that specific handle.</li>
+ *   <li>When not using SQLite backend, this bean is deactivated and Agroal ignores pool interceptor mappings if not loaded.</li>
  * </ul>
  * 
  * Encapsulated inside arcclaw-persistence-sqlite adapter module.
  * Registered with Agroal via Quarkus configuration.
  */
 @Singleton
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
     private static final Logger log = Logger.getLogger(FtsConnectionInterceptor.class);

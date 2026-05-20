@@ -20,6 +20,7 @@ import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.common.entity.AuditEventEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -28,7 +29,10 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
+
+
 
     private static final Logger log = Logger.getLogger(SqliteAuditEventStoreAdapter.class);
 

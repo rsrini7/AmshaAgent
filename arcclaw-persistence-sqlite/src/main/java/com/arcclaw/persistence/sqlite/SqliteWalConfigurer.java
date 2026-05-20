@@ -14,6 +14,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -28,6 +29,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteWalConfigurer {
 
     private static final Logger log = Logger.getLogger(SqliteWalConfigurer.class);

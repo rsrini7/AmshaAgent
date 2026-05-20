@@ -12,9 +12,11 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.persistence.api.CronRunDto;
 import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.common.entity.CronRunEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresCronRunStoreAdapter implements CronRunStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresCronRunStoreAdapter.class);

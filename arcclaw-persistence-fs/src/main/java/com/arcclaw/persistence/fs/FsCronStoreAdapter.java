@@ -13,10 +13,12 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(FsCronStoreAdapter.class);

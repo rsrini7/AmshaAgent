@@ -10,10 +10,12 @@ import jakarta.inject.Inject;
 import com.arcclaw.persistence.api.CronRunDto;
 import com.arcclaw.persistence.api.CronRunStorePort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsCronRunStoreAdapter implements CronRunStorePort {
 
     private static final Logger log = Logger.getLogger(FsCronRunStoreAdapter.class);

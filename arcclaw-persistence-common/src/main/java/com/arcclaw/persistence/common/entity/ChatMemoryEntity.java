@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.sqlite.entity;
+package com.arcclaw.persistence.common.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -70,4 +70,3 @@ public class ChatMemoryEntity implements ChatMemory {
         this.metadataJson = metadataJson;
     }
 }
-

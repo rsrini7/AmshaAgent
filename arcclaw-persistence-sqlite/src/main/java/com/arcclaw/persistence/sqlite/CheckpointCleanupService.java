@@ -15,6 +15,7 @@ import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.scheduler.Scheduled;
 import org.jboss.logging.Logger;
 
@@ -22,6 +23,7 @@ import org.jboss.logging.Logger;
  * Handles background cleanup of stale checkpoints, orphaned sessions, and old chat history.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class CheckpointCleanupService {
 
     private static final Logger log = Logger.getLogger(CheckpointCleanupService.class);

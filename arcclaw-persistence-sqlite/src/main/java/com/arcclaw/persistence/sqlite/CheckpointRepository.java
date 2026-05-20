@@ -12,12 +12,14 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
  * Handles core JPA operations for AgentCheckpointEntity entities.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class CheckpointRepository {
 
     private static final Logger log = Logger.getLogger(CheckpointRepository.class);

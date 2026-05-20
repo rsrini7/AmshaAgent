@@ -11,8 +11,9 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.ChatMemoryDto;
 import com.arcclaw.persistence.api.ChatMemoryStorePort;
-import com.arcclaw.persistence.sqlite.entity.ChatMemoryEntity;
+import com.arcclaw.persistence.common.entity.ChatMemoryEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * SQLite implementation of ChatMemoryStorePort.
@@ -20,6 +21,7 @@ import io.quarkus.arc.Unremovable;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteChatMemoryStoreAdapter implements ChatMemoryStorePort {
 
     @Inject

@@ -13,12 +13,14 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.arcclaw.persistence.common.entity.AgentCronEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
  * PostgreSQL implementation of CronStorePort.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresCronStoreAdapter.class);

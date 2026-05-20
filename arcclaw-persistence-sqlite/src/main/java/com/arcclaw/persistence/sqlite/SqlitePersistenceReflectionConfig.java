@@ -1,17 +1,18 @@
 package com.arcclaw.persistence.sqlite;
 
+import com.arcclaw.persistence.common.SessionKnowledgeBase;
+import com.arcclaw.persistence.common.entity.AdvisoryLockEntity;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import com.arcclaw.persistence.common.entity.AgentCronEntity;
+import com.arcclaw.persistence.common.entity.AgentSkillEntity;
 import com.arcclaw.persistence.common.entity.AuditEventEntity;
+import com.arcclaw.persistence.common.entity.ChatMemoryEntity;
+import com.arcclaw.persistence.common.entity.CompactionSummaryEntity;
 import com.arcclaw.persistence.common.entity.CronStatusConverter;
+import com.arcclaw.persistence.common.entity.EncryptedSecretEntity;
 import com.arcclaw.persistence.common.entity.InstantToTextConverter;
+import com.arcclaw.persistence.common.entity.RagChunkEntity;
 import com.arcclaw.persistence.common.entity.ReasoningStepEntity;
-import com.arcclaw.persistence.sqlite.entity.AdvisoryLockEntity;
-import com.arcclaw.persistence.sqlite.entity.AgentSkillEntity;
-import com.arcclaw.persistence.sqlite.entity.ChatMemoryEntity;
-import com.arcclaw.persistence.sqlite.entity.CompactionSummaryEntity;
-import com.arcclaw.persistence.sqlite.entity.EncryptedSecretEntity;
-import com.arcclaw.persistence.sqlite.entity.RagChunkEntity;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(

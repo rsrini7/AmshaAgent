@@ -66,6 +66,23 @@ CREATE TABLE IF NOT EXISTS agent_cron (
     updatedAt           TIMESTAMP WITH TIME ZONE
 );
 
+-- Agent cron job runs (execution history)
+CREATE TABLE IF NOT EXISTS agent_cron_run (
+    id              TEXT PRIMARY KEY,
+    cronId          TEXT NOT NULL,
+    sessionId       TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    startedAt       TIMESTAMP WITH TIME ZONE NOT NULL,
+    finishedAt      TIMESTAMP WITH TIME ZONE,
+    errorReason     TEXT,
+    iterationsUsed  INTEGER NOT NULL DEFAULT 0,
+    inputTokens     INTEGER NOT NULL DEFAULT 0,
+    outputTokens    INTEGER NOT NULL DEFAULT 0,
+    usdCost         NUMERIC(10,6) NOT NULL DEFAULT 0.0,
+    createdAt       TIMESTAMP WITH TIME ZONE NOT NULL,
+    FOREIGN KEY (cronId) REFERENCES agent_cron(id) ON DELETE CASCADE
+);
+
 -- Agent skills (YAML-defined)
 CREATE TABLE IF NOT EXISTS agent_skill (
     id              TEXT PRIMARY KEY,
@@ -106,12 +123,12 @@ CREATE TABLE IF NOT EXISTS chat_memory (
 
 -- Context compaction summaries
 CREATE TABLE IF NOT EXISTS compaction_summary (
-    sessionId          TEXT PRIMARY KEY,
+    session_id         TEXT PRIMARY KEY,
     summary            TEXT NOT NULL,
-    compactedAt        TIMESTAMP WITH TIME ZONE,
-    messagesCompacted  INTEGER NOT NULL,
+    compacted_at       TIMESTAMP WITH TIME ZONE,
+    messages_compacted INTEGER NOT NULL,
     user_id            TEXT,
-    created_at         TIMESTAMP WITH TIME ZONE
+    tenant_id          TEXT
 );
 
 -- Encrypted secrets (AES-256-GCM-SIV ciphertext per key per session)
@@ -165,6 +182,10 @@ CREATE TABLE IF NOT EXISTS session_registry (
 CREATE INDEX IF NOT EXISTS idx_cron_nextfire ON agent_cron(nextFireTime) WHERE status='ACTIVE';
 CREATE INDEX IF NOT EXISTS idx_cron_status    ON agent_cron(status);
 CREATE INDEX IF NOT EXISTS idx_cron_userid    ON agent_cron(userId);
+
+CREATE INDEX IF NOT EXISTS idx_cron_run_cronid ON agent_cron_run(cronId);
+CREATE INDEX IF NOT EXISTS idx_cron_run_status ON agent_cron_run(status);
+CREATE INDEX IF NOT EXISTS idx_cron_run_started ON agent_cron_run(startedAt);
 
 CREATE INDEX IF NOT EXISTS idx_audit_session   ON audit_event (sessionId);
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_event (timestamp);

@@ -9,6 +9,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.AuditSchemaPort;
+import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.StartupEvent;
 import org.jboss.logging.Logger;
 
@@ -19,6 +20,7 @@ import org.jboss.logging.Logger;
  * Runs after Hibernate schema generation (@Priority APPLICATION + 100).
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresAuditSchemaEnforcer implements AuditSchemaPort {
 
     @Inject

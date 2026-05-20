@@ -19,9 +19,11 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsLockManager implements AdvisoryLockPort {
 
     private static final Logger log = Logger.getLogger(FsLockManager.class);

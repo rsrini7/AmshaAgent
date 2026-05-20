@@ -8,8 +8,10 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsCompactionStoreAdapter implements CompactionStorePort {
 
     private static final String DOMAIN = "compaction";

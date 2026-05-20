@@ -37,6 +37,20 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- Filesystem adapter (persistence backend) -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-persistence-fs</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- PostgreSQL adapter (persistence backend) -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-persistence-postgres</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>com.arcclaw</groupId>
       <artifactId>arcclaw-rag</artifactId>

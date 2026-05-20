@@ -94,8 +94,8 @@ public class ReflexRegistry {
                         reflex.auditDetail(sessionId, before));
                 }
             } catch (Exception e) {
-                log.errorf("REFLEX-SANITIZE-FAILURE reflex=%s session=%s error=%s",
-                    ClassUtils.getCleanName(reflex), sessionId, LogUtil.rootMessage(e));
+                log.errorf("REFLEX-SANITIZE-FAILURE reflex=%s session=%s error=%s\n%s",
+                    ClassUtils.getCleanName(reflex), sessionId, LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
             }
         }
         return new ReflexResult(Optional.empty(), sanitized);

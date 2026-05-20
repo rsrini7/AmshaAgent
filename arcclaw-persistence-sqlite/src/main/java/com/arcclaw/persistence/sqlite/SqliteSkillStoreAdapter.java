@@ -11,8 +11,9 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
-import com.arcclaw.persistence.sqlite.entity.AgentSkillEntity;
+import com.arcclaw.persistence.common.entity.AgentSkillEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * SQLite implementation of SkillStorePort.
@@ -20,6 +21,7 @@ import io.quarkus.arc.Unremovable;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteSkillStoreAdapter implements SkillStorePort {
 
     @Inject

@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.AdvisoryLockPort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * SQLite implementation of {@link AdvisoryLockPort} (§T5-3).
@@ -17,6 +18,7 @@ import io.quarkus.arc.Unremovable;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
 
     @Inject

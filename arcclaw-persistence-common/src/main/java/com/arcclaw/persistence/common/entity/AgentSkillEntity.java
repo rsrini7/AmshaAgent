@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.sqlite.entity;
+package com.arcclaw.persistence.common.entity;
 
 import java.time.Instant;
 
@@ -10,8 +10,7 @@ import jakarta.persistence.Table;
 import com.arcclaw.core.domain.model.AgentSkill;
 
 /**
- * Persistent script entity backed by the {@code agent_skill} SQLite table.
- * <p>
+ * Persistent script entity backed by the {@code agent_skill} table.
  * Contains the raw YAML + text block shipped by the user or pre-loaded.
  */
 @Entity
@@ -78,4 +77,3 @@ public class AgentSkillEntity implements AgentSkill {
         this.updatedAt = updatedAt;
     }
 }
-

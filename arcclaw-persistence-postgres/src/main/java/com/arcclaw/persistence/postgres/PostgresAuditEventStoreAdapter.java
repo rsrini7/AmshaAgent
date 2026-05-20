@@ -16,11 +16,14 @@ import com.arcclaw.core.domain.model.AuditEvent;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.common.entity.AuditEventEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * PostgreSQL implementation of the AuditEventStorePort with WORM enforcement triggers.
  */
+
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
 
     @Inject EntityManager em;

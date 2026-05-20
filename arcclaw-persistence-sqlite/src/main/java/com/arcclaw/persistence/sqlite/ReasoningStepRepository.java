@@ -10,11 +10,13 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.common.entity.ReasoningStepEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Handles core JPA operations for ReasoningStepEntity objects.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class ReasoningStepRepository {
 
     private final EntityManager em;

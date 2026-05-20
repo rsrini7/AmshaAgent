@@ -14,9 +14,11 @@ import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class CheckpointBatchOperations {
 
     private static final Logger log = Logger.getLogger(CheckpointBatchOperations.class);

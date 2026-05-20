@@ -15,8 +15,10 @@ import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsCheckpointHelper {
 
     static final String DOMAIN = "checkpoints";

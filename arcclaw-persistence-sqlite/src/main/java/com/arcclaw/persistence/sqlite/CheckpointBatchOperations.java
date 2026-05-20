@@ -16,6 +16,7 @@ import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -23,6 +24,7 @@ import org.jboss.logging.Logger;
  * and staleness protection during joins.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class CheckpointBatchOperations {
 
     private static final Logger log = Logger.getLogger(CheckpointBatchOperations.class);

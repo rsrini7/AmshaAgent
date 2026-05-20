@@ -18,6 +18,8 @@ import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
+import com.arcclaw.persistence.common.SessionKnowledgeBase;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
@@ -25,6 +27,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
  * Merges FTS5 keyword results and sqlite-vec vector results using Reciprocal Rank Fusion (RRF).
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
     private static final double RRF_K = 60.0;

@@ -12,11 +12,13 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.common.util.LogUtil;
 import io.agroal.api.AgroalDataSource;
+import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class RagSchemaInitializer {
 
     private static final Logger log = Logger.getLogger(RagSchemaInitializer.class);

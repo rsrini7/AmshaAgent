@@ -10,9 +10,11 @@ import jakarta.inject.Inject;
 import com.arcclaw.persistence.api.ChatMemoryDto;
 import com.arcclaw.persistence.api.ChatMemoryStorePort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsChatMemoryStoreAdapter implements ChatMemoryStorePort {
 
     private static final String DOMAIN = "chat-memory";

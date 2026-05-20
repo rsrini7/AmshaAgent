@@ -18,6 +18,7 @@ import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -27,6 +28,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCheckpointStoreAdapter.class);

@@ -16,6 +16,7 @@ import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.arcclaw.persistence.common.entity.AgentCronEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -25,6 +26,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCronStoreAdapter.class);

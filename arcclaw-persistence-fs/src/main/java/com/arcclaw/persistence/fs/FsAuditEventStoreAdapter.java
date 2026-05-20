@@ -12,10 +12,12 @@ import jakarta.inject.Inject;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsAuditEventStoreAdapter implements AuditEventStorePort {
 
     private static final Logger log = Logger.getLogger(FsAuditEventStoreAdapter.class);

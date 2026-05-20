@@ -14,10 +14,12 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
-import com.arcclaw.persistence.sqlite.entity.CompactionSummaryEntity;
+import com.arcclaw.persistence.common.entity.CompactionSummaryEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteCompactionStoreAdapter implements CompactionStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCompactionStoreAdapter.class);
@@ -102,7 +104,7 @@ public class SqliteCompactionStoreAdapter implements CompactionStorePort {
         @SuppressWarnings("unchecked")
         List<CompactionSummaryEntity> results = em.createNativeQuery("""
                 SELECT cs.* FROM compaction_summary cs
-                JOIN fts.compaction_summary_fts fts_v ON cs.sessionId = fts_v.sessionId
+                JOIN fts.compaction_summary_fts fts_v ON cs.session_id = fts_v.sessionId
                 WHERE fts_v.summary MATCH ?1
                 AND cs.user_id = ?2
                 ORDER BY rank
