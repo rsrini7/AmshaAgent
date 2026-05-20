@@ -12,6 +12,7 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
@@ -56,6 +57,7 @@ public class FinishActionHandler {
     private final Instance<AgentObserver> observers;
     private final FinishOutcomeProcessor resultProcessor;
     private final ToolRegistry toolRegistry;
+    private final RoleRegistry roleRegistry;
 
     @Inject
     public FinishActionHandler(AnswerGuardStrategy qualityGuard,
@@ -65,10 +67,12 @@ public class FinishActionHandler {
                                CorrectionStrategy correctionStrategy,
                                ObjectMapper objectMapper,
                                TextPatternUtils textPatternUtils,
-                               ToolRegistry toolRegistry) {
+                               ToolRegistry toolRegistry,
+                               RoleRegistry roleRegistry) {
         this.qualityGuard = qualityGuard;
         this.observers = observers;
         this.toolRegistry = toolRegistry;
+        this.roleRegistry = roleRegistry;
         this.resultProcessor = new FinishOutcomeProcessor(
                 qualityGuard, codePolicy, rateLimitTracker, correctionStrategy, objectMapper, textPatternUtils, toolRegistry);
     }
@@ -253,6 +257,20 @@ public class FinishActionHandler {
                     "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
         }
 
+        // Case 3: Scheduling goal + not scheduled + schedule_task permitted -> force scheduling correction
+        if (AgentSentinels.SCHEDULING_KEYWORDS.matcher(goal).find()
+                && isToolPermitted(context.agentRole(), ToolCapability.SCHEDULE_TASK.toolName())) {
+            boolean actuallyScheduled = resultProcessor.historyContainsSuccessfulSchedule(history);
+            if (!actuallyScheduled) {
+                log.infof("TOOL-INJECT session %s: scheduling goal but no schedule_task call found, forcing correction", sessionId);
+                return new FinishOutcome.Correction(
+                        step.withObservation("Agent finished without calling schedule_task for a scheduling goal"),
+                        "System: STOP. The user requested a future/scheduled action, but you did NOT call " +
+                        "the schedule_task tool. You MUST compute the correct cron expression (based on current system time " +
+                        "and timezone conversions if any) and call the schedule_task tool now before finishing.");
+            }
+        }
+
         return null;
     }
 
@@ -270,8 +288,7 @@ public class FinishActionHandler {
 
     private boolean isToolPermitted(String agentRole, String toolName) {
         var role = AgentRoleEnum.fromString(agentRole);
-        return role.definition().capabilities().stream()
-                .anyMatch(cap -> cap.toolName().equals(toolName));
+        return roleRegistry.permittedTools(role).contains(toolName);
     }
 
 }

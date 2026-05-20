@@ -231,7 +231,11 @@ public class ReasoningStepParser {
             String mergedText = requests.stream()
                 .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
                 .filter(p -> !p.containsKey("__error"))
-                .map(p -> p.get("text") != null ? p.get("text") : (p.get("content") != null ? p.get("content") : p.get("value")))
+                .map(p -> p.get("text") != null ? p.get("text") : 
+                         (p.get("content") != null ? p.get("content") : 
+                         (p.get("value") != null ? p.get("value") : 
+                         (p.get("document") != null ? p.get("document") : 
+                         (p.get("doc") != null ? p.get("doc") : p.get("data"))))))
                 .filter(Objects::nonNull)
                 .map(Object::toString)
                 .collect(Collectors.joining(", "));

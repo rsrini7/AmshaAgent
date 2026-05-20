@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
@@ -23,6 +24,7 @@ import java.util.logging.Logger;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.AbstractInboundMessagePipeline;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
@@ -57,9 +59,9 @@ class TelegramAgentHandlerTest {
     void setup() throws Exception {
         // Clear the sync flags on the handler via reflection to ensure test isolation
         TelegramAgentHandler target = ClientProxy.unwrap(handler);
-        Field flagsField = com.arcclaw.channel.api.AbstractInboundMessagePipeline.class.getDeclaredField("processingFlags");
+        Field flagsField = AbstractInboundMessagePipeline.class.getDeclaredField("processingFlags");
         flagsField.setAccessible(true);
-        java.util.Map<?, ?> flags = (java.util.Map<?, ?>) flagsField.get(target);
+        Map<?, ?> flags = (Map<?, ?>) flagsField.get(target);
         if (flags != null) {
             flags.clear();
         }

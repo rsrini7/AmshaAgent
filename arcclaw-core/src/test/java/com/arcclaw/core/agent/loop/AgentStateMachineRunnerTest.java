@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 import jakarta.enterprise.inject.Instance;
@@ -30,6 +31,8 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.governance.ApprovalFrame;
@@ -118,7 +121,17 @@ class AgentStateMachineRunnerTest {
 
         ToolRegistry toolRegistryForHandler = mock(ToolRegistry.class);
         Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of("sandbox_exec", "serper_web_search", "memory_search"));
-        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper, textPatternUtils, toolRegistryForHandler);
+        RoleRegistry roleRegistryMock = mock(RoleRegistry.class);
+        Mockito.lenient().when(roleRegistryMock.permittedTools(any())).thenAnswer(invocation -> {
+            AgentRoleEnum r = invocation.getArgument(0);
+            if ("coordinator".equals(r.id())) {
+                return Set.of("schedule_task", "memory_search");
+            } else if ("coder".equals(r.id())) {
+                return Set.of("sandbox_exec");
+            }
+            return Set.of();
+        });
+        finishActionHandler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, objectMapper, textPatternUtils, toolRegistryForHandler, roleRegistryMock);
 
         ApprovalCheckpointManager checkpointManager = new ApprovalCheckpointManager(agentStore, agentSseService, new ObjectMapper());
 

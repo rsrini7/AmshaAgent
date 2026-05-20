@@ -45,6 +45,12 @@ public class FinishOutcomeProcessor {
             Pattern.MULTILINE
     );
 
+    /** Detects claims of having scheduled a task/reminder/timer without an actual tool call. */
+    private static final Pattern HALLUCINATED_SCHEDULE_CLAIM = Pattern.compile(
+            "(?i)\\b(?:I (?:have |'ve )?(?:scheduled|set a (?:reminder|timer)|created a (?:cron|task))|task (?:is |has been )?scheduled|scheduled the task|cron job has been|will run (?:in|at|every)|remind you in|reminder has been set|timer has been set)\\b",
+            Pattern.MULTILINE
+    );
+
     /** Detects knowledge disclaimers when memory_search results should have been synthesized. */
     private static final Pattern KNOWLEDGE_DISCLAIMER = Pattern.compile(
             "(?i)(?:I (?:do(?:n't| not) (?:have|know|possess|store|remember|recall)|(?:have|possess) (?:no|not)) (?:any )?(?:information|data|knowledge|record|detail|identity|name|preference)|(?:no|not? any) (?:information|data|knowledge|record) (?:about|regarding|on|of) (?:you|the user|their))",
@@ -131,19 +137,38 @@ public class FinishOutcomeProcessor {
     }
 
     public FinishActionHandler.FinishOutcome checkHallucination(String sessionId, List<ReasoningStep> history, ReasoningStep step, String answer) {
-        if (answer != null && answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)) {
-            boolean actuallyScheduled = historyContainsSuccessfulSchedule(history);
+        if (answer != null) {
+            boolean hasScheduleClaim = answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)
+                    || HALLUCINATED_SCHEDULE_CLAIM.matcher(answer).find();
 
-            if (!actuallyScheduled) {
-                log.warnf("FINISH-HANDLER: Hallucinated scheduling success detected for session %s. " +
-                          "No 'schedule_task' call found in history.", sessionId);
+            if (hasScheduleClaim) {
+                boolean isNegative = answer.toLowerCase().contains("not scheduled")
+                        || answer.toLowerCase().contains("cannot schedule")
+                        || answer.toLowerCase().contains("can't schedule")
+                        || answer.toLowerCase().contains("failed to schedule")
+                        || answer.toLowerCase().contains("unable to schedule");
 
-                ReasoningStep cleanStep = step.withObservation("Detected hallucinated scheduling success in FINISH answer");
-                String hint = "System: STOP. You claimed '" + AgentSentinels.SCHEDULE_SUCCESS_MESSAGE + "' but you did NOT call " +
-                    "the schedule_task tool in this turn. You must invoke the schedule_task tool with " +
-                    "the correct cron expression and goal BEFORE calling FINISH.";
+                if (!isNegative) {
+                    boolean actuallyScheduled = historyContainsSuccessfulSchedule(history);
+                    if (!actuallyScheduled) {
+                        log.warnf("FINISH-HANDLER: Hallucinated scheduling success detected for session %s. " +
+                                  "No 'schedule_task' call found in history. Answer: %s", sessionId, answer);
 
-                return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+                        ReasoningStep cleanStep = step.withObservation("Detected hallucinated scheduling success in FINISH answer");
+                        String hint;
+                        if (answer.contains(AgentSentinels.SCHEDULE_SUCCESS_MESSAGE)) {
+                            hint = "System: STOP. You claimed '" + AgentSentinels.SCHEDULE_SUCCESS_MESSAGE +
+                                "' but you did NOT call the schedule_task tool. You must invoke the schedule_task tool with " +
+                                "the correct cron expression and goal BEFORE calling FINISH.";
+                        } else {
+                            hint = "System: STOP. You claimed to have scheduled/set a reminder but you did NOT call " +
+                                "the schedule_task tool. You must invoke the schedule_task tool with " +
+                                "the correct cron expression and goal BEFORE calling FINISH.";
+                        }
+
+                        return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
+                    }
+                }
             }
         }
 
@@ -359,7 +384,7 @@ public class FinishOutcomeProcessor {
         return textPatternUtils.looksLikeJson(text);
     }
 
-    private boolean historyContainsSuccessfulSchedule(List<ReasoningStep> history) {
+    public boolean historyContainsSuccessfulSchedule(List<ReasoningStep> history) {
         return history.stream().anyMatch(this::stepContainsSuccessfulSchedule);
     }
 

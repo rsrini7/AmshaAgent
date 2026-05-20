@@ -4,6 +4,11 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 
 ---
 
+* **Import Alignment**: After making any modifications to Java source files, you MUST run the import organization and FQN sorting script to align imports:
+  ```bash
+  python3 ./fix_fqns.py
+  ```
+
 ## 1. Critical Architectural Invariants
 
 ### 1.1 The Transaction-Free Zone
