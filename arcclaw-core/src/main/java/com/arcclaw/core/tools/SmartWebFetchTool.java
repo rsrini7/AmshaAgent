@@ -319,7 +319,9 @@ public class SmartWebFetchTool implements AgentTool {
         private volatile boolean closed = false;
 
         public LocalSocksProxy() throws IOException {
-            this.serverSocket = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
+            this.serverSocket = new ServerSocket();
+            this.serverSocket.setReuseAddress(true);
+            this.serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 50);
             this.serverThread = Thread.ofVirtual().start(this::run);
         }
 
@@ -432,6 +434,8 @@ public class SmartWebFetchTool implements AgentTool {
                  InputStream in = clientSocket.getInputStream();
                  OutputStream out = clientSocket.getOutputStream()) {
 
+                clientSocket.setSoTimeout(25_000); // 25s read timeout for client-side
+
                 if (!performHandshake(in, out)) return;
 
                 SocksTarget target = readConnectTarget(in, out);
@@ -443,6 +447,7 @@ public class SmartWebFetchTool implements AgentTool {
                 // 4. Connect to remote destination
                 try (Socket destSocket = new Socket()) {
                     destSocket.connect(new InetSocketAddress(targetIp, target.port()), 10000); // 10s timeout
+                    destSocket.setSoTimeout(20_000); // 20s read timeout for destination
                     try (InputStream destIn = destSocket.getInputStream();
                          OutputStream destOut = destSocket.getOutputStream()) {
 
@@ -454,12 +459,16 @@ public class SmartWebFetchTool implements AgentTool {
                         Thread pipeThread = Thread.ofVirtual().start(() -> {
                             try {
                                 destIn.transferTo(out);
-                            } catch (IOException ignored) {}
+                            } catch (IOException e) {
+                                if (!closed) LOG.debugf("SOCKS pipe IOException (dest→client): %s", e.getMessage());
+                            }
                         });
 
                         try {
                             in.transferTo(destOut);
-                        } catch (IOException ignored) {}
+                        } catch (IOException e) {
+                            if (!closed) LOG.debugf("SOCKS pipe IOException (client→dest): %s", e.getMessage());
+                        }
 
                         try {
                             pipeThread.join();

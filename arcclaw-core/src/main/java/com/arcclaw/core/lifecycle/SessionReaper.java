@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
@@ -114,17 +115,24 @@ public class SessionReaper {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
 
-        // Step 2: Replay ALL surviving AWAITING_APPROVAL - never orphan at startup
+        // Step 2: Replay surviving AWAITING_APPROVAL - never orphan at startup
+        // CLI approvals are auto-denied (CLI has no SSE subscription to replay into)
         List<CheckpointDto> pendingApprovals =
             checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
         if (!pendingApprovals.isEmpty()) {
-            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) - "
-                + "leaving alive, queuing SSE replay.", pendingApprovals.size());
+            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s).", pendingApprovals.size());
             for (var dto : pendingApprovals) {
-                log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
-                    dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
-                agentSseService.republishOnSubscribe(
-                    dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
+                if (ChannelType.CLI.id().equalsIgnoreCase(dto.channelType())) {
+                    log.warnf("  Auto-denying CLI approval: id=%d session=%s tool=%s",
+                        dto.id(), dto.sessionId(), dto.pendingToolName());
+                    checkpointStore.transitionStatus(dto.id(), CheckpointStatus.DENIED.name());
+                    cliResultBridge.cancel(dto.sessionId());
+                } else {
+                    log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
+                        dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
+                    agentSseService.republishOnSubscribe(
+                        dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
+                }
             }
         } else {
             log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints found.");

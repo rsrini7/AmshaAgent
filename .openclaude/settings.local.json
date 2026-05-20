@@ -41,7 +41,8 @@
       "Bash(java -version)",
       "Bash(mvn compile:*)",
       "Bash(mvn test-compile:*)",
-      "Bash(ollama list:*)"
+      "Bash(ollama list:*)",
+      "Bash(bash autotest-full.sh)"
     ]
   }
 }
