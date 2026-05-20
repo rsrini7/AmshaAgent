@@ -201,11 +201,15 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         targetId = resolveNumericTargetIndex(targetId, sessionId, userId);
 
         // Resolve prefix match for cron job IDs
-        if (targetId.length() >= 4 && !targetId.contains("-")) {
+        String prefix = targetId.toLowerCase();
+        if (prefix.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            prefix = prefix.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        }
+        if (prefix.length() >= 4 && !prefix.contains("-")) {
             List<AgentCron> pendingCrons = cronStore.findAwaitingApprovalByUserId(userId).stream().map(AgentCronRecord::fromDto).collect(Collectors.toList());
-            String prefix = targetId.toLowerCase();
+            String finalPrefix = prefix;
             Optional<AgentCron> matchedCron = pendingCrons.stream()
-                .filter(c -> c.getId().toLowerCase().startsWith(prefix))
+                .filter(c -> c.getId().toLowerCase().startsWith(finalPrefix))
                 .findFirst();
             if (matchedCron.isPresent()) {
                 targetId = matchedCron.get().getId();

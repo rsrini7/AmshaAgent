@@ -42,22 +42,26 @@ public class GovernanceLayer implements GovernanceStrategy {
     }
 
     void cleanupStaleBudgets(int maxAgeHours) {
-        Instant cutoff = Instant.now().minus(maxAgeHours, ChronoUnit.HOURS);
-        int evicted = 0;
-        
-        // entrySet().removeIf is safe for ConcurrentHashMap
-        var it = budgets.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
-            if (entry.getValue().getLastAccessedAt().isBefore(cutoff)) {
-                it.remove();
-                evicted++;
+        try {
+            Instant cutoff = Instant.now().minus(maxAgeHours, ChronoUnit.HOURS);
+            int evicted = 0;
+            
+            // entrySet().removeIf is safe for ConcurrentHashMap
+            var it = budgets.entrySet().iterator();
+            while (it.hasNext()) {
+                var entry = it.next();
+                if (entry.getValue().getLastAccessedAt().isBefore(cutoff)) {
+                    it.remove();
+                    evicted++;
+                }
             }
-        }
-        
-        if (evicted > 0) {
-            log.infof("Cleaned up %d stale budget(s) older than %d hours.", evicted, maxAgeHours);
-            registry.counter("arcclaw.governance.budget.evictions").increment(evicted);
+            
+            if (evicted > 0) {
+                log.infof("Cleaned up %d stale budget(s) older than %d hours.", evicted, maxAgeHours);
+                registry.counter("arcclaw.governance.budget.evictions").increment(evicted);
+            }
+        } catch (Exception e) {
+            log.debugf("Failed to cleanup stale budgets or record metric: %s", e.getMessage());
         }
     }
 

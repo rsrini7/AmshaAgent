@@ -31,6 +31,7 @@ def main():
     parser.add_argument("-o", "--role", default="coordinator", help="Agent role (coordinator | researcher | debugger | etc.)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print verbose output of all subprocess logs")
     parser.add_argument("-p", "--port", default="8089", help="Http port for Quarkus server (default: 8089)")
+    parser.add_argument("-l", "--log-file", help="Path to save the test execution log (optional)")
     args = parser.parse_args()
 
     if not os.path.exists(args.file):
@@ -65,6 +66,18 @@ def main():
     print(f"  Prompt Delay   : {args.delay}s")
     print(f"  Approval Delay : {args.approval_delay}s")
     print(f"-------------------------------------------------")
+
+    log_f = None
+    if args.log_file:
+        log_f = open(args.log_file, 'w', encoding='utf-8')
+        log_f.write("✦ Starting ArcClaw Automated Test Harness\n")
+        log_f.write(f"  Test File      : {args.file}\n")
+        log_f.write(f"  Target Range   : {args.range} ({len(runnable_cases)} active cases)\n")
+        log_f.write(f"  Agent Role     : {args.role}\n")
+        log_f.write(f"  Prompt Delay   : {args.delay}s\n")
+        log_f.write(f"  Approval Delay : {args.approval_delay}s\n")
+        log_f.write("-------------------------------------------------\n")
+        log_f.flush()
 
     cmd = ["mise", "run", "jar:chat", "--role", args.role]
     proc = subprocess.Popen(
@@ -106,6 +119,9 @@ def main():
                 sys.stdout.write(char)
                 sys.stdout.flush()
                 output_buffer += char
+                if log_f:
+                    log_f.write(char)
+                    log_f.flush()
 
                 # Check for "You>" prompt to send the next case
                 if "You>" in output_buffer:
@@ -124,10 +140,17 @@ def main():
                         time.sleep(args.delay)
                         
                         print(f"\n[Test Harness] Sending Prompt #{idx}: {prompt}")
+                        if log_f:
+                            log_f.write(f"\n[Test Harness] Sending Prompt #{idx}: {prompt}\n")
+                            log_f.flush()
                         proc.stdin.write(prompt + "\n")
                         proc.stdin.flush()
                     else:
                         print("\n[Test Harness] All test cases completed successfully. Exiting.")
+                        if log_f:
+                            log_f.write("\n[Test Harness] All test cases completed successfully. Exiting.\n")
+                            log_f.write("/exit\n")
+                            log_f.flush()
                         proc.stdin.write("/exit\n")
                         proc.stdin.flush()
                         break
@@ -139,6 +162,10 @@ def main():
                     print(f"\n[Test Harness] Tool approval detected. Waiting {args.approval_delay}s before auto-approving...")
                     time.sleep(args.approval_delay)
                     print("[Test Harness] Sending: /approve")
+                    if log_f:
+                        log_f.write("\n[Test Harness] Tool approval detected. Auto-approving after delay...\n")
+                        log_f.write("/approve\n")
+                        log_f.flush()
                     proc.stdin.write("/approve\n")
                     proc.stdin.flush()
 
@@ -151,6 +178,9 @@ def main():
         if proc.poll() is None:
             proc.terminate()
             proc.wait()
+        if log_f:
+            log_f.write("\n✦ Automated Test Harness Finished.\n")
+            log_f.close()
         print("\n✦ Automated Test Harness Finished.")
 
 if __name__ == "__main__":

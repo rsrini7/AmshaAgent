@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
@@ -142,29 +143,42 @@ public class SessionReaper {
         if (shuttingDown) return;
         if (heartbeatTracker.activeSessionCount() == 0) return;
 
-        Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
-        log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)",
-                sessionTtlMinutes, cutoff);
+        try {
+            Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
+            log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)",
+                    sessionTtlMinutes, cutoff);
 
-        Set<String> awaitingApprovalIds = findAwaitingApprovalIds();
+            Set<String> awaitingApprovalIds = findAwaitingApprovalIds();
 
-        heartbeatTracker.forEachExpired(cutoff, sessionId -> {
-            if (awaitingApprovalIds.contains(sessionId)) {
-                log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
-                return;
+            heartbeatTracker.forEachExpired(cutoff, sessionId -> {
+                if (awaitingApprovalIds.contains(sessionId)) {
+                    log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
+                    return;
+                }
+                if (agentStore.isBatchResuming(sessionId)) {
+                    log.infof("GC sweep: skipping session=%s (RESUMING)", sessionId);
+                    return;
+                }
+                log.warnf("GC sweep: session=%s expired", sessionId);
+                meterRegistry.counter("arcclaw.agent.orphaned.sweep").increment();
+                cliResultBridge.cancel(sessionId); 
+                compactionInFlight.remove(sessionId);
+                workspaceManager.terminateSession(sessionId);
+                heartbeatTracker.removeHeartbeat(sessionId);
+                auditSequencer.releaseStaleSession(sessionId);
+            });
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("SessionReaper: gcSweep failed", e);
+            } else {
+                log.infof("SessionReaper: database closed during gcSweep (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
-            if (agentStore.isBatchResuming(sessionId)) {
-                log.infof("GC sweep: skipping session=%s (RESUMING)", sessionId);
-                return;
-            }
-            log.warnf("GC sweep: session=%s expired", sessionId);
-            meterRegistry.counter("arcclaw.agent.orphaned.sweep").increment();
-            cliResultBridge.cancel(sessionId); 
-            compactionInFlight.remove(sessionId);
-            workspaceManager.terminateSession(sessionId);
-            heartbeatTracker.removeHeartbeat(sessionId);
-            auditSequencer.releaseStaleSession(sessionId);
-        });
+        } catch (Exception e) {
+            log.error("SessionReaper: gcSweep failed", e);
+        }
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -186,16 +200,29 @@ public class SessionReaper {
     public void sweepTimedOutApprovals() {
         if (shuttingDown) return;
 
-        Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
-        List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
-        if (stale.isEmpty()) return;
+        try {
+            Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
+            List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
+            if (stale.isEmpty()) return;
 
-        for (AgentCheckpoint cp : stale) {
-            log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
-                    cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
-            meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
-                    "role", cp.getAgentRole()).increment();
-            markApprovalTimedOut(cp);
+            for (AgentCheckpoint cp : stale) {
+                log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
+                        cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
+                meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
+                        "role", cp.getAgentRole()).increment();
+                markApprovalTimedOut(cp);
+            }
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("SessionReaper: sweepTimedOutApprovals failed", e);
+            } else {
+                log.infof("SessionReaper: database closed during sweepTimedOutApprovals (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
+            }
+        } catch (Exception e) {
+            log.error("SessionReaper: sweepTimedOutApprovals failed", e);
         }
     }
 

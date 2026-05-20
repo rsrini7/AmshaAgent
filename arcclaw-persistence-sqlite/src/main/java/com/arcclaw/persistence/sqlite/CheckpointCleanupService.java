@@ -6,16 +6,21 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.persistence.CheckpointMapper;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.arc.properties.IfBuildProperty;
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.scheduler.Scheduled;
 import org.jboss.logging.Logger;
 
@@ -31,6 +36,8 @@ public class CheckpointCleanupService {
     private final EntityManager em;
     private final SqliteCheckpointStoreAdapter adapter;
 
+    private volatile boolean shuttingDown = false;
+
     @Inject
     public CheckpointCleanupService(EntityManager em,
                                    SqliteCheckpointStoreAdapter adapter) {
@@ -42,11 +49,34 @@ public class CheckpointCleanupService {
         this(null, null);
     }
 
+    void onShutdown(@Observes ShutdownEvent ev) {
+        this.shuttingDown = true;
+    }
+
+    @PreDestroy
+    void destroy() {
+        this.shuttingDown = true;
+    }
+
     @Scheduled(every = "12h", delayed = "1h")
     public void scheduledPurge() {
+        if (shuttingDown) return;
         log.info("[CLEANUP-SERVICE] Starting scheduled purge of old chat history...");
-        Instant cutoff = Instant.now().minus(Duration.ofDays(7));
-        adapter.purgeOldChatHistory(cutoff);
+        try {
+            Instant cutoff = Instant.now().minus(Duration.ofDays(7));
+            adapter.purgeOldChatHistory(cutoff);
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("CheckpointCleanupService: scheduledPurge failed", e);
+            } else {
+                log.infof("CheckpointCleanupService: database closed during scheduledPurge (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.rootMessage(e));
+            }
+        } catch (Exception e) {
+            log.error("CheckpointCleanupService: scheduledPurge failed", e);
+        }
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)

@@ -1,0 +1,1 @@
+python3 ./autotest.py --log-file autotest-full.log --delay 4 --approval-delay 2 --port 8999

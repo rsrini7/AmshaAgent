@@ -57,6 +57,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
     /** Guards the "vec0 unavailable" WARN so it fires at most once. */
     private final AtomicBoolean warnedUnavailable = new AtomicBoolean(false);
 
+    /** Guards the "fts attachment failed" WARN so it fires at most once. */
+    private final AtomicBoolean warnedFtsAttachment = new AtomicBoolean(false);
+
     @Override
     public void onConnectionAcquire(Connection connection) {
         if (Arc.container() == null) {
@@ -67,8 +70,10 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             loadVectorExtensionIfNeeded(connection);
         } catch (Exception e) {
             if (Arc.container() != null) {
-                log.warnf("FtsConnectionInterceptor: Failed to verify/attach " +
-                          "fts schema: %s", LogUtil.rootMessage(e));
+                if (warnedFtsAttachment.compareAndSet(false, true)) {
+                    log.warnf("FtsConnectionInterceptor: Failed to verify/attach " +
+                              "fts schema (will suppress subsequent warnings): %s", LogUtil.rootMessage(e));
+                }
                 log.debugf("Full stacktrace for fts attachment failure: %s",
                            LogUtil.trimmedStack(e));
             }
