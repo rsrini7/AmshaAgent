@@ -84,16 +84,34 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
         log.infof("InfiniteLoop: Ready with %d slot(s): %s.",
                 slots.size(), slots.stream().map(InfiniteLoopChatModel.Slot::name).collect(Collectors.joining(", ")));
 
-        // Log model summary for visibility
+        // Log provider summary table
+        StringBuilder table = new StringBuilder();
+        table.append("\n┌─────────────────────────────────────────────────────────────────────┐\n");
+        table.append("│                    LLM PROVIDER CONFIGURATION                      │\n");
+        table.append("├──────────────┬──────────────────────────────────────────────────────┤\n");
+        table.append(String.format("│ %-12s │ %-52s │\n", "Provider", "Model(s)"));
+        table.append("├──────────────┼──────────────────────────────────────────────────────┤\n");
+
         for (InfiniteLoopChatModel.Slot slot : slots) {
             String modelStr = slot.model().toString();
-            String display = modelStr.length() > 120 ? modelStr.substring(0, 120) + "..." : modelStr;
-            if (slot.model() instanceof MultiModelChatModel) {
-                log.infof("InfiniteLoop:   [%s] → MULTI-MODEL: %s", slot.name(), display);
+            // Extract model name from MultiModel or single model
+            String modelName;
+            if (slot.model() instanceof MultiModelChatModel multi) {
+                modelName = multi.toString().replaceAll("MultiModel\\[", "").replaceAll("\\]", "");
             } else {
-                log.infof("InfiniteLoop:   [%s] → %s", slot.name(), display);
+                modelName = modelStr.length() > 52 ? modelStr.substring(0, 49) + "..." : modelStr;
             }
+            if (modelName.length() > 52) {
+                modelName = modelName.substring(0, 49) + "...";
+            }
+            table.append(String.format("│ %-12s │ %-52s │\n", slot.name(), modelName));
         }
+
+        table.append("├──────────────┴──────────────────────────────────────────────────────┤\n");
+        table.append(String.format("│ Cooldown: %ds base, %ds max, %ds transient │ %6dms max latency  │\n",
+                cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs));
+        table.append("└─────────────────────────────────────────────────────────────────────┘");
+        log.infof("InfiniteLoop: Provider summary:%s", table);
 
         log.infof("InfiniteLoop: TIP — Free models change frequently. If a slot starts failing with " +
                 "'model not found' or 404, check the provider's model list and update ARCCLAW_*_MODEL.");
