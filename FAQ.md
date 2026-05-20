@@ -741,7 +741,7 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 
 ## 🧪 Testing
 
-### Q: How are the 1454 tests structured across modules?
+### Q: How are the 1458 tests structured across modules?
 
 Tests live in two modules:
 
