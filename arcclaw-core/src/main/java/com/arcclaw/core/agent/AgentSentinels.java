@@ -125,7 +125,7 @@ public final class AgentSentinels {
             Pattern.CASE_INSENSITIVE);
 
     public static final Pattern SCHEDULING_KEYWORDS = Pattern.compile(
-            "(?i)\\b(?:schedule|cron|remind|reminder|timer|in\\s+\\d+\\s*(?:min|hour|day)|after\\s+\\d+\\s*(?:min|hour|day)|every\\s+(?:\\d+\\s*)?(?:min|hour|day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tomorrow|at\\s+\\d{1,2}:\\d{2})\\b"
+            "(?i)\\b(?:schedule|cron|remind|reminder|timer|in\\s+\\d+\\s*(?:min|minute|hour|day)s?|after\\s+\\d+\\s*(?:min|minute|hour|day)s?|every\\s+(?:\\d+\\s*)?(?:min|minute|hour|day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?|tomorrow|at\\s+\\d{1,2}:\\d{2})\\b"
     );
 
 }

@@ -29,6 +29,7 @@ public class CliCronNotificationObserver {
             // Print inline to the active CLI session
             System.out.println("\n[⏰ Scheduled Task] " + answer);
             System.out.print("\nYou> "); // re-print prompt so input line isn't lost
+            System.out.flush();
         } catch (Exception e) {
             log.errorf("CLI-CRON-NOTIFY-FAIL cronId=%s:\n%s", event.cronId(), LogUtil.trimmedStack(e));
         }

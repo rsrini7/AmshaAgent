@@ -143,6 +143,7 @@ public class ChatCommand implements Runnable {
 
         while (true) {
             System.out.print("\nYou> ");
+            System.out.flush();
             if (!scanner.hasNextLine()) break;
 
             String input;
@@ -244,6 +245,7 @@ public class ChatCommand implements Runnable {
                                 if (hitlOutput != null) {
                                     System.out.println("\n▶ ArcClaw> " + hitlOutput);
                                     System.out.print("\nYou> "); // re-prompt so user sees the cursor
+                                    System.out.flush();
                                 }
                             } catch (CancellationException e) {
                                 log.debugf("HITL waiter cancelled for session %s (shutdown or GC)", sessionId);

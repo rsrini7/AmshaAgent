@@ -142,6 +142,7 @@ public class FinishActionHandler {
         log.warnf("FINISH-HANDLER: unexpected step type %s passed to handle() bridge — returning Correction",
                 step != null ? step.getClass().getSimpleName() : "null");
         ReasoningStep correctedStep = step != null ? step.withObservation("Unexpected step type for FINISH") : null;
+        context.setForceFinishRetry(true);
         return new FinishOutcome.Correction(correctedStep,
                 "System: Expected a FINISH action but received an unexpected step type. Please FINISH with a plain text answer.");
     }
@@ -197,12 +198,16 @@ public class FinishActionHandler {
             ReasoningStep correctedStep = step.withObservation("Quality guard rejected the answer: " + guardResult.failureReason());
             String hint = "Your previous answer was rejected by the quality guard (" + guardResult.failureReason()
                     + "). Please provide a complete, well-formed response. Do NOT output raw JSON, tool calls, or placeholders.";
+            context.setForceFinishRetry(true);
             return new FinishOutcome.Correction(correctedStep, hint);
         }
 
         // --- Tool injection: if agent finished without calling tools, inject the appropriate one ---
         FinishOutcome injected = tryInjectToolCall(context, history, step, answer, sessionId);
         if (injected != null) {
+            if (injected instanceof FinishOutcome.Correction) {
+                context.setForceFinishRetry(true);
+            }
             return injected;
         }
 

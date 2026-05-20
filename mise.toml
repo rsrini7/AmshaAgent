@@ -1275,7 +1275,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:chat"]
-depends = ["env:recover"]
+depends = ["env:recover", "dev:kill", "build:full"]
+usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar - interactive REPL (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1297,7 +1298,7 @@ $jvmArgs = @(
     '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
-& java @jvmArgs -jar $jar chat
+& java @jvmArgs -jar $jar chat @args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 

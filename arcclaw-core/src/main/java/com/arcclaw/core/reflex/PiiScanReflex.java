@@ -154,7 +154,7 @@ public class PiiScanReflex implements AgentReflex, InputSanitizer {
         }
 
         if (redacted) {
-            log.warnf("[PII-REDACTED] session=%s user=%s mode=%s types=%s " +
+            log.debugf("[PII-REDACTED] session=%s user=%s mode=%s types=%s " +
                       "original_length=%d sanitized_length=%d",
                     sessionId, userId, piiMode,
                     String.join(",", detectedTypes),
