@@ -99,7 +99,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             try {
                 stmt.execute("PRAGMA synchronous=NORMAL");
             } catch (Exception e) {
-                log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", LogUtil.rootMessage(e));
+                // Expected when connection is already inside a transaction — SQLite rejects
+                // safety-level changes mid-transaction. Harmless; suppress to TRACE.
+                log.tracef("FtsConnectionInterceptor: Could not set synchronous=NORMAL (in transaction?): %s", LogUtil.rootMessage(e));
             }
         }
         if (!attached) {
