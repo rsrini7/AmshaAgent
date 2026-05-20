@@ -23,6 +23,7 @@ import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -127,7 +128,7 @@ class LangChainReasoningEngineTest {
         // Arrange
         ToolExecutionRequest toolRequest = ToolExecutionRequest.builder()
                 .id("call_123")
-                .name("github")
+                .name(ToolCapability.GITHUB.toolName())
                 .arguments("{\"repo\":\"test/repo\"}")
                 .build();
         // LangChain4j 0.26.x→1.x migration: renamed .from() to factory method
@@ -142,13 +143,13 @@ class LangChainReasoningEngineTest {
         when(llmProviderPort.nextStep(any(ChatRequest.class))).thenReturn(mockResponse);
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
-        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", "github", Map.of("repo", "test/repo"), 100, 100));
+        when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("I will use github", ToolCapability.GITHUB.toolName(), Map.of("repo", "test/repo"), 100, 100));
 
         // Act
         ReasoningStep step = reasoningEngine.nextStep(createCtx("test-session"), "coordinator", "Do something", List.of());
 
         // Assert
-        assertEquals("github", step.action());
+        assertEquals(ToolCapability.GITHUB.toolName(), step.action());
         assertEquals("I will use github", step.thought());
         assertEquals(100, step.inputTokens());
         assertEquals(100, step.outputTokens());
@@ -333,19 +334,19 @@ class LangChainReasoningEngineTest {
 
         // Mock RoleRegistry to return permitted tools for researcher
         when(roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER))
-                .thenReturn(Set.of("github", "memory_search"));
+                .thenReturn(Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
 
         // Mock ToolRegistry to return available tools
         AgentTool github = Mockito.mock(AgentTool.class);
-        when(github.name()).thenReturn("github");
+        when(github.name()).thenReturn(ToolCapability.GITHUB.toolName());
         when(github.isEnabled()).thenReturn(true);
         AgentTool memorySearch = Mockito.mock(AgentTool.class);
-        when(memorySearch.name()).thenReturn("memory_search");
+        when(memorySearch.name()).thenReturn(ToolCapability.MEMORY_SEARCH.toolName());
         when(memorySearch.isEnabled()).thenReturn(true);
         
-        when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search", "schedule_task", "manage_schedule"));
-        when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));
-        when(toolRegistry.findTool("memory_search")).thenReturn(Optional.of(memorySearch));
+        when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(github));
+        when(toolRegistry.findTool(ToolCapability.MEMORY_SEARCH.toolName())).thenReturn(Optional.of(memorySearch));
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the ChatModel anyway. Let's make sure the tool is available.
@@ -364,12 +365,12 @@ class LangChainReasoningEngineTest {
                 
         // Phase 46 Fix: Researcher ONLY has github and memory_search. 
         // Coordinator handles all scheduling to prevent tool hallucinations.
-        assertTrue(toolNames.contains("github"),        "researcher must have github");
-        assertTrue(toolNames.contains("memory_search"), "researcher must have memory_search");
+        assertTrue(toolNames.contains(ToolCapability.GITHUB.toolName()),        "researcher must have github");
+        assertTrue(toolNames.contains(ToolCapability.MEMORY_SEARCH.toolName()), "researcher must have memory_search");
         
         // Researcher MUST NOT have scheduling tools
-        assertFalse(toolNames.contains("schedule_task"),   "researcher must NOT have schedule_task");
-        assertFalse(toolNames.contains("manage_schedule"), "researcher must NOT have manage_schedule");
+        assertFalse(toolNames.contains(ToolCapability.SCHEDULE_TASK.toolName()),   "researcher must NOT have schedule_task");
+        assertFalse(toolNames.contains(ToolCapability.MANAGE_SCHEDULE.toolName()), "researcher must NOT have manage_schedule");
         
         // Researcher must NOT have shell or vault access - safety boundary
         assertFalse(toolNames.contains("execute_shell"), "researcher must NOT have execute_shell");
@@ -394,7 +395,7 @@ class LangChainReasoningEngineTest {
         when(stepParser.parse(any(), any(), any())).thenReturn(ReasoningStep.pending("Done.", ReasoningStep.FINISH, Map.of(), 100, 100));
 
         // Mock RoleRegistry to return permitted tools
-        when(roleRegistry.permittedTools(any())).thenReturn(Set.of("github"));
+        when(roleRegistry.permittedTools(any())).thenReturn(Set.of(ToolCapability.GITHUB.toolName()));
 
         // Act
         reasoningEngine.nextStep(ctx, "coordinator", "goal", List.of());
@@ -418,23 +419,23 @@ class LangChainReasoningEngineTest {
 
         // Mock RoleRegistry to return permitted tools for coordinator
         when(roleRegistry.permittedTools(AgentRoleEnum.COORDINATOR))
-                .thenReturn(Set.of("github", "schedule_task", "manage_schedule"));
+                .thenReturn(Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()));
 
         // Mock ToolRegistry to return available tools
         AgentTool github = Mockito.mock(AgentTool.class);
-        when(github.name()).thenReturn("github");
+        when(github.name()).thenReturn(ToolCapability.GITHUB.toolName());
         when(github.isEnabled()).thenReturn(true);
         AgentTool sched = Mockito.mock(AgentTool.class);
-        when(sched.name()).thenReturn("schedule_task");
+        when(sched.name()).thenReturn(ToolCapability.SCHEDULE_TASK.toolName());
         when(sched.isEnabled()).thenReturn(true);
         AgentTool manage = Mockito.mock(AgentTool.class);
-        when(manage.name()).thenReturn("manage_schedule");
+        when(manage.name()).thenReturn(ToolCapability.MANAGE_SCHEDULE.toolName());
         when(manage.isEnabled()).thenReturn(true);
         
-        when(toolRegistry.listTools()).thenReturn(List.of("github", "schedule_task", "manage_schedule"));
-        when(toolRegistry.findTool("github")).thenReturn(Optional.of(github));
-        when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(sched));
-        when(toolRegistry.findTool("manage_schedule")).thenReturn(Optional.of(manage));
+        when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(github));
+        when(toolRegistry.findTool(ToolCapability.SCHEDULE_TASK.toolName())).thenReturn(Optional.of(sched));
+        when(toolRegistry.findTool(ToolCapability.MANAGE_SCHEDULE.toolName())).thenReturn(Optional.of(manage));
 
         when(promptBuilder.build(any(), any(), any(), any(), ArgumentMatchers.anyBoolean())).thenReturn("System Prompt");
         when(historyAssembler.assemble(any(), any(), any())).thenReturn(List.of());
@@ -448,9 +449,9 @@ class LangChainReasoningEngineTest {
         
         // Assert schedule_task and manage_schedule are physically missing
         boolean hasScheduleTask = sent.toolSpecifications().stream()
-                .anyMatch(t -> t.name().equals("schedule_task"));
+                .anyMatch(t -> t.name().equals(ToolCapability.SCHEDULE_TASK.toolName()));
         boolean hasManageSchedule = sent.toolSpecifications().stream()
-                .anyMatch(t -> t.name().equals("manage_schedule"));
+                .anyMatch(t -> t.name().equals(ToolCapability.MANAGE_SCHEDULE.toolName()));
         
         assertFalse(hasScheduleTask, "schedule_task MUST be stripped from cron sessions to prevent fork bombs");
         assertFalse(hasManageSchedule, "manage_schedule MUST be stripped from cron sessions");
@@ -593,7 +594,7 @@ class LangChainReasoningEngineTest {
                 "ok execute and share results",
                 List.of(prior));
 
-        assertEquals("sandbox_exec", step.action());
+        assertEquals(ToolCapability.SANDBOX_EXEC.toolName(), step.action());
         assertEquals("java", step.actionInput().get("language"));
         assertTrue(((String) step.actionInput().get("code")).contains("public class StringReverser"));
     }
@@ -619,7 +620,7 @@ class LangChainReasoningEngineTest {
                 0, 0);
         ReasoningStep failedExec = ReasoningStep.pending(
                 "Executing code",
-                "sandbox_exec",
+                ToolCapability.SANDBOX_EXEC.toolName(),
                 Map.of("language", "java", "code", "broken"),
                 0, 0
         ).withObservation("Compilation failed", false);
@@ -696,7 +697,7 @@ class LangChainReasoningEngineTest {
         // Arrange
         String codeJava = "```java\n public class J { } \n```";
         ReasoningStep priorJava = ReasoningStep.pending("th", ReasoningStep.FINISH, Map.of("answer", codeJava));
-        ReasoningStep execJava = ReasoningStep.pending("th", "sandbox_exec", Map.of("language", "java"))
+        ReasoningStep execJava = ReasoningStep.pending("th", ToolCapability.SANDBOX_EXEC.toolName(), Map.of("language", "java"))
                 .withObservation("Java done", true); // Successful Java execution
         
         String codeGo = "```go\n package main \n```";
@@ -710,7 +711,7 @@ class LangChainReasoningEngineTest {
                 createCtx("s1", goal), "coder", goal, List.of(priorJava, execJava, priorGo));
 
         // Assert
-        assertEquals("sandbox_exec", step.action(), "Should fast-path GO despite Java success");
+        assertEquals(ToolCapability.SANDBOX_EXEC.toolName(), step.action(), "Should fast-path GO despite Java success");
         assertEquals("go", step.actionInput().get("language"));
     }
 
@@ -718,7 +719,7 @@ class LangChainReasoningEngineTest {
     void testFastPathRetryHint_quotesCompilerError() {
         // Arrange
         String goal = "execute it";
-        ReasoningStep failedExec = ReasoningStep.pending("th", "sandbox_exec", Map.of("language", "java"))
+        ReasoningStep failedExec = ReasoningStep.pending("th", ToolCapability.SANDBOX_EXEC.toolName(), Map.of("language", "java"))
                 .withObservation("cannot find symbol: Collectors.reverse()", false);
         
         // Model returns prose (code plan) after failure instead of fixing it

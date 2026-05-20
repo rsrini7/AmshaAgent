@@ -2,6 +2,7 @@ package com.arcclaw.core.security;
 
 import java.util.List;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.config.PolicyConfig;
 
 /**
@@ -28,7 +29,7 @@ public final class PolicyConfigTestHelper {
             }
             @Override public Governance governance() {
                 return new Governance() {
-                    @Override public List<String> hitlExemptTools() { return List.of("schedule_task", "manage_schedule"); }
+                    @Override public List<String> hitlExemptTools() { return List.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()); }
                     @Override public List<String> supervisedSalvageOperations() {
                         return List.of("NETWORK_OUTBOUND", "VAULT_ACCESS", "EXECUTE_SHELL",
                                 "WRITE_MEMORY", "DELEGATE_AUTONOMOUS", "WRITE_FS");

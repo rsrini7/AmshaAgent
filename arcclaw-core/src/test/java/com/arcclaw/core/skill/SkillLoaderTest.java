@@ -11,6 +11,7 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.agent.role.RoleDefinition;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
@@ -107,7 +108,7 @@ class SkillLoaderTest {
         
         // FAKE_TOOL_DOES_NOT_EXIST should be ignored, leaving only GITHUB (1 capability)
         assertEquals(1, entry.roleDefinition().capabilities().size());
-        assertEquals("github", entry.roleDefinition().capabilities().iterator().next().toolName());
+        assertEquals(ToolCapability.GITHUB.toolName(), entry.roleDefinition().capabilities().iterator().next().toolName());
     }
 
     @Test

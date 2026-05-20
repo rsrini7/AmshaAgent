@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ class PlaywrightCliToolTest {
 
     @Test
     void name() {
-        assertEquals("browser_navigate", tool.name());
+        assertEquals(ToolCapability.BROWSER_NAVIGATE.toolName(), tool.name());
     }
 
     @Test

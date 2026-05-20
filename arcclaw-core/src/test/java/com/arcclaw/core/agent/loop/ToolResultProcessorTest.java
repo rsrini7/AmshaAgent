@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -119,11 +120,11 @@ class ToolResultProcessorTest {
     @Test
     void resolveOutcome_ScheduleTaskSuccess_TriggersTerminal() {
         var ctx = ctx();
-        var step = ReasoningStep.pending("", "schedule_task", Map.of());
+        var step = ReasoningStep.pending("", ToolCapability.SCHEDULE_TASK.toolName(), Map.of());
         var res = ToolResponse.success("task created");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, "schedule_task", Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.SCHEDULE_TASK.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
         verify(writer).saveAnswer("sess-1", "✅ task created");
     }
@@ -131,11 +132,11 @@ class ToolResultProcessorTest {
     @Test
     void resolveOutcome_ManageScheduleNonListAction_TriggersTerminal() {
         var ctx = ctx();
-        var step = ReasoningStep.pending("", "manage_schedule", Map.of());
+        var step = ReasoningStep.pending("", ToolCapability.MANAGE_SCHEDULE.toolName(), Map.of());
         var res = ToolResponse.success("deleted");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, "manage_schedule", Map.of("action", "delete"), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.MANAGE_SCHEDULE.toolName(), Map.of("action", "delete"), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
         verify(writer).saveAnswer("sess-1", "✅ deleted");
     }
@@ -143,11 +144,11 @@ class ToolResultProcessorTest {
     @Test
     void resolveOutcome_ManageScheduleListAction_DoesNotTerminateWhenNotListOnlyGoal() {
         var ctx = ctx();
-        var step = ReasoningStep.pending("", "manage_schedule", Map.of());
+        var step = ReasoningStep.pending("", ToolCapability.MANAGE_SCHEDULE.toolName(), Map.of());
         var res = ToolResponse.success("list output");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, "manage_schedule", Map.of("action", "list"), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.MANAGE_SCHEDULE.toolName(), Map.of("action", "list"), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
         verify(writer).saveAnswer("sess-1", "list output");
     }
@@ -155,46 +156,46 @@ class ToolResultProcessorTest {
     @Test
     void resolveOutcome_DelegateSuccessWithoutWarning_TriggersProceed() {
         var ctx = ctx();
-        var step = ReasoningStep.pending("", "delegate_to_agent", Map.of());
+        var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
         var res = ToolResponse.success("task delegated");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, "delegate_to_agent", Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.PROCEED, decision.type());
     }
 
     @Test
     void resolveOutcome_GithubNotAvailable_TriggersTerminal() {
         var ctx = ctx();
-        var step = ReasoningStep.pending("", "github", Map.of());
+        var step = ReasoningStep.pending("", ToolCapability.GITHUB.toolName(), Map.of());
         var res = ToolResponse.failure(1, "GitHub integration is not available");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, "github", Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.GITHUB.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
     }
 
     @Test
     void resolveOutcome_BrowserNavigateFailure_TriggersRetry() {
         var ctx = ctx();
-        var step = ReasoningStep.pending("", "browser_navigate", Map.of());
+        var step = ReasoningStep.pending("", ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of());
         var res = ToolResponse.failure(1, "timeout");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, "browser_navigate", Map.of("url", "https://example.com"), res, obs, step, new ArrayList<>(), 0);
+        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of("url", "https://example.com"), res, obs, step, new ArrayList<>(), 0);
         assertEquals(DecisionType.CONTINUE, decision.type());
         assertNotNull(decision.transientError());
-        assertTrue(decision.transientError().contains("serper_web_search"));
+        assertTrue(decision.transientError().contains(ToolCapability.WEB_SEARCH_SERPER.toolName()));
     }
 
     @Test
     void resolveOutcome_BrowserNavigateFailureWithoutUrl_FallsBackToCircuitBreaker() {
         var ctx = ctx();
-        var step = ReasoningStep.pending("", "browser_navigate", Map.of());
+        var step = ReasoningStep.pending("", ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of());
         var res = ToolResponse.failure(1, "timeout");
         var obs = processor.buildObservation(res);
 
-        StepDecision decision = processor.resolveOutcome(ctx, "browser_navigate", Map.of(), res, obs, step, List.of(), 0);
+        StepDecision decision = processor.resolveOutcome(ctx, ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(1, decision.consecutiveFailures());
     }
 }

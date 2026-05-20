@@ -29,6 +29,7 @@ import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -248,13 +249,13 @@ class DenyReflexTest {
     void testPerToolDenialFeedback() {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setAgentRole("coordinator");
-        cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
+        cp.setBatchToolDecisions("{\"" + ToolCapability.GITHUB.toolName() + "\":\"PENDING\"}");
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
 
         MessageContext ctx = createContext("/deny github");
         ReflexResult result = denyReflex.execute("session-1", "user-1", "chat-1", "/deny github", ctx);
         
-        assertTrue(result.commandResponse().get().contains("github"));
+        assertTrue(result.commandResponse().get().contains(ToolCapability.GITHUB.toolName()));
         assertTrue(result.commandResponse().get().contains("denied"));
     }
 }

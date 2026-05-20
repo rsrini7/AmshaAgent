@@ -17,6 +17,7 @@ import jakarta.enterprise.inject.Instance;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -48,13 +49,13 @@ class FinishActionHandlerTest {
         roleRegistry = mock(RoleRegistry.class);
 
         ToolRegistry toolRegistry = mock(ToolRegistry.class);
-        when(toolRegistry.listTools()).thenReturn(List.of("sandbox_exec", "serper_web_search", "memory_search"));
+        when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.SANDBOX_EXEC.toolName(), ToolCapability.WEB_SEARCH_SERPER.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
         when(roleRegistry.permittedTools(any())).thenAnswer(invocation -> {
             AgentRoleEnum r = invocation.getArgument(0);
             if ("coordinator".equals(r.id())) {
-                return Set.of("schedule_task", "memory_search");
+                return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MEMORY_SEARCH.toolName());
             } else if ("coder".equals(r.id())) {
-                return Set.of("sandbox_exec");
+                return Set.of(ToolCapability.SANDBOX_EXEC.toolName());
             }
             return Set.of();
         });
@@ -191,7 +192,7 @@ class FinishActionHandlerTest {
         when(ctx.agentRole()).thenReturn("coordinator");
 
         String batchJson = """
-                [{"callId":"1","toolName":"schedule_task","params":{},"paramsJson":"{}","observation":"TOOL_FAILED: CHANNEL_TYPE not bound","success":false}]
+                [{"callId":"1","toolName":ToolCapability.SCHEDULE_TASK.toolName(),"params":{},"paramsJson":"{}","observation":"TOOL_FAILED: CHANNEL_TYPE not bound","success":false}]
                 """;
         ReasoningStep parallel = ReasoningStep.parallelBatch("batch", Map.of("batch", batchJson), 0, 0)
                 .withObservation("schedule_task→FAIL", false);

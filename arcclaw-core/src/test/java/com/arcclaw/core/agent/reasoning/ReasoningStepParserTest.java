@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Collections;
 import java.util.List;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +38,7 @@ class ReasoningStepParserTest {
         // Arrange
         ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
                 .id("call_1")
-                .name("github")
+                .name(ToolCapability.GITHUB.toolName())
                 .arguments("{\"repo\":\"arcclaw\"}")
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("Thinking", Collections.singletonList(toolReq));
@@ -50,7 +51,7 @@ class ReasoningStepParserTest {
         ReasoningStep step = parser.parse("s1", "coordinator", response);
 
         // Assert
-        assertEquals("github", step.action());
+        assertEquals(ToolCapability.GITHUB.toolName(), step.action());
         assertEquals("arcclaw", step.actionInput().get("repo"));
         assertEquals(100, step.inputTokens());
         assertEquals(50, step.outputTokens());
@@ -77,7 +78,7 @@ class ReasoningStepParserTest {
         // Arrange
         ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
                 .id("call_1")
-                .name("github")
+                .name(ToolCapability.GITHUB.toolName())
                 .arguments("invalid json")
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("Thinking", Collections.singletonList(toolReq));
@@ -154,7 +155,7 @@ class ReasoningStepParserTest {
         // Arrange: Ollama returns tool calls with NULL id()
         ToolExecutionRequest tool1 = ToolExecutionRequest.builder()
                 .id(null) // Ollama style
-                .name("github")
+                .name(ToolCapability.GITHUB.toolName())
                 .arguments("{\"repo\":\"arcclaw\"}")
                 .build();
         ToolExecutionRequest tool2 = ToolExecutionRequest.builder()
@@ -183,7 +184,7 @@ class ReasoningStepParserTest {
         // Arrange: OpenAI/Anthropic return tool calls with IDs
         ToolExecutionRequest tool1 = ToolExecutionRequest.builder()
                 .id("call_abc")
-                .name("github")
+                .name(ToolCapability.GITHUB.toolName())
                 .arguments("{\"repo\":\"arcclaw\"}")
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("Thinking", List.of(tool1));
@@ -206,12 +207,12 @@ class ReasoningStepParserTest {
     void testParse_schedulingGoalCollapsesMixedParallelBatchToScheduleTask() throws Exception {
         ToolExecutionRequest scheduleReq = ToolExecutionRequest.builder()
                 .id("call_sched")
-                .name("schedule_task")
+                .name(ToolCapability.SCHEDULE_TASK.toolName())
                 .arguments("{\"goal\":\"Say Hello Buddy\",\"cronExpression\":\"37 10 * * *\",\"timezone\":\"Asia/Kolkata\",\"runOnce\":true}")
                 .build();
         ToolExecutionRequest delegateReq = ToolExecutionRequest.builder()
                 .id("call_delegate")
-                .name("delegate_to_agent")
+                .name(ToolCapability.DELEGATE_TO_AGENT.toolName())
                 .arguments("{\"agent\":\"saraswati\",\"goal\":\"Perform a real-time search\"}")
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("I'll schedule it", List.of(scheduleReq, delegateReq));
@@ -221,7 +222,7 @@ class ReasoningStepParserTest {
                 ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "schedule to say Hello Buddy in one min")
                         .call(() -> parser.parse("s1", "coordinator", response)));
 
-        assertEquals("schedule_task", step.action());
+        assertEquals(ToolCapability.SCHEDULE_TASK.toolName(), step.action());
         assertEquals("Say Hello Buddy", step.actionInput().get("goal"));
         assertEquals(Boolean.TRUE, step.actionInput().get("runOnce"));
     }
@@ -240,7 +241,7 @@ class ReasoningStepParserTest {
                 "}\", \"language\":\"java\"}";
         ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
                 .id("call_sandbox")
-                .name("sandbox_exec")
+                .name(ToolCapability.SANDBOX_EXEC.toolName())
                 .arguments(malformed)
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("execute", List.of(toolReq));
@@ -251,7 +252,7 @@ class ReasoningStepParserTest {
                 ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "execute this code")
                         .call(() -> parser.parse("s1", "coder", response)));
 
-        assertEquals("sandbox_exec", step.action());
+        assertEquals(ToolCapability.SANDBOX_EXEC.toolName(), step.action());
         assertEquals("java", step.actionInput().get("language"));
         String code = (String) step.actionInput().get("code");
         assertNotNull(code);
@@ -266,7 +267,7 @@ class ReasoningStepParserTest {
         
         ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
                 .id("call_trunc")
-                .name("sandbox_exec")
+                .name(ToolCapability.SANDBOX_EXEC.toolName())
                 .arguments(truncated)
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("execute", List.of(toolReq));
@@ -277,7 +278,7 @@ class ReasoningStepParserTest {
                 ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "execute this code")
                         .call(() -> parser.parse("s1", "coder", response)));
 
-        assertEquals("sandbox_exec", step.action());
+        assertEquals(ToolCapability.SANDBOX_EXEC.toolName(), step.action());
         assertEquals("java", step.actionInput().get("language"), "Should infer java from 'public class'");
         String code = (String) step.actionInput().get("code");
         assertNotNull(code);
@@ -291,7 +292,7 @@ class ReasoningStepParserTest {
         
         ToolExecutionRequest toolReq = ToolExecutionRequest.builder()
                 .id("call_unrequested")
-                .name("sandbox_exec")
+                .name(ToolCapability.SANDBOX_EXEC.toolName())
                 .arguments("{\"code\":\"public class Hello { }\", \"language\":\"java\"}")
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("Here is the code", List.of(toolReq));
@@ -311,12 +312,12 @@ class ReasoningStepParserTest {
     void testParse_nonSchedulingTomorrowQuestionRemainsParallelBatch() throws Exception {
         ToolExecutionRequest scheduleReq = ToolExecutionRequest.builder()
                 .id("call_sched")
-                .name("schedule_task")
+                .name(ToolCapability.SCHEDULE_TASK.toolName())
                 .arguments("{\"goal\":\"bad\",\"cronExpression\":\"37 10 * * *\"}")
                 .build();
         ToolExecutionRequest delegateReq = ToolExecutionRequest.builder()
                 .id("call_delegate")
-                .name("delegate_to_agent")
+                .name(ToolCapability.DELEGATE_TO_AGENT.toolName())
                 .arguments("{\"agent\":\"saraswati\",\"goal\":\"weather\"}")
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("thinking", List.of(scheduleReq, delegateReq));
@@ -333,12 +334,12 @@ class ReasoningStepParserTest {
     void testParse_everyDayRequestCollapsesToScheduleTaskWithoutExplicitVerb() throws Exception {
         ToolExecutionRequest scheduleReq = ToolExecutionRequest.builder()
                 .id("call_sched")
-                .name("schedule_task")
+                .name(ToolCapability.SCHEDULE_TASK.toolName())
                 .arguments("{\"goal\":\"send me the news\",\"cronExpression\":\"0 9 * * *\"}")
                 .build();
         ToolExecutionRequest delegateReq = ToolExecutionRequest.builder()
                 .id("call_delegate")
-                .name("delegate_to_agent")
+                .name(ToolCapability.DELEGATE_TO_AGENT.toolName())
                 .arguments("{\"agent\":\"saraswati\",\"goal\":\"find the news\"}")
                 .build();
         AiMessage aiMessage = AiMessage.aiMessage("thinking", List.of(scheduleReq, delegateReq));
@@ -348,6 +349,6 @@ class ReasoningStepParserTest {
                 ScopedValue.where(WorkspaceContext.RAW_USER_GOAL, "every day send me the news")
                         .call(() -> parser.parse("s1", "coordinator", response)));
 
-        assertEquals("schedule_task", step.action());
+        assertEquals(ToolCapability.SCHEDULE_TASK.toolName(), step.action());
     }
 }

@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,26 +25,26 @@ class PersonaEscalationServiceTest {
     @Test
     void shouldAttemptEscalation_enabled_failure() {
         ToolResponse response = ToolResponse.failure(1, "error");
-        assertTrue(service.shouldAttemptEscalation("coder", "sandbox_exec", response));
+        assertTrue(service.shouldAttemptEscalation("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
     void shouldAttemptEscalation_disabled_whenFeatureOff() {
         service.escalationEnabled = false;
         ToolResponse response = ToolResponse.failure(1, "error");
-        assertFalse(service.shouldAttemptEscalation("coder", "sandbox_exec", response));
+        assertFalse(service.shouldAttemptEscalation("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
     void shouldAttemptEscalation_disabled_forInfraFailure() {
         ToolResponse response = ToolResponse.infraFailure("podman offline");
-        assertFalse(service.shouldAttemptEscalation("coder", "sandbox_exec", response));
+        assertFalse(service.shouldAttemptEscalation("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
     void shouldAttemptEscalation_disabled_forSuccess() {
         ToolResponse response = ToolResponse.success("output");
-        assertFalse(service.shouldAttemptEscalation("coder", "sandbox_exec", response));
+        assertFalse(service.shouldAttemptEscalation("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
@@ -201,7 +202,7 @@ class PersonaEscalationServiceTest {
 
     @Test
     void formatAgentResultError_awaitingApproval() {
-        AgentResult result = AgentResult.awaitingApproval("sandbox_exec", "null", "sess1", null);
+        AgentResult result = AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "null", "sess1", null);
         String msg = service.formatAgentResultError(result);
         assertTrue(msg.contains("requires human approval"));
     }

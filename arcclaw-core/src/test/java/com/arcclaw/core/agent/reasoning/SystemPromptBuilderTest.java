@@ -19,6 +19,7 @@ import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.tools.AgentTool;
@@ -169,7 +170,7 @@ class SystemPromptBuilderTest {
         AgentTool mockTool = mock(AgentTool.class);
         when(mockTool.isEnabled()).thenReturn(true);
         when(toolRegistry.findTool(any())).thenReturn(Optional.of(mockTool));
-        when(capabilityRegistry.getSupplementalTools("researcher")).thenReturn(Collections.singleton("browser_navigate"));
+        when(capabilityRegistry.getSupplementalTools("researcher")).thenReturn(Collections.singleton(ToolCapability.BROWSER_NAVIGATE.toolName()));
         setField(builder, "contextWindow", 8192);
 
         String result = builder.build(createCtx("s1"), "researcher", "s1", "some goal", false);

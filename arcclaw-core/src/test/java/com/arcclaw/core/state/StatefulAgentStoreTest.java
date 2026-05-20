@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -57,7 +58,7 @@ class StatefulAgentStoreTest {
         String session = SESSION + "-" + System.nanoTime();
         WorkspaceScopeHolder.run(session, () -> {
             var steps = List.of(
-                    ReasoningStep.of("Analyzing the repo", "github",
+                    ReasoningStep.of("Analyzing the repo", ToolCapability.GITHUB.toolName(),
                             Map.of("repo", "test/repo"), "Repository has 10 files", 0, 0),
                     ReasoningStep.of("Done analyzing", ReasoningStep.FINISH,
                             Map.of("answer", "Analysis complete"), "Task completed.", 0, 0));
@@ -83,7 +84,7 @@ class StatefulAgentStoreTest {
             System.out.println("DEBUG: step action: " + deserializedSteps.get(1).action());
             assertEquals(2, deserializedSteps.size());
             assertEquals("Analyzing the repo", deserializedSteps.get(0).thought());
-            assertEquals("github", deserializedSteps.get(0).action());
+            assertEquals(ToolCapability.GITHUB.toolName(), deserializedSteps.get(0).action());
             assertEquals("Repository has 10 files", deserializedSteps.get(0).observation());
             assertEquals(ReasoningStep.FINISH, deserializedSteps.get(1).action());
         });
@@ -97,7 +98,7 @@ class StatefulAgentStoreTest {
         String sessionFail = SESSION + "-fail";
         WorkspaceScopeHolder.run(sessionFail, () -> {
             var steps = List.of(
-                    ReasoningStep.of("Trying something", "github",
+                    ReasoningStep.of("Trying something", ToolCapability.GITHUB.toolName(),
                             Map.of("repo", "fail/repo"), "Error occurred", 0, 0));
 
             var checkpoint = store.save(sessionFail, ROLE, steps, "Trying something");
@@ -141,10 +142,10 @@ class StatefulAgentStoreTest {
         String sessionUpsert = SESSION + "-upsert";
         WorkspaceScopeHolder.run(sessionUpsert, () -> {
             var steps1 = List.of(
-                    ReasoningStep.of("Step 1", "github", Map.of(), "obs1", 0, 0));
+                    ReasoningStep.of("Step 1", ToolCapability.GITHUB.toolName(), Map.of(), "obs1", 0, 0));
             var steps2 = List.of(
-                    ReasoningStep.of("Step 1", "github", Map.of(), "obs1", 0, 0),
-                    ReasoningStep.of("Step 2", "github", Map.of(), "obs2", 0, 0));
+                    ReasoningStep.of("Step 1", ToolCapability.GITHUB.toolName(), Map.of(), "obs1", 0, 0),
+                    ReasoningStep.of("Step 2", ToolCapability.GITHUB.toolName(), Map.of(), "obs2", 0, 0));
 
             var cp1 = store.save(sessionUpsert, ROLE, steps1, "Goal 1");
             var cp2 = store.save(sessionUpsert, ROLE, steps2, "Goal 1");
@@ -165,7 +166,7 @@ class StatefulAgentStoreTest {
 
             // 1) Old AWAITING_APPROVAL
             var steps1 = List.of(
-                    ReasoningStep.of("Thinking 1", "github",
+                    ReasoningStep.of("Thinking 1", ToolCapability.GITHUB.toolName(),
                             Map.of("repo", "old"), "obs", 0, 0)
             );
             var cp1 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-old", role, steps1, "Cron Goal");
@@ -174,7 +175,7 @@ class StatefulAgentStoreTest {
 
             // 2) Newer AWAITING_APPROVAL
             var steps2 = List.of(
-                    ReasoningStep.of("Thinking 2", "github",
+                    ReasoningStep.of("Thinking 2", ToolCapability.GITHUB.toolName(),
                             Map.of("repo", "new"), "obs", 0, 0)
             );
             var cp2 = store.save(AgentSentinels.CRON_SESSION_PREFIX + cronId + "-new", role, steps2, "Cron Goal");

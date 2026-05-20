@@ -41,7 +41,22 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 
 ---
 
-## 3. Maven Build & Dependency Resolution
+## 3. Generic Coding Principles
+
+### 3.1 No Hardcoded Tool Name Strings
+* **Rule**: Never use hardcoded strings like `"sandbox_exec"`, `"github"`, `"schedule_task"`, etc. in Java code logic. Always reference the canonical name via `ToolCapability.ENUM.toolName()`.
+* **Reason**: Hardcoded strings silently break when tool names change. The enum is the single source of truth.
+* **Exceptions** (not refactorable):
+  * `@ToolMetadata(capabilityId = "...")` / `@Tool(name = "...")` annotation attributes (require compile-time constants)
+  * `@WithDefault("...")` annotation defaults
+  * Javadoc examples referencing tool names for documentation
+  * User-input pattern matching (e.g. checking if a user typed "github")
+  * LLM prompt instructions (text the model reads, not code identifiers)
+  * Cross-module constraint: `ToolCapability` lives in `arcclaw-core`. Only modules with a Maven dependency on `arcclaw-core` can import it. Modules like `arcclaw-channel-api` that don't depend on `arcclaw-core` must keep hardcoded strings.
+
+---
+
+## 4. Maven Build & Dependency Resolution
 * **Rule**: Because modules are heavily linked, running single-module tests (e.g. via `-pl`) can fail if dependent jars are out of date in your local repository.
 * **Best Practice**: Whenever you modify a class in a dependency module (like `arcclaw-channel-api` or `arcclaw-core`), run a local repository installation:
   ```bash

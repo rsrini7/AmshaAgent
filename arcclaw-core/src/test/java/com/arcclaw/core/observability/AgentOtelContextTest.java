@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanBuilder;
@@ -138,12 +139,12 @@ class AgentOtelContextTest {
         String sessionId = "tool-session";
         agentOtelContext.startSessionSpan(sessionId);
 
-        Span toolSpan = agentOtelContext.startToolSpan(sessionId, "github", "invoke");
+        Span toolSpan = agentOtelContext.startToolSpan(sessionId, ToolCapability.GITHUB.toolName(), "invoke");
         assertNotNull(toolSpan);
 
         verify(tracer).spanBuilder(AgentOTelConstants.SPAN_TOOL_CALL);
         verify(spanBuilder, times(2)).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
-        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, "github");
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, ToolCapability.GITHUB.toolName());
         verify(spanBuilder).setAttribute("tool.operation", "invoke");
         verify(spanBuilder).setParent((Context) any());
     }

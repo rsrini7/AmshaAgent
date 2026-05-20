@@ -3,6 +3,7 @@ package com.arcclaw.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,41 +25,41 @@ class ExecutionFailureRecoveryServiceTest {
     @Test
     void shouldAttemptRecovery_enabled_coder_sandboxExec_failure() {
         ToolResponse response = ToolResponse.failure(1, "syntax error");
-        assertTrue(service.shouldAttemptRecovery("coder", "sandbox_exec", response));
+        assertTrue(service.shouldAttemptRecovery("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
     void shouldAttemptRecovery_disabled_whenFeatureOff() {
         service.autoHealEnabled = false;
         ToolResponse response = ToolResponse.failure(1, "syntax error");
-        assertFalse(service.shouldAttemptRecovery("coder", "sandbox_exec", response));
+        assertFalse(service.shouldAttemptRecovery("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
     void shouldAttemptRecovery_disabled_forNonCoderRole() {
         ToolResponse response = ToolResponse.failure(1, "syntax error");
-        assertFalse(service.shouldAttemptRecovery("coordinator", "sandbox_exec", response));
-        assertFalse(service.shouldAttemptRecovery("researcher", "sandbox_exec", response));
-        assertFalse(service.shouldAttemptRecovery("debugger", "sandbox_exec", response));
+        assertFalse(service.shouldAttemptRecovery("coordinator", ToolCapability.SANDBOX_EXEC.toolName(), response));
+        assertFalse(service.shouldAttemptRecovery("researcher", ToolCapability.SANDBOX_EXEC.toolName(), response));
+        assertFalse(service.shouldAttemptRecovery("debugger", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
     void shouldAttemptRecovery_disabled_forNonSandboxTool() {
         ToolResponse response = ToolResponse.failure(1, "error");
-        assertFalse(service.shouldAttemptRecovery("coder", "delegate_to_agent", response));
-        assertFalse(service.shouldAttemptRecovery("coder", "github", response));
+        assertFalse(service.shouldAttemptRecovery("coder", ToolCapability.DELEGATE_TO_AGENT.toolName(), response));
+        assertFalse(service.shouldAttemptRecovery("coder", ToolCapability.GITHUB.toolName(), response));
     }
 
     @Test
     void shouldAttemptRecovery_disabled_forInfraFailure() {
         ToolResponse response = ToolResponse.infraFailure("podman offline");
-        assertFalse(service.shouldAttemptRecovery("coder", "sandbox_exec", response));
+        assertFalse(service.shouldAttemptRecovery("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
     void shouldAttemptRecovery_disabled_forSuccess() {
         ToolResponse response = ToolResponse.success("output");
-        assertFalse(service.shouldAttemptRecovery("coder", "sandbox_exec", response));
+        assertFalse(service.shouldAttemptRecovery("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
     }
 
     @Test
@@ -140,7 +141,7 @@ class ExecutionFailureRecoveryServiceTest {
 
     @Test
     void formatAgentResultError_awaitingApproval() {
-        AgentResult result = AgentResult.awaitingApproval("sandbox_exec", "null", "sess1", null);
+        AgentResult result = AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "null", "sess1", null);
         String msg = service.formatAgentResultError(result);
         assertTrue(msg.contains("requires human approval"));
     }

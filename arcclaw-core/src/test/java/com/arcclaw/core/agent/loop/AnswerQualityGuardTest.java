@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,8 +20,8 @@ class AnswerQualityGuardTest {
     void setUp() {
         toolRegistry = mock(ToolRegistry.class);
         when(toolRegistry.listTools()).thenReturn(List.of(
-            "memory_search", "ingest_document", "github", "sandbox_exec", 
-            "delegate_to_agent", "schedule_task", "manage_schedule"
+            ToolCapability.MEMORY_SEARCH.toolName(), ToolCapability.INGEST_DOCUMENT.toolName(), ToolCapability.GITHUB.toolName(), ToolCapability.SANDBOX_EXEC.toolName(), 
+            ToolCapability.DELEGATE_TO_AGENT.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()
         ));
         
         guard = new AnswerQualityGuard();

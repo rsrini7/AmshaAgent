@@ -20,6 +20,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
@@ -146,7 +147,7 @@ class DelegateToAgentToolTest {
 
         when(agentLoop.run(
             any(), any(), any(), any(), anyInt()
-        )).thenReturn(AgentResult.awaitingApproval("sandbox_exec", "{}", SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "coder", List.of()));
+        )).thenReturn(AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "{}", SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "coder", List.of()));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
             SESSION_ID, USER_ID, CHAT_ID, "coordinator", AutonomyLevel.FULL,

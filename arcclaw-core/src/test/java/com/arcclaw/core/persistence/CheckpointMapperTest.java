@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Instant;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.domain.model.CheckpointRecord;
@@ -22,10 +23,10 @@ class CheckpointMapperTest {
         entity.setOriginalGoal("goal");
         entity.setSystemNote("note");
         entity.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        entity.setPendingToolName("github");
+        entity.setPendingToolName(ToolCapability.GITHUB.toolName());
         entity.setPendingToolParametersJson("{\"arg\":\"val\"}");
-        entity.setBatchToolDecisions("{\"github\":\"PENDING\"}");
-        entity.setStateJson("[{\"thought\":\"thinking\",\"action\":\"github\"}]");
+        entity.setBatchToolDecisions("{\"" + ToolCapability.GITHUB.toolName() + "\":\"PENDING\"}");
+        entity.setStateJson("[{\"thought\":\"thinking\",\"action\":\"" + ToolCapability.GITHUB.toolName() + "\"}]");
         entity.setMaxIterations(5);
         entity.setChannelType("telegram");
         entity.setChannelPlatformId("u123");
@@ -72,10 +73,10 @@ class CheckpointMapperTest {
         source.setOriginalGoal("goal");
         source.setSystemNote("note");
         source.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        source.setPendingToolName("github");
+        source.setPendingToolName(ToolCapability.GITHUB.toolName());
         source.setPendingToolParametersJson("{\"arg\":\"val\"}");
-        source.setBatchToolDecisions("{\"github\":\"PENDING\"}");
-        source.setStateJson("[{\"thought\":\"thinking\",\"action\":\"github\"}]");
+        source.setBatchToolDecisions("{\"" + ToolCapability.GITHUB.toolName() + "\":\"PENDING\"}");
+        source.setStateJson("[{\"thought\":\"thinking\",\"action\":\"" + ToolCapability.GITHUB.toolName() + "\"}]");
         source.setMaxIterations(5);
         source.setChannelType("telegram");
         source.setChannelPlatformId("u123");

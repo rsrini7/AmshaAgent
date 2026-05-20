@@ -33,6 +33,7 @@ import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.governance.ApprovalFrame;
@@ -120,14 +121,14 @@ class AgentStateMachineRunnerTest {
         TextPatternUtils textPatternUtils = new TextPatternUtils();
 
         ToolRegistry toolRegistryForHandler = mock(ToolRegistry.class);
-        Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of("sandbox_exec", "serper_web_search", "memory_search"));
+        Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of(ToolCapability.SANDBOX_EXEC.toolName(), ToolCapability.WEB_SEARCH_SERPER.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
         RoleRegistry roleRegistryMock = mock(RoleRegistry.class);
         Mockito.lenient().when(roleRegistryMock.permittedTools(any())).thenAnswer(invocation -> {
             AgentRoleEnum r = invocation.getArgument(0);
             if ("coordinator".equals(r.id())) {
-                return Set.of("schedule_task", "memory_search");
+                return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MEMORY_SEARCH.toolName());
             } else if ("coder".equals(r.id())) {
-                return Set.of("sandbox_exec");
+                return Set.of(ToolCapability.SANDBOX_EXEC.toolName());
             }
             return Set.of();
         });
@@ -340,10 +341,10 @@ class AgentStateMachineRunnerTest {
     @Test
     void testSchedulingToolFastPathExits() {
         ReasoningStep scheduleStep = ReasoningStep.pending(
-                "planning", "schedule_task", Map.of("task", "clean"), 100, 100);
+                "planning", ToolCapability.SCHEDULE_TASK.toolName(), Map.of("task", "clean"), 100, 100);
         when(engine.nextStep(any(), anyString(), anyString(), anyList()))
                 .thenReturn(scheduleStep);
-        when(toolRegistry.findTool("schedule_task")).thenReturn(Optional.of(mock(AgentTool.class)));
+        when(toolRegistry.findTool(ToolCapability.SCHEDULE_TASK.toolName())).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(),
                 anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
@@ -383,7 +384,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(reactStep)
                 .thenReturn(finishStep);
         lenient().when(toolRegistry.findTool("OBSERVE")).thenReturn(Optional.empty());
-        lenient().when(toolRegistry.listTools()).thenReturn(List.of("github", "memory_search"));
+        lenient().when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
                 "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);
