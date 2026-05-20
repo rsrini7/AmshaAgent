@@ -18,7 +18,6 @@ import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -28,8 +27,6 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
@@ -58,12 +55,14 @@ class TelegramAgentHandlerTest {
 
     @BeforeEach
     void setup() throws Exception {
-        // Inject the sync flag cache into the handler via reflection
+        // Clear the sync flags on the handler via reflection to ensure test isolation
         TelegramAgentHandler target = ClientProxy.unwrap(handler);
-        Field flagsField = TelegramAgentHandler.class.getDeclaredField("processingFlags");
+        Field flagsField = com.arcclaw.channel.api.AbstractInboundMessagePipeline.class.getDeclaredField("processingFlags");
         flagsField.setAccessible(true);
-        Cache<String, AtomicBoolean> flags = Caffeine.newBuilder().build();
-        flagsField.set(target, flags);
+        java.util.Map<?, ?> flags = (java.util.Map<?, ?>) flagsField.get(target);
+        if (flags != null) {
+            flags.clear();
+        }
 
         // Default behavior: processAsync returns immediately
         when(channelServices.processAsync(any())).thenReturn(CompletableFuture.completedFuture(null));

@@ -11,7 +11,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.TelemetryAuditService;
-import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -66,7 +65,7 @@ public class StructuredRetryLoop {
                                 "Success after recovery. Attempt " + attempt + ". Reasons: " + retryReasons.stream().map(Exception::getMessage).collect(Collectors.joining("; ")));
                     }
                     return result;
-                } catch (BudgetWarningException | JsonExtractionException e) {
+                } catch (JsonExtractionException e) {
                     attempt++;
                     retryReasons.add(e);
                     

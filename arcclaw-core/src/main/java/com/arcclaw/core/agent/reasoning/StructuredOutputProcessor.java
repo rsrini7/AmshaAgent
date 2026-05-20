@@ -74,7 +74,6 @@ public class StructuredOutputProcessor {
                     otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                 } catch (BudgetWarningException w) {
                     log.warnf("Budget warning for session %s structured call: %s", sessionId, AgentErrorMessageUtil.safeMessage(w));
-                    throw w;
                 } catch (BudgetExceededException be) {
                     log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, AgentErrorMessageUtil.safeMessage(be));
                     throw be;
@@ -82,7 +81,7 @@ public class StructuredOutputProcessor {
             }
 
             return response.aiMessage().text();
-        } catch (BudgetWarningException | BudgetExceededException e) {
+        } catch (BudgetExceededException e) {
             throw e;
         } catch (LlmProviderException e) {
             if (e instanceof LlmRateLimitException) {

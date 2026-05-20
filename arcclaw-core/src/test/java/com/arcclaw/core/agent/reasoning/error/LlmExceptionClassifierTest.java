@@ -40,4 +40,43 @@ class LlmExceptionClassifierTest {
         assertTrue(sanitized.contains("Function id '123'"));
         assertTrue(sanitized.startsWith("⚠️ API Error:"));
     }
+
+    @Test
+    void testGeminiSafetyBlockedFilter() {
+        NullPointerException npe = new NullPointerException("Something about parts list being null or Part");
+        LlmProviderException classified = LlmExceptionClassifier.classify(npe);
+        assertTrue(classified instanceof LlmContentFilterException);
+        assertTrue(classified.getMessage().contains("safety filters"));
+    }
+
+    @Test
+    void testAuthenticationExceptionFor401() {
+        HttpException httpEx = new HttpException(401, "Unauthorized");
+        LlmProviderException classified = LlmExceptionClassifier.classify(httpEx);
+        assertTrue(classified instanceof LlmAuthenticationException);
+    }
+
+    @Test
+    void testModelNotFoundFor404() {
+        HttpException httpEx = new HttpException(404, "Not Found");
+        LlmProviderException classified = LlmExceptionClassifier.classify(httpEx);
+        assertTrue(classified instanceof LlmAuthenticationException);
+        assertTrue(classified.getMessage().contains("Model not found"));
+    }
+
+    @Test
+    void testMalformedRestClientUrl() {
+        IllegalArgumentException ex = new IllegalArgumentException("Invalid REST Client URL: chat/completions");
+        LlmProviderException classified = LlmExceptionClassifier.classify(ex);
+        assertTrue(classified instanceof LlmServiceUnavailableException);
+        assertTrue(classified.getMessage().contains("Malformed LLM Base URL"));
+    }
+
+    @Test
+    void testTimeoutError() {
+        RuntimeException ex = new RuntimeException("LLM Request timed out after 30000 ms");
+        LlmProviderException classified = LlmExceptionClassifier.classify(ex);
+        assertTrue(classified instanceof LlmServiceUnavailableException);
+        assertTrue(classified.getMessage().contains("Timeout"));
+    }
 }
