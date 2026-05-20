@@ -246,9 +246,12 @@ public class FinishActionHandler {
         }
 
         // Case 2: Execution goal + no code in answer + sandbox available → retry with correction
+        // Skip correction if sandbox_exec was already called successfully — the answer
+        // describes execution output, not source code, so code fence check would fail spuriously.
         if (AgentSentinels.EXECUTION_KEYWORDS.matcher(goal).find()
                 && isToolPermitted(context.agentRole(), ToolCapability.SANDBOX_EXEC.toolName())
-                && !answer.contains("```")) {
+                && !answer.contains("```")
+                && !historyContainsSuccess(ToolCapability.SANDBOX_EXEC.toolName(), history)) {
             log.infof("TOOL-INJECT session %s: execution goal but no code in answer, forcing correction", sessionId);
             return new FinishOutcome.Correction(
                     step.withObservation("Agent finished without writing code for an execution goal"),
@@ -289,6 +292,12 @@ public class FinishActionHandler {
     private boolean isToolPermitted(String agentRole, String toolName) {
         var role = AgentRoleEnum.fromString(agentRole);
         return roleRegistry.permittedTools(role).contains(toolName);
+    }
+
+    private static boolean historyContainsSuccess(String toolName, List<ReasoningStep> history) {
+        return history.stream().anyMatch(s -> s instanceof ReasoningStep.ToolCallStep tc
+                && toolName.equals(tc.action())
+                && Boolean.TRUE.equals(tc.success()));
     }
 
 }

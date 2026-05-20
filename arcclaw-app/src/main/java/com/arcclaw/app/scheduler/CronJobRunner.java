@@ -68,7 +68,7 @@ public class CronJobRunner {
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
 
-    @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
+    @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "5")
     int cronMaxIterations;
 
 
