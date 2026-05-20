@@ -23,10 +23,15 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
 
             if (msg != null) {
                 String lower = msg.toLowerCase();
-                if (lower.contains("timeout") 
+                if (lower.contains("timeout")
                         || lower.contains("timed out")
                         || (lower.contains("exceeded") && lower.contains("ms"))) {
                     return new LlmServiceUnavailableException("LLM Request Timeout: " + msg, t);
+                }
+                // Groq tool_use_failed — provider rejected the tool call format.
+                // This is a provider-specific error, not retryable with the same provider.
+                if (lower.contains("tool_use_failed") || lower.contains("failed_generation")) {
+                    return new LlmServiceUnavailableException("Tool call format rejected by provider: " + msg, t);
                 }
             }
             cause = cause.getCause();
