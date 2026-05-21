@@ -153,12 +153,28 @@ public class AuditResource {
     private AuditEventResponse toResponseFromDto(AuditEventDto dto) {
         return new AuditEventResponse(
                 dto.id(), dto.sessionId(), dto.userId(), dto.agentRole(), dto.goalHash(),
-                dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null,
-                dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null,
+                dto.outcome() != null ? parseAuditOutcome(dto.outcome()) : null,
+                dto.eventType() != null ? parseSecurityEventType(dto.eventType()) : null,
                 dto.eventDetail(),
                 dto.inputTokens(), dto.outputTokens(), dto.usdCost(), dto.iterationsUsed(),
                 dto.timestamp(), dto.hmacHash()
         );
+    }
+
+    private AuditOutcome parseAuditOutcome(String value) {
+        try {
+            return AuditOutcome.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private SecurityEventType parseSecurityEventType(String value) {
+        try {
+            return SecurityEventType.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static Instant parseInstant(String s) {

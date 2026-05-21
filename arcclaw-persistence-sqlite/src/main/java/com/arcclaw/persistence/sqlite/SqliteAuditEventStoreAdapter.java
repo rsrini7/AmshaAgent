@@ -134,31 +134,31 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
         StringBuilder jpql = new StringBuilder("SELECT a FROM AuditEvent a WHERE 1=1");
 
         if (sessionId != null && !sessionId.isBlank()) {
-            jpql.append(" AND a.sessionId = ?1");
+            jpql.append(" AND a.sessionId = :sessionId");
         }
         if (eventType != null && !eventType.isBlank()) {
-            jpql.append(" AND a.eventType = ?2");
+            jpql.append(" AND a.eventType = :eventType");
         }
         if (from != null) {
-            jpql.append(" AND a.timestamp >= ?3");
+            jpql.append(" AND a.timestamp >= :from");
         }
         if (to != null) {
-            jpql.append(" AND a.timestamp <= ?4");
+            jpql.append(" AND a.timestamp <= :to");
         }
         jpql.append(" ORDER BY a.timestamp DESC");
 
         var query = em.createQuery(jpql.toString(), AuditEventEntity.class);
         if (sessionId != null && !sessionId.isBlank()) {
-            query.setParameter(1, sessionId);
+            query.setParameter("sessionId", sessionId);
         }
         if (eventType != null && !eventType.isBlank()) {
-            query.setParameter(2, SecurityEventType.valueOf(eventType));
+            query.setParameter("eventType", SecurityEventType.valueOf(eventType));
         }
         if (from != null) {
-            query.setParameter(3, from);
+            query.setParameter("from", from);
         }
         if (to != null) {
-            query.setParameter(4, to);
+            query.setParameter("to", to);
         }
         query.setFirstResult(offset);
         query.setMaxResults(limit);
@@ -172,30 +172,30 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
         StringBuilder jpql = new StringBuilder("SELECT COUNT(a) FROM AuditEvent a WHERE 1=1");
 
         if (sessionId != null && !sessionId.isBlank()) {
-            jpql.append(" AND a.sessionId = ?1");
+            jpql.append(" AND a.sessionId = :sessionId");
         }
         if (eventType != null && !eventType.isBlank()) {
-            jpql.append(" AND a.eventType = ?2");
+            jpql.append(" AND a.eventType = :eventType");
         }
         if (from != null) {
-            jpql.append(" AND a.timestamp >= ?3");
+            jpql.append(" AND a.timestamp >= :from");
         }
         if (to != null) {
-            jpql.append(" AND a.timestamp <= ?4");
+            jpql.append(" AND a.timestamp <= :to");
         }
 
         var query = em.createQuery(jpql.toString(), Long.class);
         if (sessionId != null && !sessionId.isBlank()) {
-            query.setParameter(1, sessionId);
+            query.setParameter("sessionId", sessionId);
         }
         if (eventType != null && !eventType.isBlank()) {
-            query.setParameter(2, SecurityEventType.valueOf(eventType));
+            query.setParameter("eventType", SecurityEventType.valueOf(eventType));
         }
         if (from != null) {
-            query.setParameter(3, from);
+            query.setParameter("from", from);
         }
         if (to != null) {
-            query.setParameter(4, to);
+            query.setParameter("to", to);
         }
         return query.getSingleResult();
     }

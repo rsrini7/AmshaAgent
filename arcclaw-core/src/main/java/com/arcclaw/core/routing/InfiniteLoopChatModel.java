@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import com.arcclaw.core.agent.reasoning.error.LlmAuthenticationException;
 import com.arcclaw.core.agent.reasoning.error.LlmContentFilterException;
@@ -156,7 +157,7 @@ public class InfiniteLoopChatModel implements ChatModel {
                 String disabledSlots = health.entrySet().stream()
                     .filter(e -> e.getValue().isPermanentlyDisabled())
                     .map(e -> e.getKey())
-                    .collect(java.util.stream.Collectors.joining(", "));
+                    .collect(Collectors.joining(", "));
                 throw new RuntimeException("InfiniteLoop: All providers permanently disabled [" + disabledSlots + "]. "
                     + "Check server status and API keys. Slots will reset on app restart.");
             }

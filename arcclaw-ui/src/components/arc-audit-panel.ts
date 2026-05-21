@@ -42,10 +42,16 @@ export class ArcAuditPanel extends LitElement {
   @state() private filterTo = '';
 
   private static readonly EVENT_TYPES = [
-    'LOOPSTART', 'LOOPFINISH', 'LOOPTIMEOUT', 'LOOPERROR', 'LOOPMAXITERATIONS',
-    'TOOLINVOKED', 'TOOLAPPROVED', 'TOOLDENIED',
+    'LOOP_FINISH', 'LOOP_ERROR', 'LOOP_BUDGET_EXCEEDED', 'LOOP_MAX_ITERATIONS',
+    'LOOP_AWAITING_APPROVAL', 'LOOP_AWAITING_RETRY',
+    'TOOL_INVOKED', 'TOOL_EXECUTED', 'TOOL_BLOCKED', 'TOOL_FAILED',
+    'APPROVAL_GRANTED', 'APPROVAL_DENIED',
+    'PROMPT_INJECTION_BLOCKED', 'PII_SCAN_REDACTED', 'REFLEX_COMMAND',
+    'VAULT_ACCESS', 'VAULT_STORE', 'VAULT_RETRIEVE', 'VAULT_RETRIEVE_MISS',
     'CRONCREATED', 'CRONFIRED', 'CRONFAILED', 'CRONDELETED',
-    'MEMORYINGESTED', 'HMACCHAINBREAK', 'GENESIS'
+    'MEMORY_INGESTED', 'BUDGET_EXCEEDED', 'CONTEXT_COMPACTED',
+    'SKILL_LOADED', 'SKILL_REFRESHED', 'MCP_TOOL_INVOKED',
+    'UNAUTHORIZED_ACCESS'
   ];
 
   static styles = css`
@@ -53,6 +59,7 @@ export class ArcAuditPanel extends LitElement {
       display: flex; flex-direction: column;
       height: 100%; padding: var(--space-6);
       box-sizing: border-box; gap: var(--space-4);
+      overflow-y: auto;
     }
     .header {
       display: flex; justify-content: space-between; align-items: center;
@@ -69,6 +76,18 @@ export class ArcAuditPanel extends LitElement {
     }
     input { cursor: text; min-width: 140px; }
     button:hover { border-color: var(--accent); }
+    .table-wrap {
+      flex: 1; overflow-y: auto; overflow-x: auto;
+      min-height: 0; max-height: calc(100vh - 200px);
+      scrollbar-width: thin;
+      scrollbar-color: var(--text-tertiary) transparent;
+    }
+    .table-wrap::-webkit-scrollbar { width: 8px; }
+    .table-wrap::-webkit-scrollbar-track { background: transparent; }
+    .table-wrap::-webkit-scrollbar-thumb {
+      background: var(--text-tertiary); border-radius: 4px;
+    }
+    .table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
     table {
       width: 100%; border-collapse: collapse;
       font-size: 13px;
@@ -146,6 +165,19 @@ export class ArcAuditPanel extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.loadEvents();
+    this._onKeyDown = this._onKeyDown.bind(this);
+    document.addEventListener('keydown', this._onKeyDown);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener('keydown', this._onKeyDown);
+  }
+
+  private _onKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && this.selectedEvent) {
+      this.selectedEvent = null;
+    }
   }
 
   private async loadEvents() {
@@ -308,7 +340,7 @@ export class ArcAuditPanel extends LitElement {
         <div class="filters">
           <input type="text" placeholder="Session ID"
             .value=${this.filterSessionId}
-            @change=${(e: Event) => { this.filterSessionId = (e.target as HTMLInputElement).value; this.page = 0; this.loadEvents(); }}>
+            @input=${(e: Event) => { this.filterSessionId = (e.target as HTMLInputElement).value; this.page = 0; this.loadEvents(); }}>
           <select @change=${(e: Event) => {
             this.filterEventType = (e.target as HTMLSelectElement).value;
             this.page = 0;
@@ -341,34 +373,36 @@ export class ArcAuditPanel extends LitElement {
           ${this.loading ? 'Loading...' : 'No audit events found.'}
         </div>
       ` : html`
-        <table>
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Event Type</th>
-              <th>Outcome</th>
-              <th>Session</th>
-              <th>Role</th>
-              <th>Tokens</th>
-              <th>Cost</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${this.events.map(event => html`
-              <tr @click=${() => this.selectedEvent = event} style="cursor:pointer">
-                <td>${this.formatDate(event.timestamp)}</td>
-                <td>${this.renderEventType(event.eventType)}</td>
-                <td>${this.renderOutcome(event.outcome)}</td>
-                <td title="${event.sessionId}">${event.sessionId.substring(0, 12)}...</td>
-                <td>${event.agentRole}</td>
-                <td>${(event.inputTokens + event.outputTokens).toLocaleString()}</td>
-                <td class="cost">${this.formatCost(event.usdCost)}</td>
-                <td class="detail" title="${event.eventDetail || ''}">${event.eventDetail || '—'}</td>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Event Type</th>
+                <th>Outcome</th>
+                <th>Session</th>
+                <th>Role</th>
+                <th>Tokens</th>
+                <th>Cost</th>
+                <th>Detail</th>
               </tr>
-            `)}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${this.events.map(event => html`
+                <tr @click=${() => this.selectedEvent = event} style="cursor:pointer">
+                  <td>${this.formatDate(event.timestamp)}</td>
+                  <td>${this.renderEventType(event.eventType)}</td>
+                  <td>${this.renderOutcome(event.outcome)}</td>
+                  <td title="${event.sessionId}">${event.sessionId.substring(0, 12)}...</td>
+                  <td>${event.agentRole}</td>
+                  <td>${(event.inputTokens + event.outputTokens).toLocaleString()}</td>
+                  <td class="cost">${this.formatCost(event.usdCost)}</td>
+                  <td class="detail" title="${event.eventDetail || ''}">${event.eventDetail || '—'}</td>
+                </tr>
+              `)}
+            </tbody>
+          </table>
+        </div>
         <div class="pagination">
           <span>Showing ${this.events.length} of ${this.total} events</span>
           <div>
