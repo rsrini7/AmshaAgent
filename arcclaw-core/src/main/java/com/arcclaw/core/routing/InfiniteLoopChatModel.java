@@ -148,49 +148,7 @@ public class InfiniteLoopChatModel implements ChatModel {
                     log.infof("InfiniteLoop: Slot [%s] responded successfully (%dms).", slot.name(), elapsedMs);
                     return response;
                 } catch (Throwable t) {
-                    LlmProviderException classified = LlmExceptionClassifier.classify(t);
-                    if (classified instanceof LlmRateLimitException) {
-                        // Detect daily/per-day quota exhaustion — permanently disable
-                        String rateMsg = classified.getMessage();
-                        if (rateMsg != null && rateMsg.toLowerCase().contains("per day")) {
-                            h.disablePermanently();
-                            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (daily quota exhausted): %s",
-                                    slot.name(), rateMsg);
-                        } else {
-                            // Per-minute rate limit: short cooldown then try next slot
-                            h.recordRateLimit(1, cooldownMaxSeconds);
-                            log.infof("InfiniteLoop: Slot [%s] rate-limited, trying next slot. %s",
-                                    slot.name(), rateMsg);
-                        }
-                    } else if (classified instanceof LlmAuthenticationException) {
-                        h.disablePermanently();
-                        log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s",
-                                slot.name(), classified.getMessage());
-                    } else if (classified instanceof LlmServiceUnavailableException) {
-                        String msg = classified.getMessage();
-                        // Fast-fail: tool_use_failed is a provider-specific error (Groq rejects plain text).
-                        // Retrying with the same provider will always fail — disable immediately.
-                        if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
-                            h.disablePermanently();
-                            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (tool_use_failed - provider rejected response): %s",
-                                    slot.name(), msg);
-                        } else {
-                            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-                            if (h.isPermanentlyDisabled()) {
-                                log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
-                                        slot.name(), MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
-                            } else {
-                                log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
-                                        slot.name(), h.cooldownRemainingMs() / 1000, msg);
-                            }
-                        }
-                    } else if (classified instanceof LlmContentFilterException) {
-                        throw classified;
-                    } else {
-                        h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
-                        log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
-                                slot.name(), h.cooldownRemainingMs() / 1000, classified.getMessage());
-                    }
+                    classifyAndHandle(slot.name(), h, t);
                 }
             }
 
@@ -214,6 +172,46 @@ public class InfiniteLoopChatModel implements ChatModel {
             }
 
             interruptibleSleep(shortestMs, "InfiniteLoop");
+        }
+    }
+
+    private void classifyAndHandle(String slotName, SlotHealth h, Throwable t) {
+        LlmProviderException classified = LlmExceptionClassifier.classify(t);
+        if (classified instanceof LlmRateLimitException) {
+            String rateMsg = classified.getMessage();
+            if (rateMsg != null && rateMsg.toLowerCase().contains("per day")) {
+                h.disablePermanently();
+                log.errorf("InfiniteLoop: Slot [%s] permanently disabled (daily quota exhausted): %s",
+                        slotName, rateMsg);
+            } else {
+                h.recordRateLimit(1, cooldownMaxSeconds);
+                log.infof("InfiniteLoop: Slot [%s] rate-limited, trying next slot. %s", slotName, rateMsg);
+            }
+        } else if (classified instanceof LlmAuthenticationException) {
+            h.disablePermanently();
+            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s",
+                    slotName, classified.getMessage());
+        } else if (classified instanceof LlmServiceUnavailableException) {
+            String msg = classified.getMessage();
+            if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
+                h.disablePermanently();
+                log.errorf("InfiniteLoop: Slot [%s] permanently disabled (tool_use_failed): %s", slotName, msg);
+            } else {
+                h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+                if (h.isPermanentlyDisabled()) {
+                    log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
+                            slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
+                } else {
+                    log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
+                            slotName, h.cooldownRemainingMs() / 1000, msg);
+                }
+            }
+        } else if (classified instanceof LlmContentFilterException) {
+            throw classified;
+        } else {
+            h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
+            log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
+                    slotName, h.cooldownRemainingMs() / 1000, classified.getMessage());
         }
     }
 
