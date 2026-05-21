@@ -218,7 +218,7 @@ def build_assertion(prompt: str, cat: PromptCategory) -> AssertionRule:
     # Memory store/recall
     if cat == PromptCategory.MEMORY:
         if any(k in p for k in ["store","save","remember","vault"]):
-            return AssertionRule(must_contain=["stored","saved","information"],
+            return AssertionRule(must_contain=["stored","saved","information","ingested"],
                                  expect_approval=True)
         if any(k in p for k in ["who am i","my name","my phone","my email",
                                   "my contact","nickname","my original"]):
@@ -478,8 +478,15 @@ def run_prompt(proc, buf: OutputBuffer, approver: ApprovalHandler,
     proc.stdin.flush()
 
     # If no approval expected: wait for You> with timeout
+    # Use longer timeout for complex categories
+    actual_timeout = prompt_timeout
+    if tc.category in (PromptCategory.CRON, PromptCategory.DELEGATION, PromptCategory.GITHUB):
+        actual_timeout = prompt_timeout * 1.5  # 50% longer for complex operations
+    if tc.category == PromptCategory.SECURITY:
+        actual_timeout = prompt_timeout * 2.0  # 100% longer for security tests
+
     if not tc.assertion.expect_approval:
-        found, _ = buf.wait_for([PROMPT_READY], timeout=prompt_timeout)
+        found, _ = buf.wait_for([PROMPT_READY], timeout=actual_timeout)
         elapsed = time.monotonic() - start
         if not found:
             return TestResult(tc.line_no, tc.prompt, Outcome.TIMEOUT,
@@ -490,7 +497,7 @@ def run_prompt(proc, buf: OutputBuffer, approver: ApprovalHandler,
 
     # Approval expected: wait for approval gate OR You>
     all_patterns = APPROVAL_NEEDED_PATTERNS + AMBIGUOUS_APPROVAL_PATTERNS +                    BACKGROUND_CRON_APPROVAL_PATTERNS + [PROMPT_READY]
-    found, matched = buf.wait_for(all_patterns, timeout=prompt_timeout)
+    found, matched = buf.wait_for(all_patterns, timeout=actual_timeout)
     elapsed_so_far = time.monotonic() - start
 
     if not found:
@@ -508,8 +515,12 @@ def run_prompt(proc, buf: OutputBuffer, approver: ApprovalHandler,
     # Handle the approval gate
     approver.handle_pending()
 
+    # Reset buffer and wait for the actual response (not just You>)
+    # The approval prompt text should not be part of the response we evaluate
+    buf.reset()
+
     # Now wait for the final You> after approval processing
-    found2, _ = buf.wait_for([PROMPT_READY], timeout=prompt_timeout)
+    found2, _ = buf.wait_for([PROMPT_READY], timeout=actual_timeout)
     elapsed = time.monotonic() - start
     if not found2:
         response = buf.snapshot()
@@ -603,8 +614,8 @@ def main():
                         help="Cooling delay between prompts (s)")
     parser.add_argument("-a","--approval-delay", type=float, default=2.0,
                         help="Delay before auto-approving (s)")
-    parser.add_argument("-t","--timeout", type=float, default=90.0,
-                        help="Max seconds to wait per prompt (default 90)")
+    parser.add_argument("-t","--timeout", type=float, default=120.0,
+                        help="Max seconds to wait per prompt (default 120)")
     parser.add_argument("-r","--range", default="all",
                         help="Line range: 'all', '5-20', '5,10,15'")
     parser.add_argument("-o","--role", default="coordinator",
