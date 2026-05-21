@@ -63,3 +63,9 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   ./mvnw clean install -DskipTests
   ```
   This guarantees that all local classpath references are synchronized before executing module tests.
+
+### 4.1 Checkstyle Restrictions
+* **File Length**: Maximum **500 lines** per Java source file.
+* **Method Length**: Maximum **80 lines** per method.
+* **Enforcement**: Checkstyle runs during `compile` phase. Violations fail the build.
+* **Refactoring**: If a method exceeds 80 lines, extract logical blocks into private helper methods. If a file exceeds 500 lines, split into separate classes (e.g., extract inner classes, constants, or utility methods into companion files).

@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import java.util.Optional;
 
-import com.arcclaw.core.agent.role.ToolCapability;
 import org.junit.jupiter.api.Test;
 
 class BatchHitlKeyboardBuilderTest {
@@ -96,7 +95,8 @@ class BatchHitlKeyboardBuilderTest {
 
     @Test
     void test_buildKeyboard_uses_compressed_id() {
-        var markup = BatchHitlKeyboardBuilder.buildKeyboard(UUID_STR, List.of(ToolCapability.SANDBOX_EXEC.toolName()));
+        // Use hardcoded string — tests don't depend on arcclaw-core (architecture boundary)
+        var markup = BatchHitlKeyboardBuilder.buildKeyboard(UUID_STR, List.of("sandbox_exec"));
         var rows = markup.getInlineKeyboard();
         assertNotNull(rows);
         assertFalse(rows.isEmpty());

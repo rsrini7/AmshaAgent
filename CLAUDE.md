@@ -9,7 +9,12 @@
 * **Transaction-Free Zone**: No LLM calls, network requests, or tool execution inside `@Transactional`.
 * **Import alignment**: After editing Java files, run `python3 ./fix_fqns.py`.
 
-## 2. ReplyNode Pattern
+## 2. Checkstyle Limits
+* **File**: max 500 lines per Java source file
+* **Method**: max 80 lines per method
+* If a method exceeds 80 lines, extract into private helper methods.
+
+## 3. ReplyNode Pattern
 `ReplyNode` is a sealed interface with 10 record permits. Always use `switch` with pattern matching:
 ```java
 return switch (node) {
