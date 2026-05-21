@@ -135,6 +135,10 @@ public class ReasoningStepParser {
         // Strip <|channel|> commentary suffix
         int idx = name.indexOf("<|");
         if (idx > 0) name = name.substring(0, idx);
+        // Strip trailing colon (e.g., "brahma:" → "brahma")
+        if (name.endsWith(":")) {
+            name = name.substring(0, name.length() - 1);
+        }
         // Strip agent: prefix (e.g., "brahma:delegate_to_agent" → "delegate_to_agent")
         int colonIdx = name.indexOf(':');
         if (colonIdx > 0 && colonIdx < name.length() - 1) {
