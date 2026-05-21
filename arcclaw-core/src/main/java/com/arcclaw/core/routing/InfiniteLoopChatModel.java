@@ -153,7 +153,12 @@ public class InfiniteLoopChatModel implements ChatModel {
             }
 
             if (health.values().stream().allMatch(SlotHealth::isPermanentlyDisabled)) {
-                throw new RuntimeException("InfiniteLoop: All providers permanently disabled (auth errors)");
+                String disabledSlots = health.entrySet().stream()
+                    .filter(e -> e.getValue().isPermanentlyDisabled())
+                    .map(e -> e.getKey())
+                    .collect(java.util.stream.Collectors.joining(", "));
+                throw new RuntimeException("InfiniteLoop: All providers permanently disabled [" + disabledSlots + "]. "
+                    + "Check server status and API keys. Slots will reset on app restart.");
             }
 
             long shortestMs = Long.MAX_VALUE;
