@@ -96,7 +96,7 @@ public class SqliteCompactionStoreAdapter implements CompactionStorePort {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.SUPPORTS)
     public List<CompactionSummaryDto> search(String userId, String query, int limit) {
         String sanitized = sanitizeForFts5(query);
         if (sanitized == null) return List.of();
