@@ -132,8 +132,19 @@ public class ReasoningStepParser {
      */
     private static String sanitizeToolName(String name) {
         if (name == null) return null;
+        // Strip <|channel|> commentary suffix
         int idx = name.indexOf("<|");
-        return idx > 0 ? name.substring(0, idx) : name;
+        if (idx > 0) name = name.substring(0, idx);
+        // Strip agent: prefix (e.g., "brahma:delegate_to_agent" → "delegate_to_agent")
+        int colonIdx = name.indexOf(':');
+        if (colonIdx > 0 && colonIdx < name.length() - 1) {
+            String afterColon = name.substring(colonIdx + 1);
+            // Tool names contain underscores; agent names don't
+            if (afterColon.contains("_")) {
+                name = afterColon;
+            }
+        }
+        return name;
     }
 
     private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
