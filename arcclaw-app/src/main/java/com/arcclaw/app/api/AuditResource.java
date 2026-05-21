@@ -1,6 +1,7 @@
 package com.arcclaw.app.api;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,6 +48,16 @@ public class AuditResource {
 
     @Context
     SecurityContext securityContext;
+
+    @GET
+    @Path("/event-types")
+    @Operation(summary = "List all valid SecurityEventType values for UI filters")
+    public Response listEventTypes() {
+        List<String> types = Arrays.stream(SecurityEventType.values())
+                .map(Enum::name)
+                .toList();
+        return Response.ok(Map.of("eventTypes", types)).build();
+    }
 
     @GET
     @Operation(summary = "List all audit events with pagination and optional filters")

@@ -41,17 +41,28 @@ export class ArcAuditPanel extends LitElement {
   @state() private filterFrom = '';
   @state() private filterTo = '';
 
-  private static readonly EVENT_TYPES = [
+  @state() private eventTypes: string[] = [];
+  private static readonly EVENT_TYPES_CACHE_KEY = 'arcclaw_audit_event_types';
+
+  private static readonly EVENT_TYPES_FALLBACK = [
     'LOOP_FINISH', 'LOOP_ERROR', 'LOOP_BUDGET_EXCEEDED', 'LOOP_MAX_ITERATIONS',
     'LOOP_AWAITING_APPROVAL', 'LOOP_AWAITING_RETRY',
+    'INVALID_ROLE_FALLBACK', 'LEGACY_CHANNEL_FALLBACK',
     'TOOL_INVOKED', 'TOOL_EXECUTED', 'TOOL_BLOCKED', 'TOOL_FAILED',
     'APPROVAL_GRANTED', 'APPROVAL_DENIED',
     'PROMPT_INJECTION_BLOCKED', 'PII_SCAN_REDACTED', 'REFLEX_COMMAND',
     'VAULT_ACCESS', 'VAULT_STORE', 'VAULT_RETRIEVE', 'VAULT_RETRIEVE_MISS',
+    'CHECKPOINT_CREATED', 'CHECKPOINT_COMPLETED', 'CHECKPOINT_FAILED', 'CHECKPOINT_ORPHANED',
+    'SECURITY', 'CONTEXT_COMPACTED', 'BUDGET_EXCEEDED',
     'CRONCREATED', 'CRONFIRED', 'CRONFAILED', 'CRONDELETED',
-    'MEMORY_INGESTED', 'BUDGET_EXCEEDED', 'CONTEXT_COMPACTED',
-    'SKILL_LOADED', 'SKILL_REFRESHED', 'MCP_TOOL_INVOKED',
-    'UNAUTHORIZED_ACCESS'
+    'CRON_PAUSED', 'CRON_RESUMED', 'CRON_FORCE_TRIGGERED',
+    'SKILL_LOADED', 'SKILL_REFRESHED', 'SKILL_CREATED', 'SKILL_DELETED',
+    'MCP_TOOL_INVOKED', 'MCP_SERVER_CONNECTED', 'MCP_SERVER_DISCONNECTED',
+    'STRUCTURED_OUTPUT_RETRY', 'DELEGATE_APPROVAL', 'DELEGATION_DISPATCHED',
+    'UNAUTHORIZED_ACCESS', 'AUTH_REJECTED',
+    'SESSION_CREATED', 'SESSION_TERMINATED',
+    'SETTINGS_CHANGED', 'SETTINGS_RESET', 'ONBOARDING_COMPLETED',
+    'WS_TOKEN_ISSUED', 'MEMORY_INGESTED'
   ];
 
   static styles = css`
@@ -114,6 +125,13 @@ export class ArcAuditPanel extends LitElement {
     .event-type-ERROR { background: #7f1d1d; color: #fca5a5; }
     .event-type-MEMORY { background: #4c1d95; color: #c4b5fd; }
     .event-type-SECURITY { background: #7f1d1d; color: #fca5a5; }
+    .event-type-SESSION { background: #1e3a5f; color: #93c5fd; }
+    .event-type-SETTINGS { background: #365314; color: #bef264; }
+    .event-type-AUTH { background: #7f1d1d; color: #fca5a5; }
+    .event-type-CHECKPOINT { background: #4c1d95; color: #c4b5fd; }
+    .event-type-DELEGATION { background: #713f12; color: #fbbf24; }
+    .event-type-MCP { background: #065f46; color: #6ee7b7; }
+    .event-type-APPROVAL { background: #713f12; color: #fbbf24; }
     .outcome {
       display: inline-block; padding: 2px 8px;
       border-radius: 12px; font-size: 11px; font-weight: 600;
@@ -164,6 +182,7 @@ export class ArcAuditPanel extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this.loadEventTypes();
     this.loadEvents();
     this._onKeyDown = this._onKeyDown.bind(this);
     document.addEventListener('keydown', this._onKeyDown);
@@ -177,6 +196,30 @@ export class ArcAuditPanel extends LitElement {
   private _onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape' && this.selectedEvent) {
       this.selectedEvent = null;
+    }
+  }
+
+  private async loadEventTypes() {
+    // Check sessionStorage first
+    const cached = sessionStorage.getItem(ArcAuditPanel.EVENT_TYPES_CACHE_KEY);
+    if (cached) {
+      try {
+        this.eventTypes = JSON.parse(cached);
+        return;
+      } catch { /* ignore corrupted cache */ }
+    }
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.apiKey) headers['X-ARCCLAW-API-KEY'] = this.apiKey;
+      const r = await fetch('/api/v1/audit/event-types', { headers });
+      if (!r.ok) throw new Error(`${r.status}`);
+      const data = await r.json();
+      this.eventTypes = data.eventTypes;
+      sessionStorage.setItem(ArcAuditPanel.EVENT_TYPES_CACHE_KEY, JSON.stringify(this.eventTypes));
+    } catch {
+      // Fallback to static list
+      this.eventTypes = ArcAuditPanel.EVENT_TYPES_FALLBACK;
     }
   }
 
@@ -222,7 +265,16 @@ export class ArcAuditPanel extends LitElement {
     if (type.startsWith('CRON')) return 'CRON';
     if (type.startsWith('LOOP') && (type.includes('ERROR') || type.includes('TIMEOUT'))) return 'ERROR';
     if (type.startsWith('MEMORY')) return 'MEMORY';
-    if (type.includes('HMAC') || type === 'GENESIS') return 'SECURITY';
+    if (type.startsWith('SESSION')) return 'SESSION';
+    if (type.startsWith('SETTINGS') || type.startsWith('ONBOARDING')) return 'SETTINGS';
+    if (type.startsWith('AUTH') || type === 'UNAUTHORIZED_ACCESS' || type === 'WS_TOKEN_ISSUED') return 'AUTH';
+    if (type.startsWith('CHECKPOINT')) return 'CHECKPOINT';
+    if (type.startsWith('DELEGAT')) return 'DELEGATION';
+    if (type.startsWith('MCP')) return 'MCP';
+    if (type.includes('APPROVAL')) return 'APPROVAL';
+    if (type.includes('HMAC') || type === 'GENESIS' || type === 'SECURITY') return 'SECURITY';
+    if (type.startsWith('SKILL')) return 'CRON';
+    if (type.startsWith('PROMPT_INJECTION') || type.startsWith('PII')) return 'SECURITY';
     return '';
   }
 
@@ -347,7 +399,7 @@ export class ArcAuditPanel extends LitElement {
             this.loadEvents();
           }}>
             <option value="">All Event Types</option>
-            ${ArcAuditPanel.EVENT_TYPES.map(t => html`<option value=${t}>${t}</option>`)}
+            ${this.eventTypes.map(t => html`<option value=${t}>${t}</option>`)}
           </select>
           <input type="datetime-local" placeholder="From"
             @change=${(e: Event) => {

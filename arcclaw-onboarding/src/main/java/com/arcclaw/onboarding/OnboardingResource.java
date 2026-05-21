@@ -30,6 +30,8 @@ import jakarta.ws.rs.core.Response;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
@@ -68,6 +70,7 @@ public class OnboardingResource {
     @Any
     Instance<OnboardingStepProvider> pluginProviders;
     @Inject McpClientService mcpClientService;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
@@ -188,6 +191,10 @@ public class OnboardingResource {
             vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
             vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
 
+            auditService.recordMandatory("onboarding-" + sid, "onboarding-user", "system",
+                    SecurityEventType.ONBOARDING_COMPLETED,
+                    "step=3 provider=" + provider + " model=" + state.selectedModel);
+
             return Response.ok(new Step3Response(4, true, null)).cookie(createCookie(sid)).build();
 
         } catch (Exception e) {
@@ -259,6 +266,13 @@ public class OnboardingResource {
         }
 
         state.advance();
+
+        if (!registered.isEmpty()) {
+            auditService.recordMandatory("onboarding-" + sid, "onboarding-user", "system",
+                    SecurityEventType.MCP_SERVER_CONNECTED,
+                    "via=onboarding servers=" + String.join(",", registered));
+        }
+
         return Response.ok(new Step5Response(6, registered)).cookie(createCookie(sid)).build();
     }
 
@@ -274,6 +288,10 @@ public class OnboardingResource {
             .map(p -> new PluginStepDto(
                 p.stepId(), p.title(), p.isConfigured()))
             .toList();
+
+        auditService.recordMandatory("onboarding-" + sid, "onboarding-user", "system",
+                SecurityEventType.ONBOARDING_COMPLETED,
+                "step=complete provider=" + state.selectedProvider + " model=" + state.selectedModel);
 
         CompleteResponse dto = new CompleteResponse(
             true,

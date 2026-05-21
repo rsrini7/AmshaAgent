@@ -17,6 +17,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
@@ -68,6 +70,7 @@ public class SandboxExecTool implements AgentTool {
 
     @Inject ProcessIsolationExecutor isolationExecutor;
     @Inject HostJavaCompiler hostJavaCompiler;
+    @Inject AuditService auditService;
     CodeLanguageDetector codeLanguageDetector;
     OutputTruncator outputTruncator;
 
@@ -131,6 +134,10 @@ public class SandboxExecTool implements AgentTool {
         if (lang == null) throw new IllegalArgumentException("Parameter 'language' is required.");
 
         lang = lang.toLowerCase();
+
+        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "sandbox_exec lang=" + lang + " codeLen=" + code.length());
 
         String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
         if (violation != null) {

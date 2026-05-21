@@ -89,26 +89,27 @@ public class AgentTaskTool implements AgentTool {
         String action = params.getOrDefault("action", "list").toString().trim().toLowerCase();
 
         return switch (action) {
-            case "create" -> doCreate(params);
+            case "create" -> doCreate(ctx, params);
             case "list" -> doList();
             case "list_active" -> doListActive();
             case "get" -> doGet(params);
-            case "transition" -> doTransition(params);
-            case "update" -> doUpdate(params);
-            case "delete" -> doDelete(params);
+            case "transition" -> doTransition(ctx, params);
+            case "update" -> doUpdate(ctx, params);
+            case "delete" -> doDelete(ctx, params);
             default -> ToolResponse.failure(400, "Unknown action: " + action);
         };
     }
 
-    private ToolResponse doCreate(Map<String, Object> params) {
+    private ToolResponse doCreate(ToolExecutionContext ctx, Map<String, Object> params) {
         String name = (String) params.get("name");
         if (name == null || name.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'name' is required for create.");
         }
         String description = (String) params.getOrDefault("description", "");
         TaskFile task = taskManager.createTask(name.trim(), description);
-        auditService.record(null, null, null, SecurityEventType.TOOL_EXECUTED,
-            "AgentTask: created task " + task.name());
+        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+            SecurityEventType.TOOL_EXECUTED,
+            "AgentTask: created task=" + task.name() + " id=" + task.id());
         return ToolResponse.success("Created task: " + task.name() + " (id: " + task.id() + ")");
     }
 
@@ -141,7 +142,7 @@ public class AgentTaskTool implements AgentTool {
             .orElse(ToolResponse.failure(404, "Task not found: " + id));
     }
 
-    private ToolResponse doTransition(Map<String, Object> params) {
+    private ToolResponse doTransition(ToolExecutionContext ctx, Map<String, Object> params) {
         String id = (String) params.get("taskId");
         String statusStr = (String) params.get("newStatus");
         if (id == null || id.isBlank()) {
@@ -153,13 +154,16 @@ public class AgentTaskTool implements AgentTool {
         try {
             TaskState newState = TaskState.fromString(statusStr);
             TaskFile updated = taskManager.transitionTo(id.trim(), newState);
+            auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "AgentTask: transition task=" + id + " newStatus=" + updated.status().name());
             return ToolResponse.success("Task '" + updated.name() + "' is now " + updated.status().name().toLowerCase());
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ToolResponse.failure(400, e.getMessage());
         }
     }
 
-    private ToolResponse doUpdate(Map<String, Object> params) {
+    private ToolResponse doUpdate(ToolExecutionContext ctx, Map<String, Object> params) {
         String id = (String) params.get("taskId");
         String body = (String) params.get("description");
         if (id == null || id.isBlank()) {
@@ -169,15 +173,23 @@ public class AgentTaskTool implements AgentTool {
             return ToolResponse.failure(400, "Parameter 'description' is required for update.");
         }
         TaskFile updated = taskManager.updateBody(id.trim(), body);
+        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+            SecurityEventType.TOOL_EXECUTED,
+            "AgentTask: update task=" + id);
         return ToolResponse.success("Updated task: " + updated.name());
     }
 
-    private ToolResponse doDelete(Map<String, Object> params) {
+    private ToolResponse doDelete(ToolExecutionContext ctx, Map<String, Object> params) {
         String id = (String) params.get("taskId");
         if (id == null || id.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'taskId' is required for delete.");
         }
         boolean ok = taskManager.deleteTask(id.trim());
+        if (ok) {
+            auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "AgentTask: deleted task=" + id);
+        }
         return ok
             ? ToolResponse.success("Deleted task: " + id)
             : ToolResponse.failure(404, "Task not found: " + id);

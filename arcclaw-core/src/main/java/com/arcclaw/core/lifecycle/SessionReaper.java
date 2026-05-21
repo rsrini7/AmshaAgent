@@ -20,6 +20,8 @@ import com.arcclaw.channel.api.hitl.ApprovalOutcome;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
@@ -66,6 +68,7 @@ public class SessionReaper {
     @Inject CompactionInFlightFlag compactionInFlight;
     @Inject AgentSseService agentSseService;
     @Inject CliResultBridge cliResultBridge;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
@@ -236,6 +239,10 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
+        auditService.recordMandatory(cp.getSessionId(), "system", cp.getAgentRole(),
+                SecurityEventType.APPROVAL_DENIED,
+                "reason=timeout_hours=" + hitlTimeoutHours + " tool=" + cp.getPendingToolName());
+
         if (cp.hasBatchToolDecisions()) {
             BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
                 agentStore.updateBatchToolDecision(

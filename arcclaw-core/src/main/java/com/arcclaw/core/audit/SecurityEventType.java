@@ -63,6 +63,35 @@ public enum SecurityEventType {
     // Session isolation (Per-key isolation)
     UNAUTHORIZED_ACCESS, // Cross-key session access attempt blocked
     
+    // Session lifecycle
+    SESSION_CREATED,       // new agent session created via REST
+    SESSION_TERMINATED,    // session force-terminated or reaped
+
+    // Configuration changes
+    SETTINGS_CHANGED,      // LLM provider/model/prompt updated
+    SETTINGS_RESET,        // all settings nuked via /settings/reset
+    ONBOARDING_COMPLETED,  // onboarding wizard finished
+
+    // Cron admin operations (REST)
+    CRON_PAUSED,           // cron job paused via REST
+    CRON_RESUMED,          // cron job resumed via REST
+    CRON_FORCE_TRIGGERED,  // cron job force-fired via REST
+
+    // Skill admin operations (REST)
+    SKILL_CREATED,         // skill created/updated via REST
+    SKILL_DELETED,         // skill deleted via REST
+
+    // MCP admin operations (REST)
+    MCP_SERVER_CONNECTED,  // remote MCP server connected
+    MCP_SERVER_DISCONNECTED, // remote MCP server disconnected
+
+    // Auth
+    AUTH_REJECTED,         // API key auth failed (invalid/missing/rate-limited)
+    WS_TOKEN_ISSUED,       // WebSocket auth token issued
+
+    // Delegation
+    DELEGATION_DISPATCHED, // coordinator delegated to sub-agent
+
     // RAG and Memory writes
     MEMORY_INGESTED;       // IngestDocumentTool indexed content
 
@@ -76,7 +105,13 @@ public enum SecurityEventType {
             case VAULT_ACCESS, TOOL_INVOKED, TOOL_EXECUTED, BUDGET_EXCEEDED,
                  PROMPT_INJECTION_BLOCKED, APPROVAL_GRANTED, APPROVAL_DENIED,
                  CRONFIRED, CRONFAILED, MCP_TOOL_INVOKED, DELEGATE_APPROVAL,
-                 UNAUTHORIZED_ACCESS, MEMORY_INGESTED -> true;
+                 UNAUTHORIZED_ACCESS, MEMORY_INGESTED, AUTH_REJECTED,
+                 SESSION_CREATED, SESSION_TERMINATED,
+                 SETTINGS_CHANGED, SETTINGS_RESET,
+                 CRON_PAUSED, CRON_RESUMED, CRON_FORCE_TRIGGERED,
+                 SKILL_CREATED, SKILL_DELETED,
+                 MCP_SERVER_CONNECTED, MCP_SERVER_DISCONNECTED,
+                 DELEGATION_DISPATCHED -> true;
             default -> false;
         };
     }

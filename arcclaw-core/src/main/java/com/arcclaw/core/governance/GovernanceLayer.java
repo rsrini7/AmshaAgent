@@ -9,6 +9,9 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -29,6 +32,9 @@ public class GovernanceLayer implements GovernanceStrategy {
 
     @Inject
     MeterRegistry registry;
+
+    @Inject
+    AuditService auditService;
 
     @PostConstruct
     void initMetrics() {
@@ -146,9 +152,12 @@ public class GovernanceLayer implements GovernanceStrategy {
 
         BudgetUpdateResult result = resultWrapper[0];
         if (result.status == BudgetStatus.EXCEEDED) {
-            throw new BudgetExceededException(
-                    String.format("Session budget of $%.2f exceeded. Total cost: $%.4f", result.hardLimit,
-                            result.currentCost));
+            String detail = String.format("Session budget of $%.2f exceeded. Total cost: $%.4f",
+                    result.hardLimit, result.currentCost);
+            String userId = WorkspaceContext.getUserIdOrUnknown();
+            auditService.recordMandatory(sessionId, userId, "governance",
+                    SecurityEventType.BUDGET_EXCEEDED, detail);
+            throw new BudgetExceededException(detail);
         }
 
         if (result.status == BudgetStatus.WARNING) {

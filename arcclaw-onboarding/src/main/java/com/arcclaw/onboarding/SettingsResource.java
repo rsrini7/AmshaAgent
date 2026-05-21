@@ -17,6 +17,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.config.ConfigurationChangedEvent;
 import com.arcclaw.core.event.DomainEventBus;
 import com.arcclaw.core.event.EventTypeCatalog;
@@ -40,6 +42,7 @@ public class SettingsResource {
     @Inject LlmValidationGateway llmValidationGateway;
     @Inject OnboardingSessionRegistry registry;
     @Inject DomainEventBus eventBus;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
@@ -127,6 +130,10 @@ public class SettingsResource {
                 "model", req.model() != null ? req.model() : ""
             )));
 
+        auditService.recordMandatory("settings", key != null ? key : "unknown", "system",
+                SecurityEventType.SETTINGS_CHANGED,
+                "field=provider provider=" + req.provider() + " model=" + (req.model() != null ? req.model() : ""));
+
         return Response.ok(Map.of("updated", true)).build();
     }
 
@@ -147,6 +154,10 @@ public class SettingsResource {
                 "systemPrompt", "(updated)"
             )));
 
+        auditService.recordMandatory("settings", key != null ? key : "unknown", "system",
+                SecurityEventType.SETTINGS_CHANGED,
+                "field=prompt length=" + req.systemPrompt().length());
+
         return Response.ok(Map.of("updated", true)).build();
     }
 
@@ -155,14 +166,19 @@ public class SettingsResource {
     @Operation(summary = "Nuke all settings and keys to force re-onboarding")
     public Response reset(@HeaderParam("X-ArcClaw-API-Key") String key) {
         checkAuth(key);
+
+        auditService.recordMandatory("settings", key != null ? key : "unknown", "system",
+                SecurityEventType.SETTINGS_RESET,
+                "keys=LLM_PROVIDER_KEY,LLM_MODEL_KEY,LLM_API_KEY,SYSTEM_PROMPT_KEY");
+
         registry.invalidateAll();
-        
+
         // Clear all LLM related keys to force re-onboarding (§reset-fix)
         vault.removeSystemKey(VaultConstants.LLM_PROVIDER_KEY);
         vault.removeSystemKey(VaultConstants.LLM_MODEL_KEY);
         vault.removeSystemKey(VaultConstants.LLM_API_KEY);
         vault.removeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY);
-        
+
         return Response.ok(Map.of("reset", true,
             "message", "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard.")).build();
     }

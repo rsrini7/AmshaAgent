@@ -24,6 +24,11 @@ public class HaltReflex implements AgentReflex {
     }
 
     @Override
+    public String auditDetail(String sessionId, String input) {
+        return "reflex=HaltReflex session=" + sessionId;
+    }
+
+    @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.errorf("[HaltReflex] SYSTEM HALT issued by user=%s for session=%s", userId, sessionId);
         workspaceManager.terminateSession(sessionId);

@@ -14,6 +14,8 @@ import jakarta.inject.Inject;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.ToolOperation;
@@ -55,6 +57,9 @@ public class GithubTool implements AgentTool {
 
     @Inject
     SecretVault secretVault;
+
+    @Inject
+    AuditService auditService;
 
     // ── SINGLE SOURCE OF TRUTH 
     // Keep ALLOWED_ACTIONS, ALLOWED_COMMANDS, description(), and parametersSchema()
@@ -102,6 +107,12 @@ public class GithubTool implements AgentTool {
     @Override
     @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "ARCCLAW_TOOLS_GITHUB_TOKEN")
     public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
+        String action = (String) params.getOrDefault("action", "repo");
+        String command = (String) params.getOrDefault("command", "view");
+        String target = (String) params.get("target");
+        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "github action=" + action + " cmd=" + command + " target=" + (target != null ? target : "none"));
         return buildGhCommand(params);
     }
 

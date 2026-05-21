@@ -8,6 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
@@ -21,8 +23,10 @@ public class IdentityExtractionReflex implements AgentReflex {
     private static final Logger log = Logger.getLogger(IdentityExtractionReflex.class);
 
     @Inject MemoryRetrievalPort memoryPort;
-    
+
     @Inject ManagedExecutor managedExecutor;
+
+    @Inject AuditService auditService;
 
     private static final Pattern NAME_PATTERN = Pattern.compile("(?i)\\b(?:my name is|i am|i'm)\\s+([a-zA-Z]+)\\b");
     private static final Pattern ALIAS_PATTERN = Pattern.compile("(?i)\\b(?:call me)\\s+([a-zA-Z]+)\\b");
@@ -79,21 +83,21 @@ public class IdentityExtractionReflex implements AgentReflex {
             
             prevWasFirstPerson = isFirstPerson || (!isFirstPerson && prevWasFirstPerson);
 
-            extractAndIngest(clause, NAME_PATTERN, IdentityLabel.USER_NAME);
-            extractAndIngest(clause, ALIAS_PATTERN, IdentityLabel.USER_ALIAS);
-            extractAndIngest(clause, HOBBY_PATTERN, IdentityLabel.USER_HOBBY);
-            extractAndIngest(clause, PREF_PATTERN, IdentityLabel.USER_PREF);
-            extractAndIngest(clause, LIKE_PATTERN, IdentityLabel.USER_LIKE);
-            extractAndIngest(clause, EMPLOYER_PATTERN, IdentityLabel.USER_EMPLOYER);
-            extractAndIngest(clause, LOCATION_PATTERN, IdentityLabel.USER_LOCATION);
-            extractAndIngest(clause, ROLE_PATTERN, IdentityLabel.USER_ROLE);
+            extractAndIngest(sessionId, userId, clause, NAME_PATTERN, IdentityLabel.USER_NAME);
+            extractAndIngest(sessionId, userId, clause, ALIAS_PATTERN, IdentityLabel.USER_ALIAS);
+            extractAndIngest(sessionId, userId, clause, HOBBY_PATTERN, IdentityLabel.USER_HOBBY);
+            extractAndIngest(sessionId, userId, clause, PREF_PATTERN, IdentityLabel.USER_PREF);
+            extractAndIngest(sessionId, userId, clause, LIKE_PATTERN, IdentityLabel.USER_LIKE);
+            extractAndIngest(sessionId, userId, clause, EMPLOYER_PATTERN, IdentityLabel.USER_EMPLOYER);
+            extractAndIngest(sessionId, userId, clause, LOCATION_PATTERN, IdentityLabel.USER_LOCATION);
+            extractAndIngest(sessionId, userId, clause, ROLE_PATTERN, IdentityLabel.USER_ROLE);
         }
 
         // Forward to the LLM without blocking
         return ReflexResult.forward(context);
     }
 
-    private void extractAndIngest(String input, Pattern pattern, IdentityLabel label) {
+    private void extractAndIngest(String sessionId, String userId, String input, Pattern pattern, IdentityLabel label) {
         Matcher matcher = pattern.matcher(input);
         if (matcher.find()) {
             String value = matcher.group(1).trim();
@@ -105,10 +109,15 @@ public class IdentityExtractionReflex implements AgentReflex {
                 Map.of("label", label.name().toLowerCase())
             );
             
+            final String sid = sessionId;
+            final String uid = userId;
             managedExecutor.submit(() -> {
                 try {
                     memoryPort.index(dto);
                     log.infof("IdentityExtractionReflex ingested fact silently: label=%s, fact='%s'", label, fullText);
+                    auditService.record(sid, uid, "IdentityExtractionReflex",
+                            SecurityEventType.MEMORY_INGESTED,
+                            "label=" + label.name().toLowerCase() + " fact=" + fullText);
                 } catch (Exception e) {
                     log.warnf("IdentityExtractionReflex failed to ingest fact: %s", LogUtil.rootMessage(e));
                 }

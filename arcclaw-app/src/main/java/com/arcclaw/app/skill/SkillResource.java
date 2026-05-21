@@ -18,6 +18,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.skill.SkillDefinitionParser;
 import com.arcclaw.core.skill.SkillLoader;
 import com.arcclaw.core.skill.SkillRegistry;
@@ -43,6 +45,9 @@ public class SkillResource {
 
     @Inject
     SkillDefinitionParser parser;
+
+    @Inject
+    AuditService auditService;
 
     @GET
     @Operation(summary = "List all active agent skills")
@@ -92,6 +97,10 @@ public class SkillResource {
             // Reload the registry to make it active immediately
             skillLoader.reloadAll(false);
 
+            auditService.recordMandatory("skills", "admin", "system",
+                    existingOptional.isPresent() ? SecurityEventType.SKILL_CREATED : SecurityEventType.SKILL_CREATED,
+                    "skill=" + def.name() + " op=" + (existingOptional.isPresent() ? "update" : "create"));
+
             return Response.status(Response.Status.CREATED)
                            .entity(new MessageResponse("Skill saved and registry reloaded: " + def.name()))
                            .build();
@@ -118,6 +127,10 @@ public class SkillResource {
 
         skillStore.deleteById(existing.get().id());
         skillLoader.reloadAll(false);
+
+        auditService.recordMandatory("skills", "admin", "system",
+                SecurityEventType.SKILL_DELETED,
+                "skill=" + name);
 
         return Response.ok(new MessageResponse("Deleted and reloaded: " + name)).build();
     }

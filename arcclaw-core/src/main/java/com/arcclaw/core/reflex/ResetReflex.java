@@ -47,6 +47,12 @@ public class ResetReflex implements AgentReflex {
     }
 
     @Override
+    public String auditDetail(String sessionId, String input) {
+        boolean isHard = input != null && (input.toLowerCase().contains("hard") || input.toLowerCase().contains("clear all"));
+        return "reflex=ResetReflex type=" + (isHard ? "HARD" : "SOFT") + " session=" + sessionId;
+    }
+
+    @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.infof("[ResetReflex] User requested session reset for %s", sessionId);
 

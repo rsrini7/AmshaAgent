@@ -110,6 +110,7 @@ public class SecretVaultImpl implements SecretVault {
             // missing context
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_STORE, "keyName=" + keyName);
+                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS, "keyName=" + keyName + " op=STORE");
             }
 
         } catch (Exception e) {
@@ -138,6 +139,8 @@ public class SecretVaultImpl implements SecretVault {
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
                         "keyName=" + keyName);
+                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
+                        "keyName=" + keyName + " op=RETRIEVE_MISS");
             }
             return Optional.empty();
         }
@@ -149,6 +152,7 @@ public class SecretVaultImpl implements SecretVault {
             byte[] plaintext = cipher.decrypt(dto.ciphertext(), dto.nonce(), sessionKey, keyName);
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
+                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS, "keyName=" + keyName + " op=RETRIEVE");
             }
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
@@ -204,6 +208,13 @@ public class SecretVaultImpl implements SecretVault {
                 result.ciphertext(),
                 result.nonce()
             ));
+
+            auditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER,
+                    AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_STORE,
+                    "systemKey=" + keyName);
+            auditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER,
+                    AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
+                    "systemKey=" + keyName + " op=STORE_SYSTEM");
         } catch (Exception e) {
             throw e;
         }
@@ -213,5 +224,9 @@ public class SecretVaultImpl implements SecretVault {
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void removeSystemKey(String keyName) {
         secretStore.delete(VaultConstants.SYSTEM_SESSION_ID, keyName);
+
+        auditService.record(AgentSentinels.SYSTEM_SESSION, AgentSentinels.SYSTEM_USER,
+                AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
+                "systemKey=" + keyName + " op=DELETE_SYSTEM");
     }
 }

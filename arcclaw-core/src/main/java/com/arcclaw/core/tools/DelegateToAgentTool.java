@@ -18,6 +18,8 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -47,6 +49,7 @@ public class DelegateToAgentTool implements AgentTool {
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
     @Inject CheckpointCrudPort checkpointCrud;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "3")
     int maxDelegationDepth = 3;
@@ -133,6 +136,10 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
+
+        auditService.record(outerSessionId, userId, ctx.agentRole(),
+                SecurityEventType.DELEGATION_DISPATCHED,
+                "target=" + agentName + " depth=" + depth + " goalLen=" + goal.length());
 
         AgentResult result;
         try {

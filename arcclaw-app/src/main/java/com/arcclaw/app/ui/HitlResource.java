@@ -28,6 +28,8 @@ import com.arcclaw.app.ui.dto.PageDto;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -44,6 +46,7 @@ public class HitlResource {
     @Inject HitlService hitlService;
     @Inject AgentSseService agentSseService;
     @Inject SessionHeartbeatTracker heartbeatTracker;
+    @Inject AuditService auditService;
 
     @Context
     SecurityContext securityContext;
@@ -135,6 +138,11 @@ public class HitlResource {
         String reason = (request != null) ? request.reason() : "Approved via REST";
         try {
             hitlService.resolve(taskId, toolName, true, reason);
+            String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
+                ? securityContext.getUserPrincipal().getName() : "anonymous";
+            auditService.recordMandatory("hitl-" + taskId, userId, "coordinator",
+                    SecurityEventType.APPROVAL_GRANTED,
+                    "taskId=" + taskId + " tool=" + toolName + " via=REST");
             Response response = Response.ok(new CheckpointApprovalResponse("approved", taskId, toolName, reason)).build();
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 idempotencyCache.put(idempotencyKey, response);
@@ -163,6 +171,11 @@ public class HitlResource {
             ? request.reason() : "Rejected by user";
         try {
             hitlService.resolve(taskId, toolName, false, reason);
+            String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
+                ? securityContext.getUserPrincipal().getName() : "anonymous";
+            auditService.recordMandatory("hitl-" + taskId, userId, "coordinator",
+                    SecurityEventType.APPROVAL_DENIED,
+                    "taskId=" + taskId + " tool=" + toolName + " via=REST");
             Response response = Response.ok(new CheckpointApprovalResponse("rejected", taskId, toolName, reason)).build();
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 idempotencyCache.put(idempotencyKey, response);

@@ -17,6 +17,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.transport.McpClientService;
@@ -52,6 +54,9 @@ public class McpConnectResource {
 
     @Inject
     McpToolAllowlist config;
+
+    @Inject
+    AuditService auditService;
 
     // ── request / response records ────────────────────────────────────────────
 
@@ -111,6 +116,11 @@ public class McpConnectResource {
                 .filter(t -> t.mcpServerName().equals(request.name()))
                 .count();
 
+        int newTools = (int) (toolsAfter - toolsBefore);
+        auditService.recordMandatory("mcp-connect", "admin", "system",
+                SecurityEventType.MCP_SERVER_CONNECTED,
+                "server=" + request.name() + " url=" + request.url() + " tools=" + newTools);
+
         return Response.ok(new ConnectResponse(
                 request.name(),
                 request.url(),
@@ -143,6 +153,10 @@ public class McpConnectResource {
                 .map(t -> t.toolName())
                 .collect(Collectors.toList())  // collect first to avoid ConcurrentModificationException
                 .forEach(registry::deregister);
+
+        auditService.recordMandatory("mcp-disconnect", "admin", "system",
+                SecurityEventType.MCP_SERVER_DISCONNECTED,
+                "server=" + name + " toolsRemoved=" + toolsBefore);
 
         return Response.ok(new DisconnectResponse(name, true, (int) toolsBefore)).build();
     }

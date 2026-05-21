@@ -12,6 +12,8 @@ import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.Fts5QueryUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
@@ -47,6 +49,9 @@ public class MemorySearchTool implements AgentTool {
 
     @Inject
     IntentClassificationService intentService;
+
+    @Inject
+    AuditService auditService;
 
     @Override
     public String name() {
@@ -121,6 +126,10 @@ public class MemorySearchTool implements AgentTool {
 
         // Normalise self-referential queries to factual equivalents
         query = normaliseMemoryQuery(query);
+
+        auditService.record(sessionId, userId, ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "memory_search queryLen=" + query.length());
 
         String safeQuery = Fts5QueryUtil.toFts5Phrase(query); 
 

@@ -17,7 +17,9 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.ComplianceViolationException;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -63,6 +65,7 @@ public class ToolRegistry {
     @Inject ToolSecretExtractor secretExtractor;
     @Inject ProcessIsolationExecutor isolationExecutor;
     @Inject ObjectMapper objectMapper;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
@@ -127,6 +130,12 @@ public class ToolRegistry {
         }
 
         log.infof("Invoking tool '%s' (operation=%s)", toolName, tool.requiredOperation());
+
+        // Mandatory audit: TOOL_INVOKED (fail-closed compliance)
+        auditService.record(
+                ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+                SecurityEventType.TOOL_INVOKED,
+                "tool=" + toolName + " op=" + tool.requiredOperation());
 
         // 2. Param stripping
         Map<String, Object> sanitizedParams;
