@@ -17,10 +17,10 @@ public class LlamaCppProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "llamacpp.base-url", defaultValue = "http://localhost:9000")
+    @ConfigProperty(name = "ARCCLAW_LLAMACPP_BASE_URL", defaultValue = "http://localhost:9000/v1")
     String baseUrl;
 
-    @ConfigProperty(name = "llamacpp.model", defaultValue = "qwen3")
+    @ConfigProperty(name = "ARCCLAW_LLAMACPP_MODEL", defaultValue = "qwen3")
     String modelId;
 
     @Override
