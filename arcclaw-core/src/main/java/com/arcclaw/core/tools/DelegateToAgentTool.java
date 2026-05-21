@@ -105,7 +105,7 @@ public class DelegateToAgentTool implements AgentTool {
             return ToolResponse.failure(400, DELEGATION_GOAL_REQUIRED);
         }
 
-        String agentName = String.valueOf(agentObj);
+        String agentName = stripSurroundingQuotes(String.valueOf(agentObj));
         String goal = String.valueOf(goalObj);
         String normalized = agentName.trim().toLowerCase();
 
@@ -232,6 +232,15 @@ public class DelegateToAgentTool implements AgentTool {
                 .flatMap(role -> role.definition().aliases().stream())
                 .sorted()
                 .collect(Collectors.joining(", "));
+    }
+
+    private static String stripSurroundingQuotes(String s) {
+        if (s == null) return null;
+        s = s.trim();
+        if (s.length() >= 2 && ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith("\"") && s.endsWith("\"")))) {
+            return s.substring(1, s.length() - 1).trim();
+        }
+        return s;
     }
 
     private boolean isSelfDelegation(String normalized, String currentRoleName) {
