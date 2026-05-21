@@ -1,12 +1,10 @@
 Hey i am Srini and love to Study a lot and teach kids.. who are you ?
 
-What your priorities and your helpers or Sub Agents ?
-
 schedule to write python program Factorial of 10 and execute then share the result after 2 mins
 
 store my phone as 9884691847 and my hobby is walking
 
-ur capabilities and delgations in short ?
+What your priorities / capabilites and your helpers or Sub Agents and their delgations in short ?
 
 schedule to say Hello Buddy in one min
 
@@ -31,8 +29,6 @@ do same in java
 /history
 
 store my phone as 9884691847
-
-do memory search and get my contact num
 
 There is a NullPointerException at UserService.java:42 - what's the root cause?
 
