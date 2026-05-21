@@ -38,11 +38,17 @@ public class AgentOtelContext implements AgentObserver {
      * @return The active root {@link Span}.
      */
     public Span startSessionSpan(String sessionId) {
+        return startSessionSpan(sessionId, null, null);
+    }
+
+    public Span startSessionSpan(String sessionId, String userId, String agentRole) {
         if (sessionId == null)
             return null;
-        Span span = tracer.spanBuilder(AgentOTelConstants.SPAN_SESSION)
-                .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
-                .startSpan();
+        var builder = tracer.spanBuilder(AgentOTelConstants.SPAN_SESSION)
+                .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
+        if (userId != null) builder.setAttribute(AgentOTelConstants.ATTR_USER_ID, userId);
+        if (agentRole != null) builder.setAttribute(AgentOTelConstants.ATTR_AGENT_ROLE, agentRole);
+        Span span = builder.startSpan();
         rootSpans.put(sessionId, span);
         // §OTel Fix: Spans must be made current to be visible to child builders
         rootScopes.put(sessionId, span.makeCurrent());
@@ -145,7 +151,7 @@ public class AgentOtelContext implements AgentObserver {
                 .setParent(parentContext)
                 .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
                 .setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, toolName)
-                .setAttribute("tool.operation", toolOperation)
+                .setAttribute(AgentOTelConstants.ATTR_TOOL_OPERATION, toolOperation)
                 .startSpan();
     }
 }

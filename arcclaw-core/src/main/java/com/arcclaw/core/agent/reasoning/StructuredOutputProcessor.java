@@ -13,6 +13,7 @@ import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import dev.langchain4j.data.message.ChatMessage;
@@ -53,7 +54,7 @@ public class StructuredOutputProcessor {
     }
 
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-        Span span = otelContext.childSpan(sessionId, "structured_output_generation");
+        Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_STRUCTURED_OUTPUT);
         try {
             String systemPrompt = promptBuilder.build(null, agentRole, sessionId, "", false);
 

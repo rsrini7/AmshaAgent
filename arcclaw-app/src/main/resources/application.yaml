@@ -152,7 +152,7 @@ quarkus:
   otel:
     enabled: true
     sdk:
-      disabled: "${OTEL_SDK_DISABLED:true}"  # default off - enable when collector present
+      disabled: "${OTEL_SDK_DISABLED:false}"  # default on - set OTEL_SDK_DISABLED=true to disable
     exporter:
       otlp:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
@@ -279,7 +279,7 @@ smallrye:
       "io.netty":
         level: WARN
       "io.opentelemetry":
-        level: "OFF"
+        level: WARN
       "org.infinispan":
         level: WARN
       "org.jboss.resteasy.reactive.common.core":
@@ -314,7 +314,7 @@ smallrye:
       enabled: true
       path: "./arcclaw.log"
       level: DEBUG
-      format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+      format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
       rotation:
         max-file-size: 20M
         max-backup-index: 3
@@ -595,7 +595,7 @@ mp:
         enabled: true
         path: ./arcclaw-cli.log
         level: DEBUG
-        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:
           max-file-size: 20M
           max-backup-index: 3
@@ -628,7 +628,7 @@ mp:
         enabled: true
         path: ./arcclaw-dev.log
         level: DEBUG
-        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:
           max-file-size: 20M
           max-backup-index: 3

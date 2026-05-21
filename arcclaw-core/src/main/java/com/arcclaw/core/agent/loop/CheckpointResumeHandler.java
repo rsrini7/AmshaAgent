@@ -200,8 +200,7 @@ public class CheckpointResumeHandler {
 
     private void handleResumeFailure(String sessionId, MessageContext context, Exception e) {
         log.errorf("Failed to resume session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
-        meterRegistry.counter("arcclaw.agent.resume.failure",
-            "sessionId", sessionId != null ? sessionId : "unknown").increment();
+        meterRegistry.counter("arcclaw.agent.resume.failure").increment();
         if (context == null || context.getUser() == null) {
             log.warnf("handleResumeFailure: context is null for session %s - no channel notification sent", sessionId);
             return;

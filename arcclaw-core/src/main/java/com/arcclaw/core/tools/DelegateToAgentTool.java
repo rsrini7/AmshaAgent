@@ -21,6 +21,8 @@ import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.observability.AgentOTelConstants;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
@@ -29,6 +31,9 @@ import com.arcclaw.persistence.api.CheckpointCrudPort;
 import com.arcclaw.persistence.api.CheckpointDto;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Context;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -50,6 +55,7 @@ public class DelegateToAgentTool implements AgentTool {
     @Inject Instance<AgentLoop> agentLoop;
     @Inject CheckpointCrudPort checkpointCrud;
     @Inject AuditService auditService;
+    @Inject AgentOtelContext otelContext;
 
     @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "3")
     int maxDelegationDepth = 3;
@@ -141,13 +147,35 @@ public class DelegateToAgentTool implements AgentTool {
                 SecurityEventType.DELEGATION_DISPATCHED,
                 "target=" + agentName + " depth=" + depth + " goalLen=" + goal.length());
 
+        // Capture parent OTel context before spawning sub-agent
+        Context parentOtelContext = Context.current();
+
         AgentResult result;
+        Span delegationSpan = otelContext.childSpan(outerSessionId, AgentOTelConstants.SPAN_DELEGATION_DISPATCH);
         try {
+            if (delegationSpan != null) {
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_TARGET, agentName);
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_DEPTH, (long) depth);
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_GOAL_LEN, (long) goal.length());
+            }
             result = runSubAgent(ctx, outerSessionId, agentName, goal, targetRole, userId, chatId);
+            if (delegationSpan != null) delegationSpan.setStatus(StatusCode.OK);
         } catch (BudgetExceededException e) {
+            if (delegationSpan != null) {
+                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                delegationSpan.recordException(e);
+                delegationSpan.end();
+            }
             throw e;
         } catch (Exception e) {
+            if (delegationSpan != null) {
+                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                delegationSpan.recordException(e);
+                delegationSpan.end();
+            }
             return handleRunSubAgentException(targetRole, e);
+        } finally {
+            if (delegationSpan != null) delegationSpan.end();
         }
 
         return handleSubAgentResult(result, targetRole, outerSessionId);

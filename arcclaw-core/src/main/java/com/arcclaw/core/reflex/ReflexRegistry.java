@@ -13,8 +13,12 @@ import jakarta.inject.Inject;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.observability.AgentOTelConstants;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.util.ClassUtils;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -28,6 +32,9 @@ public class ReflexRegistry {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    AgentOtelContext otelContext;
 
     private List<AgentReflex> sortedReflexes;
 
@@ -70,20 +77,33 @@ public class ReflexRegistry {
         // PASS 1 - find first matching reflex and dispatch
         for (AgentReflex reflex : sortedReflexes) {
             if (!reflex.matches(input)) continue;
+            Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_REFLEX_EXECUTE);
             try {
+                if (span != null) {
+                    span.setAttribute(AgentOTelConstants.ATTR_REFLEX_NAME, ClassUtils.getCleanName(reflex));
+                    span.setAttribute(AgentOTelConstants.ATTR_REFLEX_EVENT, reflex.auditEventType().name());
+                }
                 auditService.record(
                     sessionId, userId,
                     ClassUtils.getCleanName(reflex),
                     reflex.auditEventType(),
                     reflex.auditDetail(sessionId, input));
-                return reflex.execute(sessionId, userId, chatId, input, context);
+                ReflexResult result = reflex.execute(sessionId, userId, chatId, input, context);
+                if (span != null) span.setStatus(StatusCode.OK);
+                return result;
             } catch (Exception e) {
+                if (span != null) {
+                    span.setStatus(StatusCode.ERROR, e.getMessage());
+                    span.recordException(e);
+                }
                 String truncated = input != null && input.length() > 200
                     ? input.substring(0, 200) + "…" : input;
                 log.errorf("REFLEX-FAILURE reflex=%s session=%s user=%s input=%s error=%s",
                     ClassUtils.getCleanName(reflex), sessionId, userId, truncated,
                     LogUtil.rootMessage(e));
                 return ReflexResult.respond("System Error: " + e.getMessage(), context);
+            } finally {
+                if (span != null) span.end();
             }
         }
 

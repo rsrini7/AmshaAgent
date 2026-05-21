@@ -17,6 +17,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
@@ -123,10 +124,10 @@ public class PodmanContainerExecutor {
             String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
                     + "-" + Long.toHexString(System.nanoTime());
 
-            Span span = otelContext.childSpan(sessionId, "tool.container_exec");
-            span.setAttribute("container.image", sandboxImage);
-            span.setAttribute("container.name", containerName);
-            span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
+            Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_TOOL_CONTAINER_EXEC);
+            span.setAttribute(AgentOTelConstants.ATTR_CONTAINER_IMAGE, sandboxImage);
+            span.setAttribute(AgentOTelConstants.ATTR_CONTAINER_NAME, containerName);
+            span.setAttribute(AgentOTelConstants.ATTR_SANDBOX_STRATEGY, SandboxStrategy.PODMAN.name());
 
             activeContainerNames.add(containerName);
             try (Scope scope = span.makeCurrent()) {

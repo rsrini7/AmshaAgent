@@ -15,11 +15,15 @@ import jakarta.transaction.Transactional.TxType;
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.observability.AgentOTelConstants;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.BatchDecisionUtil;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.
@@ -30,6 +34,7 @@ public class HitlService {
     @Inject EntityManager em;
     @Inject ObjectMapper objectMapper;
     @Inject CheckpointApprovalService checkpointApprovalService;
+    @Inject AgentOtelContext otelContext;
 
     @Inject SessionHeartbeatTracker heartbeatTracker;
 
@@ -137,6 +142,14 @@ public class HitlService {
             throw new IllegalStateException("Already resolved for ID: " + taskId);
         }
 
+        Span span = otelContext.childSpan(cp.getSessionId(), AgentOTelConstants.SPAN_HITL_RESOLVE);
+        try {
+            if (span != null) {
+                span.setAttribute(AgentOTelConstants.ATTR_HITL_TASK_ID, taskId);
+                span.setAttribute(AgentOTelConstants.ATTR_HITL_TOOL_NAME, toolName != null ? toolName : "all");
+                span.setAttribute(AgentOTelConstants.ATTR_HITL_APPROVED, approved);
+            }
+
         AgentCheckpoint resolvedCp;
         if (approved) {
             if (toolName != null && !toolName.isBlank())
@@ -163,6 +176,17 @@ public class HitlService {
         // mirrors DenyReflex/ApproveReflex - triggers AgentLoop resume/denial path
         if (resolvedCp != null) {
             checkpointApprovalService.triggerResume(resolvedCp);
+        }
+
+            if (span != null) span.setStatus(StatusCode.OK);
+        } catch (Exception e) {
+            if (span != null) {
+                span.setStatus(StatusCode.ERROR, e.getMessage());
+                span.recordException(e);
+            }
+            throw e;
+        } finally {
+            if (span != null) span.end();
         }
     }
 

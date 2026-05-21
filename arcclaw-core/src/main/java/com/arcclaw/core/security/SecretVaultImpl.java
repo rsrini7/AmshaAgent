@@ -11,9 +11,13 @@ import jakarta.transaction.Transactional;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.observability.AgentOTelConstants;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 
 @ApplicationScoped
 public class SecretVaultImpl implements SecretVault {
@@ -32,6 +36,9 @@ public class SecretVaultImpl implements SecretVault {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    AgentOtelContext otelContext;
 
     private final ReentrantLock systemKeyLock = new ReentrantLock();
     private volatile VaultKey cachedSystemMasterKey;
@@ -91,9 +98,11 @@ public class SecretVaultImpl implements SecretVault {
     }
 
     private void store(String keyName, byte[] secret, String userId, String sessionId) {
+        Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_VAULT_STORE);
         // 1. Derive Key
         VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
         try {
+            if (span != null) span.setAttribute(AgentOTelConstants.ATTR_VAULT_KEY_NAME, keyName);
             // 2. Encrypt (AAD = keyName)
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
 
@@ -113,8 +122,15 @@ public class SecretVaultImpl implements SecretVault {
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS, "keyName=" + keyName + " op=STORE");
             }
 
+            if (span != null) span.setStatus(StatusCode.OK);
         } catch (Exception e) {
+            if (span != null) {
+                span.setStatus(StatusCode.ERROR, e.getMessage());
+                span.recordException(e);
+            }
             throw e;
+        } finally {
+            if (span != null) span.end();
         }
         // sessionKey NOT auto-closed here - lifecycle managed by VaultKeyCache
     }
@@ -132,32 +148,47 @@ public class SecretVaultImpl implements SecretVault {
     }
 
     private Optional<VaultKey> get(String keyName, String userId, String sessionId) {
-        // 1. Fetch
-        SecretDto dto = secretStore.find(sessionId, keyName).orElse(null);
-
-        if (dto == null) {
-            if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
-                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
-                        "keyName=" + keyName);
-                auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
-                        "keyName=" + keyName + " op=RETRIEVE_MISS");
-            }
-            return Optional.empty();
-        }
-
-        // 2. Derive Key
-        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
+        Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_VAULT_RETRIEVE);
         try {
+            if (span != null) span.setAttribute(AgentOTelConstants.ATTR_VAULT_KEY_NAME, keyName);
+            // 1. Fetch
+            SecretDto dto = secretStore.find(sessionId, keyName).orElse(null);
+
+            if (dto == null) {
+                if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
+                    auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE_MISS,
+                            "keyName=" + keyName);
+                    auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS,
+                            "keyName=" + keyName + " op=RETRIEVE_MISS");
+                }
+                if (span != null) {
+                    span.setAttribute(AgentOTelConstants.ATTR_VAULT_FOUND, false);
+                    span.setStatus(StatusCode.OK);
+                }
+                return Optional.empty();
+            }
+
+            // 2. Derive Key
+            VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
             // 3. Decrypt
             byte[] plaintext = cipher.decrypt(dto.ciphertext(), dto.nonce(), sessionKey, keyName);
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_RETRIEVE, "keyName=" + keyName);
                 auditService.record(sessionId, userId, AgentSentinels.SYSTEM_ROLE, SecurityEventType.VAULT_ACCESS, "keyName=" + keyName + " op=RETRIEVE");
             }
+            if (span != null) {
+                span.setAttribute("vault.found", true);
+                span.setStatus(StatusCode.OK);
+            }
             return Optional.of(new VaultKey(plaintext));
         } catch (SecurityException e) {
-            // Log security event?
+            if (span != null) {
+                span.setStatus(StatusCode.ERROR, e.getMessage());
+                span.recordException(e);
+            }
             throw e;
+        } finally {
+            if (span != null) span.end();
         }
         // sessionKey NOT auto-closed here
     }
