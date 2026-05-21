@@ -380,7 +380,7 @@ public class FinishOutcomeProcessor {
         return new FinishActionHandler.FinishOutcome.SalvageFailed(failed);
     }
 
-    private boolean looksLikeJson(String text) {
+    public boolean looksLikeJson(String text) {
         return textPatternUtils.looksLikeJson(text);
     }
 
