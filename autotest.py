@@ -478,11 +478,11 @@ def run_prompt(proc, buf: OutputBuffer, approver: ApprovalHandler,
         buf.wait_for([PROMPT_READY], timeout=8.0)
         buf.reset()
 
-    _log(f"\n[Prompt #{tc.line_no}] [{tc.category.value}] {tc.prompt[:120]} [ref:{fp}]", log_f)
-    time.sleep(inter_prompt_delay)
-
     # FIX #1: fingerprint — skip for raw commands (/halt, /reset, etc.)
     fp = _make_fingerprint()
+
+    _log(f"\n[Prompt #{tc.line_no}] [{tc.category.value}] {tc.prompt[:120]} [ref:{fp}]", log_f)
+    time.sleep(inter_prompt_delay)
     is_command = tc.prompt.strip().startswith("/") or tc.prompt.strip().lower() in ("halt","reset")
     sent_prompt = tc.prompt if is_command else f"{tc.prompt} [ref:{fp}]"
     proc.stdin.write(sent_prompt + "\n")
