@@ -209,9 +209,24 @@ public class InfiniteLoopChatModel implements ChatModel {
         } else if (classified instanceof LlmContentFilterException) {
             throw classified;
         } else {
-            h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
-            log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
-                    slotName, h.cooldownRemainingMs() / 1000, classified.getMessage());
+            String msg = classified.getMessage();
+            // Connection refused / timeout are transient — server may restart.
+            // Don't permanently disable, just cooldown.
+            if (msg != null && (msg.contains("Connection refused") || msg.contains("connect timed out")
+                    || msg.contains("timeout") || msg.contains("ECONNREFUSED"))) {
+                h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+                if (h.isPermanentlyDisabled()) {
+                    log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive connection failures: %s",
+                            slotName, MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
+                } else {
+                    log.warnf("InfiniteLoop: Slot [%s] connection error, cooling down %ds. %s",
+                            slotName, h.cooldownRemainingMs() / 1000, msg);
+                }
+            } else {
+                h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
+                log.warnf("InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
+                        slotName, h.cooldownRemainingMs() / 1000, msg);
+            }
         }
     }
 

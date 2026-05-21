@@ -72,14 +72,18 @@ public class OnboardingResource {
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
-    private static final Map<String, String> DEFAULT_MODELS = Map.of(
-        "groq",        "meta-llama/llama-4-scout-17b-16e-instruct",
-        "openai",      "gpt-4o-mini",
-        "ollama",      "mistral-small:latest",
-        "anthropic",   "claude-haiku-4-5",
-        "claude-code", "claude-sonnet-4-5",
-        "openrouter",  "openai/gpt-oss-20b:free",
-        "nvidia",      "bytedance/seed-oss-36b-instruct"
+    private static final Map<String, String> DEFAULT_MODELS = Map.ofEntries(
+        Map.entry("groq",        "meta-llama/llama-4-scout-17b-16e-instruct"),
+        Map.entry("openai",      "gpt-4o-mini"),
+        Map.entry("ollama",      "mistral-small:latest"),
+        Map.entry("anthropic",   "claude-haiku-4-5"),
+        Map.entry("claude-code", "claude-sonnet-4-5"),
+        Map.entry("openrouter",  "openai/gpt-oss-20b:free"),
+        Map.entry("nvidia",      "bytedance/seed-oss-36b-instruct"),
+        Map.entry("cerebras",    "llama-3.3-70b"),
+        Map.entry("gemini",      "gemini-2.0-flash"),
+        Map.entry("omlx",        "mlx-community/gemma-4-26b-a4b-it-4bit"),
+        Map.entry("llamacpp",    "qwen3")
     );
 
     @GET @Path("/status")

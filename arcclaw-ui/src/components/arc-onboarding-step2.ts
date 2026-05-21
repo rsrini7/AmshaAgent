@@ -22,6 +22,8 @@ export class ArcOnboardingStep2 extends LitElement {
     { id: 'nvidia',      name: 'NVIDIA',       tag: 'NIM models',      icon: 'N',  color: '#76b900' },
     { id: 'cerebras',    name: 'Cerebras',     tag: 'Ultra-fast LPU',  icon: 'Cb', color: '#11e400' },
     { id: 'gemini',      name: 'Gemini',       tag: 'Google AI',       icon: 'Ge', color: '#4285f4' },
+    { id: 'omlx',        name: 'OMLX',         tag: 'Local MLX server', icon: 'M',  color: '#5dade2' },
+    { id: 'llamacpp',    name: 'llama.cpp',    tag: 'Local GGUF',      icon: 'L',  color: '#e74c3c' },
   ];
 
   private _onProviderChange(val: string) {

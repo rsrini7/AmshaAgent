@@ -69,3 +69,26 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 * **Method Length**: Maximum **80 lines** per method.
 * **Enforcement**: Checkstyle runs during `compile` phase. Violations fail the build.
 * **Refactoring**: If a method exceeds 80 lines, extract logical blocks into private helper methods. If a file exceeds 500 lines, split into separate classes (e.g., extract inner classes, constants, or utility methods into companion files).
+
+## 5. Adding a New LLM Provider
+
+When adding a new LLM provider (e.g., llama.cpp, OMLX, etc.), update ALL of the following:
+
+### 5.1 Backend (Java)
+1. **`RoutingChatModelProvider`** — `arcclaw-core/.../routing/<Name>LlmProviderFactory.java` (for intent/compaction)
+2. **`AgentChatModelProvider`** — `arcclaw-core/.../agent/reasoning/<Name>ProviderFactory.java` (for infinite-loop agent)
+3. **`LlmModelFactory.java`** — Add URL pattern to `URL_PROVIDER_MAP` (e.g., `"localhost:9000", "llamacpp"`)
+4. **`OnboardingResource.java`** — Add default model to `DEFAULT_MODELS` map
+
+### 5.2 Configuration (.env)
+5. **`.env`** — Add `ARCCLAW_<NAME>_BASE_URL` and `ARCCLAW_<NAME>_MODEL`
+6. **`.env`** — Add provider to `ARCCLAW_INFINITE_LOOP_MODELS_LIST`
+7. **`.env.example`** — Same changes for documentation
+
+### 5.3 Frontend (UI)
+8. **`arc-settings.ts`** — Add entry to `PROVIDERS` array
+9. **`arc-onboarding-step2.ts`** — Add entry to `providers` array
+
+### 5.4 Verification
+10. Compile: `./mvnw compile -DskipTests -q`
+11. Check UI builds: `cd arcclaw-ui && npm run build`

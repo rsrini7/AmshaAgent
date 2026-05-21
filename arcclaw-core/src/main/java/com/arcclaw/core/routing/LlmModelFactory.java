@@ -97,7 +97,8 @@ public class LlmModelFactory {
         "nvidia.com", "nvidia",
         "cerebras.ai", "cerebras",
         "googleapis.com", "gemini",
-        "localhost:11434", "ollama"
+        "localhost:11434", "ollama",
+        "localhost:9000", "llamacpp"
     );
 
     public static String inferProviderFromUrl(String baseUrl) {
