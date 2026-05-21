@@ -167,13 +167,22 @@ public class InfiniteLoopChatModel implements ChatModel {
                         log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s",
                                 slot.name(), classified.getMessage());
                     } else if (classified instanceof LlmServiceUnavailableException) {
-                        h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-                        if (h.isPermanentlyDisabled()) {
-                            log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
-                                    slot.name(), MAX_CONSECUTIVE_TRANSIENT_FAILURES, classified.getMessage());
+                        String msg = classified.getMessage();
+                        // Fast-fail: tool_use_failed is a provider-specific error (Groq rejects plain text).
+                        // Retrying with the same provider will always fail — disable immediately.
+                        if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
+                            h.disablePermanently();
+                            log.errorf("InfiniteLoop: Slot [%s] permanently disabled (tool_use_failed - provider rejected response): %s",
+                                    slot.name(), msg);
                         } else {
-                            log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
-                                    slot.name(), h.cooldownRemainingMs() / 1000, classified.getMessage());
+                            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+                            if (h.isPermanentlyDisabled()) {
+                                log.errorf("InfiniteLoop: Slot [%s] permanently disabled after %d consecutive transient errors: %s",
+                                        slot.name(), MAX_CONSECUTIVE_TRANSIENT_FAILURES, msg);
+                            } else {
+                                log.warnf("InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
+                                        slot.name(), h.cooldownRemainingMs() / 1000, msg);
+                            }
                         }
                     } else if (classified instanceof LlmContentFilterException) {
                         throw classified;

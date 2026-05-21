@@ -156,13 +156,22 @@ public class MultiModelChatModel implements ChatModel {
             log.errorf("MultiModel: [%s] %s permanently disabled (auth error): %s",
                     providerName, label, classified.getMessage());
         } else if (classified instanceof LlmServiceUnavailableException) {
-            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
-            if (h.isPermanentlyDisabled()) {
-                log.errorf("MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
-                        providerName, label, MAX_CONSECUTIVE_FAILURES, classified.getMessage());
+            String msg = classified.getMessage();
+            // Fast-fail: tool_use_failed is a provider-specific error (Groq rejects plain text).
+            // Retrying with the same provider will always fail — disable immediately.
+            if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
+                h.disablePermanently();
+                log.errorf("MultiModel: [%s] %s permanently disabled (tool_use_failed - provider rejected response): %s",
+                        providerName, label, msg);
             } else {
-                log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
-                        providerName, label, h.cooldownRemainingMs() / 1000, classified.getMessage());
+                h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+                if (h.isPermanentlyDisabled()) {
+                    log.errorf("MultiModel: [%s] %s permanently disabled after %d consecutive transient errors: %s",
+                            providerName, label, MAX_CONSECUTIVE_FAILURES, msg);
+                } else {
+                    log.warnf("MultiModel: [%s] %s transient error, cooling down %ds. %s",
+                            providerName, label, h.cooldownRemainingMs() / 1000, msg);
+                }
             }
         } else if (classified instanceof LlmContentFilterException) {
             throw classified;
