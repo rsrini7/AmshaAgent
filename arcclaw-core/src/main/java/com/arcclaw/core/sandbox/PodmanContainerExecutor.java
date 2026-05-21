@@ -239,6 +239,12 @@ public class PodmanContainerExecutor {
         }
 
         int exitCode = process.exitValue();
+
+        // Filter benign JVM informational lines from stderr
+        if (stderr != null && !stderr.isBlank()) {
+            stderr = stderr.replaceAll("(?m)^Picked up JAVA_TOOL_OPTIONS:.*$", "").trim();
+        }
+
         if (exitCode != 0) {
             String raw = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
 
