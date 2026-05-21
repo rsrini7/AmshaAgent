@@ -708,9 +708,16 @@ def main():
     log("[Harness] ArcClaw ready.", log_f)
 
     results: list[TestResult] = []
+    session_halted = False
 
     try:
         for tc in cases:
+            # Skip remaining prompts after /halt — session is dead
+            if session_halted:
+                results.append(TestResult(tc.line_no, tc.prompt, Outcome.SKIP,
+                                          "", "Session halted by earlier /halt", 0.0))
+                continue
+
             result = run_prompt(proc, buf, approver, tc,
                                 args.timeout, args.delay, log_f)
             results.append(result)
@@ -721,6 +728,12 @@ def main():
                   f"{tc.prompt[:55]}")
             if result.outcome == Outcome.FAIL:
                 print(f"             ↳ {result.reason[:120]}")
+
+            # Detect /halt — subsequent prompts will timeout
+            if tc.prompt.strip().lower() == "/halt":
+                session_halted = True
+                log("[Harness] Session halted — remaining prompts will be skipped.", log_f)
+
             if args.fail_fast and result.outcome in (Outcome.FAIL, Outcome.TIMEOUT):
                 print("⚠️  --fail-fast: stopping on first failure.")
                 break

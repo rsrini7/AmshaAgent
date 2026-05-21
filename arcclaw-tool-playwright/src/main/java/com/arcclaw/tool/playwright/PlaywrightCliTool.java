@@ -1,8 +1,10 @@
 package com.arcclaw.tool.playwright;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -228,8 +230,8 @@ public class PlaywrightCliTool implements AgentTool {
             return ToolResponse.success(result);
 
         } catch (Exception e) {
-            log.error("Playwright CLI execution failed", e);
-            return ToolResponse.failure(502, "Browser action '" + action + "' failed: " + e.getMessage());
+            log.errorf("Playwright CLI execution failed: %s\n%s", LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
+            return ToolResponse.failure(502, "Browser action '" + action + "' failed: " + LogUtil.rootMessage(e));
         }
     }
 
@@ -323,15 +325,17 @@ public class PlaywrightCliTool implements AgentTool {
             String output = new String(process.getInputStream().readAllBytes());
             int exit = process.waitFor();
             if (exit != 0) {
-                throw new RuntimeException("playwright-cli exit " + exit + ": " + output.trim());
+                // Trim long daemon stacktraces — first line has the useful error info
+                String firstLine = output.lines().findFirst().orElse(output.trim());
+                throw new RuntimeException("playwright-cli exit " + exit + ": " + firstLine);
             }
             return output;
         } catch (IOException e) {
             throw new RuntimeException(
-                "playwright-cli not found. Install: npm install -g @playwright/cli", e);
+                "playwright-cli not found. Install: npm install -g @playwright/cli");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("playwright-cli interrupted", e);
+            throw new RuntimeException("playwright-cli interrupted");
         }
     }
 
@@ -351,7 +355,26 @@ public class PlaywrightCliTool implements AgentTool {
     }
 
     private static String sessionName(String sessionId) {
-        return "arcclaw-" + (sessionId != null ? sessionId : "default");
+        if (sessionId == null) return "arcclaw-default";
+        // Use SHA-256 hash to avoid socket path length limits and EADDRINUSE
+        // from delegated session IDs that contain colons and grow unbounded.
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(sessionId.getBytes(StandardCharsets.UTF_8));
+            // First 16 hex chars = 64 bits — enough uniqueness for session isolation
+            String hex = bytesToHex(hash).substring(0, 16);
+            return "arcclaw-" + hex;
+        } catch (Exception e) {
+            return "arcclaw-" + sessionId.replaceAll("[^a-zA-Z0-9_-]", "_");
+        }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
     }
 
     /** Escapes a string for use as a single-quoted JavaScript string literal. */
