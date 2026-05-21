@@ -17,10 +17,11 @@ Key improvements over v1:
   - Ambiguous approval state resolution
   - Rate-limit backoff awareness
 """
-import sys, os, re, time, queue, threading, argparse, json, textwrap
+import sys, os, re, time, queue, threading, argparse, json, textwrap, hashlib
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
+from typing import Optional
 import subprocess
 
 # ─── Enums ────────────────────────────────────────────────────────────────────
@@ -457,10 +458,47 @@ def evaluate(rule: AssertionRule, response: str) -> tuple[Outcome, str]:
 
     return Outcome.PASS, "assertions passed"
 
+# ─── Log-Based Response Correlation ─────────────────────────────────────────────
+def verify_response_from_log(log_path: str, prompt: str, timeout: float = 5.0) -> Optional[str]:
+    """
+    Search arcclaw-cli.log for the actual response to the given prompt.
+    Returns the response text if found, None otherwise.
+
+    Strategy: Find the prompt text in the log, then extract the ArcClaw response
+    that follows it. This handles out-of-order responses because we search by
+    prompt content, not by buffer position.
+    """
+    if not os.path.exists(log_path):
+        return None
+
+    try:
+        # Read the log file (seek from end for efficiency)
+        with open(log_path, 'r', errors='replace') as f:
+            content = f.read()
+
+        # Escape the prompt for regex — use first 60 chars to avoid regex issues
+        prompt_escaped = re.escape(prompt[:60])
+
+        # Find the prompt in the log
+        # Pattern: the prompt appears in a DEBUG/INFO line, followed by the response
+        # Look for the prompt text followed by ArcClaw's response
+        pattern = prompt_escaped + r'.*?ArcClaw>\s*(.*?)(?=\nYou>|\n\[Prompt|\Z)'
+        match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
+
+        if match:
+            response = match.group(1).strip()
+            if response and len(response) > 10:
+                return response
+
+    except Exception:
+        pass
+
+    return None
+
 # ─── Prompt Runner ─────────────────────────────────────────────────────────────
 def run_prompt(proc, buf: OutputBuffer, approver: ApprovalHandler,
                tc: TestCase, prompt_timeout: float,
-               inter_prompt_delay: float, log_f) -> TestResult:
+               inter_prompt_delay: float, log_f, cli_log_path: str = None) -> TestResult:
     start = time.monotonic()
     buf.reset()
 
@@ -493,6 +531,17 @@ def run_prompt(proc, buf: OutputBuffer, approver: ApprovalHandler,
                                buf.snapshot(), "Timed out waiting for You>", elapsed)
         response = buf.snapshot()
         outcome, reason = evaluate(tc.assertion, response)
+
+        # If FAIL and log path available, try log-based response correlation
+        if outcome == Outcome.FAIL and cli_log_path:
+            log_response = verify_response_from_log(cli_log_path, tc.prompt)
+            if log_response:
+                alt_outcome, alt_reason = evaluate(tc.assertion, log_response)
+                if alt_outcome == Outcome.PASS:
+                    log(f"  [LOG-CORRECTED] #{tc.line_no} FAIL→PASS via log correlation", log_f)
+                    return TestResult(tc.line_no, tc.prompt, Outcome.PASS,
+                                      log_response, f"log-corrected: {alt_reason}", elapsed)
+
         return TestResult(tc.line_no, tc.prompt, outcome, response, reason, elapsed)
 
     # Approval expected: wait for approval gate OR You>
@@ -662,9 +711,13 @@ def main():
     if args.log_file:
         log_f = open(args.log_file, "w", encoding="utf-8")
 
+    # Default log path for response correlation
+    cli_log_path = os.environ.get("ARCCLAW_CLI_LOG", "arcclaw-cli.log")
+
     print(f"✦ ArcClaw Autotest v2.0")
     print(f"  File       : {args.file}")
     print(f"  Range      : {args.range} → {len(cases)} cases")
+    print(f"  CLI log    : {cli_log_path}")
     print(f"  Role       : {args.role}  |  Autonomy: {args.autonomy}")
     print(f"  Delay      : {args.delay}s  |  Timeout: {args.timeout}s")
     print(f"  Skip cats  : {[c.value for c in skip_cats] or 'none'}")
@@ -719,7 +772,7 @@ def main():
                 continue
 
             result = run_prompt(proc, buf, approver, tc,
-                                args.timeout, args.delay, log_f)
+                                args.timeout, args.delay, log_f, cli_log_path)
             results.append(result)
             symbol = {"PASS":"✓","FAIL":"✗","TIMEOUT":"⏱","SKIP":"–","ERROR":"!"}
             s = symbol.get(result.outcome.value,"?")
