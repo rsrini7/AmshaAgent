@@ -335,15 +335,15 @@ public String renderInteraction(InteractionNode node) {
 
 ### Processing concurrency (ProcessingLockManager)
 
-`AbstractInboundMessagePipeline` delegates chat-level processing serialization to a `ProcessingLockManager` SPI. The default JVM implementation uses a `ConcurrentHashMap` with a 30-second TTL. For clustered deployments, inject a custom bean backed by Redis or database advisory locks:
+`AbstractInboundMessagePipeline` delegates chat-level processing serialization to a `ProcessingLockManager` SPI. The default runtime implementation is `CaffeineProcessingLockManager` in `arcclaw-core` with a 30-second TTL. For clustered deployments, provide an `@ApplicationScoped` bean backed by Redis or database advisory locks:
 
 ```java
 @ApplicationScoped
 public class RedisLockManager implements ProcessingLockManager {
-    @Override public boolean tryLock(String chatId) { /* Redis SETNX */ }
+    private static final long TTL_MILLIS = 30_000L;
+    @Override public boolean tryLock(String chatId) { /* Redis SET NX PX TTL_MILLIS */ }
     @Override public void unlock(String chatId)     { /* Redis DEL */ }
     @Override public boolean isLocked(String chatId) { /* Redis EXISTS */ }
-    @Override public long ttlSeconds()               { return 30; }
 }
 ```
 

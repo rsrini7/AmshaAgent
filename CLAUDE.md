@@ -15,16 +15,16 @@
 * If a method exceeds 80 lines, extract into private helper methods.
 
 ## 3. ReplyNode Pattern
-`ReplyNode` is a sealed interface with 10 record permits. Always use `switch` with pattern matching:
+`ReplyNode` is a sealed union of `ContentNode` (non-sealed, for content records) and `InteractionNode` (non-sealed, for interactive controls). Always use `switch` with pattern matching:
 ```java
 return switch (node) {
-    case ReplyNode.Text t -> t.content();
-    case ReplyNode.Heading h -> h.text();
-    case ReplyNode.CodeBlock cb -> cb.code();
+    case ContentNode.Text t -> t.content();
+    case ContentNode.Heading h -> h.text();
+    case ContentNode.CodeBlock cb -> cb.code();
     // ... etc
 };
 ```
-Never call `node.text()` directly on the base `ReplyNode` — it doesn't exist.
+Never call methods on the base `ReplyNode` — concrete methods live on the subtype.
 
 ## 3. Channel Plugin SPI
 New channels must implement `ChannelPlugin` with all 6 interfaces:
