@@ -10,10 +10,6 @@ public abstract class AbstractInboundMessagePipeline {
     protected final ChannelType channelType;
     private final ProcessingLockManager lockManager;
 
-    protected AbstractInboundMessagePipeline(ChannelServices channelServices, ChannelType channelType) {
-        this(channelServices, channelType, new ProcessingLockManager.Default());
-    }
-
     protected AbstractInboundMessagePipeline(ChannelServices channelServices, ChannelType channelType,
                                               ProcessingLockManager lockManager) {
         this.channelServices = channelServices;

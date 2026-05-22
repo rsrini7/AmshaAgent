@@ -15,8 +15,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -26,6 +28,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ProcessingLockManager;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
 import org.apache.camel.Exchange;
@@ -35,6 +38,7 @@ import org.apache.camel.component.telegram.model.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 @QuarkusComponentTest
 class TelegramAgentHandlerTest {
@@ -51,10 +55,27 @@ class TelegramAgentHandlerTest {
     @InjectMock
     TelegramChannelSender sender;
 
+    @InjectMock
+    ProcessingLockManager lockManager;
+
+    /** In-memory lock state used by the ProcessingLockManager mock. */
+    private final Map<String, Boolean> locks = new ConcurrentHashMap<>();
+
     @BeforeEach
     void setup() throws Exception {
+        locks.clear();
         // Default behavior: processAsync returns immediately
         when(channelServices.processAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
+
+        // Realistic lock behavior backed by an in-memory map
+        when(lockManager.tryLock(any())).thenAnswer(invocation ->
+                locks.putIfAbsent(invocation.getArgument(0), Boolean.TRUE) == null);
+        when(lockManager.isLocked(any())).thenAnswer(invocation ->
+                locks.containsKey(invocation.getArgument(0)));
+        // Use lenient() to avoid UnnecessaryStubbingException when unlock is not always called
+        Mockito.lenient().doAnswer(invocation ->
+                locks.remove(invocation.getArgument(0))
+        ).when(lockManager).unlock(any());
     }
 
     @Test

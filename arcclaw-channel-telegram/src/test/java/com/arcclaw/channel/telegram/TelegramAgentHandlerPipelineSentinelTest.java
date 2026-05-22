@@ -8,7 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -18,13 +20,16 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ProcessingLockManager;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.component.telegram.model.IncomingMessage;
 import org.apache.camel.component.telegram.model.User;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 /**
  * Verifies that the Telegram channel correctly notifies the user when the
@@ -44,6 +49,23 @@ class TelegramAgentHandlerPipelineSentinelTest {
 
     @InjectMock
     TelegramMessageMapper mapper;
+
+    @InjectMock
+    ProcessingLockManager lockManager;
+
+    private final Map<String, Boolean> locks = new ConcurrentHashMap<>();
+
+    @BeforeEach
+    void setup() {
+        locks.clear();
+        when(lockManager.tryLock(any())).thenAnswer(invocation ->
+                locks.putIfAbsent(invocation.getArgument(0), Boolean.TRUE) == null);
+        when(lockManager.isLocked(any())).thenAnswer(invocation ->
+                locks.containsKey(invocation.getArgument(0)));
+        Mockito.lenient().doAnswer(invocation ->
+                locks.remove(invocation.getArgument(0))
+        ).when(lockManager).unlock(any());
+    }
 
     @Test
     void bugA10_pipelineCrash_notifiesUser() {
