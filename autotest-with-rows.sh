@@ -1,0 +1,1 @@
+python3 autotest.py -r 1-20 --fail-fast --port 8999

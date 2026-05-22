@@ -6,11 +6,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.BackoffRetryExecutor;
-import com.arcclaw.common.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -26,6 +27,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteRetryTemplate {
 
     private static final Logger log = Logger.getLogger(SqliteRetryTemplate.class);

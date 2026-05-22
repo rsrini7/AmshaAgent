@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.sqlite.entity;
+package com.arcclaw.persistence.common.entity;
 
 import java.time.Instant;
 
@@ -8,8 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 /**
- * Entity for table-based distributed locks (┬ºT5-3).
- * Used for SQLite which lacks native advisory locks.
+ * Entity for table-based distributed locks (§T5-3).
+ * Shared across SQL databases (SQLite, PostgreSQL).
  */
 @Entity
 @Table(name = "advisory_lock")
@@ -42,4 +42,3 @@ public class AdvisoryLockEntity {
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
 }
-

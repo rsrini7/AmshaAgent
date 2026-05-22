@@ -9,7 +9,9 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.routing.InfiniteLoopChatModel;
+import com.arcclaw.core.routing.MultiModelChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -30,6 +32,9 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
     @ConfigProperty(name = "arcclaw.infinite-loop.cooldown-transient-seconds", defaultValue = "5")
     int cooldownTransientSeconds;
+
+    @ConfigProperty(name = "arcclaw.infinite-loop.max-latency-ms", defaultValue = "60000")
+    long maxLatencyMs;
 
     @Inject
     @Any
@@ -67,7 +72,7 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
                 slots.add(new InfiniteLoopChatModel.Slot(name, model));
                 log.infof("InfiniteLoop: Slot [%s] initialized (%s).", name, model);
             } catch (Exception e) {
-                log.warnf("InfiniteLoop: Slot [%s] failed to initialize: %s. Skipping.", name, e.getMessage());
+                log.warnf("InfiniteLoop: Slot [%s] failed to initialize: %s. Skipping.", name, LogUtil.rootMessage(e));
             }
         }
 
@@ -78,7 +83,40 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
         log.infof("InfiniteLoop: Ready with %d slot(s): %s.",
                 slots.size(), slots.stream().map(InfiniteLoopChatModel.Slot::name).collect(Collectors.joining(", ")));
-        return new InfiniteLoopChatModel(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds);
+
+        // Log provider summary table
+        StringBuilder table = new StringBuilder();
+        table.append("\n┌─────────────────────────────────────────────────────────────────────┐\n");
+        table.append("│                    LLM PROVIDER CONFIGURATION                      │\n");
+        table.append("├──────────────┬──────────────────────────────────────────────────────┤\n");
+        table.append(String.format("│ %-12s │ %-52s │\n", "Provider", "Model(s)"));
+        table.append("├──────────────┼──────────────────────────────────────────────────────┤\n");
+
+        for (InfiniteLoopChatModel.Slot slot : slots) {
+            String modelStr = slot.model().toString();
+            // Extract model name from MultiModel or single model
+            String modelName;
+            if (slot.model() instanceof MultiModelChatModel multi) {
+                modelName = multi.toString().replaceAll("MultiModel\\[", "").replaceAll("\\]", "");
+            } else {
+                modelName = modelStr.length() > 52 ? modelStr.substring(0, 49) + "..." : modelStr;
+            }
+            if (modelName.length() > 52) {
+                modelName = modelName.substring(0, 49) + "...";
+            }
+            table.append(String.format("│ %-12s │ %-52s │\n", slot.name(), modelName));
+        }
+
+        table.append("├──────────────┴──────────────────────────────────────────────────────┤\n");
+        table.append(String.format("│ Cooldown: %ds base, %ds max, %ds transient │ %6dms max latency  │\n",
+                cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs));
+        table.append("└─────────────────────────────────────────────────────────────────────┘");
+        log.infof("InfiniteLoop: Provider summary:%s", table);
+
+        log.infof("InfiniteLoop: TIP — Free models change frequently. If a slot starts failing with " +
+                "'model not found' or 404, check the provider's model list and update ARCCLAW_*_MODEL.");
+
+        return new InfiniteLoopChatModel(slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds, maxLatencyMs);
     }
 
     private AgentChatModelProvider findProvider(String name) {

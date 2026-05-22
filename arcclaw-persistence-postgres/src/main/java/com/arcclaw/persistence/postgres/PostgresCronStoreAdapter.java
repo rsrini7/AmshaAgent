@@ -13,12 +13,14 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.arcclaw.persistence.common.entity.AgentCronEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
  * PostgreSQL implementation of CronStorePort.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresCronStoreAdapter.class);
@@ -164,7 +166,8 @@ public class PostgresCronStoreAdapter implements CronStorePort {
     @Transactional
     public void markSkipped(String id, Instant nextFireTime, Instant now) {
         log.debugf("Postgres: Marking cron task %s as skipped. next=%s", id, nextFireTime);
-        em.createQuery("UPDATE AgentCronEntity e SET e.nextFireTime = :next, e.lastFireTime = :now WHERE e.id = :id")
+        em.createQuery("UPDATE AgentCronEntity e SET e.status = :skipped, e.nextFireTime = :next, e.lastFireTime = :now WHERE e.id = :id")
+                .setParameter("skipped", CronStatus.SKIPPED)
                 .setParameter("next", nextFireTime)
                 .setParameter("now", now)
                 .setParameter("id", id)
@@ -237,6 +240,77 @@ public class PostgresCronStoreAdapter implements CronStorePort {
         return em.createQuery("DELETE FROM AgentCronEntity e WHERE e.sessionId = :sessionId")
                 .setParameter("sessionId", sessionId)
                 .executeUpdate();
+    }
+
+    @Override
+    public List<AgentCronDto> findAll(String status, int offset, int limit) {
+        log.debugf("Postgres: Finding all cron tasks (status=%s, offset=%d, limit=%d)", status, offset, limit);
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT e FROM AgentCronEntity e WHERE e.status = :status ORDER BY e.nextFireTime ASC",
+                    AgentCronEntity.class)
+             .setParameter("status", CronStatus.valueOf(status))
+             .setFirstResult(offset)
+             .setMaxResults(limit)
+             .getResultStream().map(this::toDto).toList();
+        }
+        return em.createQuery(
+                "SELECT e FROM AgentCronEntity e ORDER BY e.nextFireTime ASC",
+                AgentCronEntity.class)
+         .setFirstResult(offset)
+         .setMaxResults(limit)
+         .getResultStream().map(this::toDto).toList();
+    }
+
+    @Override
+    public long countAll(String status) {
+        log.debugf("Postgres: Counting all cron tasks (status=%s)", status);
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT COUNT(e) FROM AgentCronEntity e WHERE e.status = :status", Long.class)
+             .setParameter("status", CronStatus.valueOf(status))
+             .getSingleResult();
+        }
+        return em.createQuery("SELECT COUNT(e) FROM AgentCronEntity e", Long.class)
+         .getSingleResult();
+    }
+
+    @Override
+    public List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit) {
+        log.debugf("Postgres: Finding cron tasks for userId=%s (status=%s, offset=%d, limit=%d)", userId, status, offset, limit);
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT e FROM AgentCronEntity e WHERE e.userId = :userId AND e.status = :status ORDER BY e.nextFireTime ASC",
+                    AgentCronEntity.class)
+             .setParameter("userId", userId)
+             .setParameter("status", CronStatus.valueOf(status))
+             .setFirstResult(offset)
+             .setMaxResults(limit)
+             .getResultStream().map(this::toDto).toList();
+        }
+        return em.createQuery(
+                "SELECT e FROM AgentCronEntity e WHERE e.userId = :userId ORDER BY e.nextFireTime ASC",
+                AgentCronEntity.class)
+         .setParameter("userId", userId)
+         .setFirstResult(offset)
+         .setMaxResults(limit)
+         .getResultStream().map(this::toDto).toList();
+    }
+
+    @Override
+    public long countByUserId(String userId, String status) {
+        log.debugf("Postgres: Counting cron tasks for userId=%s (status=%s)", userId, status);
+        if (status != null && !status.isBlank()) {
+            return em.createQuery(
+                    "SELECT COUNT(e) FROM AgentCronEntity e WHERE e.userId = :userId AND e.status = :status", Long.class)
+             .setParameter("userId", userId)
+             .setParameter("status", CronStatus.valueOf(status))
+             .getSingleResult();
+        }
+        return em.createQuery(
+                "SELECT COUNT(e) FROM AgentCronEntity e WHERE e.userId = :userId", Long.class)
+         .setParameter("userId", userId)
+         .getSingleResult();
     }
 
     private AgentCronDto toDto(AgentCronEntity e) {

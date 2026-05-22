@@ -1,5 +1,6 @@
 package com.arcclaw.app.scheduler;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -15,6 +16,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.LangChainReasoningEngine;
@@ -26,7 +28,8 @@ import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
-import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.persistence.api.CronRunDto;
+import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,22 +63,32 @@ public class CronJobRunner {
     CronStorePort cronStore;
 
     @Inject
+    CronRunStorePort cronRunStore;
+
+    @Inject
     SessionHeartbeatTracker heartbeatTracker;
 
-    @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "3")
+    @ConfigProperty(name = "arcclaw.cron.max-iterations", defaultValue = "5")
     int cronMaxIterations;
 
 
 
     public void execute(AgentCron job) {
         String executionId = UUID.randomUUID().toString();
-        
+
         cronStore.setDeliveryId(job.getId(), executionId);
 
         String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.getId() + "-" + executionId;
 
+        // Record cron run start
+        CronRunDto run = new CronRunDto(
+            executionId, job.getId(), cronSessionId, "RUNNING",
+            Instant.now(), null, null, 0, 0, 0, BigDecimal.ZERO, Instant.now()
+        );
+        cronRunStore.save(run);
+
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
-        
+
         try {
             String stripped = job.getGoal() != null ? CRON_PREFIX_PATTERN.matcher(job.getGoal()).replaceFirst("").trim() : "";
             
@@ -170,11 +183,11 @@ public class CronJobRunner {
 
     private boolean isTimeCheck(String normalized) {
         if (normalized == null || normalized.isBlank()) return false;
-        return normalized.contains("what is the current time") || 
+        return normalized.contains("current time") ||
+               normalized.contains("current utc time") ||
+               normalized.contains("current system time") ||
                normalized.contains("what time is it") ||
                normalized.contains("tell me the time") ||
-               normalized.contains("with the current time") ||
-               normalized.contains("show the current time") ||
                normalized.equals("check: what is the current time?");
     }
 

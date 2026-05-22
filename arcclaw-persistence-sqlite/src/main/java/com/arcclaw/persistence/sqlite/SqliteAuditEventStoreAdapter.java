@@ -1,7 +1,9 @@
 package com.arcclaw.persistence.sqlite;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
@@ -10,14 +12,15 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.audit.AuditOutcome;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.domain.model.AuditEvent;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.common.entity.AuditEventEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -26,7 +29,10 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
+
+
 
     private static final Logger log = Logger.getLogger(SqliteAuditEventStoreAdapter.class);
 
@@ -112,6 +118,86 @@ public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
             .setParameter("sid", sessionId)
             .getResultList();
         return maxSeqResult.isEmpty() ? 0L : maxSeqResult.get(0);
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public Optional<AuditEventDto> findById(UUID id) {
+        if (id == null) return Optional.empty();
+        AuditEventEntity entity = em.find(AuditEventEntity.class, id);
+        return Optional.ofNullable(entity).map(this::toDto);
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+        StringBuilder jpql = new StringBuilder("SELECT a FROM AuditEvent a WHERE 1=1");
+
+        if (sessionId != null && !sessionId.isBlank()) {
+            jpql.append(" AND a.sessionId = :sessionId");
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            jpql.append(" AND a.eventType = :eventType");
+        }
+        if (from != null) {
+            jpql.append(" AND a.timestamp >= :from");
+        }
+        if (to != null) {
+            jpql.append(" AND a.timestamp <= :to");
+        }
+        jpql.append(" ORDER BY a.timestamp DESC");
+
+        var query = em.createQuery(jpql.toString(), AuditEventEntity.class);
+        if (sessionId != null && !sessionId.isBlank()) {
+            query.setParameter("sessionId", sessionId);
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            query.setParameter("eventType", SecurityEventType.valueOf(eventType));
+        }
+        if (from != null) {
+            query.setParameter("from", from);
+        }
+        if (to != null) {
+            query.setParameter("to", to);
+        }
+        query.setFirstResult(offset);
+        query.setMaxResults(limit);
+
+        return query.getResultList().stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public long countAll(String sessionId, String eventType, Instant from, Instant to) {
+        StringBuilder jpql = new StringBuilder("SELECT COUNT(a) FROM AuditEvent a WHERE 1=1");
+
+        if (sessionId != null && !sessionId.isBlank()) {
+            jpql.append(" AND a.sessionId = :sessionId");
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            jpql.append(" AND a.eventType = :eventType");
+        }
+        if (from != null) {
+            jpql.append(" AND a.timestamp >= :from");
+        }
+        if (to != null) {
+            jpql.append(" AND a.timestamp <= :to");
+        }
+
+        var query = em.createQuery(jpql.toString(), Long.class);
+        if (sessionId != null && !sessionId.isBlank()) {
+            query.setParameter("sessionId", sessionId);
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            query.setParameter("eventType", SecurityEventType.valueOf(eventType));
+        }
+        if (from != null) {
+            query.setParameter("from", from);
+        }
+        if (to != null) {
+            query.setParameter("to", to);
+        }
+        return query.getSingleResult();
     }
 
     private AuditEventEntity toEntity(AuditEventDto dto) {

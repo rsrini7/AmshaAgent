@@ -19,6 +19,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -30,7 +31,6 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.core.util.PreExecutionFilter;
@@ -99,14 +99,12 @@ public class ParallelToolStepExecutor {
         this(null, null, null, null, null, null, null, null, null, Optional.empty(), List.of(), 60);
     }
 
-    @SuppressWarnings("resource") // CDI Instance.select() does not implement AutoCloseable
     private ManagedExecutor getInternalExecutor() {
         return managedExecutors.select(NamedLiteral.of("internal-tool-executor"))
                 .stream().findFirst()
                 .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
     }
 
-    @SuppressWarnings("resource") // CDI Instance.select() does not implement AutoCloseable
     private ManagedExecutor getExternalExecutor() {
         return managedExecutors.select(NamedLiteral.of("external-tool-executor"))
                 .stream().findFirst()

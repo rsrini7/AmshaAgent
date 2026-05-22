@@ -43,6 +43,7 @@ class ToolStepHandlerGuardTest {
     @Mock Instance<DynamicToolLookup> dynamicToolLookup;
     @Mock ApprovalCheckpointManager checkpointManager;
     @Mock ParallelToolStepExecutor parallelExecutor;
+    @Mock ExecutionFailureRecoveryService recoveryService;
     @InjectMocks ToolStepHandler handler;
 
     private AgentExecutionContext createCtx(String role, String goal) {
@@ -57,7 +58,7 @@ class ToolStepHandlerGuardTest {
     @Test
     void validateTool_coordinatorGithub_noResource_blocks() {
         AgentExecutionContext ctx = createCtx("coordinator", "find bugs in the app");
-        ReasoningStep step = ReasoningStep.pending("thought", "github", Map.of("query", "NullPointerException"));
+        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "NullPointerException"));
         
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
@@ -69,15 +70,15 @@ class ToolStepHandlerGuardTest {
         // Parameter 'agent' should be 'researcher'
         assertEquals("researcher", decision.step().actionInput().get("agent"));
         // Parameter 'goal' should contain 'github'
-        assertTrue(String.valueOf(decision.step().actionInput().get("goal")).contains("github"));
+        assertTrue(String.valueOf(decision.step().actionInput().get("goal")).contains(ToolCapability.GITHUB.toolName()));
     }
 
     @Test
     void validateTool_coordinatorGithub_resourceInGoal_allows() {
         AgentExecutionContext ctx = createCtx("coordinator", "summarize rsrini7/arcclaw");
-        ReasoningStep step = ReasoningStep.pending("thought", "github", Map.of("query", "main"));
+        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "main"));
         
-        when(toolRegistry.findTool("github")).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
@@ -87,9 +88,9 @@ class ToolStepHandlerGuardTest {
     @Test
     void validateTool_coordinatorGithub_resourceInArgs_allows() {
         AgentExecutionContext ctx = createCtx("coordinator", "check the code");
-        ReasoningStep step = ReasoningStep.pending("thought", "github", Map.of("repo", "rsrini7/config"));
+        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("repo", "rsrini7/config"));
         
-        when(toolRegistry.findTool("github")).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
@@ -99,9 +100,9 @@ class ToolStepHandlerGuardTest {
     @Test
     void validateTool_nonCoordinator_noResource_allows() {
         AgentExecutionContext ctx = createCtx("saraswati", "find bugs in the app");
-        ReasoningStep step = ReasoningStep.pending("thought", "github", Map.of("query", "NullPointerException"));
+        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "NullPointerException"));
         
-        when(toolRegistry.findTool("github")).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(Mockito.mock(AgentTool.class)));
 
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
@@ -112,15 +113,15 @@ class ToolStepHandlerGuardTest {
     @SuppressWarnings("unchecked")
     void invokeToolAndObserve_pauseForApproval_persistsPendingStepInHistory() {
         AgentExecutionContext ctx = createCtx("researcher", "list gists");
-        ReasoningStep step = ReasoningStep.pending("thought", "github", Map.of("target", "rsrini7"));
+        ReasoningStep step = ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("target", "rsrini7"));
 
         Mockito.lenient().doReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
-                        "github", "{\"target\":\"rsrini7\"}"))
+                        ToolCapability.GITHUB.toolName(), "{\"target\":\"rsrini7\"}"))
                 .when(guard).evaluate(
                         anyString(), anyString(), any(AutonomyLevel.class), anyString(), 
                         any(), anyList(), anyString(), anyList());
         when(checkpointManager.persist(any(), any(), anyList(), any(), any()))
-                .thenReturn(AgentResult.awaitingApproval("github", "{\"target\":\"rsrini7\"}", "sess1", List.of()));
+                .thenReturn(AgentResult.awaitingApproval(ToolCapability.GITHUB.toolName(), "{\"target\":\"rsrini7\"}", "sess1", List.of()));
 
         StepDecision decision = handler.invokeToolAndObserve(ctx, List.of(), step, 0, List.of());
 
@@ -129,6 +130,6 @@ class ToolStepHandlerGuardTest {
         ArgumentCaptor<List<ReasoningStep>> historyCaptor = ArgumentCaptor.forClass(List.class);
         verify(checkpointManager).persist(any(), any(), historyCaptor.capture(), any(), any());
         assertEquals(1, historyCaptor.getValue().size());
-        assertEquals("github", historyCaptor.getValue().getFirst().action());
+        assertEquals(ToolCapability.GITHUB.toolName(), historyCaptor.getValue().getFirst().action());
     }
 }

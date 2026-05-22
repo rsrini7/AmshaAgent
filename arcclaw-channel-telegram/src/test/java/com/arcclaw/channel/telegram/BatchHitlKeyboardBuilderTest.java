@@ -95,6 +95,7 @@ class BatchHitlKeyboardBuilderTest {
 
     @Test
     void test_buildKeyboard_uses_compressed_id() {
+        // Use hardcoded string — tests don't depend on arcclaw-core (architecture boundary)
         var markup = BatchHitlKeyboardBuilder.buildKeyboard(UUID_STR, List.of("sandbox_exec"));
         var rows = markup.getInlineKeyboard();
         assertNotNull(rows);

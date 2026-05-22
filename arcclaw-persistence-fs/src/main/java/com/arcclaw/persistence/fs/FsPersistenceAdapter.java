@@ -6,9 +6,11 @@ import jakarta.inject.Inject;
 import com.arcclaw.persistence.api.PersistenceAction;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsPersistenceAdapter implements PersistenceAdapterPort {
 
     @Inject

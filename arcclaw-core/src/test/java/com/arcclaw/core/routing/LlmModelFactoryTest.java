@@ -45,7 +45,7 @@ class LlmModelFactoryTest {
     void testCreateOllamaModel() {
         ChatModel model = factory.createModel(
                 "ollama", null, null, null, null, null, 1,
-                "http://localhost:11434", "llama3.2");
+                "http://localhost:11434", "mistral-small:latest");
         assertNotNull(model);
     }
 

@@ -123,7 +123,7 @@ quarkus:
         log-requests: false
         log-responses: false
       chat-model:
-        model-id: ${OLLAMA_MODEL:llama3.2}
+        model-id: ${OLLAMA_MODEL:mistral-small:latest}
         temperature: 0.7
         log-requests: false
         log-responses: false
@@ -152,7 +152,7 @@ quarkus:
   otel:
     enabled: true
     sdk:
-      disabled: "${OTEL_SDK_DISABLED:true}"  # default off - enable when collector present
+      disabled: "${OTEL_SDK_DISABLED:false}"  # default on - set OTEL_SDK_DISABLED=true to disable
     exporter:
       otlp:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
@@ -279,7 +279,7 @@ smallrye:
       "io.netty":
         level: WARN
       "io.opentelemetry":
-        level: "OFF"
+        level: WARN
       "org.infinispan":
         level: WARN
       "org.jboss.resteasy.reactive.common.core":
@@ -314,7 +314,7 @@ smallrye:
       enabled: true
       path: "./arcclaw.log"
       level: DEBUG
-      format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+      format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
       rotation:
         max-file-size: 20M
         max-backup-index: 3
@@ -326,7 +326,7 @@ smallrye:
 arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
   delegation:
-    max-depth: ${ARCCLAW_DELEGATION_MAX_DEPTH:2}
+    max-depth: ${ARCCLAW_DELEGATION_MAX_DEPTH:3}
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
@@ -345,6 +345,7 @@ arcclaw:
     cooldown-base-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_BASE_SECONDS:30}
     cooldown-max-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:300}
     cooldown-transient-seconds: ${ARCCLAW_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS:5}
+    max-latency-ms: ${ARCCLAW_INFINITE_LOOP_MAX_LATENCY_MS:60000}
   agent:
     default-timezone: "${ARCCLAW_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:
@@ -382,7 +383,7 @@ arcclaw:
       # Specific model alias for free tier ensures structured mode support (§OpenRouter-Fix)
       provider: ${ARCCLAW_INTENT_CLASSIFIER_PROVIDER:groq}
       model: ${ARCCLAW_INTENT_CLASSIFIER_MODEL:llama-3.1-8b-instant}
-      ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:llama3.2}
+      ollama-model: ${ARCCLAW_INTENT_CLASSIFIER_OLLAMA_MODEL:mistral-small:latest}
       structured-output-mode: ${ARCCLAW_INTENT_CLASSIFIER_STRUCTURED_OUTPUT_MODE:NATIVE}
       timeout-seconds: 5
       max-retries: ${ARCCLAW_INTENT_CLASSIFIER_MAX_RETRIES:3}
@@ -398,7 +399,7 @@ arcclaw:
       base-url: "${ARCCLAW_COMPACTION_BASE_URL:https://api.groq.com/openai/v1}"
       provider: "${ARCCLAW_COMPACTION_PROVIDER:groq}"
       model: "${ARCCLAW_COMPACTION_MODEL:llama-3.1-8b-instant}"
-      ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:llama3.2}"
+      ollama-model: "${ARCCLAW_COMPACTION_OLLAMA_MODEL:mistral-small:latest}"
       structured-output-mode: ${ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE:NATIVE}
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
       max-backoff-ms: ${ARCCLAW_MEMORY_COMPACTION_MAX_BACKOFF_MS:60000}
@@ -594,7 +595,7 @@ mp:
         enabled: true
         path: ./arcclaw-cli.log
         level: DEBUG
-        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:
           max-file-size: 20M
           max-backup-index: 3
@@ -627,7 +628,7 @@ mp:
         enabled: true
         path: ./arcclaw-dev.log
         level: DEBUG
-        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e%n"
+        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:
           max-file-size: 20M
           max-backup-index: 3

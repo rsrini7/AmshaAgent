@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -119,10 +120,10 @@ class McpServerE2ETest {
             .extract().body().asString();
 
         String json = raw.startsWith("data:") ? raw.substring(5).trim() : raw;
-        assertTrue(json.contains("\"github\""),
-            "tools/list must contain 'github'. Got: " + json);
-        assertTrue(json.contains("\"memory_search\""),
-            "tools/list must contain 'memory_search'. Got: " + json);
+        assertTrue(json.contains("\"" + ToolCapability.GITHUB.toolName() + "\""),
+            "tools/list must contain '" + ToolCapability.GITHUB.toolName() + "'. Got: " + json);
+        assertTrue(json.contains("\"" + ToolCapability.MEMORY_SEARCH.toolName() + "\""),
+            "tools/list must contain '" + ToolCapability.MEMORY_SEARCH.toolName() + "'. Got: " + json);
     }
 
     @Test
@@ -130,17 +131,17 @@ class McpServerE2ETest {
     void testMcpToolsCallMemorySearch() {
         assertNotNull(mcpSessionId, "Depends on testMcpInitialize running first");
 
-        String body = """
+        String body = String.format("""
             {
               "jsonrpc": "2.0",
               "id": 3,
               "method": "tools/call",
               "params": {
-                "name": "memory_search",
+                "name": "%s",
                 "arguments": {"query": "test query"}
               }
             }
-            """;
+            """, ToolCapability.MEMORY_SEARCH.toolName());
 
         String raw = RestAssured.given()
             .header("X-ArcClaw-API-Key", "test-key")
@@ -158,6 +159,6 @@ class McpServerE2ETest {
             "tools/call result must contain content. Got: " + json);
 
         Mockito.verify(toolRegistry)
-            .invokeTool(eq("memory_search"), anyString(), eq("mcp-server"));
+            .invokeTool(eq(ToolCapability.MEMORY_SEARCH.toolName()), anyString(), eq("mcp-server"));
     }
 }

@@ -90,6 +90,10 @@ public class ObservabilityManager {
         return otelContext.startSessionSpan(sessionId);
     }
 
+    public Span beginSession(String sessionId, String userId, String agentRole) {
+        return otelContext.startSessionSpan(sessionId, userId, agentRole);
+    }
+
     /**
      * Ends the session-level root OTel span and releases per-session token
      * accumulators.

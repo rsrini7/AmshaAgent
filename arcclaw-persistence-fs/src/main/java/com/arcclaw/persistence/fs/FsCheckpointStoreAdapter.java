@@ -14,9 +14,11 @@ import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Inject
@@ -417,6 +419,21 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             cp.createdAt(), Instant.now()
         ));
         return true;
+    }
+
+    @Override
+    public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
+        findById(checkpointId).ifPresent(cp -> save(new CheckpointDto(
+            cp.id(), cp.sessionId(), cp.agentRole(), cp.status(), cp.autonomyLevel(),
+            cp.stateJson(), channelPlatformId, channelType,
+            cp.originalGoal(), cp.failedAt(), cp.completedAt(), cp.failReason(),
+            cp.pendingToolName(), cp.batchToolDecisions(), cp.pendingToolParametersJson(),
+            cp.preExecutedResults(), cp.maxIterations(), cp.iterationsUsed(),
+            cp.retryAfterMs(), cp.systemNote(), cp.contextDataJson(),
+            cp.errorCode(), cp.traceId(), cp.rootCauseClass(),
+            cp.parentCheckpointId(), cp.depth(),
+            cp.createdAt(), Instant.now()
+        )));
     }
 
     private static CheckpointDto withNewStatus(CheckpointDto cp, String newStatus) {

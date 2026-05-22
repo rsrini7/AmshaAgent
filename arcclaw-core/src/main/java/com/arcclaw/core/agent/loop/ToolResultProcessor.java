@@ -51,6 +51,8 @@ public class ToolResultProcessor {
             decision = handleGithubUnavailableOutcome(context, response, observation, history);
         } else if (ToolCapability.BROWSER_NAVIGATE.toolName().equalsIgnoreCase(toolName)) {
             decision = handleBrowserOutcome(context, params, response, observation, history);
+        } else if (ToolCapability.WEB_FETCH.toolName().equalsIgnoreCase(toolName)) {
+            decision = handleWebFetchOutcome(context, params, response, observation, history);
         }
 
         if (decision != null) {
@@ -97,8 +99,9 @@ public class ToolResultProcessor {
 
     private StepDecision handleDelegateOutcome(AgentExecutionContext ctx, ToolResponse res, String obs, List<ReasoningStep> history) {
         if (res != null && res.success() && !obs.startsWith("⚠️") && !obs.startsWith("⏳") && !obs.startsWith("Tool execution failed")) {
-            writer.saveAnswer(ctx.sessionId(), obs);
-            return StepDecision.terminal(AgentResult.finished(obs, List.copyOf(history)));
+            // Don't terminate — let the parent agent process the sub-agent's result.
+            // The LLM will decide whether to delegate again, write code, or finish.
+            return null;
         }
         // Delegation paused for human approval — terminal with message, don't retry.
         // The delegate checkpoint is AWAITING_APPROVAL with channel info so the user
@@ -131,6 +134,26 @@ public class ToolResultProcessor {
                 ReasoningStep fallbackStep = ReasoningStep.observe(ToolCapability.BROWSER_NAVIGATE.toolName(),
                         "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
                         "Browser navigation failed, falling back to search.");
+                history.add(fallbackStep);
+
+                return StepDecision.retryEngine(fallbackGoal, 0);
+            }
+        }
+        return null;
+    }
+
+    private StepDecision handleWebFetchOutcome(AgentExecutionContext ctx, Map<String, Object> params, ToolResponse res, String obs, List<ReasoningStep> history) {
+        if (res != null && !res.success()) {
+            String url = String.valueOf(params.getOrDefault("url", ""));
+            if (!url.isBlank()) {
+                log.infof("[TOOL-STEP] web_fetch failed for %s - triggering fallback to browser_navigate", url);
+
+                String fallbackGoal = "The web_fetch tool was unable to retrieve " + url + " (error: " + obs + "). " +
+                        "Please try browser_navigate to visit this URL instead.";
+
+                ReasoningStep fallbackStep = ReasoningStep.observe(ToolCapability.WEB_FETCH.toolName(),
+                        "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
+                        "web_fetch failed, falling back to browser_navigate.");
                 history.add(fallbackStep);
 
                 return StepDecision.retryEngine(fallbackGoal, 0);

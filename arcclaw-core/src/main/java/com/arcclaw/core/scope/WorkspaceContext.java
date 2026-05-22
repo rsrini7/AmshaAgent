@@ -4,9 +4,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.util.MdcKeys;
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
@@ -34,6 +35,23 @@ public final class WorkspaceContext {
     public static final ScopedValue<Boolean> IS_COMPACT = ScopedValue.newInstance();
     public static final ScopedValue<String> RAW_USER_GOAL = ScopedValue.newInstance();
     public static final ScopedValue<String> CHANNEL_PLATFORM_ID = ScopedValue.newInstance();
+    public static final ScopedValue<AtomicInteger> GLOBAL_ITERATION_COUNT = ScopedValue.newInstance();
+
+    /** Default global iteration budget across all nested state machines. */
+    public static final int DEFAULT_GLOBAL_MAX_ITERATIONS = 100;
+
+    /** Increments the global iteration counter and returns true if within budget. */
+    public static boolean incrementAndCheckGlobalIterations() {
+        if (!GLOBAL_ITERATION_COUNT.isBound()) return true; // not tracking
+        AtomicInteger counter = GLOBAL_ITERATION_COUNT.get();
+        int current = counter.incrementAndGet();
+        return current <= DEFAULT_GLOBAL_MAX_ITERATIONS;
+    }
+
+    /** Returns the current global iteration count, or 0 if not tracking. */
+    public static int globalIterationCount() {
+        return GLOBAL_ITERATION_COUNT.isBound() ? GLOBAL_ITERATION_COUNT.get().get() : 0;
+    }
 
 
     private WorkspaceContext() {
@@ -47,12 +65,16 @@ public final class WorkspaceContext {
         // WorkspaceScopeHolder.call() binds WORKSPACE_ID first - required for
         // WorkspaceScopeContext.isActive() to return true, which enables
         // @WorkspaceScoped CDI beans (e.g. SessionKnowledgeBase) to resolve.
+        AtomicInteger globalCounter = GLOBAL_ITERATION_COUNT.isBound()
+                ? GLOBAL_ITERATION_COUNT.get()
+                : new AtomicInteger(0);
         return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
             ScopedValue.where(SESSION_ID, sessionId)
                 .where(USER_ID, userId)
                 .where(CHAT_ID, chatId)
                 .where(AUTONOMY, autonomy)
                 .where(AGENT_ROLE, role)
+                .where(GLOBAL_ITERATION_COUNT, globalCounter)
                 .call(() -> task.call())
         );
     }
@@ -60,6 +82,9 @@ public final class WorkspaceContext {
 
     public static <T> T run(String sessionId, String userId, String chatId,
             AutonomyLevel autonomy, String role, String channelType, String platformId, Callable<T> task) throws Exception {
+        AtomicInteger globalCounter = GLOBAL_ITERATION_COUNT.isBound()
+                ? GLOBAL_ITERATION_COUNT.get()
+                : new AtomicInteger(0);
         return WorkspaceScopeHolder.call(sessionId, userId, chatId, () ->
             ScopedValue.where(SESSION_ID, sessionId)
                 .where(USER_ID, userId)
@@ -68,6 +93,7 @@ public final class WorkspaceContext {
                 .where(AGENT_ROLE, role)
                 .where(CHANNEL_TYPE, channelType)
                 .where(CHANNEL_PLATFORM_ID, platformId)
+                .where(GLOBAL_ITERATION_COUNT, globalCounter)
                 .call(() -> task.call())
         );
     }

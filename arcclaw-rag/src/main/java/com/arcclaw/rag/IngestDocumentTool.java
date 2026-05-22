@@ -51,7 +51,9 @@ public class IngestDocumentTool implements AgentTool {
     public String description() {
         return "Ingest a text document into the RAG knowledge base for future retrieval. " +
                "Use this when the user provides a document, code, or reference material " +
-               "that should be stored and searchable in future queries.";
+               "that should be stored and searchable in future queries. " +
+               "Required param: 'text' (the document content). " +
+               "For storing short key-value pairs (name, phone, etc), use the /store reflex instead.";
     }
 
     @Override
@@ -93,6 +95,9 @@ public class IngestDocumentTool implements AgentTool {
         String text = (String) params.get("text");
         if (text == null) text = (String) params.get("content");
         if (text == null) text = (String) params.get("value");
+        if (text == null) text = (String) params.get("document");
+        if (text == null) text = (String) params.get("doc");
+        if (text == null) text = (String) params.get("data");
         
         if (text == null || text.isBlank()) {
             return ToolResponse.failure(400, "text parameter is required.");

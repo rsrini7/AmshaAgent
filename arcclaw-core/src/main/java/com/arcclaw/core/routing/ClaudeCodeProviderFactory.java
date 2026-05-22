@@ -67,7 +67,7 @@ public class ClaudeCodeProviderFactory implements RoutingChatModelProvider {
 
         // 5. Clean up model name assignment (Fix I1)
         String modelName = config.modelName();
-        if (modelName == null || modelName.isBlank() || "llama3.2".equalsIgnoreCase(modelName)) {
+        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
             modelName = "claude-sonnet-4-5";
         }
 

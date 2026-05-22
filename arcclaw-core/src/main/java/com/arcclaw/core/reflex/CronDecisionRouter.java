@@ -37,12 +37,18 @@ public class CronDecisionRouter {
         }
 
         String resolvedSessionId = cronId;
-        if (!cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            Optional<AgentCheckpoint> segmentMatch = statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(cronId);
-            if (segmentMatch.isPresent()) {
-                resolvedSessionId = segmentMatch.get().getSessionId();
-            }
+        String segment = cronId;
+        if (cronId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            segment = cronId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
         }
+        if (segment.length() >= 36) {
+            segment = segment.substring(0, 36);
+        }
+        Optional<AgentCheckpoint> segmentMatch = statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(segment);
+        if (segmentMatch.isPresent()) {
+            resolvedSessionId = segmentMatch.get().getSessionId();
+        }
+
 
         AgentCheckpoint pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
         String cronSessionId = pendingCheckpoint.getSessionId();

@@ -1,10 +1,12 @@
 package com.arcclaw.core.test;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.annotation.Priority;
@@ -59,6 +61,50 @@ public class MockAuditEventStorePort implements AuditEventStorePort {
                 .mapToLong(AuditEventDto::sequence)
                 .max()
                 .orElse(0L);
+    }
+
+    @Override
+    public Optional<AuditEventDto> findById(UUID id) {
+        if (id == null) return Optional.empty();
+        return store.values().stream()
+            .flatMap(List::stream)
+            .filter(e -> id.equals(e.id()))
+            .findFirst();
+    }
+
+    @Override
+    public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+        List<AuditEventDto> results = new ArrayList<>();
+        if (sessionId != null && !sessionId.isBlank()) {
+            results.addAll(store.getOrDefault(sessionId, Collections.emptyList()));
+        } else {
+            store.values().forEach(results::addAll);
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            results = results.stream().filter(e -> eventType.equals(e.eventType())).toList();
+        }
+        if (from != null) {
+            results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isBefore(from)).toList();
+        }
+        if (to != null) {
+            results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isAfter(to)).toList();
+        }
+        results = results.stream()
+            .sorted((a, b) -> {
+                if (a.timestamp() == null && b.timestamp() == null) return 0;
+                if (a.timestamp() == null) return 1;
+                if (b.timestamp() == null) return -1;
+                return b.timestamp().compareTo(a.timestamp());
+            })
+            .toList();
+        int end = Math.min(offset + limit, results.size());
+        if (offset >= results.size()) return List.of();
+        return results.subList(offset, end);
+    }
+
+    @Override
+    public long countAll(String sessionId, String eventType, Instant from, Instant to) {
+        return findAll(sessionId, eventType, from, to, 0, Integer.MAX_VALUE).size();
     }
 
     /** Test helper: replace the DTO at a given index for a session. */

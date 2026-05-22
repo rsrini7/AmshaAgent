@@ -23,19 +23,19 @@ import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.cron.CronTaskScheduled;
 import com.arcclaw.core.domain.model.AgentCron;
 import com.arcclaw.core.domain.model.AgentCronRecord;
 import com.arcclaw.core.util.CronScheduleUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.MdcCleaner;
 import com.arcclaw.core.util.MdcKeys;
 import com.arcclaw.persistence.api.AdvisoryLockPort;
 import com.arcclaw.persistence.api.CronStorePort;
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
-import io.smallrye.mutiny.Uni;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
@@ -110,12 +110,11 @@ public class AgentCronScheduler {
      * but whose sessions are now dead (as all sessions are non-persistent §5.17).
      */
     void onStartup(@Observes StartupEvent ev) {
-        // Wait briefly for persistence adapters to stabilize without blocking virtual thread
-        Uni.createFrom().voidItem()
-           .onItem().delayIt().by(Duration.ofMillis(startupDelayMs))
-           .subscribe().with(unused -> {
-               if (active) sweepOrphanedApprovalJobs();
-           }, failure -> log.error("Startup orphan sweep failed", failure));
+        if (active) sweepOrphanedApprovalJobs();
+    }
+
+    void onShutdown(@Observes ShutdownEvent ev) {
+        this.active = false;
     }
 
     private void sweepOrphanedApprovalJobs() {
@@ -247,73 +246,86 @@ public class AgentCronScheduler {
     @ActivateRequestContext
     @Transactional(TxType.NOT_SUPPORTED)
     void pollAndDispatch() {
-        // Step 0 - Leader election (§T5-3)
-        if (!advisoryLock.isUnsatisfied() && !advisoryLock.get().tryLock("cron-leader", 30)) {
-            return; // Not the leader this cycle
+        if (!active) {
+            return;
         }
 
         try {
+            // Step 0 - Leader election (§T5-3)
+            if (!advisoryLock.isUnsatisfied() && !advisoryLock.get().tryLock("cron-leader", 30)) {
+                return; // Not the leader this cycle
+            }
+
             // Step 0.1 - Crash recovery
             cronStore.reclaimStaleCrons(
                     Instant.now().minus(5, ChronoUnit.MINUTES));
+            
+            // Step 1 - Query due rows
+            List<AgentCron> due = cronStore.findDueCrons().stream()
+                    .map(AgentCronRecord::fromDto)
+                    .collect(Collectors.<AgentCron>toList());
+            if (due.isEmpty()) return;
+
+            Instant lookbackCutoff = Instant.now().minus(maxLookbackWindow);
+
+            Iterator<AgentCron> iter = due.iterator();
+            while (iter.hasNext()) {
+                if (!active) return;
+                AgentCron job = iter.next();
+                if (job.getNextFireTime().isBefore(lookbackCutoff)) {
+                    log.warnf("Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
+                        job.getId(), job.getNextFireTime(), lookbackCutoff);
+                    Instant newNext = (job.getCronExpression() != null && !job.getCronExpression().isBlank())
+                        ? CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone())
+                        : null;
+                    cronStore.markSkipped(job.getId(), newNext, Instant.now());
+                    iter.remove();
+                }
+            }
+
+            if (due.isEmpty()) return;
+
+            log.infof("CRON-POLL found %d due job(s)", due.size());
+
+            // Step 2 - Dispatch loop
+            for (AgentCron job : due) {
+                if (!active) break;
+                if (!cronStore.claimForFire(job.getId())) continue;
+
+                if (!concurrencyLimiter.tryAcquire()) {
+                    log.warnf("CRON-THROTTLED cronId=%s, releasing claim", job.getId());
+                    cronStore.releaseClaimToActive(job.getId());
+                    continue;
+                }
+
+                try {
+                    vThreads.execute(() -> {
+                        MDC.put(MdcKeys.USER_ID, job.getUserId());
+                        try {
+                            jobRunner.execute(job);
+                        } finally {
+                            concurrencyLimiter.release();
+                            MdcCleaner.clearAll();
+                        }
+                    });
+                } catch (RejectedExecutionException e) {
+                    log.errorf("Failed to dispatch cron job %s: %s",
+                            job.getId(), e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                    concurrencyLimiter.release();
+                    cronStore.releaseClaimToActive(job.getId());
+                }
+            }
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = !active || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("AgentCronScheduler: pollAndDispatch failed", e);
+            } else {
+                log.infof("AgentCronScheduler: database closed during pollAndDispatch (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
+            }
         } catch (Exception e) {
-                log.warnf("Cron zombie recovery failed (skipping this cycle): %s",
-                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-                return;
-        }
-        
-        // Step 1 - Query due rows
-        List<AgentCron> due = cronStore.findDueCrons().stream()
-                .map(AgentCronRecord::fromDto)
-                .collect(Collectors.<AgentCron>toList());
-        if (due.isEmpty()) return;
-
-        Instant lookbackCutoff = Instant.now().minus(maxLookbackWindow);
-
-        Iterator<AgentCron> iter = due.iterator();
-        while (iter.hasNext()) {
-            AgentCron job = iter.next();
-            if (job.getNextFireTime().isBefore(lookbackCutoff)) {
-                log.warnf("Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
-                    job.getId(), job.getNextFireTime(), lookbackCutoff);
-                Instant newNext = (job.getCronExpression() != null && !job.getCronExpression().isBlank())
-                    ? CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone())
-                    : null;
-                cronStore.markSkipped(job.getId(), newNext, Instant.now());
-                iter.remove();
-            }
-        }
-
-        if (due.isEmpty()) return;
-
-        log.infof("CRON-POLL found %d due job(s)", due.size());
-
-        // Step 2 - Dispatch loop
-        for (AgentCron job : due) {
-            if (!cronStore.claimForFire(job.getId())) continue;
-
-            if (!concurrencyLimiter.tryAcquire()) {
-                log.warnf("CRON-THROTTLED cronId=%s, releasing claim", job.getId());
-                cronStore.releaseClaimToActive(job.getId());
-                continue;
-            }
-
-            try {
-                vThreads.execute(() -> {
-                    MDC.put(MdcKeys.USER_ID, job.getUserId());
-                    try {
-                        jobRunner.execute(job);
-                    } finally {
-                        concurrencyLimiter.release();
-                        MdcCleaner.clearAll();
-                    }
-                });
-            } catch (RejectedExecutionException e) {
-                log.errorf("Failed to dispatch cron job %s: %s",
-                        job.getId(), e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-                concurrencyLimiter.release();
-                cronStore.releaseClaimToActive(job.getId());
-            }
+            log.error("AgentCronScheduler: pollAndDispatch failed", e);
         }
     }
 }

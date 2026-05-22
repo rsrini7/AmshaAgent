@@ -1,7 +1,10 @@
 package com.arcclaw.core.tools;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -71,8 +74,29 @@ public class CodeLanguageDetector {
         return resolveExecutable("go", configuredGoExe);
     }
 
+    private static final int MAX_FS_NAME_LENGTH = 200;
+
     public String toFsName(String sessionId) {
-        return FS_ILLEGAL_CHARS.matcher(sessionId).replaceAll("_");
+        String sanitized = FS_ILLEGAL_CHARS.matcher(sessionId).replaceAll("_");
+        if (sanitized.length() <= MAX_FS_NAME_LENGTH) return sanitized;
+        // Truncate and append hash to keep uniqueness while staying under limit
+        String hash = sha256Prefix(sanitized, 12);
+        return sanitized.substring(0, MAX_FS_NAME_LENGTH - 13) + "_" + hash;
+    }
+
+    private static String sha256Prefix(String input, int prefixLen) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+                if (sb.length() >= prefixLen) break;
+            }
+            return sb.substring(0, prefixLen);
+        } catch (NoSuchAlgorithmException e) {
+            return Integer.toHexString(input.hashCode());
+        }
     }
 
     private static String resolveExecutable(String command, Optional<String> config) {

@@ -47,11 +47,20 @@ public class ResetReflex implements AgentReflex {
     }
 
     @Override
+    public String auditDetail(String sessionId, String input) {
+        boolean isHard = input != null && (input.toLowerCase().contains("hard") || input.toLowerCase().contains("clear all"));
+        return "reflex=ResetReflex type=" + (isHard ? "HARD" : "SOFT") + " session=" + sessionId;
+    }
+
+    @Override
     public ReflexResult execute(String sessionId, String userId, String chatId, String input, MessageContext context) {
         log.infof("[ResetReflex] User requested session reset for %s", sessionId);
 
         String trimmed = input.trim().toLowerCase();
         boolean isHardReset = trimmed.contains("hard") || trimmed.contains("clear all");
+
+        // 0. Clear halted flag — allows fresh start after /halt
+        WorkspaceManager.clearHalted(sessionId);
 
         // 1. Soft workspace reset - clears memory, workspace dir, CDI scope
         //    Does NOT remove heartbeat. Does NOT clear governance budget.

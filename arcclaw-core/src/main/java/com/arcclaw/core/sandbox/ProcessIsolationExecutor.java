@@ -12,8 +12,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -77,6 +77,10 @@ public class ProcessIsolationExecutor {
     @ConfigProperty(name = "arcclaw.sandbox.allow-insecure-fallback", defaultValue = "false")
     boolean allowInsecureFallback;
 
+    public boolean isAllowInsecureFallback() {
+        return allowInsecureFallback;
+    }
+
     public int getPodmanFailureThreshold() {
         return circuitBreaker.getPodmanFailureThreshold();
     }
@@ -100,7 +104,8 @@ public class ProcessIsolationExecutor {
                     circuitBreaker.openCircuit();
                 }
             } catch (Exception e) {
-                log.warn("Podman not found on PATH - isolation degraded to NAMESPACE strategy", e);
+                log.warnf("Podman not found on PATH - isolation degraded to NAMESPACE strategy (error: %s)", LogUtil.rootMessage(e));
+                log.debugf("Podman check exception details: %s", LogUtil.trimmedStack(e));
                 circuitBreaker.openCircuit();
             }
         }
@@ -152,6 +157,8 @@ public class ProcessIsolationExecutor {
             if (e instanceof TimeoutException || (msg != null && msg.contains("exceeded"))) {
                 msg = "Execution timed out.";
             }
+            log.errorf("[SANDBOX] Unexpected infrastructure failure (sessionId=%s): %s", sessionId, msg);
+            log.debugf("Detailed infrastructure failure stack trace: %s", LogUtil.trimmedStack(e));
             return SandboxResult.infraFailure("SANDBOX_OFFLINE: " + (msg != null ? msg : "Unknown error"));
         }
     }
@@ -160,6 +167,9 @@ public class ProcessIsolationExecutor {
      * Rewrites container-side /workspace paths to the actual host workspaceRoot.
      * Only needed for NONE/NAMESPACE strategies where execution is NOT inside a container.
      * Podman mounts workspaceRoot as /workspace itself, so no rewriting needed there.
+     *
+     * Handles both standalone args (e.g. {@code /workspace/script.py}) and embedded
+     * paths inside shell command strings (e.g. {@code sh -c "javac ... /workspace/X.java"}).
      */
     private List<String> rewriteContainerPaths(List<String> command, Path workspaceRoot) {
         final String containerRoot = "/workspace";
@@ -167,9 +177,15 @@ public class ProcessIsolationExecutor {
                 .replace("\\", "/");   // normalize Windows backslashes → forward slashes
 
         return command.stream()
-                .map(arg -> arg.startsWith(containerRoot)
-                        ? hostRoot + arg.substring(containerRoot.length())
-                        : arg)
+                .map(arg -> {
+                    if (arg.startsWith(containerRoot)) {
+                        return hostRoot + arg.substring(containerRoot.length());
+                    }
+                    if (arg.contains(containerRoot)) {
+                        return arg.replace(containerRoot, hostRoot);
+                    }
+                    return arg;
+                })
                 .toList();
     }
 

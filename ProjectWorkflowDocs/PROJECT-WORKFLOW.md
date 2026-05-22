@@ -1,6 +1,6 @@
-# ArcClaw P84 - Complete End-to-End Workflow
+# ArcClaw V1.0.0 - Complete End-to-End Workflow
 
-ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI agent framework** built around a checkpoint-driven Thought-Plan-Act-Observe loop with Human-in-the-Loop (HITL) governance, pluggable channel adapters, persistent SQLite state, two-tier RAG memory, and MCP integration.
+ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI agent framework** built around a checkpoint-driven Thought-Plan-Act-Observe loop with Human-in-the-Loop (HITL) governance, pluggable channel adapters, hexagonal persistence (SQLite / PostgreSQL / filesystem), two-tier RAG memory, and MCP integration.
 
 ---
 
@@ -9,16 +9,24 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 | Module | Role |
 |---|---|
 | `arcclaw-app` | Main deployable; CLI (Picocli), REST endpoints, scheduler wiring, security, channel routing |
-| `arcclaw-core` | Agent loop, state machine, tools, audit, governance, SSE, skill system, persistence |
+| `arcclaw-core` | Agent loop, state machine, tools, audit, governance, SSE, skill system, routing, sandbox |
 | `arcclaw-channel-api` | Channel SPI - sealed interfaces and plugin contracts shared by all channel adapters |
 | `arcclaw-channel-telegram` | Apache Camel–backed Telegram bot adapter with HITL inline keyboards |
 | `arcclaw-channel-web` | WebSocket channel adapter + Lit TypeScript frontend |
 | `arcclaw-deployment` | Quarkus build-time processors - custom `@WorkspaceScoped` CDI scope, MCP reflection, REST enforcement |
+| `arcclaw-persistence-api` | Hexagonal architecture port interfaces (CheckpointStorePort, ChatMemoryStorePort, CronStorePort, etc.) |
+| `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters |
+| `arcclaw-persistence-sqlite` | SQLite adapter (WAL + FTS5 + vec0) implementing all persistence ports |
+| `arcclaw-persistence-postgres` | PostgreSQL adapter (partial: checkpoint, cron, audit only) |
+| `arcclaw-persistence-fs` | Filesystem-based persistence adapter (alternative to SQLite) |
 | `arcclaw-rag` | Two-tier vector (vec0) + FTS5 RAG memory module |
 | `arcclaw-mcp` | Model Context Protocol server bridge + dynamic client tool loading |
-| `arcclaw-onboarding` | 5-step setup wizard REST API |
+| `arcclaw-onboarding` | 6-step setup wizard REST API |
+| `arcclaw-tool-playwright` | Playwright browser automation tool |
+| `arcclaw-common` | Shared utilities (LogUtil, constants) |
+| `arcclaw-ui` | Lit TypeScript web frontend |
 
-**Dependency flow:** `arcclaw-app` → `arcclaw-core` → `arcclaw-channel-api` ← `arcclaw-channel-telegram`, `arcclaw-channel-web`. `arcclaw-deployment` is build-time only (not in the runtime fat-jar). `arcclaw-rag` and `arcclaw-mcp` are optional runtime modules discovered via CDI.
+**Dependency flow:** `arcclaw-app` → `arcclaw-core` → `arcclaw-channel-api` ← `arcclaw-channel-telegram`, `arcclaw-channel-web`. `arcclaw-deployment` is build-time only (not in the runtime fat-jar). `arcclaw-rag`, `arcclaw-mcp`, and `arcclaw-tool-playwright` are optional runtime modules discovered via CDI. Persistence follows hexagonal architecture: `arcclaw-persistence-api` defines ports, `arcclaw-persistence-common` holds shared entities, and three adapters (sqlite, postgres, fs) implement the ports.
 
 ---
 
@@ -28,9 +36,9 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 
 `ArcClawCli.main()` runs **before** the Quarkus CDI container boots. Steps are strictly ordered:
 
-1. **Env-var validation** - `CliUtils.validateRequiredEnvVars()` checks all required environment variables and hard-exits with a clear setup guide if any are absent. Quarkus never starts with a missing or dirty config.
-2. **Data directory provisioning** - resolves `ARCCLAW_DATA_DIR` to an absolute path, creates `workspaces/` sub-dir, and pins it back via `System.setProperty("ARCCLAW_DATA_DIR", absolutePath)` so every YAML expression (`${ARCCLAW_DATA_DIR}`) resolves to the same absolute path regardless of JVM working directory.
-3. **Vec0 native library installation** - `Vec0NativeLibraryInstaller.performInstallation()` extracts the platform-correct SQLite-vec `.so` / `.dylib` / `.dll` from JAR resources before any JDBC connection is opened, enabling vector similarity search at the SQL layer.
+1. **Bootstrap** - `AppBootstrap.bootstrap(args)` delegates to `BootstrapOrchestrator` which: resolves binary dir, drains input buffer, extracts .env, handles LD_PRELOAD re-exec, loads .env, normalizes Playwright path, installs Playwright CLI, ensures fallback LLM defaults, validates security keys, validates LLM/embedding config, validates sandbox tools, validates mandatory config, runs interactive setup wizard, prompts Playwright setup, provisions data directory, provisions native libs (including Vec0).
+2. **Env-var validation** - `CliUtils.validateRequiredEnvVars()` checks all required environment variables and hard-exits with a clear setup guide if any are absent. Quarkus never starts with a missing or dirty config.
+3. **Args check** - If `args.length == 0`, prints usage guide and exits.
 4. **Quarkus boot** - `Quarkus.run(ArcClawCli.class, args)` starts the CDI container (Quarkus Arc), Hibernate ORM, Agroal connection pool, and all Quarkus extensions.
 
 ### 1.2 CDI Startup Observers (firing in priority order)
@@ -38,12 +46,12 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 | Priority | Observer | Action |
 |---|---|---|
 | 10 | `Vec0NativeLibraryInstaller` | Re-fires observer-path native lib install (belt-and-suspenders) |
-| 90 | `SessionSchemaEnforcer` | Creates `session_registry` DDL in SQLite |
+| 90 | `SessionSchemaInitializer` | Ensures `session_registry` table exists (managed by Hibernate ORM + Flyway) |
 | 100 | `RagSchemaInitializer` | Warms the Agroal pool; triggers `FtsConnectionInterceptor.onConnectionAcquire()` which loads `vec0` extension and ATTACHes the FTS database; creates `fts.vec_global` virtual table |
 | Unordered | `SkillLoader.onStart()` | Loads skills from classpath (`ClasspathSkillProvider`, priority 100) and SQLite DB (`DatabaseSkillProvider`, priority 10); parses YAML frontmatter; compiles trigger `Pattern[]`; registers dynamic roles in `RoleRegistry`; snapshots `CompiledSkillEntry[]` into `SkillRegistry` |
 | Unordered | `StartupSecurityValidator` | **Hard gate in prod:** throws `DeploymentException` if vault pepper equals dev default, HMAC audit key is absent, or the Telegram allowlist contains only usernames instead of numeric IDs |
 | Unordered | `DevSecretSeederStartup` | Dev-profile only - seeds mock API keys so the app can run without a `.env` file |
-| Unordered | `AuditSchemaEnforcer` | Verifies audit event table DDL |
+| Unordered | `AuditSchemaEnforcer` (per-adapter) | Verifies audit event table DDL; implemented by `PostgresAuditSchemaEnforcer`, `FsAuditSchemaEnforcer` |
 | Unordered | `AgentCronScheduler` (on `ApplicationReady`) | Restores previously persisted cron jobs so scheduled tasks survive restarts |
 
 ### 1.3 Build-Time Processors (`arcclaw-deployment`)
@@ -151,8 +159,9 @@ The cron goal is prefixed with a `SYSTEM CONSTRAINT: CRON EXECUTION MODE` direct
 | Priority | Handler | Responsibility |
 |---|---|---|
 | 10 | `AllowlistHandler` | Fetch `ChannelPlugin` for channel type; check `ChannelAllowlist.isAllowed()` |
-| 20 | `SessionResolutionHandler` | Resolve or create `SessionRegistry` entry; activate `WorkspaceContext` CDI scope |
-| 30 | `IntentClassificationHandler` | Run `ReflexRegistry`; skill routing; LLM intent classification |
+| 40 | `SessionResolutionHandler` | Resolve or create `SessionRegistry` entry; activate `WorkspaceContext` CDI scope |
+| 45 | `CommandDispatchHandler` | Handle `/help` and other built-in commands before intent classification |
+| 50 | `IntentClassificationHandler` | Run `ReflexRegistry`; skill routing; LLM intent classification |
 | 60 | `CompactionHandler` | If token/message count over threshold, compact chat history via lightweight LLM |
 | 70 | `AgentDispatchHandler` | Call `AgentLoop.run()`; render result; send via `ChannelPlugin.sender()` |
 
@@ -164,19 +173,24 @@ Any handler can return `HandleResult.STOP` to short-circuit the chain (e.g., `Al
 
 `ReflexRegistry` holds `AgentReflex` implementations checked in `IntentClassificationHandler` before any LLM call. If a reflex matches, its `CommandResponse` is sent directly through the channel sender.
 
-| Reflex | Trigger | Action |
-|---|---|---|
-| `ApproveReflex` | `/approve` | Calls `CheckpointApprovalService.approveTool()` |
-| `DenyReflex` | `/deny` | Calls `CheckpointApprovalService.denyTool()` |
-| `ResetReflex` | `/reset` | Wipes session state via `WorkspaceManager.resetSessionState()` |
-| `HaltReflex` | `/halt` | Terminates the running session |
-| `HistoryReflex` | `/history` | Returns recent chat turns |
-| `StatusReflex` | `/status` | Shows current agent status |
-| `ListCronsReflex` | `/crons` | Lists active scheduled jobs |
-| `DeleteCronReflex` | `/delete-cron` | Removes a scheduled job |
-| `PromptInjectionReflex` | Injection patterns | Detects "ignore previous instructions" style attacks; rejects message |
-| `PiiScanReflex` | Any message | Runs PII detection pass; blocks if `PII_MODE=BLOCK_AND_NOTIFY` |
-| `SkillReflex` | `/skills` | Lists available skill personas |
+| Reflex | Priority | Trigger | Action |
+|---|---|---|---|
+| `PromptInjectionReflex` | 10 | Injection patterns | Detects "ignore previous instructions" style attacks; rejects message |
+| `RetryReflex` | 10 | `/retry` | Retries the last agent action |
+| `PiiScanReflex` | 20 | Any message | Runs PII detection pass; blocks if `PII_MODE=BLOCK_AND_NOTIFY` |
+| `IdentityExtractionReflex` | 250 | User identity patterns | Extracts and stores user identity information |
+| `ApproveReflex` | 100 | `/approve` | Calls `CheckpointApprovalService.approveTool()` |
+| `DenyReflex` | 200 | `/deny` | Calls `CheckpointApprovalService.denyTool()` |
+| `VaultStoreReflex` | 400 | `/vault-store` | Stores secrets in the encrypted vault |
+| `StoreReflex` | 500 | `/store` | Stores key-value pairs |
+| `HaltReflex` | 500 | `/halt` | Terminates the running session |
+| `HistoryReflex` | 500 | `/history` | Returns recent chat turns |
+| `StatusReflex` | 500 | `/status` | Shows current agent status |
+| `ListCronsReflex` | 500 | `/crons` | Lists active scheduled jobs |
+| `DeleteCronReflex` | 500 | `/delete-cron` | Removes a scheduled job |
+| `ResetReflex` | 500 | `/reset` | Wipes session state via `WorkspaceManager.resetSessionState()` |
+| `McpReflex` | 500 | `/mcp` | Shows MCP server status and connected tools |
+| `SkillReflex` | 500 | `/skills` | Lists available skill personas |
 
 ---
 
@@ -208,6 +222,8 @@ If `context.isResumeSignal()` and checkpoint is `AWAITING_APPROVAL`:
 - **Denial** → mark checkpoint `FAILED`, set fail reason, return `AgentResult.finished("Tool execution was denied")`.
 - **Single-tool approval** → `WorkspaceContext.runWithFullAutonomy()` → `toolRegistry.invokeTool(toolName, params)`; append observation to history; reset checkpoint to `IN_PROGRESS`; return `null` (continue main loop).
 - **Parallel batch approval** → `resumeParallelBatch()`: reads `batchToolDecisions` map; skips DENIED tools (fills "User denied" observation); re-invokes APPROVED tools or restores pre-executed results from checkpoint JSON; aggregates into `CompletedBatch` step; continues.
+- **Auto-heal on resume failure** → `ResumeStrategyDispatcher` intercepts `sandbox_exec` failures for the coder role on the resume path. If `ExecutionFailureRecoveryService.shouldAttemptRecovery()` returns true, it delegates to Shiva (debugger) in an isolated `:heal:` sub-session, extracts fixed code from Shiva's response, and re-executes the tool. On success, the loop continues via `runFinishPass()`. If auto-heal also fails, falls through to persona escalation (Step C.2).
+- **Persona escalation on resume** → `ResumeStrategyDispatcher.tryEscalationOnResume()` checks if the failure matches an escalation pattern (unknown API, architecture decision, obscure error). If `PersonaEscalationService.determineEscalationTarget()` returns a target, it spawns an isolated `:escalate:` sub-session with the target persona. On success, the result is merged back and the loop continues via `runFinishPass()`. On failure, returns `AgentResult.failed()`.
 
 ### 6.4 Fast-Path: `delegate_to_agent` Finish
 
@@ -280,6 +296,57 @@ Budget tracking: `GovernanceStrategy.recordLlmCall()` checks per-session token b
 5. Default → GuardDecision.Allow
 ```
 
+### Step C.1: ToolStepHandler - Auto-Heal Hook
+
+After tool execution, `ToolStepHandler` intercepts `sandbox_exec` failures for the coder role before returning the error to the LLM:
+
+```
+sandbox_exec → ToolFailure (coder role only)
+  → ExecutionFailureRecoveryService.shouldAttemptRecovery()
+     - auto-heal enabled (arcclaw.agent.auto-heal.enabled=true)
+     - agentRole == CODER
+     - toolName == sandbox_exec
+     - NOT an infra failure
+  → attemptRecovery(sessionId, userId, chatId, originalCode, language, errorOutput, ...)
+     - Spawns isolated Shiva (debugger) sub-session with :heal: sentinel
+     - Max attempts configurable (default 2)
+     - Accumulates errors across attempts
+  → RecoveryResult.success(fixedCode)
+     - Re-executes sandbox_exec with fixed code
+     - On success: continues loop with new observation
+     - On failure: falls through to escalation (Step C.2)
+  → RecoveryResult.failure()
+     - Falls through to escalation (Step C.2)
+```
+
+### Step C.2: ToolStepHandler - Persona Escalation Hook
+
+After auto-heal (or directly for non-sandbox failures), `ToolStepHandler` checks if the failure matches a cross-persona escalation pattern:
+
+```
+ToolFailure (any role, any tool)
+  → PersonaEscalationService.shouldAttemptEscalation()
+     - escalation enabled (arcclaw.agent.escalation.enabled=true)
+     - NOT an infra failure
+  → determineEscalationTarget(sourceRole, errorOutput, originalGoal)
+     - Pattern matching on error content and goal:
+       Brahma → Saraswati (unknown API/dependency)
+       Brahma → Brihaspati (architecture/trade-off decision)
+       Shiva → Saraswati (obscure error needing research)
+       Shiva → Brahma (fundamental flaw needing rewrite)
+       Saraswati → Brahma (research complete, needs implementation)
+       Brihaspati → Brahma (architecture decided, needs coding)
+       Brihaspati → Saraswati (needs external research)
+  → attemptEscalation(sessionId, userId, chatId, sourceRole, targetRole, ...)
+     - Spawns isolated target persona sub-session with :escalate: sentinel
+     - Max depth configurable (default 2, prevents infinite loops)
+     - Supports chained escalation (target can escalate further)
+  → EscalationResult.success(target, result, depth)
+     - Returns result as ToolResponse.success() — loop continues
+  → EscalationResult.failure()
+     - Falls through to normal error path
+```
+
 ### Step D: ToolStepHandler - Parallel Batch Execution
 
 For parallel tool batches (`ReasoningStep.isParallelBatch() == true`):
@@ -322,14 +389,17 @@ On resume after batch approval:
 |---|---|---|
 | `brave_web_search` | `BraveWebSearchTool` | Brave Search API; requires `BRAVE_API_KEY` |
 | `serper_web_search` | `SerperWebSearchTool` | Serper Google Search API |
+| `smart_web_fetch` | `SmartWebFetchTool` | Fetches and extracts content from URLs with SSRF protection |
 | `sandbox_exec` | `SandboxExecTool` | Code execution; Podman container when `SANDBOX_STRATEGY=podman` |
 | `github` | `GithubTool` | GitHub API; `GithubToolGuardInterceptor` enforces HITL |
 | `memory_search` | `MemorySearchTool` | Searches RAG session KB + global KB |
-| `ingest_document` | (RAG module) | Embeds text into vec0 + `rag_chunk`; always requires approval |
+| `ingest_document` | `IngestDocumentTool` | Embeds text into vec0 + `rag_chunk`; always requires approval |
 | `schedule_task` | `ScheduleTaskTool` | Creates a new cron job |
 | `manage_schedule` | `ManageScheduleTool` | Lists / updates / deletes cron jobs |
 | `delegate_to_agent` | `DelegateToAgentTool` | Spawns sub-agent with capability subset check |
 | `check_list` | `CheckListTool` | Fires `CheckListEvent` for structured checklists |
+| `playwright_cli` | `PlaywrightCliTool` | Headless browser automation via Playwright CLI |
+| `agent_task` | `AgentTaskTool` | Task management for agent workflows |
 | MCP dynamic tools | `ExternalMcpToolAdapter` | Loaded at runtime from connected MCP servers |
 
 ---
@@ -571,13 +641,75 @@ Coordinator: THINK → ACTION: delegate_to_agent(agent="brahma", goal="Write uni
 
 | Agent Name | Role | Persona Template |
 |---|---|---|
-| `brahma` | Coder | `role-coder.txt` |
-| `shiva` | Debugger | `role-debugger.txt` |
-| `saraswati` | Researcher | `role-researcher.txt` |
-| `brihaspati` | Coordinator | `role-coordinator.txt` |
-| `dattatreya` | Synthesizer | `role-synthesizer.txt` |
+| `brahma` | Coder | `coder.txt` / `role-coder.txt` |
+| `shiva` | Debugger | `debugger.txt` / `role-debugger.txt` |
+| `saraswati` | Researcher | `researcher.txt` / `role-researcher.txt` |
+| `brihaspati` | Architect | `architect.txt` / `role-architect.txt` |
+| `dattatreya` | Synthesizer | `synthesizer.txt` / `role-synthesizer.txt` |
+| `vishnu` | Coordinator | `coordinator.txt` / `role-coordinator.txt` |
 
 `Dattatreya` (synthesizer) uses a structured output path via `SynthesisFunction` returning `SynthesisResult` (contributions from each sub-agent + `ConflictSummary` + `finalResolution`). Implemented via `StructuredOutputEngine` + `StructuredRetryLoop` with `PermissiveJsonExtractor`.
+
+### Auto-Heal: Shiva as Code Fixer
+
+`ExecutionFailureRecoveryService` automatically delegates sandbox execution failures to Shiva (debugger) for self-correction:
+
+```
+Brahma (coder) → sandbox_exec → FAIL
+  → ExecutionFailureRecoveryService intercepts (ToolStepHandler or ResumeStrategyDispatcher)
+  → Auto-delegate to Shiva with: original code + language + full error output
+  → Shiva analyzes, fixes, returns corrected code in a single fenced code block
+  → RecoveryService extracts fixed code via regex (```lang\n...\n```)
+  → Re-executes sandbox_exec with fixed code
+  → On success: continues agent loop
+  → On failure after max attempts: returns error to user
+```
+
+**Configuration:**
+| Property | Default | Description |
+|---|---|---|
+| `arcclaw.agent.auto-heal.enabled` | `true` | Enable/disable auto-heal |
+| `arcclaw.agent.auto-heal.max-attempts` | `2` | Max Shiva delegation attempts per failure |
+
+**Session sentinel:** `HEAL_SESSION_SENTINEL` (`:heal:`) in `AgentSentinels` marks auto-heal sub-sessions. Format: `{parent_sid}:heal:{agentName}:{currentTimeMillis}:a{attempt}`.
+
+**Debugger persona:** `debugger.txt` includes `AUTO-HEAL MODE` instructions — Shiva returns only a single fenced code block with the corrected code, no explanations.
+
+### Cross-Persona Escalation
+
+`PersonaEscalationService` detects when a persona hits its capability boundary and auto-routes the task to a more suitable specialist:
+
+```
+Source persona → tool call → FAIL / knowledge gap
+  → PersonaEscalationService.shouldAttemptEscalation()
+  → determineEscalationTarget() via pattern matching:
+     Brahma (coder)    → Saraswati (researcher)   : unknown API/dependency
+     Brahma (coder)    → Brihaspati (architect)   : architecture/trade-off decision
+     Shiva (debugger)  → Saraswati (researcher)   : obscure error needing research
+     Shiva (debugger)  → Brahma (coder)           : fundamental flaw needing rewrite
+     Saraswati (researcher) → Brahma (coder)      : research complete, needs implementation
+     Brihaspati (architect) → Brahma (coder)      : architecture decided, needs coding
+     Brihaspati (architect) → Saraswati (researcher): needs external research
+     Dattatreya (synthesizer) → any               : conflicting outputs need re-specialization
+  → Isolated sub-session with :escalate: sentinel
+  → Target persona handles and returns result
+  → Result merged back into source persona's context
+  → Chained escalation: target can escalate further (up to max depth)
+```
+
+**Configuration:**
+| Property | Default | Description |
+|---|---|---|
+| `arcclaw.agent.escalation.enabled` | `true` | Enable/disable cross-persona escalation |
+| `arcclaw.agent.escalation.max-depth` | `2` | Max escalation chain depth (prevents infinite routing loops) |
+
+**Session sentinel:** `ESCALATION_SESSION_SENTINEL` (`:escalate:`) in `AgentSentinels` marks escalation sub-sessions. Format: `{parent_sid}:escalate:{source}:{target}:{currentTimeMillis}`.
+
+**Persona templates:** All 6 persona templates include `ESCALATION RULES` sections defining when and how to escalate to other personas.
+
+**Integration points:**
+- `ToolStepHandler` — escalation hook after tool failure (and after auto-heal failure)
+- `ResumeStrategyDispatcher` — escalation hook on HITL resume path failure
 
 ---
 
@@ -587,11 +719,16 @@ Coordinator: THINK → ACTION: delegate_to_agent(agent="brahma", goal="Write uni
 
 | Provider ID | Implementation | Notes |
 |---|---|---|
-| `groq` | `GroqProviderFactory` | OpenAI-compatible API at `api.groq.com`; default `llama-3.3-70b-versatile` |
+| `groq` | `GroqProviderFactory` | OpenAI-compatible API at `api.groq.com`; default `meta-llama/llama-4-scout-17b-16e-instruct` |
 | `openai` | `OpenAiProviderFactory` | Official OpenAI API |
-| `ollama` | `OllamaProviderFactory` | Local inference; default `llama3.2` |
+| `ollama` | `OllamaProviderFactory` | Local inference; default `mistral-small:latest` |
 | `openrouter` | `OpenRouterProviderFactory` | Unified multi-model API |
 | `claude-code` | `ClaudeCodeProviderFactory` | `ClaudeCodeOAuthTokenExtractor` reads OAuth token from local Claude Code CLI installation |
+| `cerebras` | `CerebrasLlmProviderFactory` | Cerebras inference API; daily quota detection disables slot permanently |
+| `gemini` | `GeminiLlmProviderFactory` | Google Gemini API |
+| `nvidia` | `NvidiaLlmProviderFactory` | NVIDIA inference API |
+| `omlx` | `OmlxLlmProviderFactory` | OMLX inference API |
+| `infinite-loop` | `InfiniteLoopAgentChatModelProvider` | Multi-slot provider with quality tracking and cooldown |
 
 The **compaction model** is produced separately by `CompactionModelProducer` (in `arcclaw-app`) - always a lighter/cheaper model regardless of the main reasoning provider, configurable via `arcclaw.memory.compaction.*` properties.
 
@@ -697,10 +834,18 @@ The `arcclaw-ui` module is a TypeScript / Lit Web Components application served 
 
 | Component | Role |
 |---|---|
-| `arc-chat` | Main chat UI; opens `ws://host/ws/chat`; renders HITL approval cards inline via SSE |
+| `arc-chat-interface` | Main chat UI; opens `ws://host/ws/chat`; renders HITL approval cards inline via SSE |
 | `arc-settings` | Tabbed UI for LLM provider switch, API key update, system prompt edit |
-| `arc-onboarding` | 5-step wizard; calls `/onboarding/step*` REST endpoints |
+| `arc-onboarding` | 6-step wizard; calls `/onboarding/step*` REST endpoints |
 | `arc-agent-status` | Polls `GET /agents` + subscribes `GET /agents/events` SSE for live agent status |
+| `arc-audit-panel` | Displays WORM audit chain events for session inspection |
+| `arc-scheduler-panel` | Manages cron jobs - list, create, delete scheduled tasks |
+| `arc-hitl-panel` | Human-in-the-Loop approval management interface |
+| `arc-skills-panel` | Skill management - view and configure agent skills |
+| `arc-shell` | Main application shell with navigation |
+| `arc-nav` | Navigation sidebar component |
+| `arc-connection-badge` | WebSocket connection status indicator |
+| `arc-theme-toggle` | Light/dark theme toggle |
 
 ### WebSocket Protocol
 
@@ -713,18 +858,21 @@ On HITL: HITL events arrive via `GET /hitl/events` SSE and are rendered as inlin
 
 ## Phase 21: Onboarding Wizard
 
-A 5-step REST wizard at `/onboarding`:
+A 6-step REST wizard at `/onboarding`:
 
 | Step | Endpoint | Payload | Action |
 |---|---|---|---|
-| 1 | `GET /onboarding/step1` | - | Returns system info (version, current provider) |
-| 2 | `POST /onboarding/step2` | `{provider, model}` | Saves LLM provider config |
-| 3 | `POST /onboarding/step3` | `{apiKey}` | Validates credential via `LlmValidationGateway`; encrypts in vault |
-| 4 | `POST /onboarding/step4` | `{systemPrompt}` | Persists custom system prompt |
-| 5 | `POST /onboarding/step5` | `{mcpServers[]}` | Registers MCP server connections |
-| - | `GET /onboarding/settings` | - | Returns current config (`hasApiKey`, `provider`, `model`, `version`) |
+| 1 | `POST /onboarding/step/1` | - | Returns system info (version, current provider) |
+| 2 | `POST /onboarding/step/2` | `{provider, model}` | Saves LLM provider config |
+| 3 | `POST /onboarding/step/3` | `{apiKey}` | Validates credential via `LlmValidationGateway`; encrypts in vault |
+| 4 | `POST /onboarding/step/4` | `{systemPrompt}` | Persists custom system prompt |
+| 5 | `POST /onboarding/step/5` | `{mcpServers[]}` | Registers MCP server connections |
+| 6 | `POST /onboarding/step/6` | `{telegramToken}` | Configures Telegram bot token |
+| - | `GET /onboarding/status` | - | Returns current onboarding session status |
+| - | `GET /onboarding/complete` | - | Finalizes setup, returns API key and redirect URL |
+| - | `GET /settings` | - | Returns current config (`hasApiKey`, `provider`, `model`, `version`) |
 
-`OnboardingStepProvider` SPI allows future steps to self-register (e.g., Telegram token setup, Brave Search key).
+`OnboardingStepProvider` SPI allows future steps to self-register (e.g., Brave Search key, additional channel tokens).
 
 ---
 
@@ -732,18 +880,21 @@ A 5-step REST wizard at `/onboarding`:
 
 ### SQLite Tables
 
-| Table | Purpose |
-|---|---|
-| `session_registry` | `(channelType, channelId, userId)` → `sessionId` mapping |
-| `agent_checkpoint` | Checkpoint state machine; `ReasoningStep[]` JSON; batch tool decisions |
-| `agent_cron` | Cron job definitions, fire times, delivery IDs, status |
-| `chat_memory` | Persistent `ChatMemory` for all sessions |
-| `compaction_summary` | LLM-generated summaries of compacted chat history |
-| `audit_event` | HMAC-chained audit records |
-| `agent_skill` | User-defined skill definitions (YAML) |
-| `rag_chunk` | RAG text chunks (hydration for vec0 results) |
-| `encrypted_secret` | AES-GCM-SIV encrypted vault entries |
-| `fts.vec_global` | vec0 virtual table for global KNN embedding search (ATTACHed FTS db) |
+| Table | Entity | Purpose |
+|---|---|---|
+| `session_registry` | `SessionRegistryEntry` | `(channelType, channelId, userId)` → `sessionId` mapping |
+| `agent_checkpoint` | `AgentCheckpointEntity` | Checkpoint state machine; `ReasoningStep[]` JSON; batch tool decisions |
+| `agent_cron` | `AgentCronEntity` | Cron job definitions, fire times, delivery IDs, status |
+| `agent_cron_run` | `CronRunEntity` | Cron execution history with delivery tracking |
+| `chat_memory` | `ChatMemoryEntity` | Persistent `ChatMemory` for all sessions |
+| `compaction_summary` | `CompactionSummaryEntity` | LLM-generated summaries of compacted chat history |
+| `audit_event` | `AuditEventEntity` | HMAC-chained audit records |
+| `agent_skill` | `AgentSkillEntity` | User-defined skill definitions (YAML) |
+| `rag_chunk` | `RagChunkEntity` | RAG text chunks (hydration for vec0 results) |
+| `encrypted_secrets` | `EncryptedSecretEntity` | AES-GCM-SIV encrypted vault entries |
+| `advisory_lock` | `AdvisoryLockEntity` | Distributed advisory locking for coordination |
+| `reasoning_step` | `ReasoningStepEntity` | Individual reasoning step persistence |
+| `fts.vec_global` | - | vec0 virtual table for global KNN embedding search (ATTACHed FTS db) |
 
 ### Reliability Patterns
 
@@ -769,9 +920,10 @@ External Input
   MessagePipeline
   ┌─────────────────────────────────────────┐
   │ AllowlistHandler (priority 10)          │
-  │ SessionResolutionHandler (priority 20)  │  ← SessionRegistry → sessionId
-  │ IntentClassificationHandler (priority 30)  ← ReflexRegistry → short-circuit reply
-  │   └─ SkillAwareIntentDetector         │     or skill:name / coordinator role
+  │ SessionResolutionHandler (priority 40)  │  ← SessionRegistry → sessionId
+  │ CommandDispatchHandler (priority 45)    │  ← /help and built-in commands
+  │ IntentClassificationHandler (priority 50)  ← ReflexRegistry → short-circuit reply
+  │   └─ SkillAwareIntentDetector           │     or skill:name / coordinator role
   │ CompactionHandler (priority 60)         │  ← summarize if over threshold
   │ AgentDispatchHandler (priority 70)      │
   └─────────────────────────────────────────┘
@@ -809,6 +961,12 @@ External Input
   │              → AwaitingApproval result ← loop exits             │
   │    → ToolInvoker → AgentTool.execute(params)                    │
   │         └─ ToolObservationSanitizer (PII / injection / truncate)│
+  │    → Auto-Heal (sandbox_exec failure, coder role)               │
+  │         └─ ExecutionFailureRecoveryService → Shiva :heal: sub   │
+  │            → re-exec with fixed code → continue or fall through │
+  │    → Persona Escalation (any failure, any role)                 │
+  │         └─ PersonaEscalationService → target :escalate: sub     │
+  │            → pattern match → delegate → merge → continue        │
   │    → ChatMemoryWriter.saveStep()                                 │
   └─────────────────────────────────────────────────────────────────┘
          │

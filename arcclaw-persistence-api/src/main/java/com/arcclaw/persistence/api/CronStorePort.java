@@ -30,4 +30,27 @@ public interface CronStorePort {
     int deleteByIdAndUserId(String id, String userId);
     long deleteAllByUserId(String userId);
     long deleteAllBySessionId(String sessionId);
+
+    /**
+     * Returns all cron jobs, optionally filtered by status.
+     * @param status if non-null, filter by this status; if null, return all.
+     * @param offset pagination offset (0-based)
+     * @param limit  max results to return
+     */
+    List<AgentCronDto> findAll(String status, int offset, int limit);
+
+    /**
+     * Returns total count of cron jobs, optionally filtered by status.
+     */
+    long countAll(String status);
+
+    /**
+     * Returns cron jobs for a specific user, optionally filtered by status.
+     */
+    List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit);
+
+    /**
+     * Returns total count of cron jobs for a specific user, optionally filtered by status.
+     */
+    long countByUserId(String userId, String status);
 }

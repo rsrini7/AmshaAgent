@@ -11,11 +11,12 @@ RUN apk add --no-cache \
     git \
     bash
 
-# ── Java - JRE only, headless, LTS ───────────────────────────────────────────
+# ── Java - full JDK (needed for java --source in-container compilation) ──────
 # openjdk21 is the latest LTS available on Alpine 3.21.
 # openjdk25 is not yet packaged for Alpine stable - edge is too unstable for sandbox.
-# JRE-headless removes GUI/sound libs; ~100MB vs ~300MB for full JDK.
-RUN apk add --no-cache openjdk21-jre-headless
+# Full JDK ~300MB vs ~100MB for JRE-headless. Needed for java --source mode
+# which compiles & runs in a single step inside the container (see H4).
+RUN apk add --no-cache openjdk21
 
 # ── Go - second heaviest, version bumps quarterly ────────────────────────────
 # CGO_ENABLED=0: pure Go mode - skips GCC/binutils/libstdc++ toolchain (~150MB saved).

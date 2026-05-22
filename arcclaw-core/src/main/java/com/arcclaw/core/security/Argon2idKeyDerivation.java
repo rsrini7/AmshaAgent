@@ -5,7 +5,6 @@ import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
@@ -54,15 +53,16 @@ public class Argon2idKeyDerivation {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("Session ID cannot be null or empty during key derivation");
         }
+        if (pepperChars == null || pepperChars.length == 0) {
+            throw new IllegalStateException("Pepper not configured - check arcclaw.vault.pepper property");
+        }
 
-        // Properly extract bytes from ByteBuffer without assuming it's fully packed
         ByteBuffer bb = StandardCharsets.UTF_8.encode(CharBuffer.wrap(pepperChars));
         byte[] passwordBytes = new byte[bb.remaining()];
         bb.get(passwordBytes);
         byte[] saltBytes = sessionId.getBytes(StandardCharsets.UTF_8);
 
         try {
-            // Configure Argon2id
             Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
                     .withVersion(Argon2Parameters.ARGON2_VERSION_13)
                     .withMemoryAsKB(MEMORY_COST_KB)
@@ -74,28 +74,20 @@ public class Argon2idKeyDerivation {
             Argon2BytesGenerator generator = new Argon2BytesGenerator();
             generator.init(params);
 
-            // Generate Key
             byte[] resultKey = new byte[KEY_LENGTH_BYTES];
             generator.generateBytes(passwordBytes, resultKey);
 
-            // Return wrapped key (caller is responsible for closing)
             return new VaultKey(resultKey);
         } finally {
-            // Zero ALL intermediate arrays immediately after use - not only in @PreDestroy
             Arrays.fill(passwordBytes, (byte) 0);
-            Arrays.fill(pepperChars, '\0');
-            // Also zero the ByteBuffer backing array - encode() allocates an internal buffer
-            // that may retain pepper bytes after bb.get() completes
             if (bb.hasArray()) {
                 Arrays.fill(bb.array(), (byte) 0);
             }
         }
     }
 
-    @PreDestroy
-    void cleanup() {
-        if (pepperChars != null) {
-            Arrays.fill(pepperChars, '\0');
-        }
+    // test-only — used by Argon2idKeyDerivationTest.setUp() to inject pepper without CDI
+    void setPepperChars(char[] pepperChars) {
+        this.pepperChars = pepperChars;
     }
 }

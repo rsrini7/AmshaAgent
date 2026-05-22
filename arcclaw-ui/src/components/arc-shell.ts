@@ -11,6 +11,8 @@ import './arc-chat-interface';
 import './arc-agent-status';
 import './arc-hitl-panel';
 import './arc-skills-panel';
+import './arc-scheduler-panel';
+import './arc-audit-panel';
 import './arc-settings';
 import './arc-theme-toggle';
 
@@ -120,6 +122,10 @@ export class ArcShell extends LitElement {
       if (this._apiKey) {
         if (this._sseStatus !== 'connected') {
           this._sseManager?.connect();
+        }
+        if (this._route === '#/chat' && this._chatWsStatus !== 'open') {
+          this._chatWsStatus = 'connecting';
+          (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect();
         }
         this._fetchAgents();
         this._fetchApprovals();
@@ -341,6 +347,14 @@ export class ArcShell extends LitElement {
         <arc-skills-panel class="content-area" .apiKey="${this._apiKey}"></arc-skills-panel>
       ` : nothing}
 
+      ${this._route === '#/scheduler' ? html`
+        <arc-scheduler-panel class="content-area" .apiKey="${this._apiKey}"></arc-scheduler-panel>
+      ` : nothing}
+
+      ${this._route === '#/audit' ? html`
+        <arc-audit-panel class="content-area" .apiKey="${this._apiKey}"></arc-audit-panel>
+      ` : nothing}
+
       ${this._route === '#/settings' ? html`
         <arc-settings class="content-area" .apiKey="${this._apiKey}"></arc-settings>
       ` : nothing}
@@ -395,7 +409,7 @@ export class ArcShell extends LitElement {
                         : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'};
                         box-shadow: 0 0 0 6px color-mix(in srgb, ${this._sseStatus === 'connected' ? 'var(--accent-secondary)' : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'} 18%, transparent);"
                     ></div>
-                    ${this._sseStatus === 'connected' ? 'Connected to ArcClaw Agent Cluster' : 'ArcClaw Agent Cluster (Offline)'}
+                    ${this._sseStatus === 'connected' ? 'Connected to ArcClaw' : 'ArcClaw (Offline)'}
                   </div>
                   <arc-theme-toggle></arc-theme-toggle>
                 </div>

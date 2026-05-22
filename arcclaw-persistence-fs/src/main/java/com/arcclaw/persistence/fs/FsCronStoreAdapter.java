@@ -13,10 +13,12 @@ import com.arcclaw.core.state.CronStatus;
 import com.arcclaw.persistence.api.AgentCronDto;
 import com.arcclaw.persistence.api.CronStorePort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(FsCronStoreAdapter.class);
@@ -204,6 +206,62 @@ public class FsCronStoreAdapter implements CronStorePort {
             }
         }
         return count;
+    }
+
+    @Override
+    public List<AgentCronDto> findAll(String status, int offset, int limit) {
+        List<AgentCronDto> all = loadAll();
+        if (status != null && !status.isBlank()) {
+            all = all.stream()
+                .filter(dto -> status.equals(dto.status()))
+                .toList();
+        }
+        all = all.stream()
+            .sorted((a, b) -> {
+                if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
+                if (a.nextFireTime() == null) return 1;
+                if (b.nextFireTime() == null) return -1;
+                return a.nextFireTime().compareTo(b.nextFireTime());
+            })
+            .toList();
+        int end = Math.min(offset + limit, all.size());
+        if (offset >= all.size()) return List.of();
+        return all.subList(offset, end);
+    }
+
+    @Override
+    public long countAll(String status) {
+        if (status != null && !status.isBlank()) {
+            return loadAll().stream()
+                .filter(dto -> status.equals(dto.status()))
+                .count();
+        }
+        return loadAll().size();
+    }
+
+    @Override
+    public List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit) {
+        List<AgentCronDto> all = loadAll().stream()
+            .filter(dto -> userId.equals(dto.userId()))
+            .filter(dto -> status == null || status.isBlank() || status.equals(dto.status()))
+            .sorted((a, b) -> {
+                if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
+                if (a.nextFireTime() == null) return 1;
+                if (b.nextFireTime() == null) return -1;
+                return a.nextFireTime().compareTo(b.nextFireTime());
+            })
+            .toList();
+        int end = Math.min(offset + limit, all.size());
+        if (offset >= all.size()) return List.of();
+        return all.subList(offset, end);
+    }
+
+    @Override
+    public long countByUserId(String userId, String status) {
+        return loadAll().stream()
+            .filter(dto -> userId.equals(dto.userId()))
+            .filter(dto -> status == null || status.isBlank() || status.equals(dto.status()))
+            .count();
     }
 
     private List<AgentCronDto> loadAll() {

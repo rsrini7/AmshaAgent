@@ -1,11 +1,10 @@
-package com.arcclaw.persistence.sqlite.entity;
+package com.arcclaw.persistence.common.entity;
 
 import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 @Entity
@@ -13,32 +12,34 @@ import jakarta.persistence.Table;
 public class CompactionSummaryEntity {
 
     @Id
+    @Column(name = "session_id")
     private String sessionId;
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String summary;
 
+    @Column(name = "compacted_at", nullable = false)
     private Instant compactedAt;
 
+    @Column(name = "messages_compacted", nullable = false)
     private int messagesCompacted;
 
     @Column(name = "user_id")
     private String userId;
 
-    @Column(name = "created_at")
-    private Instant createdAt;
+    @Column(name = "tenant_id")
+    private String tenantId;
 
-    public CompactionSummaryEntity() {
-    }
+    public CompactionSummaryEntity() {}
 
-    public CompactionSummaryEntity(String sessionId, String summary, Instant compactedAt,
-                                   int messagesCompacted, String userId, Instant createdAt) {
+    public CompactionSummaryEntity(String sessionId, String summary, Instant compactedAt, 
+                                   int messagesCompacted, String userId, String tenantId) {
         this.sessionId = sessionId;
         this.summary = summary;
         this.compactedAt = compactedAt;
         this.messagesCompacted = messagesCompacted;
         this.userId = userId;
-        this.createdAt = createdAt;
+        this.tenantId = tenantId;
     }
 
     public String getSessionId() { return sessionId; }
@@ -56,14 +57,6 @@ public class CompactionSummaryEntity {
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
 
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-
-    @PrePersist
-    void onPrePersist() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-    }
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
 }
-

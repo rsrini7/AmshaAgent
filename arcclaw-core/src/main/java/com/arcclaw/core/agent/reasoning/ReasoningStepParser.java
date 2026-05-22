@@ -12,9 +12,9 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -126,13 +126,43 @@ public class ReasoningStepParser {
         return stripped;
     }
 
+    /**
+     * Strips model-artifact suffixes like {@code <|channel|>commentary} from tool names.
+     * Some free models (e.g. OpenRouter) append these to function-call names.
+     */
+    private static String sanitizeToolName(String name) {
+        if (name == null) return null;
+        // Strip <|channel|> commentary suffix
+        int idx = name.indexOf("<|");
+        if (idx > 0) name = name.substring(0, idx);
+        // Strip trailing colon (e.g., "brahma:" → "brahma")
+        if (name.endsWith(":")) {
+            name = name.substring(0, name.length() - 1);
+        }
+        // Strip agent: prefix (e.g., "brahma:delegate_to_agent" → "delegate_to_agent")
+        int colonIdx = name.indexOf(':');
+        if (colonIdx > 0 && colonIdx < name.length() - 1) {
+            String afterColon = name.substring(colonIdx + 1);
+            // Tool names contain underscores; agent names don't
+            if (afterColon.contains("_")) {
+                name = afterColon;
+            }
+        }
+        return name;
+    }
+
     private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
-        log.infof("LLM is attempting to call tool: '%s' with args: %s", req.name(), req.arguments());
+        String rawName = req.name();
+        String toolName = sanitizeToolName(rawName);
+        if (!rawName.equals(toolName)) {
+            log.infof("Sanitized tool name: '%s' -> '%s'", rawName, toolName);
+        }
+        log.infof("LLM is attempting to call tool: '%s' with args: %s", toolName, req.arguments());
 
         String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
                 ? WorkspaceContext.RAW_USER_GOAL.get() : null;
 
-        if (ToolCapability.SANDBOX_EXEC.toolName().equals(req.name()) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
+        if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
             String code = recoverCodeForDisplay(req.arguments());
             if (code != null && !code.isBlank()) {
                 log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
@@ -143,7 +173,7 @@ public class ReasoningStepParser {
             }
         }
 
-        Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
+        Map<String, Object> actionInput = deserializeParams(sessionId, toolName, req.arguments());
         if (actionInput.containsKey("__error")) {
             return ReasoningStep.schemaError(
                     "System: Your previous response contained invalid JSON. " +
@@ -152,7 +182,7 @@ public class ReasoningStepParser {
             );
         }
 
-        if (ToolCapability.MEMORY_SEARCH.toolName().equals(req.name())) {
+        if (ToolCapability.MEMORY_SEARCH.toolName().equals(toolName)) {
             String query = (String) actionInput.get("query");
             if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
                 String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
@@ -165,16 +195,16 @@ public class ReasoningStepParser {
             }
 
             if (query == null || query.isBlank()) {
-                log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", req.name(), sessionId);
+                log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", toolName, sessionId);
                 return ReasoningStep.schemaError(
-                    "System: The 'query' parameter for '" + req.name() + "' cannot be blank. " +
+                    "System: The 'query' parameter for '" + toolName + "' cannot be blank. " +
                     "Please provide factual keywords for the search.",
                     inputTokens, outputTokens
                 );
             }
         }
 
-        return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
+        return ReasoningStep.pending(aiMessage.text(), toolName, actionInput, inputTokens, outputTokens);
     }
 
     private ReasoningStep handleMultipleToolCalls(String sessionId, String agentRole, AiMessage aiMessage, List<ToolExecutionRequest> requests, int inputTokens, int outputTokens) {
@@ -182,7 +212,7 @@ public class ReasoningStepParser {
                   "tool calls: %s - routing to ParallelToolStepExecutor.",
                   sessionId, agentRole, requests.size(),
                   requests.stream()
-                      .map(ToolExecutionRequest::name)
+                      .map(r -> sanitizeToolName(r.name()))
                       .collect(Collectors.joining(", ")));
 
         List<ParallelToolCall> calls = new ArrayList<>();
@@ -216,7 +246,11 @@ public class ReasoningStepParser {
             String mergedText = requests.stream()
                 .map(r -> deserializeParams(sessionId, r.name(), r.arguments()))
                 .filter(p -> !p.containsKey("__error"))
-                .map(p -> p.get("text") != null ? p.get("text") : (p.get("content") != null ? p.get("content") : p.get("value")))
+                .map(p -> p.get("text") != null ? p.get("text") : 
+                         (p.get("content") != null ? p.get("content") : 
+                         (p.get("value") != null ? p.get("value") : 
+                         (p.get("document") != null ? p.get("document") : 
+                         (p.get("doc") != null ? p.get("doc") : p.get("data"))))))
                 .filter(Objects::nonNull)
                 .map(Object::toString)
                 .collect(Collectors.joining(", "));
@@ -233,15 +267,16 @@ public class ReasoningStepParser {
 
         for (int i = 0; i < requests.size(); i++) {
             ToolExecutionRequest req = requests.get(i);
-            String callId = req.id() != null ? req.id() : req.name() + "-" + UUID.randomUUID();
-            Map<String, Object> params = deserializeParams(sessionId, req.name(), req.arguments());
+            String name = sanitizeToolName(req.name());
+            String callId = req.id() != null ? req.id() : name + "-" + UUID.randomUUID();
+            Map<String, Object> params = deserializeParams(sessionId, name, req.arguments());
             String paramsJson = "{}";
             try {
                 paramsJson = objectMapper.writeValueAsString(params);
             } catch (Exception e) {
-                log.warnf("Failed to serialize params for tool %s: %s", req.name(), LogUtil.rootMessage(e));
+                log.warnf("Failed to serialize params for tool %s: %s", name, LogUtil.rootMessage(e));
             }
-            calls.add(ParallelToolCall.pending(callId, req.name(), params, paramsJson));
+            calls.add(ParallelToolCall.pending(callId, name, params, paramsJson));
         }
 
         Map<String, Object> batchPayload;
@@ -251,8 +286,9 @@ public class ReasoningStepParser {
         } catch (Exception e) {
             log.errorf("Failed to serialize parallel batch for session %s: %s", sessionId, LogUtil.rootMessage(e));
             ToolExecutionRequest req = requests.getFirst();
-            Map<String, Object> actionInput = deserializeParams(sessionId, req.name(), req.arguments());
-            return ReasoningStep.pending(aiMessage.text(), req.name(), actionInput, inputTokens, outputTokens);
+            String name = sanitizeToolName(req.name());
+            Map<String, Object> actionInput = deserializeParams(sessionId, name, req.arguments());
+            return ReasoningStep.pending(aiMessage.text(), name, actionInput, inputTokens, outputTokens);
         }
 
         return ReasoningStep.parallelBatch(aiMessage.text(), batchPayload, inputTokens, outputTokens);
@@ -279,7 +315,7 @@ public class ReasoningStepParser {
                         return recovered;
                     }
                 }
-                log.errorf("JSON repair failed for session %s: %s", sessionId, e2.getMessage());
+                log.errorf("JSON repair failed for session %s: %s", sessionId, LogUtil.rootMessage(e2));
                 return Map.of("__error", e.getMessage(), "parameters", argsJson);
             }
         }
@@ -333,24 +369,38 @@ public class ReasoningStepParser {
      * Attempts to repair common LLM tool-calling JSON errors:
      * 1. Unescaped newlines within string values
      * 2. Unescaped double-quotes within what looks like a code field
+     *
+     * Heuristic for interior-quote detection: when inside a JSON string value
+     * and an unescaped {@code "} is found, look ahead one character. If the
+     * following character is NOT a JSON structural delimiter ({@code ,}]}:) or
+     * whitespace, the quote is likely interior and should be escaped as {@code \"}.
      */
     private String sanitizeJson(String json) {
         if (json == null) return null;
-        
-        // Replace literal newlines with \n ONLY if they are not escaped
-        // This is a naive heuristic but works for code blocks.
-        // We look for a newline that is preceded by something other than \
+
         StringBuilder sb = new StringBuilder();
         boolean inString = false;
         char prev = 0;
-        
+
         for (int i = 0; i < json.length(); i++) {
             char c = json.charAt(i);
-            
+
+            boolean isUnescapedQuote = (c == '"' && prev != '\\');
+            if (isUnescapedQuote && inString) {
+                char next = i + 1 < json.length() ? json.charAt(i + 1) : 0;
+                if (next != ',' && next != '}' && next != ']' && next != ':'
+                        && !Character.isWhitespace(next) && next != 0) {
+                    sb.append('\\');
+                    sb.append(c);
+                    prev = c;
+                    continue;
+                }
+            }
+
             if (c == '"' && prev != '\\') {
                 inString = !inString;
             }
-            
+
             if (inString && (c == '\n' || c == '\r')) {
                 sb.append("\\n");
             } else {
@@ -358,7 +408,7 @@ public class ReasoningStepParser {
             }
             prev = c;
         }
-        
+
         return sb.toString();
     }
 

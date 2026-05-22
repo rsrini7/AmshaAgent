@@ -9,8 +9,9 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
-import com.arcclaw.persistence.sqlite.entity.EncryptedSecretEntity;
+import com.arcclaw.persistence.common.entity.EncryptedSecretEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * SQLite implementation of SecretStorePort.
@@ -18,6 +19,7 @@ import io.quarkus.arc.Unremovable;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteSecretStoreAdapter implements SecretStorePort {
 
     @Inject

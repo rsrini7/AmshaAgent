@@ -9,6 +9,12 @@ import java.util.regex.Pattern;
 public final class AgentSentinels {
     private AgentSentinels() {}
     
+    /** sentinel for auto-heal sub-sessions. format: {parent_sid}:heal:{agentName}:{currentTimeMillis}:a{attempt} */
+    public static final String HEAL_SESSION_SENTINEL = ":heal:";
+
+    /** sentinel for persona escalation sub-sessions. format: {parent_sid}:escalate:{source}:{target}:{reason}:{currentTimeMillis} */
+    public static final String ESCALATION_SESSION_SENTINEL = ":escalate:";
+
     /** sentinel for delegated sub-sessions. format: {parent_sid}:delegate:{agentName}:{currentTimeMillis} */
     public static final String DELEGATE_SESSION_SENTINEL = ":delegate:";
 
@@ -69,6 +75,20 @@ public final class AgentSentinels {
         Pattern.CASE_INSENSITIVE
     );
 
+    // System instruction echo guard
+    // The LLM occasionally echoes back system prompt formatting instructions
+    // (e.g. "Response must be 1-2 sentences maximum") as part of the answer
+    // instead of answering the user's question.
+    public static final Pattern SYSTEM_INSTRUCTION_ECHO_PATTERN = Pattern.compile(
+            "(?i)(?:Response must be\\s+\\d+\\s+sentences?" +
+            "|STRICT\\s+(?:TOOL\\s+BINDING\\s+CONTRACT|MODE\\s*-\\s*SIMPLE\\s+CONVERSATION)" +
+            "|Do\\s+NOT\\s+(?:call\\s+any\\s+tools|use\\s+the\\s+tool\\s+calling\\s+API)" +
+            "|I will output the response" +
+            "|One final check)" +
+            "",
+            Pattern.MULTILINE
+    );
+
     // System prompt echo guard
     // The LLM occasionally echoes back its own system prompt (persona, environment
     // metadata, tool list) as part of the FINISH answer. This leaks internal host
@@ -86,6 +106,27 @@ public final class AgentSentinels {
     public static final String SYSTEM_ROLE = "system";
     public static final String SYSTEM_USER = "system";
     public static final String SYSTEM_SESSION = "system";
+
+    // Goal keyword patterns — shared across DelegateToAgentTool, FinishActionHandler, etc.
+    public static final Pattern RESEARCH_KEYWORDS = Pattern.compile(
+            "\\b(research|search|find|look.?up|latest|news|current|recent|what is|who is|how to)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    public static final Pattern CODE_EXECUTION_KEYWORDS = Pattern.compile(
+            "\\b(execute|compile|sandbox_exec|sample.?program|write.*program|write.*code|run.*code|run.*program|demo)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    public static final Pattern EXECUTION_KEYWORDS = Pattern.compile(
+            "\\b(execute|run|compile|test|sample.?program|write.*program|demo|sandbox)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    public static final Pattern REFUSAL_PATTERN = Pattern.compile(
+            "\\b(I cannot|I can't|I don't have|I'm unable|falls outside|outside.*scope|not present in.*context|should be handled by|delegat[eing]+|I recommend|I am not able|beyond my|outside my)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    public static final Pattern SCHEDULING_KEYWORDS = Pattern.compile(
+            "(?i)\\b(?:schedule|cron|remind|reminder|timer|in\\s+\\d+\\s*(?:min|minute|hour|day)s?|after\\s+\\d+\\s*(?:min|minute|hour|day)s?|every\\s+(?:\\d+\\s*)?(?:min|minute|hour|day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?|tomorrow|at\\s+\\d{1,2}:\\d{2})\\b"
+    );
 
 }
 

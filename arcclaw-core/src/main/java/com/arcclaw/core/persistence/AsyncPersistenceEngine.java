@@ -11,10 +11,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.audit.ComplianceViolationException;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.util.BackoffRetryExecutor;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -271,11 +271,19 @@ public class AsyncPersistenceEngine {
                 new BackoffRetryExecutor.Strategy(3, 100, 500, 0.0), // Fixed delay-like for HMAC wait
                 e -> e instanceof IllegalStateException && e.getMessage() != null && e.getMessage().contains("HMAC key unavailable"),
                 () -> {
-                    WorkspaceScopeHolder.run(event.getSessionId(),
-                        () -> persistenceAdapter.execute(
-                                event.getSessionId(),
+                    String sid = event.getSessionId();
+                    if (sid == null || sid.isBlank()) {
+                        persistenceAdapter.execute(
+                                sid,
                                 event.getEventType().toString(),
-                                event.getDbAction()));
+                                event.getDbAction());
+                    } else {
+                        WorkspaceScopeHolder.run(sid,
+                            () -> persistenceAdapter.execute(
+                                    sid,
+                                    event.getEventType().toString(),
+                                    event.getDbAction()));
+                    }
                 }
             );
             if (event.getFuture() != null) event.getFuture().complete(null);

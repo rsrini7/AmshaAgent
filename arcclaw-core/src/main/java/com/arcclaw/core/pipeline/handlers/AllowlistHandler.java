@@ -7,6 +7,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelAllowlist;
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -22,6 +24,9 @@ public class AllowlistHandler implements MessageHandler {
 
     @Inject
     ChannelPluginRegistry channelPluginRegistry;
+
+    @Inject
+    AuditService auditService;
 
     @Override
     public int priority() {
@@ -43,8 +48,11 @@ public class AllowlistHandler implements MessageHandler {
 
         ChannelAllowlist allowlist = allowlistOpt.get();
         if (!allowlist.isAllowed(userId, username)) {
-            log.warnf("[SECURITY] Blocked unauthorized user: %s (id: %s) on channel %s", 
+            log.warnf("[SECURITY] Blocked unauthorized user: %s (id: %s) on channel %s",
                     username, userId, context.getChannelType());
+            auditService.record("allowlist", userId, "system",
+                    SecurityEventType.UNAUTHORIZED_ACCESS,
+                    "channel=" + context.getChannelType() + " username=" + username);
             
             if (!allowlist.isSilentBlock()) {
                 channelPluginRegistry.find(context.getChannelType())

@@ -92,8 +92,8 @@ public class PromptTemplateEngine {
                 .filter(cap -> toolRegistry.findTool(cap.toolName())
                         .map(AgentTool::isEnabled).orElse(false))
                 .filter(cap -> !isBackground || 
-                        (!"schedule_task".equals(cap.toolName()) && 
-                         !"manage_schedule".equals(cap.toolName())))
+                        (!ToolCapability.SCHEDULE_TASK.toolName().equals(cap.toolName()) && 
+                         !ToolCapability.MANAGE_SCHEDULE.toolName().equals(cap.toolName())))
                 .sorted((c1, c2) -> {
                     if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(c1.toolName())) return -1;
                     if (ToolCapability.BROWSER_NAVIGATE.toolName().equals(c2.toolName())) return 1;

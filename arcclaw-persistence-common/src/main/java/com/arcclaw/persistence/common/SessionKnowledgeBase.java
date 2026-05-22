@@ -1,4 +1,4 @@
-package com.arcclaw.persistence.sqlite;
+package com.arcclaw.persistence.common;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -6,8 +6,8 @@ import java.util.stream.Collectors;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.scope.WorkspaceScoped;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
@@ -37,13 +37,10 @@ public class SessionKnowledgeBase {
         }
     }
 
-    // Original - unchanged, kept for callers that don't need score filtering.
     public List<MemoryChunkDto> search(String query, int topN) {
         return search(query, topN, 0.0);
     }
 
-    // ── New overload: minScore filters at the store level, avoiding the cost of
-    // returning and then discarding low-relevance matches at the enricher layer.
     public List<MemoryChunkDto> search(String query, int topN, double minScore) {
         try {
             Embedding queryEmbedding = embeddingModel.embed(query).content();

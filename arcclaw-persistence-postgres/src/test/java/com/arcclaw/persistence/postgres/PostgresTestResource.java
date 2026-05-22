@@ -1,10 +1,12 @@
 package com.arcclaw.persistence.postgres;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.github.dockerjava.api.DockerClient;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -13,25 +15,34 @@ import org.testcontainers.containers.wait.strategy.Wait;
 public class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
 
     private PostgreSQLContainer<?> postgres;
+    private EmbeddedPostgres embeddedDb;
 
     @Override
     public Map<String, String> start() {
-        if (!isDockerAvailable()) {
-            throw new RuntimeException("Docker is not available - Postgres integration tests cannot run");
-        }
-
-        postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("test")
-            .withUsername("test")
-            .withPassword("test")
-            .waitingFor(Wait.forListeningPort());
-
-        postgres.start();
-
         Map<String, String> props = new HashMap<>();
-        props.put("quarkus.datasource.jdbc.url", postgres.getJdbcUrl());
-        props.put("quarkus.datasource.username", postgres.getUsername());
-        props.put("quarkus.datasource.password", postgres.getPassword());
+
+        if (isDockerAvailable()) {
+            postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+                .withDatabaseName("test")
+                .withUsername("test")
+                .withPassword("test")
+                .waitingFor(Wait.forListeningPort());
+
+            postgres.start();
+
+            props.put("quarkus.datasource.jdbc.url", postgres.getJdbcUrl());
+            props.put("quarkus.datasource.username", postgres.getUsername());
+            props.put("quarkus.datasource.password", postgres.getPassword());
+        } else {
+            try {
+                embeddedDb = EmbeddedPostgres.builder().start();
+                props.put("quarkus.datasource.jdbc.url", embeddedDb.getJdbcUrl("postgres", "postgres"));
+                props.put("quarkus.datasource.username", "postgres");
+                props.put("quarkus.datasource.password", "postgres");
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to start embedded PostgreSQL database", e);
+            }
+        }
         return props;
     }
 
@@ -39,6 +50,13 @@ public class PostgresTestResource implements QuarkusTestResourceLifecycleManager
     public void stop() {
         if (postgres != null) {
             postgres.stop();
+        }
+        if (embeddedDb != null) {
+            try {
+                embeddedDb.close();
+            } catch (IOException e) {
+                // Ignore
+            }
         }
     }
 

@@ -17,6 +17,8 @@ import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.Provider;
 
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.core.util.MdcKeys;
 import io.vertx.core.http.HttpServerRequest;
@@ -29,6 +31,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
     @Inject
     ApiKeyRegistry apiKeyRegistry;
+
+    @Inject
+    AuditService auditService;
 
     @Inject
     Logger log;
@@ -79,6 +84,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         if (apiKey == null || apiKey.isBlank()) {
             logAudit(safeKey, finalPath, method, "REJECTED_NO_KEY", ip, System.currentTimeMillis() - startTime);
+            auditService.record("auth-filter", "anonymous", "system",
+                    SecurityEventType.AUTH_REJECTED,
+                    "reason=NO_KEY endpoint=" + finalPath + " method=" + method + " ip=" + ip);
             requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
@@ -88,6 +96,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         if (!apiKeyRegistry.isValidKey(apiKey)) {
             logAudit(safeKey, finalPath, method, "REJECTED_INVALID_KEY", ip, System.currentTimeMillis() - startTime);
+            auditService.record("auth-filter", "anonymous", "system",
+                    SecurityEventType.AUTH_REJECTED,
+                    "reason=INVALID_KEY key=" + safeKey + " endpoint=" + finalPath + " method=" + method + " ip=" + ip);
             requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
@@ -105,6 +116,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 : apiKeyRegistry.isMutationAllowed(apiKey);
             if (!allowed) {
                 logAudit(safeKey, finalPath, method, "RATE_LIMITED", ip, System.currentTimeMillis() - startTime);
+                auditService.record("auth-filter", userId, "system",
+                        SecurityEventType.AUTH_REJECTED,
+                        "reason=RATE_LIMITED key=" + safeKey + " endpoint=" + finalPath + " method=" + method + " ip=" + ip);
                 requestContext.abortWith(Response.status(429)
                         .header("Retry-After", "60")
                         .type(MediaType.APPLICATION_JSON)

@@ -1,12 +1,18 @@
 package com.arcclaw.core.routing;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
+import org.jboss.logging.Logger;
 
 /**
  * Shared factory for building LangChain4j ChatModel instances.
@@ -93,7 +99,7 @@ public final class ChatModelFactory {
                 temperature, logHttp, logHttp);
         if (customParameters != null && !customParameters.isEmpty()) {
             builder.defaultRequestParameters(
-                    dev.langchain4j.model.openai.OpenAiChatRequestParameters.builder()
+                    OpenAiChatRequestParameters.builder()
                             .customParameters(customParameters)
                             .build());
         }
@@ -107,5 +113,67 @@ public final class ChatModelFactory {
             OpenAiChatModel.OpenAiChatModelBuilder builder,
             String siteUrl, String appName) {
         return builder.customHeaders(Map.of("HTTP-Referer", siteUrl, "X-Title", appName));
+    }
+
+    /**
+     * Builds a list of MultiModelChatModel.ModelEntry from comma-separated API keys and model names.
+     * Pairing rules:
+     * - Single key + single model → 1 entry
+     * - Multiple keys + single model → one entry per key (same model)
+     * - Single key + multiple models → one entry per model (same key)
+     * - Multiple keys + multiple models → paired by index (zip, up to shorter list)
+     *
+     * @param keys comma-separated API keys
+     * @param models comma-separated model names
+     * @param providerName for logging
+     * @param modelFactory function that creates a ChatModel from (apiKey, modelName)
+     * @return list of ModelEntry, never empty
+     */
+    public static List<MultiModelChatModel.ModelEntry> buildMultiModelEntries(
+            String keys, String models, String providerName,
+            BiFunction<String, String, ChatModel> modelFactory) {
+        String[] keyArr = keys.split(",");
+        String[] modelArr = models.split(",");
+
+        // Trim and filter empty values
+        keyArr = Arrays.stream(keyArr).map(String::trim).filter(s -> !s.isEmpty()).toArray(String[]::new);
+        modelArr = Arrays.stream(modelArr).map(String::trim).filter(s -> !s.isEmpty()).toArray(String[]::new);
+
+        List<MultiModelChatModel.ModelEntry> entries = new ArrayList<>();
+
+        if (keyArr.length == 1 && modelArr.length == 1) {
+            // Single key + single model
+            entries.add(new MultiModelChatModel.ModelEntry(
+                    providerName, modelFactory.apply(keyArr[0], modelArr[0])));
+        } else if (keyArr.length > 1 && modelArr.length == 1) {
+            // Multiple keys, single model
+            for (int i = 0; i < keyArr.length; i++) {
+                String label = providerName + "-key" + (i + 1);
+                entries.add(new MultiModelChatModel.ModelEntry(
+                        label, modelFactory.apply(keyArr[i], modelArr[0])));
+            }
+        } else if (keyArr.length == 1 && modelArr.length > 1) {
+            // Single key, multiple models
+            for (int i = 0; i < modelArr.length; i++) {
+                String label = providerName + "-" + modelArr[i];
+                entries.add(new MultiModelChatModel.ModelEntry(
+                        label, modelFactory.apply(keyArr[0], modelArr[i])));
+            }
+        } else {
+            // Multiple keys AND models — pair by index
+            int len = Math.min(keyArr.length, modelArr.length);
+            if (keyArr.length != modelArr.length) {
+                Logger.getLogger(ChatModelFactory.class).warnf(
+                        "Provider %s: %d API keys but %d models — pairing by index (using first %d)",
+                        providerName, keyArr.length, modelArr.length, len);
+            }
+            for (int i = 0; i < len; i++) {
+                String label = providerName + "-key" + (i + 1) + "/" + modelArr[i];
+                entries.add(new MultiModelChatModel.ModelEntry(
+                        label, modelFactory.apply(keyArr[i], modelArr[i])));
+            }
+        }
+
+        return entries;
     }
 }

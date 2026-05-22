@@ -15,6 +15,7 @@ import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
@@ -31,10 +32,10 @@ import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentGuards;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Arc;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
@@ -75,8 +76,10 @@ public class CheckpointResumeHandler {
                                    AgentLoop agentLoop,
                                    ReasoningEngine reasoningEngine,
                                    ChannelPluginRegistry channelPluginRegistry,
+                                   CronStorePort cronStore,
                                    CliResultBridge cliResultBridge,
-                                   CronStorePort cronStore) {
+                                   ExecutionFailureRecoveryService recoveryService,
+                                   PersonaEscalationService escalationService) {
         this.agentStore = agentStore;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
@@ -84,11 +87,14 @@ public class CheckpointResumeHandler {
         this.cliResultBridge = cliResultBridge;
         this.cronStore = cronStore;
         this.objectMapper = objectMapper;
-        this.strategyDispatcher = new ResumeStrategyDispatcher(agentStore, toolRegistry, objectMapper, reasoningEngine);
+        this.strategyDispatcher = new ResumeStrategyDispatcher(agentStore, toolRegistry, objectMapper, reasoningEngine, recoveryService, escalationService);
     }
 
     @Inject
     ManagedExecutor executor;
+
+    @Inject
+    MeterRegistry meterRegistry;
 
     @ActivateRequestContext
     public void resumeAfterBatchDecision(
@@ -194,6 +200,7 @@ public class CheckpointResumeHandler {
 
     private void handleResumeFailure(String sessionId, MessageContext context, Exception e) {
         log.errorf("Failed to resume session %s:\n%s", sessionId, LogUtil.trimmedStack(e));
+        meterRegistry.counter("arcclaw.agent.resume.failure").increment();
         if (context == null || context.getUser() == null) {
             log.warnf("handleResumeFailure: context is null for session %s - no channel notification sent", sessionId);
             return;
@@ -235,7 +242,7 @@ public class CheckpointResumeHandler {
         if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
             s.send(user, List.of(new ReplyNode.Text(output), new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
         } else if (ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
-            s.sendBySession(sessionId, output);
+            s.sendRaw(user, output);
         } else {
             s.sendRaw(user, output);
         }

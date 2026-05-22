@@ -17,11 +17,15 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.observability.AgentOTelConstants;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.util.TextPatternUtils;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import org.jboss.logging.Logger;
 
 /**
@@ -45,6 +49,9 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private final RecoveryProcessor recoveryProcessor;
     private final StructuredOutputProcessor structuredOutputProcessor;
     private final ReasoningValidator validator;
+
+    @Inject
+    AgentOtelContext otelContext;
 
     @Inject
     public LangChainReasoningEngine(
@@ -162,9 +169,34 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
     private ChatResponse executeLlmStep(boolean isSimpleChitchat, AgentExecutionContext context, boolean isWriteIntent, ChatRequest request) {
         boolean isCompact = isSimpleChitchat || context.isForceFinishRetry();
-        return ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
-                .where(WorkspaceContext.IS_COMPACT, isCompact)
-                .call(() -> llmProviderPort.nextStep(request));
+        Span span = otelContext.childSpan(context.sessionId(), AgentOTelConstants.SPAN_LLM_PROVIDER_CALL);
+        try {
+            if (span != null) {
+                span.setAttribute(AgentOTelConstants.ATTR_LLM_WRITE_INTENT, isWriteIntent);
+                span.setAttribute("arcclaw.llm.is_compact", isCompact);
+                span.setAttribute(AgentOTelConstants.ATTR_LLM_MESSAGE_COUNT,
+                        request.messages() != null ? (long) request.messages().size() : 0L);
+            }
+            ChatResponse response = ScopedValue.where(WorkspaceContext.IS_WRITE_INTENT, isWriteIntent)
+                    .where(WorkspaceContext.IS_COMPACT, isCompact)
+                    .call(() -> llmProviderPort.nextStep(request));
+            if (span != null) {
+                if (response.tokenUsage() != null) {
+                    span.setAttribute(AgentOTelConstants.ATTR_LLM_INPUT_TOKENS, (long) response.tokenUsage().inputTokenCount());
+                    span.setAttribute(AgentOTelConstants.ATTR_LLM_OUTPUT_TOKENS, (long) response.tokenUsage().outputTokenCount());
+                }
+                span.setStatus(StatusCode.OK);
+            }
+            return response;
+        } catch (Exception e) {
+            if (span != null) {
+                span.setStatus(StatusCode.ERROR, e.getMessage());
+                span.recordException(e);
+            }
+            throw e;
+        } finally {
+            if (span != null) span.end();
+        }
     }
 
     private ReasoningStep handleLlmException(Exception e, List<ReasoningStep> history, String sessionId, String targetLanguage, AgentExecutionContext context, String goal, boolean isWriteIntent, String agentRole) {

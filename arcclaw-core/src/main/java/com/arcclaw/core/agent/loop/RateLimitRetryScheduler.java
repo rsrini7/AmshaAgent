@@ -7,15 +7,19 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.common.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -43,9 +47,20 @@ public class RateLimitRetryScheduler {
 
     private final AtomicLong backlogMaxAge = new AtomicLong(0);
 
+    private volatile boolean shuttingDown = false;
+
     @PostConstruct
     void init() {
         meterRegistry.gauge("arcclaw.retry.backlog.max_age_seconds", backlogMaxAge);
+    }
+
+    void onShutdown(@Observes ShutdownEvent ev) {
+        this.shuttingDown = true;
+    }
+
+    @PreDestroy
+    void destroy() {
+        this.shuttingDown = true;
     }
 
     /**
@@ -57,49 +72,67 @@ public class RateLimitRetryScheduler {
     @Scheduled(every = "30s", identity = "rate-limit-retry")
     @ActivateRequestContext
     public void processPendingRetries() {
-        List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
-        log.tracef("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)", awaiting.size());
-        
-        if (awaiting.isEmpty()) {
-            backlogMaxAge.set(0);
+        if (shuttingDown) {
             return;
         }
 
-        Instant now = Instant.now();
-        long maxAgeSec = 0;
+        try {
+            List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
+            log.tracef("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)", awaiting.size());
+            
+            if (awaiting.isEmpty()) {
+                backlogMaxAge.set(0);
+                return;
+            }
 
-        for (AgentCheckpoint cp : awaiting) {
-            if (cp.getUpdatedAt() == null) continue;
+            Instant now = Instant.now();
+            long maxAgeSec = 0;
 
-            long ageSec = Duration.between(cp.getUpdatedAt(), now).getSeconds();
-            maxAgeSec = Math.max(maxAgeSec, ageSec);
+            for (AgentCheckpoint cp : awaiting) {
+                if (shuttingDown) return;
+                if (cp.getUpdatedAt() == null) continue;
 
-            long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : defaultRetryDelayMs;
-            Instant readyAt = cp.getUpdatedAt().plus(retryAfterMs, ChronoUnit.MILLIS);
+                long ageSec = Duration.between(cp.getUpdatedAt(), now).getSeconds();
+                maxAgeSec = Math.max(maxAgeSec, ageSec);
 
-            if (now.isAfter(readyAt)) {
-                log.infof("Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
-                        cp.getSessionId(), retryAfterMs, ageSec);
+                long retryAfterMs = cp.getRetryAfterMs() != null ? cp.getRetryAfterMs() : defaultRetryDelayMs;
+                Instant readyAt = cp.getUpdatedAt().plus(retryAfterMs, ChronoUnit.MILLIS);
 
-                // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the adapter
-                if (agentStore.claimForRetry(cp.getId())) {
-                    try {
-                        // Offload to background thread via AgentLoop.resume
-                        agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
-                    } catch (Exception e) {
-                        log.errorf("Failed to resume rate-limited session %s:\n%s", cp.getSessionId(), LogUtil.trimmedStack(e));
-                        agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
+                if (now.isAfter(readyAt)) {
+                    log.infof("Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
+                            cp.getSessionId(), retryAfterMs, ageSec);
+
+                    // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the adapter
+                    if (agentStore.claimForRetry(cp.getId())) {
+                        try {
+                            // Offload to background thread via AgentLoop.resume
+                            agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
+                        } catch (Exception e) {
+                            log.errorf("Failed to resume rate-limited session %s:\n%s", cp.getSessionId(), LogUtil.trimmedStack(e));
+                            agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
+                        }
+                    } else {
+                        log.debugf("Session %s was already claimed by another thread, skipping", cp.getSessionId());
                     }
                 } else {
-                    log.debugf("Session %s was already claimed by another thread, skipping", cp.getSessionId());
+                    long remaining = Duration.between(now, readyAt).toSeconds();
+                    log.debugf("Session %s still in backoff (%ds remaining)", cp.getSessionId(), remaining);
                 }
-            } else {
-                long remaining = Duration.between(now, readyAt).toSeconds();
-                log.debugf("Session %s still in backoff (%ds remaining)", cp.getSessionId(), remaining);
             }
+            
+            backlogMaxAge.set(maxAgeSec);
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
+            } else {
+                log.infof("RateLimitRetryScheduler: database closed during processPendingRetries (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
+            }
+        } catch (Exception e) {
+            log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
         }
-        
-        backlogMaxAge.set(maxAgeSec);
     }
 
     /**
@@ -108,19 +141,37 @@ public class RateLimitRetryScheduler {
      */
     @Scheduled(every = "5m", identity = "rate-limit-orphan-sweeper")
     public void sweepOrphanedRetries() {
-        List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
-        Instant cutoff = Instant.now().minus(30, ChronoUnit.MINUTES);
+        if (shuttingDown) {
+            return;
+        }
 
-        for (AgentCheckpoint cp : awaiting) {
-            if (cp.getUpdatedAt() != null && cp.getUpdatedAt().isBefore(cutoff)) {
-                log.errorf("Checkpoint %d is STALE in AWAITING_RETRY (updatedAt=%s). Marking as ORPHANED.",
-                        cp.getId(), cp.getUpdatedAt());
-                
-                agentStore.markOrphaned(cp.getId(), 
-                    "Abandoned after 30 minutes in AWAITING_RETRY (potential scheduler outage)");
-                
-                meterRegistry.counter("arcclaw.retry.orphaned.count").increment();
+        try {
+            List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
+            Instant cutoff = Instant.now().minus(30, ChronoUnit.MINUTES);
+
+            for (AgentCheckpoint cp : awaiting) {
+                if (shuttingDown) return;
+                if (cp.getUpdatedAt() != null && cp.getUpdatedAt().isBefore(cutoff)) {
+                    log.errorf("Checkpoint %d is STALE in AWAITING_RETRY (updatedAt=%s). Marking as ORPHANED.",
+                            cp.getId(), cp.getUpdatedAt());
+                    
+                    agentStore.markOrphaned(cp.getId(), 
+                        "Abandoned after 30 minutes in AWAITING_RETRY (potential scheduler outage)");
+                    
+                    meterRegistry.counter("arcclaw.retry.orphaned.count").increment();
+                }
             }
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
+            } else {
+                log.infof("RateLimitRetryScheduler: database closed during sweepOrphanedRetries (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
+            }
+        } catch (Exception e) {
+            log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
         }
     }
 }

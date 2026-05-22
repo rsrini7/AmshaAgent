@@ -23,11 +23,12 @@
 # =============================================================================
 
 [tools]
-java       = "temurin-25"
-maven      = "3.9"
-powershell = "7.6"
-node       = "22"
-gh         = "latest"
+java = "temurin-25"
+maven = "3.9"
+powershell = "7.5"
+node = "22"
+gh = "latest"
+go = "1.26"
 
 [env]
 _.file = ".env"
@@ -56,19 +57,19 @@ trusted_config_paths = ["~/.cache/arcclaw-wsl-build"]
 [tasks.start]
 description = "New here? Run: mise install  then: mise run setup:profile  then: mise run setup"
 run = [
-    "echo \"\"",
-    "echo   ArcClaw - mise Task Runner",
-    "echo   ===========================",
-    "echo \"\"",
-    "echo   BOOTSTRAP SEQUENCE",
-    "echo   1. mise install                installs pwsh + java + maven + usage",
-    "echo   2. mise run setup:profile      writes shell profile activate + completion",
-    "echo   3. reload your shell",
-    "echo   4. mise run setup              .env + chmod mvnw + JDKs + gh CLI + Playwright Chromium",
-    "echo   5. mise run dev                hot-reload on :8080",
-    "echo \"\"",
-    "echo   See MISE_SETUP.md for full documentation.",
-    "echo \"\"",
+  "echo \"\"",
+  "echo   ArcClaw - mise Task Runner",
+  "echo   ===========================",
+  "echo \"\"",
+  "echo   BOOTSTRAP SEQUENCE",
+  "echo   1. mise install                installs pwsh + java + maven + usage",
+  "echo   2. mise run setup:profile      writes shell profile activate + completion",
+  "echo   3. reload your shell",
+  "echo   4. mise run setup              .env + chmod mvnw + JDKs + gh CLI + Playwright Chromium",
+  "echo   5. mise run dev                hot-reload on :8080",
+  "echo \"\"",
+  "echo   See MISE_SETUP.md for full documentation.",
+  "echo \"\"",
 ]
 
 # =============================================================================
@@ -254,7 +255,10 @@ Write-Host '✅  mvnw + mise.toml + all task scripts CRLF fixed.'
 [tasks."jdk:graalvm"]
 description = "Switch active JDK to GraalVM Community 25.0.2 (for native builds)"
 dir = "{{config_root}}"
-run = ["mise use --path mise.toml java@graalvm-community-25.0.2", "java -version"]
+run = [
+  "mise use --path mise.toml java@graalvm-community-25.0.2",
+  "java -version"
+]
 
 [tasks."jdk:temurin"]
 description = "Switch active JDK back to Temurin 25 (default - dev, build, jar tasks)"
@@ -265,9 +269,9 @@ run = ["mise use --path mise.toml java@temurin-25", "java -version"]
 description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) - safe to re-run"
 dir = "{{config_root}}"
 run = [
-    "mise install",
-    "mise install java@graalvm-community-25.0.2 --quiet",
-    "mise ls java",
+  "mise install",
+  "mise install java@graalvm-community-25.0.2 --quiet",
+  "mise ls java",
 ]
 
 [tasks."jdk:status"]
@@ -363,8 +367,8 @@ if ($IsMacOS) {
     if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     $cpu = [int](sysctl -n hw.ncpu)
 } elseif ($IsWindows) {
-    $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
-    $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+    $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    $cpu = [int]$env:NUMBER_OF_PROCESSORS
 } else {
     $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     $cpu = [int](nproc)
@@ -433,8 +437,8 @@ if ($IsMacOS) {
     if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     $cpu = [int](sysctl -n hw.ncpu)
 } elseif ($IsWindows) {
-    $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
-    $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+    $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    $cpu = [int]$env:NUMBER_OF_PROCESSORS
 } else {
     $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     $cpu = [int](nproc)
@@ -503,8 +507,8 @@ if ($IsMacOS) {
     if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     $cpu = [int](sysctl -n hw.ncpu)
 } elseif ($IsWindows) {
-    $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
-    $cpu = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+    $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    $cpu = [int]$env:NUMBER_OF_PROCESSORS
 } else {
     $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     $cpu = [int](nproc)
@@ -523,7 +527,7 @@ if (Test-Path '.env') {
 
     try {
         $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
-        & $mvnw clean verify -am "-Dquarkus.test.profile=test" -T $threads
+        & $mvnw clean verify -am "-Dquarkus.test.profile=test"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '✅  Tests complete.'
     } finally {
@@ -532,6 +536,23 @@ if (Test-Path '.env') {
         Write-Host 'ℹ️   .env restored.'
     }
 }
+"""
+
+[tasks."test:summary"]
+description = "Summarize surefire XML test report counts"
+dir = "{{config_root}}"
+quiet = true
+shell = "bash -c"
+run = """
+rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | awk -F' ' '{
+    for(i=1; i<=NF; i++) {
+        if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
+        if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }
+        if($i ~ /failures=/) { split($i, a, "\\x22"); f += a[2] }
+        if($i ~ /skipped=/)  { split($i, a, "\\x22"); s += a[2] }
+    }
+}
+END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d\\n", t, f, e, s }'
 """
 
 [tasks."build:native"]
@@ -610,7 +631,7 @@ if ($strategy -eq 'container') {
             $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
             if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
         } elseif ($IsWindows) {
-            $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+            $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
         } else {
             $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
         }
@@ -634,7 +655,7 @@ if ($strategy -eq 'container') {
             $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
             if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
         } elseif ($IsWindows) {
-            $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+            $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
         } else {
             $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
         }
@@ -701,7 +722,7 @@ if (Test-Path '.env') {
             $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
             if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
         } elseif ($IsWindows) {
-            $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+            $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
         } else {
             $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
         }
@@ -747,7 +768,7 @@ try {
         $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
         if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     } elseif ($IsWindows) {
-        $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+        $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
     } else {
         $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     }
@@ -803,7 +824,7 @@ try {
         $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
         if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
     } elseif ($IsWindows) {
-        $availGB = [Math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB)
+        $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
     } else {
         $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
     }
@@ -976,7 +997,6 @@ try {
 }
 """
 
-
 [tasks."dev:attach"]
 depends = ["env:recover"]
 description = "Dev mode - Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
@@ -1044,7 +1064,6 @@ try {
     if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
-
 
 [tasks."dev:ask"]
 depends = ["env:recover"]
@@ -1117,7 +1136,6 @@ try {
     if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
 }
 """
-
 
 [tasks."dev:no-ui"]
 depends = ["env:recover"]
@@ -1212,12 +1230,12 @@ Write-Host 'Found:'
 $procs | ForEach-Object { Write-Host "  $_" }
 Write-Host ''
 $procs | ForEach-Object {
-    $pid = ($_ -split '\\s+')[0]
+    $procId = ($_ -split '\\s+')[0]
     try {
-        Stop-Process -Id $pid -Force
-        Write-Host "✅  Killed PID $pid"
+        Stop-Process -Id $procId -Force
+        Write-Host "✅  Killed PID $procId"
     } catch {
-        Write-Host "⚠️   Could not kill PID $pid (already gone?)"
+        Write-Host "⚠️   Could not kill PID $procId (already gone?)"
     }
 }
 Write-Host '────────────────────────────────────────────────────────────────'
@@ -1257,7 +1275,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:chat"]
-depends = ["env:recover"]
+depends = ["env:recover", "dev:kill", "build:full"]
+usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar - interactive REPL (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1279,7 +1298,7 @@ $jvmArgs = @(
     '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
-& java @jvmArgs -jar $jar chat
+& java @jvmArgs -jar $jar chat @args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -1392,7 +1411,7 @@ try {
 """
 
 [tasks."jar:run-dev-dep"]
-depends = ["env:recover", "build:full"]
+depends = ["env:recover", "dev:kill", "build:full"]
 usage = 'arg "[cmd]" help="Command to run: serve|chat|attach|ask (default: serve)"'
 description = "Build and run packaged jar with dev profile. Usage: mise run jar:run-dev-dep -- serve|chat|attach|ask"
 shell = "pwsh -NonInteractive -Command"

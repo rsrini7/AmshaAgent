@@ -14,6 +14,7 @@ import jakarta.inject.Singleton;
 import com.arcclaw.common.util.LogUtil;
 import io.agroal.api.AgroalPoolInterceptor;
 import io.quarkus.arc.Arc;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.sqlite.SQLiteConnection;
@@ -32,12 +33,14 @@ import org.sqlite.SQLiteConnection;
  *       "error during initialization:" because the module is already registered.</li>
  *   <li>Fix: check pragma_module_list on each connection before loading -
  *       skip if vec0 is already registered on that specific handle.</li>
+ *   <li>When not using SQLite backend, this bean is deactivated and Agroal ignores pool interceptor mappings if not loaded.</li>
  * </ul>
  * 
  * Encapsulated inside arcclaw-persistence-sqlite adapter module.
  * Registered with Agroal via Quarkus configuration.
  */
 @Singleton
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
     private static final Logger log = Logger.getLogger(FtsConnectionInterceptor.class);
@@ -54,6 +57,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
     /** Guards the "vec0 unavailable" WARN so it fires at most once. */
     private final AtomicBoolean warnedUnavailable = new AtomicBoolean(false);
 
+    /** Guards the "fts attachment failed" WARN so it fires at most once. */
+    private final AtomicBoolean warnedFtsAttachment = new AtomicBoolean(false);
+
     @Override
     public void onConnectionAcquire(Connection connection) {
         if (Arc.container() == null) {
@@ -64,8 +70,10 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             loadVectorExtensionIfNeeded(connection);
         } catch (Exception e) {
             if (Arc.container() != null) {
-                log.warnf("FtsConnectionInterceptor: Failed to verify/attach " +
-                          "fts schema: %s", LogUtil.rootMessage(e));
+                if (warnedFtsAttachment.compareAndSet(false, true)) {
+                    log.warnf("FtsConnectionInterceptor: Failed to verify/attach " +
+                              "fts schema (will suppress subsequent warnings): %s", LogUtil.rootMessage(e));
+                }
                 log.debugf("Full stacktrace for fts attachment failure: %s",
                            LogUtil.trimmedStack(e));
             }
@@ -91,7 +99,9 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             try {
                 stmt.execute("PRAGMA synchronous=NORMAL");
             } catch (Exception e) {
-                log.debugf("FtsConnectionInterceptor: Could not set synchronous=NORMAL: %s", LogUtil.rootMessage(e));
+                // Expected when connection is already inside a transaction — SQLite rejects
+                // safety-level changes mid-transaction. Harmless; suppress to TRACE.
+                log.tracef("FtsConnectionInterceptor: Could not set synchronous=NORMAL (in transaction?): %s", LogUtil.rootMessage(e));
             }
         }
         if (!attached) {
@@ -128,7 +138,7 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
             if (!alreadyLoaded) {
                 SQLiteConnection sqliteConn = connection.unwrap(SQLiteConnection.class);
                 sqliteConn.getDatabase().enable_load_extension(true);
-                String absoluteVecPath = Path.of(vecExtensionPath).toAbsolutePath().toString().replace("\\", "/");
+                String absoluteVecPath = resolveExtensionPath(vecExtensionPath).toAbsolutePath().toString().replace("\\", "/");
                 try (Statement vecStmt = connection.createStatement()) {
                     vecStmt.execute("SELECT load_extension('" + absoluteVecPath + "')");
                 }
@@ -147,6 +157,45 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                            LogUtil.trimmedStack(e));
             }
         }
+    }
+
+    private Path resolveExtensionPath(String rawPath) {
+        Path p = Path.of(rawPath);
+        if (p.isAbsolute()) {
+            return p;
+        }
+        if (fileExistsWithOsExtension(p)) {
+            return p;
+        }
+
+        // Traverse upwards from current working directory (up to 4 levels) to search for the extension.
+        Path current = Path.of(".").toAbsolutePath().normalize();
+        for (int i = 0; i < 4; i++) {
+            Path candidate = current.resolve(rawPath);
+            if (fileExistsWithOsExtension(candidate)) {
+                return candidate.normalize();
+            }
+            Path parent = current.getParent();
+            if (parent == null) {
+                break;
+            }
+            current = parent;
+        }
+        return p;
+    }
+
+    private boolean fileExistsWithOsExtension(Path path) {
+        if (Files.exists(path)) {
+            return true;
+        }
+        String filename = path.getFileName().toString();
+        Path parent = path.getParent();
+        if (parent == null || !Files.exists(parent)) {
+            return false;
+        }
+        return Files.exists(parent.resolve(filename + ".dylib")) ||
+               Files.exists(parent.resolve(filename + ".so")) ||
+               Files.exists(parent.resolve(filename + ".dll"));
     }
 
     public boolean isVectorSearchEnabled() {

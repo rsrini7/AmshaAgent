@@ -27,11 +27,11 @@ export class ArcOnboarding extends LitElement {
   private readonly DEFAULT_MODELS: Record<string, string> = {
     groq: 'meta-llama/llama-4-scout-17b-16e-instruct',
     openai: 'gpt-4o-mini',
-    ollama: 'llama3.2',
+    ollama: 'mistral-small:latest',
     anthropic: 'claude-haiku-4-5',
     'claude-code': 'claude-sonnet-4-5',
     openrouter: 'openai/gpt-oss-20b:free',
-    nvidia: 'mistralai/devstral-2-123b-instruct-2512',
+    nvidia: 'bytedance/seed-oss-36b-instruct',
     cerebras: 'qwen-3-235b-a22b-instruct-2507',
     gemini: 'gemini-2.5-flash-lite',
     omlx: 'mlx-community/Qwen3.6-35B-A3B-4bit',
@@ -233,8 +233,14 @@ export class ArcOnboarding extends LitElement {
     }
   }
 
-  private _onStepEvent(e: CustomEvent) {
+  private _onStepEvent = (e: CustomEvent) => {
     switch (this._currentStep) {
+      case 1: {
+        if (e.type === 'next') {
+          this._next();
+        }
+        break;
+      }
       case 2: {
         const { provider, model } = (e as CustomEvent<{ provider: string; model: string }>).detail || {};
         if (e.type === 'provider-change') {
@@ -282,11 +288,11 @@ export class ArcOnboarding extends LitElement {
         break;
       }
     }
-  }
+  };
 
-  private _onFinish() {
+  private _onFinish = () => {
     this._finish();
-  }
+  };
 
   render() {
     return html`

@@ -17,6 +17,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -30,7 +31,6 @@ import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.StatefulAgentStore;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.TimeContextInjector;
 import io.quarkus.runtime.ShutdownEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -61,6 +61,13 @@ public class ChatCommand implements Runnable {
      * at a time on the main thread.
      */
     private volatile boolean hitlResultPrinted = false;
+
+    /**
+     * Guard flag: set to true when an AwaitingApproval result is received.
+     * Replaces the store query in the HITL guard to eliminate the TOCTOU window
+     * where the approval could complete between the check and the dispatch.
+     */
+    private volatile boolean hitlPending = false;
 
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
@@ -112,6 +119,7 @@ public class ChatCommand implements Runnable {
 
         try {
             log.debugf("CLI ShutdownEvent triggered for session %s (absolute priority cleanup)", sessionId);
+            hitlPending = false;
             cliResultBridge.cancel(sessionId); // unblocks any HITL virtual thread immediately
             workspaceManager.terminateSession(sessionId);
         } catch (Exception e) {
@@ -143,6 +151,7 @@ public class ChatCommand implements Runnable {
 
         while (true) {
             System.out.print("\nYou> ");
+            System.out.flush();
             if (!scanner.hasNextLine()) break;
 
             String input;
@@ -159,7 +168,7 @@ public class ChatCommand implements Runnable {
             if (input.isBlank()) continue;
 
             if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
-                if (statefulAgentStore.findLatestAwaitingApproval(sessionId).isPresent()) {
+                if (hitlPending) {
                     cliResultBridge.register(sessionId);
                     System.out.println("\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
                     continue;
@@ -182,6 +191,9 @@ public class ChatCommand implements Runnable {
                     // sees it and suppresses its own print - avoids double-print when
                     // user types /approve while a virtual waiter thread is also active.
                     hitlResultPrinted = true;
+                    if (input.startsWith("/approve") || input.startsWith("/deny")) {
+                        hitlPending = false;
+                    }
                     System.out.println("\n▶ ArcClaw> " + response);
                 }
                 continue;
@@ -212,6 +224,7 @@ public class ChatCommand implements Runnable {
                 case AgentResult.LoopExceeded l       -> "⏱ Timed out after " + l.maxIterations() + " steps.";
                 case AgentResult.AwaitingRetry r      -> "⏳ Rate limit hit. I'll automatically retry in " + (r.retryAfterMs() / 1000) + "s...";
                 case AgentResult.AwaitingApproval a   -> {
+                    hitlPending = true;
                     heartbeatTracker.recordHeartbeat(sessionId);
                     String truncatedParams = a.paramsJson() != null
                             && a.paramsJson().length() > 200
@@ -244,6 +257,7 @@ public class ChatCommand implements Runnable {
                                 if (hitlOutput != null) {
                                     System.out.println("\n▶ ArcClaw> " + hitlOutput);
                                     System.out.print("\nYou> "); // re-prompt so user sees the cursor
+                                    System.out.flush();
                                 }
                             } catch (CancellationException e) {
                                 log.debugf("HITL waiter cancelled for session %s (shutdown or GC)", sessionId);
@@ -253,6 +267,8 @@ public class ChatCommand implements Runnable {
                                 Thread.currentThread().interrupt();
                             } catch (Exception e) {
                                 log.warnf("HITL waiter error for session %s: %s", sessionId, LogUtil.rootMessage(e));
+                            } finally {
+                                hitlPending = false;
                             }
                         });
 

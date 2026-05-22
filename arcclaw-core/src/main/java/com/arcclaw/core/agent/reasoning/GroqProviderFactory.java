@@ -1,11 +1,13 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.routing.ChatModelFactory;
+import com.arcclaw.core.routing.MultiModelChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -23,7 +25,7 @@ public class GroqProviderFactory implements AgentChatModelProvider {
     String baseUrl;
 
     @ConfigProperty(name = "ARCCLAW_GROQ_MODEL",
-                    defaultValue = "llama-3.3-70b-versatile")
+                    defaultValue = "meta-llama/llama-4-scout-17b-16e-instruct")
     String modelName;
 
     @Override
@@ -40,9 +42,13 @@ public class GroqProviderFactory implements AgentChatModelProvider {
     public ChatModel create() {
         String key = apiKey.orElseThrow(() -> new IllegalStateException(
                 "Groq requires ARCCLAW_GROQ_API_KEY"));
-        return ChatModelFactory.createOpenAi(
-                baseUrl, key, modelName,
-                agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
-                agentConfig.temperature(), agentConfig.logHttp());
+        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
+                key, modelName, "groq",
+                (k, m) -> ChatModelFactory.createOpenAi(
+                        baseUrl, k, m,
+                        agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
+                        agentConfig.temperature(), agentConfig.logHttp()));
+        if (entries.size() == 1) return entries.get(0).model();
+        return new MultiModelChatModel("groq", entries, 5);
     }
 }

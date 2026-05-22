@@ -27,12 +27,14 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.api.AgentResponseMapper;
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;
@@ -68,18 +70,23 @@ public class OnboardingResource {
     @Any
     Instance<OnboardingStepProvider> pluginProviders;
     @Inject McpClientService mcpClientService;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "key-internal-changeme")
     String internalApiKey;
 
-    private static final Map<String, String> DEFAULT_MODELS = Map.of(
-        "groq",        "meta-llama/llama-4-scout-17b-16e-instruct",
-        "openai",      "gpt-4o-mini",
-        "ollama",      "llama3.2",
-        "anthropic",   "claude-haiku-4-5",
-        "claude-code", "claude-sonnet-4-5",
-        "openrouter",  "openai/gpt-oss-20b:free",
-        "nvidia",      "mistralai/devstral-2-123b-instruct-2512"
+    private static final Map<String, String> DEFAULT_MODELS = Map.ofEntries(
+        Map.entry("groq",        "meta-llama/llama-4-scout-17b-16e-instruct"),
+        Map.entry("openai",      "gpt-4o-mini"),
+        Map.entry("ollama",      "mistral-small:latest"),
+        Map.entry("anthropic",   "claude-haiku-4-5"),
+        Map.entry("claude-code", "claude-sonnet-4-5"),
+        Map.entry("openrouter",  "openai/gpt-oss-20b:free"),
+        Map.entry("nvidia",      "bytedance/seed-oss-36b-instruct"),
+        Map.entry("cerebras",    "llama-3.3-70b"),
+        Map.entry("gemini",      "gemini-2.0-flash"),
+        Map.entry("omlx",        "mlx-community/gemma-4-26b-a4b-it-4bit"),
+        Map.entry("llamacpp",    "qwen3")
     );
 
     @GET @Path("/status")
@@ -184,6 +191,10 @@ public class OnboardingResource {
             vault.storeSystemKey(VaultConstants.LLM_API_KEY, req.apiKey().getBytes(StandardCharsets.UTF_8));
             vault.storeSystemKey(VaultConstants.LLM_PROVIDER_KEY, provider.getBytes(StandardCharsets.UTF_8));
 
+            auditService.recordMandatory("onboarding-" + sid, "onboarding-user", "system",
+                    SecurityEventType.ONBOARDING_COMPLETED,
+                    "step=3 provider=" + provider + " model=" + state.selectedModel);
+
             return Response.ok(new Step3Response(4, true, null)).cookie(createCookie(sid)).build();
 
         } catch (Exception e) {
@@ -255,6 +266,13 @@ public class OnboardingResource {
         }
 
         state.advance();
+
+        if (!registered.isEmpty()) {
+            auditService.recordMandatory("onboarding-" + sid, "onboarding-user", "system",
+                    SecurityEventType.MCP_SERVER_CONNECTED,
+                    "via=onboarding servers=" + String.join(",", registered));
+        }
+
         return Response.ok(new Step5Response(6, registered)).cookie(createCookie(sid)).build();
     }
 
@@ -270,6 +288,10 @@ public class OnboardingResource {
             .map(p -> new PluginStepDto(
                 p.stepId(), p.title(), p.isConfigured()))
             .toList();
+
+        auditService.recordMandatory("onboarding-" + sid, "onboarding-user", "system",
+                SecurityEventType.ONBOARDING_COMPLETED,
+                "step=complete provider=" + state.selectedProvider + " model=" + state.selectedModel);
 
         CompleteResponse dto = new CompleteResponse(
             true,

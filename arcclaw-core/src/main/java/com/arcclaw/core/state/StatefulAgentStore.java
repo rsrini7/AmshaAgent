@@ -100,6 +100,13 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
     void archive(Long checkpointId);
 
     /**
+     * Updates only the channel_type and channel_platform_id on a checkpoint
+     * via native SQL, without touching any other field (especially status).
+     * Used by tryStampChannelInfo to avoid overwriting AWAITING_APPROVAL.
+     */
+    void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId);
+
+    /**
      * Save the final state of a checkpoint and mark it as completed or failed.
      * <p>
      * This creates/updates the {@link AgentCheckpoint} and persists all

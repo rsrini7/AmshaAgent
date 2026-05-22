@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.audit.AuditService;
@@ -17,7 +18,6 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.governance.SessionBudgetTracker;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.JsonNode;

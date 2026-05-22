@@ -13,12 +13,10 @@ import jakarta.ws.rs.core.MediaType;
 import com.arcclaw.mcp.bridge.McpToolBridge;
 import com.arcclaw.mcp.config.McpToolAllowlist;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
-import io.smallrye.common.annotation.RunOnVirtualThread;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 
 @ApplicationScoped
 @Path("/mcp")
-@RunOnVirtualThread
 public class McpAdminResource {
 
     @Inject McpToolAllowlist config;

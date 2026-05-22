@@ -21,9 +21,9 @@ services:
       # Explicitly override the prod profile default (/var/arcclaw)
       - ARCCLAW_SANDBOX_WORKSPACE_ROOT=/app/data/workspaces
       - OLLAMA_BASE_URL=http://ollama:11434
-      #- OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
+      #- OLLAMA_MODEL=${OLLAMA_MODEL:-mistral-small:latest}
       # The OpenAI extension properly parses this dynamically at runtime!
-      #- QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${OLLAMA_MODEL:-llama3.2:1b}
+      #- QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${OLLAMA_MODEL:-mistral-small:latest}
       - QUARKUS_LANGCHAIN4J_OPENAI_CHAT_MODEL_MODEL_NAME=${GROQ_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
       - ARCCLAW_LLM_API_KEY=${ARCCLAW_LLM_API_KEY:-}
       # Added Jina embedding key missing from previous env setups
@@ -76,7 +76,7 @@ services:
         echo 'Waiting for Ollama API...' &&
         until curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done &&
         echo 'Ollama is up, pulling models...' &&
-        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_MODEL:-llama3.2:1b}\"}' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${OLLAMA_MODEL:-mistral-small:latest}\"}' &&
         if [ \"${ARCCLAW_EMBED_PROVIDER:-ollama}\" = \"ollama\" ]; then
           curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"${ARCCLAW_EMBED_MODEL:-nomic-embed-text:v1.5}\"}';
         fi &&
@@ -131,9 +131,24 @@ services:
     profiles:
       - builder # Keeps this dormant during normal operations
 
+  postgres:
+    image: postgres:17-alpine
+    container_name: arcclaw-postgres
+    environment:
+      - POSTGRES_DB=arcclaw
+      - POSTGRES_USER=arcclaw
+      - POSTGRES_PASSWORD=arcclawpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - arcclaw-net
+
 volumes:
   arcclaw_data:
   ollama_data:
+  postgres_data:
 
 networks:
   arcclaw-net:

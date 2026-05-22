@@ -9,6 +9,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.util.TemporalUtils;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -16,6 +17,7 @@ import org.jboss.logging.Logger;
  * Optimized for SQLite via Native SQL to minimize lock duration and avoid JTA deadlocks.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class CheckpointStatusService {
 
     private static final Logger log = Logger.getLogger(CheckpointStatusService.class);

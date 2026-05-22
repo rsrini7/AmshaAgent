@@ -1,8 +1,18 @@
-Do not use dir /s /b or grep which are keep on failing right use powershell frindly commands to find files also use rg (ripgrep) which is already installed in my pc alternative to grep.
+# Rule Guidelines for Gemini (GEMINI.md)
 
-Do not use  cat -n instead use powershell if in windows terminal.
+## 1. Windows OS Shell Restrictions
+In Windows, do not use `dir /s /b` or `grep` (which are prone to failure). 
+* Use powershell-friendly commands to find files.
+* Use `rg` (ripgrep) which is pre-installed as the replacement for `grep`.
+* Do not use `cat -n`; instead use powershell equivalent if running inside a Windows terminal.
 
-For actual data from sqlite use sqlite3 data/arcclaw-meta.db ".tables".
-For vec or search use sqlite3 data/arcclaw-fts.db ".tables"
-Then drill into respective tables.
+## 2. SQLite Database Diagnostics
+* **Metadata db**: `sqlite3 data/arcclaw-meta.db ".tables"`
+* **Search / Vector db**: `sqlite3 data/arcclaw-fts.db ".tables"`
+* Query directly to inspect database structures and states.
 
+## 3. Project Architectural Invariants & Patterns
+Refer to [AGENTS.md](./AGENTS.md) for full developer instructions, including:
+* The Transaction-Free Zone (no high-latency network/LLM calls inside DB transactions).
+* Exception Classification Chain of Responsibility.
+* Inbound Message Pipeline abstractions.

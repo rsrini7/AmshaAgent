@@ -15,6 +15,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.AgentLoop;
@@ -41,7 +42,6 @@ import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.util.MdcManaged;
 import io.quarkus.virtual.threads.VirtualThreads;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -128,6 +128,11 @@ public class AgentSessionService {
         if (userId != null && !userId.isBlank() && !"unknown".equals(userId)) {
             heartbeatTracker.tryBindOwner(sessionId, userId);
         }
+
+        auditService.recordMandatory(sessionId, userId != null ? userId : "unknown", "system",
+                SecurityEventType.SESSION_CREATED,
+                "autonomy=" + level.name());
+
         return sessionId;
     }
 
@@ -243,6 +248,9 @@ public class AgentSessionService {
                 }
 
                 checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
+                auditService.recordMandatory(sessionId, userId, canonicalRole,
+                        SecurityEventType.APPROVAL_GRANTED,
+                        "via=REST role=" + agentRole);
                 String channel = ChannelType.REST_API.name();
 
                 return WorkspaceContext.<ServiceResult<Object>>run(sessionId, REST_USER_ID, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
@@ -273,6 +281,9 @@ public class AgentSessionService {
                     return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
                 }
                 AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
+                auditService.recordMandatory(sessionId, userId, canonicalRole,
+                        SecurityEventType.APPROVAL_DENIED,
+                        "via=REST role=" + agentRole);
                 checkpointApprovalService.triggerResume(cp);
                 return ServiceResult.success(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId));
             };
@@ -305,6 +316,9 @@ public class AgentSessionService {
         var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
 
+        auditService.recordMandatory(sessionId, userId, "system",
+                SecurityEventType.SESSION_TERMINATED,
+                "via=REST");
         workspaceManager.terminateSession(sessionId);
         return ServiceResult.success(null);
     }

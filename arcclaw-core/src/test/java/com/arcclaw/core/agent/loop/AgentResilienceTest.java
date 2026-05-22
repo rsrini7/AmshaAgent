@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import io.quarkus.test.junit.QuarkusTest;
@@ -95,7 +96,7 @@ class AgentResilienceTest {
                 public ReasoningStep nextStep(AgentExecutionContext context, String role, String goal, List<ReasoningStep> history) {
                     return ReasoningStep.pending(
                         "I'll keep trying the github tool.",
-                        "github",
+                        ToolCapability.GITHUB.toolName(),
                         Map.of("repo", "test/repo"), 100, 100);
                 }
 

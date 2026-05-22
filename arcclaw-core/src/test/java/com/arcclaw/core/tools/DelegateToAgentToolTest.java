@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -21,7 +20,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.role.CapabilityRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
@@ -40,7 +39,6 @@ class DelegateToAgentToolTest {
     @Mock ReasoningEngine reasoningEngine;
     @Mock AgentLoop agentLoop;
     @Mock Instance<AgentLoop> agentLoopInstance;
-    @Mock CapabilityRegistry capabilityRegistry;
     @Mock CheckpointCrudPort checkpointCrud;
 
     @InjectMocks DelegateToAgentTool tool;
@@ -149,7 +147,7 @@ class DelegateToAgentToolTest {
 
         when(agentLoop.run(
             any(), any(), any(), any(), anyInt()
-        )).thenReturn(AgentResult.awaitingApproval("sandbox_exec", "{}", SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "coder", List.of()));
+        )).thenReturn(AgentResult.awaitingApproval(ToolCapability.SANDBOX_EXEC.toolName(), "{}", SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "coder", List.of()));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
             SESSION_ID, USER_ID, CHAT_ID, "coordinator", AutonomyLevel.FULL,
@@ -185,14 +183,13 @@ class DelegateToAgentToolTest {
     }
 
     @Test
-    void execute_capabilityEscalationRejected() throws Exception {
+    void execute_capabilityEscalation_allowed() throws Exception {
         Map<String, Object> params = Map.of(
             "agent", "researcher",
             "goal", "search the web"
         );
 
-        when(capabilityRegistry.getSupplementalTools("architect")).thenReturn(Set.of("github", "memory_search", "delegate_to_agent"));
-        when(capabilityRegistry.getSupplementalTools("researcher")).thenReturn(Set.of("github", "memory_search", "web_search", "delegate_to_agent"));
+        when(agentLoop.run(any(), eq("researcher"), any(), any(), anyInt())).thenReturn(AgentResult.finished("research results", List.of()));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
             SESSION_ID, USER_ID, CHAT_ID, "architect", AutonomyLevel.FULL,
@@ -201,10 +198,7 @@ class DelegateToAgentToolTest {
 
         ToolResponse response = tool.execute(ctx, params);
 
-        assertFalse(response.success(), "Delegation should have been rejected for capability escalation");
-        assertEquals(403, response.exitCode());
-        assertTrue(response.output().contains("target role has capabilities"));
-        assertTrue(response.output().contains("not permitted for delegating role [architect]"));
+        assertTrue(response.success(), "architect → researcher delegation should now be allowed");
     }
 
     @Test

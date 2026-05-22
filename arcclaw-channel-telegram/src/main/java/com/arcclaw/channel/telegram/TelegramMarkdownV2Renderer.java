@@ -66,10 +66,18 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
             case ReplyNode.KeyValue kv -> "*" + esc(kv.key()) + ":* " + esc(kv.value());
             case ReplyNode.Separator _ -> "---";
             case ReplyNode.ApprovalPrompt ap -> {
+                // Truncate paramsJson to fit within Telegram's 4096 char limit.
+                // Template overhead ≈ 120 chars; leave room for the JSON block.
+                String params = ap.paramsJson();
+                if (params == null) params = "{}";
+                int maxJsonLen = 3800; // conservative limit for template + escaping overhead
+                if (params.length() > maxJsonLen) {
+                    params = params.substring(0, maxJsonLen) + "\n... (truncated)";
+                }
                 yield "⚠️ *APPROVAL REQUIRED*\n\n" +
                         "*Tool:* `" + esc(ap.toolName()) + "`\n" +
                         "*Session:* `" + esc(ap.sessionId()) + "`\n\n" +
-                        "```json\n" + ap.paramsJson() + "\n```\n\n" +
+                        "```json\n" + params + "\n```\n\n" +
                         "Reply with `/approve` or `/deny`";
             }
             case ReplyNode.ErrorMessage em -> {

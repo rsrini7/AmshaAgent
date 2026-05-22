@@ -9,6 +9,9 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
+import com.arcclaw.core.scope.WorkspaceContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -30,6 +33,9 @@ public class GovernanceLayer implements GovernanceStrategy {
     @Inject
     MeterRegistry registry;
 
+    @Inject
+    AuditService auditService;
+
     @PostConstruct
     void initMetrics() {
         registry.gauge("arcclaw.governance.budget.map.size", budgets, Map::size);
@@ -42,22 +48,26 @@ public class GovernanceLayer implements GovernanceStrategy {
     }
 
     void cleanupStaleBudgets(int maxAgeHours) {
-        Instant cutoff = Instant.now().minus(maxAgeHours, ChronoUnit.HOURS);
-        int evicted = 0;
-        
-        // entrySet().removeIf is safe for ConcurrentHashMap
-        var it = budgets.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
-            if (entry.getValue().getLastAccessedAt().isBefore(cutoff)) {
-                it.remove();
-                evicted++;
+        try {
+            Instant cutoff = Instant.now().minus(maxAgeHours, ChronoUnit.HOURS);
+            int evicted = 0;
+            
+            // entrySet().removeIf is safe for ConcurrentHashMap
+            var it = budgets.entrySet().iterator();
+            while (it.hasNext()) {
+                var entry = it.next();
+                if (entry.getValue().getLastAccessedAt().isBefore(cutoff)) {
+                    it.remove();
+                    evicted++;
+                }
             }
-        }
-        
-        if (evicted > 0) {
-            log.infof("Cleaned up %d stale budget(s) older than %d hours.", evicted, maxAgeHours);
-            registry.counter("arcclaw.governance.budget.evictions").increment(evicted);
+            
+            if (evicted > 0) {
+                log.infof("Cleaned up %d stale budget(s) older than %d hours.", evicted, maxAgeHours);
+                registry.counter("arcclaw.governance.budget.evictions").increment(evicted);
+            }
+        } catch (Exception e) {
+            log.debugf("Failed to cleanup stale budgets or record metric: %s", e.getMessage());
         }
     }
 
@@ -142,9 +152,12 @@ public class GovernanceLayer implements GovernanceStrategy {
 
         BudgetUpdateResult result = resultWrapper[0];
         if (result.status == BudgetStatus.EXCEEDED) {
-            throw new BudgetExceededException(
-                    String.format("Session budget of $%.2f exceeded. Total cost: $%.4f", result.hardLimit,
-                            result.currentCost));
+            String detail = String.format("Session budget of $%.2f exceeded. Total cost: $%.4f",
+                    result.hardLimit, result.currentCost);
+            String userId = WorkspaceContext.getUserIdOrUnknown();
+            auditService.recordMandatory(sessionId, userId, "governance",
+                    SecurityEventType.BUDGET_EXCEEDED, detail);
+            throw new BudgetExceededException(detail);
         }
 
         if (result.status == BudgetStatus.WARNING) {

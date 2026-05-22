@@ -124,6 +124,8 @@ public class AgentResponseMapper {
                     new ArcClawErrorResponse(f.reason(), "RATE_LIMIT"), 429);
             case SECURITY_POLICY -> new MappedResult(
                     new ArcClawErrorResponse(f.reason(), "SECURITY_POLICY"), 403);
+            case USER_ABORT -> new MappedResult(
+                    new ArcClawErrorResponse("Session halted by user.", "HALTED"), 499);
         };
     }
 }

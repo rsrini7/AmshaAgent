@@ -1,12 +1,14 @@
 package com.arcclaw.rag;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.time.Duration;
 import java.util.Optional;
 
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIf;
+import org.mockito.MockedStatic;
 
 class EmbeddingProviderFactoryTest {
 
@@ -64,14 +66,20 @@ class EmbeddingProviderFactoryTest {
     }
 
     @Test
-    @EnabledIf("com.arcclaw.rag.CdiAvailableCondition#isCdiAvailable")
     void testJinaOverridesDefaultModel() {
         JinaEmbeddingProviderFactory factory = new JinaEmbeddingProviderFactory();
         EmbeddingModelConfig defaultModelConfig = new EmbeddingModelConfig(
             "jina", "nomic-embed-text:v1.5", "https://api.jina.ai",
             Optional.of("test-key"), Duration.ofSeconds(30)
         );
-        assertDoesNotThrow(() -> factory.create(defaultModelConfig));
+        try (MockedStatic<OpenAiEmbeddingModel> builderMock = mockStatic(OpenAiEmbeddingModel.class)) {
+            OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder mockBuilder = mock(OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder.class, RETURNS_SELF);
+            OpenAiEmbeddingModel mockModel = mock(OpenAiEmbeddingModel.class);
+            when(mockBuilder.build()).thenReturn(mockModel);
+            builderMock.when(OpenAiEmbeddingModel::builder).thenReturn(mockBuilder);
+            
+            assertDoesNotThrow(() -> factory.create(defaultModelConfig));
+        }
     }
 
     @Test

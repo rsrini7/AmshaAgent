@@ -10,13 +10,18 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.hitl.ApprovalDecision;
 import com.arcclaw.channel.api.hitl.ApprovalDecisionEvent;
 import com.arcclaw.channel.api.hitl.ApprovalOutcome;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.CliResultBridge;
 import com.arcclaw.core.agent.sse.AgentSseService;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.audit.SessionAuditSequencer;
 import com.arcclaw.core.compaction.CompactionInFlightFlag;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
@@ -24,7 +29,6 @@ import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.util.BatchDecisionUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,6 +68,7 @@ public class SessionReaper {
     @Inject CompactionInFlightFlag compactionInFlight;
     @Inject AgentSseService agentSseService;
     @Inject CliResultBridge cliResultBridge;
+    @Inject AuditService auditService;
 
     @ConfigProperty(name = "arcclaw.workspace.session-ttl-minutes", defaultValue = "30")
     long sessionTtlMinutes;
@@ -113,17 +118,24 @@ public class SessionReaper {
             log.info("Zombie recovery: no orphaned IN_PROGRESS checkpoints found.");
         }
 
-        // Step 2: Replay ALL surviving AWAITING_APPROVAL - never orphan at startup
+        // Step 2: Replay surviving AWAITING_APPROVAL - never orphan at startup
+        // CLI approvals are auto-denied (CLI has no SSE subscription to replay into)
         List<CheckpointDto> pendingApprovals =
             checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name());
         if (!pendingApprovals.isEmpty()) {
-            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s) - "
-                + "leaving alive, queuing SSE replay.", pendingApprovals.size());
+            log.infof("Zombie recovery: found %d AWAITING_APPROVAL checkpoint(s).", pendingApprovals.size());
             for (var dto : pendingApprovals) {
-                log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
-                    dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
-                agentSseService.republishOnSubscribe(
-                    dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
+                if (ChannelType.CLI.id().equalsIgnoreCase(dto.channelType())) {
+                    log.warnf("  Auto-denying CLI approval: id=%d session=%s tool=%s",
+                        dto.id(), dto.sessionId(), dto.pendingToolName());
+                    checkpointStore.transitionStatus(dto.id(), CheckpointStatus.DENIED.name());
+                    cliResultBridge.cancel(dto.sessionId());
+                } else {
+                    log.infof("  Surviving approval: id=%d session=%s role=%s tool=%s",
+                        dto.id(), dto.sessionId(), dto.agentRole(), dto.pendingToolName());
+                    agentSseService.republishOnSubscribe(
+                        dto.sessionId(), dto.pendingToolName(), dto.pendingToolParametersJson());
+                }
             }
         } else {
             log.info("Zombie recovery: no orphaned AWAITING_APPROVAL checkpoints found.");
@@ -142,29 +154,42 @@ public class SessionReaper {
         if (shuttingDown) return;
         if (heartbeatTracker.activeSessionCount() == 0) return;
 
-        Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
-        log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)",
-                sessionTtlMinutes, cutoff);
+        try {
+            Instant cutoff = Instant.now().minus(Duration.ofMinutes(sessionTtlMinutes));
+            log.debugf("GC sweep: checking sessions against TTL=%dm (cutoff=%s)",
+                    sessionTtlMinutes, cutoff);
 
-        Set<String> awaitingApprovalIds = findAwaitingApprovalIds();
+            Set<String> awaitingApprovalIds = findAwaitingApprovalIds();
 
-        heartbeatTracker.forEachExpired(cutoff, sessionId -> {
-            if (awaitingApprovalIds.contains(sessionId)) {
-                log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
-                return;
+            heartbeatTracker.forEachExpired(cutoff, sessionId -> {
+                if (awaitingApprovalIds.contains(sessionId)) {
+                    log.debugf("GC sweep: skipping session=%s (AWAITING_APPROVAL)", sessionId);
+                    return;
+                }
+                if (agentStore.isBatchResuming(sessionId)) {
+                    log.infof("GC sweep: skipping session=%s (RESUMING)", sessionId);
+                    return;
+                }
+                log.warnf("GC sweep: session=%s expired", sessionId);
+                meterRegistry.counter("arcclaw.agent.orphaned.sweep").increment();
+                cliResultBridge.cancel(sessionId); 
+                compactionInFlight.remove(sessionId);
+                workspaceManager.terminateSession(sessionId);
+                heartbeatTracker.removeHeartbeat(sessionId);
+                auditSequencer.releaseStaleSession(sessionId);
+            });
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("SessionReaper: gcSweep failed", e);
+            } else {
+                log.infof("SessionReaper: database closed during gcSweep (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
-            if (agentStore.isBatchResuming(sessionId)) {
-                log.infof("GC sweep: skipping session=%s (RESUMING)", sessionId);
-                return;
-            }
-            log.warnf("GC sweep: session=%s expired", sessionId);
-            meterRegistry.counter("arcclaw.agent.orphaned.sweep").increment();
-            cliResultBridge.cancel(sessionId); 
-            compactionInFlight.remove(sessionId);
-            workspaceManager.terminateSession(sessionId);
-            heartbeatTracker.removeHeartbeat(sessionId);
-            auditSequencer.releaseStaleSession(sessionId);
-        });
+        } catch (Exception e) {
+            log.error("SessionReaper: gcSweep failed", e);
+        }
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -186,21 +211,38 @@ public class SessionReaper {
     public void sweepTimedOutApprovals() {
         if (shuttingDown) return;
 
-        Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
-        List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
-        if (stale.isEmpty()) return;
+        try {
+            Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
+            List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
+            if (stale.isEmpty()) return;
 
-        for (AgentCheckpoint cp : stale) {
-            log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
-                    cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
-            meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
-                    "role", cp.getAgentRole()).increment();
-            markApprovalTimedOut(cp);
+            for (AgentCheckpoint cp : stale) {
+                log.warnf("[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
+                        cp.getSessionId(), cp.getAgentRole(), hitlTimeoutHours);
+                meterRegistry.counter("arcclaw.hitl.timeout.auto_deny",
+                        "role", cp.getAgentRole()).increment();
+                markApprovalTimedOut(cp);
+            }
+        } catch (IllegalStateException | PersistenceException e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            if (!isShutdown) {
+                log.error("SessionReaper: sweepTimedOutApprovals failed", e);
+            } else {
+                log.infof("SessionReaper: database closed during sweepTimedOutApprovals (app shutting down) - suppression intentional.");
+                log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
+            }
+        } catch (Exception e) {
+            log.error("SessionReaper: sweepTimedOutApprovals failed", e);
         }
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
+        auditService.recordMandatory(cp.getSessionId(), "system", cp.getAgentRole(),
+                SecurityEventType.APPROVAL_DENIED,
+                "reason=timeout_hours=" + hitlTimeoutHours + " tool=" + cp.getPendingToolName());
+
         if (cp.hasBatchToolDecisions()) {
             BatchDecisionUtil.pendingToolNames(cp, objectMapper).forEach(toolName ->
                 agentStore.updateBatchToolDecision(

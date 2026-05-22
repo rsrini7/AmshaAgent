@@ -2,9 +2,7 @@ package com.arcclaw.core.tools;
 
 import static com.arcclaw.core.message.UserMessages.*;
 
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -12,24 +10,30 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
-import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.observability.AgentOTelConstants;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.ToolOperation;
 import com.arcclaw.core.util.AgentResultFormatter;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
 import com.arcclaw.persistence.api.CheckpointDto;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Context;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -49,11 +53,12 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
-    @Inject CapabilityRegistry capabilityRegistry;
     @Inject CheckpointCrudPort checkpointCrud;
+    @Inject AuditService auditService;
+    @Inject AgentOtelContext otelContext;
 
-    @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "2")
-    int maxDelegationDepth = 2;
+    @ConfigProperty(name = "arcclaw.delegation.max-depth", defaultValue = "3")
+    int maxDelegationDepth = 3;
 
     @Override
     public String name() {
@@ -106,7 +111,7 @@ public class DelegateToAgentTool implements AgentTool {
             return ToolResponse.failure(400, DELEGATION_GOAL_REQUIRED);
         }
 
-        String agentName = String.valueOf(agentObj);
+        String agentName = stripSurroundingQuotes(String.valueOf(agentObj));
         String goal = String.valueOf(goalObj);
         String normalized = agentName.trim().toLowerCase();
 
@@ -122,38 +127,55 @@ public class DelegateToAgentTool implements AgentTool {
             return ToolResponse.failure(400, delegationSelfGuard(normalized, delegatableList));
         }
 
+        if (isCoderDelegatingToResearcher(normalized, currentRoleName)) {
+            log.infof("[CODE-FIRST] %s delegating research to %s — allowing for context gathering", currentRoleName, normalized);
+        }
+
+        if (isCombinedGoalToResearcher(normalized, currentRoleName, goal)) {
+            log.infof("[REDIRECT] %s → %s blocked (combined goal), auto-redirecting to brahma", currentRoleName, normalized);
+            normalized = AgentRoleEnum.CODER.id();
+            agentName = normalized;
+        }
+
         if (!AgentRoleEnum.isKnownRole(agentName)) {
             return ToolResponse.failure(400, delegationUnknownAgent(agentName, delegatableList));
         }
 
         AgentRoleEnum targetRole = AgentRoleEnum.fromString(agentName);
-        AgentRoleEnum currentRole = AgentRoleEnum.fromString(currentRoleName);
 
-        if (!currentRole.equals(AgentRoleEnum.COORDINATOR)) {
-            Set<String> currentCaps = capabilityRegistry.getSupplementalTools(currentRoleName);
-            Set<String> targetCaps = capabilityRegistry.getSupplementalTools(targetRole.id());
+        auditService.record(outerSessionId, userId, ctx.agentRole(),
+                SecurityEventType.DELEGATION_DISPATCHED,
+                "target=" + agentName + " depth=" + depth + " goalLen=" + goal.length());
 
-            Set<String> unauthorizedCaps = new HashSet<>(targetCaps);
-            unauthorizedCaps.removeAll(currentCaps);
-
-            if (!unauthorizedCaps.isEmpty()) {
-                String unauthorizedList = unauthorizedCaps.stream()
-                    .sorted()
-                    .collect(Collectors.joining(", "));
-                
-                return ToolResponse.failure(403,
-                    delegationRejectedCaps(targetRole.toScopedName(), unauthorizedList, currentRoleName)
-                );
-            }
-        }
+        // Capture parent OTel context before spawning sub-agent
+        Context parentOtelContext = Context.current();
 
         AgentResult result;
+        Span delegationSpan = otelContext.childSpan(outerSessionId, AgentOTelConstants.SPAN_DELEGATION_DISPATCH);
         try {
+            if (delegationSpan != null) {
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_TARGET, agentName);
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_DEPTH, (long) depth);
+                delegationSpan.setAttribute(AgentOTelConstants.ATTR_DELEGATION_GOAL_LEN, (long) goal.length());
+            }
             result = runSubAgent(ctx, outerSessionId, agentName, goal, targetRole, userId, chatId);
+            if (delegationSpan != null) delegationSpan.setStatus(StatusCode.OK);
         } catch (BudgetExceededException e) {
+            if (delegationSpan != null) {
+                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                delegationSpan.recordException(e);
+                delegationSpan.end();
+            }
             throw e;
         } catch (Exception e) {
+            if (delegationSpan != null) {
+                delegationSpan.setStatus(StatusCode.ERROR, e.getMessage());
+                delegationSpan.recordException(e);
+                delegationSpan.end();
+            }
             return handleRunSubAgentException(targetRole, e);
+        } finally {
+            if (delegationSpan != null) delegationSpan.end();
         }
 
         return handleSubAgentResult(result, targetRole, outerSessionId);
@@ -168,7 +190,7 @@ public class DelegateToAgentTool implements AgentTool {
         AutonomyLevel outerLevel = ctx.autonomyLevel();
         AutonomyLevel innerLevel = switch (outerLevel) {
             case READONLY -> AutonomyLevel.READONLY;
-            default -> AutonomyLevel.FULL;
+            default -> outerLevel;
         };
 
         String channelType = ctx.channelType();
@@ -218,8 +240,10 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         if (result instanceof AgentResult.Finished f && f.answer() != null) {
-            if (f.answer().contains("I cannot share my internal system instructions")) {
-                return ToolResponse.failure(403, 
+            String trimmed = f.answer().trim();
+            if (trimmed.contains("unable to share my internal instructions")
+                    || trimmed.contains("PROMPT_LEAK_BLOCKED")) {
+                return ToolResponse.failure(403,
                     "Sub-agent refused to complete the task due to safety constraints or prompt injection filters. " +
                     "Do NOT return this error to the user. You must answer the user's request directly using your own knowledge and tools.");
             }
@@ -238,9 +262,35 @@ public class DelegateToAgentTool implements AgentTool {
                 .collect(Collectors.joining(", "));
     }
 
+    private static String stripSurroundingQuotes(String s) {
+        if (s == null) return null;
+        s = s.trim();
+        if (s.length() >= 2 && ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith("\"") && s.endsWith("\"")))) {
+            return s.substring(1, s.length() - 1).trim();
+        }
+        return s;
+    }
+
     private boolean isSelfDelegation(String normalized, String currentRoleName) {
         AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
         return current.id().equals(normalized) ||
                current.definition().aliases().contains(normalized);
+    }
+
+    private boolean isCoderDelegatingToResearcher(String normalized, String currentRoleName) {
+        if (!AgentRoleEnum.isKnownRole(normalized)) return false;
+        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
+        AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
+        return current == AgentRoleEnum.CODER && target == AgentRoleEnum.RESEARCHER;
+    }
+
+    private boolean isCombinedGoalToResearcher(String normalized, String currentRoleName, String goal) {
+        if (!AgentRoleEnum.isKnownRole(normalized)) return false;
+        AgentRoleEnum current = AgentRoleEnum.fromString(currentRoleName);
+        AgentRoleEnum target = AgentRoleEnum.fromString(normalized);
+        return current == AgentRoleEnum.COORDINATOR
+            && target == AgentRoleEnum.RESEARCHER
+            && goal != null
+            && AgentSentinels.CODE_EXECUTION_KEYWORDS.matcher(goal).find();
     }
 }

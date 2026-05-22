@@ -10,11 +10,13 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.common.entity.ReasoningStepEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Handles core JPA operations for ReasoningStepEntity objects.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class ReasoningStepRepository {
 
     private final EntityManager em;
@@ -30,7 +32,10 @@ public class ReasoningStepRepository {
 
     @Transactional(Transactional.TxType.REQUIRED)
     public void persistSteps(Long checkpointId, List<ReasoningStepDto> steps) {
-        em.clear();
+        // NOTE: Do NOT call em.clear() here. persistSteps is called inside
+        // doSaveCheckpointWithSteps which shares the same REQUIRED transaction.
+        // em.clear() would detach the just-saved checkpoint entity, silently
+        // losing the AWAITING_APPROVAL status update on commit.
         em.createQuery("DELETE FROM ReasoningStepEntity r WHERE r.checkpointId = :id")
                 .setParameter("id", checkpointId)
                 .executeUpdate();

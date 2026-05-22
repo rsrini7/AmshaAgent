@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1361_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1458_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
@@ -32,12 +32,13 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, OMLX, or local Ollama models
 - **Six specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
+- **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
 - **Reflex system** - 16 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
 - **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation, with namespace and direct-execution fallbacks
 - **Web search tools** - Brave Search and Serper API integration for real-time information retrieval
-- **Code execution** - `sandbox_exec` tool for running Python, Java, Node.js, and Go in isolated containers
+- **Code execution** - `sandbox_exec` tool for running Python, Java, Node.js, and Go in isolated containers, with auto-heal: sandbox failures are automatically routed to Shiva (debugger) for self-correction before surfacing errors
 - **AES-256-GCM-SIV secret vault** with Argon2id key derivation - secrets are never stored in plaintext
 - **Tamper-evident HMAC audit chain** - every agent action is logged as an append-only, verifiable record
 - **Autonomous cron scheduler** - agents can schedule future tasks using a 5-field UNIX cron expression
@@ -67,7 +68,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
-| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability |
+| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability; sandbox failures auto-delegated to Shiva via `ExecutionFailureRecoveryService`; cross-persona escalation via `PersonaEscalationService` |
 
 - **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files - never as process arguments.
 - **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
@@ -159,11 +160,13 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 4. **Skill System:** Inside `IntentClassificationHandler`, `SkillAwareIntentDetector` checks `SkillRegistry.findMatch()` first. If matched, the skill's system prompt is injected and the agent runs directly - bypassing LLM intent classification entirely (zero additional classification tokens).
 5. **AgentLoop (LangChain4J):** The core reasoning engine runs a bounded `maxIterations` loop (Thought → Plan → Act → Observe), preventing infinite hallucination spirals.
 6. **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or budget-exceeded).
+7. **ToolSearchIndex:** An in-memory Lucene index over all registered tools enables dynamic tool discovery. Instead of injecting every tool definition into every prompt, the agent queries this index with its task description to find the most relevant tools, reducing prompt bloat when many tools, MCP servers, and skills are registered.
 7. **Parallel Tool Execution:** When the LLM requests multiple tools in one step, `ParallelToolStepExecutor` executes them concurrently. Pre-executable tools (FULL autonomy or configured safe list) run immediately; remaining tools are held for batch HITL approval with Telegram inline keyboard.
 8. **Agent Delegation:** Any role can use the `delegate_to_agent` tool to spin up a sub-agent loop for specialist tasks. Non-coordinators are restricted from delegating to roles they lack capabilities for. The sub-agent runs with its own isolated context and reports results back.
 9. **ProcessIsolationExecutor:** Three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in test mode only (`strategy: NONE`).
 10. **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 11. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
+12. **Answer Quality Guard:** Before returning a final answer, `AnswerQualityGuard` validates it against multiple checks: system instruction echo detection, naked tool call injection, compaction context leaks, and minimum quality thresholds. Failed answers trigger automatic retry with corrective hints.
 
 > [!NOTE]
 > **Sandbox Degradation Details**: The `ProcessIsolationExecutor` operates in three tiers:
@@ -404,12 +407,12 @@ ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, w
 
 | Role | Deity | Max Iterations | Tools | Description |
 |---|---|---|---|---|
-| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output |
-| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code |
-| `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox |
-| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification |
-| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `delegate_to_agent` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code |
-| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains simultaneously |
+| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output. Escalates conflicting outputs to Dattatreya |
+| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code. Escalates to Brahma for implementation, Brihaspati for architecture |
+| `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox. Escalates unknown APIs to Saraswati, design decisions to Brihaspati, bugs to Shiva |
+| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification. Auto-heal target; escalates obscure errors to Saraswati, fundamental flaws to Brahma |
+| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `delegate_to_agent` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code. Escalates implementation to Brahma, research to Saraswati |
+| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains. Escalates conflicts to Brihaspati, gaps to Brahma/Saraswati |
 
 > [!NOTE]
 > Tool schemas are assembled dynamically at runtime via `@ToolMetadata(defaultRoles=...)` annotations on tool classes. `delegate_to_agent` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. The `coder` role has `add_mcp_server` for dynamically registering MCP servers at runtime. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
@@ -422,12 +425,12 @@ graph LR
 
     subgraph AGENTS["🕉️ THE COSMIC PANTHEON - SIX AGENTS"]
         direction TB
-        A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate_to_agent"]:::coordinator
-        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code · + delegate"]:::researcher
-        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist + MCP + delegate"]:::coder
-        A4["🔴 debugger - Shiva<br/>Contrarian · Finds blind spots · MCP + delegate"]:::debugger
-        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code · + delegate"]:::architect
-        A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist"]:::synthesizer
+        A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate + escalation"]:::coordinator
+        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code<br/>+ delegate + escalation"]:::researcher
+        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist<br/>+ MCP + delegate + escalation"]:::coder
+        A4["🔴 debugger - Shiva<br/>Contrarian · Auto-heal · Escalation<br/>MCP + delegate"]:::debugger
+        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code<br/>+ delegate + escalation"]:::architect
+        A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist<br/>+ escalation"]:::synthesizer
     end
 
     subgraph TOOLS["🛠️ TOOLS"]
@@ -494,6 +497,7 @@ arcclaw-persistence-api/      ← Hexagonal architecture port interfaces
 │   ├── CheckpointLifecyclePort Checkpoint lifecycle (reap, GC)
 │   ├── ChatMemoryStorePort     Chat memory persistence
 │   ├── CronStorePort           Cron job persistence
+│   ├── CronRunStorePort        Cron execution history persistence
 │   ├── SecretStorePort         Encrypted secret storage
 │   ├── SkillStorePort          Skill CRUD
 │   ├── AuditEventStorePort     Audit event append + query
@@ -506,6 +510,7 @@ arcclaw-persistence-api/      ← Hexagonal architecture port interfaces
 arcclaw-persistence-common/   ← Shared JPA entities (used by all persistence adapters)
 │   ├── AgentCheckpointEntity   JPA entity for agent checkpoints
 │   ├── AgentCronEntity         JPA entity for cron jobs
+│   ├── CronRunEntity           JPA entity for cron execution history
 │   ├── AuditEventEntity        JPA entity for audit events
 │   ├── ReasoningStepEntity     JPA entity for reasoning steps
 │   └── Converters              CronStatusConverter, InstantToTextConverter
@@ -528,7 +533,7 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           OmlxProviderFactory
 │   ├── agent/role/             AgentRoleEnum, RoleDefinition, RoleRegistry, ToolCapability
 │   ├── api/                    AgentResource, AgentSessionService, AuditResource,
-│   │                           SystemInfoResource, ToolRegistryResource,
+│   │                           CronResource, SystemInfoResource, ToolRegistryResource,
 │   │                           GlobalExceptionMapper
 │   ├── api/dto/                ActiveAgentResponse (UI DTO: count + AgentSummary list)
 │   ├── audit/                  AuditService, AuditObserver, AuditHashUtil, AuditEvent,
@@ -587,7 +592,8 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           ToolCapability, GithubTool, ScheduleTaskTool,
 │   │                           ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
 │   │                           SandboxExecTool, CheckListTool, BraveWebSearchTool,
-│   │                           SerperWebSearchTool, DynamicToolLookup SPI,
+│   │                           SerperWebSearchTool, SmartWebFetchTool, AgentTaskTool,
+│   │                           DynamicToolLookup SPI, ToolSearchIndex (Lucene),
 │   │                           ToolContractExporter (writes tool-contracts.json on startup)
 │   ├── util/                   LogUtil (rootMessage, trimmedStack, ctx formatting)
 │
@@ -670,7 +676,7 @@ arcclaw-deployment/           ← Build-time Quarkus extension (@BuildStep proce
 │   ├── RagResourcesBuildStep   RAG resource registration
 │   └── ArcClawDeploymentInfo   Deployment metadata
 │
-arcclaw-ui/                   ← Frontend (Node.js / React) - no Java source
+arcclaw-ui/                   ← Frontend (Lit 3.x Web Components + TypeScript + Vite) - no Java source
 │
 arcclaw-app/                  ← Application entrypoint and wiring
     ├── ArcClawCli              Quarkus + Picocli entry point
@@ -711,7 +717,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-api` | Allows `arcclaw-core` to reference channel concepts (sender, allowlist) without coupling to Telegram or any concrete adapter. Swapping channels requires zero core changes. |
 | `arcclaw-persistence-api` | Hexagonal architecture port interfaces. Core depends on ports, not implementations. Enables swapping SQLite for Postgres or filesystem without core changes. |
 | `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters. Avoids entity duplication across SQLite, Postgres, and filesystem adapters. |
-| `arcclaw-core` | Independently testable. All ~1361 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
+| `arcclaw-core` | Independently testable. All ~1454 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
 | `arcclaw-persistence-sqlite` | SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, and FTS5 setup. |
 | `arcclaw-persistence-fs` | Filesystem-based persistence adapter for environments without SQLite. |
 | `arcclaw-persistence-postgres` | PostgreSQL adapter for production deployments requiring a server database. |
@@ -722,7 +728,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-telegram` | The Telegram channel is a full Maven module with its own test suite. It can be excluded from the build for deployments that don't need Telegram. |
 | `arcclaw-tool-playwright` | Playwright browser automation tool. Optional; requires Playwright CLI binary. |
 | `arcclaw-deployment` | The `@WorkspaceScoped` CDI scope, `AgentFunctionProcessor`, `RestResourceBuildStep`, and RAG resource steps are registered at Quarkus build time via `@BuildStep`. Separating this ensures the scope works correctly in native image compilation. |
-| `arcclaw-ui` | Frontend (Node.js / React). No Java source; excluded from Maven build. |
+| `arcclaw-ui` | Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build. |
 | `arcclaw-app` | The only module that knows about external protocols (HTTP, Telegram, CLI). Keeps protocol concerns out of the kernel. |
 
 ### `@WorkspaceScoped` - Custom CDI Scope
@@ -836,7 +842,7 @@ This matters for three reasons:
 |---|---|---|---|
 | `PromptInjectionReflex` | every message | 10 | Blocks jailbreak patterns (fake approvals, "reveal system prompt", CONTEXT_WIPE, auto-approve bypass attempts); writes mandatory `PROMPT_INJECTION_BLOCKED` audit event |
 | `PiiScanReflex` | every message | 20 | Detects emails, phone numbers, Aadhaar, PAN, credit cards, SSNs, IPs, JWTs; redacts or blocks per `arcclaw.pii.mode` |
-| `ApproveReflex` | `/approve [sessionId] [toolName]` | 100 | Resumes a paused `AWAITING_APPROVAL` checkpoint; per-tool or all-tools; admin delegation supported |
+| `ApproveReflex` | `/approve [sessionId] [toolName]` | 100 | Resumes a paused `AWAITING_APPROVAL` checkpoint; per-tool or all-tools; admin delegation supported; cron jobs owned by the approver are auto-approved via fast path |
 | `DenyReflex` | `/deny [sessionId] [toolName]` | 200 | Marks checkpoint `FAILED`, wipes state; per-tool granularity supported |
 | `RetryReflex` | `/retry` | 10 | Retries the last failed checkpoint from the current session |
 | `IdentityExtractionReflex` | every message | 250 | Extracts user identity facts (name, role, preferences) silently via NLP for persona adaptation |
@@ -871,11 +877,13 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `IngestDocumentTool` | `ingest_document` | `WRITE_MEMORY` | ❌ In-memory | coordinator, synthesizer | Ingest a document into the global or session knowledge base for future vector retrieval |
 | `DelegateToAgentTool` | `delegate_to_agent` | `DELEGATE_AUTONOMOUS` | ❌ In-process | all 6 roles | Spawns a specialist sub-agent loop; non-coordinators are restricted from delegating to roles they lack |
 | `McpSelfRegisterTool` | `add_mcp_server` | `NETWORK_OUTBOUND` | ❌ In-memory | coder, debugger | Dynamically register a new MCP server at runtime; tools become available immediately |
-| `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Go, Node, Bash); falls back to direct execution with `allow-insecure-fallback` |
+| `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Go, Node, Bash); falls back to direct execution with `allow-insecure-fallback`. Failures auto-heal via `ExecutionFailureRecoveryService` → Shiva debugger |
 | `CheckListTool` | `check_list` | `READ_FS` | ❌ In-memory | coder, debugger | Manage task checklist progress tracking |
 | `BraveWebSearchTool` | `brave_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time web search via Brave Search API |
 | `SerperWebSearchTool` | `serper_web_search` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Real-time Google search results via Serper API |
 | `PlaywrightCliTool` | `browser_navigate` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Headless browser automation via Playwright CLI |
+| `SmartWebFetchTool` | `web_fetch` | `NETWORK_OUTBOUND` | ❌ In-memory | researcher, synthesizer | Fetch a URL and return content as plain text; for JS-heavy sites, use `browser_navigate` instead |
+| `AgentTaskTool` | `agent_task` | `READ_FS` | ❌ In-memory | coordinator, synthesizer, researcher | Create, list, update, and transition markdown-based task files with YAML frontmatter |
 | `ExternalMcpToolAdapter` | *(dynamic name)* | Varies | ❌ In-process | *(dynamic)* | Wraps tools from connected external MCP servers; registered dynamically via `DynamicToolCapabilityRegistry` |
 
 ### Tool Governance - Autonomy Levels
@@ -1047,7 +1055,7 @@ graph LR
 
 ### Context Compaction (`ContextCompactionService`)
 
-The rolling chat window is controlled by `arcclaw.chat-memory.max-messages` (default: **100 messages**). System messages are always preserved; the window applies only to non-system messages.
+The rolling chat window is controlled by `arcclaw.chat-memory.max-messages` (default: **20 messages**). System messages are always preserved; the window applies only to non-system messages.
 
 When the rolling window exceeds `arcclaw.memory.compaction.threshold` (default: **10 messages**), `CompactionHandler` fires an **asynchronous CDI event** and returns immediately. Compaction also triggers when the combined message character count exceeds `arcclaw.memory.compaction.max-chars` (default: **96,000**) or the estimated token count exceeds `arcclaw.memory.compaction.max-tokens` (default: **32,000**). The actual compaction runs in a background thread:
 
@@ -1073,7 +1081,7 @@ Long-term memory search merges results from **two** retrieval tiers using **Reci
 
 **Graceful degradation**: If `FtsConnectionInterceptor.isVectorSearchEnabled()` returns `false` (sqlite-vec extension unavailable), `TwoTierMemoryService` skips the RRF merge entirely and returns FTS5 results directly - no error, no downtime.
 
-The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`).
+The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`). The `FtsConnectionInterceptor` dynamically resolves relative paths by recursively searching up parent directories (up to 4 levels) to support seamless execution inside submodule directories (e.g. during Maven tests).
 
 ### Long-Term Memory (`MemorySearchTool`)
 
@@ -1417,6 +1425,10 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_AGENT_MAX_ITERATIONS` | no | `5` | Default max ReAct loop iterations |
 | `ARCCLAW_AGENT_DEFAULT_TIMEZONE` | no | `Asia/Kolkata` | Default timezone for agent operations |
 | `ARCCLAW_AGENT_MAX_RATELIMIT_RETRIES` | no | `3` | Max retries on LLM rate-limit errors in the agent loop |
+| `ARCCLAW_AGENT_AUTO_HEAL_ENABLED` | no | `true` | Enable auto-heal: sandbox_exec failures are delegated to Shiva (debugger) for self-correction |
+| `ARCCLAW_AGENT_AUTO_HEAL_MAX_ATTEMPTS` | no | `2` | Max Shiva delegation attempts per sandbox_exec failure |
+| `ARCCLAW_AGENT_ESCALATION_ENABLED` | no | `true` | Enable cross-persona escalation: auto-route tasks to the right specialist when a persona hits its capability boundary |
+| `ARCCLAW_AGENT_ESCALATION_MAX_DEPTH` | no | `2` | Max escalation chain depth (prevents infinite routing loops) |
 | `ARCCLAW_DELEGATION_MAX_DEPTH` | no | `2` | Max agent delegation depth |
 
 ### Data & Storage
@@ -1503,4 +1515,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1361 tests passing · 17 modules · 13 tools · 16 reflexes · 10 LLM providers*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 16 reflexes · 10 LLM providers · 19 UI components*

@@ -15,6 +15,7 @@ import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.loop.ToolInvocationGuard;
 import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,7 +59,7 @@ class ToolInvocationGuardDynamicTest {
 
         // Root Cause 1: When dynamic lookup is unsatisfied, isDynamicAllowed=false -> Blocked
         ToolInvocationGuard.GuardDecision decision = guard.evaluate(
-                "s1", "coordinator", AutonomyLevel.SUPERVISED, "github", Map.of("op", "search"),
+                "s1", "coordinator", AutonomyLevel.SUPERVISED, ToolCapability.GITHUB.toolName(), Map.of("op", "search"),
                 Collections.emptyList(), "just a question", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);

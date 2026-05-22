@@ -3,6 +3,7 @@ package com.arcclaw.core.security;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,15 +11,13 @@ import org.junit.jupiter.api.Test;
 class Argon2idKeyDerivationTest {
 
     private Argon2idKeyDerivation keyDerivation;
+    private char[] pepperChars;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         keyDerivation = new Argon2idKeyDerivation();
-        
-        // Inject char[] pepper using reflection
-        Field pepperField = Argon2idKeyDerivation.class.getDeclaredField("pepperChars");
-        pepperField.setAccessible(true);
-        pepperField.set(keyDerivation, "secret-pepper".toCharArray());
+        pepperChars = "secret-pepper".toCharArray();
+        keyDerivation.setPepperChars(pepperChars);
     }
 
     @Test
@@ -29,19 +28,44 @@ class Argon2idKeyDerivationTest {
     }
 
     @Test
-    void pepperCharsAreZeroedInsideDeriveSessionKey() throws Exception {
-        // Call derivation
-        keyDerivation.deriveSessionKey("test-session-id");
+    void pepperCharsPersistAcrossMultipleCalls() throws Exception {
+        VaultKey firstKey = keyDerivation.deriveSessionKey("first-session");
+        assertNotNull(firstKey);
 
-        // Read pepperChars field via reflection - must be all zeros BEFORE @PreDestroy fires
         Field field = Argon2idKeyDerivation.class.getDeclaredField("pepperChars");
         field.setAccessible(true);
         char[] pepper = (char[]) field.get(keyDerivation);
 
-        for (int i = 0; i < pepper.length; i++) {
-            assertEquals('\0', pepper[i],
-                    "pepperChars[" + i + "] must be zeroed after deriveSessionKey() returns, " +
-                    "not only in @PreDestroy");
-        }
+        assertEquals("secret-pepper", new String(pepper),
+                "pepperChars must persist after deriveSessionKey() returns");
+
+        VaultKey secondKey = keyDerivation.deriveSessionKey("second-session");
+        assertNotNull(secondKey);
+    }
+
+    @Test
+    void sameSessionIdProducesSameKey() {
+        VaultKey key1 = keyDerivation.deriveSessionKey("test-session");
+        VaultKey key2 = keyDerivation.deriveSessionKey("test-session");
+        assertArrayEquals(key1.get(), key2.get());
+    }
+
+    @Test
+    void differentSessionIdsProduceDifferentKeys() {
+        VaultKey key1 = keyDerivation.deriveSessionKey("session-a");
+        VaultKey key2 = keyDerivation.deriveSessionKey("session-b");
+        assertFalse(Arrays.equals(key1.get(), key2.get()));
+    }
+
+    @Test
+    void nullSessionIdThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> keyDerivation.deriveSessionKey(null));
+    }
+
+    @Test
+    void blankSessionIdThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> keyDerivation.deriveSessionKey("   "));
     }
 }

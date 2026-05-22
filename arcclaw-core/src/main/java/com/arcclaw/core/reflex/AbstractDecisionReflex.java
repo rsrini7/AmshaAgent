@@ -8,6 +8,8 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResolutionException;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
@@ -21,7 +23,6 @@ import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.BatchDecisionUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.CronStorePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -173,7 +174,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         }
 
         String auditMsg = "Admin %s performed %s on session %s: %s".formatted(adminId, getActionName(), targetSid, reason);
-        auditService.logSecurityEvent(SecurityEventType.DELEGATE_APPROVAL, adminId, auditMsg);
+        auditService.recordMandatory(targetSid, adminId, activeRole, SecurityEventType.DELEGATE_APPROVAL, auditMsg);
 
         checkpointResumeHandler.resumeAfterBatchDecision(targetSid, activeRole, adminId, adminChatId, context.getUser().channel().name());
         return MSG_RESUMING_TASK;
@@ -200,11 +201,15 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         targetId = resolveNumericTargetIndex(targetId, sessionId, userId);
 
         // Resolve prefix match for cron job IDs
-        if (targetId.length() >= 4 && !targetId.contains("-")) {
+        String prefix = targetId.toLowerCase();
+        if (prefix.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            prefix = prefix.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        }
+        if (prefix.length() >= 4 && !prefix.contains("-")) {
             List<AgentCron> pendingCrons = cronStore.findAwaitingApprovalByUserId(userId).stream().map(AgentCronRecord::fromDto).collect(Collectors.toList());
-            String prefix = targetId.toLowerCase();
+            String finalPrefix = prefix;
             Optional<AgentCron> matchedCron = pendingCrons.stream()
-                .filter(c -> c.getId().toLowerCase().startsWith(prefix))
+                .filter(c -> c.getId().toLowerCase().startsWith(finalPrefix))
                 .findFirst();
             if (matchedCron.isPresent()) {
                 targetId = matchedCron.get().getId();
@@ -248,6 +253,17 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         // 1. Session pending? → requires delegate role for cross-session approval
         Optional<AgentCheckpoint> targetPending = statefulAgentStore.findLatestAwaitingApproval(targetId);
         if (targetPending.isPresent()) {
+            // §Cron-Owner Fast-Path: if the target is a cron-run session owned by this user,
+            // allow approval without delegate role.
+            String targetSessionId = targetPending.get().getSessionId();
+            if (targetSessionId != null && targetSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+                String cronId = targetSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+                if (cronId.length() >= 36) cronId = cronId.substring(0, 36);
+                Optional<AgentCron> cron = cronStore.findById(cronId).map(AgentCronRecord::fromDto);
+                if (cron.isPresent() && cron.get().getUserId().equals(userId)) {
+                    return handleDelegateDecision(targetId, userId, chatId, reason, context);
+                }
+            }
             if (!delegateGuard.isDelegate(userId)) {
                 log.warnf("[%s-DELEGATE-DENIED] user=%s attempted session decision for id=%s",
                         getActionName(), userId, targetId);

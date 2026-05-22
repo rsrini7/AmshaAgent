@@ -13,11 +13,13 @@ import com.arcclaw.persistence.api.CheckpointDto;
 import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Handles complex upsert logic and entity-dto mapping for checkpoints.
  */
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class CheckpointUpsertService {
 
     private final CheckpointRepository checkpointRepo;
@@ -75,7 +77,8 @@ public class CheckpointUpsertService {
         if (created) {
             entity = checkpointRepo.persist(entity);
         } else {
-            entity = checkpointRepo.merge(entity);
+            // Native SQL: JPA merge silently fails to commit via Narayana JTA + SQLite
+            checkpointRepo.nativeUpdate(entity);
         }
         
         return new CheckpointUpsertResult(CheckpointMapper.toDto(entity), created);
@@ -120,7 +123,8 @@ public class CheckpointUpsertService {
         if (created) {
             entity = checkpointRepo.persist(entity);
         } else {
-            entity = checkpointRepo.merge(entity);
+            // Native SQL: JPA merge silently fails to commit via Narayana JTA + SQLite
+            checkpointRepo.nativeUpdate(entity);
         }
         
         CheckpointDto savedDto = CheckpointMapper.toDto(entity);

@@ -10,10 +10,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.message.UserMessages;
 import com.arcclaw.core.util.ClassUtils;
-import com.arcclaw.common.util.LogUtil;
 import io.quarkus.runtime.Startup;
 import org.jboss.logging.Logger;
 

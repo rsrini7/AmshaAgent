@@ -126,7 +126,7 @@ public class AgentLoop {
         AgentResult result = null;
         List<ReasoningStep> resumedHistory = new ArrayList<>();
 
-        Span span = observabilityManager.beginSession(sessionId);
+        Span span = observabilityManager.beginSession(sessionId, capturedUserId, canonicalRole);
         try (Scope _ = span.makeCurrent()) {
             try {
                 var decision = checkpointResumeCoordinator.resolveResumePath(

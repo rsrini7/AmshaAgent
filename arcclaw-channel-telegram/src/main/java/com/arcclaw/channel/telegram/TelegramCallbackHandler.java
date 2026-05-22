@@ -21,7 +21,6 @@ import com.arcclaw.channel.api.hitl.ApprovalResult;
 import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Unremovable;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
@@ -104,7 +103,14 @@ public class TelegramCallbackHandler {
                 case REJECTED -> popupText = "❌ Rejected: " + toolName;
                 case EXPIRED -> popupText = "⏱ Approval expired";
                 case NOT_FOUND -> {
-                    log.debugf("Stale callback for session %s, ignoring", sessionId);
+                    log.infof("Stale callback for session %s - ignoring NOT_FOUND", sessionId);
+                    // Edit the message to remove stale inline keyboard and show expired notice
+                    try {
+                        sender.editMessage(chatId, messageId, "ignoring session NOT_FOUND", null);
+                    } catch (Exception editEx) {
+                        log.debugf("Failed to edit stale NOT_FOUND message: %s", LogUtil.rootMessage(editEx));
+                    }
+                    answerCallback(query.getId(), "ignoring session NOT_FOUND");
                     return;
                 }
                 case ALREADY_DECIDED -> popupText = "Already decided";
@@ -174,7 +180,7 @@ public class TelegramCallbackHandler {
                 HttpResponse.BodyHandlers.discarding())
             .exceptionally(ex -> {
                 log.warnf("Failed to answer Telegram callback %s: %s",
-                    callbackQueryId, ex.getMessage());
+                    callbackQueryId, LogUtil.rootMessage(ex));
                 return null;
             });
         } catch (Exception e) {

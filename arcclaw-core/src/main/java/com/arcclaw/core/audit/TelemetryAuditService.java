@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.config.SystemMetadataRegistry;
 import com.arcclaw.core.domain.model.AuditEvent;
@@ -12,7 +13,6 @@ import com.arcclaw.core.domain.model.AuditEventRecord;
 import com.arcclaw.core.persistence.AsyncPersistenceEngine;
 import com.arcclaw.core.persistence.PersistenceEvent;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped

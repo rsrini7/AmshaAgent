@@ -39,6 +39,9 @@ export class ArcChatInterface extends LitElement {
   private _intentionalClose = false;
   private _reconnectAttempts = 0;
   private _reconnectTimeoutId: any = null;
+  private _wsToken = '';
+  private _wsTokenFetchedAt = 0;
+  private static readonly WS_TOKEN_TTL = 30_000; // reuse same token within 30s window
 
   static styles = css`
     :host { 
@@ -272,8 +275,9 @@ export class ArcChatInterface extends LitElement {
     if (this._intentionalClose) return;
     this._connecting = true;
 
-    let token = '';
-    if (this.apiKey) {
+    let token = this._wsToken && Date.now() - this._wsTokenFetchedAt < ArcChatInterface.WS_TOKEN_TTL
+      ? this._wsToken : '';
+    if (!token && this.apiKey) {
       try {
         const res = await fetch('/api/v1/chat/ws-token', {
           method: 'POST',
@@ -281,7 +285,9 @@ export class ArcChatInterface extends LitElement {
         });
         if (res.ok) {
           const data = await res.json();
-          token = data.token;
+          this._wsToken = data.token;
+          this._wsTokenFetchedAt = Date.now();
+          token = this._wsToken;
         }
       } catch (e) {
         console.warn('Failed to obtain WS token', e);
@@ -302,11 +308,18 @@ export class ArcChatInterface extends LitElement {
           composed: true
         }));
         if (status === 'open') {
-          this._reconnectAttempts = 0;
           if (token) this._ws?.send({ type: 'AUTH', token });
+          // Defer resetting backoff — WS must stay open for 5s first
+          // to prevent rapid open/close loops from resetting the counter
+          setTimeout(() => {
+            if (this._wsStatus === 'open') {
+              this._reconnectAttempts = 0;
+            }
+          }, 5000);
         }
         if (status === 'closed' || status === 'error') {
           this._ws = null;
+          this._reconnectAttempts++;
           this._scheduleReconnect();
         }
       }
@@ -317,23 +330,25 @@ export class ArcChatInterface extends LitElement {
 
   private _scheduleReconnect() {
     if (this._intentionalClose || this._connecting) return;
-    
-    // Exponential backoff with jitter
+    if (this._reconnectAttempts >= 10) {
+      console.warn('ArcClaw: Too many reconnect failures, stopping');
+      return;
+    }
+
+    // Exponential backoff with jitter (square at attempt so delay grows fast)
     const baseDelay = 1000;
     const maxDelay = 30000;
-    const delay = Math.min(maxDelay, baseDelay * Math.pow(2, this._reconnectAttempts));
+    const exponent = Math.min(this._reconnectAttempts, 5); // cap exponent to avoid overflow
+    const delay = Math.min(maxDelay, baseDelay * Math.pow(2, exponent));
     const jitter = delay * 0.2 * (Math.random() * 2 - 1);
     const finalDelay = Math.max(baseDelay, delay + jitter);
 
-    console.log(`ArcClaw: Reconnecting in ${Math.round(finalDelay)}ms (attempt ${this._reconnectAttempts + 1})`);
-    
+    console.log(`ArcClaw: Reconnecting in ${Math.round(finalDelay)}ms (attempt ${this._reconnectAttempts})`);
+
     if (this._reconnectTimeoutId) clearTimeout(this._reconnectTimeoutId);
     this._reconnectTimeoutId = setTimeout(() => {
         this._reconnectTimeoutId = null;
-        // Re-check before connecting — _connect() may have already been
-        // triggered by updated() or another path since this was scheduled.
         if (this._connecting || this._ws) return;
-        this._reconnectAttempts++;
         this._connect();
     }, finalDelay);
   }
@@ -345,11 +360,13 @@ export class ArcChatInterface extends LitElement {
       this._isTyping = false;
       
       // We now have the server-assigned internal session ID
-      if (frame.sessionId && frame.sessionId !== this.sessionId) {
-        this.sessionId = frame.sessionId;
-        // Dispatch to parent shell to update SSE subscriptions
-        this.dispatchEvent(new CustomEvent('session-ready', { detail: { sessionId: frame.sessionId } }));
-        // Now we can safely load history
+      if (frame.sessionId) {
+        if (frame.sessionId !== this.sessionId) {
+          this.sessionId = frame.sessionId;
+          // Dispatch to parent shell to update SSE subscriptions
+          this.dispatchEvent(new CustomEvent('session-ready', { detail: { sessionId: frame.sessionId } }));
+        }
+        // Always reload history on connect/reconnect (handles page refresh)
         this._loadHistory();
       }
     } else if (frame.type === 'session_terminated') {
@@ -434,7 +451,7 @@ export class ArcChatInterface extends LitElement {
       return unsafeHTML(this._markdownCache.get(messageId)!);
     }
 
-    const rawHtml = marked.parse(text) as string;
+    const rawHtml = marked.parse(text, { breaks: true }) as string;
     const cleanHtml = DOMPurify.sanitize(rawHtml);
     
     // Update cache (limit size to 200 items)
@@ -456,6 +473,7 @@ export class ArcChatInterface extends LitElement {
       clearTimeout(this._reconnectTimeoutId);
       this._reconnectTimeoutId = null;
     }
+    this._reconnectAttempts = 0;
     this._ws = null; 
     this._intentionalClose = false; 
     this._connecting = true;

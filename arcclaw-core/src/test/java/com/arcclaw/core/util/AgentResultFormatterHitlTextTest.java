@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import com.arcclaw.core.agent.result.AgentResult;
+import com.arcclaw.core.agent.role.ToolCapability;
 import org.junit.jupiter.api.Test;
 
 class AgentResultFormatterHitlTextTest {
@@ -37,7 +38,7 @@ class AgentResultFormatterHitlTextTest {
     @Test
     void formatHitlMessage_singleTool_isPlainText() {
         AgentResult awaiting = AgentResult.awaitingApproval(
-            "github", "{\"cmd\":\"ls\"}", "sess-456", List.of());
+            ToolCapability.GITHUB.toolName(), "{\"cmd\":\"ls\"}", "sess-456", List.of());
         String output = AgentResultFormatter.format(awaiting);
         
         assertFalse(output.contains("`/approve`"), "Single tool HITL should not have backticks");

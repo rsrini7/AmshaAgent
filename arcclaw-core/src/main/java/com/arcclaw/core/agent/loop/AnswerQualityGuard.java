@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -49,18 +50,20 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
     TextPatternUtils textPatternUtils;
 
     private Pattern nakedFunctionCallPattern;
+    private LeakedToolCallParser leakedToolCallParser;
 
     @PostConstruct
     void initialize() {
         String toolNames = toolRegistry.listTools().stream()
                 .sorted()
                 .collect(Collectors.joining("|"));
-        
-        // Dynamic pattern: \b(tool1|tool2|...)\s*\(\s*[a-z0-9_]+\s*=\s*["'].*?["']\s*\)
+
+        // Dynamic pattern: \b(tool1|tool2|...)\s*\(([^)]*)\)
         this.nakedFunctionCallPattern = Pattern.compile(
-                "\\b(" + toolNames + ")\\s*\\(\\s*[a-z0-9_]+\\s*=\\s*[\"'].*?[\"']\\s*\\)",
+                "\\b(" + toolNames + ")\\s*\\(([^)]*)\\)",
                 Pattern.CASE_INSENSITIVE
         );
+        this.leakedToolCallParser = new LeakedToolCallParser(toolRegistry);
         log.debugf("AnswerQualityGuard initialized with dynamic naked call pattern for tools: %s", toolNames);
     }
 
@@ -261,8 +264,13 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
         if (textPatternUtils.looksLikeJson(answer)) {
             return "a structured JSON block";
         }
-        
+
         return "the intended tool";
+    }
+
+    @Override
+    public Optional<LeakedToolCall> extractLeakedToolCall(String answer) {
+        return leakedToolCallParser.extractLeakedToolCall(answer);
     }
 
     @Override
@@ -353,6 +361,14 @@ public class AnswerQualityGuard implements AnswerGuardStrategy {
                 }
             }
             return "I wasn't able to generate a clean response. Please try again.";
+        }
+
+        // Guard 6: system instruction echo (delegates pattern ref to AgentSentinels)
+        // The model echoes back formatting instructions ("Response must be 1-2 sentences") 
+        // as meta-commentary instead of answering the user's question.
+        if (AgentSentinels.SYSTEM_INSTRUCTION_ECHO_PATTERN.matcher(stripped).find()) {
+            log.warnf("ANSWER-GUARD detected system instruction echo in answer for session %s - rejecting", sessionId);
+            return "I wasn't able to generate a meaningful response. Please try again.";
         }
 
         return stripped;

@@ -35,11 +35,11 @@ public final class AgentExecutionContext {
     private final Map<String, Object> data;
 
     // Hot-path cache (§7.22 / F22)
-    private CheckpointStatus lastCheckpointStatus;
-    private boolean statusDirty = true;
-    private boolean forceFinishRetry = false;
-    private int truncationRetryCount = 0;
-    private int checkpointRestoreOffset = 0;
+    private volatile CheckpointStatus lastCheckpointStatus;
+    private volatile boolean statusDirty = true;
+    private volatile boolean forceFinishRetry = false;
+    private volatile int truncationRetryCount = 0;
+    private volatile int checkpointRestoreOffset = 0;
 
     public AgentExecutionContext(
             String sessionId,

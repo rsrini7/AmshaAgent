@@ -1,5 +1,6 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -7,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.routing.ChatModelFactory;
+import com.arcclaw.core.routing.MultiModelChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -42,9 +44,13 @@ public class OmlxProviderFactory implements AgentChatModelProvider {
                 "OMLX requires ARCCLAW_OMLX_MODEL"));
         // Disable Qwen/DeepSeek thinking mode — puts chain-of-thought in content field
         Map<String, Object> customParams = Map.of("enable_thinking", false);
-        return ChatModelFactory.createOpenAi(
-                baseUrl, apiKey, model,
-                agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
-                agentConfig.temperature(), agentConfig.logHttp(), customParams);
+        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
+                apiKey, model, "omlx",
+                (k, m) -> ChatModelFactory.createOpenAi(
+                        baseUrl, k, m,
+                        agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
+                        agentConfig.temperature(), agentConfig.logHttp(), customParams));
+        if (entries.size() == 1) return entries.get(0).model();
+        return new MultiModelChatModel("omlx", entries, 5);
     }
 }

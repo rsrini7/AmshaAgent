@@ -16,8 +16,10 @@ import com.arcclaw.persistence.api.IngestResult;
 import com.arcclaw.persistence.api.MemoryChunkDto;
 import com.arcclaw.persistence.api.MemoryEntryDto;
 import com.arcclaw.persistence.api.MemoryRetrievalPort;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
     private static final String DOMAIN = "memory-index";

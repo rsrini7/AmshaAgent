@@ -6,15 +6,16 @@ import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.error.LlmProviderException;
 import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.port.LlmProviderPort;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
+import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.common.util.LogUtil;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -53,7 +54,7 @@ public class StructuredOutputProcessor {
     }
 
     public String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt) {
-        Span span = otelContext.childSpan(sessionId, "structured_output_generation");
+        Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_STRUCTURED_OUTPUT);
         try {
             String systemPrompt = promptBuilder.build(null, agentRole, sessionId, "", false);
 
@@ -74,7 +75,6 @@ public class StructuredOutputProcessor {
                     otelContext.recordLlmCall(sessionId, usage.inputTokenCount(), usage.outputTokenCount());
                 } catch (BudgetWarningException w) {
                     log.warnf("Budget warning for session %s structured call: %s", sessionId, AgentErrorMessageUtil.safeMessage(w));
-                    throw w;
                 } catch (BudgetExceededException be) {
                     log.warnf("Budget exceeded in structured output for session %s: %s", sessionId, AgentErrorMessageUtil.safeMessage(be));
                     throw be;
@@ -82,7 +82,7 @@ public class StructuredOutputProcessor {
             }
 
             return response.aiMessage().text();
-        } catch (BudgetWarningException | BudgetExceededException e) {
+        } catch (BudgetExceededException e) {
             throw e;
         } catch (LlmProviderException e) {
             if (e instanceof LlmRateLimitException) {

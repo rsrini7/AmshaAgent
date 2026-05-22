@@ -12,10 +12,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.role.ToolMetadata;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.agent.role.ToolMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -35,8 +36,8 @@ public class ToolContractExporter {
     @Inject ToolRegistry toolRegistry;
     @Inject ToolDiscoveryService discoveryService;
 
-    @ConfigProperty(name = "quarkus.datasource.jdbc.url", defaultValue = "jdbc:sqlite:./data/arcclaw-meta.db")
-    String jdbcUrl;
+    @ConfigProperty(name = "arcclaw.data-dir", defaultValue = "./data")
+    String dataDir;
 
     void onStart(@Observes StartupEvent ev) {
         try {
@@ -101,11 +102,10 @@ public class ToolContractExporter {
     }
 
     private Path dataDir() {
-        String path = jdbcUrl.replace("jdbc:sqlite:", "");
-        int qIndex = path.indexOf('?');
-        if (qIndex > 0) path = path.substring(0, qIndex);
-        Path parent = Path.of(path).getParent();
-        return parent != null ? parent : Path.of(".");
+        if (LaunchMode.current() == LaunchMode.TEST && "./data".equals(dataDir)) {
+            return Path.of("target");
+        }
+        return Path.of(dataDir);
     }
 
     private static <T extends Annotation> T findAnnotation(Class<?> clazz, Class<T> ann) {

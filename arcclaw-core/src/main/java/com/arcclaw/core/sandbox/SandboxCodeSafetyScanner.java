@@ -26,7 +26,7 @@ public final class SandboxCodeSafetyScanner {
     private static final List<Pattern> UNIVERSAL_PATTERNS = List.of(
 
         // Filesystem destruction - shell
-        pattern("rm\\s+(-[^ ]*r[^ ]*|-r)"),         // rm -rf, rm -r, rm -Rf etc.
+        pattern("rm\\s+(-[^ ]*r[^ ]*)"),            // rm -rf, rm -r, rm --recursive, rm -Rf etc.
         pattern("rmdir\\s+/[sS]"),                   // Windows rmdir /s
         pattern("rd\\s+/[sS]"),                      // Windows rd /s
 
@@ -60,6 +60,19 @@ public final class SandboxCodeSafetyScanner {
     // e.g. exec.Command must not block node's child_process.exec
     // -------------------------------------------------------------------------
 
+    private static final List<Pattern> NODE_PATTERNS = List.of(
+        pattern("child_process\\.exec"),
+        pattern("child_process\\.execSync"),
+        pattern("child_process\\.spawn"),
+        pattern("child_process\\.execFile"),
+        pattern("child_process\\.fork"),
+        pattern("fs\\.rmSync"),
+        pattern("fs\\.rm\\s*\\("),
+        pattern("fs\\.unlinkSync"),
+        pattern("shelljs"),
+        pattern("execa")
+    );
+
     private static final Map<String, List<Pattern>> LANG_PATTERNS = Map.of(
 
         "python", List.of(
@@ -92,7 +105,10 @@ public final class SandboxCodeSafetyScanner {
         "go", List.of(
             pattern("exec\\.Command"),
             pattern("os\\.Remove(All)?\\s*\\(")
-        )
+        ),
+
+        "node", NODE_PATTERNS,
+        "javascript", NODE_PATTERNS
     );
 
     /**

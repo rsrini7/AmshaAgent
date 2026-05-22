@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
@@ -20,7 +21,6 @@ import com.arcclaw.core.state.ToolDecision;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
-import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -38,16 +38,22 @@ class ResumeStrategyDispatcher {
     private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper;
     private final ReasoningEngine reasoningEngine;
+    private final ExecutionFailureRecoveryService recoveryService;
+    private final PersonaEscalationService escalationService;
 
     ResumeStrategyDispatcher(
             StatefulAgentStore agentStore,
             ToolRegistry toolRegistry,
             ObjectMapper objectMapper,
-            ReasoningEngine reasoningEngine) {
+            ReasoningEngine reasoningEngine,
+            ExecutionFailureRecoveryService recoveryService,
+            PersonaEscalationService escalationService) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
         this.reasoningEngine = reasoningEngine;
+        this.recoveryService = recoveryService;
+        this.escalationService = escalationService;
     }
 
     AgentResult handle(AgentExecutionContext context,
@@ -151,7 +157,7 @@ class ResumeStrategyDispatcher {
                         () -> toolRegistry.invokeTool(toolName, paramsJson, sessionId));
 
                 if (response instanceof ToolResponse.ToolFailure failure && failure.isInfraFailure()) {
-                    return AgentResult.failed("⚠️ The sandbox execution environment is currently offline.",
+                    return AgentResult.failed("⚠️ " + failure.output(),
                             AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
                 }
 
@@ -169,8 +175,18 @@ class ResumeStrategyDispatcher {
                     if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)) {
                         return AgentResult.finished(success.output(), List.copyOf(history));
                     }
+                    completeInProgressCheckpoint(checkpoint);
                     return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
                 } else {
+                    AgentResult healResult = tryAutoHealOnResume(response, paramsJson, effectiveRole, toolName, sessionId, context, history, channelType, checkpoint, stateMachineRunner);
+                    if (healResult != null) {
+                        return healResult;
+                    }
+                    // Persona escalation hook for HITL resume path
+                    AgentResult escalationResult = tryEscalationOnResume(response, paramsJson, effectiveRole, toolName, sessionId, context, history, channelType, checkpoint, stateMachineRunner);
+                    if (escalationResult != null) {
+                        return escalationResult;
+                    }
                     String failMsg = response.output() != null ? response.output() : "Tool execution failed";
                     return AgentResult.failed(failMsg,
                             AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
@@ -190,6 +206,112 @@ class ResumeStrategyDispatcher {
                 return handleResumeExecutionError(checkpoint, toolName, sessionId, history, e);
             }
         }
+    }
+
+    private String extractParam(String paramsJson, String key) {
+        try {
+            if (paramsJson != null && !paramsJson.isBlank()) {
+                Map<String, Object> params = objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
+                Object val = params.get(key);
+                return val instanceof String s ? s : (val != null ? val.toString() : "");
+            }
+        } catch (Exception e) {
+            log.debugf("Failed to extract param '%s' from paramsJson: %s", key, LogUtil.rootMessage(e));
+        }
+        return "";
+    }
+
+    private String buildFixedParamsJson(String originalParamsJson, String key, String newValue) {
+        try {
+            Map<String, Object> params = objectMapper.readValue(originalParamsJson, new TypeReference<Map<String, Object>>() {});
+            params.put(key, newValue);
+            return objectMapper.writeValueAsString(params);
+        } catch (Exception e) {
+            log.warnf("Failed to rebuild paramsJson with fixed code: %s", LogUtil.rootMessage(e));
+            return originalParamsJson;
+        }
+    }
+
+    private AgentResult tryAutoHealOnResume(ToolResponse response, String paramsJson, String effectiveRole, String toolName,
+            String sessionId, AgentExecutionContext context, List<ReasoningStep> history, String channelType,
+            AgentCheckpoint checkpoint, AgentStateMachineRunner stateMachineRunner) {
+        if (!(response instanceof ToolResponse.ToolFailure failure) || !recoveryService.shouldAttemptRecovery(effectiveRole, toolName, response)) {
+            return null;
+        }
+
+        log.infof("[AutoHeal-Resume] Detected recoverable sandbox_exec failure for session %s, invoking Shiva debugger", sessionId);
+        String originalCode = extractParam(paramsJson, "code");
+        String language = extractParam(paramsJson, "language");
+
+        ExecutionFailureRecoveryService.RecoveryResult recovery = recoveryService.attemptRecovery(
+                sessionId, context.userId(), context.chatId(),
+                originalCode, language, failure.output(),
+                context.channelType(), context.channelPlatformId(),
+                context.goal());
+
+        if (!recovery.success()) {
+            return null;
+        }
+
+        log.infof("[AutoHeal-Resume] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)", recovery.attemptsUsed());
+        String fixedParamsJson = buildFixedParamsJson(paramsJson, "code", recovery.fixedCode());
+        ToolResponse retriedResponse;
+        try {
+            retriedResponse = WorkspaceContext.runWithFullAutonomy(
+                    sessionId, context.userId(), context.chatId(), effectiveRole,
+                    channelType, context.channelPlatformId(),
+                    () -> toolRegistry.invokeTool(toolName, fixedParamsJson, sessionId));
+        } catch (Exception e) {
+            log.warnf("[AutoHeal-Resume] Re-execution threw exception: %s", LogUtil.rootMessage(e));
+            return AgentResult.failed("Tool execution failed after auto-heal: " + AgentErrorMessageUtil.safeMessage(e),
+                    AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+        }
+
+        if (retriedResponse instanceof ToolResponse.ToolSuccess _) {
+            recordReasoningStep(toolName, fixedParamsJson, retriedResponse.output(), true, history, sessionId);
+            completeInProgressCheckpoint(checkpoint);
+            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+        } else if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure && !retryFailure.isInfraFailure()) {
+            log.warnf("[AutoHeal-Resume] Re-execution also failed: %s", retryFailure.output());
+            String failMsg = retryFailure.output() != null ? retryFailure.output() : "Tool execution failed after auto-heal";
+            return AgentResult.failed(failMsg, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+        }
+        return null;
+    }
+
+    private AgentResult tryEscalationOnResume(ToolResponse response, String paramsJson, String effectiveRole, String toolName,
+            String sessionId, AgentExecutionContext context, List<ReasoningStep> history, String channelType,
+            AgentCheckpoint checkpoint, AgentStateMachineRunner stateMachineRunner) {
+        if (!(response instanceof ToolResponse.ToolFailure failure) || !escalationService.shouldAttemptEscalation(effectiveRole, toolName, response)) {
+            return null;
+        }
+
+        String targetRole = escalationService.determineEscalationTarget(effectiveRole, failure.output(), context.goal());
+        if (targetRole == null) {
+            return null;
+        }
+
+        log.infof("[PersonaEscalation-Resume] Detected escalation pattern for session %s, routing %s → %s",
+                sessionId, effectiveRole, targetRole);
+
+        String originalCode = extractParam(paramsJson, "code");
+        String language = extractParam(paramsJson, "language");
+
+        PersonaEscalationService.EscalationResult escalation = escalationService.attemptEscalation(
+                sessionId, context.userId(), context.chatId(),
+                effectiveRole, targetRole,
+                failure.output(), context.goal(), originalCode, language,
+                context.channelType(), context.channelPlatformId());
+
+        if (escalation.success()) {
+            log.infof("[PersonaEscalation-Resume] Escalation to %s succeeded for session %s", targetRole, sessionId);
+            recordReasoningStep("escalation:" + effectiveRole + "→" + targetRole, paramsJson, escalation.result(), true, history, sessionId);
+            completeInProgressCheckpoint(checkpoint);
+            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+        }
+
+        log.warnf("[PersonaEscalation-Resume] Escalation failed: %s, returning original failure", escalation.errorIfFailed());
+        return null;
     }
 
     private void recordReasoningStep(String tool, String paramsJson, String output, boolean success, List<ReasoningStep> history, String sessionId) {

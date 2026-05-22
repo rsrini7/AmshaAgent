@@ -45,7 +45,7 @@ public class IntentDetectorModelProducer {
     int timeoutSeconds;
 
     @ConfigProperty(name = "arcclaw.routing.intent-classifier.ollama-model",
-                    defaultValue = "llama3.2")
+                    defaultValue = "mistral-small:latest")
     String ollamaModelId;
 
     @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",

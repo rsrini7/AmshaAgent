@@ -4,10 +4,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.governance.ApprovalFrame;
-import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,7 +38,8 @@ public sealed interface AgentResult
         SCHEMA_ERROR,
         USER_DENIED,
         RATE_LIMIT,
-        SECURITY_POLICY
+        SECURITY_POLICY,
+        USER_ABORT
     }
 
     @TemplateData

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,9 +36,9 @@ public class HitlServicePerToolApprovalTest {
 
         when(em.find(AgentCheckpointEntity.class, 1L)).thenReturn(cp);
 
-        hitlService.resolve("1", "github", true, "approved github");
+        hitlService.resolve("1", ToolCapability.GITHUB.toolName(), true, "approved github");
 
-        verify(checkpointApprovalService).approveTool("s1", "github", "approved github");
+        verify(checkpointApprovalService).approveTool("s1", ToolCapability.GITHUB.toolName(), "approved github");
         verify(checkpointApprovalService, never()).approveAll(anyString(), anyString());
     }
 

@@ -10,9 +10,11 @@ import jakarta.inject.Inject;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public class FsSecretStoreAdapter implements SecretStorePort {
 
     private static final String DOMAIN = "secrets";

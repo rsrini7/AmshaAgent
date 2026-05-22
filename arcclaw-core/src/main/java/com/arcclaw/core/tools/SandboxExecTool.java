@@ -14,14 +14,16 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.role.ToolMetadata;
+import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.sandbox.SandboxCodeSafetyScanner;
 import com.arcclaw.core.sandbox.SandboxResult;
 import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -54,14 +56,21 @@ public class SandboxExecTool implements AgentTool {
     // ── Single source of truth for the infra-failure user message.
     // Never copy-paste this string - always reference this constant.
     // Logs contain the raw reason; the LLM/user only ever sees this sanitized message.
-    private static final String SANDBOX_OFFLINE_MSG =
-        "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed. " +
-        "The code was NOT run. Inform the user gracefully that the execution " +
-        "environment is currently offline, or set " +
-        "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
+    private String buildSandboxOfflineMsg(String reason) {
+        String msg = "SANDBOX_OFFLINE: System Error - Podman sandbox execution failed. ";
+        if (isolationExecutor.isAllowInsecureFallback()) {
+            msg += "Direct host fallback also failed: " + reason + ". ";
+        } else {
+            msg += "The code was NOT run. Inform the user gracefully that the execution " +
+                   "environment is currently offline, or set " +
+                   "ARCCLAW_SANDBOX_ALLOW_INSECURE_FALLBACK=true to allow insecure fallback.";
+        }
+        return msg;
+    }
 
     @Inject ProcessIsolationExecutor isolationExecutor;
     @Inject HostJavaCompiler hostJavaCompiler;
+    @Inject AuditService auditService;
     CodeLanguageDetector codeLanguageDetector;
     OutputTruncator outputTruncator;
 
@@ -109,10 +118,12 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     // sandboxCommand() - returns the command that runs INSIDE the Podman container.
     //
-    // Java path: prepareWorkspace() already compiled .java → .class on the host.
-    //            The container just runs:  java -cp /workspace ClassName
-    //            This only needs the JRE - no compiler required inside the image.
-    //            See class-level Javadoc for why we chose this over java --source.
+    // Java path: uses java --source with --enable-preview via sh -c that
+    //            auto-detects the JDK major version at runtime (H4).
+    //            This works across JDK 21 (container) and JDK 25 (host fallback)
+    //            since --enable-preview requires --source matching the current
+    //            release. The embedded /workspace path is handled by
+    //            rewriteContainerPaths() in ProcessIsolationExecutor.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
@@ -124,6 +135,10 @@ public class SandboxExecTool implements AgentTool {
 
         lang = lang.toLowerCase();
 
+        auditService.record(ctx.sessionId(), ctx.userId(), ctx.agentRole(),
+                SecurityEventType.TOOL_EXECUTED,
+                "sandbox_exec lang=" + lang + " codeLen=" + code.length());
+
         String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
         if (violation != null) {
             log.warnf("[SandboxExecTool] Blocked dangerous pattern in session %s: %s",
@@ -132,9 +147,12 @@ public class SandboxExecTool implements AgentTool {
         }
 
         return switch (lang) {
-            case "java" -> {
+case "java" -> {
                 String className = codeLanguageDetector.extractJavaClassName(code);
-                yield List.of("java", "-cp", CONTAINER_WORKSPACE, className);
+                String srcPath = CONTAINER_WORKSPACE + "/" + className + ".java";
+                yield List.of("sh", "-c",
+                    "ver=$(java -version 2>&1); ver=${ver#*\\\"}; ver=${ver%%.*} && " +
+                    "exec java --enable-preview --source \"$ver\" " + srcPath);
             }
             case "python", "python3" -> List.of("python3", CONTAINER_WORKSPACE + "/script.py");
             case "bash"              -> List.of("bash",    CONTAINER_WORKSPACE + "/script.sh");
@@ -147,10 +165,10 @@ public class SandboxExecTool implements AgentTool {
     // ─────────────────────────────────────────────────────────────────────────
     // prepareWorkspace() - runs on the HOST before the container is launched.
     //
-    // Java: write .java file, then compile it to .class using the host JDK's
-    //       javac (resolved from java.home - always present since Quarkus needs JDK).
-    //       If compilation fails, throws IOException with the full javac error output
-    //       so ToolRegistry surfaces it as a proper tool failure to the LLM.
+    // Java: write .java file only (H4). Compilation now happens inside the
+    //       container via java --source in sandboxCommand(). The host-side javac
+    //       call is removed to prevent sandbox boundary bypass.
+    //       executeJavaFallback() still compiles on host for the non-sandbox path.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     public void prepareWorkspace(Path workspaceRoot, Map<String, Object> params) throws IOException {
@@ -162,13 +180,13 @@ public class SandboxExecTool implements AgentTool {
 
         if ("java".equals(lang)) {
             if (!codeLanguageDetector.containsTypeDeclaration(code)) {
-                throw new IllegalArgumentException("Java execution failed: Code must contain a class declaration. Bare methods are not supported.");
+                code = "public class Main {\n    public static void main(String[] args) {\n"
+                        + code.indent(8) + "    }\n}\n";
             }
             Files.createDirectories(workspaceRoot);
             String className = codeLanguageDetector.extractJavaClassName(code);
             Path javaFile = workspaceRoot.resolve(className + ".java");
             Files.writeString(javaFile, code, StandardCharsets.UTF_8);
-            hostJavaCompiler.compile(javaFile, workspaceRoot);
 
         } else if ("python".equals(lang) || "python3".equals(lang)) {
             // Write to file - avoids shell quote-stripping of f-strings, 
@@ -208,7 +226,8 @@ public class SandboxExecTool implements AgentTool {
             if (violation != null) return ToolResponse.failure(1, "🚫 Execution blocked: " + violation);
 
             if ("java".equals(lang) && !codeLanguageDetector.containsTypeDeclaration(code)) {
-                return ToolResponse.failure(1, "Java execution failed: Code must contain a class declaration. Bare methods are not supported.");
+                code = "public class Main {\n    public static void main(String[] args) {\n"
+                        + code.indent(8) + "    }\n}\n";
             }
 
             // Secrets are intentionally empty on the direct-execution fallback path.
@@ -232,7 +251,7 @@ public class SandboxExecTool implements AgentTool {
             throw e;
         } catch (TimeoutException e) {
             log.errorf("[SandboxExecTool] Execution timed out: %s", LogUtil.rootMessage(e));
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            return ToolResponse.infraFailure(buildSandboxOfflineMsg("Timeout"));
         } catch (Exception e) {
             String msg = e.getMessage();
             return ToolResponse.failure(1, msg != null && !msg.isBlank()
@@ -261,7 +280,7 @@ public class SandboxExecTool implements AgentTool {
         if (result == null || result.isInfraFailure()) {
             String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (java-fallback) sessionId=%s: %s", sessionId, reason);
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            return ToolResponse.infraFailure(buildSandboxOfflineMsg(reason));
         }
         if (!result.success()) {
             return ToolResponse.failure(1, result.reason());
@@ -283,7 +302,7 @@ public class SandboxExecTool implements AgentTool {
         if (result == null || result.isInfraFailure()) {
             String reason = result != null ? result.reason() : "Sandbox executor returned null";
             log.errorf("[SandboxExecTool] Infra failure (interpreted/%s) session=%s: %s", lang, sessionId, reason);
-            return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+            return ToolResponse.infraFailure(buildSandboxOfflineMsg(reason));
         }
         if (!result.success()) {
             return ToolResponse.failure(1, result.reason());
@@ -303,7 +322,7 @@ public class SandboxExecTool implements AgentTool {
             if (result == null || result.isInfraFailure()) {
                 String reason = result != null ? result.reason() : "Sandbox executor returned null";
                 log.errorf("[SandboxExecTool] Infra failure (go) session=%s: %s", sessionId, reason);
-                return ToolResponse.infraFailure(SANDBOX_OFFLINE_MSG);
+                return ToolResponse.infraFailure(buildSandboxOfflineMsg(reason));
             }
             if (!result.success()) {
                 return ToolResponse.failure(1, result.reason());

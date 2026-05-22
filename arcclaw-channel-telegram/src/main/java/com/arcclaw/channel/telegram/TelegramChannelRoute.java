@@ -1,11 +1,18 @@
 package com.arcclaw.channel.telegram;
 
+import java.net.SocketException;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import io.quarkus.runtime.StartupEvent;
 import org.apache.camel.CamelContext;
+import org.apache.camel.Exchange;
+import org.apache.camel.Predicate;
+import org.apache.camel.Processor;
+import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.telegram.TelegramComponent;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
@@ -55,7 +62,7 @@ public class TelegramChannelRoute extends RouteBuilder {
 
         from("telegram:bots?timeout=10&backoffErrorThreshold=3&backoffMultiplier=2")
                 .routeId("telegram-bot")
-                .onException(org.apache.camel.RuntimeCamelException.class)
+                .onException(RuntimeCamelException.class)
                     .onWhen(new isSocketException())
                     .process(new logTransientError())
                     .handled(true)
@@ -105,23 +112,23 @@ public class TelegramChannelRoute extends RouteBuilder {
     }
 
     /** Matches only when the root cause is a transient SocketException (connection reset, etc.) */
-    private static class isSocketException implements org.apache.camel.Predicate {
+    private static class isSocketException implements Predicate {
         @Override
-        public boolean matches(org.apache.camel.Exchange exchange) {
-            Throwable cause = exchange.getProperty(org.apache.camel.Exchange.EXCEPTION_CAUGHT, Throwable.class);
+        public boolean matches(Exchange exchange) {
+            Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
             while (cause != null && cause.getCause() != null && cause != cause.getCause()) {
                 cause = cause.getCause();
             }
-            return cause instanceof java.net.SocketException;
+            return cause instanceof SocketException;
         }
     }
 
     /** Logs a single WARN line instead of a full stack trace for transient poll errors */
-    private class logTransientError implements org.apache.camel.Processor {
+    private class logTransientError implements Processor {
         @Override
-        public void process(org.apache.camel.Exchange exchange) {
-            Throwable ex = exchange.getProperty(org.apache.camel.Exchange.EXCEPTION_CAUGHT, Throwable.class);
-            log.warnf("Telegram poll transient error: %s — will retry", ex.getMessage());
+        public void process(Exchange exchange) {
+            Throwable ex = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+            log.warnf("Telegram poll transient error: %s — will retry", LogUtil.rootMessage(ex));
         }
     }
 }

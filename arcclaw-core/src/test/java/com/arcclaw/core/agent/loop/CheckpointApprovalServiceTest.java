@@ -10,6 +10,7 @@ import java.util.Optional;
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.agent.sse.AgentSseService;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
@@ -53,7 +54,7 @@ public class CheckpointApprovalServiceTest {
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
         when(agentStore.isAllBatchToolsDecided("s1", "coordinator")).thenReturn(true);
 
-        checkpointApprovalService.approveTool("s1", "github", "test");
+        checkpointApprovalService.approveTool("s1", ToolCapability.GITHUB.toolName(), "test");
 
         verify(agentStore).save(any(AgentCheckpointRecord.class));
     }
@@ -67,7 +68,7 @@ public class CheckpointApprovalServiceTest {
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
         when(agentStore.isAllBatchToolsDecided("s1", "coordinator")).thenReturn(false);
 
-        checkpointApprovalService.approveTool("s1", "github", "test");
+        checkpointApprovalService.approveTool("s1", ToolCapability.GITHUB.toolName(), "test");
 
         verify(agentStore).save(any(AgentCheckpointRecord.class));
     }
@@ -77,7 +78,7 @@ public class CheckpointApprovalServiceTest {
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.empty());
 
         Assertions.assertThrows(CheckpointResolutionException.class, () -> {
-            checkpointApprovalService.approveTool("s1", "github", "test");
+            checkpointApprovalService.approveTool("s1", ToolCapability.GITHUB.toolName(), "test");
         });
 
         verify(agentStore, never()).save(any());
@@ -88,8 +89,8 @@ public class CheckpointApprovalServiceTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
-        cp.setPendingToolName("parallel|github,sandboxexec");
-        cp.setBatchToolDecisions("{\"github\":\"PENDING\",\"sandboxexec\":\"PENDING\"}");
+        cp.setPendingToolName("parallel|" + ToolCapability.GITHUB.toolName() + ",sandboxexec");
+        cp.setBatchToolDecisions("{\"" + ToolCapability.GITHUB.toolName() + "\":\"PENDING\",\"sandboxexec\":\"PENDING\"}");
         
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
 

@@ -18,6 +18,7 @@ import com.arcclaw.persistence.api.CheckpointUpsertResult;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -27,6 +28,7 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @Unremovable
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCheckpointStoreAdapter.class);
@@ -81,8 +83,12 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                     checkpointDto.sessionId(), checkpointDto.agentRole());
             if (!existing.isEmpty()) {
                 AgentCheckpointEntity managed = existing.get(0);
+                log.infof("[CheckpointAdapter] doSaveEntity: updating existing id=%d status=%s -> %s",
+                        managed.getId(), managed.getStatus(), checkpointDto.status());
                 upsertService.updateEntityFromDto(managed, checkpointDto);
-                return CheckpointMapper.toDto(checkpointRepo.merge(managed));
+                // Native SQL: JPA merge silently fails to commit via Narayana JTA + SQLite
+                checkpointRepo.nativeUpdate(managed);
+                return CheckpointMapper.toDto(managed);
             }
             AgentCheckpointEntity entity = newEntityFromDto(checkpointDto);
             return CheckpointMapper.toDto(checkpointRepo.persist(entity));
@@ -90,7 +96,9 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return checkpointRepo.findById(checkpointDto.id())
             .map(managed -> {
                 upsertService.updateEntityFromDto(managed, checkpointDto);
-                return CheckpointMapper.toDto(checkpointRepo.merge(managed));
+                // Native SQL: JPA merge silently fails to commit via Narayana JTA + SQLite
+                checkpointRepo.nativeUpdate(managed);
+                return CheckpointMapper.toDto(managed);
             })
             .orElseGet(() -> {
                 AgentCheckpointEntity entity = newEntityFromDto(checkpointDto);
@@ -166,6 +174,9 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     public CheckpointDto doSaveCheckpointWithSteps(CheckpointDto checkpointDto, List<ReasoningStepDto> steps) {
         CheckpointDto saved = doSaveEntity(checkpointDto);
         stepRepo.persistSteps(saved.id(), steps);
+        // DIAGNOSTIC: verify DB state after save+steps within same TX
+        log.infof("[CheckpointAdapter] doSaveCheckpointWithSteps: saved.id=%s saved.status=%s (about to return, TX will commit after)",
+                saved.id(), saved.status());
         return saved;
     }
 
@@ -261,6 +272,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public boolean isSessionActive(String sessionId) {
         return withRetry(() -> cleanupService.isSessionActive(sessionId), "is-active");
+    }
+
+    @Override
+    public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {
+        withRetry(() -> { checkpointRepo.stampChannelInfo(checkpointId, channelType, channelPlatformId); return null; }, "stamp-channel");
     }
 
     @Override

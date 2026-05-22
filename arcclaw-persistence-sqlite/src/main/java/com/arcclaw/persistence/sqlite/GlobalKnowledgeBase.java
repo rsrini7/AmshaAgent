@@ -12,13 +12,15 @@ import jakarta.transaction.Transactional;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryChunkDto;
-import com.arcclaw.persistence.sqlite.entity.RagChunkEntity;
+import com.arcclaw.persistence.common.entity.RagChunkEntity;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class GlobalKnowledgeBase {
 
     private static final Logger log = Logger.getLogger(GlobalKnowledgeBase.class);

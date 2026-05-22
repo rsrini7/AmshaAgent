@@ -7,8 +7,8 @@ import java.nio.charset.StandardCharsets;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import org.jboss.logging.Logger;
 
 /**

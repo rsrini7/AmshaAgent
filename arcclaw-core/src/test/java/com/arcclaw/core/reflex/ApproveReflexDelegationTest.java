@@ -17,6 +17,7 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.loop.CheckpointResumeHandler;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.domain.model.AgentCheckpointRecord;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -106,7 +107,7 @@ public class ApproveReflexDelegationTest {
 
         ReflexResult result = approveReflex.execute("s1", "u1", "c1", "/approve github", context);
 
-        verify(checkpointApprovalService).approveTool("s1", "github", "CLI approve");
+        verify(checkpointApprovalService).approveTool("s1", ToolCapability.GITHUB.toolName(), "CLI approve");
         assertNotNull(result);
     }
 }

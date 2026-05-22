@@ -10,12 +10,17 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jakarta.enterprise.inject.Instance;
 
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.RoleRegistry;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.observability.AgentObserver;
+import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.util.TextPatternUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +35,7 @@ class FinishActionHandlerTest {
     private Instance<AgentObserver> observers;
     private CorrectionStrategy correctionStrategy;
     private TextPatternUtils textPatternUtils;
+    private RoleRegistry roleRegistry;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -40,8 +46,21 @@ class FinishActionHandlerTest {
         observers = mock(Instance.class);
         correctionStrategy = mock(CorrectionStrategy.class);
         textPatternUtils = mock(TextPatternUtils.class);
+        roleRegistry = mock(RoleRegistry.class);
 
-        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, new ObjectMapper(), textPatternUtils);
+        ToolRegistry toolRegistry = mock(ToolRegistry.class);
+        when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.SANDBOX_EXEC.toolName(), ToolCapability.WEB_SEARCH_SERPER.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
+        when(roleRegistry.permittedTools(any())).thenAnswer(invocation -> {
+            AgentRoleEnum r = invocation.getArgument(0);
+            if ("coordinator".equals(r.id())) {
+                return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MEMORY_SEARCH.toolName());
+            } else if ("coder".equals(r.id())) {
+                return Set.of(ToolCapability.SANDBOX_EXEC.toolName());
+            }
+            return Set.of();
+        });
+
+        handler = new FinishActionHandler(qualityGuard, codePolicy, rateLimitTracker, observers, correctionStrategy, new ObjectMapper(), textPatternUtils, toolRegistry, roleRegistry);
 
         // Default mock behaviors
         when(qualityGuard.isRawToolCallLeak(anyString())).thenReturn(false);
@@ -173,7 +192,7 @@ class FinishActionHandlerTest {
         when(ctx.agentRole()).thenReturn("coordinator");
 
         String batchJson = """
-                [{"callId":"1","toolName":"schedule_task","params":{},"paramsJson":"{}","observation":"TOOL_FAILED: CHANNEL_TYPE not bound","success":false}]
+                [{"callId":"1","toolName":ToolCapability.SCHEDULE_TASK.toolName(),"params":{},"paramsJson":"{}","observation":"TOOL_FAILED: CHANNEL_TYPE not bound","success":false}]
                 """;
         ReasoningStep parallel = ReasoningStep.parallelBatch("batch", Map.of("batch", batchJson), 0, 0)
                 .withObservation("schedule_task→FAIL", false);
@@ -207,5 +226,38 @@ class FinishActionHandlerTest {
 
         assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.SalvageFailed, 
                 "Should fail salvage if the 'clean' thought is still JSON");
+    }
+
+    @Test
+    void testHandleBlocksHallucinatedSchedulingWithCustomPhrases() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s1");
+        when(ctx.agentRole()).thenReturn("coordinator");
+
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH,
+                Map.of("answer", "I have scheduled the task to run in 2 minutes."), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Correction);
+        String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
+        assertTrue(hint.contains("STOP. You claimed to have scheduled/set a reminder but you did NOT call the schedule_task tool"));
+    }
+
+    @Test
+    void testHandleBlocksSchedulingGoalWithoutToolCall() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        when(ctx.sessionId()).thenReturn("s1");
+        when(ctx.agentRole()).thenReturn("coordinator");
+        when(ctx.goal()).thenReturn("schedule python script to run after 2 mins");
+
+        ReasoningStep step = ReasoningStep.pending("thought", ReasoningStep.FINISH,
+                Map.of("answer", "I will do that for you."), 0, 0);
+
+        FinishActionHandler.FinishOutcome outcome = handler.handle(ctx, List.of(), step, 0);
+
+        assertTrue(outcome instanceof FinishActionHandler.FinishOutcome.Correction);
+        String hint = ((FinishActionHandler.FinishOutcome.Correction) outcome).correctionHint();
+        assertTrue(hint.contains("STOP. The user requested a future/scheduled action, but you did NOT call the schedule_task tool"));
     }
 }

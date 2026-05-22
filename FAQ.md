@@ -43,7 +43,7 @@ The reactor enforces strict architectural separation that prevents accidental de
 - **`arcclaw-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
 - **`arcclaw-tool-playwright`** - Playwright browser automation tool. Optional; requires Playwright CLI binary.
 - **`arcclaw-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
-- **`arcclaw-ui`** - Frontend (Node.js / React / Lit + Vite + TypeScript). No Java source; excluded from Maven build.
+- **`arcclaw-ui`** - Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build.
 - **`arcclaw-app`** - the entry point. Owns all application-layer concerns: REST resources, Telegram routes, CLI commands, scheduler, security filters. It depends on all other modules but **no module depends on `arcclaw-app`**.
 
 The rule is: **kernel logic never imports application-layer code**. This makes `arcclaw-core` independently testable with zero Quarkus startup overhead.
@@ -194,12 +194,12 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 |---|---|---|---|
 | `coordinator` | Vishnu | Can use all tools | General tasks, delegation, scheduling |
 | `researcher` | Saraswati | Read-only tools only; never fabricates | External data retrieval, GitHub lookups |
-| `coder` | Brahma | Empty tool schema - no tools | Pure code generation, math, logic |
+| `coder` | Brahma | sandbox_exec + check_list + add_mcp_server | Code execution, engineering tasks |
 | `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
 | `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
 
-The `IntentDetectorService` uses `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
+The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
 ---
 
@@ -474,7 +474,7 @@ ArcClaw's `TwoTierMemoryService` merges results from two sources using **Recipro
 
 ### Q: What is sqlite-vec and how does ArcClaw use it?
 
-`sqlite-vec` (the `vec0.so` extension) adds vector similarity search to SQLite as a virtual table extension. ArcClaw uses it for the second tier of RAG. The extension is loaded at runtime by `FtsConnectionInterceptor` using `arcclaw.rag.vec-extension-path` (dev: `../lib/vec0`, native Docker: `/app/lib/vec0`).
+`sqlite-vec` (the `vec0.so` extension) adds vector similarity search to SQLite as a virtual table extension. ArcClaw uses it for the second tier of RAG. The extension is loaded at runtime by `FtsConnectionInterceptor` using `arcclaw.rag.vec-extension-path` (default: `./lib/vec0`, native Docker: `/app/lib/vec0`). The `FtsConnectionInterceptor` automatically performs a recursive parent-directory lookup (up to 4 levels) to resolve the extension's absolute path if executing inside a submodule directory during testing or local development.
 
 **Native image requirement**: `vec0.so` links against `libm.so.6` for math functions (`sqrtf`). GraalVM native image does not statically link `libm`, so `LD_PRELOAD=/lib64/libm.so.6` must be set before the native binary starts. Without it, `dlopen(vec0.so)` fails with `undefined symbol: sqrtf` and vector search degrades silently to FTS5-only.
 
@@ -741,7 +741,7 @@ The rebuild prompt (`Read-Host "Rebuild/Package application before running? (y/N
 
 ## 🧪 Testing
 
-### Q: How are the 1361 tests structured across modules?
+### Q: How are the 1458 tests structured across modules?
 
 Tests live in two modules:
 

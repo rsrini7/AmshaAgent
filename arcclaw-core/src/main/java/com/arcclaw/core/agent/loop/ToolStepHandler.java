@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.loop;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -11,6 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
@@ -24,7 +26,6 @@ import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.tool.DynamicToolLookup;
 import com.arcclaw.core.tools.ToolRegistry;
 import com.arcclaw.core.tools.ToolResponse;
-import com.arcclaw.common.util.LogUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.jboss.logging.Logger;
@@ -66,6 +67,8 @@ public class ToolStepHandler {
     private final ParallelToolStepExecutor parallelExecutor;
     private final MeterRegistry meterRegistry;
     private final ToolResultProcessor resultProcessor;
+    private final ExecutionFailureRecoveryService recoveryService;
+    private final PersonaEscalationService escalationService;
 
     @Inject
     public ToolStepHandler(ToolRegistry toolRegistry,
@@ -76,7 +79,9 @@ public class ToolStepHandler {
                            Instance<DynamicToolLookup> dynamicToolLookup,
                            ApprovalCheckpointManager checkpointManager,
                            ParallelToolStepExecutor parallelExecutor,
-                           MeterRegistry meterRegistry) {
+                           MeterRegistry meterRegistry,
+                           ExecutionFailureRecoveryService recoveryService,
+                           PersonaEscalationService escalationService) {
         this.toolRegistry = toolRegistry;
         this.observers = observers;
         this.guard = guard;
@@ -86,6 +91,8 @@ public class ToolStepHandler {
         this.parallelExecutor = parallelExecutor;
         this.meterRegistry = meterRegistry;
         this.resultProcessor = new ToolResultProcessor(writer);
+        this.recoveryService = recoveryService;
+        this.escalationService = escalationService;
     }
 
     // ── Validation
@@ -217,10 +224,53 @@ public class ToolStepHandler {
                     toolName, context.sessionId(), failure.output());
             history.add(step.withObservation("INFRA_FAILURE: " + failure.output()));
             return StepDecision.terminal(AgentResult.failed(
-                    "⚠️ The sandbox execution environment is currently offline. " +
-                    "Your code was not executed. Please try again later.",
+                    "⚠️ " + failure.output(),
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(history)));
+        }
+
+        // Auto-heal hook: intercept sandbox_exec failures for coder and delegate to Shiva
+        if (response instanceof ToolResponse.ToolFailure failure
+                && recoveryService.shouldAttemptRecovery(context.agentRole(), toolName, response)) {
+            log.infof("[AutoHeal] Detected recoverable sandbox_exec failure for session %s, invoking Shiva debugger",
+                    context.sessionId());
+            String originalCode = extractParam(params, "code");
+            String language = extractParam(params, "language");
+            String originalGoal = context.goal();
+
+            ExecutionFailureRecoveryService.RecoveryResult recovery = recoveryService.attemptRecovery(
+                    context.sessionId(), context.userId(), context.chatId(),
+                    originalCode, language, failure.output(),
+                    context.channelType(), context.channelPlatformId(), originalGoal);
+
+            if (recovery.success()) {
+                log.infof("[AutoHeal] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
+                        recovery.attemptsUsed());
+                Map<String, Object> fixedParams = new HashMap<>(params);
+                fixedParams.put("code", recovery.fixedCode());
+                ToolResponse retriedResponse = invokeToolWithParams(context, history, step, toolName, fixedParams);
+
+                if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure && !retryFailure.isInfraFailure()) {
+                    log.warnf("[AutoHeal] Re-execution also failed, attempting persona escalation");
+                    response = attemptEscalationAfterHealFailure(context, step, toolName, params, failure, retryFailure, history);
+                } else {
+                    response = retriedResponse;
+                }
+            } else {
+                log.warnf("[AutoHeal] Recovery failed: %s, attempting persona escalation", recovery.errorIfFailed());
+                response = attemptEscalationAfterHealFailure(context, step, toolName, params, failure, failure, history);
+            }
+        }
+
+        // Persona escalation hook: intercept failures that match escalation patterns
+        if (response instanceof ToolResponse.ToolFailure failure
+                && escalationService.shouldAttemptEscalation(context.agentRole(), toolName, response)) {
+            String targetRole = escalationService.determineEscalationTarget(context.agentRole(), failure.output(), context.goal());
+            if (targetRole != null) {
+                log.infof("[PersonaEscalation] Detected escalation pattern for session %s, routing %s → %s",
+                        context.sessionId(), context.agentRole(), targetRole);
+                response = attemptEscalation(context, step, toolName, params, failure, targetRole, history);
+            }
         }
 
         // Phase 3 - Observe
@@ -351,6 +401,57 @@ public class ToolStepHandler {
         } finally {
             sample.stop(timer.tag("exception", exceptionClass).register(meterRegistry));
         }
+    }
+
+    private String extractParam(Map<String, Object> params, String key) {
+        Object val = params.get(key);
+        return val instanceof String s ? s : (val != null ? val.toString() : "");
+    }
+
+    private ToolResponse invokeToolWithParams(AgentExecutionContext context,
+            List<ReasoningStep> history, ReasoningStep step,
+            String toolName, Map<String, Object> params) {
+        InvokeResult result = invokeTool(context, history, step, toolName, params);
+        if (result instanceof InvokeResult.ShortCircuit sc) {
+            return ToolResponse.failure(1, "Auto-heal re-execution blocked by guard: " + sc.decision());
+        }
+        return ((InvokeResult.Responded) result).response();
+    }
+
+    private ToolResponse attemptEscalationAfterHealFailure(AgentExecutionContext context,
+            ReasoningStep step, String toolName, Map<String, Object> params,
+            ToolResponse.ToolFailure originalFailure, ToolResponse.ToolFailure retryFailure,
+            List<ReasoningStep> history) {
+        String targetRole = escalationService.determineEscalationTarget(context.agentRole(),
+                retryFailure.output(), context.goal());
+        if (targetRole != null) {
+            log.infof("[PersonaEscalation] Auto-heal failed, escalating %s → %s for session %s",
+                    context.agentRole(), targetRole, context.sessionId());
+            return attemptEscalation(context, step, toolName, params, retryFailure, targetRole, history);
+        }
+        return retryFailure;
+    }
+
+    private ToolResponse attemptEscalation(AgentExecutionContext context,
+            ReasoningStep step, String toolName, Map<String, Object> params,
+            ToolResponse.ToolFailure failure, String targetRole, List<ReasoningStep> history) {
+        String originalCode = extractParam(params, "code");
+        String language = extractParam(params, "language");
+        String originalGoal = context.goal();
+
+        PersonaEscalationService.EscalationResult escalation = escalationService.attemptEscalation(
+                context.sessionId(), context.userId(), context.chatId(),
+                context.agentRole(), targetRole,
+                failure.output(), originalGoal, originalCode, language,
+                context.channelType(), context.channelPlatformId());
+
+        if (escalation.success()) {
+            log.infof("[PersonaEscalation] Escalation succeeded, returning result from %s", escalation.targetPersona());
+            return ToolResponse.success(escalation.result());
+        }
+
+        log.warnf("[PersonaEscalation] Escalation failed: %s, returning original failure", escalation.errorIfFailed());
+        return failure;
     }
 
     private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {

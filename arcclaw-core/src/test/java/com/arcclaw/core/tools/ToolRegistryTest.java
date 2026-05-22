@@ -10,6 +10,7 @@ import java.util.Map;
 
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.sandbox.ProcessIsolationExecutor;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -54,7 +55,7 @@ class ToolRegistryTest {
     @Test
     void testToolDiscovery() {
         var tools = registry.listTools();
-        assertTrue(tools.contains("github"),
+        assertTrue(tools.contains(ToolCapability.GITHUB.toolName()),
                 "GithubTool should be discovered, found: " + tools);
     }
 
@@ -63,9 +64,9 @@ class ToolRegistryTest {
      */
     @Test
     void testFindToolByName() {
-        var tool = registry.findTool("github");
+        var tool = registry.findTool(ToolCapability.GITHUB.toolName());
         assertTrue(tool.isPresent(), "Should find 'github' tool");
-        assertEquals("github", tool.get().name());
+        assertEquals(ToolCapability.GITHUB.toolName(), tool.get().name());
         assertNotNull(tool.get().description());
     }
 
@@ -86,7 +87,7 @@ class ToolRegistryTest {
         // Use a role that has 'github' capability (e.g., COORDINATOR) 
         // to pass the role-capability check, but then hit the autonomy level block.
         WorkspaceContext.run(TEST_SESSION, "coordinator", "", AutonomyLevel.READONLY, "coordinator", () -> {
-            ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("target", "test/repo"));
+            ToolResponse response = registry.invokeTool(ToolCapability.GITHUB.toolName(), Map.<String, Object>of("target", "test/repo"));
 
             assertEquals(403, response.exitCode(), "Should return 403 Forbidden");
             assertTrue(response.output().contains("NETWORK_OUTBOUND"),
@@ -108,7 +109,7 @@ class ToolRegistryTest {
             // This will *not* throw SecurityException (governance passes).
             // The tool itself may fail (no 'gh' binary) - that's fine; we're
             // testing governance, not the gh CLI.
-            ToolResponse response = registry.invokeTool("github", Map.<String, Object>of("target", "test/repo"));
+            ToolResponse response = registry.invokeTool(ToolCapability.GITHUB.toolName(), Map.<String, Object>of("target", "test/repo"));
             assertNotNull(response, "Should get a response (even if tool execution failed)");
         });
     }
@@ -137,7 +138,7 @@ class ToolRegistryTest {
 
     @Test
     void secretsCachePrePopulatedAtStartup() {
-        var githubTool = registry.findTool("github").get();
+        var githubTool = registry.findTool(ToolCapability.GITHUB.toolName()).get();
         var first  = registry.extractRequiredSecrets(githubTool);
         var second = registry.extractRequiredSecrets(githubTool);
         assertTrue(first == second || first.equals(second), "Should match from cache");

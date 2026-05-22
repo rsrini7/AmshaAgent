@@ -2,6 +2,7 @@ package com.arcclaw.mcp.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +32,7 @@ class DynamicToolLookupImplTest {
     @Test
     void testToolInAllowlistButNotInRegistry() {
         // The implementation doesn't check McpToolAllowlist, only DynamicToolCapabilityRegistry
-        assertFalse(lookup.isDynamicToolAllowed("github")); 
-        assertFalse(lookup.isDynamicToolAllowed("memory_search"));
+        assertFalse(lookup.isDynamicToolAllowed(ToolCapability.GITHUB.toolName())); 
+        assertFalse(lookup.isDynamicToolAllowed(ToolCapability.MEMORY_SEARCH.toolName()));
     }
 }

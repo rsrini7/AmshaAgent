@@ -13,13 +13,16 @@ import java.util.concurrent.TimeUnit;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.observability.AgentOTelConstants;
+import com.arcclaw.core.observability.AgentOtelContext;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
+import io.quarkus.runtime.StartupEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -67,6 +70,10 @@ public class PodmanContainerExecutor {
     private static final String CONTAINER_PIDS_LIMIT = "128";
 
     private final Set<String> activeContainerNames = ConcurrentHashMap.newKeySet();
+
+    void onStartup(@Observes StartupEvent ev) {
+        TmpfsSecretTransport.sweepStaleTmpFilesStatic();
+    }
 
     /**
      * Graceful container shutdown on JVM SIGTERM / @ApplicationScoped destroy.
@@ -117,10 +124,10 @@ public class PodmanContainerExecutor {
             String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length()))
                     + "-" + Long.toHexString(System.nanoTime());
 
-            Span span = otelContext.childSpan(sessionId, "tool.container_exec");
-            span.setAttribute("container.image", sandboxImage);
-            span.setAttribute("container.name", containerName);
-            span.setAttribute("sandbox.strategy", SandboxStrategy.PODMAN.name());
+            Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_TOOL_CONTAINER_EXEC);
+            span.setAttribute(AgentOTelConstants.ATTR_CONTAINER_IMAGE, sandboxImage);
+            span.setAttribute(AgentOTelConstants.ATTR_CONTAINER_NAME, containerName);
+            span.setAttribute(AgentOTelConstants.ATTR_SANDBOX_STRATEGY, SandboxStrategy.PODMAN.name());
 
             activeContainerNames.add(containerName);
             try (Scope scope = span.makeCurrent()) {
@@ -233,6 +240,12 @@ public class PodmanContainerExecutor {
         }
 
         int exitCode = process.exitValue();
+
+        // Filter benign JVM informational lines from stderr
+        if (stderr != null && !stderr.isBlank()) {
+            stderr = stderr.replaceAll("(?m)^Picked up JAVA_TOOL_OPTIONS:.*$", "").trim();
+        }
+
         if (exitCode != 0) {
             String raw = (stdout != null && !stdout.isBlank()) ? stdout : stderr;
 

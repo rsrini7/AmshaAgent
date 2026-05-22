@@ -384,6 +384,7 @@ class PersistencePortContractTest {
         @Override public void releaseResumeClaim(String sessionId, String agentRole) {}
         @Override public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) { return false; }
         @Override public boolean hasPendingApprovalForChat(String chatId) { return false; }
+        @Override public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {}
     }
 
     static class InMemoryCronStore implements CronStorePort {
@@ -449,6 +450,55 @@ class PersistencePortContractTest {
         @Override public int deleteByIdAndUserId(String id, String userId) { return 0; }
         @Override public long deleteAllByUserId(String userId) { return 0; }
         @Override public long deleteAllBySessionId(String sessionId) { return 0; }
+        @Override
+        public List<AgentCronDto> findAll(String status, int offset, int limit) {
+            List<AgentCronDto> all = store.values().stream()
+                .filter(c -> status == null || status.isBlank() || status.equals(c.status()))
+                .sorted((a, b) -> {
+                    if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
+                    if (a.nextFireTime() == null) return 1;
+                    if (b.nextFireTime() == null) return -1;
+                    return a.nextFireTime().compareTo(b.nextFireTime());
+                })
+                .collect(Collectors.toList());
+            int end = Math.min(offset + limit, all.size());
+            if (offset >= all.size()) return List.of();
+            return all.subList(offset, end);
+        }
+        @Override
+        public long countAll(String status) {
+            if (status != null && !status.isBlank()) {
+                return store.values().stream().filter(c -> status.equals(c.status())).count();
+            }
+            return store.size();
+        }
+
+        @Override
+        public List<AgentCronDto> findByUserId(String userId, String status, int offset, int limit) {
+            List<AgentCronDto> all = store.values().stream()
+                .filter(c -> userId.equals(c.userId()))
+                .filter(c -> status == null || status.isBlank() || status.equals(c.status()))
+                .sorted((a, b) -> {
+                    if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
+                    if (a.nextFireTime() == null) return 1;
+                    if (b.nextFireTime() == null) return -1;
+                    return a.nextFireTime().compareTo(b.nextFireTime());
+                })
+                .collect(Collectors.toList());
+            int end = Math.min(offset + limit, all.size());
+            if (offset >= all.size()) return List.of();
+            return all.subList(offset, end);
+        }
+
+        @Override
+        public long countByUserId(String userId, String status) {
+            if (status != null && !status.isBlank()) {
+                return store.values().stream()
+                    .filter(c -> userId.equals(c.userId()) && status.equals(c.status()))
+                    .count();
+            }
+            return store.values().stream().filter(c -> userId.equals(c.userId())).count();
+        }
 
         private AgentCronDto copyWithStatus(AgentCronDto c, String status) {
             return new AgentCronDto(c.id(), c.sessionId(), c.userId(), c.chatId(), c.channelType(),
@@ -486,6 +536,97 @@ class PersistencePortContractTest {
         @Override
         public long getMaxSequence(String sessionId) {
             return store.getOrDefault(sessionId, List.of()).stream().mapToLong(AuditEventDto::sequence).max().orElse(0L);
+        }
+        @Override
+        public Optional<AuditEventDto> findById(UUID id) {
+            if (id == null) return Optional.empty();
+            return store.values().stream()
+                .flatMap(List::stream)
+                .filter(e -> id.equals(e.id()))
+                .findFirst();
+        }
+        @Override
+        public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
+            List<AuditEventDto> results = new ArrayList<>();
+            if (sessionId != null && !sessionId.isBlank()) {
+                results.addAll(store.getOrDefault(sessionId, List.of()));
+            } else {
+                store.values().forEach(results::addAll);
+            }
+            if (eventType != null && !eventType.isBlank()) {
+                results = results.stream().filter(e -> eventType.equals(e.eventType())).toList();
+            }
+            if (from != null) {
+                results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isBefore(from)).toList();
+            }
+            if (to != null) {
+                results = results.stream().filter(e -> e.timestamp() != null && !e.timestamp().isAfter(to)).toList();
+            }
+            results = results.stream()
+                .sorted((a, b) -> {
+                    if (a.timestamp() == null && b.timestamp() == null) return 0;
+                    if (a.timestamp() == null) return 1;
+                    if (b.timestamp() == null) return -1;
+                    return b.timestamp().compareTo(a.timestamp());
+                })
+                .toList();
+            int end = Math.min(offset + limit, results.size());
+            if (offset >= results.size()) return List.of();
+            return results.subList(offset, end);
+        }
+        @Override
+        public long countAll(String sessionId, String eventType, Instant from, Instant to) {
+            return findAll(sessionId, eventType, from, to, 0, Integer.MAX_VALUE).size();
+        }
+    }
+
+    static class InMemoryCronRunStore implements CronRunStorePort {
+        final Map<String, CronRunDto> store = new ConcurrentHashMap<>();
+
+        @Override
+        public void save(CronRunDto dto) { store.put(dto.id(), dto); }
+        @Override
+        public Optional<CronRunDto> findById(String id) { return Optional.ofNullable(store.get(id)); }
+        @Override
+        public List<CronRunDto> findByCronId(String cronId, int offset, int limit) {
+            List<CronRunDto> all = store.values().stream()
+                .filter(r -> cronId.equals(r.cronId()))
+                .sorted((a, b) -> {
+                    if (a.startedAt() == null && b.startedAt() == null) return 0;
+                    if (a.startedAt() == null) return 1;
+                    if (b.startedAt() == null) return -1;
+                    return b.startedAt().compareTo(a.startedAt());
+                })
+                .collect(Collectors.toList());
+            int end = Math.min(offset + limit, all.size());
+            if (offset >= all.size()) return List.of();
+            return all.subList(offset, end);
+        }
+        @Override
+        public long countByCronId(String cronId) {
+            return store.values().stream().filter(r -> cronId.equals(r.cronId())).count();
+        }
+        @Override
+        public List<CronRunDto> findAll(String status, int offset, int limit) {
+            List<CronRunDto> all = store.values().stream()
+                .filter(r -> status == null || status.isBlank() || status.equals(r.status()))
+                .sorted((a, b) -> {
+                    if (a.startedAt() == null && b.startedAt() == null) return 0;
+                    if (a.startedAt() == null) return 1;
+                    if (b.startedAt() == null) return -1;
+                    return b.startedAt().compareTo(a.startedAt());
+                })
+                .collect(Collectors.toList());
+            int end = Math.min(offset + limit, all.size());
+            if (offset >= all.size()) return List.of();
+            return all.subList(offset, end);
+        }
+        @Override
+        public long countAll(String status) {
+            if (status != null && !status.isBlank()) {
+                return store.values().stream().filter(r -> status.equals(r.status())).count();
+            }
+            return store.size();
         }
     }
 

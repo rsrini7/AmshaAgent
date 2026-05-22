@@ -129,13 +129,9 @@ class StructuredRetryLoopTest {
         @SuppressWarnings("unchecked")
         Supplier<String> call = mock(Supplier.class);
         when(call.get())
-            .thenThrow(new BudgetWarningException("Low budget"))
-            .thenThrow(new JsonExtractionException("fail", "raw", String.class, null, null))
-            .thenReturn("success");
+            .thenThrow(new BudgetWarningException("Low budget"));
 
-        String result = retryLoop.execute(sessionId, "role", "op", call);
-
-        assertEquals("success", result);
-        verify(call, times(3)).get();
+        assertThrows(BudgetWarningException.class, () -> retryLoop.execute(sessionId, "role", "op", call));
+        verify(call, times(1)).get();
     }
 }

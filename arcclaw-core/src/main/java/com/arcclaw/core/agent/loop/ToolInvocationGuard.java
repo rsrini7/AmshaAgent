@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,7 +45,9 @@ public class ToolInvocationGuard {
     @Inject public Instance<DynamicToolLookup> dynamicToolLookup;
     @Inject public Instance<ToolGuardInterceptor> interceptors;
     
+    private static final int MAX_DEDUP_SESSIONS = 1000;
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedDeque<String> sessionOrder = new ConcurrentLinkedDeque<>();
 
     private List<ToolGuardInterceptor> sortedInterceptors;
 
@@ -104,9 +107,16 @@ public class ToolInvocationGuard {
                 .orElse(IdempotencyMode.NON_IDEMPOTENT);
 
         if (mode != IdempotencyMode.NON_IDEMPOTENT) {
+            if (sessionDedupeCache.size() >= MAX_DEDUP_SESSIONS && !sessionDedupeCache.containsKey(sessionId)) {
+                String evictKey = sessionOrder.pollFirst();
+                if (evictKey != null) {
+                    sessionDedupeCache.remove(evictKey);
+                }
+            }
             Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
                 Map<String, String> index = new ConcurrentHashMap<>();
-                for (ReasoningStep past : history) {
+                sessionOrder.addLast(k);
+                for (ReasoningStep past : List.copyOf(history)) {
                     if (past.observation() != null && !past.observation().isBlank()) {
                         index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
                     }
@@ -175,21 +185,23 @@ public class ToolInvocationGuard {
 
     public void recordToolCall(String sessionId, String toolName, Map<String, Object> params, String observation) {
         if (observation == null || observation.isBlank()) return;
-        Map<String, String> index = sessionDedupeCache.computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
+        Map<String, String> index = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
+            sessionOrder.addLast(k);
+            return new ConcurrentHashMap<>();
+        });
         index.put(buildDedupeKey(toolName, params), observation);
     }
 
     public void clearSession(String sessionId) {
         sessionDedupeCache.remove(sessionId);
+        sessionOrder.remove(sessionId);
     }
 
     private String buildDedupeKey(String toolName, Map<String, Object> params) {
         if (params == null || params.isEmpty()) return toolName + ":empty";
         try {
-            // Sort keys for deterministic JSON
             TreeMap<String, Object> sorted = new TreeMap<>(params);
-            String normalizedJson = objectMapper.writeValueAsString(sorted);
-            return toolName + ":" + normalizedJson.hashCode();
+            return toolName + ":" + objectMapper.writeValueAsString(sorted);
         } catch (Exception e) {
             return toolName + ":err:" + Objects.hash(params);
         }

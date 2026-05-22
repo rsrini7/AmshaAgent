@@ -7,11 +7,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
@@ -25,7 +27,8 @@ import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.AgentResultFormatter;
 import com.arcclaw.core.util.CronScheduleUtil;
-import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.persistence.api.CronRunDto;
+import com.arcclaw.persistence.api.CronRunStorePort;
 import com.arcclaw.persistence.api.CronStorePort;
 import org.jboss.logging.Logger;
 
@@ -39,6 +42,7 @@ public class CronResultHandler {
     private static final Logger log = Logger.getLogger(CronResultHandler.class);
 
     private final CronStorePort cronStore;
+    private final CronRunStorePort cronRunStore;
     private final AuditService auditService;
     private final WorkspaceManager workspaceManager;
     private final Event<AgentJobCompleted> jobCompletedEvent;
@@ -46,6 +50,7 @@ public class CronResultHandler {
 
     protected CronResultHandler() {
         this.cronStore = null;
+        this.cronRunStore = null;
         this.auditService = null;
         this.workspaceManager = null;
         this.jobCompletedEvent = null;
@@ -54,26 +59,47 @@ public class CronResultHandler {
 
     @Inject
     public CronResultHandler(CronStorePort cronStore,
+                             CronRunStorePort cronRunStore,
                              AuditService auditService,
                              WorkspaceManager workspaceManager,
                              Event<AgentJobCompleted> jobCompletedEvent,
                              StatefulAgentStore statefulAgentStore) {
         this.cronStore = cronStore;
+        this.cronRunStore = cronRunStore;
         this.auditService = auditService;
         this.workspaceManager = workspaceManager;
         this.jobCompletedEvent = jobCompletedEvent;
         this.statefulAgentStore = statefulAgentStore;
     }
 
+    @ActivateRequestContext
     public void handleSuccess(AgentCron job, String cronSessionId, String executionId, AgentResult result) {
         if (result instanceof AgentResult.AwaitingApproval a) {
             handleApprovalPause(job, cronSessionId, executionId, a);
         } else if (result instanceof AgentResult.AwaitingRetry) {
+            updateRunStatus(executionId, "AWAITING_RETRY", null, result);
             log.infof("CronResultHandler: Session kept alive for cron=%s AWAITING_RETRY (rate limit).", cronSessionId);
-            // No-op termination - let the RateLimitRetryScheduler pick it up
         } else {
             handleNormalCompletion(job, cronSessionId, executionId, result);
         }
+    }
+
+    private void updateRunStatus(String executionId, String status, String errorReason, AgentResult result) {
+        cronRunStore.findById(executionId).ifPresent(existing -> {
+            int inputTokens = 0;
+            int outputTokens = 0;
+            if (result != null) {
+                inputTokens = result.totalInputTokens();
+                outputTokens = result.totalOutputTokens();
+            }
+            CronRunDto updated = new CronRunDto(
+                existing.id(), existing.cronId(), existing.sessionId(), status,
+                existing.startedAt(), Instant.now(), errorReason,
+                existing.iterationsUsed(), inputTokens, outputTokens,
+                existing.usdCost(), existing.createdAt()
+            );
+            cronRunStore.save(updated);
+        });
     }
 
     // Handles Finished, Failed, LoopExceeded - always terminates session
@@ -82,6 +108,12 @@ public class CronResultHandler {
         String finalAnswer = answer.trim().isEmpty()
                 ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.getGoal()
                 : answer;
+
+        if (result instanceof AgentResult.Finished) {
+            updateRunStatus(executionId, "COMPLETED", null, result);
+        } else {
+            updateRunStatus(executionId, "FAILED", answer, result);
+        }
 
         handleFinalResult(job, cronSessionId, result);
 
@@ -115,6 +147,7 @@ public class CronResultHandler {
 
     // Handles AwaitingApproval - session must stay alive for ApproveReflex
     private void handleApprovalPause(AgentCron job, String cronSessionId, String executionId, AgentResult.AwaitingApproval result) {
+        updateRunStatus(executionId, "AWAITING_APPROVAL", null, null);
         cronStore.markAwaitingApproval(job.getId());
         log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s",
                 job.getId(), result.toolName());
@@ -140,7 +173,9 @@ public class CronResultHandler {
         }
     }
 
+    @ActivateRequestContext
     public void handleFailure(AgentCron job, String cronSessionId, String executionId, Throwable t) {
+        updateRunStatus(executionId, "FAILED", t.getMessage(), null);
         cronStore.markFailed(job.getId(), t.getMessage());
         
         auditService.record(cronSessionId, job.getUserId(),
@@ -149,7 +184,7 @@ public class CronResultHandler {
                 "cronId=" + job.getId() + " reason=" + t.getMessage());
 
         if (t.getMessage() != null && t.getMessage().contains("[TEST-EXPECTED]")) {
-            log.warnf("CRON-FAIL (EXPECTED) cronId=%s: %s", job.getId(), t.getMessage());
+            log.warnf("CRON-FAIL (EXPECTED) cronId=%s: %s", job.getId(), LogUtil.rootMessage(t));
         } else {
             log.warnf(t, "CRON-FAIL cronId=%s", job.getId());
         }
@@ -179,11 +214,26 @@ public class CronResultHandler {
                 log.infof("CRON-FIRED cronId=%s nextFire=%s", job.getId(), next);
             }
         } else {
-            cronStore.markFailed(job.getId(), AgentResultFormatter.format(result));
-            auditService.record(cronSessionId, job.getUserId(),
-                    AgentRoleEnum.COORDINATOR.toScopedName(),
-                    SecurityEventType.CRONFAILED,
-                    "cronId=" + job.getId() + " status=FAILED result=" + result.getClass().getSimpleName());
+            if (!job.isRunOnce() && job.getCronExpression() != null && !job.getCronExpression().isBlank()) {
+                // Recurring job failed — reschedule instead of permanent failure.
+                // Free-tier LLMs fail intermittently; marking permanently FAILED
+                // would kill the recurring schedule after the first transient error.
+                Instant next = CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone());
+                cronStore.markFired(job.getId(), Instant.now(), next);
+                log.warnf("CRON-RETRY recurring cronId=%s failed (will retry at %s): %s",
+                        job.getId(), next, AgentResultFormatter.format(result));
+                auditService.record(cronSessionId, job.getUserId(),
+                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        SecurityEventType.CRONFAILED,
+                        "cronId=" + job.getId() + " status=RETRY nextFire=" + next
+                        + " result=" + result.getClass().getSimpleName());
+            } else {
+                cronStore.markFailed(job.getId(), AgentResultFormatter.format(result));
+                auditService.record(cronSessionId, job.getUserId(),
+                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        SecurityEventType.CRONFAILED,
+                        "cronId=" + job.getId() + " status=FAILED result=" + result.getClass().getSimpleName());
+            }
         }
     }
 

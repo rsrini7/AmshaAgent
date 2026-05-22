@@ -6,6 +6,7 @@ import jakarta.json.Json;
 
 import com.arcclaw.channel.api.ChannelJobNotifier;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.common.util.LogUtil;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -53,7 +54,7 @@ public class WebJobNotifier implements ChannelJobNotifier {
             conn -> {
                 conn.sendText(payload).subscribe().with(
                     id -> {},
-                    err -> log.warnf("Failed to send to session %s: %s", sessionId, err.getMessage())
+                    err -> log.warnf("Failed to send to session %s: %s", sessionId, LogUtil.rootMessage(err))
                 );
             },
             () -> log.warnf("WebJobNotifier: no WS session for id=%s", sessionId)

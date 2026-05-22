@@ -11,6 +11,7 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.tools.AgentTool;
@@ -48,22 +49,22 @@ class McpToolBridgeTest {
 
     @Test
     void testGetExposedTools() throws Exception {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("github", "memory_search"));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         when(mockSchemaProvider.getJsonSchema(ArgumentMatchers.any())).thenReturn("{}");
         
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(2, tools.size());
-        assertEquals("github", tools.get(0).name());
-        assertEquals("memory_search", tools.get(1).name());
+        assertEquals(ToolCapability.GITHUB.toolName(), tools.get(0).name());
+        assertEquals(ToolCapability.MEMORY_SEARCH.toolName(), tools.get(1).name());
     }
 
     @Test
     void testGetExposedToolsSchemaDerivation() throws Exception {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("github"));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
-        when(mockRegistry.findTool("github")).thenReturn(Optional.of(mockTool));
+        when(mockRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(mockTool));
         when(mockSchemaProvider.getJsonSchema(mockTool)).thenReturn("{\"schema\":\"v1\"}");
 
         List<McpToolDescriptor> tools = bridge.getExposedTools();
@@ -72,55 +73,55 @@ class McpToolBridgeTest {
 
         // Verify cache: second call does not hit registry/provider again
         bridge.getExposedTools();
-        Mockito.verify(mockRegistry, Mockito.times(1)).findTool("github");
+        Mockito.verify(mockRegistry, Mockito.times(1)).findTool(ToolCapability.GITHUB.toolName());
         Mockito.verify(mockSchemaProvider, Mockito.times(1)).getJsonSchema(mockTool);
     }
 
     @Test
     void testMatchingUsesToolNameNotEnumName() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("memory_search"));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.MEMORY_SEARCH.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
-        assertEquals("memory_search", tools.get(0).name()); // must NOT be "MEMORY_SEARCH"
+        assertEquals(ToolCapability.MEMORY_SEARCH.toolName(), tools.get(0).name()); // must NOT be "MEMORY_SEARCH"
     }
 
     @Test
     void testEntryWithNoMatchingToolName() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("invalid_tool", "github"));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of("invalid_tool", ToolCapability.GITHUB.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
-        assertEquals("github", tools.get(0).name());
+        assertEquals(ToolCapability.GITHUB.toolName(), tools.get(0).name());
     }
 
     @Test
     void testInvokeAllowlistedTool() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("github"));
-        when(mockRegistry.invokeTool(eq("github"), eq("{}"), anyString()))
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
+        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString()))
             .thenReturn(ToolResponse.success("ok"));
             
-        String result = bridge.executeTool(new McpToolRequest("github", "{}", null));
+        String result = bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null));
         assertEquals("ok", result);
     }
 
     @Test
     void testInvokeNonAllowlistedTool() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("memory_search"));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.MEMORY_SEARCH.toolName()));
         
-        assertThrows(McpToolNotAllowedException.class, () -> bridge.executeTool(new McpToolRequest("github", "{}", null)));
+        assertThrows(McpToolNotAllowedException.class, () -> bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null)));
     }
 
     @Test
     void testAuditRecordsHaveDistinctIdentities() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("github"));
-        when(mockRegistry.invokeTool(eq("github"), eq("{}"), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
+        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString())).thenReturn(ToolResponse.success("ok"));
 
         // Client A
-        McpToolRequest reqA = new McpToolRequest("github", "{}", HttpServerRequest.class.cast(
+        McpToolRequest reqA = new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", HttpServerRequest.class.cast(
             Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{HttpServerRequest.class}, (p, m, args) -> {
                 if ("headers".equals(m.getName())) return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Client-ID", "A").add("X-MCP-Session-ID", "1");
                 return null;
@@ -128,7 +129,7 @@ class McpToolBridgeTest {
         bridge.executeTool(reqA);
 
         // Client B
-        McpToolRequest reqB = new McpToolRequest("github", "{}", HttpServerRequest.class.cast(
+        McpToolRequest reqB = new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", HttpServerRequest.class.cast(
             Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{HttpServerRequest.class}, (p, m, args) -> {
                 if ("headers".equals(m.getName())) return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Client-ID", "B").add("X-MCP-Session-ID", "2");
                 return null;
@@ -150,10 +151,10 @@ class McpToolBridgeTest {
 
     @Test
     void testRoleMappingFromCapabilities() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of("github"));
-        when(mockRegistry.invokeTool(eq("github"), eq("{}"), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
+        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString())).thenReturn(ToolResponse.success("ok"));
 
-        McpToolRequest reqCoder = new McpToolRequest("github", "{}", HttpServerRequest.class.cast(
+        McpToolRequest reqCoder = new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", HttpServerRequest.class.cast(
             Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{HttpServerRequest.class}, (p, m, args) -> {
                 if ("headers".equals(m.getName())) return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Capabilities", "code_generation");
                 return null;
