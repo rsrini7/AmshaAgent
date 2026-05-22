@@ -1,5 +1,7 @@
 package com.arcclaw.channel.api;
 
+import java.util.Objects;
+
 /**
  * Reusable base pipeline implementing the Template Method pattern for channel inbound message processing.
  * Manages concurrency locks and asynchronous processing delegation.
@@ -10,11 +12,21 @@ public abstract class AbstractInboundMessagePipeline {
     protected final ChannelType channelType;
     private final ProcessingLockManager lockManager;
 
+    /**
+     * No-arg constructor for CDI proxies.
+     * Note: Final fields initialized to null here are only valid after CDI-created subclass initialization.
+     */
+    protected AbstractInboundMessagePipeline() {
+        this.channelServices = null;
+        this.channelType = null;
+        this.lockManager = null;
+    }
+
     protected AbstractInboundMessagePipeline(ChannelServices channelServices, ChannelType channelType,
                                               ProcessingLockManager lockManager) {
-        this.channelServices = channelServices;
-        this.channelType = channelType;
-        this.lockManager = lockManager;
+        this.channelServices = Objects.requireNonNull(channelServices, "channelServices must not be null");
+        this.channelType = Objects.requireNonNull(channelType, "channelType must not be null");
+        this.lockManager = Objects.requireNonNull(lockManager, "lockManager must not be null");
     }
 
     protected abstract void sendRawReply(ChannelUser user, String text);

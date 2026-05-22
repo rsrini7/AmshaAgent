@@ -42,7 +42,7 @@ public class TelegramAgentHandler extends AbstractInboundMessagePipeline {
      */
     @Deprecated
     protected TelegramAgentHandler() {
-        super(null, null, null);
+        super();
     }
 
     public void receiveMessage(Exchange exchange) {

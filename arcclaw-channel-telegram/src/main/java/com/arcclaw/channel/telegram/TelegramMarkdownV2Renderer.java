@@ -60,7 +60,7 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
                     + "```json\n" + params + "\n```\n\n"
                     + "Reply with `/approve` or `/deny`";
         }
-        return node.fallbackText();
+        return esc(node.fallbackText());
     }
 
     private String renderContentNode(ContentNode node) {
