@@ -5,8 +5,11 @@ import static org.mockito.Mockito.*;
 import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
+import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -17,6 +20,9 @@ public class HitlServiceAbstractionTest {
 
     @Mock EntityManager em;
     @Mock CheckpointApprovalService checkpointApprovalService;
+    @Mock AgentOtelContext otelContext;
+    @Mock ObjectMapper objectMapper;
+    @Mock SessionHeartbeatTracker heartbeatTracker;
     @InjectMocks HitlService hitlService;
 
     @BeforeEach
