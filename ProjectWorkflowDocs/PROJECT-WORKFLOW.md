@@ -225,7 +225,7 @@ If `context.isResumeSignal()` and checkpoint is `AWAITING_APPROVAL`:
 - **Auto-heal on resume failure** → `ResumeStrategyDispatcher` intercepts `sandbox_exec` failures for the coder role on the resume path. If `ExecutionFailureRecoveryService.shouldAttemptRecovery()` returns true, it delegates to Shiva (debugger) in an isolated `:heal:` sub-session, extracts fixed code from Shiva's response, and re-executes the tool. On success, the loop continues via `runFinishPass()`. If auto-heal also fails, falls through to persona escalation (Step C.2).
 - **Persona escalation on resume** → `ResumeStrategyDispatcher.tryEscalationOnResume()` checks if the failure matches an escalation pattern (unknown API, architecture decision, obscure error). If `PersonaEscalationService.determineEscalationTarget()` returns a target, it spawns an isolated `:escalate:` sub-session with the target persona. On success, the result is merged back and the loop continues via `runFinishPass()`. On failure, returns `AgentResult.failed()`.
 
-### 6.4 Fast-Path: `delegate_to_agent` Finish
+### 6.4 Fast-Path: `garuda` Finish
 
 `tryDelegateFinishFastPath()` - if the last history step's action is `delegate-to-agent` and the observation is a clean answer (does not start with ⏳ / ⚠️ / ❌), the coordinator skips its wrap-up LLM call and returns the sub-agent's result directly. Saves approximately 9,800 tokens per delegation.
 
@@ -396,7 +396,7 @@ On resume after batch approval:
 | `ingest_document` | `IngestDocumentTool` | Embeds text into vec0 + `rag_chunk`; always requires approval |
 | `schedule_task` | `ScheduleTaskTool` | Creates a new cron job |
 | `manage_schedule` | `ManageScheduleTool` | Lists / updates / deletes cron jobs |
-| `delegate_to_agent` | `DelegateToAgentTool` | Spawns sub-agent with capability subset check |
+| `garuda` | `DelegateToAgentTool` | Spawns sub-agent with capability subset check |
 | `check_list` | `CheckListTool` | Fires `CheckListEvent` for structured checklists |
 | `playwright_cli` | `PlaywrightCliTool` | Headless browser automation via Playwright CLI |
 | `agent_task` | `AgentTaskTool` | Task management for agent workflows |
@@ -626,7 +626,7 @@ Self-connect smoke test: connecting to `http://localhost:8080/mcp` makes ArcClaw
 `DelegateToAgentTool` allows the coordinator to spawn sub-agents:
 
 ```
-Coordinator: THINK → ACTION: delegate_to_agent(agent="brahma", goal="Write unit tests for...")
+Coordinator: THINK → ACTION: garuda(agent="brahma", goal="Write unit tests for...")
   → ToolInvocationGuard: scheduling tools are EXEMPT from HITL (§4.10)
   → Capability subset check: sub-agent role must have a subset of coordinator's tools
     (prevents transitive privilege escalation)

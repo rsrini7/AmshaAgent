@@ -48,6 +48,30 @@ public class AgentProducer {
     Template synthesizerTemplate;
 
     @Inject
+    @Location("personas/optimizer.txt")
+    Template optimizerTemplate;
+
+    @Inject
+    @Location("personas/sentinel.txt")
+    Template sentinelTemplate;
+
+    @Inject
+    @Location("personas/healer.txt")
+    Template healerTemplate;
+
+    @Inject
+    @Location("personas/protector.txt")
+    Template protectorTemplate;
+
+    @Inject
+    @Location("personas/purifier.txt")
+    Template purifierTemplate;
+
+    @Inject
+    @Location("personas/nurturer.txt")
+    Template nurturerTemplate;
+
+    @Inject
     StructuredOutputEngine structuredOutputEngine;
 
     @Inject
@@ -96,5 +120,47 @@ public class AgentProducer {
     @AgentRole(AgentRoleEnum.SYNTHESIZER_ID)
     public Agent synthesizer() {
         return new DefaultAgent(AgentPersona.DATTATREYA, () -> synthesizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
+    }
+
+    @Produces
+    @ApplicationScoped
+    @AgentRole(AgentRoleEnum.OPTIMIZER_ID)
+    public Agent optimizer() {
+        return new DefaultAgent(AgentPersona.GANESHA, () -> optimizerTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
+    }
+
+    @Produces
+    @ApplicationScoped
+    @AgentRole(AgentRoleEnum.SENTINEL_ID)
+    public Agent sentinel() {
+        return new DefaultAgent(AgentPersona.KARTIKEYA, () -> sentinelTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
+    }
+
+    @Produces
+    @ApplicationScoped
+    @AgentRole(AgentRoleEnum.HEALER_ID)
+    public Agent healer() {
+        return new DefaultAgent(AgentPersona.LAKSHMI, () -> healerTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
+    }
+
+    @Produces
+    @ApplicationScoped
+    @AgentRole(AgentRoleEnum.PROTECTOR_ID)
+    public Agent protector() {
+        return new DefaultAgent(AgentPersona.DURGA, () -> protectorTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
+    }
+
+    @Produces
+    @ApplicationScoped
+    @AgentRole(AgentRoleEnum.PURIFIER_ID)
+    public Agent purifier() {
+        return new DefaultAgent(AgentPersona.KALI, () -> purifierTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
+    }
+
+    @Produces
+    @ApplicationScoped
+    @AgentRole(AgentRoleEnum.NURTURER_ID)
+    public Agent nurturer() {
+        return new DefaultAgent(AgentPersona.PARVATI, () -> nurturerTemplate, defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
     }
 }

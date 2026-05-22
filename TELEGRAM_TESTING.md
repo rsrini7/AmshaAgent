@@ -265,7 +265,7 @@ What was the project name I told you about?
 
 ---
 
-### 5.3 Intent classifier routes to all six specialist roles
+### 5.3 Intent classifier routes to all twelve specialist roles
 
 **Coordinator (Vishnu):**
 ```

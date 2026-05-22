@@ -30,8 +30,8 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 ### Key Capabilities
 
 - **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, OMLX, or local Ollama models
-- **Six specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
-- **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `delegate_to_agent` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
+- **Twelve specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
+- **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `garuda` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
 - **Reflex system** - 16 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
@@ -68,7 +68,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
-| **Delegation** | All roles can delegate via `delegate_to_agent` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability; sandbox failures auto-delegated to Shiva via `ExecutionFailureRecoveryService`; cross-persona escalation via `PersonaEscalationService` |
+| **Delegation** | All roles can delegate via `garuda` tool + `DelegationRoutingProvider`; non-coordinators restricted by capability; sandbox failures auto-delegated to Shiva via `ExecutionFailureRecoveryService`; cross-persona escalation via `PersonaEscalationService` |
 
 - **🛡️ Hardened Isolation:** Rootless Podman execution with ephemeral secret injection. Tools run in strictly capped containers, and secrets are passed via memory-wiped `.env` files - never as process arguments.
 - **🔐 Zero-String Security:** Argon2id key derivation and AES-GCM-SIV cryptographic vault. Keys are held in `AutoCloseable` wrappers that aggressively overwrite memory with zeros when no longer needed.
@@ -125,7 +125,7 @@ flowchart TD
         L6["📝 Observe<br/>+ SQLite tick"]:::loop
         L7{"FINISH?"}:::decision
         L8(["✅ Reply sent"]):::result
-        LD["🔀 delegate_to_agent<br/>sub-agent loop"]:::loop
+        LD["🔀 garuda<br/>sub-agent loop"]:::loop
     end
 
     IN --> PIPELINE
@@ -148,7 +148,7 @@ flowchart TD
     L5 --> L6 --> L7
     L7 -->|"next iter"| L1
     L7 -->|"done"| L8
-    L1 -->|"delegate_to_agent"| LD
+    L1 -->|"garuda"| LD
     LD --> L6
 ```
 
@@ -162,7 +162,7 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 6. **ToolRegistry:** The CDI-powered registry discovers available tools and enforces Governance policy (e.g., blocking `NETWORK_OUTBOUND` actions if the agent is untrusted or budget-exceeded).
 7. **ToolSearchIndex:** An in-memory Lucene index over all registered tools enables dynamic tool discovery. Instead of injecting every tool definition into every prompt, the agent queries this index with its task description to find the most relevant tools, reducing prompt bloat when many tools, MCP servers, and skills are registered.
 7. **Parallel Tool Execution:** When the LLM requests multiple tools in one step, `ParallelToolStepExecutor` executes them concurrently. Pre-executable tools (FULL autonomy or configured safe list) run immediately; remaining tools are held for batch HITL approval with Telegram inline keyboard.
-8. **Agent Delegation:** Any role can use the `delegate_to_agent` tool to spin up a sub-agent loop for specialist tasks. Non-coordinators are restricted from delegating to roles they lack capabilities for. The sub-agent runs with its own isolated context and reports results back.
+8. **Agent Delegation:** Any role can use the `garuda` tool to spin up a sub-agent loop for specialist tasks. Non-coordinators are restricted from delegating to roles they lack capabilities for. The sub-agent runs with its own isolated context and reports results back.
 9. **ProcessIsolationExecutor:** Three-tier degradation: Podman rootless containers in production (strict network/CPU/memory caps), Linux namespace isolation as fallback, and direct host execution in test mode only (`strategy: NONE`).
 10. **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 11. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
@@ -231,16 +231,16 @@ graph TD
         Loop <-->|Prompt + Role-Filtered<br/>Tool Schema| AI[LangChainReasoningEngine]
         Loop -->|Execute Tool Request| ToolReg[ToolRegistry<br/>Governance + HITL]
         Loop -->|RAG context enrichment| RAG[TwoTierMemoryService<br/>FTS5 + sqlite-vec RRF]
-        Loop -->|delegate_to_agent| DelegateLoop[Sub-Agent Loop<br/>DelegationRoutingProvider]
+        Loop -->|garuda| DelegateLoop[Sub-Agent Loop<br/>DelegationRoutingProvider]
         Loop -->|parallel batch| ParExec[ParallelToolStepExecutor<br/>pre-execute + HITL split]
     end
 
     subgraph Tool Schema per Role
         AI -->|agentRole filter| Schema{Schema Filter<br/>RoleDefinition.capabilities}
-        Schema -->|coordinator| CT[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + delegate_to_agent]
-        Schema -->|researcher| RA[github + memory_search<br/>+ brave_web_search + serper_web_search + delegate_to_agent]
-        Schema -->|architect| AR[github + memory_search + delegate_to_agent]
-        Schema -->|synthesizer| SYN[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + web_search + delegate_to_agent]
+        Schema -->|coordinator| CT[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + garuda]
+        Schema -->|researcher| RA[github + memory_search<br/>+ brave_web_search + serper_web_search + garuda]
+        Schema -->|architect| AR[github + memory_search + garuda]
+        Schema -->|synthesizer| SYN[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + web_search + garuda]
         Schema -->|debugger| DB2[github + sandbox_exec + check_list + add_mcp_server]
         Schema -->|coder| COD[sandbox_exec + check_list + add_mcp_server]
         Schema -->|dynamic MCP tools| DynT[ExternalMcpToolAdapter<br/>MCP server tools]
@@ -361,7 +361,7 @@ sequenceDiagram
 
         loop maxIterations - Thought → Plan → Act → Observe
             AL->>LLM: nextStep(agentRole, goal, history)
-            Note over LLM: Role-filtered tool schema injected<br/>coder → sandbox_exec + checklist<br/>coordinator → all tools + delegate_to_agent<br/>researcher → github + memory_search + web_search<br/>debugger → github + sandbox_exec<br/>all roles → delegate_to_agent (restricted)
+            Note over LLM: Role-filtered tool schema injected<br/>coder → sandbox_exec + checklist<br/>coordinator → all tools + garuda<br/>researcher → github + memory_search + web_search<br/>debugger → github + sandbox_exec<br/>all roles → garuda (restricted)
             LLM-->>AL: Action (ToolName + Args OR parallel batch) OR FINISH
 
             alt Single tool call
@@ -384,7 +384,7 @@ sequenceDiagram
                 AL->>DB: 💾 Save AWAITING_APPROVAL + preExecutedResults
                 U->>CH: /approve toolName or /approve (all)
                 CH->>AL: resumeParallelBatch()
-            else delegate_to_agent
+            else garuda
                 AL->>AL: DelegationRoutingProvider → sub-agent loop
                 Note over AL: Sub-agent runs with specialist role<br/>fully self-contained goal
                 AL-->>AL: Sub-agent result → observation
@@ -403,19 +403,25 @@ sequenceDiagram
 
 ## 🕉️ The Cosmic Pantheon - Full Agent Roster
 
-ArcClaw ships a **six-agent roster** inspired by the Hindu Trimurti & Tridevi, with two additional specialist roles derived from extended Vedic tradition. Roles are selected automatically by the intent classifier or passed explicitly via `agentRole` in the API/CLI.
+ArcClaw ships a **twelve-agent roster** inspired by the Hindu Trimurti, Tridevi, and extended Vedic tradition. Roles are selected automatically by the intent classifier or passed explicitly via `agentRole` in the API/CLI.
 
 | Role | Deity | Max Iterations | Tools | Description |
 |---|---|---|---|---|
-| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `delegate_to_agent` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output. Escalates conflicting outputs to Dattatreya |
-| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code. Escalates to Brahma for implementation, Brihaspati for architecture |
-| `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox. Escalates unknown APIs to Saraswati, design decisions to Brihaspati, bugs to Shiva |
-| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `delegate_to_agent` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification. Auto-heal target; escalates obscure errors to Saraswati, fundamental flaws to Brahma |
-| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `delegate_to_agent` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code. Escalates implementation to Brahma, research to Saraswati |
-| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `delegate_to_agent` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains. Escalates conflicts to Brihaspati, gaps to Brahma/Saraswati |
+| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `garuda` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output. Escalates conflicting outputs to Dattatreya |
+| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `garuda` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code. Escalates to Brahma for implementation, Brihaspati for architecture |
+| `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `garuda` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox. Escalates unknown APIs to Saraswati, design decisions to Brihaspati, bugs to Shiva |
+| `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `garuda` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification. Auto-heal target; escalates obscure errors to Saraswati, fundamental flaws to Brahma |
+| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `garuda` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code. Escalates implementation to Brahma, research to Saraswati |
+| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `garuda` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains. Escalates conflicts to Brihaspati, gaps to Brahma/Saraswati |
+| `optimizer` | **Ganesha** | 10 | `github`, `sandbox_exec`, `garuda` | The Obstacle Remover. Complex logic analysis, recursive problem-solving, and clever workarounds. Sub-agent of Shiva; escalates to Brahma for implementation, Saraswati for research |
+| `sentinel` | **Kartikeya** | 10 | `github`, `sandbox_exec`, `garuda` | The Sentinel. Security scanning, input validation, and defense against malicious patterns. Sub-agent of Shiva; escalates to Shiva for fixes, Saraswati for CVE research |
+| `healer` | **Lakshmi** | 10 | `github`, `memory_search`, `garuda` | The Healer. Error recovery, self-healing, and token budget optimization. Dual role: healing + resource efficiency; escalates to Shiva for fixes, Saraswati for best practices |
+| `protector` | **Durga** | 10 | `github`, `memory_search`, `garuda` | The Protector. Policy enforcement, guardrails, and autonomy boundary protection. Escalates to Shiva for policy fixes, Saraswati for compliance research |
+| `purifier` | **Kali** | 10 | `github`, `memory_search`, `garuda` | The Purifier. Cleanup, lifecycle management, and resource termination. Escalates to Shiva for cleanup code, Saraswati for lifecycle best practices |
+| `nurturer` | **Parvati** | 10 | `github`, `memory_search`, `garuda` | The Nurturer. Empathy, tone analysis, and user sentiment management. Escalates to Shiva for bug fixes, Saraswati for documentation research |
 
 > [!NOTE]
-> Tool schemas are assembled dynamically at runtime via `@ToolMetadata(defaultRoles=...)` annotations on tool classes. `delegate_to_agent` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. The `coder` role has `add_mcp_server` for dynamically registering MCP servers at runtime. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
+> Tool schemas are assembled dynamically at runtime via `@ToolMetadata(defaultRoles=...)` annotations on tool classes. `garuda` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. The `coder` role has `add_mcp_server` for dynamically registering MCP servers at runtime. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryBorderColor': '#4fc3f7', 'lineColor': '#4fc3f7', 'activationBorderColor': '#4fc3f7', 'actorBorder': '#4fc3f7', 'actorLineColor': '#4fc3f7','labelBoxBorderColor': '#0b0c0cff', 'noteBorderColor': '#81c784', 'fontSize': '13px'}}}%%
@@ -423,14 +429,20 @@ graph LR
 
     IC(["🎯 Intent Classifier<br/>llama-3.1-8b-instant"]):::classifier
 
-    subgraph AGENTS["🕉️ THE COSMIC PANTHEON - SIX AGENTS"]
+    subgraph AGENTS["🕉️ THE COSMIC PANTHEON - TWELVE AGENTS"]
         direction TB
-        A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ delegate + escalation"]:::coordinator
-        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code<br/>+ delegate + escalation"]:::researcher
-        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist<br/>+ MCP + delegate + escalation"]:::coder
-        A4["🔴 debugger - Shiva<br/>Contrarian · Auto-heal · Escalation<br/>MCP + delegate"]:::debugger
-        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code<br/>+ delegate + escalation"]:::architect
+        A1["🔵 coordinator - Vishnu<br/>Routes · Delegates · Synthesizes<br/>+ garuda + escalation"]:::coordinator
+        A2["🟣 researcher - Saraswati<br/>Fact retrieval · No code<br/>+ garuda + escalation"]:::researcher
+        A3["🟠 coder - Brahma<br/>Pure logic · sandbox_exec + checklist<br/>+ MCP + garuda + escalation"]:::coder
+        A4["🔴 debugger - Shiva<br/>Contrarian · Auto-heal · Escalation<br/>MCP + garuda"]:::debugger
+        A5["🟡 architect - Brihaspati<br/>ADRs · Trade-offs · No prod code<br/>+ garuda + escalation"]:::architect
         A6["🟢 synthesizer - Dattatreya<br/>Cross-domain · Multi-specialist<br/>+ escalation"]:::synthesizer
+        A7["⚪ optimizer - Ganesha<br/>Logic · Obstacle removal<br/>Sub-agent of Shiva"]:::optimizer
+        A8["🟤 sentinel - Kartikeya<br/>Security · Input validation<br/>Sub-agent of Shiva"]:::sentinel
+        A9["💗 healer - Lakshmi<br/>Recovery · Token optimization<br/>Dual role"]:::healer
+        A10["🛡️ protector - Durga<br/>Policy · Guardrails<br/>Autonomy protection"]:::protector
+        A11["✨ purifier - Kali<br/>Cleanup · Lifecycle<br/>Resource termination"]:::purifier
+        A12["🌸 nurturer - Parvati<br/>Empathy · Tone analysis<br/>Sentiment management"]:::nurturer
     end
 
     subgraph TOOLS["🛠️ TOOLS"]
@@ -440,7 +452,7 @@ graph LR
         T3["📋 manage_schedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
         T4["🔍 memory_search<br/>SQLite FTS5 + sqlite-vec<br/>Past compaction summaries"]:::tool
         T5["🌐 ExternalMcpTool<br/>Dynamic tools from MCP servers<br/>HTTP_SSE / Podman STDIO transport"]:::tool
-        T6["🔀 delegate_to_agent<br/>all roles<br/>Spawns specialist sub-agent loop"]:::tool
+        T6["🔀 garuda<br/>all roles<br/>Spawns specialist sub-agent loop"]:::tool
         T7["💻 sandbox_exec<br/>Isolated code execution<br/>Python / Java / Node / Go"]:::tool
         T8["✅ check_list<br/>Task progress tracking"]:::tool
         T9["🔍 brave_web_search / serper_web_search<br/>Real-time web search"]:::tool
@@ -875,7 +887,7 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `ManageScheduleTool` | `manage_schedule` | `READ_FS` | ❌ In-memory | coordinator, synthesizer | List or delete the current user's scheduled cron jobs; tenant-isolated via `WorkspaceScopeHolder.USER_ID` |
 | `MemorySearchTool` | `memory_search` | `READ_FS` | ❌ In-memory | coordinator, researcher, architect, synthesizer | Two-tier RAG: FTS5 full-text + sqlite-vec vector search of past session compaction summaries |
 | `IngestDocumentTool` | `ingest_document` | `WRITE_MEMORY` | ❌ In-memory | coordinator, synthesizer | Ingest a document into the global or session knowledge base for future vector retrieval |
-| `DelegateToAgentTool` | `delegate_to_agent` | `DELEGATE_AUTONOMOUS` | ❌ In-process | all 6 roles | Spawns a specialist sub-agent loop; non-coordinators are restricted from delegating to roles they lack |
+| `DelegateToAgentTool` | `garuda` | `DELEGATE_AUTONOMOUS` | ❌ In-process | all 6 roles | Spawns a specialist sub-agent loop; non-coordinators are restricted from delegating to roles they lack |
 | `McpSelfRegisterTool` | `add_mcp_server` | `NETWORK_OUTBOUND` | ❌ In-memory | coder, debugger | Dynamically register a new MCP server at runtime; tools become available immediately |
 | `SandboxExecTool` | `sandbox_exec` | `EXECUTE_SHELL` | ✅ Podman | coder, debugger | Execute code in an isolated sandbox (Python, Java, Go, Node, Bash); falls back to direct execution with `allow-insecure-fallback`. Failures auto-heal via `ExecutionFailureRecoveryService` → Shiva debugger |
 | `CheckListTool` | `check_list` | `READ_FS` | ❌ In-memory | coder, debugger | Manage task checklist progress tracking |

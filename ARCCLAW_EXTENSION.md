@@ -133,34 +133,24 @@ The `AgentTool` interface provides several optional lifecycle and configuration 
 
 ## 2. Define a New Agent Persona
 
-### Step 1 - Create the Agent class
+> **For the complete 14-step checklist with all required touchpoints, see [`AGENTS.md` Section 6](./AGENTS.md#6-adding-a-new-persona-agent-role).**
 
-Implement `Agent`, annotate with `@AgentRole("your_role")` and `@ApplicationScoped`. The persona is registered automatically by `AgentPersonaRegistry`.
+### Step 1 - Add enum entries
+
+In `AgentPersona.java`, add the new deity enum entry:
 
 ```java
-@AgentRole("analyst")
-@ApplicationScoped
-public class AnalystAgent implements Agent {
-
-    @Override
-    public String role() { return "analyst"; }
-
-    // The system prompt is now driven by Qute templates (see Step 3 below)
-    // This method provides a fallback only
-    @Override
-    public String systemPrompt() {
-        return "You are a data analyst. Interpret structured data and produce clear summaries.";
-    }
-}
+ANALYST("analyst", "Lakshmi (The Analyst)", Set.of("lakshmi")),
 ```
 
-### Step 2 - Add the role to `AgentRoleEnum`
-
-Define the role with its `RoleDefinition`. Tool capabilities are dynamically assembled at startup via `@ToolMetadata` annotations on tool classes — you don't need to list them in `RoleDefinition`:
+In `AgentRoleEnum.java`, add the static instance and `RoleDefinition`:
 
 ```java
-// In AgentRoleEnum - add to the DEFINITIONS map
-AgentPersona.ANALYST.roleId(), new RoleDefinition(
+public static final String ANALYST_ID = "analyst";
+public static final AgentRoleEnum ANALYST = new AgentRoleEnum(ANALYST_ID);
+
+// In DEFINITIONS map (use Map.ofEntries() if >10 entries)
+Map.entry(AgentPersona.ANALYST.roleId(), new RoleDefinition(
     AgentPersona.ANALYST.roleId(),
     AgentPersona.ANALYST.displayName(),
     "Interprets structured data and produces clear summaries.",
@@ -169,47 +159,79 @@ AgentPersona.ANALYST.roleId(), new RoleDefinition(
     false,   // codeCapable
     Set.of(), // capabilities - assembled dynamically via @ToolMetadata
     AgentPersona.ANALYST.aliases()
-)
+))
 ```
 
-Tools grant themselves to roles via `@ToolMetadata(defaultRoles = {"analyst", ...})`. Add a case to every exhaustive switch over `AgentRoleEnum` in the codebase — the compiler will flag missing cases.
+### Step 2 - Create Qute templates
 
-### Step 3 - Add a Qute system prompt template
+Create **two** template files:
 
-Create `arcclaw-core/src/main/resources/templates/prompts/role-analyst.txt`:
-
+1. **Persona identity template** - `templates/personas/analyst.txt`:
 ```
-PERMITTED TOOLS: {#if sortedCapabilities.isEmpty()}None{#else}{#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}{/if}
-You are a data analyst. Your only job is to interpret structured data
-and produce clear summaries. You never write code or make network calls.
+You are Lakshmi, the Analyst of the ArcClaw team.
+
+YOUR RESPONSIBILITIES:
+- Interpret structured data and produce clear summaries.
+- ...
+
+AVAILABLE TOOLS: {tools}
+```
+
+2. **Role prompt template** - `templates/prompts/role-analyst.txt`:
+```
+PERMITTED TOOLS: {#each sortedCapabilities}{it.toolName}{#if it_hasNext}, {/if}{/each}
+
+ANALYST-SPECIFIC RULES:
+- Interpret structured data and produce clear summaries.
+- ...
 
 MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
+{#include prompts/github-tool-rules /}
+{#include prompts/delegate-to-agent-rules /}
 {#include prompts/safety-rules /}
 {#include prompts/compaction-summary /}
 ```
 
-Add the template injection to `PromptTemplateEngine`:
+### Step 3 - Add CDI producer
+
+In `AgentProducer.java`, add template injection and producer method:
 
 ```java
-// In PromptTemplateEngine
 @Inject
-@Location("prompts/role-analyst")
+@Location("personas/analyst.txt")
 Template analystTemplate;
 
-// Add a case to the exhaustive switch in buildSystemPrompt()
-case ANALYST -> analystTemplate.data(...)...render();
+@Produces
+@ApplicationScoped
+@AgentRole(AgentRoleEnum.ANALYST_ID)
+public Agent analyst() {
+    return new DefaultAgent(AgentPersona.ANALYST, () -> analystTemplate,
+        defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
+}
 ```
 
-### Step 4 - Register the role in `application.yaml`
+### Step 4 - Wire into the system
 
-```yaml
-arcclaw:
-  agents:
-    roles:
-      - name: analyst
-        class: com.yourpackage.AnalystAgent
-        description: "Data analysis persona"
+1. **`CoordinatorPromptSection.java`** - Add to Trimurti/Tridevi block
+2. **`PersonaEscalationService.java`** - Add escalation paths
+3. **`PromptInstructionLibrary.java`** - Add to system capabilities
+4. **`DelegateToAgentTool.java`** - Add to `defaultRoles` in `@ToolMetadata`
+5. **`delegate-to-agent-rules.txt`** - Add to "Available Specialists" list
+6. **`application.yaml`** - Add role entry
+
+### Step 5 - Update documentation
+
+1. **`AGENTS.md`** - Ensure Section 6 covers the new persona
+2. **`telegram-test-arcclaw.txt`** - Add test cases
+3. **`04_agent_roles.http`** - Add HTTP test cases
+
+### Step 6 - Verify
+
+```bash
+python3 ./fix_fqns.py
+./mvnw compile -DskipTests -q
+./mvnw test -pl arcclaw-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"
 ```
 
 ### Step 5 - Register for native image reflection (if applicable)

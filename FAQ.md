@@ -188,7 +188,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 
 ## 🤖 AI & Agent Logic
 
-### Q: What is the difference between all six agent roles?
+### Q: What is the difference between all twelve agent roles?
 
 | Role | Deity | Key Constraint | Use For |
 |---|---|---|---|
@@ -198,6 +198,12 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 | `debugger` | Shiva | GitHub only; contrarian by design | Bug analysis, stack traces, security audits |
 | `architect` | Brihaspati | GitHub + memory search; never writes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | All tools; only for cross-domain tasks | Multi-agent output integration |
+| `optimizer` | Ganesha | GitHub + sandbox; sub-agent of Shiva | Complex logic, obstacle removal, recursion |
+| `sentinel` | Kartikeya | GitHub + sandbox; sub-agent of Shiva | Security scanning, input validation |
+| `healer` | Lakshmi | GitHub + memory; dual role | Error recovery, token optimization |
+| `protector` | Durga | GitHub + memory | Policy enforcement, guardrails |
+| `purifier` | Kali | GitHub + memory | Cleanup, lifecycle management |
+| `nurturer` | Parvati | GitHub + memory | Empathy, tone analysis, sentiment |
 
 The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
@@ -254,7 +260,7 @@ The results from both categories are merged before the next iteration. In Telegr
 
 ### Q: How does agent delegation work?
 
-Any agent role can use the `delegate_to_agent` tool to spawn a sub-agent loop for specialist tasks. The `DelegationRoutingProvider` handles routing — it determines which specialist role should handle the delegated goal based on content analysis.
+Any agent role can use the `garuda` tool to spawn a sub-agent loop for specialist tasks. The `DelegationRoutingProvider` handles routing — it determines which specialist role should handle the delegated goal based on content analysis.
 
 Key constraints:
 - **Non-coordinators** are restricted from delegating to roles they lack capabilities for (e.g., a `researcher` cannot delegate to `coder`).
@@ -642,7 +648,7 @@ Per Architecture Invariant §4.4, agent personas are **data-driven via Qute temp
 The new persona is immediately available via `--role your_role` on the CLI and `agentRole: "your_role"` in the REST API.
 
 > [!IMPORTANT]
-> Class-per-persona inheritance (`BrahmaAgent`, `ShivaAgent`, etc.) is **forbidden** by Architecture Invariant §4.4. All six built-in personas use the single `DefaultAgent` implementation with Qute-rendered system prompts.
+> Class-per-persona inheritance (`BrahmaAgent`, `ShivaAgent`, etc.) is **forbidden** by Architecture Invariant §4.4. All twelve built-in personas use the single `DefaultAgent` implementation with Qute-rendered system prompts.
 
 ---
 

@@ -25,8 +25,8 @@ public class ResponseRecoveryHintBuilder {
     public String buildHallucinatedAgentToolHint(String agentName) {
         return String.format(
             "System: You called '%s' as if it were a tool, but that is an agent name. " +
-            "STRICT RULE: Only use 'delegate_to_agent' for delegation. " +
-            "Example: delegate_to_agent(agent=\"%s\", goal=\"...\"). " +
+            "STRICT RULE: Only use 'garuda' for delegation. " +
+            "Example: garuda(agent=\"%s\", goal=\"...\"). " +
             "Retry now with the correct tool call.",
             agentName, agentName);
     }
@@ -45,8 +45,8 @@ public class ResponseRecoveryHintBuilder {
 
     public String buildMalformedDelegateHint() {
         return """
-            System: Your delegate_to_agent call was malformed. STRICT RULES:
-            1. Call delegate_to_agent EXACTLY ONCE per turn - never batch multiple agents.
+            System: Your garuda call was malformed. STRICT RULES:
+            1. Call garuda EXACTLY ONCE per turn - never batch multiple agents.
             2. Pass exactly TWO flat string parameters only:
             {"agent": "<name>", "goal": "<self-contained task>"}
             3. Do NOT wrap in an array []. Do NOT nest under "parameters" or any other key.

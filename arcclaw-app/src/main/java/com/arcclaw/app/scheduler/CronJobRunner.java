@@ -209,12 +209,12 @@ public class CronJobRunner {
     }
     /**
      * §New Issue 1: Surgically extract the natural language goal from a serialized tool call string.
-     * Example: delegate_to_agent(agent="saraswati", goal="github repo view ...") -> "github repo view ..."
+     * Example: garuda(agent="saraswati", goal="github repo view ...") -> "github repo view ..."
      */
     private String unwrapToolCallGoal(String goal) {
         if (goal == null || goal.isBlank()) return goal;
         
-        // 1. Detect delegate_to_agent(...) wrapper
+        // 1. Detect garuda(...) wrapper
         if (goal.startsWith(ToolCapability.DELEGATE_TO_AGENT.toolName()) && goal.contains("goal=")) {
             int goalStart = goal.indexOf("goal=\"");
             if (goalStart != -1) {

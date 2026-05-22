@@ -220,7 +220,7 @@ public class FinishOutcomeProcessor {
             String hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
                     + ") cannot generate code. " + codePolicy.buildRefusalMessage(agentRole)
                     + " Do NOT tell the user to ask them separately. "
-                    + "Instead, use the `delegate_to_agent` tool NOW with agent='coder' and a complete goal "
+                    + "Instead, use the `garuda` tool NOW with agent='coder' and a complete goal "
                     + "that includes the full code generation, execution, and result-checking request. "
                     + "Wait for coder's response, then FINISH with the result.";
 

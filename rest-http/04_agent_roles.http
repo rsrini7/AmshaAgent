@@ -1,31 +1,43 @@
 ### ═══════════════════════════════════════════════════════════════
-### 04 - ALL SIX AGENT ROLES
+### 04 - ALL TWELVE AGENT ROLES
 ###
-### ArcClaw ships six persona-based agents. Each has a distinct
+### ArcClaw ships twelve persona-based agents. Each has a distinct
 ### system prompt, tool schema, and maxIterations constraint.
 ###
 ### Role → Deity        → Tools available
 ### ────────────────────────────────────────────────────────────
-### coordinator → Vishnu     → github, schedule_task, manage_schedule, memory_search, ingest_document, delegate_to_agent
-### researcher  → Saraswati  → github, memory_search, brave_web_search, serper_web_search, delegate_to_agent
-### coder       → Brahma     → sandbox_exec, check_list, add_mcp_server, delegate_to_agent
-### debugger    → Shiva      → github, sandbox_exec, check_list, add_mcp_server, delegate_to_agent
-### architect   → Brihaspati → github, memory_search, delegate_to_agent
-### synthesizer → Dattatreya → github, schedule_task, manage_schedule, memory_search, ingest_document, brave_web_search, serper_web_search, delegate_to_agent
+### coordinator → Vishnu      → github, schedule_task, manage_schedule, memory_search, ingest_document, garuda
+### researcher  → Saraswati   → github, memory_search, brave_web_search, serper_web_search, garuda
+### coder       → Brahma      → sandbox_exec, check_list, add_mcp_server, garuda
+### debugger    → Shiva       → github, sandbox_exec, check_list, add_mcp_server, garuda
+### architect   → Brihaspati  → github, memory_search, garuda
+### synthesizer → Dattatreya  → github, schedule_task, manage_schedule, memory_search, ingest_document, brave_web_search, serper_web_search, garuda
+### optimizer   → Ganesha     → github, sandbox_exec, garuda
+### sentinel    → Kartikeya   → github, sandbox_exec, garuda
+### healer      → Lakshmi     → github, memory_search, garuda
+### protector   → Durga       → github, memory_search, garuda
+### purifier    → Kali        → github, memory_search, garuda
+### nurturer    → Parvati     → github, memory_search, garuda
 ###
 ### IMPORTANT - coder vs debugger tool schema:
-###   coder:   sandbox_exec + check_list + add_mcp_server + delegate_to_agent (no github, no network)
-###   debugger: github + sandbox_exec + check_list + add_mcp_server + delegate_to_agent
-###   Both have delegate_to_agent but non-coordinators are restricted from delegating to roles they lack.
+###   coder:   sandbox_exec + check_list + add_mcp_server + garuda (no github, no network)
+###   debugger: github + sandbox_exec + check_list + add_mcp_server + garuda
+###   Both have garuda but non-coordinators are restricted from delegating to roles they lack.
 ###   add_mcp_server allows dynamically registering MCP servers at runtime (NETWORK_OUTBOUND, requires HITL).
 ###
 ### Hindu deity aliases (AgentRoleEnum.fromString):
-###   "vishnu"    → COORDINATOR
-###   "brahma"    → CODER
-###   "shiva"     → DEBUGGER
-###   "saraswati" → RESEARCHER
-###   "brihaspati"→ ARCHITECT
+###   "vishnu"     → COORDINATOR
+###   "brahma"     → CODER
+###   "shiva"      → DEBUGGER
+###   "saraswati"  → RESEARCHER
+###   "brihaspati" → ARCHITECT
 ###   "dattatreya" or "datta" → SYNTHESIZER
+###   "ganesha" or "ganesh" → OPTIMIZER
+###   "kartikeya" or "murugan" or "skanda" → SENTINEL
+###   "lakshmi"    → HEALER
+###   "durga"      → PROTECTOR
+###   "kali"       → PURIFIER
+###   "parvati" or "uma" → NURTURER
 ###
 ### Prerequisites: ArcClaw serve mode, ARCCLAW_LLM_API_KEY set.
 ###   GitHub tool tests additionally require GITHUB_TOKEN in vault.

@@ -375,10 +375,10 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run" \
 
 ---
 
-### 6.3 All six agent roles - smoke test
+### 6.3 All twelve agent roles - smoke test
 
 ```bash
-for ROLE in coordinator researcher coder debugger architect synthesizer; do
+for ROLE in coordinator researcher coder debugger architect synthesizer optimizer sentinel healer protector purifier nurturer; do
   echo "--- $ROLE ---"
   SESSION=$(curl -s -X POST http://localhost:8080/api/v1/sessions \
     -H "X-ArcClaw-API-Key: key-internal-changeme" \
@@ -395,7 +395,7 @@ for ROLE in coordinator researcher coder debugger architect synthesizer; do
 done
 ```
 
-**Expect:** All six return an answer without error.
+**Expect:** All twelve return an answer without error.
 
 ---
 

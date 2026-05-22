@@ -543,23 +543,41 @@ arcclaw:
   agents:
     roles:
       - name: coordinator
-        class: com.arcclaw.core.agent.VishnuAgent
-        description: "Preserver and Captain/Coordinator - task decomposition and synthesis"
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Vishnu - Preserver and Captain/Coordinator - task decomposition and synthesis"
       - name: researcher
-        class: com.arcclaw.core.agent.SaraswatiAgent
-        description: "Research & Knowledge, Wisdom, and Facts - real-time search and evidence"
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Saraswati - Research & Knowledge, Wisdom, and Facts - real-time search and evidence"
       - name: coder
-        class: com.arcclaw.core.agent.BrahmaAgent
-        description: "Math/Code Creator and Logic Expert - rigorous validation"
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Brahma - Math/Code Creator and Logic Expert - rigorous validation"
       - name: debugger
-        class: com.arcclaw.core.agent.ShivaAgent
-        description: "Creative, Transformer and Balance Expert - blind-spot detection"
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Shiva - Creative, Transformer and Balance Expert - blind-spot detection"
       - name: architect
-        class: com.arcclaw.core.agent.persona.BrihaspatiAgent
-        description: "Brihaspati - Guru of the Devas, System Designer and Standards Author  - ADRs and architectural trade-offs"
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Brihaspati - Guru of the Devas, System Designer and Standards Author - ADRs and architectural trade-offs"
       - name: synthesizer
-        class: com.arcclaw.core.agent.persona.DattatreyaAgent
-        description: "Synthesizer and Avadhuta - multi-agent conflict resolution and integration"        
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Dattatreya - Synthesizer and Avadhuta - multi-agent conflict resolution and integration"
+      - name: optimizer
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Ganesha - Obstacle Remover, Complex Logic and Problem-Solving (son of Shiva)"
+      - name: sentinel
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Kartikeya - Sentinel, Security Scanning and Input Validation (son of Shiva)"
+      - name: healer
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Lakshmi - Healer, Error Recovery and Token Budget Optimization (wife of Vishnu)"
+      - name: protector
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Durga - Protector, Policy Enforcement and Guardrails (form of Parvati)"
+      - name: purifier
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Kali - Purifier, Cleanup and Resource Lifecycle Management (form of Parvati)"
+      - name: nurturer
+        class: com.arcclaw.core.agent.persona.DefaultAgent
+        description: "Parvati - Nurturer, Empathy and Tone Analysis (wife of Shiva)"        
 
 # =============================================================================
 # MICROPROFILE CONTEXT PROPAGATION

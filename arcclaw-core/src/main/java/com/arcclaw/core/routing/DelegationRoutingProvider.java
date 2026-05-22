@@ -14,7 +14,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 /**
  * Ensures that natural language delegation requests (e.g., "ask shiva to fix this")
- * are routed to the Coordinator so it can use the delegate_to_agent tool.
+ * are routed to the Coordinator so it can use the garuda tool.
  * Priority 5 ensures it runs after strict overrides but before fallback logic.
  */
 @ApplicationScoped

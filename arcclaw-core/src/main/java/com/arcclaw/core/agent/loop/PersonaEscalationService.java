@@ -34,10 +34,52 @@ import org.jboss.logging.Logger;
  *   Brahma → Shiva            | Bug diagnosis (superseded by auto-heal)
  *   Shiva → Saraswati         | Obscure error needing external research
  *   Shiva → Brahma            | Fundamental flaw needing rewrite
+ *   Shiva → Ganesha           | Complex logic, recursive debugging (son of Shiva)
+ *   Shiva → Kartikeya         | Security vulnerability analysis (son of Shiva)
  *   Saraswati → Brahma        | Research complete, needs implementation
  *   Brihaspati → Brahma       | Architecture decided, needs coding
  *   Brihaspati → Saraswati    | Needs external research/data
  *   Dattatreya → *            | Conflicting outputs need re-specialization
+ *   Ganesha → Brahma          | Solution needs implementation
+ *   Ganesha → Saraswati       | Problem needs research
+ *   Ganesha → Shiva           | Logic reveals bug
+ *   Ganesha → Kartikeya       | Security issue found in logic (brother)
+ *   Kartikeya → Shiva         | Vulnerability needs fix
+ *   Kartikeya → Saraswati     | CVE/security advisory research
+ *   Kartikeya → Ganesha       | Complex logic in security (brother)
+ *   Lakshmi → Shiva           | Error needs code fix
+ *   Lakshmi → Saraswati       | Best practices research
+ *   Lakshmi → Vishnu          | Budget/cost coordination (wife→husband)
+ *   Durga → Shiva             | Policy violation needs fix
+ *   Durga → Saraswati         | Compliance/regulation research
+ *   Kali → Shiva              | Cleanup code needed
+ *   Kali → Saraswati          | Lifecycle best practices
+ *   Parvati → Shiva           | Bug causing frustration
+ *   Parvati → Saraswati       | Documentation gap
+ * </pre>
+ *
+ * <p>Mythological Sub-Agent Hierarchy:
+ * <pre>
+ *   VISHNU'S FAMILY:
+ *     - Vishnu (Coordinator) - husband
+ *     - Lakshmi (Healer) - wife (wealth/budget management)
+ *     - Garuda (Tool) - divine vahana for delegation
+ *
+ *   SHIVA'S FAMILY:
+ *     - Shiva (Debugger) - father/husband
+ *     - Parvati (Nurturer) - wife (empathy/tone)
+ *     - Ganesha (Optimizer) - son (logic/obstacles)
+ *     - Kartikeya (Sentinel) - son (security/defense)
+ *     - Durga (Protector) - form of Parvati (policy/guardrails)
+ *     - Kali (Purifier) - form of Parvati (cleanup/lifecycle)
+ *
+ *   SPECIAL ESCALATION PATHS (mythological):
+ *     - Shiva → Ganesha (father → son: complex logic)
+ *     - Shiva → Kartikeya (father → son: security)
+ *     - Ganesha → Kartikeya (brother → brother: security in logic)
+ *     - Kartikeya → Ganesha (brother → brother: logic in security)
+ *     - Lakshmi → Vishnu (wife → husband: budget coordination)
+ *     - Parvati → Shiva (wife → husband: technical debugging)
  * </pre>
  *
  * <p>Flow:
@@ -163,6 +205,14 @@ public class PersonaEscalationService {
             if (matchesAny(errorLower, goalLower, REWRITE_NEEDED_PATTERNS)) {
                 return AgentRoleEnum.CODER.toScopedName();
             }
+            // Ganesha (son of Shiva) - complex logic analysis
+            if (containsAny(goalLower, "recursive", "complex logic", "algorithm", "obstacle")) {
+                return AgentRoleEnum.OPTIMIZER.toScopedName();
+            }
+            // Kartikeya (son of Shiva) - security analysis
+            if (containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
+                return AgentRoleEnum.SENTINEL.toScopedName();
+            }
         }
 
         // Brihaspati escalations
@@ -180,6 +230,12 @@ public class PersonaEscalationService {
             if (containsAny(goalLower, "implement", "write code", "execute", "run")) {
                 return AgentRoleEnum.CODER.toScopedName();
             }
+        }
+
+        // New persona escalations (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati)
+        String newPersonaTarget = determineNewPersonaEscalation(sourceRole, goalLower);
+        if (newPersonaTarget != null) {
+            return newPersonaTarget;
         }
 
         return null;
@@ -323,6 +379,12 @@ public class PersonaEscalationService {
             case "architect" -> "Brihaspati (Architect)";
             case "coordinator" -> "Vishnu (Coordinator)";
             case "synthesizer" -> "Dattatreya (Synthesizer)";
+            case "optimizer" -> "Ganesha (Optimizer)";
+            case "sentinel" -> "Kartikeya (Sentinel)";
+            case "healer" -> "Lakshmi (Healer)";
+            case "protector" -> "Durga (Protector)";
+            case "purifier" -> "Kali (Purifier)";
+            case "nurturer" -> "Parvati (Nurturer)";
             default -> role;
         };
     }
@@ -344,6 +406,93 @@ public class PersonaEscalationService {
             }
         }
         return false;
+    }
+
+    /**
+     * Determines escalation targets for new personas (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati).
+     * Extracted to keep determineEscalationTarget within checkstyle limits.
+     */
+    private String determineNewPersonaEscalation(String sourceRole, String goalLower) {
+        // Ganesha (Optimizer) escalations
+        if (AgentRoleEnum.OPTIMIZER.toScopedName().equals(sourceRole)) {
+            if (containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
+                return AgentRoleEnum.CODER.toScopedName();
+            }
+            if (containsAny(goalLower, "research", "find information", "look up", "documentation")) {
+                return AgentRoleEnum.RESEARCHER.toScopedName();
+            }
+            if (containsAny(goalLower, "fix bug", "debug", "error", "exception")) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
+            // Kartikeya (brother) - security issue found in logic
+            if (containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
+                return AgentRoleEnum.SENTINEL.toScopedName();
+            }
+        }
+
+        // Kartikeya (Sentinel) escalations
+        if (AgentRoleEnum.SENTINEL.toScopedName().equals(sourceRole)) {
+            if (containsAny(goalLower, "fix", "patch", "remediate", "implement")) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
+            if (containsAny(goalLower, "research", "vulnerability", "cve", "security advisory")) {
+                return AgentRoleEnum.RESEARCHER.toScopedName();
+            }
+            // Ganesha (brother) - complex logic in security analysis
+            if (containsAny(goalLower, "algorithm", "recursive", "complex logic", "obstacle")) {
+                return AgentRoleEnum.OPTIMIZER.toScopedName();
+            }
+        }
+
+        // Lakshmi (Healer) escalations
+        if (AgentRoleEnum.HEALER.toScopedName().equals(sourceRole)) {
+            if (containsAny(goalLower, "fix", "patch", "implement", "code change")) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
+            if (containsAny(goalLower, "research", "documentation", "best practice")) {
+                return AgentRoleEnum.RESEARCHER.toScopedName();
+            }
+            // Vishnu (husband) - budget/cost coordination
+            if (containsAny(goalLower, "budget", "cost", "allocation", "governance")) {
+                return AgentRoleEnum.COORDINATOR.toScopedName();
+            }
+        }
+
+        // Durga (Protector) escalations
+        if (AgentRoleEnum.PROTECTOR.toScopedName().equals(sourceRole)) {
+            if (containsAny(goalLower, "fix", "patch", "implement", "enforce")) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
+            if (containsAny(goalLower, "research", "policy", "compliance", "regulation")) {
+                return AgentRoleEnum.RESEARCHER.toScopedName();
+            }
+        }
+
+        // Kali (Purifier) escalations
+        if (AgentRoleEnum.PURIFIER.toScopedName().equals(sourceRole)) {
+            if (containsAny(goalLower, "fix", "patch", "implement", "code change")) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
+            if (containsAny(goalLower, "research", "documentation", "best practice")) {
+                return AgentRoleEnum.RESEARCHER.toScopedName();
+            }
+        }
+
+        // Parvati (Nurturer) escalations
+        if (AgentRoleEnum.NURTURER.toScopedName().equals(sourceRole)) {
+            if (containsAny(goalLower, "fix", "bug", "error", "broken")) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
+            if (containsAny(goalLower, "research", "documentation", "information")) {
+                return AgentRoleEnum.RESEARCHER.toScopedName();
+            }
+            // Shiva (husband) - technical issues requiring debugging
+            if (containsAny(goalLower, "debug", "stack trace", "exception", "crash")) {
+                return AgentRoleEnum.DEBUGGER.toScopedName();
+            }
+        }
+
+        return null;
     }
 
     private String truncate(String text, int maxLen) {
