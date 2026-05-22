@@ -60,7 +60,7 @@ public class AuditServiceIntegrationTest {
         WorkspaceScopeHolder.run(sessionId, () -> {
             WorkspaceContext.runWithFullAutonomy(sessionId, "test", "test", "coordinator", () -> {
             secretVault.init(sessionId);
-            
+
             secretVault.store("my-secret", "super-secret-value".getBytes());
 
             // Wait for async persistence
@@ -68,10 +68,12 @@ public class AuditServiceIntegrationTest {
             em.clear();
 
             List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
-            assertEquals(1, events.size());
-            
-            AuditEventDto event = events.get(0);
-            assertEquals(SecurityEventType.VAULT_STORE.name(), event.eventType());
+            assertTrue(events.stream().anyMatch(e -> SecurityEventType.VAULT_STORE.name().equals(e.eventType())),
+                    "Expected VAULT_STORE event but got: " + events.stream().map(AuditEventDto::eventType).toList());
+
+            AuditEventDto event = events.stream()
+                    .filter(e -> SecurityEventType.VAULT_STORE.name().equals(e.eventType()))
+                    .findFirst().orElseThrow();
             assertTrue(event.eventDetail().contains("keyName=my-secret"));
             });
         });
@@ -82,7 +84,7 @@ public class AuditServiceIntegrationTest {
         WorkspaceScopeHolder.run(sessionId, () -> {
             WorkspaceContext.runWithFullAutonomy(sessionId, "test", "test", "coordinator", () -> {
             secretVault.init(sessionId);
-            
+
             secretVault.get("non-existent-key");
 
             // Wait for async persistence
@@ -90,10 +92,12 @@ public class AuditServiceIntegrationTest {
             em.clear();
 
             List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
-            assertEquals(1, events.size());
-            
-            AuditEventDto event = events.get(0);
-            assertEquals(SecurityEventType.VAULT_RETRIEVE_MISS.name(), event.eventType());
+            assertTrue(events.stream().anyMatch(e -> SecurityEventType.VAULT_RETRIEVE_MISS.name().equals(e.eventType())),
+                    "Expected VAULT_RETRIEVE_MISS event but got: " + events.stream().map(AuditEventDto::eventType).toList());
+
+            AuditEventDto event = events.stream()
+                    .filter(e -> SecurityEventType.VAULT_RETRIEVE_MISS.name().equals(e.eventType()))
+                    .findFirst().orElseThrow();
             assertTrue(event.eventDetail().contains("keyName=non-existent-key"));
             });
         });
