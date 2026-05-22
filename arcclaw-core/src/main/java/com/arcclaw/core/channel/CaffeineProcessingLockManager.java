@@ -12,8 +12,7 @@ import io.quarkus.arc.DefaultBean;
 /**
  * Default runtime implementation of {@link ProcessingLockManager} backed by
  * Caffeine with a 30-second TTL and a maximum of 100,000 concurrent lock
- * entries. Registered as an {@link ApplicationScoped} CDI bean in
- * {@code arcclaw-core}.
+ * entries. Registered as an {@link ApplicationScoped} CDI bean.
  * <p>
  * Lock acquisition uses {@link Cache#asMap() asMap().putIfAbsent()} for
  * atomic check-and-set. Automatic TTL expiry via
