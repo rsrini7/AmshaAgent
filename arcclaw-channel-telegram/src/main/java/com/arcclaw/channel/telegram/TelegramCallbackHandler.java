@@ -140,10 +140,9 @@ public class TelegramCallbackHandler {
     }
 
     private String resolveSessionId(String rawSessionId, String userId) {
-        String cached = BatchHitlKeyboardBuilder.resolveCachedSessionId(rawSessionId);
+        String cached = BatchHitlKeyboardBuilder.resolveAndRemoveCachedSessionId(rawSessionId);
         if (cached != null) {
             log.debugf("Resolved cached token '%s' -> session '%s' for user=%s", rawSessionId, cached, userId);
-            BatchHitlKeyboardBuilder.removeCachedSessionId(rawSessionId);
             return cached;
         }
         String decompressed = BatchHitlKeyboardBuilder.decompressSessionId(rawSessionId);

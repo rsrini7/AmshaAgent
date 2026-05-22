@@ -96,6 +96,18 @@ class PersonaEscalationServiceTest {
     }
 
     @Test
+    void determineEscalationTarget_shiva_complexLogic_toGanesha() {
+        String target = service.determineEscalationTarget("debugger", "dummy", "this recursive algorithm is complex");
+        assertEquals("optimizer", target);
+    }
+
+    @Test
+    void determineEscalationTarget_shiva_securityVulnerability_toKartikeya() {
+        String target = service.determineEscalationTarget("debugger", "dummy", "found a security vulnerability in the code");
+        assertEquals("sentinel", target);
+    }
+
+    @Test
     void determineEscalationTarget_brihaspati_needsImplementation_toBrahma() {
         String target = service.determineEscalationTarget("architect", "dummy error", "implement this design");
         assertEquals("coder", target);
@@ -135,6 +147,114 @@ class PersonaEscalationServiceTest {
     void determineEscalationTarget_nullSource_returnsNull() {
         String target = service.determineEscalationTarget(null, "error", null);
         assertNull(target);
+    }
+
+    // Ganesha (Optimizer) escalation tests
+    @Test
+    void determineEscalationTarget_ganesha_needsImplementation_toBrahma() {
+        String target = service.determineEscalationTarget("optimizer", "dummy", "implement this solution");
+        assertEquals("coder", target);
+    }
+
+    @Test
+    void determineEscalationTarget_ganesha_needsResearch_toSaraswati() {
+        String target = service.determineEscalationTarget("optimizer", "dummy", "research the algorithm");
+        assertEquals("researcher", target);
+    }
+
+    @Test
+    void determineEscalationTarget_ganesha_needsDebug_toShiva() {
+        String target = service.determineEscalationTarget("optimizer", "dummy", "fix bug in logic");
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_ganesha_securityIssue_toKartikeya() {
+        String target = service.determineEscalationTarget("optimizer", "dummy", "this logic has a security vulnerability");
+        assertEquals("sentinel", target);
+    }
+
+    // Kartikeya (Sentinel) escalation tests
+    @Test
+    void determineEscalationTarget_kartikeya_needsFix_toShiva() {
+        String target = service.determineEscalationTarget("sentinel", "dummy", "patch the vulnerability");
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_kartikeya_needsResearch_toSaraswati() {
+        String target = service.determineEscalationTarget("sentinel", "dummy", "research CVE details");
+        assertEquals("researcher", target);
+    }
+
+    @Test
+    void determineEscalationTarget_kartikeya_cveLowercase_toSaraswati() {
+        String target = service.determineEscalationTarget("sentinel", "dummy", "look up cve-2024-1234");
+        assertEquals("researcher", target);
+    }
+
+    @Test
+    void determineEscalationTarget_kartikeya_complexLogic_toGanesha() {
+        String target = service.determineEscalationTarget("sentinel", "dummy", "this requires complex algorithm analysis");
+        assertEquals("optimizer", target);
+    }
+
+    // Lakshmi (Healer) escalation tests
+    @Test
+    void determineEscalationTarget_lakshmi_needsFix_toShiva() {
+        String target = service.determineEscalationTarget("healer", "dummy", "fix the error");
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_lakshmi_needsResearch_toSaraswati() {
+        String target = service.determineEscalationTarget("healer", "dummy", "research best practices");
+        assertEquals("researcher", target);
+    }
+
+    @Test
+    void determineEscalationTarget_lakshmi_budgetCoordination_toVishnu() {
+        String target = service.determineEscalationTarget("healer", "dummy", "need budget allocation review");
+        assertEquals("coordinator", target);
+    }
+
+    // Durga (Protector) escalation tests
+    @Test
+    void determineEscalationTarget_durga_needsFix_toShiva() {
+        String target = service.determineEscalationTarget("protector", "dummy", "implement policy fix");
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_durga_needsResearch_toSaraswati() {
+        String target = service.determineEscalationTarget("protector", "dummy", "research compliance rules");
+        assertEquals("researcher", target);
+    }
+
+    // Kali (Purifier) escalation tests
+    @Test
+    void determineEscalationTarget_kali_needsFix_toShiva() {
+        String target = service.determineEscalationTarget("purifier", "dummy", "fix cleanup code");
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_kali_needsResearch_toSaraswati() {
+        String target = service.determineEscalationTarget("purifier", "dummy", "research best practices");
+        assertEquals("researcher", target);
+    }
+
+    // Parvati (Nurturer) escalation tests
+    @Test
+    void determineEscalationTarget_parvati_needsFix_toShiva() {
+        String target = service.determineEscalationTarget("nurturer", "dummy", "fix the bug");
+        assertEquals("debugger", target);
+    }
+
+    @Test
+    void determineEscalationTarget_parvati_needsResearch_toSaraswati() {
+        String target = service.determineEscalationTarget("nurturer", "dummy", "research documentation");
+        assertEquals("researcher", target);
     }
 
     @Test

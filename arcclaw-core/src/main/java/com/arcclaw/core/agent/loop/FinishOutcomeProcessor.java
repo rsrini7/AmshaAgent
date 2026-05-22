@@ -220,7 +220,7 @@ public class FinishOutcomeProcessor {
             String hint = "System: You attempted to output code in your FINISH answer, but your role (" + agentRole
                     + ") cannot generate code. " + codePolicy.buildRefusalMessage(agentRole)
                     + " Do NOT tell the user to ask them separately. "
-                    + "Instead, use the `delegate_to_agent` tool NOW with agent='coder' and a complete goal "
+                    + "Instead, use the `garuda` tool NOW with agent='coder' and a complete goal "
                     + "that includes the full code generation, execution, and result-checking request. "
                     + "Wait for coder's response, then FINISH with the result.";
 
@@ -279,6 +279,13 @@ public class FinishOutcomeProcessor {
             InfiniteLoopChatModel.getLastUsedSlot().ifPresent(InfiniteLoopChatModel::recordQualityFailure);
             ReasoningStep cleanStep = step.withObservation(cleanThought);
             return new FinishActionHandler.FinishOutcome.ExecuteLeakedTool(call.toolName(), call.arguments(), cleanStep);
+        }
+
+        // JSON detected but no tool-call keys (e.g. {"response":"..."}) — treat as valid answer, not a leak.
+        if (isLeak && !containsToolCallKeys(candidateAnswer)) {
+            log.infof("FINISH-HANDLER session %s: JSON without tool-call keys - treating as valid answer", sessionId);
+            var guarded = qualityGuard.guard(candidateAnswer, history).answer();
+            return new FinishActionHandler.FinishOutcome.Completed(AgentResult.finished(guarded, List.copyOf(history)), guarded);
         }
 
         if ((llmSchemaErrorCount >= 1 || isBrokenFragment)
@@ -346,6 +353,14 @@ public class FinishOutcomeProcessor {
         return salvage(candidateAnswer, history, sessionId);
     }
 
+    /** Returns true if the answer contains JSON keys characteristic of tool calls vs benign JSON. */
+    private boolean containsToolCallKeys(String answer) {
+        if (answer == null) return false;
+        return answer.contains("\"name\"") || answer.contains("\"tool_name\"") || answer.contains("\"tool_calls\"")
+                || answer.contains("\"function\"") || answer.contains("\"action\"") || answer.contains("\"parameters\"")
+                || answer.contains("\"arguments\"") || answer.contains("TOOLCALLS");
+    }
+
     private FinishActionHandler.FinishOutcome salvage(String candidateAnswer,
                                   List<ReasoningStep> history,
                                   String sessionId) {
@@ -380,7 +395,7 @@ public class FinishOutcomeProcessor {
         return new FinishActionHandler.FinishOutcome.SalvageFailed(failed);
     }
 
-    private boolean looksLikeJson(String text) {
+    public boolean looksLikeJson(String text) {
         return textPatternUtils.looksLikeJson(text);
     }
 

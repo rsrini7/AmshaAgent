@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.mcp.tool.DynamicToolCapability;
 import com.arcclaw.mcp.tool.DynamicToolCapabilityRegistry;
 import com.arcclaw.mcp.tool.McpTransportType;
@@ -20,6 +21,7 @@ class ExternalMcpToolAdapterTest {
     private PodmanMcpTransport mockPodman;
     private McpClientService mockClient;
     private DynamicToolCapabilityRegistry mockRegistry;
+    private AuditService mockAuditService;
 
     @BeforeEach
     void setUp() {
@@ -27,9 +29,11 @@ class ExternalMcpToolAdapterTest {
         mockPodman = mock(PodmanMcpTransport.class);
         mockClient = mock(McpClientService.class);
         mockRegistry = mock(DynamicToolCapabilityRegistry.class);
+        mockAuditService = mock(AuditService.class);
         adapter.podmanMcpTransport = mockPodman;
         adapter.mcpClientService = mockClient;
         adapter.registry = mockRegistry;
+        adapter.auditService = mockAuditService;
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.MessageHandler;
+import com.arcclaw.core.pipeline.parsers.CommandParserRegistry;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -33,6 +34,9 @@ public class CommandDispatchHandler implements MessageHandler {
     @Inject
     ChannelPluginRegistry channelPluginRegistry;
 
+    @Inject
+    CommandParserRegistry commandParserRegistry;
+
     @Override
     public int priority() {
         return 45;
@@ -40,64 +44,69 @@ public class CommandDispatchHandler implements MessageHandler {
 
     @Override
     public HandleResult handle(MessageContext context) {
-        ChannelCommand cmd = ChannelCommand.parse(context.getMessage().text());
+        ChannelCommand cmd = commandParserRegistry.parse(
+            context.getMessage().text(), context.getChannelType());
 
-        return switch (cmd) {
-            case ChannelCommand.Approve a -> {
-                String input = "/approve";
-                if (a.targetId().isPresent()) {
-                    input += " " + a.targetId().get();
-                } else if (a.toolName().isPresent()) {
-                    input += " " + a.toolName().get();
+        if (cmd instanceof ChannelCommand.BuiltInChannelCommand bic) {
+            return switch (bic) {
+                case ChannelCommand.Approve a -> {
+                    String input = "/approve";
+                    if (a.targetId().isPresent()) {
+                        input += " " + a.targetId().get();
+                    } else if (a.toolName().isPresent()) {
+                        input += " " + a.toolName().get();
+                    }
+                    dispatch(context, input);
+                    yield HandleResult.STOP;
                 }
-                dispatch(context, input);
-                yield HandleResult.STOP;
-            }
-            case ChannelCommand.Deny d -> {
-                String input = "/deny";
-                if (d.targetId().isPresent()) {
-                    input += " " + d.targetId().get();
-                } else if (d.toolName().isPresent()) {
-                    input += " " + d.toolName().get();
+                case ChannelCommand.Deny d -> {
+                    String input = "/deny";
+                    if (d.targetId().isPresent()) {
+                        input += " " + d.targetId().get();
+                    } else if (d.toolName().isPresent()) {
+                        input += " " + d.toolName().get();
+                    }
+                    dispatch(context, input);
+                    yield HandleResult.STOP;
                 }
-                dispatch(context, input);
-                yield HandleResult.STOP;
-            }
-            case ChannelCommand.Status _ -> {
-                dispatch(context, "/status");
-                yield HandleResult.STOP;
-            }
-            case ChannelCommand.History _ -> { 
-                dispatch(context, "/history"); 
-                yield HandleResult.STOP; 
-            }
-            case ChannelCommand.Halt _ -> {
-                dispatch(context, "/halt");
-                yield HandleResult.STOP;
-            }
-            case ChannelCommand.Reset _ -> {
-                dispatch(context, "/reset");
-                yield HandleResult.STOP;
-            }     
-            case ChannelCommand.Start s -> {
-                if (s.payload().isPresent()) {
-                    dispatch(context, s.payload().get());
-                } else {
-                    sendWelcomeMessage(context);
+                case ChannelCommand.Status _ -> {
+                    dispatch(context, "/status");
+                    yield HandleResult.STOP;
                 }
-                yield HandleResult.STOP;
-            }
-            case ChannelCommand.CronTasks _ -> {
-                dispatch(context, "/cron");
-                yield HandleResult.STOP;
-            }
-            case ChannelCommand.DeleteCron dc -> {
-                String input = dc.cronId().map(id -> "deletecron " + id).orElse("deletecron");
-                dispatch(context, input);
-                yield HandleResult.STOP;
-            }
-            case ChannelCommand.Unknown u -> handleUnknownCommand(context, u);
-        };
+                case ChannelCommand.History _ -> { 
+                    dispatch(context, "/history"); 
+                    yield HandleResult.STOP; 
+                }
+                case ChannelCommand.Halt _ -> {
+                    dispatch(context, "/halt");
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.Reset _ -> {
+                    dispatch(context, "/reset");
+                    yield HandleResult.STOP;
+                }     
+                case ChannelCommand.Start s -> {
+                    if (s.payload().isPresent()) {
+                        dispatch(context, s.payload().get());
+                    } else {
+                        sendWelcomeMessage(context);
+                    }
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.CronTasks _ -> {
+                    dispatch(context, "/cron");
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.DeleteCron dc -> {
+                    String input = dc.cronId().map(id -> "deletecron " + id).orElse("deletecron");
+                    dispatch(context, input);
+                    yield HandleResult.STOP;
+                }
+                case ChannelCommand.Unknown u -> handleUnknownCommand(context, u);
+            };
+        }
+
+        return HandleResult.CONTINUE;
     }
 
     private void sendWelcomeMessage(MessageContext context) {

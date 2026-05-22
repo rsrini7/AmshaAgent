@@ -46,7 +46,7 @@ public class PromptSectionBuilder {
     private static final String EXECUTION_BOUNDARY_NO_SANDBOX = """
             EXECUTION BOUNDARY:
             You cannot execute, run, or compile code directly in this role. If a user asks you to "execute", "run", "just do it", or
-            "compile and run" any code, you MUST use `delegate_to_agent(agent=brahma)` to handle the execution.
+            "compile and run" any code, you MUST use `garuda(agent=brahma)` to handle the execution.
             """;
 
     private static final String COMPACT_EXECUTION_BOUNDARY_SANDBOX = "EXECUTION BOUNDARY: Use `sandbox_exec` for run/execute/compile.\n";

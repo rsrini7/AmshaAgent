@@ -1,19 +1,21 @@
 package com.arcclaw.channel.api;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Channel-agnostic representation of an inbound user message.
  *
- * <p>Common accessors are declared on the sealed interface; channel-specific
- * fields live on each permit record.
+ * <p>Common accessors are declared on the interface; channel-specific
+ * fields live on each implementation record.
+ *
+ * <p>Third-party channel plugins can implement this interface in their own modules
+ * without modifying {@code arcclaw-channel-api}. Use {@link #attribute(ChannelMessageAttribute)}
+ * to attach channel-specific data that is not part of the core contract.
  */
-public sealed interface ChannelMessage
-        permits ChannelMessage.TelegramMessage,
-                ChannelMessage.DiscordMessage,
-                ChannelMessage.RestApiMessage,
-                ChannelMessage.CliMessage,
-                ChannelMessage.WebSocketMessage {
+public interface ChannelMessage {
 
     /** The user who sent this message. */
     ChannelUser sender();
@@ -32,6 +34,35 @@ public sealed interface ChannelMessage
 
     /** The channel the message arrived on. */
     ChannelType channelType();
+
+    /**
+     * Returns channel-specific attributes attached to this message.
+     * Default implementation returns an empty map. Channel implementations
+     * can override to provide typed metadata (e.g. Telegram callback query ID,
+     * Discord guild ID, Slack thread timestamp).
+     */
+    default Map<ChannelMessageAttribute<?>, Object> attributes() {
+        return Collections.emptyMap();
+    }
+
+    /**
+     * Retrieves a typed channel-specific attribute by key.
+     *
+     * @param key the attribute key
+     * @param <T> the attribute type
+     * @return the attribute value, or empty if not present
+     * @throws ClassCastException if the value exists but is not of the expected type
+     */
+    default <T> Optional<T> attribute(ChannelMessageAttribute<T> key) {
+        Object value = attributes().get(key);
+        if (value == null) return Optional.empty();
+        if (!key.type().isInstance(value)) {
+            throw new ClassCastException(
+                "ChannelMessageAttribute '" + key.name() + "' expected "
+                    + key.type().getName() + " but got " + value.getClass().getName());
+        }
+        return Optional.of(key.type().cast(value));
+    }
 
     // ------------------------------------------------------------------
     // Permit records

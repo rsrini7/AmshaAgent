@@ -144,6 +144,7 @@ public class CheckpointRepository {
 
     public List<AgentCheckpointEntity> findBySessionAndRole(String sessionId, String agentRole) {
         log.debugf("[Query] findBySessionAndRole(session=%s, role=%s)", sessionId, agentRole);
+        em.clear();
         List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -162,6 +163,7 @@ public class CheckpointRepository {
 
     public List<AgentCheckpointEntity> findAnyBySessionAndRole(String sessionId, String agentRole) {
         log.debugf("[Query] findAnyBySessionAndRole(session=%s, role=%s)", sessionId, agentRole);
+        em.clear();
         List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -177,6 +179,7 @@ public class CheckpointRepository {
     }
 
     public List<AgentCheckpointEntity> findActiveBySession(String sessionId) {
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c " +
                 "WHERE c.sessionId = :sid " +
@@ -210,6 +213,7 @@ public class CheckpointRepository {
     }
 
     public List<AgentCheckpointEntity> findByStatus(String status) {
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status = :status ORDER BY c.id DESC",
                 AgentCheckpointEntity.class)
@@ -218,6 +222,7 @@ public class CheckpointRepository {
     }
 
     public List<AgentCheckpointEntity> findAllActive() {
+        em.clear();
         return em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.status NOT IN :terminal ORDER BY c.updatedAt DESC",
                 AgentCheckpointEntity.class)
@@ -227,6 +232,7 @@ public class CheckpointRepository {
 
     public List<AgentCheckpointEntity> findLatestBySession(String sessionId) {
         log.debugf("[Query] findLatestBySession(session=%s)", sessionId);
+        em.clear();
         List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid ORDER BY c.id DESC",
                 AgentCheckpointEntity.class)
@@ -239,6 +245,7 @@ public class CheckpointRepository {
 
     public List<AgentCheckpointEntity> findLatestNonArchived(String sessionId) {
         log.debugf("[Query] findLatestNonArchived(session=%s)", sessionId);
+        em.clear();
         List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status <> :archived ORDER BY c.id DESC",
                 AgentCheckpointEntity.class)
@@ -252,6 +259,7 @@ public class CheckpointRepository {
 
     public List<AgentCheckpointEntity> findLatestBySessionAndStatus(String sessionId, String status) {
         log.debugf("[Query] findLatestBySessionAndStatus(session=%s, status=%s)", sessionId, status);
+        em.clear();
         List<AgentCheckpointEntity> result = em.createQuery(
                 "SELECT c FROM AgentCheckpoint c WHERE c.sessionId = :sid AND c.status = :status ORDER BY c.id DESC",
                 AgentCheckpointEntity.class)

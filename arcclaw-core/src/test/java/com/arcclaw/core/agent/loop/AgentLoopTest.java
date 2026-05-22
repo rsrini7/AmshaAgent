@@ -91,6 +91,15 @@ class AgentLoopTest {
                     mock(MeterRegistry.class), new TextPatternUtils(),
                     stepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator
                 );
+
+                // Inject otelContext via reflection (field injection, not constructor)
+                try {
+                    var otelField = LangChainReasoningEngine.class.getDeclaredField("otelContext");
+                    otelField.setAccessible(true);
+                    otelField.set(engine, otelContext);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to inject otelContext", e);
+                }
         }
 
         private void setField(Object target, String name, Object value) throws Exception {
@@ -149,7 +158,7 @@ class AgentLoopTest {
                 Span span = mock(Span.class);
                 Scope scope = mock(Scope.class);
                 when(span.makeCurrent()).thenReturn(scope);
-                when(observabilityManager.beginSession(any())).thenReturn(span);
+                when(observabilityManager.beginSession(any(), any(), any())).thenReturn(span);
 
                 setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
                 setField(loop, "observabilityManager", observabilityManager);

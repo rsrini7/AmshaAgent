@@ -139,7 +139,7 @@ public class ReasoningStepParser {
         if (name.endsWith(":")) {
             name = name.substring(0, name.length() - 1);
         }
-        // Strip agent: prefix (e.g., "brahma:delegate_to_agent" → "delegate_to_agent")
+        // Strip agent: prefix (e.g., "brahma:garuda" → "garuda")
         int colonIdx = name.indexOf(':');
         if (colonIdx > 0 && colonIdx < name.length() - 1) {
             String afterColon = name.substring(colonIdx + 1);

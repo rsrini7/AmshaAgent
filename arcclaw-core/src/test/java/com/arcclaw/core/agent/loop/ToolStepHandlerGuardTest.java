@@ -62,7 +62,7 @@ class ToolStepHandlerGuardTest {
         
         StepDecision decision = handler.validateTool(ctx, List.of(), step, 0);
         
-        // Silently rewrites to delegate_to_agent instead of blocking with hint
+        // Silently rewrites to garuda instead of blocking with hint
         assertEquals(DecisionType.PROCEED, decision.type());
         assertEquals(ToolCapability.DELEGATE_TO_AGENT.toolName(), decision.step().action());
         // Thought is preserved from original step

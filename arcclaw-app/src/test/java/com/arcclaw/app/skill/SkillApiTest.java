@@ -5,8 +5,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
 import jakarta.inject.Inject;
+import jakarta.persistence.PessimisticLockException;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
+import com.arcclaw.core.audit.ComplianceAuditService;
 import com.arcclaw.core.audit.TelemetryAuditService;
 import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.persistence.api.SkillStorePort;
@@ -24,18 +26,39 @@ class SkillApiTest {
     @InjectMock
     TelemetryAuditService telemetryAuditService;
 
+    @InjectMock
+    ComplianceAuditService complianceAuditService;
+
     @Inject
     ApiKeyRegistry apiKeyRegistry;
 
     @BeforeEach
     void setup() {
         apiKeyRegistry.register("test-key", "key-internal-changeme");
-        // Run in a programmatic transaction to ensure it's committed before REST calls
-        skillStore.deleteAll();
+        // Retry deleteAll on SQLITE_BUSY — SQLite's single-writer constraint can
+        // cause transient lock contention when background beans flush at startup.
+        deleteAllWithRetry(3);
         // Defensive refresh to start with empty registry
         given()
             .header(HttpConstants.X_ARCCLAW_API_KEY, "key-internal-changeme")
             .get("/api/v1/skills/refresh").then().statusCode(200);
+    }
+
+    private void deleteAllWithRetry(int maxRetries) {
+        for (int i = 0; ; i++) {
+            try {
+                skillStore.deleteAll();
+                return;
+            } catch (PessimisticLockException e) {
+                if (i >= maxRetries - 1) throw e;
+                try {
+                    Thread.sleep(2000L * (i + 1));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(ie);
+                }
+            }
+        }
     }
 
     @Test

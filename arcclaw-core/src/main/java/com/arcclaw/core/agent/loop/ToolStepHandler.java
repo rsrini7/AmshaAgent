@@ -35,10 +35,10 @@ import org.jboss.logging.Logger;
  * and the consecutive-failure circuit breaker.
  *
  * <p>FIX §1: TOOL-GUARD silently rewrites coordinator github calls to
- * delegate_to_agent instead of returning a retryEngine hint.
+ * garuda instead of returning a retryEngine hint.
  * This collapses 2–3 wasted iterations (OpenRouter ignores hints) to 1.
  *
- * <p>FIX §2: delegate_to_agent rewrite params use key "agent" (not "role").
+ * <p>FIX §2: garuda rewrite params use key "agent" (not "role").
  * DelegateToAgentTool.execute() calls params.get("agent") - using "role"
  * caused "Parameter 'agent' is required." to be sent to the user on every
  * cron HITL resume.
@@ -118,7 +118,7 @@ public class ToolStepHandler {
 
         // 🟢 FIX: Specialist Tool Redirection
         // If coordinator or researcher attempts a specialist tool (sandbox, search, browser) for which it 
-        // lacks capabilities, redirect to the appropriate specialist agent via delegate_to_agent.
+        // lacks capabilities, redirect to the appropriate specialist agent via garuda.
         // Guard: don't redirect if this step is already a delegation to avoid infinite loops.
         String currentRole = context.agentRole();
         if ((AgentRoleEnum.COORDINATOR.toScopedName().equals(currentRole) || AgentRoleEnum.RESEARCHER.toScopedName().equals(currentRole))

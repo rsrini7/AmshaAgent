@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
 
+import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
@@ -32,8 +33,8 @@ public class WebChannelSender implements ChannelSender {
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
         String rendered = renderer.render(nodes);
         
-        ReplyNode.ApprovalPrompt prompt = (ReplyNode.ApprovalPrompt) nodes.stream()
-            .filter(n -> n instanceof ReplyNode.ApprovalPrompt)
+        ApprovalPrompt prompt = (ApprovalPrompt) nodes.stream()
+            .filter(n -> n instanceof ApprovalPrompt)
             .findFirst()
             .orElse(null);
 
@@ -45,7 +46,7 @@ public class WebChannelSender implements ChannelSender {
         sendRawWithSession(recipient, text, null);
     }
 
-    private void sendRawWithSession(ChannelUser recipient, String text, ReplyNode.ApprovalPrompt prompt) {
+    private void sendRawWithSession(ChannelUser recipient, String text, ApprovalPrompt prompt) {
         String payload = buildMessageJson(text, prompt);
         String platformId = recipient.platformId();
 
@@ -74,7 +75,7 @@ public class WebChannelSender implements ChannelSender {
         sendBySessionWithTarget(sessionId, text, null);
     }
 
-    private void sendBySessionWithTarget(String sessionId, String text, ReplyNode.ApprovalPrompt prompt) {
+    private void sendBySessionWithTarget(String sessionId, String text, ApprovalPrompt prompt) {
         String payload = buildMessageJson(text, prompt);
         List<WebSocketConnection> conns = sessionStore.getConnectionsByArcclawSession(sessionId);
         
@@ -96,7 +97,7 @@ public class WebChannelSender implements ChannelSender {
         }
     }
 
-    private String buildMessageJson(String text, ReplyNode.ApprovalPrompt prompt) {
+    private String buildMessageJson(String text, ApprovalPrompt prompt) {
         var builder = Json.createObjectBuilder()
             .add("type", "message")
             .add("role", "assistant")

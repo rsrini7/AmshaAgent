@@ -170,6 +170,17 @@ public class FinishActionHandler {
         // --- HTML unescape + unicode normalisation + JSON strip ---
         String answer = resultProcessor.unescapeAndNormalize(candidateAnswer);
 
+        // --- Arbitrary JSON response detection (not tool-call JSON) ---
+        if (resultProcessor.looksLikeJson(answer)) {
+            log.warnf("FINISH-HANDLER: Answer is raw JSON (not tool-call leak) for session %s - retrying with natural-language hint", sessionId);
+            ReasoningStep cleanStep = step.withObservation("Your response was raw JSON instead of natural language.");
+            String hint = "System: STOP. Your response was a raw JSON object/array, NOT a natural language answer. "
+                    + "You MUST respond in plain text prose. Do NOT output JSON structures, code blocks, or data formats. "
+                    + "Answer the user's question directly in natural language.";
+            context.setForceFinishRetry(true);
+            return new FinishOutcome.Correction(cleanStep, hint);
+        }
+
         // --- Hallucination detection ---
         FinishOutcome hallucinationCheck = resultProcessor.checkHallucination(sessionId, history, step, answer);
         if (hallucinationCheck != null) {

@@ -12,7 +12,7 @@ import java.util.List;
 
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.channel.api.ContentNode;
 import org.apache.camel.ProducerTemplate;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +43,7 @@ class TelegramChannelSenderTest {
   void testSendWithNodesCallsSendRaw() {
       when(renderer.render(any())).thenReturn("Hello");
       // Use a non-empty list to avoid the immediate fallback
-      sender.send(user, List.of(new ReplyNode.Text("hi")));
+      sender.send(user, List.of(new ContentNode.Text("hi")));
       
       verify(producerTemplate).sendBodyAndHeader(
           eq("telegram:bots"),
@@ -83,7 +83,7 @@ class TelegramChannelSenderTest {
   @Test
   void testSenderEndpointUriIsClean() {
       when(renderer.render(any())).thenReturn("hi");
-      sender.send(user, List.of(new ReplyNode.Text("hi")));
+      sender.send(user, List.of(new ContentNode.Text("hi")));
       ArgumentCaptor<String> uriCaptor = ArgumentCaptor.forClass(String.class);
       verify(producerTemplate).sendBodyAndHeader(
           uriCaptor.capture(), any(), any(), any());

@@ -1,7 +1,6 @@
 package com.arcclaw.channel.api;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
 
 /**
  * Reusable base pipeline implementing the Template Method pattern for channel inbound message processing.
@@ -11,14 +10,23 @@ public abstract class AbstractInboundMessagePipeline {
 
     protected final ChannelServices channelServices;
     protected final ChannelType channelType;
+    private final ProcessingLockManager lockManager;
 
-    // Concurrent processing locks mapped to system timestamp of creation
-    private final Map<String, Long> processingFlags = new ConcurrentHashMap<>();
-    private static final long LOCK_TTL_MILLIS = 10 * 60 * 1000; // 10 minutes
+    /**
+     * No-arg constructor for CDI proxies.
+     * Note: Final fields initialized to null here are only valid after CDI-created subclass initialization.
+     */
+    protected AbstractInboundMessagePipeline() {
+        this.channelServices = null;
+        this.channelType = null;
+        this.lockManager = null;
+    }
 
-    protected AbstractInboundMessagePipeline(ChannelServices channelServices, ChannelType channelType) {
-        this.channelServices = channelServices;
-        this.channelType = channelType;
+    protected AbstractInboundMessagePipeline(ChannelServices channelServices, ChannelType channelType,
+                                              ProcessingLockManager lockManager) {
+        this.channelServices = Objects.requireNonNull(channelServices, "channelServices must not be null");
+        this.channelType = Objects.requireNonNull(channelType, "channelType must not be null");
+        this.lockManager = Objects.requireNonNull(lockManager, "lockManager must not be null");
     }
 
     protected abstract void sendRawReply(ChannelUser user, String text);
@@ -57,10 +65,7 @@ public abstract class AbstractInboundMessagePipeline {
         boolean acquiredLock = false;
 
         if (!isReflex) {
-            long now = System.currentTimeMillis();
-            pruneExpiredLocks(now);
-            Long existingLockTime = processingFlags.putIfAbsent(chatId, now);
-            if (existingLockTime != null) {
+            if (!lockManager.tryLock(chatId)) {
                 sendRawReply(user, "⏳ Still processing your previous message. Please wait.");
                 return;
             }
@@ -78,27 +83,18 @@ public abstract class AbstractInboundMessagePipeline {
                     sendRawReply(user, "Sorry, an internal error occurred while processing your message.");
                 }
                 if (finalAcquiredLock) {
-                    processingFlags.remove(chatId);
+                    lockManager.unlock(chatId);
                 }
                 return null;
             });
     }
 
-    private void pruneExpiredLocks(long now) {
-        processingFlags.entrySet().removeIf(entry -> (now - entry.getValue()) > LOCK_TTL_MILLIS);
-    }
-
-    /** For verification and tests only */
+    /**
+     * Checks whether the given chat is currently being processed.
+     * Exposed for test verification. Production code should use the
+     * {@link ProcessingLockManager} directly.
+     */
     public boolean isProcessing(String chatId) {
-        long now = System.currentTimeMillis();
-        Long lockTime = processingFlags.get(chatId);
-        if (lockTime == null) {
-            return false;
-        }
-        if ((now - lockTime) > LOCK_TTL_MILLIS) {
-            processingFlags.remove(chatId);
-            return false;
-        }
-        return true;
+        return lockManager.isLocked(chatId);
     }
 }

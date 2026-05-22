@@ -46,7 +46,11 @@ class CompactionServiceIntegrationTest {
                     "arcclaw.memory.compaction.enabled", "true",
                     "arcclaw.memory.compaction.threshold", "4",
                     "arcclaw.memory.compaction.keep-recent", "2",
-                    "quarkus.langchain4j.groq.api-key", "mock-key-for-tests-only"
+                    "quarkus.langchain4j.groq.api-key", "mock-key-for-tests-only",
+                    // Raise pool size above 1 to avoid deadlock between @Transactional
+                    // compaction and the async persistence drain thread competing for the
+                    // same connection (see application.yaml quarkus.datasource.max-size=1).
+                    "quarkus.datasource.max-size", "2"
             );
         }
     }

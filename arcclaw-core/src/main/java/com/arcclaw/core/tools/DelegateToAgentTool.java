@@ -43,9 +43,10 @@ import org.jboss.logging.Logger;
  */
 @ApplicationScoped
 @ToolMetadata(
-    capabilityId = "delegate_to_agent",
-    description = "Delegate a task to a domain expert sub-agent",
-    defaultRoles = {"architect", "coordinator", "researcher", "coder", "debugger", "synthesizer"}
+    capabilityId = "garuda",
+    description = "Garuda - The divine vahana of Vishnu. Dispatch tasks to domain expert sub-agents.",
+    defaultRoles = {"architect", "coordinator", "researcher", "coder", "debugger", "synthesizer",
+                    "optimizer", "sentinel", "healer", "protector", "purifier", "nurturer"}
 )
 public class DelegateToAgentTool implements AgentTool {
 
@@ -62,7 +63,7 @@ public class DelegateToAgentTool implements AgentTool {
 
     @Override
     public String name() {
-        return ToolCapability.DELEGATE_TO_AGENT.toolName();
+        return ToolCapability.DELEGATE_TO_AGENT.toolName(); // "garuda"
     }
 
     @Override
@@ -84,7 +85,7 @@ public class DelegateToAgentTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
             .addProperty("agent", JsonStringSchema.builder()
-                .description("The name of the specialist sub-agent (e.g., shiva, brahma, saraswati, brihaspati, dattatreya, coordinator).")
+                .description("The name of the specialist sub-agent (e.g., shiva, brahma, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati, coordinator).")
                 .build())
             .addProperty("goal", JsonStringSchema.builder()
                 .description("The self-contained task description for the sub-agent.")
@@ -149,6 +150,8 @@ public class DelegateToAgentTool implements AgentTool {
 
         // Capture parent OTel context before spawning sub-agent
         Context parentOtelContext = Context.current();
+        log.debugf("GARUDA: Dispatching to agent=%s depth=%d parentTraceId=%s",
+                agentName, depth, parentOtelContext.toString());
 
         AgentResult result;
         Span delegationSpan = otelContext.childSpan(outerSessionId, AgentOTelConstants.SPAN_DELEGATION_DISPATCH);

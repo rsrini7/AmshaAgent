@@ -92,3 +92,37 @@ When adding a new LLM provider (e.g., llama.cpp, OMLX, etc.), update ALL of the 
 ### 5.4 Verification
 10. Compile: `./mvnw compile -DskipTests -q`
 11. Check UI builds: `cd arcclaw-ui && npm run build`
+
+## 6. Adding a New Persona (Agent Role)
+
+When adding a new persona (e.g., Garuda, Indra, etc.), update ALL of the following:
+
+### 6.1 Core Definitions
+1. **`AgentPersona.java`** — Add enum entry with `roleId`, `displayName`, and `aliases`
+2. **`AgentRoleEnum.java`** — Add `static final` ID constant, instance, and `RoleDefinition` in `DEFINITIONS` map (use `Map.ofEntries()` if >10 entries)
+
+### 6.2 Templates (Qute)
+3. **`templates/personas/<name>.txt`** — Create persona identity template (who they are, responsibilities, rules)
+4. **`templates/prompts/role-<name>.txt`** — Create role-specific prompt section (PERMITTED TOOLS, rules, includes)
+
+### 6.3 CDI & Wiring
+5. **`AgentProducer.java`** — Add `@Produces @ApplicationScoped @AgentRole(ID)` method
+6. **`CoordinatorPromptSection.java`** — Add to Trimurti/Tridevi architecture block
+
+### 6.4 Delegation (CRITICAL - Static Lists, No Compile Safety)
+7. **`DelegateToAgentTool.java`** — Add role ID to `defaultRoles` in `@ToolMetadata` annotation
+8. **`templates/prompts/delegate-to-agent-rules.txt`** — Add to "Available Specialists" list
+
+### 6.5 Escalation & Routing
+9. **`PersonaEscalationService.java`** — Add escalation paths in `determineNewPersonaEscalation()`
+10. **`PromptInstructionLibrary.java`** — Add to system capabilities list
+
+### 6.6 Configuration
+11. **`application.yaml`** — Add role entry under `arcclaw.agents.roles`
+
+### 6.7 Verification
+12. Compile: `./mvnw compile -DskipTests -q`
+13. Run tests: `./mvnw test -pl arcclaw-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"`
+14. Update `telegram-test-arcclaw.txt` with test cases for new persona
+
+**WARNING**: Items 7 and 8 are static lists in annotations/templates. The compiler will NOT catch missing updates. Always verify manually.

@@ -63,7 +63,17 @@ public interface ChannelSender {
 ```java
 public interface ReplyRenderer {
     ChannelType supports();
-    String render(List<ReplyNode> nodes);  // ReplyNode tree → channel-native string
+    
+    // Renders a list of content nodes and interaction nodes (default implementation)
+    default String render(List<ReplyNode> nodes) { ... }
+
+    // Renders a list of content nodes (must be implemented by all channels)
+    String renderContent(List<ContentNode> nodes);
+
+    // Renders an interaction node (default implementation degrades gracefully)
+    default String renderInteraction(InteractionNode node) {
+        return node.fallbackText();
+    }
 }
 ```
 
@@ -165,9 +175,44 @@ public class DiscordRenderer implements ReplyRenderer {
     public ChannelType supports() { return ChannelType.DISCORD; }
 
     @Override
-    public String render(List<ReplyNode> nodes) {
-        // Convert ReplyNode tree to Discord markdown
-        return nodes.stream().map(this::renderNode).collect(Collectors.joining());
+    public String renderContent(List<ContentNode> nodes) {
+        return nodes.stream()
+                .map(this::renderContentNode)
+                .collect(Collectors.joining("\n\n"));
+    }
+
+    @Override
+    public String renderInteraction(InteractionNode node) {
+        if (node instanceof ApprovalPrompt ap) {
+            return "⚠️ **APPROVAL REQUIRED**\n"
+                    + "*Tool:* `" + ap.toolName() + "`\n"
+                    + "*Session:* `" + ap.sessionId() + "`";
+        }
+        return node.fallbackText();
+    }
+
+    private String renderContentNode(ContentNode node) {
+        return switch (node) {
+            case ContentNode.Text t         -> t.content();
+            case ContentNode.Heading h      -> "#".repeat(h.level()) + " " + h.text();
+            case ContentNode.CodeBlock cb   -> "```" + cb.language() + "\n" + cb.code() + "\n```";
+            case ContentNode.InlineCode ic  -> "`" + ic.code() + "`";
+            case ContentNode.BulletList bl  -> bl.items().stream()
+                    .map(item -> "* " + item)
+                    .collect(Collectors.joining("\n"));
+            case ContentNode.NumberedList nl -> {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < nl.items().size(); i++) {
+                    sb.append(i + 1).append(". ").append(nl.items().get(i));
+                    if (i < nl.items().size() - 1) sb.append("\n");
+                }
+                yield sb.toString();
+            }
+            case ContentNode.KeyValue kv    -> "**" + kv.key() + ":** " + kv.value();
+            case ContentNode.Separator _    -> "---";
+            case ContentNode.ErrorMessage err -> "❌ **ERROR [" + err.category() + "]**: " + err.reason();
+            default -> "[Unsupported content]";
+        };
     }
 }
 ```

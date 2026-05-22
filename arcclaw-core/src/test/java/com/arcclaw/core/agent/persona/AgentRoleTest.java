@@ -18,6 +18,12 @@ class AgentRoleTest {
         assertEquals(AgentRoleEnum.RESEARCHER, AgentRoleEnum.fromString("researcher"));
         assertEquals(AgentRoleEnum.CODER, AgentRoleEnum.fromString("coder"));
         assertEquals(AgentRoleEnum.DEBUGGER, AgentRoleEnum.fromString("debugger"));
+        assertEquals(AgentRoleEnum.OPTIMIZER, AgentRoleEnum.fromString("optimizer"));
+        assertEquals(AgentRoleEnum.SENTINEL, AgentRoleEnum.fromString("sentinel"));
+        assertEquals(AgentRoleEnum.HEALER, AgentRoleEnum.fromString("healer"));
+        assertEquals(AgentRoleEnum.PROTECTOR, AgentRoleEnum.fromString("protector"));
+        assertEquals(AgentRoleEnum.PURIFIER, AgentRoleEnum.fromString("purifier"));
+        assertEquals(AgentRoleEnum.NURTURER, AgentRoleEnum.fromString("nurturer"));
     }
 
     @ParameterizedTest(name = "{0} -> {1}")
@@ -25,7 +31,15 @@ class AgentRoleTest {
         "vishnu,   coordinator",
         "saraswati,researcher",
         "brahma,   coder",
-        "shiva,    debugger"
+        "shiva,    debugger",
+        "ganesha,  optimizer",
+        "kartikeya,sentinel",
+        "lakshmi,  healer",
+        "durga,    protector",
+        "kali,     purifier",
+        "parvati,  nurturer",
+        "brihaspati,architect",
+        "dattatreya,synthesizer"
     })
     void testFromStringDeityAliases(String alias, String expectedName) {
         AgentRoleEnum expected = AgentRoleEnum.fromString(expectedName);
@@ -33,7 +47,7 @@ class AgentRoleTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"unknown", "kali"})
+    @ValueSource(strings = {"unknown", "zeus"})
     void testFromStringUnknownThrows(String bad) {
         assertThrows(IllegalArgumentException.class, () -> AgentRoleEnum.fromString(bad));
     }

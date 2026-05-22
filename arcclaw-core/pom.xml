@@ -210,6 +210,12 @@
       <version>10.4.0</version>
     </dependency>
 
+    <!-- Caffeine cache for ProcessingLockManager -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-caffeine</artifactId>
+    </dependency>
+
     <!-- Observability -->
     <dependency>
       <groupId>io.quarkus</groupId>

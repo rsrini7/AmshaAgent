@@ -13,7 +13,13 @@ public enum AgentPersona {
     SARASWATI("researcher", "Saraswati (The Researcher)", Set.of("saraswati")),
     BRAHMA("coder", "Brahma (The Creator)", Set.of("brahma")),
     SHIVA("debugger", "Shiva (The Debugger)", Set.of("shiva")),
-    DATTATREYA("synthesizer", "Dattatreya (The Synthesizer)", Set.of("dattatreya", "datta"));
+    DATTATREYA("synthesizer", "Dattatreya (The Synthesizer)", Set.of("dattatreya", "datta")),
+    GANESHA("optimizer", "Ganesha (The Obstacle Remover)", Set.of("ganesha", "ganesh")),
+    KARTIKEYA("sentinel", "Kartikeya (The Sentinel)", Set.of("kartikeya", "murugan", "skanda")),
+    LAKSHMI("healer", "Lakshmi (The Healer)", Set.of("lakshmi")),
+    DURGA("protector", "Durga (The Protector)", Set.of("durga")),
+    KALI("purifier", "Kali (The Purifier)", Set.of("kali")),
+    PARVATI("nurturer", "Parvati (The Nurturer)", Set.of("parvati", "uma"));
 
     private final String roleId;
     private final String displayName;

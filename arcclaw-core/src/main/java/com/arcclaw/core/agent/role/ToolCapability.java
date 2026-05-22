@@ -68,9 +68,9 @@ public enum ToolCapability {
      * "fix the NullPointerException in UserAuth.java on line 42".
      * Example: {"agent":"shiva","goal":"Analyze stack trace in app.log and fix the NPE"}
      */
-    DELEGATE_TO_AGENT("delegate_to_agent",
-        "Delegate a task to a domain expert sub-agent. " +
-        "REQUIRED: 'agent' (one of: shiva, brahma, saraswati, brihaspati, dattatreya), 'goal' (string task description)."),
+    DELEGATE_TO_AGENT("garuda",
+        "Garuda - The divine vahana (vehicle) of Vishnu. Use Garuda to dispatch tasks to domain expert sub-agents. " +
+        "REQUIRED: 'agent' (one of: shiva, brahma, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati, coordinator), 'goal' (string task description)."),
 
     /**
      * Ability to ingest a document into the RAG knowledge base.

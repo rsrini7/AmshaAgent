@@ -203,7 +203,7 @@ public class LoopResultHandler {
             return Optional.of(AgentResult.finished(observation, historyWithFailure));
         }
 
-        log.infof("[AgentLoop] Fast-path: delegate_to_agent resume result used as FINISH " +
+        log.infof("[AgentLoop] Fast-path: garuda resume result used as FINISH " +
                 "for session %s - skipping coordinator wrap-up LLM call", sessionId);
         return Optional.of(AgentResult.finished(observation, List.copyOf(resumedHistory)));
     }

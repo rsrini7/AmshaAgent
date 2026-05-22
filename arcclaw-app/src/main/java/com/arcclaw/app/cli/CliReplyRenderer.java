@@ -5,9 +5,12 @@ import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelType;
-import com.arcclaw.channel.api.ReplyNode;
+import com.arcclaw.channel.api.ContentNode;
+import com.arcclaw.channel.api.InteractionNode;
 import com.arcclaw.channel.api.ReplyRenderer;
+import org.jboss.logging.Logger;
 
 /**
  * CLI implementation of {@link ReplyRenderer}.
@@ -16,32 +19,42 @@ import com.arcclaw.channel.api.ReplyRenderer;
 @ApplicationScoped
 public class CliReplyRenderer implements ReplyRenderer {
 
+    private static final Logger log = Logger.getLogger(CliReplyRenderer.class);
+
     @Override
     public ChannelType supports() {
         return ChannelType.CLI;
     }
 
     @Override
-    public String render(List<ReplyNode> nodes) {
+    public String renderContent(List<ContentNode> nodes) {
         if (nodes == null || nodes.isEmpty()) return "";
 
         StringBuilder sb = new StringBuilder();
-        for (ReplyNode node : nodes) {
-            sb.append(renderNode(node));
+        for (ContentNode node : nodes) {
+            sb.append(renderContentNode(node));
         }
         return sb.toString().trim();
     }
 
-    private String renderNode(ReplyNode node) {
+    @Override
+    public String renderInteraction(InteractionNode node) {
+        if (node instanceof ApprovalPrompt ap) {
+            return "[Approval Required] Tool: " + ap.toolName();
+        }
+        return node.fallbackText();
+    }
+
+    private String renderContentNode(ContentNode node) {
         return switch (node) {
-            case ReplyNode.Text t         -> t.content() + "\n\n";
-            case ReplyNode.Heading h      -> h.text() + "\n\n";
-            case ReplyNode.CodeBlock cb   -> cb.code() + "\n\n";
-            case ReplyNode.InlineCode ic  -> ic.code();
-            case ReplyNode.BulletList bl  -> bl.items().stream()
+            case ContentNode.Text t         -> t.content() + "\n\n";
+            case ContentNode.Heading h      -> h.text() + "\n\n";
+            case ContentNode.CodeBlock cb   -> cb.code() + "\n\n";
+            case ContentNode.InlineCode ic  -> ic.code();
+            case ContentNode.BulletList bl  -> bl.items().stream()
                     .map(item -> "- " + item)
                     .collect(Collectors.joining("\n")) + "\n\n";
-            case ReplyNode.NumberedList nl -> {
+            case ContentNode.NumberedList nl -> {
                 StringBuilder lst = new StringBuilder();
                 for (int i = 0; i < nl.items().size(); i++) {
                     lst.append((i + 1)).append(". ").append(nl.items().get(i)).append("\n");
@@ -49,10 +62,14 @@ public class CliReplyRenderer implements ReplyRenderer {
                 lst.append("\n");
                 yield lst.toString();
             }
-            case ReplyNode.KeyValue kv    -> kv.key() + ": " + kv.value() + "\n\n";
-            case ReplyNode.Separator _    -> "---\n\n";
-            case ReplyNode.ApprovalPrompt ap -> "[Approval Required] Tool: " + ap.toolName() + "\n\n";
-            case ReplyNode.ErrorMessage err  -> "[Error] " + err.reason() + "\n\n";
+            case ContentNode.KeyValue kv    -> kv.key() + ": " + kv.value() + "\n\n";
+            case ContentNode.Separator _    -> "---\n\n";
+            case ContentNode.ErrorMessage err  -> "[Error] " + err.reason() + "\n\n";
+            default -> {
+                log.warnf("Unsupported ContentNode type %s in CLI renderer",
+                    node.getClass().getName());
+                yield "[Unsupported content type]";
+            }
         };
     }
 }

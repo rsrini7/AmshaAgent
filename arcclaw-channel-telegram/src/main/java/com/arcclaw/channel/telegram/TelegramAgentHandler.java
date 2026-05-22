@@ -8,6 +8,7 @@ import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ProcessingLockManager;
 import com.arcclaw.common.util.LogUtil;
 import io.quarkus.arc.Unremovable;
 import org.apache.camel.Exchange;
@@ -31,12 +32,17 @@ public class TelegramAgentHandler extends AbstractInboundMessagePipeline {
     TelegramChannelSender sender;
 
     @Inject
-    public TelegramAgentHandler(ChannelServices channelServices) {
-        super(channelServices, ChannelType.TELEGRAM);
+    public TelegramAgentHandler(ChannelServices channelServices, ProcessingLockManager lockManager) {
+        super(channelServices, ChannelType.TELEGRAM, lockManager);
     }
 
+    /**
+     * No-arg constructor required by Quarkus CDI proxy generation.
+     * Do not call directly — use the {@link Inject} constructor.
+     */
+    @Deprecated
     protected TelegramAgentHandler() {
-        super(null, null);
+        super();
     }
 
     public void receiveMessage(Exchange exchange) {

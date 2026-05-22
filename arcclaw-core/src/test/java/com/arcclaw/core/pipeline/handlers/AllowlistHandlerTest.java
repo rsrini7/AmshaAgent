@@ -12,6 +12,7 @@ import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
@@ -25,13 +26,15 @@ class AllowlistHandlerTest {
     private ChannelSender sender;
     private MessageContext context;
     private ChannelPluginRegistry registry;
+    private AuditService auditService;
 
     @BeforeEach
     void setup() {
         allowlist = mock(ChannelAllowlist.class);
         sender = mock(ChannelSender.class);
         registry = mock(ChannelPluginRegistry.class);
-        
+        auditService = mock(AuditService.class);
+
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
         when(plugin.allowlist()).thenReturn(allowlist);
@@ -39,6 +42,7 @@ class AllowlistHandlerTest {
 
         handler = new AllowlistHandler();
         handler.channelPluginRegistry = registry;
+        handler.auditService = auditService;
 
         ChannelUser user = new ChannelUser("123", "123", "alice", ChannelType.CLI);
         context = new MessageContext("chat1", user, new ChannelMessage.CliMessage(user, "hi", "sid", Instant.now()));

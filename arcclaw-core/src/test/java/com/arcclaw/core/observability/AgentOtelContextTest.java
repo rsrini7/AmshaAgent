@@ -145,7 +145,7 @@ class AgentOtelContextTest {
         verify(tracer).spanBuilder(AgentOTelConstants.SPAN_TOOL_CALL);
         verify(spanBuilder, times(2)).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
         verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, ToolCapability.GITHUB.toolName());
-        verify(spanBuilder).setAttribute("tool.operation", "invoke");
+        verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_TOOL_OPERATION, "invoke");
         verify(spanBuilder).setParent((Context) any());
     }
 

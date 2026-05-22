@@ -181,9 +181,18 @@ public class StepDecisionRouter {
             var cpOpt = engineStepHandler.loadCheckpointStatus(context);
             context.setLastCheckpointStatus(cpOpt.orElse(null));
             if (context.lastCheckpointStatus() == CheckpointStatus.AWAITING_APPROVAL) {
-                log.warnf("Session %s is still AWAITING_APPROVAL. Refusing to invoke tool until state is flushed as IN_PROGRESS.", context.sessionId());
-                return RoutingOutcome.terminal(AgentResult.failed("State corrupted - tool execution attempted before approval persistence completed.",
-                        AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+                // Retry once after a short delay — the claimForResume() transaction may have
+                // committed in a different thread but WAL visibility is not yet guaranteed.
+                try { Thread.sleep(150); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                context.markStatusDirty(); // force re-read from DB
+                cpOpt = engineStepHandler.loadCheckpointStatus(context);
+                context.setLastCheckpointStatus(cpOpt.orElse(null));
+                if (context.lastCheckpointStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                    log.warnf("Session %s is still AWAITING_APPROVAL after retry. Refusing to invoke tool.", context.sessionId());
+                    return RoutingOutcome.terminal(AgentResult.failed("State corrupted - tool execution attempted before approval persistence completed.",
+                            AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+                }
+                log.infof("Session %s: AWAITING_APPROVAL resolved to %s after WAL visibility retry.", context.sessionId(), context.lastCheckpointStatus());
             }
         }
 

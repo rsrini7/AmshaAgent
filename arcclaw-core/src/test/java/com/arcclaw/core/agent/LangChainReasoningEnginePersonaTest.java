@@ -91,6 +91,15 @@ class LangChainReasoningEnginePersonaTest {
             mockMeterRegistry, new TextPatternUtils(),
             mockStepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator
         );
+
+        // 5. Inject otelContext via reflection (field injection, not constructor)
+        try {
+            var otelField = LangChainReasoningEngine.class.getDeclaredField("otelContext");
+            otelField.setAccessible(true);
+            otelField.set(engine, mockOtelContext);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to inject otelContext", e);
+        }
     }
 
     @Test
