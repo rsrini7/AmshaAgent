@@ -7,7 +7,9 @@ import java.util.regex.Pattern;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelPlugin;
+import com.arcclaw.channel.api.ContentNode;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
@@ -221,8 +223,8 @@ public class AgentDispatchHandler implements MessageHandler {
                     if (result instanceof AgentResult.AwaitingApproval aa) {
                         String text = AgentResultFormatter.formatBasic(result);
                         s.send(context.getUser(), List.of(
-                            new ReplyNode.Text(text),
-                            new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)
+                            new ContentNode.Text(text),
+                            new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)
                         ));
                     } else {
                         String output = AgentResultFormatter.format(result);

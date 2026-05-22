@@ -305,7 +305,47 @@ See [`CHANNEL_SPI.md`](./CHANNEL_SPI.md) for the complete step-by-step guide wit
 - The Telegram implementation as a reference (`arcclaw-channel-telegram/`)
 
 > [!NOTE]
-> `ChannelType` is a record - switched on `channelType.id()` (a string), not on enum ordinals. New channel types require a new `ChannelType` record instance (e.g., `ChannelType.DISCORD`). Do not add one-off channel branches into core flow when an SPI extension point exists (Architecture Invariant §4.5).
+> `ChannelType` uses the **Flyweight pattern** (GoF) — `ChannelType.of("telegram") == ChannelType.TELEGRAM` is guaranteed by reference equality. Built-in types are pre-registered as static constants. Third-party plugins register new types via `ChannelType.of(id)` on first use; the result is cached permanently.
+>
+> `ChannelMessage` and `ChannelCommand` are **non-sealed interfaces** — third-party modules can implement them without modifying `arcclaw-channel-api`. Attach channel-specific metadata to `ChannelMessage` using `ChannelMessageAttribute<T>` typed keys (extension object pattern). For compile-time safety of the built-in command set, `ChannelCommand.parse()` returns a `ChannelCommand.BuiltInChannelCommand` subtype that can be switched exhaustively.
+>
+> `ChannelJobNotifier.notifyApprovalRequired()` is now **abstract** — every channel adapter must implement it explicitly. Channels without inline button support should send text instructions (e.g., "To approve, run `/approve {sessionId}`").
+
+### Reply rendering (ContentNode / InteractionNode)
+
+The `ReplyNode` tree is split into two sealed sub-interfaces for channel rendering:
+
+- **`ContentNode`** — pure content nodes (Text, Heading, CodeBlock, BulletList, NumberedList, KeyValue, Separator, ErrorMessage). Every channel must render these. `ContentNode` is `non-sealed` so third-party plugins can define custom content types.
+- **`InteractionNode`** — interactive controls (ApprovalPrompt). Channels override `ReplyRenderer.renderInteraction()` for types they support; unsupported types fall back to `InteractionNode.fallbackText()` for graceful degradation.
+
+All three built-in renderers (Telegram, Web, CLI) implement this split:
+
+```java
+@Override
+public String renderContent(List<ContentNode> nodes) { /* exhaustive or default guard */ }
+
+@Override
+public String renderInteraction(InteractionNode node) {
+    if (node instanceof ApprovalPrompt ap) {
+        return "⏸ Approval required for: " + ap.toolName();
+    }
+    return node.fallbackText(); // graceful degradation
+}
+```
+
+### Processing concurrency (ProcessingLockManager)
+
+`AbstractInboundMessagePipeline` delegates chat-level processing serialization to a `ProcessingLockManager` SPI. The default JVM implementation uses a `ConcurrentHashMap` with a 30-second TTL. For clustered deployments, inject a custom bean backed by Redis or database advisory locks:
+
+```java
+@ApplicationScoped
+public class RedisLockManager implements ProcessingLockManager {
+    @Override public boolean tryLock(String chatId) { /* Redis SETNX */ }
+    @Override public void unlock(String chatId)     { /* Redis DEL */ }
+    @Override public boolean isLocked(String chatId) { /* Redis EXISTS */ }
+    @Override public long ttlSeconds()               { return 30; }
+}
+```
 
 ---
 

@@ -6,6 +6,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
 import jakarta.transaction.Transactional;
 
+import com.arcclaw.channel.api.AbstractInboundMessagePipeline;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -77,6 +78,15 @@ public class ArchitectureBoundaryTest {
     static final ArchRule coreShouldNotUseEntityManager = noClasses()
             .that().resideInAPackage("com.arcclaw.core..")
             .should().dependOnClassesThat().haveFullyQualifiedName("jakarta.persistence.EntityManager")
+            .allowEmptyShould(true);
+
+    // 9. isProcessing() is for test verification only — ban calls from production code
+    @ArchTest
+    static final ArchRule isProcessingTestSeam = noClasses()
+            .that().resideOutsideOfPackage("..test..")
+            .should().callMethod(
+                    AbstractInboundMessagePipeline.class,
+                    "isProcessing", String.class)
             .allowEmptyShould(true);
 
 }

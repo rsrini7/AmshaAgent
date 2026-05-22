@@ -111,6 +111,17 @@ public class AsyncPersistenceEngine {
             throw new IllegalArgumentException("submitCritical requires a CRITICAL event");
         }
 
+        // Drain threads not yet started (pre-StartupEvent) — process synchronously to avoid deadlock
+        boolean drainReady = criticalDrainThread != null && criticalDrainThread.isAlive();
+        if (!drainReady) {
+            try {
+                processEvent(event);
+            } catch (Exception e) {
+                throw new ComplianceViolationException(event.getSessionId(), event.getEventType(), e);
+            }
+            return;
+        }
+
         inFlightCritical.incrementAndGet();
         if (!criticalQueue.offer(event)) {
             inFlightCritical.decrementAndGet();
@@ -157,8 +168,9 @@ public class AsyncPersistenceEngine {
             return;
         }
 
-        if (criticalDrainThread == null || !criticalDrainThread.isAlive()
-                || telemetryDrainThread == null || !telemetryDrainThread.isAlive()) {
+        boolean criticalAlive = criticalDrainThread != null && criticalDrainThread.isAlive();
+        boolean telemetryAlive = telemetryDrainThread != null && telemetryDrainThread.isAlive();
+        if (!criticalAlive || !telemetryAlive) {
             return;
         }
 

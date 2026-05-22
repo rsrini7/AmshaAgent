@@ -7,23 +7,30 @@ import java.util.regex.Pattern;
  * Channel-agnostic command parsed from a user's text message.
  *
  * <p>Commands always begin with {@code /}. The static {@link #parse(String)}
- * factory maps raw text to one of the sealed permits. Non-command messages
+ * factory maps raw text to one of the built-in permits. Non-command messages
  * map to {@link Unknown}.
  *
- * <p>Tier 2B renderers depend on exhaustive switching over exactly these 7 types.
- * Do not add or remove permit types.
+ * <p>Third-party channel plugins can add their own command types by implementing
+ * this interface. The built-in command set remains stable for renderers that
+ * use exhaustive switching.
  */
-public sealed interface ChannelCommand
-        permits ChannelCommand.Approve,
-                ChannelCommand.Deny,
-                ChannelCommand.Status,
-                ChannelCommand.Halt,
-                ChannelCommand.Reset,
-                ChannelCommand.History,
-                ChannelCommand.CronTasks,
-                ChannelCommand.DeleteCron,
-                ChannelCommand.Start,
-                ChannelCommand.Unknown {
+public interface ChannelCommand {
+
+    /**
+     * Sealed sub-hierarchy for the built-in command set.
+     * Switch expressions over {@code BuiltInChannelCommand} are exhaustive at
+     * compile time — adding a new built-in command and forgetting to handle it
+     * is a compiler error, not a silent {@code default} fall-through.
+     * <p>
+     * Third-party channel plugins that define their own command types implement
+     * {@link ChannelCommand} directly, not this interface, preserving the
+     * compile-time safety of the built-in set.
+     */
+    sealed interface BuiltInChannelCommand extends ChannelCommand
+        permits ChannelCommand.Approve, ChannelCommand.Deny, ChannelCommand.Status,
+                ChannelCommand.Halt, ChannelCommand.Reset, ChannelCommand.History,
+                ChannelCommand.CronTasks, ChannelCommand.DeleteCron, ChannelCommand.Start,
+                ChannelCommand.Unknown {}
 
     // Single compiled Pattern - avoids repeated compilation per message.
     // Group 1: command
@@ -49,13 +56,19 @@ public sealed interface ChannelCommand
     }
 
     /**
-     * Parses {@code text} into the most specific {@link ChannelCommand}.
+     * Parses {@code text} into the most specific {@link BuiltInChannelCommand}.
      * Never throws; falls back to {@link Unknown}.
+     * <p>
+     * The return type is {@link BuiltInChannelCommand} because {@code parse()}
+     * exclusively produces commands from the built-in set. Callers can switch
+     * exhaustively over the result without an outer {@code instanceof} check.
+     * Third-party channel commands arrive through other paths (their own
+     * handlers), not through {@code parse()}.
      *
      * @param text raw user message; may be null
-     * @return a non-null ChannelCommand
+     * @return a non-null BuiltInChannelCommand
      */
-    static ChannelCommand parse(String text) {
+    static BuiltInChannelCommand parse(String text) {
         if (text == null || text.isBlank()) {
             return new Unknown(text == null ? "" : text);
         }
@@ -143,7 +156,7 @@ public sealed interface ChannelCommand
         Optional<String> targetId,
         Optional<String> toolName,
         Optional<String> reason
-    ) implements ChannelCommand {}
+    ) implements BuiltInChannelCommand {}
 
     /**
      * Denies a pending tool execution.
@@ -156,41 +169,41 @@ public sealed interface ChannelCommand
         Optional<String> targetId,
         Optional<String> toolName,
         Optional<String> reason
-    ) implements ChannelCommand {}
+    ) implements BuiltInChannelCommand {}
 
      /**
      * Telegram lifecycle command - sent automatically when a user opens a fresh
      * chat or clicks the "Start" button. {@code payload} carries any deep-link
      * parameter Telegram appends after /start (may be empty).
      */
-    record Start(Optional<String> payload) implements ChannelCommand {}
+    record Start(Optional<String> payload) implements BuiltInChannelCommand {}
 
     /** Queries the current status of the agent's active session. */
-    record Status() implements ChannelCommand {}
+    record Status() implements BuiltInChannelCommand {}
 
     /** Immediately terminates the agent's current reasoning loop. */
-    record Halt() implements ChannelCommand {}
+    record Halt() implements BuiltInChannelCommand {}
 
     /** Wipes the active session checkpoint, starting fresh on next message. */
-    record Reset() implements ChannelCommand {}
+    record Reset() implements BuiltInChannelCommand {}
 
     /** Lists scheduled cron tasks for the current user. */
-    record CronTasks() implements ChannelCommand {}
+    record CronTasks() implements BuiltInChannelCommand {}
 
     /** Shows conversation history for the current session. */
-    record History() implements ChannelCommand {}
+    record History() implements BuiltInChannelCommand {}
 
     /**
      * Deletes a scheduled cron task.
      *
      * @param cronId the ID of the cron task to delete
      */
-    record DeleteCron(Optional<String> cronId) implements ChannelCommand {}
+    record DeleteCron(Optional<String> cronId) implements BuiltInChannelCommand {}
 
     /**
      * Fallback for any text that does not match a known command.
      *
      * @param raw the original raw input
      */
-    record Unknown(String raw) implements ChannelCommand {}
+    record Unknown(String raw) implements BuiltInChannelCommand {}
 }

@@ -16,29 +16,39 @@ class ChannelTypeTest {
     }
 
     @Test
-    void testFromString_invalidReturnsEmpty() {
-        // Now any string is valid as a custom channel type
-        assertTrue(ChannelType.fromString("custom").isPresent());
-        assertEquals(new ChannelType("custom"), ChannelType.fromString("CUSTOM").get());
-        
+    void testFromString_unknownReturnsEmpty() {
+        assertTrue(ChannelType.fromString("custom").isEmpty());
         assertTrue(ChannelType.fromString(null).isEmpty());
         assertTrue(ChannelType.fromString("").isEmpty());
         assertTrue(ChannelType.fromString("  ").isEmpty());
     }
 
     @Test
-    void testCustomChannelTypeCreatable() {
-        ChannelType custom = new ChannelType("whatsapp");
-        assertEquals("whatsapp", custom.id());
-        
-        ChannelType alsoCustom = ChannelType.fromString("WHATSAPP").get();
-        assertEquals(custom, alsoCustom);
+    void testFlyweightIdentity() {
+        ChannelType a = ChannelType.of("whatsapp");
+        ChannelType b = ChannelType.of("WHATSAPP");
+        // Flyweight guarantees reference equality for the same normalized id
+        assertSame(a, b, "ChannelType.of() must return same instance for same id");
+        assertEquals("whatsapp", a.id());
     }
 
     @Test
     void testFallbackPattern() {
-        // This simulates how we use it in the app for legacy rows
         ChannelType ch = ChannelType.fromString(null).orElse(ChannelType.TELEGRAM);
         assertEquals(ChannelType.TELEGRAM, ch);
+    }
+
+    @Test
+    void testNameUppercase() {
+        assertEquals("TELEGRAM", ChannelType.TELEGRAM.name());
+        assertEquals("CLI", ChannelType.CLI.name());
+    }
+
+    @Test
+    void testIdentityEquality() {
+        // Same reference
+        assertSame(ChannelType.TELEGRAM, ChannelType.of("telegram"));
+        // Different id
+        assertNotSame(ChannelType.TELEGRAM, ChannelType.DISCORD);
     }
 }

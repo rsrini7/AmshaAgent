@@ -14,9 +14,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Field;
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
@@ -24,12 +22,10 @@ import java.util.logging.Logger;
 
 import jakarta.inject.Inject;
 
-import com.arcclaw.channel.api.AbstractInboundMessagePipeline;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelServices;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
-import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
 import org.apache.camel.Exchange;
@@ -57,15 +53,6 @@ class TelegramAgentHandlerTest {
 
     @BeforeEach
     void setup() throws Exception {
-        // Clear the sync flags on the handler via reflection to ensure test isolation
-        TelegramAgentHandler target = ClientProxy.unwrap(handler);
-        Field flagsField = AbstractInboundMessagePipeline.class.getDeclaredField("processingFlags");
-        flagsField.setAccessible(true);
-        Map<?, ?> flags = (Map<?, ?>) flagsField.get(target);
-        if (flags != null) {
-            flags.clear();
-        }
-
         // Default behavior: processAsync returns immediately
         when(channelServices.processAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
     }

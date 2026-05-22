@@ -46,6 +46,7 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
             }
             // If numeric IDs are configured, we strictly deny anything that doesn't match
             // (Ignoring the deprecated string list entirely for security)
+            log.warnf("SECURITY: Access denied for userId=%s username=%s — not in numeric allowlist", userIdStr, username);
             return false;
         }
 
@@ -66,7 +67,7 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
 
         for (String allowed : allowedUsers.get()) {
             if (allowed == null || allowed.isBlank()) continue; // Safely skip blank entries like [""]
-            
+
             String cleanAllowed = allowed.startsWith("@") ? allowed.substring(1) : allowed;
             if (cleanAllowed.equalsIgnoreCase(cleanUsername)) {
                 log.warnf("DEPRECATION WARNING: User %s authenticated via deprecated string username allowlist. Migrate to numeric allowed-user-ids.", username);
@@ -74,6 +75,7 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
             }
         }
 
+        log.warnf("SECURITY: Access denied for userId=%s username=%s — not in string allowlist", userIdStr, username);
         return false;
     }
 

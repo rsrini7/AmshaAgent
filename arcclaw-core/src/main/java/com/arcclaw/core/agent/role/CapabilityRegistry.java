@@ -7,6 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import org.jboss.logging.Logger;
+
 /**
  * Registry for dynamic tool-capability grants.
  * <p>
@@ -16,10 +18,20 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class CapabilityRegistry {
 
+    private static final Logger log = Logger.getLogger(CapabilityRegistry.class);
+
     private final Map<String, Set<String>> roleSupplementalTools = new ConcurrentHashMap<>();
 
     /**
      * Grants a tool capability to a specific agent role.
+     * <p>
+     * Idempotent — duplicate grants log a warning instead of throwing.
+     * This is safe for CDI hot-reload where {@code ToolDiscoveryService}
+     * may re-register tools after {@link #clear()}.
+     * <p>
+     * Note: this method runs at CDI startup (called by ToolDiscoveryService),
+     * before the database is fully initialized. It MUST NOT perform any
+     * database writes or audit events.
      *
      * @param roleId   The canonical role ID (e.g., "researcher").
      * @param toolName The unique tool name (e.g., "browser_navigate").
@@ -27,10 +39,10 @@ public class CapabilityRegistry {
     public void grant(String roleId, String toolName) {
         Set<String> tools = roleSupplementalTools.computeIfAbsent(roleId, k -> ConcurrentHashMap.newKeySet());
         if (!tools.add(toolName)) {
-             throw new IllegalStateException(String.format(
-                 "Duplicate tool-capability grant: role '%s' already has tool '%s' registered (§T2-5).",
-                 roleId, toolName));
+            log.warnf("Idempotent grant ignored: role '%s' already has tool '%s'", roleId, toolName);
+            return;
         }
+        log.infof("Tool-capability granted: role=%s tool=%s", roleId, toolName);
     }
 
     /**

@@ -1,17 +1,18 @@
 package com.arcclaw.channel.telegram;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.camel.component.telegram.model.InlineKeyboardButton;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.jboss.logging.Logger;
@@ -28,7 +29,10 @@ class BatchHitlKeyboardBuilder {
     private static final Base64.Decoder B64_DECODER = Base64.getUrlDecoder();
     private static final Set<String> KNOWN_PREFIXES = Set.of("cron-");
     private static final String COMPRESSED_CRON_PREFIX = "c-";
-    private static final Map<String, String> sessionCache = new ConcurrentHashMap<>();
+    private static final Cache<String, String> sessionCache = Caffeine.newBuilder()
+            .maximumSize(10_000)
+            .expireAfterWrite(Duration.ofHours(24))
+            .build();
 
     /**
      * @param sessionId the active session ID (embedded in callback data)
@@ -227,6 +231,7 @@ class BatchHitlKeyboardBuilder {
         if (cbInfo.length() <= 64) return cbInfo;
         String token = generateShortToken();
         sessionCache.put(token, originalSessionId);
+
         log.warnf("Callback data (%d bytes) exceeded limit for session '%s'. Cached under token '%s'",
             cbInfo.length(), originalSessionId, token);
         int firstPipe = cbInfo.indexOf('|');
@@ -244,18 +249,15 @@ class BatchHitlKeyboardBuilder {
     }
 
     /**
-     * Resolves a cached short token back to the original session ID.
-     * Returns null if the token is not found in the cache.
+     * Atomically resolves and removes a cached short token.
+     * Returns the original session ID, or null if the token is not found.
+     * <p>
+     * Using {@code asMap().remove(key)} instead of separate {@code getIfPresent}
+     * + {@code invalidate} prevents a race where two concurrent callbacks with
+     * the same token both resolve it, causing duplicate processing.
      */
-    static String resolveCachedSessionId(String token) {
-        return sessionCache.get(token);
-    }
-
-    /**
-     * Removes a short token from the session cache after successful resolution.
-     */
-    static void removeCachedSessionId(String token) {
-        sessionCache.remove(token);
+    static String resolveAndRemoveCachedSessionId(String token) {
+        return (String) sessionCache.asMap().remove(token);
     }
 
     /**

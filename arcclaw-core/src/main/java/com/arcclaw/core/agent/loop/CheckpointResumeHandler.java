@@ -9,11 +9,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.ContentNode;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
@@ -240,7 +242,7 @@ public class CheckpointResumeHandler {
 
     private void sendFormattedResult(ChannelSender s, ChannelUser user, AgentResult result, String output, String sessionId, ChannelType cType) {
         if (result instanceof AgentResult.AwaitingApproval aa && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
-            s.send(user, List.of(new ReplyNode.Text(output), new ReplyNode.ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+            s.send(user, List.of(new ContentNode.Text(output), new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
         } else if (ChannelType.WEBSOCKET.id().equalsIgnoreCase(cType.id())) {
             s.sendRaw(user, output);
         } else {

@@ -5,11 +5,15 @@ import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelType;
+import com.arcclaw.channel.api.ContentNode;
+import com.arcclaw.channel.api.InteractionNode;
 import com.arcclaw.channel.api.MarkdownEscapeService;
 import com.arcclaw.channel.api.MarkdownProfile;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.channel.api.ReplyRenderer;
+import org.jboss.logging.Logger;
 
 /**
  * Renders a list of {@link ReplyNode} into Telegram's MarkdownV2 format.
@@ -22,6 +26,8 @@ import com.arcclaw.channel.api.ReplyRenderer;
 @ApplicationScoped
 public class TelegramMarkdownV2Renderer implements ReplyRenderer {
 
+    private static final Logger log = Logger.getLogger(TelegramMarkdownV2Renderer.class);
+
     private final MarkdownEscapeService escapeService = new MarkdownEscapeService();
 
     @Override
@@ -30,32 +36,48 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
     }
 
     @Override
-    public String render(List<ReplyNode> nodes) {
+    public String renderContent(List<ContentNode> nodes) {
         if (nodes == null || nodes.isEmpty()) {
             return "";
         }
         return nodes.stream()
-                .map(this::renderNode)
+                .map(this::renderContentNode)
                 .collect(Collectors.joining("\n\n"));
     }
 
-    private String renderNode(ReplyNode node) {
+    @Override
+    public String renderInteraction(InteractionNode node) {
+        if (node instanceof ApprovalPrompt ap) {
+            String params = ap.paramsJson();
+            if (params == null) params = "{}";
+            int maxJsonLen = 3800;
+            if (params.length() > maxJsonLen) {
+                params = params.substring(0, maxJsonLen) + "\n... (truncated)";
+            }
+            return "⚠️ *APPROVAL REQUIRED*\n\n"
+                    + "*Tool:* `" + esc(ap.toolName()) + "`\n"
+                    + "*Session:* `" + esc(ap.sessionId()) + "`\n\n"
+                    + "```json\n" + params + "\n```\n\n"
+                    + "Reply with `/approve` or `/deny`";
+        }
+        return node.fallbackText();
+    }
+
+    private String renderContentNode(ContentNode node) {
         return switch (node) {
-            case ReplyNode.Text t -> esc(t.content());
-            case ReplyNode.Heading h -> h.level() == 1
+            case ContentNode.Text t -> esc(t.content());
+            case ContentNode.Heading h -> h.level() == 1
                     ? "*__" + esc(h.text()) + "__*"
                     : "*" + esc(h.text()) + "*";
-            case ReplyNode.CodeBlock cb -> {
-                // Language identifier is NOT MarkdownV2 content - do NOT escape it.
-                // Telegram uses it as a literal syntax hint: ```java, ```c++, etc.
+            case ContentNode.CodeBlock cb -> {
                 String lang = cb.language() != null ? cb.language().trim() : "";
                 yield "```" + lang + "\n" + cb.code() + "\n```";
             }
-            case ReplyNode.InlineCode ic -> "`" + ic.code() + "`";
-            case ReplyNode.BulletList bl -> bl.items().stream()
+            case ContentNode.InlineCode ic -> "`" + ic.code() + "`";
+            case ContentNode.BulletList bl -> bl.items().stream()
                     .map(item -> "• " + esc(item))
                     .collect(Collectors.joining("\n"));
-            case ReplyNode.NumberedList nl -> {
+            case ContentNode.NumberedList nl -> {
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < nl.items().size(); i++) {
                     sb.append(i + 1).append("\\. ").append(esc(nl.items().get(i)));
@@ -63,25 +85,13 @@ public class TelegramMarkdownV2Renderer implements ReplyRenderer {
                 }
                 yield sb.toString();
             }
-            case ReplyNode.KeyValue kv -> "*" + esc(kv.key()) + ":* " + esc(kv.value());
-            case ReplyNode.Separator _ -> "---";
-            case ReplyNode.ApprovalPrompt ap -> {
-                // Truncate paramsJson to fit within Telegram's 4096 char limit.
-                // Template overhead ≈ 120 chars; leave room for the JSON block.
-                String params = ap.paramsJson();
-                if (params == null) params = "{}";
-                int maxJsonLen = 3800; // conservative limit for template + escaping overhead
-                if (params.length() > maxJsonLen) {
-                    params = params.substring(0, maxJsonLen) + "\n... (truncated)";
-                }
-                yield "⚠️ *APPROVAL REQUIRED*\n\n" +
-                        "*Tool:* `" + esc(ap.toolName()) + "`\n" +
-                        "*Session:* `" + esc(ap.sessionId()) + "`\n\n" +
-                        "```json\n" + params + "\n```\n\n" +
-                        "Reply with `/approve` or `/deny`";
-            }
-            case ReplyNode.ErrorMessage em -> {
-                yield "❌ *ERROR [" + esc(em.category()) + "]*\n\n" + esc(em.reason());
+            case ContentNode.KeyValue kv -> "*" + esc(kv.key()) + ":* " + esc(kv.value());
+            case ContentNode.Separator _ -> "---";
+            case ContentNode.ErrorMessage em -> "❌ *ERROR [" + esc(em.category()) + "]*\n\n" + esc(em.reason());
+            default -> {
+                log.warnf("Unsupported ContentNode type %s in Telegram renderer",
+                    node.getClass().getName());
+                yield esc("[Unsupported content type]");
             }
         };
     }

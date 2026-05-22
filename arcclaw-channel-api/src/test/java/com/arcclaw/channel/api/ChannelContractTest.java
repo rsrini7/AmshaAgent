@@ -73,8 +73,13 @@ public class ChannelContractTest {
     }
 
     @Test
-    void testAllSealedPermitsAreExhaustive() {
-        assertEquals(5, ChannelMessage.class.getPermittedSubclasses().length);
+    void testAllBuiltInMessageTypesExist() {
+        // Verify all 5 built-in message types are present as inner records
+        assertNotNull(ChannelMessage.TelegramMessage.class);
+        assertNotNull(ChannelMessage.DiscordMessage.class);
+        assertNotNull(ChannelMessage.RestApiMessage.class);
+        assertNotNull(ChannelMessage.CliMessage.class);
+        assertNotNull(ChannelMessage.WebSocketMessage.class);
     }
 
     // ── ChannelCommand sealed interface dispatch ──
@@ -171,8 +176,22 @@ public class ChannelContractTest {
     }
 
     @Test
-    void testAllSealedCommandPermitsAreExhaustive() {
-        assertEquals(10, ChannelCommand.class.getPermittedSubclasses().length);
+    void testAllBuiltInCommandTypesAreSealedPermits() {
+        // Verify all 10 built-in command types are sealed permits of BuiltInChannelCommand
+        assertEquals(10, ChannelCommand.BuiltInChannelCommand.class.getPermittedSubclasses().length,
+            "Adding a new built-in command type requires adding it to the permits clause "
+            + "of BuiltInChannelCommand. If you see this failure, add the new record "
+            + "and add a case in CommandDispatchHandler.");
+        assertNotNull(ChannelCommand.Approve.class);
+        assertNotNull(ChannelCommand.Deny.class);
+        assertNotNull(ChannelCommand.Status.class);
+        assertNotNull(ChannelCommand.Halt.class);
+        assertNotNull(ChannelCommand.Reset.class);
+        assertNotNull(ChannelCommand.History.class);
+        assertNotNull(ChannelCommand.CronTasks.class);
+        assertNotNull(ChannelCommand.DeleteCron.class);
+        assertNotNull(ChannelCommand.Start.class);
+        assertNotNull(ChannelCommand.Unknown.class);
     }
 
     @Test

@@ -21,18 +21,17 @@ public interface ChannelJobNotifier {
     /**
      * Notifies the user on this channel that a scheduled/cron job requires approval.
      * <p>
-     * Channels with inline button support (e.g. Telegram) should override this to
-     * present Approve/Deny buttons alongside the message. The default implementation
-     * sends the rendered message as plain text without buttons.
+     * Every channel adapter must implement this method to make a deliberate choice
+     * about how to present approval actions (inline buttons, text instructions, etc.).
+     * Channels without inline button support should send text instructions (e.g.
+     * "To approve, run /approve {@code cronSessionId}").
      *
      * @param recipient      Channel-specific recipient identifier.
      * @param cronSessionId  Full cron session ID for constructing callback data.
      * @param toolName       The tool that requires approval.
      * @param renderedMessage The pre-formatted notification text.
      */
-    default void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage) {
-        notifyJobCompleted(recipient, renderedMessage, cronSessionId);
-    }
+    void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage);
     
     /**
      * Notifies the user on this channel that an approval has timed out.

@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
+import com.arcclaw.channel.api.ChannelCommand;
 import com.arcclaw.channel.api.ChannelMessage;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ChannelSender;
@@ -22,6 +23,7 @@ import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
 import com.arcclaw.core.pipeline.HandleResult;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.pipeline.parsers.CommandParserRegistry;
 import com.arcclaw.core.reflex.ReflexRegistry;
 import com.arcclaw.core.reflex.ReflexResult;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -38,6 +40,7 @@ class CommandDispatchHandlerTest {
     private ReflexRegistry reflexRegistry;
     private ChannelSender sender;
     private ChannelPluginRegistry channelPluginRegistry;
+    private CommandParserRegistry commandParserRegistry;
     private MockedStatic<WorkspaceContext> mockedContext;
 
     @BeforeEach
@@ -45,6 +48,7 @@ class CommandDispatchHandlerTest {
         reflexRegistry = mock(ReflexRegistry.class);
         sender = mock(ChannelSender.class);
         channelPluginRegistry = mock(ChannelPluginRegistry.class);
+        commandParserRegistry = mock(CommandParserRegistry.class);
         
         ChannelPlugin plugin = mock(ChannelPlugin.class);
         when(plugin.sender()).thenReturn(sender);
@@ -53,7 +57,12 @@ class CommandDispatchHandlerTest {
         handler = new CommandDispatchHandler();
         handler.reflexRegistry = reflexRegistry;
         handler.channelPluginRegistry = channelPluginRegistry;
+        handler.commandParserRegistry = commandParserRegistry;
         handler.defaultTimezone = "Asia/Kolkata";
+
+        // Wire the mock command parser to delegate to the real parse logic
+        when(commandParserRegistry.parse(any(), any())).thenAnswer(inv ->
+            ChannelCommand.parse(inv.getArgument(0)));
         mockedContext = mockStatic(WorkspaceContext.class);
         
         @SuppressWarnings("unchecked")

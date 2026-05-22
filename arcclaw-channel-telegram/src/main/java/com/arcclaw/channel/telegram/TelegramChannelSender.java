@@ -8,9 +8,11 @@ import java.util.Optional;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelSender;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
+import com.arcclaw.channel.api.InteractionNode;
 import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.common.util.LogUtil;
 import org.apache.camel.ProducerTemplate;
@@ -63,16 +65,16 @@ public class TelegramChannelSender implements ChannelSender {
         }
 
         // Component 73-A4 - Intercept ApprovalPrompt to add Telegram inline keyboard
-        Optional<ReplyNode.ApprovalPrompt> promptOpt = nodes.stream()
-            .filter(n -> n instanceof ReplyNode.ApprovalPrompt)
-            .map(n -> (ReplyNode.ApprovalPrompt) n)
+        Optional<ApprovalPrompt> promptOpt = nodes.stream()
+            .filter(n -> n instanceof ApprovalPrompt)
+            .map(n -> (ApprovalPrompt) n)
             .findFirst();
 
         if (promptOpt.isPresent()) {
-            ReplyNode.ApprovalPrompt prompt = promptOpt.get();
+            ApprovalPrompt prompt = promptOpt.get();
             List<String> toolNames;
-            if (prompt.toolName() != null && prompt.toolName().startsWith(ReplyNode.PARALLEL_SENTINEL_PIPE_PREFIX)) {
-                String toolNamesStr = prompt.toolName().substring(ReplyNode.PARALLEL_SENTINEL_PIPE_PREFIX.length());
+            if (prompt.toolName() != null && prompt.toolName().startsWith(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+                String toolNamesStr = prompt.toolName().substring(InteractionNode.PARALLEL_SENTINEL_PIPE_PREFIX.length());
                 toolNames = Arrays.asList(toolNamesStr.split(","));
             } else if (prompt.toolName() != null) {
                 toolNames = List.of(prompt.toolName());
