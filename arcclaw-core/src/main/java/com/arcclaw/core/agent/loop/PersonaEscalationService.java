@@ -110,36 +110,6 @@ public class PersonaEscalationService {
 
     private static final Logger log = Logger.getLogger(PersonaEscalationService.class);
 
-    private static final Set<String> UNKNOWN_API_PATTERNS = Set.of(
-            "does not exist", "cannot find symbol", "cannot be resolved",
-            "cannot be applied", "undefined reference", "no such method",
-            "no such class", "package does not exist", "import cannot be resolved",
-            "cannot resolve", "cannot find", "unknown", "not found",
-            "no documentation", "no such file", "class not found",
-            "module not found", "dependency not found"
-    );
-
-    private static final Set<String> ARCHITECTURE_PATTERNS = Set.of(
-            "architecture", "design pattern", "trade-off", "tradeoff",
-            "which approach", "which pattern", "best practice",
-            "how should i structure", "how to design", "how to architect",
-            "should i use", "should we use", "what is the best way"
-    );
-
-    private static final Set<String> RESEARCH_NEEDED_PATTERNS = Set.of(
-            "unknown error", "cannot determine", "unable to diagnose",
-            "insufficient information", "need more context",
-            "this appears to be a known issue", "check the documentation",
-            "refer to", "see the documentation", "look up"
-    );
-
-    private static final Set<String> REWRITE_NEEDED_PATTERNS = Set.of(
-            "fundamental flaw", "design flaw", "architecture issue",
-            "needs to be rewritten", "needs to be redesigned",
-            "structural problem", "cannot be fixed with a simple",
-            "requires a complete rewrite", "core issue"
-    );
-
     @Inject ReasoningEngine reasoningEngine;
     @Inject Instance<AgentLoop> agentLoop;
     @Inject ObjectMapper objectMapper;
@@ -189,51 +159,51 @@ public class PersonaEscalationService {
 
         // Brahma escalations
         if (AgentRoleEnum.CODER.toScopedName().equals(sourceRole)) {
-            if (matchesAny(errorLower, goalLower, UNKNOWN_API_PATTERNS)) {
+            if (matchesAny(errorLower, goalLower, EscalationPatterns.UNKNOWN_API_PATTERNS)) {
                 return AgentRoleEnum.RESEARCHER.toScopedName();
             }
-            if (matchesAny(errorLower, goalLower, ARCHITECTURE_PATTERNS)) {
+            if (matchesAny(errorLower, goalLower, EscalationPatterns.ARCHITECTURE_PATTERNS)) {
                 return AgentRoleEnum.ARCHITECT.toScopedName();
             }
         }
 
         // Shiva escalations
         if (AgentRoleEnum.DEBUGGER.toScopedName().equals(sourceRole)) {
-            if (matchesAny(errorLower, goalLower, RESEARCH_NEEDED_PATTERNS)) {
+            if (matchesAny(errorLower, goalLower, EscalationPatterns.RESEARCH_NEEDED_PATTERNS)) {
                 return AgentRoleEnum.RESEARCHER.toScopedName();
             }
-            if (matchesAny(errorLower, goalLower, REWRITE_NEEDED_PATTERNS)) {
+            if (matchesAny(errorLower, goalLower, EscalationPatterns.REWRITE_NEEDED_PATTERNS)) {
                 return AgentRoleEnum.CODER.toScopedName();
             }
             // Ganesha (son of Shiva) - complex logic analysis
-            if (containsAny(goalLower, "recursive", "complex logic", "algorithm", "obstacle")) {
+            if (EscalationPatterns.containsAny(goalLower, "recursive", "complex logic", "algorithm", "obstacle")) {
                 return AgentRoleEnum.OPTIMIZER.toScopedName();
             }
             // Kartikeya (son of Shiva) - security analysis
-            if (containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
+            if (EscalationPatterns.containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
                 return AgentRoleEnum.SENTINEL.toScopedName();
             }
         }
 
         // Brihaspati escalations
         if (AgentRoleEnum.ARCHITECT.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
+            if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
                 return AgentRoleEnum.CODER.toScopedName();
             }
-            if (containsAny(goalLower, "research", "find information", "look up", "documentation")) {
+            if (EscalationPatterns.containsAny(goalLower, "research", "find information", "look up", "documentation")) {
                 return AgentRoleEnum.RESEARCHER.toScopedName();
             }
         }
 
         // Saraswati escalations
         if (AgentRoleEnum.RESEARCHER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "implement", "write code", "execute", "run")) {
+            if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "execute", "run")) {
                 return AgentRoleEnum.CODER.toScopedName();
             }
         }
 
         // New persona escalations (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati)
-        String newPersonaTarget = determineNewPersonaEscalation(sourceRole, goalLower);
+        String newPersonaTarget = EscalationPatterns.determineNewPersonaEscalation(sourceRole, goalLower);
         if (newPersonaTarget != null) {
             return newPersonaTarget;
         }
@@ -396,103 +366,6 @@ public class PersonaEscalationService {
             }
         }
         return false;
-    }
-
-    private boolean containsAny(String text, String... keywords) {
-        if (text == null) return false;
-        for (String keyword : keywords) {
-            if (text.contains(keyword)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Determines escalation targets for new personas (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati).
-     * Extracted to keep determineEscalationTarget within checkstyle limits.
-     */
-    private String determineNewPersonaEscalation(String sourceRole, String goalLower) {
-        // Ganesha (Optimizer) escalations
-        if (AgentRoleEnum.OPTIMIZER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "find information", "look up", "documentation")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            if (containsAny(goalLower, "fix bug", "debug", "error", "exception")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            // Kartikeya (brother) - security issue found in logic
-            if (containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
-                return AgentRoleEnum.SENTINEL.toScopedName();
-            }
-        }
-
-        // Kartikeya (Sentinel) escalations
-        if (AgentRoleEnum.SENTINEL.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "remediate", "implement")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "vulnerability", "cve", "security advisory")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            // Ganesha (brother) - complex logic in security analysis
-            if (containsAny(goalLower, "algorithm", "recursive", "complex logic", "obstacle")) {
-                return AgentRoleEnum.OPTIMIZER.toScopedName();
-            }
-        }
-
-        // Lakshmi (Healer) escalations
-        if (AgentRoleEnum.HEALER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "implement", "code change")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "documentation", "best practice")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            // Vishnu (husband) - budget/cost coordination
-            if (containsAny(goalLower, "budget", "cost", "allocation", "governance")) {
-                return AgentRoleEnum.COORDINATOR.toScopedName();
-            }
-        }
-
-        // Durga (Protector) escalations
-        if (AgentRoleEnum.PROTECTOR.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "implement", "enforce")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "policy", "compliance", "regulation")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-        }
-
-        // Kali (Purifier) escalations
-        if (AgentRoleEnum.PURIFIER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "patch", "implement", "code change")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "documentation", "best practice")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-        }
-
-        // Parvati (Nurturer) escalations
-        if (AgentRoleEnum.NURTURER.toScopedName().equals(sourceRole)) {
-            if (containsAny(goalLower, "fix", "bug", "error", "broken")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (containsAny(goalLower, "research", "documentation", "information")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            // Shiva (husband) - technical issues requiring debugging
-            if (containsAny(goalLower, "debug", "stack trace", "exception", "crash")) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-        }
-
-        return null;
     }
 
     private String truncate(String text, int maxLen) {
