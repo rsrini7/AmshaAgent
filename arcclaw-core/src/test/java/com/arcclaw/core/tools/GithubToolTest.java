@@ -6,12 +6,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.security.AutonomyLevel;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class GithubToolTest {
 
-    private final GithubTool tool = new GithubTool();
+    @Mock AuditService auditService;
+    @InjectMocks GithubTool tool;
 
     @Test
     void testDeleteCommandBlocked() {

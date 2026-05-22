@@ -21,7 +21,9 @@ import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
+import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.governance.BudgetExceededException;
+import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.persistence.api.CheckpointCrudPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +42,8 @@ class DelegateToAgentToolTest {
     @Mock AgentLoop agentLoop;
     @Mock Instance<AgentLoop> agentLoopInstance;
     @Mock CheckpointCrudPort checkpointCrud;
+    @Mock AuditService auditService;
+    @Mock AgentOtelContext otelContext;
 
     @InjectMocks DelegateToAgentTool tool;
 
