@@ -19,6 +19,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
+import com.arcclaw.core.util.PathSanitizer;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
@@ -187,7 +188,8 @@ public class PodmanContainerExecutor {
         log.infof("[Sandbox] Executing: %s", String.join(" ", podmanCmd));
         var pb = new ProcessBuilder(podmanCmd);
 
-        File workspaceDir = Path.of(workspaceRootDir, sessionId).toFile();
+        // Use PathSanitizer to match ToolRegistry.invokeSandboxed() which sanitizes colons in session IDs.
+        File workspaceDir = Path.of(workspaceRootDir, PathSanitizer.sanitizeForFilesystem(sessionId)).toFile();
         if (!workspaceDir.exists()) {
             boolean created = workspaceDir.mkdirs();
             if (!created) {

@@ -230,7 +230,14 @@ public class ToolRegistry {
     }
 
     private ToolResponse handleExecutionException(ToolExecutionContext ctx, String toolName, Exception e) {
-        String raw = e.getMessage() != null ? e.getMessage() : ClassUtils.getCleanName(e);
+        // Unwrap Quarkus ArC InvocationException to get the real root cause.
+        // ArC wraps all exceptions from CDI proxy method dispatch in InvocationException.
+        Exception unwrapped = e;
+        while (unwrapped.getClass().getSimpleName().equals("InvocationException")
+                && unwrapped.getCause() instanceof Exception cause) {
+            unwrapped = cause;
+        }
+        String raw = unwrapped.getMessage() != null ? unwrapped.getMessage() : ClassUtils.getCleanName(unwrapped);
         String traceId = Span.current().getSpanContext().getTraceId();
         
         String friendly;
@@ -241,7 +248,7 @@ public class ToolRegistry {
         }
 
         log.errorf("Tool '%s' execution failed: %s", toolName, raw);
-        ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, ClassUtils.getCleanName(e));
+        ToolResponse response = ToolResponse.failure(1, friendly, "TOOL_EXECUTION_FAILED", traceId, ClassUtils.getCleanName(unwrapped));
         governanceGuard.recordToolFailureAudit(ctx, toolName, response);
         return response;
     }

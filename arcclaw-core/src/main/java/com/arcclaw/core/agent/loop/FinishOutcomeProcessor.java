@@ -281,6 +281,13 @@ public class FinishOutcomeProcessor {
             return new FinishActionHandler.FinishOutcome.ExecuteLeakedTool(call.toolName(), call.arguments(), cleanStep);
         }
 
+        // JSON detected but no tool-call keys (e.g. {"response":"..."}) — treat as valid answer, not a leak.
+        if (isLeak && !containsToolCallKeys(candidateAnswer)) {
+            log.infof("FINISH-HANDLER session %s: JSON without tool-call keys - treating as valid answer", sessionId);
+            var guarded = qualityGuard.guard(candidateAnswer, history).answer();
+            return new FinishActionHandler.FinishOutcome.Completed(AgentResult.finished(guarded, List.copyOf(history)), guarded);
+        }
+
         if ((llmSchemaErrorCount >= 1 || isBrokenFragment)
                 && !cleanThought.isBlank()
                 && !isBrokenFragment
@@ -344,6 +351,14 @@ public class FinishOutcomeProcessor {
         }
 
         return salvage(candidateAnswer, history, sessionId);
+    }
+
+    /** Returns true if the answer contains JSON keys characteristic of tool calls vs benign JSON. */
+    private boolean containsToolCallKeys(String answer) {
+        if (answer == null) return false;
+        return answer.contains("\"name\"") || answer.contains("\"tool_name\"") || answer.contains("\"tool_calls\"")
+                || answer.contains("\"function\"") || answer.contains("\"action\"") || answer.contains("\"parameters\"")
+                || answer.contains("\"arguments\"") || answer.contains("TOOLCALLS");
     }
 
     private FinishActionHandler.FinishOutcome salvage(String candidateAnswer,
