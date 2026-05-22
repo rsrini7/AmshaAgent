@@ -1,30 +1,3 @@
-## P0 — Active (already in progress)
-
-These are the changes you are mid-flight on right now.
-
-- **`Objects.requireNonNull()`** in `AbstractInboundMessagePipeline` constructor to make null-construction fail fast
-- **`CommandParserRegistry` lazy CDI resolution** — materialize `Instance<ChannelCommandParser>` on first `parse()`, not in constructor
-- **Renderer fallback text** — remove class name leak, use generic user message, escape Telegram fallback with `esc()`
-
-***
-
-## P1 — High Impact, Bounded Scope
-
-Do these before adding any new feature.
-
-### 1. `AgentStateMachineRunner` → State Pattern (GoF)
-Current `while` loop with boolean flags (`isForceFinishRetry`, `truncationRetryCount`) is unmaintainable and untestable. Also intersects with Qwen's DAG recommendation — the GoF State pattern is the correct first step before going full DAG.
-
-**States to introduce:**
-- `ThinkingState`
-- `ToolExecutionState`
-- `AwaitingApprovalState`
-- `TerminalState`
-
-Each returns the next state explicitly. Cyclomatic complexity drops dramatically. State transitions become independently unit-testable.
-
-***
-
 ### 2. Persistence — Drop JPA for SQLite Paths (jOOQ or JDBI)
 You are already writing native SQL. `em.clear()`, `SqliteRetryTemplate`, and `em.createNativeQuery()` everywhere prove the leaky abstraction. Qwen confirms: JPA is designed for MVCC client-server RDBMS, not a single-writer file-based store.
 
