@@ -10,7 +10,6 @@ import jakarta.inject.Inject;
 import com.arcclaw.channel.api.ApprovalPrompt;
 import com.arcclaw.channel.api.ChannelPlugin;
 import com.arcclaw.channel.api.ContentNode;
-import com.arcclaw.channel.api.ReplyNode;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentLoop;

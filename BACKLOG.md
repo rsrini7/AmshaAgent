@@ -28,6 +28,8 @@ Each returns the next state explicitly. Cyclomatic complexity drops dramatically
 ### 2. Persistence — Drop JPA for SQLite Paths (jOOQ or JDBI)
 You are already writing native SQL. `em.clear()`, `SqliteRetryTemplate`, and `em.createNativeQuery()` everywhere prove the leaky abstraction. Qwen confirms: JPA is designed for MVCC client-server RDBMS, not a single-writer file-based store.
 
+Refer [JDBI-refactor.md](#JDBI-refactor.md)
+
 **Direction:**
 - Keep `CheckpointStorePort` hexagonal boundary untouched
 - Replace the SQLite adapter implementation with jOOQ or JDBI

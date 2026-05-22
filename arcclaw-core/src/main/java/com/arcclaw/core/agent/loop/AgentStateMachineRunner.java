@@ -1,8 +1,6 @@
 package com.arcclaw.core.agent.loop;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -15,12 +13,9 @@ import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
-import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.observability.AgentOtelContext;
-import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.skill.SkillRegistry;
-import com.arcclaw.core.structured.StructuredOutputException;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
@@ -158,13 +153,6 @@ public class AgentStateMachineRunner {
                            ReasoningEngine engine,
                            List<ReasoningStep> resumedHistory) {
         context.setCheckpointRestoreOffset(resumedHistory.size());
-        List<ReasoningStep> history = new ArrayList<>(resumedHistory);
-
-        int iteration = context.startingIteration();
-        int llmSchemaErrorCount = 0;
-        int consecutiveFailures = 0;
-        int rateLimitRetryCount = 0;
-        String transientError = null;
 
         String goal = context.goal() != null ? context.goal() : "unknown";
         String goalHash = AgentErrorMessageUtil.hashGoal(goal);
@@ -177,60 +165,43 @@ public class AgentStateMachineRunner {
         loopExitPublisher.publishStart(context);
         writer.saveGoal(context.sessionId(), goal);
 
-        AgentResult finalResult = null;
+        RunnerServices services = new RunnerServices(
+                engineStepHandler,
+                stepDecisionRouter,
+                skillRegistry,
+                correctionStrategy,
+                browserPreflightHandler,
+                intentDetector,
+                maxRateLimitRetries
+        );
+        StateContext stateContext = new StateContext(context, engine, resumedHistory);
 
+        return runStateMachineLoop(services, stateContext, context, goalHash);
+    }
+
+    private AgentResult runStateMachineLoop(RunnerServices services,
+                                            StateContext stateContext,
+                                            AgentExecutionContext context,
+                                            String goalHash) {
         try {
-            Optional<AgentResult> preflightResult = browserPreflightHandler.run(context, history);
-            if (preflightResult.isPresent()) {
-                finalResult = preflightResult.get();
-                return finalResult;
-            }
-
-            while (iteration < context.maxIterations() || (iteration == context.maxIterations() && context.isForceFinishRetry())) {
-                // Halt check — session was terminated by /halt command
-                if (WorkspaceManager.isSessionHalted(context.sessionId())) {
-                    log.warnf("Session %s halted — stopping agent loop at iteration %d", context.sessionId(), iteration);
-                    return AgentResult.failed("Session halted by user", AgentResult.FailureCategory.USER_ABORT, List.copyOf(history));
-                }
-                // Global iteration budget check across all nested state machines
-                if (!WorkspaceContext.incrementAndCheckGlobalIterations()) {
-                    log.warnf("Global iteration budget (%d) exceeded for session %s — terminating",
-                            WorkspaceContext.DEFAULT_GLOBAL_MAX_ITERATIONS, context.sessionId());
-                    return AgentResult.loopExceeded(iteration, List.copyOf(history));
-                }
-                iteration++;
-                IterationResult iterRes = processSingleIteration(context, engine, history, iteration, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount, transientError);
-
-                if (iterRes.isTerminal()) {
-                    finalResult = iterRes.result();
-                    return finalResult;
-                }
-
-                if (iterRes.rateLimitRetryCount() > rateLimitRetryCount) {
-                    iteration--;
-                }
-
-                transientError = iterRes.transientError();
-                llmSchemaErrorCount = iterRes.llmSchemaErrorCount();
-                consecutiveFailures = iterRes.consecutiveFailures();
-                rateLimitRetryCount = iterRes.rateLimitRetryCount();
-            }
-
-            finalResult = AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history));
-            return finalResult;
+            executeStateMachine(services, stateContext, context);
+            return stateContext.finalResult();
 
         } catch (BudgetExceededException e) {
-            finalResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(history));
-            return finalResult;
+            AgentResult failedResult = AgentResult.failed(e.getMessage(), AgentResult.FailureCategory.BUDGET_EXCEEDED, List.copyOf(stateContext.history()));
+            stateContext.setFinalResult(failedResult);
+            return failedResult;
         } catch (Exception e) {
             log.errorf("StateMachine terminal failure %s: %s\n%s",
                     LogUtil.ctx(context.sessionId(), context.agentRole()),
                     LogUtil.rootMessage(e), LogUtil.trimmedStack(e));
-            finalResult = AgentResult.failed(LogUtil.rootMessage(e), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
-            return finalResult;
+            AgentResult failedResult = AgentResult.failed(LogUtil.rootMessage(e), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(stateContext.history()));
+            stateContext.setFinalResult(failedResult);
+            return failedResult;
         } finally {
-            AgentResult res = finalResult;
-            meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole()).record(iteration - context.startingIteration());
+            AgentResult res = stateContext.finalResult();
+            meterRegistry.summary("arcclaw.agent.iterations.distribution", "role", context.agentRole())
+                    .record(stateContext.iteration() - context.startingIteration());
             if (res != null) {
                 loopExitPublisher.publish(context, res);
                 observers.forEach(o -> o.onLoopComplete(context.sessionId(), context.userId(), context.agentRole(), goalHash, res));
@@ -238,74 +209,48 @@ public class AgentStateMachineRunner {
         }
     }
 
-    private record IterationResult(
-            AgentResult result,
-            String transientError,
-            int llmSchemaErrorCount,
-            int consecutiveFailures,
-            int rateLimitRetryCount,
-            boolean isTerminal
-    ) {
-        public static IterationResult terminal(AgentResult result) {
-            return new IterationResult(result, null, 0, 0, 0, true);
-        }
-        public static IterationResult proceed(String transientError, int llmSchemaErrorCount, int consecutiveFailures, int rateLimitRetryCount) {
-            return new IterationResult(null, transientError, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount, false);
-        }
-    }
+    private void executeStateMachine(RunnerServices services, StateContext stateContext, AgentExecutionContext context) {
+        Span iterSpan = null;
+        Scope iterScope = null;
+        try {
+            RunnerState state = services.preflightState();
+            while (!state.isTerminal()) {
+                if (state.isInsideIterationSpan() && iterSpan == null) {
+                    iterSpan = agentOtelContext.startIterationSpan(
+                            context.sessionId(),
+                            stateContext.iteration(),
+                            context.agentRole()
+                    );
+                    iterScope = iterSpan.makeCurrent();
+                }
 
-    private IterationResult processSingleIteration(
-            AgentExecutionContext context, ReasoningEngine engine, List<ReasoningStep> history,
-            int iteration, int llmSchemaErrorCount, int consecutiveFailures, int rateLimitRetryCount, String transientError) {
-        
-        Span iterSpan = agentOtelContext.startIterationSpan(context.sessionId(), iteration, context.agentRole());
-        try (Scope _ = iterSpan.makeCurrent()) {
-            if (history.isEmpty() && intentDetector.isWriteIntent(context.goal())) {
-                transientError = "The user wants to store data. Call ingest_document immediately.";
-            }
-
-            StepDecision engineDecision;
-            try {
-                engineDecision = engineStepHandler.processEngineStep(context, engine, history, transientError, llmSchemaErrorCount, iteration);
-
-                if (engineDecision.isRateLimitHit()) {
-                    if (rateLimitRetryCount + 1 > maxRateLimitRetries) {
-                        return IterationResult.terminal(AgentResult.failed("Repeated rate limits.", AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+                RunnerState nextState;
+                try {
+                    nextState = state.execute(stateContext);
+                } catch (Exception e) {
+                    if (iterSpan != null) {
+                        iterSpan.recordException(e);
                     }
-                    return IterationResult.proceed(transientError, llmSchemaErrorCount, consecutiveFailures, rateLimitRetryCount + 1);
+                    throw e;
                 }
-            } catch (StructuredOutputException soe) {
-                if (!correctionStrategy.withinBudget(llmSchemaErrorCount)) {
-                    return IterationResult.terminal(AgentResult.loopExceeded(context.maxIterations(), List.copyOf(history)));
+
+                if (iterSpan != null && !nextState.isInsideIterationSpan()) {
+                    iterScope.close();
+                    iterSpan.end();
+                    iterSpan = null;
+                    iterScope = null;
                 }
-                return IterationResult.proceed(correctionStrategy.buildCorrectionHint(llmSchemaErrorCount + 1, soe.getMessage()), llmSchemaErrorCount + 1, consecutiveFailures, rateLimitRetryCount);
-            }
 
-            if (engineDecision.type() == DecisionType.TERMINAL) {
-                return IterationResult.terminal(engineDecision.result());
+                state = nextState;
             }
-            if (engineDecision.type() == DecisionType.CONTINUE) {
-                return IterationResult.proceed(engineDecision.transientError(), engineDecision.llmSchemaErrorCount(), consecutiveFailures, rateLimitRetryCount);
-            }
-
-            ReasoningStep step = engineDecision.step();
-            var outcome = stepDecisionRouter.route(context, history, step, llmSchemaErrorCount, consecutiveFailures, skillRegistry.currentSnapshot());
-
-            if (outcome.isTerminal()) {
-                return IterationResult.terminal(outcome.result());
-            }
-            if (outcome.retryEngine()) {
-                return IterationResult.proceed(outcome.transientError(), outcome.llmSchemaErrorCount(), consecutiveFailures, rateLimitRetryCount);
-            }
-
-            return IterationResult.proceed(null, llmSchemaErrorCount, outcome.consecutiveFailures(), rateLimitRetryCount);
-        } catch (Exception e) {
-            iterSpan.recordException(e);
-            throw e;
         } finally {
-            iterSpan.end();
+            if (iterScope != null) {
+                iterScope.close();
+            }
+            if (iterSpan != null) {
+                iterSpan.end();
+            }
         }
     }
-
-
 }
+

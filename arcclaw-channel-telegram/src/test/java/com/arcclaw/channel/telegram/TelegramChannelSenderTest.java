@@ -13,7 +13,6 @@ import java.util.List;
 import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ChannelUser;
 import com.arcclaw.channel.api.ContentNode;
-import com.arcclaw.channel.api.ReplyNode;
 import org.apache.camel.ProducerTemplate;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
