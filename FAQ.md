@@ -665,8 +665,8 @@ If your reflex needs to sanitize input before the LLM sees it (like `PiiScanRefl
 Yes. The `arcclaw-channel-api` module defines a **6-interface SPI contract**. To add a channel, implement all six interfaces and wire them in a `ChannelPlugin` composite bean:
 
 1. **`ChannelPlugin`** — composite registration bean wiring all 5 components together.
-2. **`ChannelSender`** — sends `List<ReplyNode>` to the channel (with chunking, edit support, etc.).
-3. **`ReplyRenderer`** — converts `ReplyNode` AST to channel-native format (e.g., MarkdownV2 for Telegram).
+2. **`ChannelSender`** — sends `List<ReplyNode>` to the channel (handling the split into `ContentNode` and `InteractionNode` with chunking, edit support, etc.).
+3. **`ReplyRenderer`** — converts the `ReplyNode` AST (split into `ContentNode` and `InteractionNode`) to channel-native format (e.g., MarkdownV2 for Telegram).
 4. **`ChannelAllowlist`** — determines if a `ChannelUser` is authorized (supports open-access and silent-block modes).
 5. **`ChannelJobNotifier`** — sends cron completion and approval timeout notifications.
 6. **`ChannelDaemon`** — daemon lifecycle: `isConfigured()`, `start()` (e.g., starts Camel route).
@@ -685,7 +685,7 @@ Sessions are identified using `UUID.nameUUIDFromBytes(chatId + ":" + userId)`. T
 
 ### Q: What does `TelegramMarkdownV2Renderer` do?
 
-Telegram's MarkdownV2 format requires escaping every special character (`_`, `*`, `[`, `]`, `(`, `)`, `~`, `` ` ``, `>`, `#`, `+`, `-`, `=`, `|`, `{`, `}`, `.`, `!`) that appears outside of formatting syntax. Raw LLM output routinely contains these characters. `TelegramMarkdownV2Renderer` traverses LangChain4J's `ReplyNode` tree and correctly escapes all plain-text content while preserving bold, italic, code, and link formatting. Without this renderer, Telegram rejects messages with a `Bad Request: can't parse entities` error.
+Telegram's MarkdownV2 format requires escaping every special character (`_`, `*`, `[`, `]`, `(`, `)`, `~`, `` ` ``, `>`, `#`, `+`, `-`, `=`, `|`, `{`, `}`, `.`, `!`) that appears outside of formatting syntax. Raw LLM output routinely contains these characters. `TelegramMarkdownV2Renderer` traverses ArcClaw's custom `ReplyNode` tree and correctly escapes all plain-text content while preserving bold, italic, code, and link formatting. Without this renderer, Telegram rejects messages with a `Bad Request: can't parse entities` error.
 
 ---
 

@@ -983,7 +983,7 @@ External Input
   └──────┬──────────────────────────────────────┘
          │
          ▼
-  ReplyRenderer → ChannelPlugin.sender.send(ReplyNode[])
+  ReplyRenderer → ChannelPlugin.sender.send(List<ReplyNode>)
   (TelegramMarkdownV2Renderer / WebReplyRenderer / CLI stdout)
          │
          ▼

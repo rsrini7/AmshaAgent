@@ -486,15 +486,15 @@ arcclaw-parent/               ← Root POM: Java 25, Quarkus 3.27.2, BouncyCastl
 │
 arcclaw-channel-api/          ← Channel SPI contracts (zero implementation)
 │   ├── ChannelPlugin           6-method composite registration bean
-│   ├── ChannelSender           Sends List<ReplyNode> to the channel
-│   ├── ReplyRenderer           Converts ReplyNode AST to channel-native format
+│   ├── ChannelSender           Sends List<ReplyNode> to the channel (ContentNode/InteractionNode)
+│   ├── ReplyRenderer           Renders ReplyNode (ContentNode and InteractionNode) to channel-native format
 │   ├── ChannelAllowlist        Determines if a ChannelUser is authorized
 │   ├── ChannelJobNotifier      Sends cron and approval timeout notifications
 │   ├── ChannelDaemon           Daemon lifecycle: isConfigured(), start()
 │   ├── ChannelType             Record - id() is the canonical key (e.g. "TELEGRAM")
 │   ├── ChannelUser, ChannelMessage, ChannelCommand, ChannelServices
 │   ├── IntentDetector          Interface for channel-level intent detection
-│   ├── ReplyNode               Sealed interface for reply AST
+│   ├── ReplyNode               Sealed interface for reply AST (split into ContentNode and InteractionNode)
 │   ├── MarkdownEscapeService   Channel-specific markdown escaping
 │   ├── ApprovalGateway, ApprovalDecision, ApprovalResult  HITL approval contracts
 │   └── structured/             AgentContribution, SynthesisFunction, SynthesisResult,
@@ -534,15 +534,16 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           TruncationTransformer, CheckpointResumeHandler,
 │   │                           ApprovalCheckpointManager, ChatMemoryWriter, EngineStepHandler
 │   ├── agent/persona/          Agent, AgentPersonaRegistry, AgentRole, AgentRoleRegistry,
-│   │                           BrahmaAgent, BrihaspatiAgent, DattatreyaAgent, SaraswatiAgent,
-│   │                           ShivaAgent, VishnuAgent
+│   │                           AgentProducer, DefaultAgent
 │   ├── agent/reasoning/        LangChainReasoningEngine, ReasoningEngine SPI,
 │   │                           AgentChatModelProvider SPI, ChatHistoryAssembler,
 │   │                           PromptTemplateEngine (Qute), SystemPromptBuilder,
 │   │                           ParallelToolCall, ReasoningStep, ReasoningStepParser,
-│   │                           GroqProviderFactory, OpenAiProviderFactory,
-│   │                           OllamaProviderFactory, OpenRouterProviderFactory,
-│   │                           OmlxProviderFactory
+│   │                           CerebrasProviderFactory, ClaudeCodeProviderFactory,
+│   │                           GeminiProviderFactory, GroqProviderFactory,
+│   │                           LlamaCppProviderFactory, NvidiaProviderFactory,
+│   │                           OllamaProviderFactory, OmlxProviderFactory,
+│   │                           OpenAiProviderFactory, OpenRouterProviderFactory
 │   ├── agent/role/             AgentRoleEnum, RoleDefinition, RoleRegistry, ToolCapability
 │   ├── api/                    AgentResource, AgentSessionService, AuditResource,
 │   │                           CronResource, SystemInfoResource, ToolRegistryResource,
