@@ -186,11 +186,19 @@ public class LeakedToolCallParser {
 
     private Map<String, Object> parseNakedArgs(String argsBlock) {
         Map<String, Object> args = new HashMap<>();
+        // Pattern 1: key="value" or key='value' (traditional naked format)
         Matcher m = Pattern.compile("([a-zA-Z_][a-zA-Z0-9_]*)\\s*=\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|'((?:[^'\\\\]|\\\\.)*)')").matcher(argsBlock);
         while (m.find()) {
             String key = m.group(1);
             String val = m.group(2) != null ? m.group(2) : m.group(3);
             args.put(key, val);
+        }
+        // Pattern 2: "key": "value" (JSON-style from Groq/other models)
+        if (args.isEmpty()) {
+            Matcher jm = Pattern.compile("\"([a-zA-Z_][a-zA-Z0-9_]*)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(argsBlock);
+            while (jm.find()) {
+                args.put(jm.group(1), jm.group(2));
+            }
         }
         return args;
     }
