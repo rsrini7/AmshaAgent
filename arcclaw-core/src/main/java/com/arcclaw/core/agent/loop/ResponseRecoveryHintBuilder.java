@@ -50,7 +50,7 @@ public class ResponseRecoveryHintBuilder {
             2. Pass exactly TWO flat string parameters only:
             {"agent": "<name>", "goal": "<self-contained task>"}
             3. Do NOT wrap in an array []. Do NOT nest under "parameters" or any other key.
-            4. Valid agent names (one at a time): brahma, xiva, saraswati, brihaspati, dattatreya. 
+            4. Valid agent names (one at a time): brahma, shiva, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati, coordinator. 
             Retry now with a single flat call - one agent, one goal string.""";
     }
 

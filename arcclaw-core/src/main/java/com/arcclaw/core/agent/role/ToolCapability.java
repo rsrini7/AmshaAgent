@@ -70,7 +70,7 @@ public enum ToolCapability {
      */
     DELEGATE_TO_AGENT("garuda",
         "Garuda - The divine vahana (vehicle) of Vishnu. Use Garuda to dispatch tasks to domain expert sub-agents. " +
-        "REQUIRED: 'agent' (one of: shiva, brahma, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati), 'goal' (string task description)."),
+        "REQUIRED: 'agent' (one of: shiva, brahma, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati, coordinator), 'goal' (string task description)."),
 
     /**
      * Ability to ingest a document into the RAG knowledge base.

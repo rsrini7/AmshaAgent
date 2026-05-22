@@ -37,7 +37,9 @@ class AgentRoleTest {
         "lakshmi,  healer",
         "durga,    protector",
         "kali,     purifier",
-        "parvati,  nurturer"
+        "parvati,  nurturer",
+        "brihaspati,architect",
+        "dattatreya,synthesizer"
     })
     void testFromStringDeityAliases(String alias, String expectedName) {
         AgentRoleEnum expected = AgentRoleEnum.fromString(expectedName);
