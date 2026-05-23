@@ -218,13 +218,14 @@ FOR EACH ROW EXECUTE FUNCTION prevent_audit_delete();
 -- pgvector extension for vector similarity search
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Embedding storage table for RAG vector search (dimension 2000 is the max
--- supported by pgvector's HNSW index; covers nomic-embed-text=768, jina=768,
--- mxbai=1024, text-embedding-3-small=1536. For text-embedding-3-large (3072),
--- drop the HNSW index and use exact search.)
+-- Embedding storage table for RAG vector search.
+-- Dimension 768 matches nomic-embed-text and jina-embeddings-v5-text-nano.
+-- pgvector requires EXACT match between model output and column dimension.
+-- If you switch models, recreate this table with the new dimension.
+-- HNSW index max is 2000 dimensions; for larger models (3072), drop the index.
 CREATE TABLE IF NOT EXISTS rag_chunk_embedding (
     chunk_id    TEXT PRIMARY KEY REFERENCES rag_chunk(chunk_id) ON DELETE CASCADE,
-    embedding   vector(2000)
+    embedding   vector(768)
 );
 
 -- HNSW index for fast approximate nearest neighbor search
