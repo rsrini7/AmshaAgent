@@ -22,7 +22,7 @@ public interface CompactionJdbiDao {
     @SqlUpdate("DELETE FROM compaction_summary WHERE session_id = :sessionId")
     void deleteBySessionId(@Bind("sessionId") String sessionId);
 
-    @SqlUpdate("DELETE FROM fts.compaction_summary_fts WHERE sessionId = :sessionId")
+    @SqlUpdate("DELETE FROM fts.compaction_summary_fts WHERE rowid IN (SELECT rowid FROM fts.compaction_summary_fts WHERE sessionId = :sessionId)")
     void deleteFtsBySessionId(@Bind("sessionId") String sessionId);
 
     @SqlUpdate("INSERT INTO fts.compaction_summary_fts(sessionId, summary) VALUES (:sessionId, :summary)")

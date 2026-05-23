@@ -11,9 +11,11 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.util.TemporalUtils;
+import com.arcclaw.common.util.LogUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agroal.api.AgroalDataSource;
+import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.argument.AbstractArgumentFactory;
 import org.jdbi.v3.core.argument.Argument;
@@ -88,6 +90,7 @@ public class JdbiProducer {
 
     static class JsonColumnMapper implements ColumnMapper<Map<String, Object>> {
         private final ObjectMapper mapper;
+        private static final Logger log = Logger.getLogger(JsonColumnMapper.class);
 
         JsonColumnMapper(ObjectMapper mapper) {
             this.mapper = mapper;
@@ -100,7 +103,8 @@ public class JdbiProducer {
             try {
                 return mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
             } catch (Exception e) {
-                return Map.of();
+                log.warnf("Failed to parse JSON column: %s", LogUtil.rootMessage(e));
+                throw new RuntimeException("Failed to parse JSON column", e);
             }
         }
     }

@@ -13,28 +13,30 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 @RegisterConstructorMapper(AgentCronDto.class)
 public interface CronJdbiDao {
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE status = :status AND nextFireTime <= :now")
+    String CRON_COLUMNS = "id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt";
+
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE status = :status AND nextFireTime <= :now")
     List<AgentCronDto> findDueCrons(@Bind("status") String status, @Bind("now") String now);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE userId = :userId ORDER BY nextFireTime ASC")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE userId = :userId ORDER BY nextFireTime ASC")
     List<AgentCronDto> findByUserId(@Bind("userId") String userId);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE userId = :userId AND status = :status ORDER BY nextFireTime ASC")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE userId = :userId AND status = :status ORDER BY nextFireTime ASC")
     List<AgentCronDto> findByUserIdAndStatus(@Bind("userId") String userId, @Bind("status") String status);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE status = :status ORDER BY nextFireTime ASC")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE status = :status ORDER BY nextFireTime ASC")
     List<AgentCronDto> findAllByStatus(@Bind("status") String status);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
     List<AgentCronDto> findAllPaginated(@Bind("offset") int offset, @Bind("limit") int limit);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE status = :status ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE status = :status ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
     List<AgentCronDto> findAllByStatusPaginated(@Bind("status") String status, @Bind("offset") int offset, @Bind("limit") int limit);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE userId = :userId ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE userId = :userId ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
     List<AgentCronDto> findByUserIdPaginated(@Bind("userId") String userId, @Bind("offset") int offset, @Bind("limit") int limit);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE userId = :userId AND status = :status ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE userId = :userId AND status = :status ORDER BY nextFireTime ASC LIMIT :limit OFFSET :offset")
     List<AgentCronDto> findByUserIdAndStatusPaginated(@Bind("userId") String userId, @Bind("status") String status, @Bind("offset") int offset, @Bind("limit") int limit);
 
     @SqlQuery("SELECT COUNT(*) FROM agent_cron")
@@ -49,7 +51,7 @@ public interface CronJdbiDao {
     @SqlQuery("SELECT COUNT(*) FROM agent_cron WHERE userId = :userId AND status = :status")
     long countByUserIdAndStatus(@Bind("userId") String userId, @Bind("status") String status);
 
-    @SqlQuery("SELECT id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce AS \"runOnce\", goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt FROM agent_cron WHERE id = :id")
+    @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE id = :id")
     Optional<AgentCronDto> findById(@Bind("id") String id);
 
     @SqlUpdate("UPDATE agent_cron SET status = :status WHERE id = :id AND status = :expectedStatus")
