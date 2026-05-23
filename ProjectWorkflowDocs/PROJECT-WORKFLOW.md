@@ -17,7 +17,7 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 | `arcclaw-persistence-api` | Hexagonal architecture port interfaces (CheckpointStorePort, ChatMemoryStorePort, CronStorePort, etc.) |
 | `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters |
 | `arcclaw-persistence-sqlite` | SQLite adapter (WAL + FTS5 + vec0) implementing all persistence ports |
-| `arcclaw-persistence-postgres` | PostgreSQL adapter (partial: checkpoint, cron, audit only) |
+| `arcclaw-persistence-postgres` | PostgreSQL adapter (checkpoint, cron, cron_run, audit, chat_memory, compaction, rag_chunk, secrets, skills, advisory_lock) |
 | `arcclaw-persistence-fs` | Filesystem-based persistence adapter (alternative to SQLite) |
 | `arcclaw-rag` | Two-tier vector (vec0) + FTS5 RAG memory module |
 | `arcclaw-mcp` | Model Context Protocol server bridge + dynamic client tool loading |
@@ -39,14 +39,14 @@ ArcClaw is a **multi-modal, multi-channel, enterprise-grade Java 25 / Quarkus AI
 1. **Bootstrap** - `AppBootstrap.bootstrap(args)` delegates to `BootstrapOrchestrator` which: resolves binary dir, drains input buffer, extracts .env, handles LD_PRELOAD re-exec, loads .env, normalizes Playwright path, installs Playwright CLI, ensures fallback LLM defaults, validates security keys, validates LLM/embedding config, validates sandbox tools, validates mandatory config, runs interactive setup wizard, prompts Playwright setup, provisions data directory, provisions native libs (including Vec0).
 2. **Env-var validation** - `CliUtils.validateRequiredEnvVars()` checks all required environment variables and hard-exits with a clear setup guide if any are absent. Quarkus never starts with a missing or dirty config.
 3. **Args check** - If `args.length == 0`, prints usage guide and exits.
-4. **Quarkus boot** - `Quarkus.run(ArcClawCli.class, args)` starts the CDI container (Quarkus Arc), Hibernate ORM, Agroal connection pool, and all Quarkus extensions.
+4. **Quarkus boot** - `Quarkus.run(ArcClawCli.class, args)` starts the CDI container (Quarkus Arc), Agroal connection pool, and all Quarkus extensions.
 
 ### 1.2 CDI Startup Observers (firing in priority order)
 
 | Priority | Observer | Action |
 |---|---|---|
 | 10 | `Vec0NativeLibraryInstaller` | Re-fires observer-path native lib install (belt-and-suspenders) |
-| 90 | `SessionSchemaInitializer` | Ensures `session_registry` table exists (managed by Hibernate ORM + Flyway) |
+| 90 | `SessionSchemaInitializer` | Ensures `session_registry` table exists (managed by Flyway) |
 | 100 | `RagSchemaInitializer` | Warms the Agroal pool; triggers `FtsConnectionInterceptor.onConnectionAcquire()` which loads `vec0` extension and ATTACHes the FTS database; creates `fts.vec_global` virtual table |
 | Unordered | `SkillLoader.onStart()` | Loads skills from classpath (`ClasspathSkillProvider`, priority 100) and SQLite DB (`DatabaseSkillProvider`, priority 10); parses YAML frontmatter; compiles trigger `Pattern[]`; registers dynamic roles in `RoleRegistry`; snapshots `CompiledSkillEntry[]` into `SkillRegistry` |
 | Unordered | `StartupSecurityValidator` | **Hard gate in prod:** throws `DeploymentException` if vault pepper equals dev default, HMAC audit key is absent, or the Telegram allowlist contains only usernames instead of numeric IDs |
@@ -191,6 +191,7 @@ Any handler can return `HandleResult.STOP` to short-circuit the chain (e.g., `Al
 | `ResetReflex` | 500 | `/reset` | Wipes session state via `WorkspaceManager.resetSessionState()` |
 | `McpReflex` | 500 | `/mcp` | Shows MCP server status and connected tools |
 | `SkillReflex` | 500 | `/skills` | Lists available skill personas |
+| `ListReflexesReflex` | 500 | `/reflex`, `/reflexes`, `/commands`, `/help` | Lists all registered reflexes with their priority and trigger pattern |
 
 ---
 
@@ -213,7 +214,7 @@ This is the outer lifecycle shell - it sets up MDC, OTel, checkpoints, and deleg
 | `IN_PROGRESS` | Deserialize `ReasoningStep[]` from `stateJson`; resume with existing history |
 | `AWAITING_APPROVAL` + resume signal | Deserialize steps; route to `CheckpointResumeHandler.handle()` |
 | `AWAITING_APPROVAL` + new message | **Archive** stale checkpoint; notify user via channel; start fresh (null history) |
-| Terminal (`COMPLETED` / `FAILED` / `ARCHIVED` / `COMPROMISED`) | Archive row; start fresh |
+| Terminal (`COMPLETED` / `FAILED` / `LOOP_EXCEEDED` / `DENIED` / `ORPHANED` / `ARCHIVED` / `COMPROMISED`) | Archive row; start fresh |
 
 ### 6.3 CheckpointResumeHandler
 
@@ -730,7 +731,7 @@ Source persona → tool call → FAIL / knowledge gap
 | `omlx` | `OmlxLlmProviderFactory` | OMLX inference API |
 | `infinite-loop` | `InfiniteLoopAgentChatModelProvider` | Multi-slot provider with quality tracking and cooldown |
 
-The **compaction model** is produced separately by `CompactionModelProducer` (in `arcclaw-app`) - always a lighter/cheaper model regardless of the main reasoning provider, configurable via `arcclaw.memory.compaction.*` properties.
+The **compaction model** is produced separately by `CompactionModelProducer` (in `arcclaw-core`) - always a lighter/cheaper model regardless of the main reasoning provider, configurable via `arcclaw.memory.compaction.*` properties.
 
 `RoutingChatModelProvider` can route requests across providers based on intent or load. `LlmValidationService` implements `LlmValidationGateway` so the onboarding wizard can fire a test call to validate credentials before persisting them.
 
@@ -900,7 +901,7 @@ A 6-step REST wizard at `/onboarding`:
 
 - All checkpoint writes: `@Transactional(REQUIRES_NEW)` called from `NOT_SUPPORTED` outer frames to prevent `REQUIRED→REQUIRES_NEW` nesting (§5.12 compliant).
 - `SqliteRetryTemplate` wraps critical writes with exponential backoff + jitter on `SQLITE_BUSY`.
-- `ArcClawSQLiteDialect` extends the Hibernate community SQLite dialect with an ORM 7 DDL identity column fix.
+- `ArcClawSQLiteDialect` extends the community SQLite dialect with a DDL identity column fix.
 - `SqliteWalConfigurer` enables WAL mode for concurrent read/write access.
 - Agroal `background-validation=true` keeps the connection pool healthy.
 

@@ -236,8 +236,6 @@ smallrye:
         level: INFO
       "io.smallrye.faulttolerance":
         level: INFO
-      "org.hibernate":
-        level: WARN
       "io.sm.op.ru.util":
         level: INFO
       "ja.la.ProcessBuilder":
@@ -248,8 +246,7 @@ smallrye:
         level: WARN       # ← suppress all sqlite-jdbc debug output
       "java.lang":
         level: WARN
-      "org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase":
-        level: ERROR   # suppress WARN → only show actual errors
+
       "dev.langchain4j.internal.RetryUtils":
         level: ERROR
       "org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext":
@@ -282,12 +279,6 @@ smallrye:
         level: INFO
       "io.quarkus.arc":
         level: INFO
-      "org.hibernate.SQL":
-        level: INFO
-      "org.hibernate.engine.jdbc.spi.SqlExceptionHelper":
-        level: ERROR
-      "org.hibernate.orm.jdbc.error":
-        level: ERROR
       "io.smallrye.context.jta.context.provider.JtaContextProvider":
         level: WARN
       "com.arjuna.ats.arjuna":
@@ -593,8 +584,6 @@ mp:
           level: ERROR     # Silences "Agroal does not support..."
         "com.arcclaw":
           level: DEBUG     # Silences WorkspaceManager and SqliteWalConfigurer
-        "org.hibernate":
-          level: ERROR
       file:
         enabled: true
         path: ./arcclaw-cli.log
@@ -687,11 +676,7 @@ mp:
       category:
         "com.arcclaw":
           level: INFO
-        "org.hibernate.SQL":
-          level: DEBUG
         "com.arjuna":
-          level: ERROR
-        "org.hibernate.resource.transaction":
           level: ERROR
     langchain4j:
       ollama:
@@ -805,12 +790,11 @@ mp:
 # =============================================================================
 # ALTERNATIVE PERSISTENCE BACKENDS
 # =============================================================================
-# To switch persistence backends:
+# To switch persistence backends (both use JDBI — no Hibernate):
 #   1. Replace the `arcclaw-persistence-sqlite` dependency in arcclaw-app/pom.xml
-#      with the desired adapter: `arcclaw-persistence-fs` or `arcclaw-persistence-postgres`.
-#   2. For Postgres, also replace `quarkus-jdbc-sqlite` with `quarkus-jdbc-postgresql`
-#      and add `quarkus-hibernate-orm-panache` if not already present.
-#   3. Activate the profile: `-Dquarkus.profile=postgresql` or `-Dquarkus.profile=filesystem`.
+#      with the desired adapter: `arcclaw-persistence-postgres` (or `arcclaw-persistence-fs`).
+#   2. Also replace `quarkus-jdbc-sqlite` with `quarkus-jdbc-postgresql`.
+#   3. Activate the profile: `-Dquarkus.profile=postgresql`.
 #   4. Flyway migrations are dialect-specific (owned by adapter modules):
 #      - arcclaw-persistence-sqlite/   → db/migration/sqlite/     (SQLite, default)
 #      - arcclaw-persistence-postgres/ → db/migration/postgresql/ (PostgreSQL, %postgresql profile)

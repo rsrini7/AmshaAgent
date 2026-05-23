@@ -58,7 +58,5 @@ quarkus:
   log:
     level: INFO
     category:
-      "org.hibernate.SQL":
-        level: WARN
       "org.testcontainers":
         level: INFO

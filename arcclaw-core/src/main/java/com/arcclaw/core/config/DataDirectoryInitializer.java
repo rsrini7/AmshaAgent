@@ -14,7 +14,7 @@ public class DataDirectoryInitializer {
     @ConfigProperty(name = "arcclaw.workspace.root-dir", defaultValue = "./data/workspaces")
     String workspaceRootDir;
 
-    // This runs the millisecond Quarkus boots, BEFORE Hibernate connects to SQLite
+    // This runs the millisecond Quarkus boots, before any database connection is established
     void onStart(@Observes StartupEvent ev) {
         // Create both: the data root (for SQLite) and the workspaces dir (for agents)
         new File(workspaceRootDir).mkdirs();  // implicitly creates ./data parent too

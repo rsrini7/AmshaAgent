@@ -71,8 +71,6 @@ quarkus:
   log:
     level: INFO
     category:
-      "org.hibernate.SQL":
-        level: WARN
       "com.arcclaw.core.agent":
         level: "OFF"
       "com.arcclaw.core.tools":

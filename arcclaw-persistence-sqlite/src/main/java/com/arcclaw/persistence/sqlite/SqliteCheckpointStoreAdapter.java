@@ -28,7 +28,7 @@ import org.jdbi.v3.core.Jdbi;
 
 /**
  * SQLite implementation of {@link CheckpointStorePort} backed by JDBI.
- * Replaces the JPA/Hibernate adapter with direct JDBC via JDBI DAO.
+ * Replaces the JPA adapter with direct JDBC via JDBI DAO.
  */
 @ApplicationScoped
 @Unremovable

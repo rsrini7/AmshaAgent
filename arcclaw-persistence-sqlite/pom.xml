@@ -42,13 +42,13 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
 
-        <!-- JDBI — thin SQL wrapper replacing Hibernate for SQLite -->
+        <!-- JDBI — thin SQL wrapper for SQLite -->
         <dependency>
           <groupId>io.quarkiverse.jdbi</groupId>
           <artifactId>quarkus-jdbi</artifactId>
         </dependency>
 
-        <!-- Flyway for schema migration in tests (replaces Hibernate schema-management) -->
+        <!-- Flyway for schema migration in tests -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-flyway</artifactId>

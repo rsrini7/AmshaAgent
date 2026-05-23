@@ -55,7 +55,7 @@
             <artifactId>quarkus-micrometer</artifactId>
         </dependency>
 
-        <!-- Flyway for schema migration (replaces Hibernate schema-management) -->
+        <!-- Flyway for schema migration -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-flyway</artifactId>

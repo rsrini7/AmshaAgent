@@ -109,7 +109,7 @@ public class ChatCommand implements Runnable {
 
     /**
      * Prioritized shutdown observer - cleans up session AND cancels any
-     * in-flight HITL virtual thread BEFORE Hibernate/connection pools close.
+     * in-flight HITL virtual thread BEFORE connection pools close.
      */
     @ActivateRequestContext
     void onShutdown(@Observes @Priority(Integer.MIN_VALUE) ShutdownEvent event) {
