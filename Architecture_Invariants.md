@@ -1232,3 +1232,152 @@ Do NOT add `--enable-preview` to any `pom.xml` compiler or surefire configuratio
 `StructuredTaskScope` is FORBIDDEN. Use `ManagedExecutor` + virtual threads instead.
 Every new or modified class MUST compile cleanly under JDK 25 standard without preview flags.
 
+---
+
+## 11. Frontend (Lit/Web Component) Invariants
+
+### 11.1 Shadow DOM Event Boundary
+
+Custom events dispatched from inside a Lit component's Shadow DOM MUST use `window.dispatchEvent()`. Events with `bubbles: true; composed: true` do NOT reliably cross the Shadow DOM boundary in all cases (observed with Chrome + Lit 3.x). This affects any event the shell needs to receive from child components.
+
+**Pattern:**
+```typescript
+// CORRECT - always works
+window.dispatchEvent(new CustomEvent('session-ready', {
+  detail: { sessionId }
+}));
+
+// WRONG - may be trapped in Shadow DOM
+this.dispatchEvent(new CustomEvent('session-ready', {
+  detail: { sessionId },
+  bubbles: true,
+  composed: true
+}));
+```
+
+Affected events (MUST use `window.dispatchEvent`):
+- `session-ready` (chat → shell, sessionId handoff)
+- `ws-status-change` (WsManager → shell, WebSocket status updates)
+
+### 11.2 CSS Height Resolution in Flex Layouts
+
+Percentage height (`height: 100%`) on a child element does NOT resolve reliably when the parent is a flex item with `overflow-y: auto`. The flex item's computed height is not considered "definite" for percentage resolution in all browsers. This manifests as blank content areas.
+
+**Fix:**
+```css
+/* Parent (flex item with scroll): */
+.content-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Child component: use flex: 1 instead of height: 100% */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;          /* ← NOT height: 100% */
+  min-height: 0;
+}
+```
+
+### 11.3 Scrollbar Styles in Shadow DOM
+
+`::-webkit-scrollbar` pseudo-element styles defined in the document's `<style>` block do NOT apply to scrollable elements inside Shadow DOMs. Each component with a scrollable container MUST define its own scrollbar styles.
+
+```css
+.scrollable-container::-webkit-scrollbar { width: 6px; }
+.scrollable-container::-webkit-scrollbar-track { background: transparent; }
+.scrollable-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+```
+
+Components with internal scrollable containers that need explicit scrollbar styles:
+- `arc-chat-interface.ts`: `.messages`
+- `arc-audit-panel.ts`: `.table-wrap`, `.drawer`
+- `arc-scheduler-panel.ts`: `.drawer`
+
+### 11.4 Dynamic Tag Names in Templates
+
+Using `<${route.component}>` syntax (dynamic tag names from array iteration) can silently fail if the component is not yet registered as a custom element at render time. This produces a blank page with no console error.
+
+**Fix:** Use explicit conditional rendering instead:
+```typescript
+// CORRECT
+${this._route === '#/chat' ? html`<arc-chat-interface class="content-area"></arc-chat-interface>` : nothing}
+
+// WRONG - may fail silently
+${ROUTES.map(r => html`<${r.component} class="content-area"></${r.component}>`)}
+```
+
+### 11.5 `updated()` Lifecycle Guard for Async Connections
+
+When a Lit component's `updated()` lifecycle triggers an async connection (e.g., WebSocket), the guard condition MUST check for a property that is available on the **first render**, not a property that is only set after a subsequent async operation.
+
+**Pattern:**
+```typescript
+// CORRECT - platformId is available immediately
+updated(changedProperties) {
+  if (this._appContext?.platformId && !this._ws && !this._connecting) {
+    this._connect();
+  }
+}
+
+// WRONG - sessionId is empty on first render (set later by WebSocket handshake)
+updated(changedProperties) {
+  if (this._appContext?.sessionId && ...) {  // never true on initial load
+    this._connect();
+  }
+}
+```
+
+### 11.6 WebSocket Stale Connection Guard
+
+When reconnecting a WebSocket, the old connection's `onclose` handler may fire AFTER the new connection is established. This handler must check that it is still the current manager before reacting.
+
+```typescript
+const manager = new WsManager(url, onFrame, (status) => {
+  if (this._ws !== manager) return;  // stale connection - ignore
+  if (status === 'closed') {
+    this._ws = null;
+    this._scheduleReconnect();
+  }
+});
+this._ws = manager;
+this._ws.connect();
+```
+
+Always call `this._ws.disconnect()` before nullifying the old connection in `reconnect()`. Otherwise the old WebSocket stays alive and its `session_terminated` frame may disconnect the new connection.
+
+---
+
+## 12. Threading & Concurrency Invariants
+
+### 12.1 Virtual Threads + `synchronized` on JDK 25
+
+JDK 25 has resolved the virtual-thread pinning issue with `synchronized` blocks. You do NOT need to migrate `synchronized` to `ReentrantLock` for Loom compatibility. Keep `synchronized` where it is semantically correct.
+
+The existing `ReentrantLock` usages in `VaultKeyCache` and `SecretVaultImpl` are there for CDI proxy correctness (`synchronized (this)` on a proxied bean locks the proxy, not the instance), NOT for virtual thread pinning. Keep these as-is.
+
+**Rule:**
+- `synchronized` blocks → safe on JDK 25, prefer for simplicity
+- `ReentrantLock` → only when CDI proxying requires it (field-level lock on `@ApplicationScoped` beans)
+
+### 12.2 Halt/Cancellation Interruption Checks
+
+Tool execution loops MUST check `Thread.currentThread().isInterrupted()` and `WorkspaceManager.isSessionHalted(sessionId)` at loop boundaries. These are GA APIs (no preview features) and are the primary halt propagation mechanism.
+
+Required check points (checked at loop top before each iteration):
+- `StepDecisionRouter.route()` - `while (true)` routing loop
+- `ResumeStrategyDispatcher.resumeToolExecution()` - `while (true)` retry loop
+- `ParallelToolStepExecutor.executeParallel()` - before each `future.get()` in the for loop
+
+```java
+if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(sessionId)) {
+    log.warnf("session %s: halted during %s", sessionId, "operation");
+    // exit cleanly or cancel remaining futures
+}
+```
+
