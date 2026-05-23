@@ -216,19 +216,24 @@ BEFORE DELETE ON audit_event
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_delete();
 
 -- pgvector extension for vector similarity search
-CREATE EXTENSION IF NOT EXISTS vector;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
+        CREATE EXTENSION IF NOT EXISTS vector;
 
--- Embedding storage table for RAG vector search.
--- Dimension 768 matches nomic-embed-text and jina-embeddings-v5-text-nano.
--- pgvector requires EXACT match between model output and column dimension.
--- If you switch models, recreate this table with the new dimension.
--- HNSW index max is 2000 dimensions; for larger models (3072), drop the index.
-CREATE TABLE IF NOT EXISTS rag_chunk_embedding (
-    chunk_id    TEXT PRIMARY KEY REFERENCES rag_chunk(chunk_id) ON DELETE CASCADE,
-    embedding   vector(768)
-);
+        -- Embedding storage table for RAG vector search.
+        -- Dimension 768 matches nomic-embed-text and jina-embeddings-v5-text-nano.
+        -- pgvector requires EXACT match between model output and column dimension.
+        -- If you switch models, recreate this table with the new dimension.
+        -- HNSW index max is 2000 dimensions; for larger models (3072), drop the index.
+        EXECUTE 'CREATE TABLE IF NOT EXISTS rag_chunk_embedding (
+            chunk_id    TEXT PRIMARY KEY REFERENCES rag_chunk(chunk_id) ON DELETE CASCADE,
+            embedding   vector(768)
+        )';
 
--- HNSW index for fast approximate nearest neighbor search
-CREATE INDEX IF NOT EXISTS idx_rag_chunk_embedding_vec
-    ON rag_chunk_embedding
-    USING hnsw (embedding vector_cosine_ops);
+        -- HNSW index for fast approximate nearest neighbor search
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_rag_chunk_embedding_vec
+            ON rag_chunk_embedding
+            USING hnsw (embedding vector_cosine_ops)';
+    END IF;
+END $$;
