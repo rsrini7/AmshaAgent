@@ -19,7 +19,7 @@ public interface RagChunkJdbiDao {
         @Bind("createdAt") Instant createdAt
     );
 
-    @SqlQuery("SELECT chunk_id AS \"chunkId\", text, 0.0 AS score FROM rag_chunk WHERE to_tsvector('english', text) @@ plainto_tsquery('english', :query) LIMIT :limit")
+    @SqlQuery("SELECT chunk_id AS \"chunkId\", text, ts_rank(to_tsvector('english', text), plainto_tsquery('english', :query)) AS score FROM rag_chunk WHERE to_tsvector('english', text) @@ plainto_tsquery('english', :query) ORDER BY score DESC LIMIT :limit")
     @RegisterConstructorMapper(MemoryChunkDto.class)
     List<MemoryChunkDto> search(@Bind("query") String query, @Bind("limit") int limit);
 }

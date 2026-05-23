@@ -13,7 +13,7 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 @RegisterConstructorMapper(CronRunDto.class)
 public interface CronRunJdbiDao {
 
-    @SqlUpdate("INSERT INTO agent_cron_run (id, cronId, sessionId, status, startedAt, finishedAt, errorReason, iterationsUsed, inputTokens, outputTokens, usdCost, createdAt) VALUES (:id, :cronId, :sessionId, :status, :startedAt, :finishedAt, :errorReason, :iterationsUsed, :inputTokens, :outputTokens, :usdCost, :createdAt) ON CONFLICT (id) DO UPDATE SET cronId = EXCLUDED.cronId, sessionId = EXCLUDED.sessionId, status = EXCLUDED.status, startedAt = EXCLUDED.startedAt, finishedAt = EXCLUDED.finishedAt, errorReason = EXCLUDED.errorReason, iterationsUsed = EXCLUDED.iterationsUsed, inputTokens = EXCLUDED.inputTokens, outputTokens = EXCLUDED.outputTokens, usdCost = EXCLUDED.usdCost, createdAt = EXCLUDED.createdAt")
+    @SqlUpdate("INSERT INTO agent_cron_run (id, cronId, sessionId, status, startedAt, finishedAt, errorReason, iterationsUsed, inputTokens, outputTokens, usdCost, createdAt) VALUES (:id, :cronId, :sessionId, :status, :startedAt, :finishedAt, :errorReason, :iterationsUsed, :inputTokens, :outputTokens, :usdCost, :createdAt) ON CONFLICT (id) DO UPDATE SET cronId = EXCLUDED.cronId, sessionId = EXCLUDED.sessionId, status = EXCLUDED.status, startedAt = EXCLUDED.startedAt, finishedAt = EXCLUDED.finishedAt, errorReason = EXCLUDED.errorReason, iterationsUsed = EXCLUDED.iterationsUsed, inputTokens = EXCLUDED.inputTokens, outputTokens = EXCLUDED.outputTokens, usdCost = EXCLUDED.usdCost")
     void save(@BindMethods CronRunDto dto);
 
     @SqlQuery("SELECT id, cronId, sessionId, status, startedAt, finishedAt, errorReason, iterationsUsed, inputTokens, outputTokens, usdCost, createdAt FROM agent_cron_run WHERE id = :id")

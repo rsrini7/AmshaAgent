@@ -111,10 +111,13 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
         return jdbi.inTransaction(handle -> {
             var dao = handle.attach(CheckpointJdbiDao.class);
             Instant now = Instant.now();
+            Optional<CheckpointDto> existing = dao.findAnyBySessionAndRole(sessionId, agentRole);
+            String autonomy = existing.map(CheckpointDto::autonomyLevel).orElse(null);
+            int iterationsUsed = existing.map(CheckpointDto::iterationsUsed).orElse(0);
             CheckpointDto dto = new CheckpointDto(
-                null, sessionId, agentRole, finalStatus, null, stateJson,
+                null, sessionId, agentRole, finalStatus, autonomy, stateJson,
                 null, null, originalGoal, null, null, null, null, null, null, null,
-                null, 0, null, null, contextDataJson, null, null, null,
+                null, iterationsUsed, null, null, contextDataJson, null, null, null,
                 null, 0, now, now
             );
             dao.upsertCheckpoint(dto);
