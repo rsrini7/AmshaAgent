@@ -24,13 +24,16 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.mapper.reflect.ConstructorMapper;
 
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.
+ * Inactive when no database backend is available (e.g., filesystem mode).
  */
 @ApplicationScoped
+@IfBuildProperty(name = "quarkus.flyway.enabled", stringValue = "true", enableIfMissing = true)
 public class HitlService {
 
     @Inject Jdbi jdbi;

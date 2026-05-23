@@ -785,6 +785,49 @@ The `%cli` profile is forced by `arcclaw-cli.ps1` and silences all Quarkus banne
 
 See [`MISE_SETUP.md`](./MISE_SETUP.md) for the recommended cross-platform task runner setup.
 
+### Persistence Backends (Switching)
+
+ArcClaw supports three persistence backends via the hexagonal port/adapter architecture. All share the same port interfaces — swap without core code changes.
+
+| Backend | Default | Mise Task | Requires | Data stored as |
+|---|---|---|---|---|
+| **SQLite** (WAL + FTS5 + sqlite-vec) | ✅ | `mise run dev` / `mise run jar:serve` | Nothing (embedded) | Single `.db` file in `./data/` |
+| **PostgreSQL** (tsvector + pgvector) | | `mise run dev:pg` / `mise run jar:pg` | Podman (auto-starts PG container) | PostgreSQL server (port 5432) |
+| **Filesystem** (JSON files) | | `mise run dev:fs` / `mise run jar:fs` | Nothing | JSON files on disk in `./data/fs/` |
+
+**Migration between backends:**
+
+```bash
+# SQLite (default)
+mise run dev                          # dev mode
+mise run jar:serve                    # packaged JAR
+
+# PostgreSQL (auto-starts Podman container)
+mise run db:pg:start                  # start PG container
+mise run dev:pg                       # dev mode with PG
+mise run build:pg && mise run jar:pg  # build & run JAR with PG
+mise run db:pg:stop                   # stop PG container
+mise run db:pg:reset                  # wipe PG database
+
+# Filesystem (no database needed)
+mise run dev:fs                       # dev mode with FS
+mise run build:fs && mise run jar:fs  # build & run JAR with FS
+```
+
+**Capabilities by backend:**
+
+| Feature | SQLite | PostgreSQL | Filesystem |
+|---|---|---|---|
+| Full-text search | FTS5 (ranked) | tsvector (ranked) | Basic substring |
+| Vector search | sqlite-vec (RRF) | pgvector (RRF) | Not supported |
+| Session resolution | DB-backed registry | DB-backed registry | UUID v3 fallback |
+| HITL approvals | ✅ | ✅ | Not available |
+| WORM audit enforcement | SQL triggers | PL/pgSQL triggers | Best-effort |
+| Transactions | JDBI-managed | JDBI-managed | Per-file atomic |
+| Zero dependencies | ✅ (embedded DB) | ❌ (needs PG server) | ✅ (just a filesystem) |
+
+The `%postgresql` and `%filesystem` profiles are defined in `arcclaw-app/src/main/resources/application.yaml`. Each backend adapter module (`arcclaw-persistence-sqlite`, `arcclaw-persistence-postgres`, `arcclaw-persistence-fs`) is conditionally activated via `@IfBuildProperty`.
+
 ### Windows Console Support (UTF-8)
 
 ArcClaw's symbols (`→`, `⏳`, `⚠️`) require UTF-8 encoding. Even with a Nerd Font (like *FiraMono Nerd Font*), Windows shells often default to CP1252.

@@ -11,13 +11,16 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.pipeline.SessionIdResolver;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 
 /**
  * Persistent session registry backed by the {@code session_registry} table using JDBI.
+ * Inactive when no database backend is available (e.g., filesystem mode).
  */
 @ApplicationScoped
+@IfBuildProperty(name = "quarkus.flyway.enabled", stringValue = "true", enableIfMissing = true)
 public class SessionRegistry implements SessionIdResolver {
 
     private static final Logger log = Logger.getLogger(SessionRegistry.class);

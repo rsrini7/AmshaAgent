@@ -834,10 +834,15 @@ mp:
           max-file-size: 20M
           max-backup-index: 3
 
-#"%filesystem":
-#  # File-based persistence — no JDBC datasource or Hibernate required.
-#  # arcclaw-fs-data-dir defaults to ./arcclaw-data if omitted.
-#  arcclaw:
-#    fs:
-#      data-dir: "${ARCCLAW_FS_DATA_DIR:./data/fs}"
-#      lock-timeout-seconds: 30
+"%filesystem":
+  arcclaw:
+    persistence:
+      backend: fs
+    fs:
+      data-dir: "${ARCCLAW_FS_DATA_DIR:./data/fs}"
+      lock-timeout-seconds: 30
+  quarkus:
+    datasource:
+      enabled: false
+    flyway:
+      enabled: false

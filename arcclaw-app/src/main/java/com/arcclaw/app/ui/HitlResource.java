@@ -33,12 +33,14 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.quarkus.arc.properties.IfBuildProperty;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 @ApplicationScoped
+@IfBuildProperty(name = "quarkus.flyway.enabled", stringValue = "true", enableIfMissing = true)
 @Path("hitl")
 @Produces(MediaType.APPLICATION_JSON)
 public class HitlResource {

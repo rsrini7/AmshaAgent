@@ -2364,3 +2364,167 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 # end of file
+
+# =============================================================================
+# FILESYSTEM BACKEND TASKS  (no container needed — pure JSON files on disk)
+# =============================================================================
+
+[tasks."dev:fs"]
+depends = ["env:recover"]
+description = "Dev mode with filesystem persistence backend (no database needed)"
+dir = "{{config_root}}/arcclaw-app"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:fs] Copied ../.env -> arcclaw-app/.env'
+    }
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8'
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=serve' `
+        '-Dquarkus.profile=dev,filesystem' `
+        '-Dquarkus.datasource.enabled=false' `
+        '-Dquarkus.flyway.enabled=false' `
+        '-Darcclaw.persistence.backend=fs' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    if ($envCopied) { Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue }
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
+}
+"""
+
+[tasks."dev:fs:chat"]
+depends = ["env:recover"]
+description = "Dev mode with filesystem backend - interactive REPL"
+dir = "{{config_root}}/arcclaw-app"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:fs:chat] Copied ../.env -> arcclaw-app/.env'
+    }
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8'
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=chat' `
+        '-Dquarkus.profile=dev,filesystem' `
+        '-Dquarkus.datasource.enabled=false' `
+        '-Dquarkus.flyway.enabled=false' `
+        '-Darcclaw.persistence.backend=fs' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    if ($envCopied) { Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue }
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
+}
+"""
+
+[tasks."build:fs"]
+description = "Build quarkus-run.jar for filesystem persistence backend"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+Write-Host '▶   Building quarkus-run.jar for filesystem backend...'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+& $mvnw 'package' '-pl' 'arcclaw-app' '-am' '-DskipTests' '-Dquarkus.profile=filesystem' '-q'
+if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
+Write-Host '✅  Filesystem JAR ready.'
+"""
+
+[tasks."jar:fs"]
+usage = 'arg "[cmd]" help="Command to run: serve|chat|ask (default: serve)"'
+description = "Run packaged jar with filesystem persistence backend (no database needed)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:fs'; exit 1 }
+$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=filesystem',
+    '-Darcclaw.data-dir=./data'
+)
+& java @jvmArgs -jar $jar $cmd
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
+
+[tasks."jar:fs:chat"]
+description = "Run packaged jar with filesystem backend - interactive REPL"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:fs'; exit 1 }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=filesystem',
+    '-Darcclaw.data-dir=./data'
+)
+& java @jvmArgs -jar $jar chat
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
+
+[tasks."jar:fs:ask"]
+description = 'Run packaged jar with filesystem backend - one-shot. Set $env:GOAL="..."'
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$goal = if ($env:GOAL) { $env:GOAL } else { '' }
+if (-not $goal) { Write-Host 'Usage: $env:GOAL="..."; mise run jar:fs:ask'; exit 1 }
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:fs'; exit 1 }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=filesystem',
+    '-Darcclaw.data-dir=./data'
+)
+$cmdArgs = @('ask', $goal)
+if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }
+& java @jvmArgs -jar $jar @cmdArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
