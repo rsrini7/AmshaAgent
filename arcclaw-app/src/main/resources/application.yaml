@@ -310,6 +310,7 @@ arcclaw:
     max-depth: ${ARCCLAW_DELEGATION_MAX_DEPTH:3}
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
+    vault-priority: ${ARCCLAW_LLM_VAULT_PRIORITY:false}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
     max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
     max-output-tokens: ${ARCCLAW_LLM_MAX_OUTPUT_TOKENS:8192}

@@ -41,6 +41,9 @@ public class ChatModelProducer {
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;
 
+    @ConfigProperty(name = "arcclaw.llm.vault-priority", defaultValue = "false")
+    boolean vaultPriority;
+
     @Inject
     @Any
     Instance<AgentChatModelProvider> providers;
@@ -58,16 +61,18 @@ public class ChatModelProducer {
         String effectiveKey = null;
         String effectiveModel = null;
 
-        Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
-        if (vaultProvider.isPresent()) {
-            String p = new String(vaultProvider.get().get(), StandardCharsets.UTF_8);
-            if (!p.isBlank()) {
-                effectiveProvider = p;
-                Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_API_KEY);
-                Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
-                effectiveKey = vaultKey.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
-                effectiveModel = vaultModel.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
-                log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProvider, effectiveModel);
+        if (vaultPriority) {
+            Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+            if (vaultProvider.isPresent()) {
+                String p = new String(vaultProvider.get().get(), StandardCharsets.UTF_8);
+                if (!p.isBlank()) {
+                    effectiveProvider = p;
+                    Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_API_KEY);
+                    Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
+                    effectiveKey = vaultKey.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
+                    effectiveModel = vaultModel.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
+                    log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProvider, effectiveModel);
+                }
             }
         }
 
@@ -86,10 +91,12 @@ public class ChatModelProducer {
     }
 
     private String resolveProvider() {
-        Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
-        if (vaultKey.isPresent()) {
-            String p = new String(vaultKey.get().get(), StandardCharsets.UTF_8);
-            if (!p.isBlank()) return p;
+        if (vaultPriority) {
+            Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+            if (vaultKey.isPresent()) {
+                String p = new String(vaultKey.get().get(), StandardCharsets.UTF_8);
+                if (!p.isBlank()) return p;
+            }
         }
         return provider != null ? provider : "groq";
     }
