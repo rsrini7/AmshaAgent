@@ -232,6 +232,8 @@ smallrye:
         level: WARN       # ← suppress goal logging noise (isInfoEnabled guard handles the rest)
       "com.arcclaw.core.sandbox.PodmanContainerExecutor":
         level: WARN       # ← suppress container start/stop/exec noise
+      "org.jboss.resteasy.reactive.server.handlers.PublisherResponseHandler":
+        level: ERROR
       "io.quarkus":
         level: INFO
       "org.apache.camel.component.telegram":
