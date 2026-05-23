@@ -12,16 +12,16 @@ quarkus:
   datasource:
     db-kind: sqlite
     jdbc:
-      url: "jdbc:sqlite:./target/web-test.db"
+      url: "jdbc:sqlite:./target/web-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 3
+      initial-size: 1
+      acquisition-timeout: 10s
 
-  hibernate-orm:
-    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
-    schema-management:
-      strategy: drop-and-create
-    packages:
-      - com.arcclaw.persistence.common.entity
-      - com.arcclaw.persistence.sqlite.entity
-      - com.arcclaw.core.domain.model
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/sqlite
 
   scheduler:
     enabled: false

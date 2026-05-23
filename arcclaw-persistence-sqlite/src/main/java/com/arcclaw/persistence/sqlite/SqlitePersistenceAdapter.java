@@ -2,51 +2,23 @@ package com.arcclaw.persistence.sqlite;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.PersistenceAction;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
-import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
-/**
- * SQLite implementation of {@link PersistenceAdapterPort}.
- * Wraps database actions with SQLite-specific retry logic via {@link SqliteRetryTemplate}.
- */
 @ApplicationScoped
-@Unremovable
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqlitePersistenceAdapter implements PersistenceAdapterPort {
 
+    private static final int MAX_ATTEMPTS = 3;
+    private static final long INITIAL_BACKOFF_MS = 100;
 
     @Inject
-    EntityManager em;
-
-    @Inject
-    SqliteRetryTemplate retryTemplate;
-
-    @Inject
-    SqlitePersistenceAdapter self;
+    JdbiRetryWrapper retryWrapper;
 
     @Override
     public void execute(String sessionId, String operationName, PersistenceAction action) {
-        try {
-            retryTemplate.execute(operationName, 5, 50, () -> {
-                self.persistSynchronously(action);
-                return null;
-            });
-        } catch (Exception e) {
-            if (e instanceof RuntimeException re) {
-                throw re;
-            }
-            throw new RuntimeException("Persistence operation failed after retries: " + operationName, e);
-        }
-    }
-
-    @Transactional(Transactional.TxType.REQUIRED)
-    public void persistSynchronously(PersistenceAction action) {
-        em.clear();
-        action.execute();
+        retryWrapper.withRetryVoid(operationName, MAX_ATTEMPTS, INITIAL_BACKOFF_MS, action::execute);
     }
 }

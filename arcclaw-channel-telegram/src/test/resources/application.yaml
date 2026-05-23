@@ -48,18 +48,15 @@ quarkus:
   arc:
     remove-unused-beans: all
   datasource:
+    db-kind: sqlite
     jdbc:
-      url: "jdbc:sqlite:./target/telegram-test.db"
-  hibernate-orm:
-    schema-management:
-      # strategy: update — NOT none. This module includes com.arcclaw.persistence.sqlite.entity
-      # in Hibernate packages, so tables like encrypted_secrets must exist at startup.
-      # Test DB is ephemeral (target/telegram-test.db), `update` is safe.
-      strategy: update
-    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
-    packages:
-      - com.arcclaw.persistence.common.entity
-      - com.arcclaw.persistence.sqlite.entity
-      - com.arcclaw.core.lifecycle
-      - com.arcclaw.core.domain.model
+      url: "jdbc:sqlite:./target/telegram-test.db?busy_timeout=20000&journal_mode=WAL&transaction_mode=IMMEDIATE"
+      additional-jdbc-url-properties: "journal_mode=WAL&synchronous=NORMAL&busy_timeout=20000&transaction_mode=IMMEDIATE"
+      min-size: 1
+      max-size: 3
+      initial-size: 1
+      acquisition-timeout: 10s
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/sqlite
 

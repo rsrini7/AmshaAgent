@@ -4,246 +4,115 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
-import com.arcclaw.common.util.LogUtil;
-import com.arcclaw.core.audit.AuditOutcome;
-import com.arcclaw.core.audit.SecurityEventType;
-import com.arcclaw.core.domain.model.AuditEvent;
+import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.persistence.api.AuditEventDto;
 import com.arcclaw.persistence.api.AuditEventStorePort;
-import com.arcclaw.persistence.common.entity.AuditEventEntity;
+import com.arcclaw.persistence.sqlite.jdbi.AuditJdbiDao;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
+import org.jdbi.v3.core.Jdbi;
 
-/**
- * SQLite implementation of AuditEventStorePort.
- * §1.2: All JPQL moved from core to here.
- */
 @ApplicationScoped
 @Unremovable
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
 
-
-
     private static final Logger log = Logger.getLogger(SqliteAuditEventStoreAdapter.class);
 
+    private final Jdbi jdbi;
+
     @Inject
-    EntityManager em;
+    public SqliteAuditEventStoreAdapter(Jdbi jdbi) {
+        this.jdbi = jdbi;
+    }
 
-    @PostConstruct
-    void warmupQueryCache() {
-        // Force HQL compilation at startup to avoid timeout during first query in native mode
-        try {
-            em.createQuery(
-                "SELECT COUNT(a) FROM AuditEvent a WHERE a.sessionId = :sid",
-                Long.class)
-              .setParameter("sid", "warmup")
-              .setMaxResults(1)
-              .getResultList();
-        } catch (Exception e) {
-            log.debugf("Warmup query failed (best effort): %s", LogUtil.rootMessage(e));
-        }
+    protected SqliteAuditEventStoreAdapter() {
+        this(null);
     }
 
     @Override
-    @Transactional(Transactional.TxType.MANDATORY)
     public void save(AuditEventDto dto) {
-        AuditEventEntity entity = toEntity(dto);
-        em.persist(entity);
+        log.tracef("save event session=%s type=%s", dto.sessionId(), dto.eventType());
+        jdbi.useHandle(handle -> handle.createUpdate(
+            "INSERT INTO audit_event (id, sessionId, userId, agentRole, goalHash, outcome, eventType, " +
+            "eventDetail, inputTokens, outputTokens, usdCost, timestamp, iterationsUsed, app_version, " +
+            "idempotency_key, sequence, hmacHash, prevHash) " +
+            "VALUES (:id, :sessionId, :userId, :agentRole, :goalHash, :outcome, :eventType, " +
+            ":eventDetail, :inputTokens, :outputTokens, :usdCost, :timestamp, :iterationsUsed, " +
+            ":appVersion, :idempotencyKey, :sequence, :hmacHash, :prevHash)")
+            .bind("id", dto.id())
+            .bind("sessionId", dto.sessionId())
+            .bind("userId", dto.userId())
+            .bind("agentRole", dto.agentRole())
+            .bind("goalHash", dto.goalHash())
+            .bind("outcome", dto.outcome())
+            .bind("eventType", dto.eventType())
+            .bind("eventDetail", dto.eventDetail())
+            .bind("inputTokens", dto.inputTokens())
+            .bind("outputTokens", dto.outputTokens())
+            .bind("usdCost", dto.usdCost())
+            .bind("timestamp", dto.timestamp())
+            .bind("iterationsUsed", dto.iterationsUsed())
+            .bind("appVersion", dto.appVersion())
+            .bind("idempotencyKey", dto.idempotencyKey())
+            .bind("sequence", dto.sequence())
+            .bind("hmacHash", dto.hmacHash())
+            .bind("prevHash", dto.prevHash())
+            .execute());
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<String> findLatestHash(String sessionId) {
-        List<String> results = em.createQuery(
-                "SELECT a.hmacHash FROM AuditEvent a WHERE a.sessionId = :sid ORDER BY a.sequence DESC",
-                String.class)
-                .setParameter("sid", sessionId)
-                .setMaxResults(1)
-                .getResultList();
-
-        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+        return jdbi.withExtension(AuditJdbiDao.class, dao -> dao.findLatestHash(sessionId));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public List<AuditEventDto> findBySessionId(String sessionId) {
-        return em.createQuery(
-                "SELECT a FROM AuditEvent a WHERE a.sessionId = :sid ORDER BY a.sequence ASC",
-                AuditEventEntity.class)
-                .setParameter("sid", sessionId)
-                .getResultList()
-                .stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return jdbi.withExtension(AuditJdbiDao.class, dao -> dao.findBySessionId(sessionId));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public long countByIdempotencyKey(String key) {
-        return em.createQuery(
-                "SELECT COUNT(a) FROM AuditEvent a WHERE a.idempotencyKey = :key",
-                Long.class)
-            .setParameter("key", key)
-            .getSingleResult();
+        return jdbi.withExtension(AuditJdbiDao.class, dao -> dao.countByIdempotencyKey(key));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public long countEventsByType(String sessionId, String eventType) {
-        return em.createQuery(
-                "SELECT COUNT(a) FROM AuditEvent a " +
-                "WHERE a.sessionId = :sid AND a.eventType = :type",
-                Long.class)
-            .setParameter("sid", sessionId)
-            .setParameter("type", SecurityEventType.valueOf(eventType))
-            .getSingleResult();
+        return jdbi.withExtension(AuditJdbiDao.class, dao -> dao.countEventsByType(sessionId, eventType));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public long getMaxSequence(String sessionId) {
-        List<Long> maxSeqResult = em.createQuery(
-                "SELECT COALESCE(MAX(a.sequence), 0) FROM AuditEvent a WHERE a.sessionId = :sid",
-                Long.class)
-            .setParameter("sid", sessionId)
-            .getResultList();
-        return maxSeqResult.isEmpty() ? 0L : maxSeqResult.get(0);
+        return jdbi.withExtension(AuditJdbiDao.class, dao -> dao.getMaxSequence(sessionId));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<AuditEventDto> findById(UUID id) {
         if (id == null) return Optional.empty();
-        AuditEventEntity entity = em.find(AuditEventEntity.class, id);
-        return Optional.ofNullable(entity).map(this::toDto);
+        return jdbi.withExtension(AuditJdbiDao.class, dao -> dao.findById(id));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public List<AuditEventDto> findAll(String sessionId, String eventType, Instant from, Instant to, int offset, int limit) {
-        StringBuilder jpql = new StringBuilder("SELECT a FROM AuditEvent a WHERE 1=1");
-
-        if (sessionId != null && !sessionId.isBlank()) {
-            jpql.append(" AND a.sessionId = :sessionId");
-        }
-        if (eventType != null && !eventType.isBlank()) {
-            jpql.append(" AND a.eventType = :eventType");
-        }
-        if (from != null) {
-            jpql.append(" AND a.timestamp >= :from");
-        }
-        if (to != null) {
-            jpql.append(" AND a.timestamp <= :to");
-        }
-        jpql.append(" ORDER BY a.timestamp DESC");
-
-        var query = em.createQuery(jpql.toString(), AuditEventEntity.class);
-        if (sessionId != null && !sessionId.isBlank()) {
-            query.setParameter("sessionId", sessionId);
-        }
-        if (eventType != null && !eventType.isBlank()) {
-            query.setParameter("eventType", SecurityEventType.valueOf(eventType));
-        }
-        if (from != null) {
-            query.setParameter("from", from);
-        }
-        if (to != null) {
-            query.setParameter("to", to);
-        }
-        query.setFirstResult(offset);
-        query.setMaxResults(limit);
-
-        return query.getResultList().stream().map(this::toDto).collect(Collectors.toList());
+        return jdbi.withExtension(AuditJdbiDao.class,
+            dao -> dao.findFiltered(
+                sessionId, eventType,
+                from != null ? TemporalUtils.formatIsoLex(from) : null,
+                to != null ? TemporalUtils.formatIsoLex(to) : null,
+                offset, limit));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public long countAll(String sessionId, String eventType, Instant from, Instant to) {
-        StringBuilder jpql = new StringBuilder("SELECT COUNT(a) FROM AuditEvent a WHERE 1=1");
-
-        if (sessionId != null && !sessionId.isBlank()) {
-            jpql.append(" AND a.sessionId = :sessionId");
-        }
-        if (eventType != null && !eventType.isBlank()) {
-            jpql.append(" AND a.eventType = :eventType");
-        }
-        if (from != null) {
-            jpql.append(" AND a.timestamp >= :from");
-        }
-        if (to != null) {
-            jpql.append(" AND a.timestamp <= :to");
-        }
-
-        var query = em.createQuery(jpql.toString(), Long.class);
-        if (sessionId != null && !sessionId.isBlank()) {
-            query.setParameter("sessionId", sessionId);
-        }
-        if (eventType != null && !eventType.isBlank()) {
-            query.setParameter("eventType", SecurityEventType.valueOf(eventType));
-        }
-        if (from != null) {
-            query.setParameter("from", from);
-        }
-        if (to != null) {
-            query.setParameter("to", to);
-        }
-        return query.getSingleResult();
-    }
-
-    private AuditEventEntity toEntity(AuditEventDto dto) {
-        AuditEventEntity entity = new AuditEventEntity();
-        entity.setId(dto.id());
-        entity.setSessionId(dto.sessionId());
-        entity.setUserId(dto.userId());
-        entity.setAgentRole(dto.agentRole());
-        entity.setGoalHash(dto.goalHash());
-        entity.setOutcome(dto.outcome() != null ? AuditOutcome.valueOf(dto.outcome()) : null);
-        entity.setEventType(dto.eventType() != null ? SecurityEventType.valueOf(dto.eventType()) : null);
-        entity.setEventDetail(dto.eventDetail());
-        entity.setInputTokens(dto.inputTokens());
-        entity.setOutputTokens(dto.outputTokens());
-        entity.setUsdCost(dto.usdCost());
-        entity.setTimestamp(dto.timestamp());
-        entity.setIterationsUsed(dto.iterationsUsed());
-        entity.setAppVersion(dto.appVersion());
-        entity.setIdempotencyKey(dto.idempotencyKey());
-        entity.setSequence(dto.sequence());
-        entity.setHmacHash(dto.hmacHash());
-        entity.setPrevHash(dto.prevHash());
-        return entity;
-    }
-
-    private AuditEventDto toDto(AuditEvent entity) {
-        return new AuditEventDto(
-            entity.getId(),
-            entity.getSessionId(),
-            entity.getUserId(),
-            entity.getAgentRole(),
-            entity.getGoalHash(),
-            entity.getOutcome() != null ? entity.getOutcome().name() : null,
-            entity.getEventType() != null ? entity.getEventType().name() : null,
-            entity.getEventDetail(),
-            entity.getInputTokens(),
-            entity.getOutputTokens(),
-            entity.getUsdCost(),
-            entity.getTimestamp(),
-            entity.getIterationsUsed(),
-            entity.getAppVersion(),
-            entity.getIdempotencyKey(),
-            entity.getSequence(),
-            entity.getHmacHash(),
-            entity.getPrevHash()
-        );
+        return jdbi.withExtension(AuditJdbiDao.class,
+            dao -> dao.countFiltered(
+                sessionId, eventType,
+                from != null ? TemporalUtils.formatIsoLex(from) : null,
+                to != null ? TemporalUtils.formatIsoLex(to) : null));
     }
 }
-

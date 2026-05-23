@@ -99,20 +99,6 @@ quarkus:
     # PostgreSQL (when activated via -Dquarkus.profile=postgresql) uses db/migration/postgresql/
     locations: db/migration/sqlite
 
-  hibernate-orm:
-    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
-    schema-management:
-      strategy: none
-    sql-load-script: no-file
-    packages:
-      - com.arcclaw.persistence.common.entity
-      - com.arcclaw.persistence.sqlite.entity
-      - com.arcclaw.core.domain.model
-      - com.arcclaw.core.routing
-      - com.arcclaw.app.session
-    log:
-      sql: false
-
   # ---------------------------------------------------------------------------
   # LANGCHAIN4J
   # ---------------------------------------------------------------------------
@@ -623,9 +609,6 @@ mp:
       server:
         stdio:
           enabled: false
-    hibernate-orm:
-      log:
-        sql: false # Forces SQL logging off even if global dev is true
   arcclaw:
     telegram:
       enabled: false        
@@ -666,9 +649,6 @@ mp:
         chat-model:
           log-requests: "${arcclaw.debug.llm:false}"
           log-responses: "${arcclaw.debug.llm:false}"
-    hibernate-orm:
-      log:
-        sql: false
 
   arcclaw:
     pii:
@@ -703,10 +683,6 @@ mp:
       baseline-on-migrate: true
       locations: db/migration/sqlite
       clean-at-start: true   # tests always need a clean schema
-    hibernate-orm:
-      schema-management:
-        strategy: none
-      dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
     log:
       category:
         "com.arcclaw":
@@ -835,9 +811,9 @@ mp:
 #   2. For Postgres, also replace `quarkus-jdbc-sqlite` with `quarkus-jdbc-postgresql`
 #      and add `quarkus-hibernate-orm-panache` if not already present.
 #   3. Activate the profile: `-Dquarkus.profile=postgresql` or `-Dquarkus.profile=filesystem`.
-#   4. Flyway migrations are dialect-specific:
-#      - db/migration/sqlite/     → SQLite (default, also used in %test)
-#      - db/migration/postgresql/ → PostgreSQL (activated with %postgresql profile)
+#   4. Flyway migrations are dialect-specific (owned by adapter modules):
+#      - arcclaw-persistence-sqlite/   → db/migration/sqlite/     (SQLite, default)
+#      - arcclaw-persistence-postgres/ → db/migration/postgresql/ (PostgreSQL, %postgresql profile)
 # Only ONE persistence adapter should be on the classpath at a time to avoid CDI ambiguity.
 # ---------------------------------------------------------------------------
 
@@ -861,19 +837,6 @@ mp:
       # PostgreSQL-specific migrations under db/migration/postgresql/
       locations: db/migration/postgresql
       clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}   # set to false to keep existing data across restarts
-    hibernate-orm:
-      database:
-        default-schema: public
-      schema-management:
-        strategy: none
-      sql-load-script: no-file
-      packages:
-        - com.arcclaw.persistence.sqlite.entity
-        - com.arcclaw.core.domain.model
-        - com.arcclaw.core.routing
-        - com.arcclaw.app.session
-      log:
-        sql: false
 
 #"%filesystem":
 #  # File-based persistence — no JDBC datasource or Hibernate required.

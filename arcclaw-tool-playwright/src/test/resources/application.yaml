@@ -46,9 +46,6 @@ quarkus:
   scheduler:
     enabled: false
   
-  hibernate-orm:
-    enabled: false
-  
   datasource:
     enabled: false
   
