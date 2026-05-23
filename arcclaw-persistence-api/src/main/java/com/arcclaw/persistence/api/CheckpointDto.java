@@ -35,4 +35,15 @@ public record CheckpointDto(
     int depth,
     Instant createdAt,
     Instant updatedAt
-) {}
+) {
+    public CheckpointDto withBatchToolDecisions(String batchToolDecisions) {
+        return new CheckpointDto(
+            id, sessionId, agentRole, status, autonomyLevel, stateJson,
+            channelPlatformId, channelType, originalGoal, failedAt, completedAt,
+            failReason, pendingToolName, batchToolDecisions, pendingToolParametersJson,
+            preExecutedResults, maxIterations, iterationsUsed, retryAfterMs,
+            systemNote, contextDataJson, errorCode, traceId, rootCauseClass,
+            parentCheckpointId, depth, createdAt, updatedAt
+        );
+    }
+}

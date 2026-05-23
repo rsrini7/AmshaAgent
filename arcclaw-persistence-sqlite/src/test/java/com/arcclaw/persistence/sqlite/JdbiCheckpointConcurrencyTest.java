@@ -115,4 +115,29 @@ class JdbiCheckpointConcurrencyTest {
         assertTrue(decisions.contains("APPROVED"), "Approved decision should survive");
         assertTrue(decisions.contains("PENDING"), "Other decisions should remain");
     }
+
+    @Test
+    void mergeBatchDecisionsPreservesManagedValueWhenIncomingNull() {
+        CheckpointDto initial = new CheckpointDto(
+            null, sessionId, "coordinator", "AWAITING_APPROVAL", "FULL", "{}",
+            null, null, "goal", null, null, null, null,
+            "{\"tool_a\":\"APPROVED\"}", null, null,
+            null, 0, null, null, null, null, null, null,
+            null, 0, Instant.now(), Instant.now()
+        );
+        checkpointStore.save(initial);
+
+        CheckpointDto incoming = new CheckpointDto(
+            null, sessionId, "coordinator", "AWAITING_APPROVAL", "FULL", "{}",
+            null, null, "goal", null, null, null, null,
+            null, null, null,
+            null, 0, null, null, null, null, null, null,
+            null, 0, Instant.now(), Instant.now()
+        );
+        checkpointStore.save(incoming);
+
+        CheckpointDto finalState = checkpointStore.findBySessionAndRole(sessionId, "coordinator").orElseThrow();
+        assertEquals("{\"tool_a\":\"APPROVED\"}", finalState.batchToolDecisions(),
+            "Decisions should be preserved from database when incoming has null");
+    }
 }

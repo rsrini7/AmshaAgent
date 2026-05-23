@@ -449,19 +449,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     private CheckpointDto mergeBatchDecisions(CheckpointDto managed, CheckpointDto incoming) {
         if (incoming.batchToolDecisions() == null) {
             if (managed.batchToolDecisions() != null) {
-                return new CheckpointDto(
-                    incoming.id(), incoming.sessionId(), incoming.agentRole(),
-                    incoming.status(), incoming.autonomyLevel(), incoming.stateJson(),
-                    incoming.channelPlatformId(), incoming.channelType(),
-                    incoming.originalGoal(), incoming.failedAt(), incoming.completedAt(),
-                    incoming.failReason(), incoming.pendingToolName(), managed.batchToolDecisions(),
-                    incoming.pendingToolParametersJson(), incoming.preExecutedResults(),
-                    incoming.maxIterations(), incoming.iterationsUsed(),
-                    incoming.retryAfterMs(), incoming.systemNote(),
-                    incoming.contextDataJson(), incoming.errorCode(),
-                    incoming.traceId(), incoming.rootCauseClass(),
-                    incoming.parentCheckpointId(), incoming.depth(),
-                    incoming.createdAt(), incoming.updatedAt());
+                return incoming.withBatchToolDecisions(managed.batchToolDecisions());
             }
             return incoming;
         }
@@ -487,19 +475,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             if (changed) {
                 try {
                     String mergedJson = objectMapper.writeValueAsString(incomingMap);
-                    return new CheckpointDto(
-                        incoming.id(), incoming.sessionId(), incoming.agentRole(),
-                        incoming.status(), incoming.autonomyLevel(), incoming.stateJson(),
-                        incoming.channelPlatformId(), incoming.channelType(),
-                        incoming.originalGoal(), incoming.failedAt(), incoming.completedAt(),
-                        incoming.failReason(), incoming.pendingToolName(), mergedJson,
-                        incoming.pendingToolParametersJson(), incoming.preExecutedResults(),
-                        incoming.maxIterations(), incoming.iterationsUsed(),
-                        incoming.retryAfterMs(), incoming.systemNote(),
-                        incoming.contextDataJson(), incoming.errorCode(),
-                        incoming.traceId(), incoming.rootCauseClass(),
-                        incoming.parentCheckpointId(), incoming.depth(),
-                        incoming.createdAt(), incoming.updatedAt());
+                    return incoming.withBatchToolDecisions(mergedJson);
                 } catch (Exception e) {
                     log.warnf("Failed to serialize merged decisions: %s", LogUtil.rootMessage(e));
                 }

@@ -116,4 +116,33 @@ class GlobalKnowledgeBaseTest {
             }
         });
     }
+
+    @Test
+    void ingestRollsBackWhenRagInsertFails() {
+        if (!ftsInterceptor.isVectorSearchEnabled()) {
+            return;
+        }
+
+        // Rename rag_chunk table to simulate database failure or missing table
+        jdbi.useHandle(handle -> handle.execute("ALTER TABLE rag_chunk RENAME TO rag_chunk_temp"));
+
+        String text = "test-rollback-" + UUID.randomUUID().toString().substring(0, 8);
+        String chunkId = null;
+        try {
+            chunkId = kb.ingest(text);
+        } finally {
+            // Restore table name to not break other tests
+            jdbi.useHandle(handle -> handle.execute("ALTER TABLE rag_chunk_temp RENAME TO rag_chunk"));
+        }
+
+        assertNull(chunkId, "ingest should return null on failure");
+
+        // Verify that no orphaned vector row was committed to vec_global
+        int orphanedCount = jdbi.withHandle(handle ->
+            handle.createQuery("SELECT COUNT(*) FROM fts.vec_global WHERE chunk_id NOT IN (SELECT chunk_id FROM rag_chunk)")
+                .mapTo(Integer.class)
+                .one()
+        );
+        assertEquals(0, orphanedCount, "No orphaned vectors should be left in fts.vec_global");
+    }
 }
