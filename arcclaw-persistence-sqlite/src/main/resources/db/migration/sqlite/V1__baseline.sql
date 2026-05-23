@@ -3,14 +3,14 @@
 -- No ALTER statements: during active development the data folder is deleted, so schema is always fresh.
 
 -- Advisory locks for distributed coordination (§T5-3)
-CREATE TABLE advisory_lock (
+CREATE TABLE IF NOT EXISTS advisory_lock (
     lock_key   TEXT NOT NULL PRIMARY KEY,
     owner_id   TEXT,
     expires_at TEXT
 );
 
 -- Agent checkpoints (session state, HITL flow)
-CREATE TABLE agent_checkpoint (
+CREATE TABLE IF NOT EXISTS agent_checkpoint (
     checkpoint_id            INTEGER PRIMARY KEY AUTOINCREMENT,
     version                  INTEGER NOT NULL,
     session_id               TEXT NOT NULL,
@@ -31,13 +31,13 @@ CREATE TABLE agent_checkpoint (
     pre_executed_results     TEXT,
     max_iterations           INTEGER,
     iterations_used          INTEGER NOT NULL DEFAULT 0,
-    retry_after_ms           INTEGER,
+    retry_after_ms           BIGINT,
     system_note              TEXT,
     context_data             TEXT,
     error_code               TEXT,
     trace_id                 TEXT,
     root_cause_class         TEXT,
-    parent_checkpoint_id     INTEGER,
+    parent_checkpoint_id     BIGINT,
     depth                    INTEGER NOT NULL DEFAULT 0,
     created_at               TEXT NOT NULL,
     updated_at               TEXT NOT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE agent_checkpoint (
 );
 
 -- Cron job schedule entries
-CREATE TABLE agent_cron (
+CREATE TABLE IF NOT EXISTS agent_cron (
     id                  TEXT PRIMARY KEY,
     sessionId           TEXT NOT NULL,
     userId              TEXT NOT NULL,
@@ -54,7 +54,7 @@ CREATE TABLE agent_cron (
     channelPlatformId   TEXT,
     cronExpression      TEXT NOT NULL,
     timezone            TEXT NOT NULL DEFAULT 'UTC',
-    runonce             INTEGER NOT NULL DEFAULT 0,
+    runonce             BOOLEAN NOT NULL DEFAULT FALSE,
     goal                TEXT NOT NULL,
     nextFireTime        TEXT NOT NULL,
     lastFireTime        TEXT,
@@ -67,7 +67,7 @@ CREATE TABLE agent_cron (
 );
 
 -- Agent cron job runs (execution history)
-CREATE TABLE agent_cron_run (
+CREATE TABLE IF NOT EXISTS agent_cron_run (
     id              TEXT PRIMARY KEY,
     cronId          TEXT NOT NULL,
     sessionId       TEXT NOT NULL,
@@ -78,13 +78,13 @@ CREATE TABLE agent_cron_run (
     iterationsUsed  INTEGER NOT NULL DEFAULT 0,
     inputTokens     INTEGER NOT NULL DEFAULT 0,
     outputTokens    INTEGER NOT NULL DEFAULT 0,
-    usdCost         TEXT NOT NULL DEFAULT '0.0',
+    usdCost         NUMERIC(10,6) NOT NULL DEFAULT 0.0,
     createdAt       TEXT NOT NULL,
     FOREIGN KEY (cronId) REFERENCES agent_cron(id) ON DELETE CASCADE
 );
 
 -- Agent skills (YAML-defined)
-CREATE TABLE agent_skill (
+CREATE TABLE IF NOT EXISTS agent_skill (
     id              TEXT PRIMARY KEY,
     name            TEXT NOT NULL UNIQUE,
     definitionYaml  TEXT NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE agent_skill (
 );
 
 -- Immutable audit event log (WORM-protected by triggers below)
-CREATE TABLE audit_event (
+CREATE TABLE IF NOT EXISTS audit_event (
     id               BLOB NOT NULL PRIMARY KEY,
     sessionId        TEXT NOT NULL,
     userId           TEXT,
@@ -115,24 +115,24 @@ CREATE TABLE audit_event (
 );
 
 -- Chat memory (JSON blob per session)
-CREATE TABLE chat_memory (
+CREATE TABLE IF NOT EXISTS chat_memory (
     memory_id     TEXT PRIMARY KEY,
     messages_json TEXT NOT NULL,
     metadata_json TEXT
 );
 
 -- Context compaction summaries (backed by FTS5 for full-text search)
-CREATE TABLE compaction_summary (
+CREATE TABLE IF NOT EXISTS compaction_summary (
     session_id         TEXT PRIMARY KEY,
     summary            TEXT NOT NULL,
-    compacted_at       TEXT NOT NULL,
+    compacted_at       TEXT,
     messages_compacted INTEGER NOT NULL,
     user_id            TEXT,
     tenant_id          TEXT
 );
 
 -- Encrypted secrets (AES-256-GCM-SIV ciphertext per key per session)
-CREATE TABLE encrypted_secrets (
+CREATE TABLE IF NOT EXISTS encrypted_secrets (
     session_id            TEXT NOT NULL,
     key_name              TEXT NOT NULL,
     encryption_key_version INTEGER NOT NULL DEFAULT 1,
@@ -142,7 +142,7 @@ CREATE TABLE encrypted_secrets (
 );
 
 -- RAG text chunks
-CREATE TABLE rag_chunk (
+CREATE TABLE IF NOT EXISTS rag_chunk (
     chunk_id   TEXT PRIMARY KEY,
     text       TEXT NOT NULL,
     source     TEXT,
@@ -150,7 +150,7 @@ CREATE TABLE rag_chunk (
 );
 
 -- Reasoning steps per checkpoint
-CREATE TABLE reasoning_step (
+CREATE TABLE IF NOT EXISTS reasoning_step (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     checkpoint_id    BIGINT NOT NULL,
     sequence_num     INTEGER NOT NULL,
@@ -160,14 +160,14 @@ CREATE TABLE reasoning_step (
     observation      TEXT,
     input_tokens     INTEGER,
     output_tokens    INTEGER,
-    success          INTEGER,
+    success          BOOLEAN,
     error_code       TEXT,
     trace_id         TEXT,
     root_cause_class TEXT
 );
 
 -- Session registry (channel/user → stable session ID mapping)
-CREATE TABLE session_registry (
+CREATE TABLE IF NOT EXISTS session_registry (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     channel_type TEXT NOT NULL,
     channel_id   TEXT NOT NULL,

@@ -119,6 +119,11 @@
       <artifactId>quarkus-caffeine</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.quarkiverse.jdbi</groupId>
+      <artifactId>quarkus-jdbi</artifactId>
+      <version>1.9.0</version>
+    </dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-rest-jackson</artifactId>
     </dependency>

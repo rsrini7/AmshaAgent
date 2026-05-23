@@ -277,8 +277,8 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public boolean isAllBatchToolsDecided(String sessionId, String agentRole) {
-        // Use findLatestAwaitingApproval (which has em.clear) to get fresh data
-        // after native SQL writes from BatchOps
+        // Use findLatestAwaitingApproval to get fresh data
+        // after writes from BatchOps (JDBI has no first-level cache)
         Optional<CheckpointDto> dtoOpt = storeAdapter.findLatestAwaitingApproval(sessionId)
                 .filter(dto -> agentRole.equals(dto.agentRole()));
         if (dtoOpt.isEmpty()) {

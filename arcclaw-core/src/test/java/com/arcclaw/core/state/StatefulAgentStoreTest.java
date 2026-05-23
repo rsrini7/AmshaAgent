@@ -15,7 +15,6 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
-import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.AfterEach;
@@ -74,7 +73,7 @@ class StatefulAgentStoreTest {
             assertNotNull(checkpoint.getCreatedAt());
 
             // Load
-            var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(session, ROLE));
+            var loaded = store.load(session, ROLE);
             assertTrue(loaded.isPresent(), "Checkpoint should be loadable");
             assertEquals(checkpoint.getId(), loaded.get().getId());
 
@@ -104,7 +103,7 @@ class StatefulAgentStoreTest {
             var checkpoint = store.save(sessionFail, ROLE, steps, "Trying something");
             store.markFailed(checkpoint.getId(), "LLM API timeout");
 
-            var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(sessionFail, ROLE));
+            var loaded = store.load(sessionFail, ROLE);
             assertTrue(loaded.isPresent());
             assertEquals(CheckpointStatus.FAILED, loaded.get().getStatus());
             assertNotNull(loaded.get().getFailedAt(), "failedAt should be set");
@@ -126,7 +125,7 @@ class StatefulAgentStoreTest {
             var checkpoint = store.save(sessionComplete, ROLE, steps, "All done");
             store.markCompleted(checkpoint.getId());
 
-            var loaded = QuarkusTransaction.requiringNew().call(() -> store.load(sessionComplete, ROLE));
+            var loaded = store.load(sessionComplete, ROLE);
             assertTrue(loaded.isPresent());
             // §7.31: markCompleted now automatically archives to prevent turn shadowing
             assertEquals(CheckpointStatus.ARCHIVED, loaded.get().getStatus());

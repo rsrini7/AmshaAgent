@@ -6,66 +6,50 @@ import java.util.Optional;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.ChatMemoryDto;
 import com.arcclaw.persistence.api.ChatMemoryStorePort;
-import com.arcclaw.persistence.common.entity.ChatMemoryEntity;
+import com.arcclaw.persistence.postgres.jdbi.ChatMemoryJdbiDao;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
+import org.jdbi.v3.core.Jdbi;
 
 /**
- * PostgreSQL implementation of ChatMemoryStorePort.
+ * PostgreSQL implementation of ChatMemoryStorePort using JDBI.
  */
 @ApplicationScoped
 @Unremovable
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresChatMemoryStoreAdapter implements ChatMemoryStorePort {
 
+    private final Jdbi jdbi;
+
     @Inject
-    EntityManager em;
+    public PostgresChatMemoryStoreAdapter(Jdbi jdbi) {
+        this.jdbi = jdbi;
+    }
+
+    protected PostgresChatMemoryStoreAdapter() {
+        this(null);
+    }
 
     @Override
-    @Transactional
     public void save(ChatMemoryDto dto) {
-        ChatMemoryEntity entity = new ChatMemoryEntity(
-            dto.memoryId(),
-            dto.messagesJson(),
-            dto.metadataJson()
-        );
-        em.merge(entity);
+        jdbi.useExtension(ChatMemoryJdbiDao.class, dao -> dao.save(dto));
     }
 
     @Override
-    @Transactional
     public Optional<ChatMemoryDto> findById(String memoryId) {
-        em.clear();
-        ChatMemoryEntity entity = em.find(ChatMemoryEntity.class, memoryId);
-        return Optional.ofNullable(entity).map(this::toDto);
+        return jdbi.withExtension(ChatMemoryJdbiDao.class, dao -> dao.findById(memoryId));
     }
 
     @Override
-    @Transactional
     public void deleteById(String memoryId) {
-        em.clear();
-        ChatMemoryEntity entity = em.find(ChatMemoryEntity.class, memoryId);
-        if (entity != null) {
-            em.remove(entity);
-        }
+        jdbi.useExtension(ChatMemoryJdbiDao.class, dao -> dao.deleteById(memoryId));
     }
 
     @Override
-    @Transactional
     public List<Long> getTimestamps(String memoryId) {
         return Collections.emptyList();
-    }
-
-    private ChatMemoryDto toDto(ChatMemoryEntity entity) {
-        return new ChatMemoryDto(
-            entity.getMemoryId(),
-            entity.getMessagesJson(),
-            entity.getMetadataJson()
-        );
     }
 }

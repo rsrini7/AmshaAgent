@@ -17,6 +17,7 @@ import com.arcclaw.core.util.TemporalUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agroal.api.AgroalDataSource;
+import io.quarkus.arc.properties.IfBuildProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.argument.AbstractArgumentFactory;
@@ -27,6 +28,7 @@ import org.jdbi.v3.core.statement.StatementContext;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
 
 @ApplicationScoped
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
 public class JdbiProducer {
 
     @Inject

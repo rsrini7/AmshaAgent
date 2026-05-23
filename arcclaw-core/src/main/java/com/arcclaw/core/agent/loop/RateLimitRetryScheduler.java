@@ -12,7 +12,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import jakarta.persistence.PersistenceException;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
@@ -66,7 +65,8 @@ public class RateLimitRetryScheduler {
     /**
      * Polls every 30 seconds for rate-limited sessions that are ready to resume.
      * 
-     * <p><strong>§5.9 (MUST):</strong> This method is transaction-free. Atomic state 
+     * <p>
+     * <strong>§5.9 (MUST):</strong> This method is transaction-free. Atomic state
      * transition is handled by {@link StatefulAgentStore#claimForRetry(Long)}.
      */
     @Scheduled(every = "30s", identity = "rate-limit-retry")
@@ -78,8 +78,9 @@ public class RateLimitRetryScheduler {
 
         try {
             List<AgentCheckpoint> awaiting = agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY);
-            log.tracef("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)", awaiting.size());
-            
+            log.tracef("RateLimitRetryScheduler: scanning for ready sessions (found %d in AWAITING_RETRY)",
+                    awaiting.size());
+
             if (awaiting.isEmpty()) {
                 backlogMaxAge.set(0);
                 return;
@@ -89,8 +90,10 @@ public class RateLimitRetryScheduler {
             long maxAgeSec = 0;
 
             for (AgentCheckpoint cp : awaiting) {
-                if (shuttingDown) return;
-                if (cp.getUpdatedAt() == null) continue;
+                if (shuttingDown)
+                    return;
+                if (cp.getUpdatedAt() == null)
+                    continue;
 
                 long ageSec = Duration.between(cp.getUpdatedAt(), now).getSeconds();
                 maxAgeSec = Math.max(maxAgeSec, ageSec);
@@ -102,13 +105,15 @@ public class RateLimitRetryScheduler {
                     log.infof("Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
                             cp.getSessionId(), retryAfterMs, ageSec);
 
-                    // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the adapter
+                    // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the
+                    // adapter
                     if (agentStore.claimForRetry(cp.getId())) {
                         try {
                             // Offload to background thread via AgentLoop.resume
                             agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
                         } catch (Exception e) {
-                            log.errorf("Failed to resume rate-limited session %s:\n%s", cp.getSessionId(), LogUtil.trimmedStack(e));
+                            log.errorf("Failed to resume rate-limited session %s:\n%s", cp.getSessionId(),
+                                    LogUtil.trimmedStack(e));
                             agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
                         }
                     } else {
@@ -119,15 +124,16 @@ public class RateLimitRetryScheduler {
                     log.debugf("Session %s still in backoff (%ds remaining)", cp.getSessionId(), remaining);
                 }
             }
-            
+
             backlogMaxAge.set(maxAgeSec);
-        } catch (IllegalStateException | PersistenceException e) {
+        } catch (RuntimeException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
                 log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
             } else {
-                log.infof("RateLimitRetryScheduler: database closed during processPendingRetries (app shutting down) - suppression intentional.");
+                log.infof(
+                        "RateLimitRetryScheduler: database closed during processPendingRetries (app shutting down) - suppression intentional.");
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
@@ -150,24 +156,26 @@ public class RateLimitRetryScheduler {
             Instant cutoff = Instant.now().minus(30, ChronoUnit.MINUTES);
 
             for (AgentCheckpoint cp : awaiting) {
-                if (shuttingDown) return;
+                if (shuttingDown)
+                    return;
                 if (cp.getUpdatedAt() != null && cp.getUpdatedAt().isBefore(cutoff)) {
                     log.errorf("Checkpoint %d is STALE in AWAITING_RETRY (updatedAt=%s). Marking as ORPHANED.",
                             cp.getId(), cp.getUpdatedAt());
-                    
-                    agentStore.markOrphaned(cp.getId(), 
-                        "Abandoned after 30 minutes in AWAITING_RETRY (potential scheduler outage)");
-                    
+
+                    agentStore.markOrphaned(cp.getId(),
+                            "Abandoned after 30 minutes in AWAITING_RETRY (potential scheduler outage)");
+
                     meterRegistry.counter("arcclaw.retry.orphaned.count").increment();
                 }
             }
-        } catch (IllegalStateException | PersistenceException e) {
+        } catch (RuntimeException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            boolean isShutdown = shuttingDown || msg.contains("EntityManagerFactory is closed");
+            boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
                 log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
             } else {
-                log.infof("RateLimitRetryScheduler: database closed during sweepOrphanedRetries (app shutting down) - suppression intentional.");
+                log.infof(
+                        "RateLimitRetryScheduler: database closed during sweepOrphanedRetries (app shutting down) - suppression intentional.");
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {

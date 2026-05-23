@@ -41,17 +41,9 @@ quarkus:
     jdbc:
       url: jdbc:postgresql://localhost:5432/test
 
-  hibernate-orm:
-    schema-management:
-      strategy: update
-    log:
-      sql: false
-    jdbc:
-      timezone: UTC
-    packages:
-      - com.arcclaw.persistence.common.entity
-      - com.arcclaw.persistence.postgres.entity
-      - com.arcclaw.core.domain.model
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/postgresql
 
   opentelemetry:
     enabled: false

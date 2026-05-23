@@ -29,7 +29,7 @@ import org.jboss.logging.Logger;
 /**
  * SQLite-backed implementation of LangChain4j {@link ChatMemoryStore}.
  * Refactored to delegate to {@link ChatMemoryStorePort}.
- * §1.2: Zero EntityManager imports, zero JPQL.
+ * §1.2: Zero JPA imports, pure JDBI delegation.
  * 
  * Logic (§8): Implements a rolling window that preserves all SystemMessages
  * and keeps the last 20 non-system messages (User/AI/Tool).

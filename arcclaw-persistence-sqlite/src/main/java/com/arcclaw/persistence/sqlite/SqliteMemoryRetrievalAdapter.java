@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.scope.WorkspaceScopeHolder;
@@ -36,7 +37,7 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     GlobalKnowledgeBase globalKb;
 
     @Inject
-    SessionKnowledgeBase sessionKb;
+    Instance<SessionKnowledgeBase> sessionKb;
 
     @Inject
     CompactionStorePort compactionRepo;
@@ -67,8 +68,8 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
         vectorResults.addAll(globalKb.search(query, topK * 2));
         
         // Session-scoped vector search (if applicable)
-        if (WorkspaceScopeHolder.isActive()) {
-            sessionKb.search(query, topK * 2).forEach(c -> 
+        if (!sessionKb.isUnsatisfied() && WorkspaceScopeHolder.isActive()) {
+            sessionKb.get().search(query, topK * 2).forEach(c ->
                 vectorResults.add(new MemoryChunkDto(c.chunkId(), c.text(), c.score())));
         }
 
@@ -94,9 +95,11 @@ public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
     public IngestResult index(MemoryEntryDto entry) {
         String chunkId = globalKb.ingest(entry.text());
         String fallbackId = entry.id() != null ? "session-" + entry.id() : UUID.randomUUID().toString();
-        sessionKb.ingest(
-            chunkId != null ? chunkId : fallbackId,
-            entry.text());
+        if (!sessionKb.isUnsatisfied()) {
+            sessionKb.get().ingest(
+                chunkId != null ? chunkId : fallbackId,
+                entry.text());
+        }
         return new IngestResult(chunkId != null ? chunkId : fallbackId, chunkId == null);
     }
 

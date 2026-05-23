@@ -19,7 +19,6 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
@@ -42,7 +41,8 @@ import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
 
 /**
- * Polls {@code agent_cron} table and dispatches due cron jobs to the {@link CronJobRunner}.
+ * Polls {@code agent_cron} table and dispatches due cron jobs to the
+ * {@link CronJobRunner}.
  * <p>
  * Architecture decisions:
  * <ul>
@@ -89,7 +89,7 @@ public class AgentCronScheduler {
     void init() {
         this.active = true;
         this.concurrencyLimiter = new Semaphore(maxConcurrent);
-        
+
         // Confirm resolution of the optional advisory lock port
         if (advisoryLock.isUnsatisfied()) {
             log.error("CRITICAL: AdvisoryLockPort implementation not found. Leader election will be disabled (§T5-3).");
@@ -110,7 +110,8 @@ public class AgentCronScheduler {
      * but whose sessions are now dead (as all sessions are non-persistent §5.17).
      */
     void onStartup(@Observes StartupEvent ev) {
-        if (active) sweepOrphanedApprovalJobs();
+        if (active)
+            sweepOrphanedApprovalJobs();
     }
 
     void onShutdown(@Observes ShutdownEvent ev) {
@@ -118,7 +119,8 @@ public class AgentCronScheduler {
     }
 
     private void sweepOrphanedApprovalJobs() {
-        if (!active) return;
+        if (!active)
+            return;
         log.info("AgentCronScheduler: starting orphan sweep for AWAITING_APPROVAL jobs...");
         try {
             List<AgentCron> orphaned = cronStore.findAllAwaitingApproval().stream()
@@ -135,13 +137,14 @@ public class AgentCronScheduler {
                 cronStore.markFailed(job.getId(), "Orphaned - session expired before approval (server restart).");
             }
             log.infof("AgentCronScheduler: orphan sweep complete. %d job(s) updated.", orphaned.size());
-        } catch (IllegalStateException | PersistenceException e) {
+        } catch (RuntimeException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            boolean isShutdown = !active || msg.contains("EntityManagerFactory is closed");
+            boolean isShutdown = !active || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
                 log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
             } else {
-                log.infof("AgentCronScheduler: persistence closed during sweep (app shutting down) - suppression intentional.");
+                log.infof(
+                        "AgentCronScheduler: persistence closed during sweep (app shutting down) - suppression intentional.");
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {
@@ -166,14 +169,16 @@ public class AgentCronScheduler {
     }
 
     /**
-     * Schedules a one-shot job to fire exactly at its nextFireTime if it is due soon.
+     * Schedules a one-shot job to fire exactly at its nextFireTime if it is due
+     * soon.
      */
     public void scheduleSoon(String jobId) {
         AgentCron job = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
-        if (job == null || !job.isRunOnce() || job.getNextFireTime() == null) return;
-        
+        if (job == null || !job.isRunOnce() || job.getNextFireTime() == null)
+            return;
+
         long delayMillis = Duration.between(Instant.now(), job.getNextFireTime()).toMillis();
-        
+
         if (delayMillis < 120_000) {
             log.infof("CRON-PRECISE-SCHEDULE id=%s, firing in %dms", job.getId(), Math.max(0, delayMillis));
             preciseScheduler.schedule(() -> {
@@ -189,24 +194,26 @@ public class AgentCronScheduler {
     @ActivateRequestContext
     public void executeSoonInternal(String jobId) {
         AgentCron job = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
-        if (job == null) return;
+        if (job == null)
+            return;
 
         MDC.put(MdcKeys.USER_ID, job.getUserId());
         try {
             if (cronStore.claimForFire(job.getId())) {
-                 log.infof("CRON-PRECISE-FIRE id=%s", job.getId());
-                 
-                 final String capturedUserId = (String) MDC.get(MdcKeys.USER_ID);
-                 vThreads.execute(() -> {
-                     if (capturedUserId != null) MDC.put(MdcKeys.USER_ID, capturedUserId);
-                     try {
-                         jobRunner.execute(job);
-                     } catch (Exception e) {
-                          log.errorf("CRON-EXEC-FAIL id=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
-                     } finally {
-                         MdcCleaner.clearAll();
-                     }
-                 });
+                log.infof("CRON-PRECISE-FIRE id=%s", job.getId());
+
+                final String capturedUserId = (String) MDC.get(MdcKeys.USER_ID);
+                vThreads.execute(() -> {
+                    if (capturedUserId != null)
+                        MDC.put(MdcKeys.USER_ID, capturedUserId);
+                    try {
+                        jobRunner.execute(job);
+                    } catch (Exception e) {
+                        log.errorf("CRON-EXEC-FAIL id=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
+                    } finally {
+                        MdcCleaner.clearAll();
+                    }
+                });
             }
         } finally {
             MdcCleaner.clearAll();
@@ -241,8 +248,7 @@ public class AgentCronScheduler {
      * Step 1: Query due rows (read-only - no write lock)
      * Step 2: Claim → throttle check → dispatch via JobRunner
      */
-    @Scheduled(every = "${arcclaw.cron.poll-interval:30s}",
-               concurrentExecution = ConcurrentExecution.SKIP)
+    @Scheduled(every = "${arcclaw.cron.poll-interval:30s}", concurrentExecution = ConcurrentExecution.SKIP)
     @ActivateRequestContext
     @Transactional(TxType.NOT_SUPPORTED)
     void pollAndDispatch() {
@@ -259,38 +265,44 @@ public class AgentCronScheduler {
             // Step 0.1 - Crash recovery
             cronStore.reclaimStaleCrons(
                     Instant.now().minus(5, ChronoUnit.MINUTES));
-            
+
             // Step 1 - Query due rows
             List<AgentCron> due = cronStore.findDueCrons().stream()
                     .map(AgentCronRecord::fromDto)
                     .collect(Collectors.<AgentCron>toList());
-            if (due.isEmpty()) return;
+            if (due.isEmpty())
+                return;
 
             Instant lookbackCutoff = Instant.now().minus(maxLookbackWindow);
 
             Iterator<AgentCron> iter = due.iterator();
             while (iter.hasNext()) {
-                if (!active) return;
+                if (!active)
+                    return;
                 AgentCron job = iter.next();
                 if (job.getNextFireTime().isBefore(lookbackCutoff)) {
-                    log.warnf("Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
-                        job.getId(), job.getNextFireTime(), lookbackCutoff);
+                    log.warnf(
+                            "Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
+                            job.getId(), job.getNextFireTime(), lookbackCutoff);
                     Instant newNext = (job.getCronExpression() != null && !job.getCronExpression().isBlank())
-                        ? CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone())
-                        : null;
+                            ? CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone())
+                            : null;
                     cronStore.markSkipped(job.getId(), newNext, Instant.now());
                     iter.remove();
                 }
             }
 
-            if (due.isEmpty()) return;
+            if (due.isEmpty())
+                return;
 
             log.infof("CRON-POLL found %d due job(s)", due.size());
 
             // Step 2 - Dispatch loop
             for (AgentCron job : due) {
-                if (!active) break;
-                if (!cronStore.claimForFire(job.getId())) continue;
+                if (!active)
+                    break;
+                if (!cronStore.claimForFire(job.getId()))
+                    continue;
 
                 if (!concurrencyLimiter.tryAcquire()) {
                     log.warnf("CRON-THROTTLED cronId=%s, releasing claim", job.getId());
@@ -315,13 +327,14 @@ public class AgentCronScheduler {
                     cronStore.releaseClaimToActive(job.getId());
                 }
             }
-        } catch (IllegalStateException | PersistenceException e) {
+        } catch (RuntimeException e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            boolean isShutdown = !active || msg.contains("EntityManagerFactory is closed");
+            boolean isShutdown = !active || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
                 log.error("AgentCronScheduler: pollAndDispatch failed", e);
             } else {
-                log.infof("AgentCronScheduler: database closed during pollAndDispatch (app shutting down) - suppression intentional.");
+                log.infof(
+                        "AgentCronScheduler: database closed during pollAndDispatch (app shutting down) - suppression intentional.");
                 log.debugf("Full shutdown race details:\n%s", LogUtil.trimmedStack(e));
             }
         } catch (Exception e) {

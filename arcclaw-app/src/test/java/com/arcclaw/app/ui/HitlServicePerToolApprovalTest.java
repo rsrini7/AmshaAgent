@@ -1,19 +1,23 @@
 package com.arcclaw.app.ui;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-import jakarta.persistence.EntityManager;
+import java.util.Optional;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.api.CheckpointDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jdbi.v3.core.Handle;
+import org.jdbi.v3.core.HandleCallback;
+import org.jdbi.v3.core.Jdbi;
+import org.jdbi.v3.core.mapper.RowMapperFactory;
+import org.jdbi.v3.core.result.ResultIterable;
+import org.jdbi.v3.core.statement.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -22,25 +26,50 @@ import org.mockito.MockitoAnnotations;
 
 public class HitlServicePerToolApprovalTest {
 
-    @Mock EntityManager em;
-    @Mock CheckpointApprovalService checkpointApprovalService;
-    @Mock AgentOtelContext otelContext;
-    @Mock ObjectMapper objectMapper;
-    @Mock SessionHeartbeatTracker heartbeatTracker;
-    @InjectMocks HitlService hitlService;
+    @Mock
+    Jdbi jdbi;
+    @Mock
+    Handle handle;
+    @Mock
+    Query query;
+    @Mock
+    CheckpointApprovalService checkpointApprovalService;
+    @Mock
+    AgentOtelContext otelContext;
+    @Mock
+    ObjectMapper objectMapper;
+    @Mock
+    SessionHeartbeatTracker heartbeatTracker;
+    @InjectMocks
+    HitlService hitlService;
 
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
+
+        // Stub withHandle
+        when(jdbi.withHandle(any())).thenAnswer(invocation -> {
+            HandleCallback<?, Exception> callback = invocation.getArgument(0);
+            return callback.withHandle(handle);
+        });
+
+        when(handle.createQuery(anyString())).thenReturn(query);
+        when(query.bind(anyString(), any(Object.class))).thenReturn(query);
+        when(query.bind(anyString(), any(Long.class))).thenReturn(query);
+        when(query.registerRowMapper(any(RowMapperFactory.class))).thenReturn(query);
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void test_resolve_perToolApprove_delegatesCorrectly() {
-        AgentCheckpointEntity cp = new AgentCheckpointEntity();
-        cp.setSessionId("s1");
-        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        CheckpointDto cp = new CheckpointDto(
+                1L, "s1", "default", CheckpointStatus.AWAITING_APPROVAL.name(),
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, 0, null, null, null, null, null, null, null, 0, null, null);
 
-        when(em.find(AgentCheckpointEntity.class, 1L)).thenReturn(cp);
+        ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
+        when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
+        when(resultIterable.findOne()).thenReturn(Optional.of(cp));
 
         hitlService.resolve("1", ToolCapability.GITHUB.toolName(), true, "approved github");
 
@@ -49,12 +78,16 @@ public class HitlServicePerToolApprovalTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void test_resolve_perToolDeny_delegatesCorrectly() {
-        AgentCheckpointEntity cp = new AgentCheckpointEntity();
-        cp.setSessionId("s1");
-        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        CheckpointDto cp = new CheckpointDto(
+                1L, "s1", "default", CheckpointStatus.AWAITING_APPROVAL.name(),
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, 0, null, null, null, null, null, null, null, 0, null, null);
 
-        when(em.find(AgentCheckpointEntity.class, 1L)).thenReturn(cp);
+        ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
+        when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
+        when(resultIterable.findOne()).thenReturn(Optional.of(cp));
 
         hitlService.resolve("1", "sandboxexec", false, "unsafe");
 
@@ -63,12 +96,16 @@ public class HitlServicePerToolApprovalTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void test_resolve_bulkApprove_stillWorks() {
-        AgentCheckpointEntity cp = new AgentCheckpointEntity();
-        cp.setSessionId("s1");
-        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        CheckpointDto cp = new CheckpointDto(
+                1L, "s1", "default", CheckpointStatus.AWAITING_APPROVAL.name(),
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, 0, null, null, null, null, null, null, null, 0, null, null);
 
-        when(em.find(AgentCheckpointEntity.class, 1L)).thenReturn(cp);
+        ResultIterable<CheckpointDto> resultIterable = mock(ResultIterable.class);
+        when(query.mapTo(CheckpointDto.class)).thenReturn(resultIterable);
+        when(resultIterable.findOne()).thenReturn(Optional.of(cp));
 
         hitlService.resolve("1", null, true, "bulk");
 

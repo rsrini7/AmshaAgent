@@ -2,87 +2,58 @@ package com.arcclaw.persistence.postgres;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.api.SkillStorePort;
-import com.arcclaw.persistence.common.entity.AgentSkillEntity;
+import com.arcclaw.persistence.postgres.jdbi.SkillJdbiDao;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
+import org.jdbi.v3.core.Jdbi;
 
 /**
- * PostgreSQL implementation of SkillStorePort.
+ * PostgreSQL implementation of SkillStorePort using JDBI.
  */
 @ApplicationScoped
 @Unremovable
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresSkillStoreAdapter implements SkillStorePort {
 
+    private final Jdbi jdbi;
+
     @Inject
-    EntityManager em;
+    public PostgresSkillStoreAdapter(Jdbi jdbi) {
+        this.jdbi = jdbi;
+    }
+
+    protected PostgresSkillStoreAdapter() {
+        this(null);
+    }
 
     @Override
-    @Transactional
     public void save(SkillDto dto) {
-        AgentSkillEntity entity = new AgentSkillEntity(
-            dto.id(),
-            dto.name(),
-            dto.definitionYaml(),
-            dto.createdAt(),
-            dto.updatedAt()
-        );
-        em.merge(entity);
+        jdbi.useExtension(SkillJdbiDao.class, dao -> dao.save(dto));
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public List<SkillDto> findAll() {
-        return em.createQuery("SELECT s FROM AgentSkillEntity s", AgentSkillEntity.class)
-                .getResultList()
-                .stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return jdbi.withExtension(SkillJdbiDao.class, SkillJdbiDao::findAll);
     }
 
     @Override
-    @Transactional(Transactional.TxType.SUPPORTS)
     public Optional<SkillDto> findByName(String name) {
-        return em.createQuery("SELECT s FROM AgentSkillEntity s WHERE s.name = :name", AgentSkillEntity.class)
-                .setParameter("name", name)
-                .getResultStream()
-                .findFirst()
-                .map(this::toDto);
+        return jdbi.withExtension(SkillJdbiDao.class, dao -> dao.findByName(name));
     }
 
     @Override
-    @Transactional
     public boolean deleteById(String id) {
-        AgentSkillEntity entity = em.find(AgentSkillEntity.class, id);
-        if (entity != null) {
-            em.remove(entity);
-            return true;
-        }
-        return false;
+        return jdbi.withExtension(SkillJdbiDao.class, dao -> dao.deleteById(id));
     }
 
     @Override
-    @Transactional
     public long deleteAll() {
-        return em.createQuery("DELETE FROM AgentSkillEntity").executeUpdate();
-    }
-
-    private SkillDto toDto(AgentSkillEntity entity) {
-        return new SkillDto(
-            entity.getId(),
-            entity.getName(),
-            entity.getDefinitionYaml(),
-            entity.getCreatedAt(),
-            entity.getUpdatedAt()
-        );
+        return jdbi.withExtension(SkillJdbiDao.class, SkillJdbiDao::deleteAll);
     }
 }

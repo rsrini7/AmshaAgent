@@ -43,6 +43,7 @@
     <bouncycastle.version>1.78.1</bouncycastle.version>
     <archunit.version>1.4.1</archunit.version>
     <camel.quarkus.version>3.27.3</camel.quarkus.version>
+    <quarkus-jdbi.version>1.9.0</quarkus-jdbi.version>
     <maven.surefire.argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</maven.surefire.argLine>
   </properties>
  
@@ -132,6 +133,11 @@
         <groupId>com.tngtech.archunit</groupId>
         <artifactId>archunit-junit5</artifactId>
         <version>${archunit.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.jdbi</groupId>
+        <artifactId>quarkus-jdbi</artifactId>
+        <version>${quarkus-jdbi.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

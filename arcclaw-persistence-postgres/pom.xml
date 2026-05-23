@@ -39,8 +39,8 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-hibernate-orm</artifactId>
+          <groupId>io.quarkiverse.jdbi</groupId>
+          <artifactId>quarkus-jdbi</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>

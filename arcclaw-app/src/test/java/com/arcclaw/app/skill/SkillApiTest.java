@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
 import jakarta.inject.Inject;
-import jakarta.persistence.PessimisticLockException;
 
 import com.arcclaw.app.security.ApiKeyRegistry;
 import com.arcclaw.core.audit.ComplianceAuditService;
@@ -49,7 +48,7 @@ class SkillApiTest {
             try {
                 skillStore.deleteAll();
                 return;
-            } catch (PessimisticLockException e) {
+            } catch (RuntimeException e) {
                 if (i >= maxRetries - 1) throw e;
                 try {
                     Thread.sleep(2000L * (i + 1));
