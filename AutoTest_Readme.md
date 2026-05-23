@@ -1,16 +1,36 @@
+# ArcClaw Autotest
+
+## Usage
+
 ```bash
-# Full run with JSON report
-python3 autotest.py -f telegram-test-arcclaw.txt -j results.json -l run.log -v
+# SQLite (default) — full run
+python3 autotest.py -f telegram-test-arcclaw.txt -j results.json -l run.log -v --backend sqlite
+
+# PostgreSQL — auto-starts Podman container
+python3 autotest.py -f telegram-test-arcclaw.txt -j results-pg.json -l run-pg.log -v --backend pg
+
+# Filesystem — no database needed
+python3 autotest.py -f telegram-test-arcclaw.txt -j results-fs.json -l run-fs.log -v --backend fs
 
 # Quick sanity: first 20 cases, fail-fast
-python3 autotest.py -r 1-20 --fail-fast
+python3 autotest.py -r 1-20 --fail-fast --backend sqlite
 
 # Skip heavy browser/code-exec tests
-python3 autotest.py --skip-categories browse,code_exec -j quick.json
+python3 autotest.py --skip-categories browse,code_exec -j quick.json --backend sqlite
 ```
 
-Old Ref:
+## Shell Wrappers
 
-python3 ./autotest.py --log-file autotest-full.log --delay 4 --approval-delay 2 
+| Script | Backend | Rows |
+|---|---|---|
+| `autotest-sqlite.sh` | SQLite | All |
+| `autotest-pg.sh` | PostgreSQL | All |
+| `autotest-fs.sh` | Filesystem | All |
+| `autotest-sqlite-rows.sh` | SQLite | 1-20 |
+| `autotest-pg-rows.sh` | PostgreSQL | 1-20 |
+| `autotest-fs-rows.sh` | Filesystem | 1-20 |
 
-python3 ./autotest.py --log-file autotest-with-rows.log -r 148-150 --delay 4 --approval-delay 2 --port 8999
+## Remarks
+
+- For PostgreSQL, the Podman container is auto-started by `mise run jar:pg:chat` if not already running.
+- Log files: `arcclaw-cli.log` (SQLite), `arcclaw-pg.log` (PostgreSQL), `arcclaw-fs.log` (Filesystem)

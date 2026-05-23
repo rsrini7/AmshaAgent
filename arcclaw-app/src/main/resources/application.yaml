@@ -219,8 +219,10 @@ smallrye:
   # ---------------------------------------------------------------------------
   # LOGGING
   # ---------------------------------------------------------------------------
-  log:
-    level: INFO
+    log:
+      console:
+        enabled: false
+      level: INFO
     category:
       "dev.langchain4j.model.chat.listener.ListenersUtil":
         level: ERROR
@@ -583,7 +585,7 @@ mp:
         "io.quarkus.agroal":
           level: ERROR     # Silences "Agroal does not support..."
         "com.arcclaw":
-          level: DEBUG     # Silences WorkspaceManager and SqliteWalConfigurer
+          level: DEBUG
       file:
         enabled: true
         path: ./arcclaw-cli.log
@@ -824,6 +826,8 @@ mp:
       locations: db/migration/postgresql
       clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}
     log:
+      console:
+        enabled: false
       level: INFO
       file:
         enabled: true
@@ -847,6 +851,8 @@ mp:
     flyway:
       enabled: false
     log:
+      console:
+        enabled: false
       level: INFO
       file:
         enabled: true

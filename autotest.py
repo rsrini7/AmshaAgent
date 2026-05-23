@@ -633,6 +633,8 @@ def main():
     parser.add_argument("--skip-categories",     default="")
     parser.add_argument("--autonomy",            default="supervised",
                         choices=["supervised","full"])
+    parser.add_argument("--backend",             default="sqlite",
+                        choices=["sqlite","pg","fs"])
     parser.add_argument("--deny-security",       action="store_true", default=True)
     parser.add_argument("--fail-fast",           action="store_true")
     args = parser.parse_args()
@@ -656,9 +658,16 @@ def main():
     log_f = open(args.log_file, "w", encoding="utf-8") if args.log_file else None
     cli_log_path = os.environ.get("ARCCLAW_CLI_LOG", "arcclaw-cli.log")
 
+    backend = args.backend
+    if backend == "pg":
+        cli_log_path = os.environ.get("ARCCLAW_CLI_LOG", "arcclaw-pg.log")
+    elif backend == "fs":
+        cli_log_path = os.environ.get("ARCCLAW_CLI_LOG", "arcclaw-fs.log")
+
     print(f"\u2726 ArcClaw Autotest v3.0")
     print(f"  File      : {args.file}")
     print(f"  Range     : {args.range} \u2192 {len(cases)} cases")
+    print(f"  Backend   : {backend}")
     print(f"  CLI log   : {cli_log_path}")
     print(f"  Role      : {args.role} | Autonomy: {args.autonomy}")
     print(f"  Delay     : {args.delay}s | Timeout: {args.timeout}s")
@@ -666,6 +675,10 @@ def main():
     print("-" * 60)
 
     cmd = ["mise", "run", "jar:chat", "--role", args.role]
+    if backend == "pg":
+        cmd = ["mise", "run", "jar:pg:chat", "--role", args.role]
+    elif backend == "fs":
+        cmd = ["mise", "run", "jar:fs:chat", "--role", args.role]
     if args.autonomy == "full":
         cmd += ["--autonomy", "FULL"]
 
