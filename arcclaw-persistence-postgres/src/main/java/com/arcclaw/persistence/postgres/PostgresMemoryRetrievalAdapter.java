@@ -101,13 +101,16 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
         jdbi.useTransaction(handle -> {
             var dao = handle.attach(RagChunkJdbiDao.class);
             dao.insert(chunkId, entry.text(), "System", Instant.now());
-            try {
-                Embedding embedding = embeddingModel.embed(entry.text()).content();
-                dao.upsertEmbedding(chunkId, floatArrayToJson(embedding.vector()));
-            } catch (Exception e) {
-                // embedding model unavailable — insert text only
-            }
         });
+        // Embedding runs outside the transaction — embed calls are slow I/O
+        // that corrupt Agroal connection state if they fail inside a tx
+        try {
+            Embedding embedding = embeddingModel.embed(entry.text()).content();
+            jdbi.useExtension(RagChunkJdbiDao.class, dao ->
+                dao.upsertEmbedding(chunkId, floatArrayToJson(embedding.vector())));
+        } catch (Exception e) {
+            // embedding model unavailable — text-only insert is still committed
+        }
         return new IngestResult(chunkId, false);
     }
 
