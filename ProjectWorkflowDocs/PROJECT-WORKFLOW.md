@@ -764,11 +764,26 @@ AuditService.record(sessionId, userId, agentRole, SecurityEventType, detail)
   → AuditEventRepository.record() → em.persist(AuditEvent)
 ```
 
-`AuditVerifier.verifyChain(sessionId)` re-computes HMAC for all events and confirms no tampering. `GET /audit/{sessionId}` exposes the full chain. `AsyncPersistenceEngine` drains two virtual threads (critical path / telemetry path). `ComplianceViolationException` bypasses normal error handling, marks the checkpoint as `COMPROMISED`, and surfaces `SECURITY ALERT` in structured logs.
+`AuditVerifier.verifyChain(sessionId)` re-computes HMAC for all events and confirms no tampering. `GET /audit/{sessionId}` exposes the full chain. `AsyncPersistenceEngine` drains two virtual threads (critical path / telemetry path). `ComplianceViolationException` is thrown when a **mandatory audit write fails** after all retries — signals a fail-closed compliance violation, not a security event itself.
 
 ### Security Events Audited
 
-`SecurityEventType` includes: `SESSION_CREATED`, `SESSION_TERMINATED`, `TOOL_INVOKED`, `TOOL_APPROVED`, `TOOL_DENIED`, `CHECKPOINT_PERSISTED`, `CHECKPOINT_RESUMED`, `CRON_FIRED`, `CRON_FAILED`, `COMPLIANCE_VIOLATION`, `INJECTION_DETECTED`, `PII_DETECTED`.
+`SecurityEventType` has 61 entries organized by category:
+
+- **Loop events**: `LOOP_FINISH`, `LOOP_ERROR`, `LOOP_BUDGET_EXCEEDED`, `LOOP_MAX_ITERATIONS`, `LOOP_AWAITING_APPROVAL`, `LOOP_AWAITING_RETRY`
+- **Role/channel fallbacks**: `INVALID_ROLE_FALLBACK`, `LEGACY_CHANNEL_FALLBACK`
+- **Tool events**: `TOOL_INVOKED`, `TOOL_EXECUTED`, `TOOL_BLOCKED`, `TOOL_FAILED`
+- **Approval events**: `APPROVAL_GRANTED`, `APPROVAL_DENIED`, `DELEGATE_APPROVAL`
+- **Injection/PII**: `PROMPT_INJECTION_BLOCKED`, `PII_SCAN_REDACTED`
+- **Reflex/system**: `REFLEX_COMMAND`, `SECURITY`, `CONTEXT_COMPACTED`, `BUDGET_EXCEEDED`
+- **Vault events**: `VAULT_ACCESS`, `VAULT_STORE`, `VAULT_RETRIEVE`, `VAULT_RETRIEVE_MISS`
+- **Checkpoint events**: `CHECKPOINT_CREATED`, `CHECKPOINT_COMPLETED`, `CHECKPOINT_FAILED`, `CHECKPOINT_ORPHANED`
+- **Cron events**: `CRONCREATED`, `CRONFIRED`, `CRONFAILED`, `CRONDELETED`, `CRON_PAUSED`, `CRON_RESUMED`, `CRON_FORCE_TRIGGERED`
+- **Skill events**: `SKILL_LOADED`, `SKILL_REFRESHED`, `SKILL_CREATED`, `SKILL_DELETED`
+- **MCP events**: `MCP_TOOL_INVOKED`, `MCP_SERVER_CONNECTED`, `MCP_SERVER_DISCONNECTED`
+- **Session events**: `SESSION_CREATED`, `SESSION_TERMINATED`, `UNAUTHORIZED_ACCESS`, `AUTH_REJECTED`
+- **Settings/events**: `SETTINGS_CHANGED`, `SETTINGS_RESET`, `ONBOARDING_COMPLETED`
+- **Other**: `STRUCTURED_OUTPUT_RETRY`, `DELEGATION_DISPATCHED`, `WS_TOKEN_ISSUED`, `MEMORY_INGESTED`
 
 ---
 
