@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
@@ -24,13 +24,6 @@ interface CronJob {
   lastDeliveryId: string;
   createdAt: string;
   updatedAt: string;
-}
-
-interface CronListResponse {
-  crons: CronJob[];
-  total: number;
-  page: number;
-  size: number;
 }
 
 interface CronRun {
@@ -135,6 +128,9 @@ export class ArcSchedulerPanel extends LitElement {
       z-index: 201; overflow-y: auto;
       padding: var(--space-6);
     }
+    .drawer::-webkit-scrollbar { width: 6px; }
+    .drawer::-webkit-scrollbar-track { background: transparent; }
+    .drawer::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
     .drawer h3 { margin: 0 0 var(--space-4); }
     .drawer-field { margin-bottom: var(--space-3); }
     .drawer-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }

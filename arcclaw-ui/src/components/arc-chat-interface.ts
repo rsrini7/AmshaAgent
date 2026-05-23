@@ -94,6 +94,10 @@ export class ArcChatInterface extends LitElement {
       position: relative;
       min-height: 0;
     }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+    .messages::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
     
     .msg-group {
       display: flex; flex-direction: column; gap: 2px;
@@ -209,9 +213,16 @@ export class ArcChatInterface extends LitElement {
     }
     
     /* Markdown Styles */
-    .bubble pre { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin: 8px 0; overflow-x: auto; }
+    .bubble pre {
+      background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;
+      margin: 8px 0; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+      max-width: 100%; font-size: 13px; line-height: 1.5;
+    }
+    .bubble pre::-webkit-scrollbar { height: 4px; }
+    .bubble pre::-webkit-scrollbar-track { background: transparent; }
+    .bubble pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
     .bubble code { font-family: 'Fira Code', monospace; font-size: 0.9em; background: rgba(255,255,255,0.05); padding: 2px 4px; border-radius: 4px; }
-    .bubble pre code { background: transparent; padding: 0; }
+    .bubble pre code { background: transparent; padding: 0; font-size: inherit; }
     .bubble p { margin-bottom: 4px; }
     .bubble p:last-child { margin-bottom: 0; }
 

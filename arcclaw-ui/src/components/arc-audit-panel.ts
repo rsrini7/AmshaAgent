@@ -92,11 +92,9 @@ export class ArcAuditPanel extends LitElement {
       scrollbar-width: thin;
       scrollbar-color: var(--text-tertiary) transparent;
     }
-    .table-wrap::-webkit-scrollbar { width: 8px; }
+    .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
     .table-wrap::-webkit-scrollbar-track { background: transparent; }
-    .table-wrap::-webkit-scrollbar-thumb {
-      background: var(--text-tertiary); border-radius: 4px;
-    }
+    .table-wrap::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 4px; }
     .table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
     table {
       width: 100%; border-collapse: collapse;
@@ -161,6 +159,9 @@ export class ArcAuditPanel extends LitElement {
       z-index: 201; overflow-y: auto;
       padding: var(--space-6);
     }
+    .drawer::-webkit-scrollbar { width: 6px; }
+    .drawer::-webkit-scrollbar-track { background: transparent; }
+    .drawer::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
     .drawer h3 { margin: 0 0 var(--space-4); }
     .drawer-field { margin-bottom: var(--space-3); }
     .drawer-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
