@@ -8,11 +8,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class DefaultRoutingProvider implements IntentRoutingProvider {
+
+    private static final Pattern CAPABILITIES_PATTERN = Pattern.compile(
+        "(?i)^\\s*(capabilities\\s*\\??|what\\s+can\\s+you\\s+do\\s*\\??|who\\s+are\\s+you\\s*\\??)\\s*$");
+
     @Override
     public List<Pattern> fastPathTriggers() {
-        return List.of(
-            Pattern.compile("(?i)^\\s*(capabilities\\s*\\??|what\\s+can\\s+you\\s+do\\s*\\??|who\\s+are\\s+you\\s*\\??)\\s*$")
-        );
+        return List.of(CAPABILITIES_PATTERN);
     }
 
     @Override
