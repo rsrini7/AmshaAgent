@@ -147,6 +147,11 @@ export class ArcShell extends LitElement {
       window.location.hash = '#/onboarding';
       return;
     }
+    if (this._apiKey && this._route === '#/onboarding') {
+      this._route = '#/chat';
+      window.location.hash = '#/chat';
+      return;
+    }
 
     // Proactively refresh when navigating if not connected
     if (this._apiKey) {
@@ -345,6 +350,7 @@ export class ArcShell extends LitElement {
 
   private _startSse() {
     this._sseManager?.disconnect();
+    if (!this._sessionId) return;
     this._sseManager = new SseManager(
       `/api/v1/chat/stream?sessionId=${encodeURIComponent(this._sessionId)}`,
       this._apiKey,
@@ -376,6 +382,12 @@ export class ArcShell extends LitElement {
         window.setTimeout(() => (window.location.hash = '#/onboarding'), 0);
       }
       return html`<arc-onboarding class="content-area"></arc-onboarding>`;
+    }
+
+    const validRoute = ROUTES.find(r => r.hash === this._route);
+    if (!validRoute) {
+      window.setTimeout(() => (window.location.hash = '#/chat'), 0);
+      return html`<arc-chat-interface class="content-area"></arc-chat-interface>`;
     }
 
     return html`

@@ -17,5 +17,23 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     target: 'es2022',
+    rollupOptions: {
+      output: {
+        // Ensure CSS loads before JS in the generated index.html
+        manualChunks: undefined,
+      },
+    },
   },
+  plugins: [
+    {
+      name: 'css-before-js',
+      transformIndexHtml(html) {
+        // Reorder: put <link> (CSS) before <script> (JS) in <head>
+        return html.replace(
+          /(<script type="module"[^>]*><\/script>)\s*(<link rel="stylesheet"[^>]*>)/,
+          '$2\n  $1'
+        );
+      },
+    },
+  ],
 });

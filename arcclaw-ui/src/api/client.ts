@@ -12,7 +12,7 @@ export class ArcClient {
     const h: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.apiKey) {
+    if (this.apiKey && this.apiKey !== 'authenticated') {
       h['X-ARCCLAW-API-KEY'] = this.apiKey;
     }
     return h;

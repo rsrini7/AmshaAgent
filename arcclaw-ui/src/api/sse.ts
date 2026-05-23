@@ -18,12 +18,15 @@ export class SseManager {
     this._controller = new AbortController();
     
     try {
+      const headers: Record<string, string> = {
+        'Accept': 'text/event-stream',
+      };
+      if (this.apiKey && this.apiKey !== 'authenticated') {
+        headers['X-ARCCLAW-API-KEY'] = this.apiKey;
+      }
       const response = await fetch(this.url, {
         credentials: 'include',
-        headers: { 
-          'Accept': 'text/event-stream',
-          'X-ARCCLAW-API-KEY': this.apiKey
-        },
+        headers,
         signal: this._controller.signal
       });
 

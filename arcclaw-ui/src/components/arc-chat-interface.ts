@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { WsManager } from '../api/websocket';
@@ -244,10 +244,13 @@ export class ArcChatInterface extends LitElement {
     const sid = this._appContext?.sessionId;
     if (!sid) return;
     try {
+      const headers: Record<string, string> = {};
+      if (this._appContext?.apiKey && this._appContext.apiKey !== 'authenticated') {
+        headers['X-ArcClaw-API-Key'] = this._appContext.apiKey;
+      }
       const res = await fetch(`/api/v1/chat/stream/history/${sid}`, {
-        headers: {
-          'X-ArcClaw-API-Key': this._appContext?.apiKey || ''
-        }
+        credentials: 'include',
+        headers
       });
       if (!res.ok) return;
       const msgs = await res.json();
@@ -287,9 +290,16 @@ export class ArcChatInterface extends LitElement {
       ? this._wsToken : '';
     if (!token && this._appContext?.apiKey) {
       try {
+        const wsHeaders: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        if (this._appContext.apiKey !== 'authenticated') {
+          wsHeaders['X-ArcClaw-API-Key'] = this._appContext.apiKey;
+        }
         const res = await fetch('/api/v1/chat/ws-token', {
           method: 'POST',
-          headers: { 'X-ArcClaw-API-Key': this._appContext.apiKey, 'Content-Type': 'application/json' }
+          credentials: 'include',
+          headers: wsHeaders
         });
         if (res.ok) {
           const data = await res.json();
@@ -371,7 +381,11 @@ export class ArcChatInterface extends LitElement {
       if (frame.sessionId) {
         if (frame.sessionId !== (this._appContext?.sessionId || '')) {
           // Dispatch to parent shell to update SSE subscriptions
-          this.dispatchEvent(new CustomEvent('session-ready', { detail: { sessionId: frame.sessionId } }));
+          this.dispatchEvent(new CustomEvent('session-ready', {
+            detail: { sessionId: frame.sessionId },
+            bubbles: true,
+            composed: true
+          }));
         }
         // Always reload history on connect/reconnect (handles page refresh)
         this._loadHistory();

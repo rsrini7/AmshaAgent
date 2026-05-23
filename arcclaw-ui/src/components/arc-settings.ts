@@ -44,16 +44,11 @@ export class ArcSettings extends LitElement {
 
   static styles = css`
     :host {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      box-sizing: border-box;
-      overflow-y: auto;
-    }
-    .settings-wrap {
+      display: block;
+      padding: var(--space-6);
       max-width: 800px;
       margin: 0 auto;
-      padding: var(--space-6);
+      box-sizing: border-box;
     }
     .tabs {
       display: flex; gap: var(--space-4); margin-bottom: var(--space-6);
@@ -181,7 +176,6 @@ export class ArcSettings extends LitElement {
 
   render() {
     return html`
-      <div class="settings-wrap">
       <h2>Settings ${this._appVersion ? html`<span style="font-size:0.5em;color:var(--text-muted)">v${this._appVersion}</span>` : ''}</h2>
       
       <div class="tabs">
@@ -196,7 +190,6 @@ export class ArcSettings extends LitElement {
       ${this._activeTab === 'provider' ? this._renderProvider() : ''}
       ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
       ${this._activeTab === 'danger' ? this._renderDanger() : ''}
-      </div>
     `;
   }
 
