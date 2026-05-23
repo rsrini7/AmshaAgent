@@ -23,6 +23,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
 
 @ApplicationScoped
@@ -30,6 +31,7 @@ import org.jdbi.v3.core.Jdbi;
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
+    private static final Logger log = Logger.getLogger(PostgresMemoryRetrievalAdapter.class);
     private static final double RRF_K = 60.0;
 
     private final Jdbi jdbi;
@@ -109,7 +111,7 @@ public class PostgresMemoryRetrievalAdapter implements MemoryRetrievalPort {
             jdbi.useExtension(RagChunkJdbiDao.class, dao ->
                 dao.upsertEmbedding(chunkId, floatArrayToJson(embedding.vector())));
         } catch (Exception e) {
-            // embedding model unavailable — text-only insert is still committed
+            log.warnf("Embedding unavailable for chunk %s: %s", chunkId, e.getMessage());
         }
         return new IngestResult(chunkId, false);
     }

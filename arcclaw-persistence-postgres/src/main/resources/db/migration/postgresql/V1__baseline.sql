@@ -214,3 +214,18 @@ DROP TRIGGER IF EXISTS prevent_audit_delete ON audit_event;
 CREATE TRIGGER prevent_audit_delete
 BEFORE DELETE ON audit_event
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_delete();
+
+-- pgvector extension for vector similarity search
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Embedding storage table for RAG vector search (dimension 768 matches
+-- common open-source models: nomic-embed-text, jina-embeddings-v5-text-nano, etc.)
+CREATE TABLE IF NOT EXISTS rag_chunk_embedding (
+    chunk_id    TEXT PRIMARY KEY REFERENCES rag_chunk(chunk_id) ON DELETE CASCADE,
+    embedding   vector(768)
+);
+
+-- HNSW index for fast approximate nearest neighbor search
+CREATE INDEX IF NOT EXISTS idx_rag_chunk_embedding_vec
+    ON rag_chunk_embedding
+    USING hnsw (embedding vector_cosine_ops);
