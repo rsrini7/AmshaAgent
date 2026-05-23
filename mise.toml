@@ -2328,7 +2328,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:pg:chat"]
-depends = ["dev:kill", "env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start", "build:pg"]
 usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar with PostgreSQL backend - interactive REPL (rebuild with: mise run build:pg first)"
 dir = "{{config_root}}"
@@ -2354,7 +2354,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:pg:ask"]
-depends = ["dev:kill", "env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start", "build:pg"]
 description = 'Run packaged jar with PostgreSQL - one-shot. Set $env:GOAL="..." (rebuild with: mise run build:pg first)'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2499,7 +2499,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:fs:chat"]
-depends = ["dev:kill", "env:recover"]
+depends = ["dev:kill", "env:recover", "build:fs"]
 usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar with filesystem backend - interactive REPL"
 dir = "{{config_root}}"
@@ -2525,7 +2525,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:fs:ask"]
-depends = ["dev:kill", "env:recover"]
+depends = ["dev:kill", "env:recover", "build:fs"]
 description = 'Run packaged jar with filesystem backend - one-shot. Set $env:GOAL="..."'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
