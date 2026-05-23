@@ -69,13 +69,18 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 Optional<CheckpointDto> existing = checkpointDto.id() != null
                     ? dao.findById(checkpointDto.id())
                     : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
+                CheckpointDto toSave;
                 if (existing.isPresent() && "AWAITING_APPROVAL".equals(checkpointDto.status())
                         && "AWAITING_APPROVAL".equals(existing.get().status())) {
-                    CheckpointDto merged = mergeBatchDecisions(existing.get(), checkpointDto);
-                    dao.upsertCheckpoint(merged);
+                    toSave = mergeBatchDecisions(existing.get(), checkpointDto);
                 } else {
-                    dao.upsertCheckpoint(checkpointDto);
+                    toSave = checkpointDto;
                 }
+                toSave = toSave.ensureTimestamps(
+                    existing.map(CheckpointDto::createdAt).orElseGet(Instant::now),
+                    Instant.now()
+                );
+                dao.upsertCheckpoint(toSave);
                 return dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole())
                     .orElseThrow(() -> new RuntimeException("Checkpoint not found after upsert"));
             })
@@ -148,7 +153,14 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         return retryWrapper.withRetry("save-checkpoint-steps", 5, 50, () ->
             jdbi.inTransaction(handle -> {
                 var dao = handle.attach(CheckpointJdbiDao.class);
-                dao.upsertCheckpoint(checkpointDto);
+                Optional<CheckpointDto> existing = checkpointDto.id() != null
+                    ? dao.findById(checkpointDto.id())
+                    : dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole());
+                CheckpointDto toSave = checkpointDto.ensureTimestamps(
+                    existing.map(CheckpointDto::createdAt).orElseGet(Instant::now),
+                    Instant.now()
+                );
+                dao.upsertCheckpoint(toSave);
                 CheckpointDto saved = dao.findAnyBySessionAndRole(checkpointDto.sessionId(), checkpointDto.agentRole())
                     .orElseThrow();
                 if (steps != null && !steps.isEmpty()) {
@@ -426,8 +438,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             dao.deleteCheckpointsForPurge(cutoffStr);
         });
     }
-
-    // ── Private Helpers ────────────────────────────────────────────────────
 
     private void insertSteps(Handle handle, Long checkpointId, List<ReasoningStepDto> steps) {
         var batch = handle.prepareBatch(
