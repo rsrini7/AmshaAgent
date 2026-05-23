@@ -2274,7 +2274,7 @@ run = """
 $ErrorActionPreference = 'Stop'
 Write-Host '▶   Building quarkus-run.jar for PostgreSQL backend...'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-& $mvnw package -pl arcclaw-app -am -DskipTests -Dquarkus.profile=postgresql '-q'
+& $mvnw 'package' '-pl' 'arcclaw-app' '-am' '-DskipTests' '-Dquarkus.profile=postgresql' '-q'
 if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
 Write-Host '✅  PostgreSQL JAR ready.'
 """
