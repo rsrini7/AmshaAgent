@@ -193,7 +193,7 @@ MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 {#include prompts/compaction-summary /}
 ```
 
-### Step 3 - Add CDI producer
+### Step 3 - Add CDI wiring
 
 In `AgentProducer.java`, add template injection and producer method:
 
@@ -209,6 +209,17 @@ public Agent analyst() {
     return new DefaultAgent(AgentPersona.ANALYST, () -> analystTemplate,
         defaultTimezone, structuredOutputEngine, objectMapper, toolRegistry);
 }
+```
+
+In `PromptTemplateEngine.java`, add the role prompt template injection and switch case:
+
+```java
+@Inject
+@Location("prompts/role-analyst")
+Template analystTemplate;
+
+// In templateFor() switch:
+case "analyst" -> analystTemplate;
 ```
 
 ### Step 4 - Wire into the system
@@ -234,7 +245,7 @@ python3 ./fix_fqns.py
 ./mvnw test -pl arcclaw-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"
 ```
 
-### Step 5 - Register for native image reflection (if applicable)
+### Step 7 - Register for native image reflection (if applicable)
 
 If the new agent class uses any reflection-sensitive patterns, add it to `AppReflectionConfig` in `arcclaw-app`.
 

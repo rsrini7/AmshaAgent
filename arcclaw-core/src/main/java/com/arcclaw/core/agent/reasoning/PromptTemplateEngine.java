@@ -59,6 +59,30 @@ public class PromptTemplateEngine {
     Template synthesizerTemplate;
 
     @Inject
+    @Location("prompts/role-healer")
+    Template healerTemplate;
+
+    @Inject
+    @Location("prompts/role-optimizer")
+    Template optimizerTemplate;
+
+    @Inject
+    @Location("prompts/role-sentinel")
+    Template sentinelTemplate;
+
+    @Inject
+    @Location("prompts/role-protector")
+    Template protectorTemplate;
+
+    @Inject
+    @Location("prompts/role-purifier")
+    Template purifierTemplate;
+
+    @Inject
+    @Location("prompts/role-nurturer")
+    Template nurturerTemplate;
+
+    @Inject
     ToolRegistry toolRegistry;
 
     /**
@@ -144,6 +168,12 @@ public class PromptTemplateEngine {
             case "debugger"    -> debuggerTemplate;
             case "architect"   -> architectTemplate;
             case "synthesizer" -> synthesizerTemplate;
+            case "healer"      -> healerTemplate;
+            case "optimizer"   -> optimizerTemplate;
+            case "sentinel"    -> sentinelTemplate;
+            case "protector"   -> protectorTemplate;
+            case "purifier"    -> purifierTemplate;
+            case "nurturer"    -> nurturerTemplate;
             default -> throw new IllegalStateException(
                 "No Qute template registered for role '" + role.id() + "'. " +
                 "Create templates/prompts/role-" + role.id() + ".txt in arcclaw-core/src/main/resources to fix.");
