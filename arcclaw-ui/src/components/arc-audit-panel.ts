@@ -90,12 +90,12 @@ export class ArcAuditPanel extends LitElement {
       flex: 1; overflow-y: auto; overflow-x: auto;
       min-height: 0; max-height: calc(100vh - 200px);
       scrollbar-width: thin;
-      scrollbar-color: var(--text-tertiary) transparent;
+      scrollbar-color: var(--border) transparent;
     }
     .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
     .table-wrap::-webkit-scrollbar-track { background: transparent; }
-    .table-wrap::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 4px; }
-    .table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+    .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+    .table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
     table {
       width: 100%; border-collapse: collapse;
       font-size: 13px;
