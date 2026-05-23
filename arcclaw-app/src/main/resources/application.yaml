@@ -807,10 +807,10 @@ mp:
   quarkus:
     datasource:
       db-kind: postgresql
+      username: "${ARCCLAW_PG_USER:arcclaw}"
+      password: "${ARCCLAW_PG_PASSWORD:changeme}"
       jdbc:
         url: "jdbc:postgresql://${ARCCLAW_PG_HOST:localhost}:${ARCCLAW_PG_PORT:5432}/${ARCCLAW_PG_DB:arcclaw}"
-        username: "${ARCCLAW_PG_USER:arcclaw}"
-        password: "${ARCCLAW_PG_PASSWORD:changeme}"
         min-size: 2
         max-size: 10
         transactions: enabled
