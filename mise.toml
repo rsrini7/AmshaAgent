@@ -2329,6 +2329,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."jar:pg:chat"]
 depends = ["dev:kill", "env:recover", "db:pg:start"]
+usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar with PostgreSQL backend - interactive REPL (rebuild with: mise run build:pg first)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2348,7 +2349,7 @@ $jvmArgs = @(
     '-Dquarkus.profile=postgresql',
     '-Darcclaw.data-dir=./data'
 )
-& java @jvmArgs -jar $jar chat
+& java @jvmArgs -jar $jar chat @args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
@@ -2499,6 +2500,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 [tasks."jar:fs:chat"]
 depends = ["dev:kill", "env:recover"]
+usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar with filesystem backend - interactive REPL"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2518,7 +2520,7 @@ $jvmArgs = @(
     '-Dquarkus.profile=filesystem',
     '-Darcclaw.data-dir=./data'
 )
-& java @jvmArgs -jar $jar chat
+& java @jvmArgs -jar $jar chat @args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
