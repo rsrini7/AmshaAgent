@@ -1,0 +1,16 @@
+export interface RouteConfig {
+  hash: string;
+  label: string;
+  icon: string;
+  component: string;
+}
+
+export const ROUTES: RouteConfig[] = [
+  { hash: '#/chat', label: 'Chat', icon: '💬', component: 'arc-chat-interface' },
+  { hash: '#/agents', label: 'Agents', icon: '🤖', component: 'arc-agent-status' },
+  { hash: '#/hitl', label: 'Approvals', icon: '✋', component: 'arc-hitl-panel' },
+  { hash: '#/skills', label: 'Skills', icon: '🔧', component: 'arc-skills-panel' },
+  { hash: '#/scheduler', label: 'Scheduler', icon: '⏰', component: 'arc-scheduler-panel' },
+  { hash: '#/audit', label: 'Audit', icon: '📋', component: 'arc-audit-panel' },
+  { hash: '#/settings', label: 'Settings', icon: '⚙', component: 'arc-settings' }
+];

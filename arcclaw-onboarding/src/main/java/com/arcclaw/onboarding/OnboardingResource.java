@@ -35,6 +35,7 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
+import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.mcp.transport.McpClientService;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState;
 import com.arcclaw.onboarding.OnboardingSessionRegistry.OnboardingState.Step;
@@ -95,6 +96,11 @@ public class OnboardingResource {
         String sid = resolveSessionId(cookie, headers);
         OnboardingState state = registry.getOrCreate(sid);
 
+        if (state.currentStep == OnboardingState.Step.WELCOME && vault.systemKeyExists(VaultConstants.LLM_API_KEY)) {
+            state.currentStep = OnboardingState.Step.COMPLETE;
+            state.credentialsValidated = true;
+        }
+
         log.infof("status: sid=%s, currentStep=%s", sid, state.currentStep);
 
         OnboardingStatusDto dto = new OnboardingStatusDto(
@@ -105,7 +111,11 @@ public class OnboardingResource {
             state.credentialsValidated
         );
 
-        return Response.ok(dto).cookie(createCookie(sid)).build();
+        Response.ResponseBuilder rb = Response.ok(dto).cookie(createCookie(sid));
+        if (state.currentStep == OnboardingState.Step.COMPLETE) {
+            rb.cookie(createApiCookie(internalApiKey));
+        }
+        return rb.build();
     }
 
     @POST @Path("/step/1")
@@ -302,7 +312,10 @@ public class OnboardingResource {
             plugins
         );
 
-        return Response.ok(dto).cookie(createCookie(sid)).build();
+        return Response.ok(dto)
+            .cookie(createCookie(sid))
+            .cookie(createApiCookie(internalApiKey))
+            .build();
     }
 
     private String resolveSessionId(Cookie cookie, HttpHeaders headers) {
@@ -326,6 +339,16 @@ public class OnboardingResource {
             .value(sid)
             .path("/")
             .maxAge(3600)
+            .httpOnly(true)
+            .sameSite(NewCookie.SameSite.STRICT)
+            .build();
+    }
+
+    private NewCookie createApiCookie(String key) {
+        return new NewCookie.Builder(HttpConstants.COOKIE_ARCCLAW_API_KEY)
+            .value(key)
+            .path("/")
+            .maxAge(3600 * 24 * 30) // 30 days
             .httpOnly(true)
             .sameSite(NewCookie.SameSite.STRICT)
             .build();

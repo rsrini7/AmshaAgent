@@ -7,4 +7,5 @@ public final class HttpConstants {
     private HttpConstants() {}
 
     public static final String X_ARCCLAW_API_KEY = "X-ArcClaw-API-Key";
+    public static final String COOKIE_ARCCLAW_API_KEY = "ARCCLAW_API_KEY";
 }

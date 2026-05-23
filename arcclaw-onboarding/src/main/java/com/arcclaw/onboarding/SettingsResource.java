@@ -14,6 +14,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
@@ -26,6 +27,7 @@ import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
+import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.onboarding.dto.PromptUpdateRequest;
 import com.arcclaw.onboarding.dto.ProviderUpdateRequest;
 import com.arcclaw.onboarding.dto.SettingsDto;
@@ -180,7 +182,15 @@ public class SettingsResource {
         vault.removeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY);
 
         return Response.ok(Map.of("reset", true,
-            "message", "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard.")).build();
+            "message", "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard."))
+            .cookie(new NewCookie.Builder(HttpConstants.COOKIE_ARCCLAW_API_KEY)
+                .value("")
+                .path("/")
+                .maxAge(0)
+                .httpOnly(true)
+                .sameSite(NewCookie.SameSite.STRICT)
+                .build())
+            .build();
     }
 
     private String readVaultString(String key, String fallback) {

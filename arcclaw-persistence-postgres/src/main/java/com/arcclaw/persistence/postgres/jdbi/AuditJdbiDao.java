@@ -36,9 +36,9 @@ public interface AuditJdbiDao {
     @SqlQuery("SELECT id, sessionId, userId, agentRole, goalHash, outcome, eventType, eventDetail, inputTokens, outputTokens, usdCost, timestamp, iterationsUsed, app_version AS \"appVersion\", idempotency_key AS \"idempotencyKey\", sequence, hmacHash, prevHash FROM audit_event WHERE id = :id")
     Optional<AuditEventDto> findById(@Bind("id") UUID id);
 
-    @SqlQuery("SELECT id, sessionId, userId, agentRole, goalHash, outcome, eventType, eventDetail, inputTokens, outputTokens, usdCost, timestamp, iterationsUsed, app_version AS \"appVersion\", idempotency_key AS \"idempotencyKey\", sequence, hmacHash, prevHash FROM audit_event WHERE (:sessionId IS NULL OR sessionId = :sessionId) AND (:eventType IS NULL OR eventType = :eventType) AND (:from IS NULL OR timestamp >= :from) AND (:to IS NULL OR timestamp <= :to) ORDER BY timestamp DESC LIMIT :limit OFFSET :offset")
+    @SqlQuery("SELECT id, sessionId, userId, agentRole, goalHash, outcome, eventType, eventDetail, inputTokens, outputTokens, usdCost, timestamp, iterationsUsed, app_version AS \"appVersion\", idempotency_key AS \"idempotencyKey\", sequence, hmacHash, prevHash FROM audit_event WHERE (:sessionId::text IS NULL OR sessionId = :sessionId) AND (:eventType::text IS NULL OR eventType = :eventType) AND (:from::timestamptz IS NULL OR timestamp >= :from) AND (:to::timestamptz IS NULL OR timestamp <= :to) ORDER BY timestamp DESC LIMIT :limit::INTEGER OFFSET :offset::INTEGER")
     List<AuditEventDto> findFiltered(@Bind("sessionId") String sessionId, @Bind("eventType") String eventType, @Bind("from") Instant from, @Bind("to") Instant to, @Bind("offset") int offset, @Bind("limit") int limit);
 
-    @SqlQuery("SELECT COUNT(*) FROM audit_event WHERE (:sessionId IS NULL OR sessionId = :sessionId) AND (:eventType IS NULL OR eventType = :eventType) AND (:from IS NULL OR timestamp >= :from) AND (:to IS NULL OR timestamp <= :to)")
+    @SqlQuery("SELECT COUNT(*) FROM audit_event WHERE (:sessionId::text IS NULL OR sessionId = :sessionId) AND (:eventType::text IS NULL OR eventType = :eventType) AND (:from::timestamptz IS NULL OR timestamp >= :from) AND (:to::timestamptz IS NULL OR timestamp <= :to)")
     long countFiltered(@Bind("sessionId") String sessionId, @Bind("eventType") String eventType, @Bind("from") Instant from, @Bind("to") Instant to);
 }

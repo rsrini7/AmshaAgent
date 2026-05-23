@@ -23,6 +23,7 @@ public class WebChannelSender implements ChannelSender {
 
     @Inject WebSocketSessionStore sessionStore;
     @Inject WebReplyRenderer renderer;
+    @Inject HtmlSanitizerService htmlSanitizer;
 
     @Override
     public ChannelType supports() {
@@ -32,18 +33,20 @@ public class WebChannelSender implements ChannelSender {
     @Override
     public void send(ChannelUser recipient, List<ReplyNode> nodes) {
         String rendered = renderer.render(nodes);
+        String sanitized = htmlSanitizer.sanitize(rendered);
         
         ApprovalPrompt prompt = (ApprovalPrompt) nodes.stream()
             .filter(n -> n instanceof ApprovalPrompt)
             .findFirst()
             .orElse(null);
 
-        sendRawWithSession(recipient, rendered, prompt);
+        sendRawWithSession(recipient, sanitized, prompt);
     }
 
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
-        sendRawWithSession(recipient, text, null);
+        String sanitized = htmlSanitizer.sanitize(text);
+        sendRawWithSession(recipient, sanitized, null);
     }
 
     private void sendRawWithSession(ChannelUser recipient, String text, ApprovalPrompt prompt) {
@@ -72,7 +75,8 @@ public class WebChannelSender implements ChannelSender {
 
     @Override
     public void sendBySession(String sessionId, String text) {
-        sendBySessionWithTarget(sessionId, text, null);
+        String sanitized = htmlSanitizer.sanitize(text);
+        sendBySessionWithTarget(sessionId, sanitized, null);
     }
 
     private void sendBySessionWithTarget(String sessionId, String text, ApprovalPrompt prompt) {

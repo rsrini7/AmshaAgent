@@ -2,10 +2,16 @@ import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { PendingApprovalDto } from '../api/types';
 import { ArcClient } from '../api/client';
+import { consume } from '@lit/context';
+import { arcContext, ArcAppContext } from '../context/arc-context';
+
 
 @customElement('arc-hitl-panel')
 export class ArcHitlPanel extends LitElement {
-  @property({ type: String }) apiKey = '';
+  @consume({ context: arcContext, subscribe: true })
+  @state()
+  private _appContext!: ArcAppContext;
+
   @property({ type: Array }) approvals: PendingApprovalDto[] = [];
   
   @state() private _processing = new Set<string>();
@@ -14,7 +20,7 @@ export class ArcHitlPanel extends LitElement {
   @state() private _error: Record<string, string> = {};
 
   static styles = css`
-    :host { display: block; padding: var(--space-8); overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
+    :host { display: block; padding: var(--space-8); box-sizing: border-box; background: var(--bg-base); }
     h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
     .empty { color: var(--text-muted); font-style: italic; font-size: 14px; }
     
@@ -75,7 +81,7 @@ export class ArcHitlPanel extends LitElement {
     this.requestUpdate();
 
     try {
-      const client = new ArcClient('/api/v1', this.apiKey);
+      const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
       await client.approveHitl(taskId);
       this.dispatchEvent(new CustomEvent('approval-action', {
         detail: { taskId, action: 'approved' },
@@ -104,7 +110,7 @@ export class ArcHitlPanel extends LitElement {
     this.requestUpdate();
 
     try {
-      const client = new ArcClient('/api/v1', this.apiKey);
+      const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
       const reason = this._rejectReason[taskId] || '';
       await client.rejectHitl(taskId, reason);
       this.dispatchEvent(new CustomEvent('approval-action', {

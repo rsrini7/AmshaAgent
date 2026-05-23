@@ -18,173 +18,131 @@ export class ArcClient {
     return h;
   }
 
+  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      credentials: 'include',
+      headers: { ...this.headers(), ...options?.headers }
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Request to ${endpoint} failed with status ${res.status}`);
+    }
+    if (res.status === 204) {
+      return {} as T;
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : {} as T;
+  }
+
   async getAgents(): Promise<AgentStatusDto[]> {
-    const r = await fetch(`${this.baseUrl}/agents`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /agents failed: ${r.status}`);
-    return r.json();
+    return this.request<AgentStatusDto[]>('/agents');
   }
 
   async getHitl(page = 0, size = 20): Promise<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }> {
-    const r = await fetch(`${this.baseUrl}/hitl?page=${page}&size=${size}`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /hitl failed: ${r.status}`);
-    return r.json();
+    return this.request<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }>(`/hitl?page=${page}&size=${size}`);
   }
 
   async approveHitl(taskId: string): Promise<ApprovalResultDto> {
-    const r = await fetch(`${this.baseUrl}/hitl/${taskId}/approve`, {
+    return this.request<ApprovalResultDto>(`/hitl/${taskId}/approve`, {
       method: 'POST',
-      headers: this.headers(),
     });
-    if (!r.ok) throw new Error(`POST /hitl/${taskId}/approve failed: ${r.status}`);
-    return r.json();
   }
 
   async rejectHitl(taskId: string, reason: string): Promise<ApprovalResultDto> {
-    const r = await fetch(`${this.baseUrl}/hitl/${taskId}/reject`, {
-        method: 'POST',
-        headers: this.headers(),  // application/json
-        body: JSON.stringify({ reason: reason || 'Rejected by user' }),
+    return this.request<ApprovalResultDto>(`/hitl/${taskId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'Rejected by user' }),
     });
-    if (!r.ok) throw new Error(`POST /hitl/${taskId}/reject failed: ${r.status}`);
-    return r.json();
   }
 
   async getTools(): Promise<ToolDto[]> {
-    const r = await fetch(`${this.baseUrl}/tools`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /tools failed: ${r.status}`);
-    return r.json();
+    return this.request<ToolDto[]>('/tools');
   }
 
   async getSkills(): Promise<SkillDto[]> {
-    const r = await fetch(this.baseUrl + '/skills', { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET skills failed ${r.status}`);
-    return r.json();
+    return this.request<SkillDto[]>('/skills');
   }
 
   // Onboarding
   async onboardingStatus(): Promise<import('./types').OnboardingStatusDto> {
-    const res = await fetch(`${this.baseUrl}/onboarding/status`, { credentials: 'include' });
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    return res.json();
+    return this.request<import('./types').OnboardingStatusDto>('/onboarding/status');
   }
 
   async onboardingStep(step: number, body?: object): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/onboarding/step/${step}`, {
+    return this.request<any>(`/onboarding/step/${step}`, {
       method: 'POST',
-      credentials: 'include',
-      headers: body ? { 'Content-Type': 'application/json' } : {},
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Step ${step} failed: ${res.status}`);
-    }
-    return res.json();
   }
 
   async onboardingComplete(): Promise<import('./types').OnboardingCompleteDto> {
-    const res = await fetch(`${this.baseUrl}/onboarding/complete`, { credentials: 'include' });
-    if (!res.ok) throw new Error(`complete failed: ${res.status}`);
-    return res.json();
+    return this.request<import('./types').OnboardingCompleteDto>('/onboarding/complete');
   }
 
   // Settings
   async getSettings(): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/settings`, {
-      headers: this.headers()
-    });
-    if (!res.ok) throw new Error(`settings ${res.status}`);
-    return res.json();
+    return this.request<any>('/settings');
   }
 
   async patchProvider(body: object): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/settings/provider`, {
+    return this.request<any>('/settings/provider', {
       method: 'PATCH',
-      headers: this.headers(),
       body: JSON.stringify(body)
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `PATCH failed: ${res.status}`);
-    }
-    return res.json();
   }
 
   async patchPrompt(prompt: string): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/settings/prompt`, {
+    return this.request<any>('/settings/prompt', {
       method: 'PATCH',
-      headers: this.headers(),
       body: JSON.stringify({ systemPrompt: prompt })
     });
-    if (!res.ok) throw new Error(`prompt update failed`);
-    return res.json();
   }
 
   async resetOnboarding(): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/settings/reset`, {
-      method: 'POST',
-      headers: this.headers()
+    return this.request<any>('/settings/reset', {
+      method: 'POST'
     });
-    if (!res.ok) throw new Error(`reset failed`);
-    return res.json();
   }
 
   // Scheduler (Cron)
   async getCrons(status?: string, page = 0, size = 50): Promise<{ crons: any[]; total: number; page: number; size: number }> {
     const params = new URLSearchParams({ page: String(page), size: String(size) });
     if (status) params.set('status', status);
-    const r = await fetch(`${this.baseUrl}/cron?${params}`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /cron failed: ${r.status}`);
-    return r.json();
+    return this.request<{ crons: any[]; total: number; page: number; size: number }>(`/cron?${params}`);
   }
 
   async getCron(id: string): Promise<any> {
-    const r = await fetch(`${this.baseUrl}/cron/${id}`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /cron/${id} failed: ${r.status}`);
-    return r.json();
+    return this.request<any>(`/cron/${id}`);
   }
 
   async deleteCron(id: string): Promise<any> {
-    const r = await fetch(`${this.baseUrl}/cron/${id}`, {
+    return this.request<any>(`/cron/${id}`, {
       method: 'DELETE',
-      headers: this.headers(),
     });
-    if (!r.ok) throw new Error(`DELETE /cron/${id} failed: ${r.status}`);
-    return r.json();
   }
 
   async triggerCron(id: string): Promise<any> {
-    const r = await fetch(`${this.baseUrl}/cron/${id}/trigger`, {
+    return this.request<any>(`/cron/${id}/trigger`, {
       method: 'POST',
-      headers: this.headers(),
     });
-    if (!r.ok) throw new Error(`POST /cron/${id}/trigger failed: ${r.status}`);
-    return r.json();
   }
 
   async pauseCron(id: string): Promise<any> {
-    const r = await fetch(`${this.baseUrl}/cron/${id}/pause`, {
+    return this.request<any>(`/cron/${id}/pause`, {
       method: 'POST',
-      headers: this.headers(),
     });
-    if (!r.ok) throw new Error(`POST /cron/${id}/pause failed: ${r.status}`);
-    return r.json();
   }
 
   async resumeCron(id: string): Promise<any> {
-    const r = await fetch(`${this.baseUrl}/cron/${id}/resume`, {
+    return this.request<any>(`/cron/${id}/resume`, {
       method: 'POST',
-      headers: this.headers(),
     });
-    if (!r.ok) throw new Error(`POST /cron/${id}/resume failed: ${r.status}`);
-    return r.json();
   }
 
   async getCronRuns(id: string, page = 0, size = 20): Promise<{ runs: any[]; total: number; page: number; size: number }> {
     const params = new URLSearchParams({ page: String(page), size: String(size) });
-    const r = await fetch(`${this.baseUrl}/cron/${id}/runs?${params}`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /cron/${id}/runs failed: ${r.status}`);
-    return r.json();
+    return this.request<{ runs: any[]; total: number; page: number; size: number }>(`/cron/${id}/runs?${params}`);
   }
 
   // Audit
@@ -204,27 +162,23 @@ export class ArcClient {
     if (filters?.eventType) params.set('eventType', filters.eventType);
     if (filters?.from) params.set('from', filters.from);
     if (filters?.to) params.set('to', filters.to);
-    const r = await fetch(`${this.baseUrl}/audit?${params}`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /audit failed: ${r.status}`);
-    return r.json();
+    return this.request<{ events: any[]; total: number; page: number; size: number }>(`/audit?${params}`);
   }
 
   async getAuditEvent(id: string): Promise<any> {
-    const r = await fetch(`${this.baseUrl}/audit/${id}`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /audit/${id} failed: ${r.status}`);
-    return r.json();
+    return this.request<any>(`/audit/${id}`);
+  }
+
+  async getAuditEventTypes(): Promise<{ eventTypes: string[] }> {
+    return this.request<{ eventTypes: string[] }>('/audit/event-types');
   }
 
   async getSessionAudit(sessionId: string): Promise<any[]> {
-    const r = await fetch(`${this.baseUrl}/audit/session/${sessionId}`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /audit/session/${sessionId} failed: ${r.status}`);
-    return r.json();
+    return this.request<any[]>(`/audit/session/${sessionId}`);
   }
 
   async verifyAuditChain(sessionId: string): Promise<any> {
-    const r = await fetch(`${this.baseUrl}/audit/${sessionId}/verify`, { headers: this.headers() });
-    if (!r.ok) throw new Error(`GET /audit/${sessionId}/verify failed: ${r.status}`);
-    return r.json();
+    return this.request<any>(`/audit/${sessionId}/verify`);
   }
 }
 

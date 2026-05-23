@@ -3,6 +3,7 @@ import { createContext } from '@lit/context';
 export interface ArcAppContext {
   apiKey: string;
   sessionId: string;
+  platformId: string;
   sseStatus: 'connected' | 'disconnected' | 'error';
 }
 

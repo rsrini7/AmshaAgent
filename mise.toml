@@ -871,7 +871,7 @@ Write-Host '✅  Build artifacts cleaned.'
 # =============================================================================
 
 [tasks.dev]
-depends = ["env:recover", "build:ui-copy"]
+depends = ["dev:kill", "env:recover", "build:ui-copy"]
 description = "Dev mode - serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -935,7 +935,7 @@ try {
 """
 
 [tasks."dev:chat"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode - interactive REPL with hot reload (strategy: NONE)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -998,7 +998,7 @@ try {
 """
 
 [tasks."dev:attach"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode - Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -1066,7 +1066,7 @@ try {
 """
 
 [tasks."dev:ask"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = 'Dev mode - one-shot task. Set $env:GOAL="your goal" then: mise run dev:ask'
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -1138,7 +1138,7 @@ try {
 """
 
 [tasks."dev:no-ui"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode - serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -1246,7 +1246,7 @@ Write-Host '──────────────────────�
 # =============================================================================
 
 [tasks."jar:serve"]
-depends = ["env:recover", "build:app"]
+depends = ["dev:kill", "env:recover", "build:app"]
 description = "Run packaged jar - REST daemon on :8080 (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1303,7 +1303,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:attach"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Run packaged jar - Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1332,7 +1332,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:ask"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = 'Run packaged jar - one-shot task. Set $env:GOAL="..." then: mise run jar:ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1430,6 +1430,7 @@ exit $code
 # =============================================================================
 
 [tasks."native:serve"]
+depends = ["dev:kill", "env:recover"]
 description = "Run native binary - REST daemon on :8080"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1449,6 +1450,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:chat"]
+depends = ["dev:kill", "env:recover"]
 description = "Run native binary - interactive REPL"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1468,6 +1470,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:attach"]
+depends = ["dev:kill", "env:recover"]
 description = "Run native binary - Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1488,6 +1491,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:ask"]
+depends = ["dev:kill", "env:recover"]
 description = 'Run native binary - one-shot task. Set $env:GOAL="..." then: mise run native:ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2201,7 +2205,7 @@ Write-Host "✅  Database 'arcclaw' recreated. Run 'mise run jar:pg' to apply Fl
 # ── Dev mode with PostgreSQL ────────────────────────────────────────────────
 
 [tasks."dev:pg"]
-depends = ["env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
 description = "Dev mode with PostgreSQL backend (auto-starts Podman container)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -2233,7 +2237,7 @@ try {
 """
 
 [tasks."dev:pg:chat"]
-depends = ["env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
 description = "Dev mode with PostgreSQL backend - interactive REPL"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -2267,6 +2271,7 @@ try {
 # ── JAR mode with PostgreSQL ─────────────────────────────────────────────────
 
 [tasks."build:app"]
+depends = ["dev:kill", "env:recover"]
 description = "Build quarkus-run.jar for SQLite backend (default)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2281,6 +2286,7 @@ Write-Host '✅  SQLite JAR ready.'
 """
 
 [tasks."build:pg"]
+depends = ["dev:kill", "env:recover"]
 description = "Build quarkus-run.jar for PostgreSQL backend"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2295,7 +2301,7 @@ Write-Host '✅  PostgreSQL JAR ready.'
 """
 
 [tasks."jar:pg"]
-depends = ["env:recover", "db:pg:start", "build:pg"]
+depends = ["dev:kill", "env:recover", "db:pg:start", "build:pg"]
 usage = 'arg "[cmd]" help="Command to run: serve|chat|ask (default: serve)"'
 description = "Build & run packaged jar with PostgreSQL backend (auto-starts Podman container, builds PG-specific JAR)"
 dir = "{{config_root}}"
@@ -2322,7 +2328,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:pg:chat"]
-depends = ["env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
 description = "Run packaged jar with PostgreSQL backend - interactive REPL (rebuild with: mise run build:pg first)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2347,7 +2353,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:pg:ask"]
-depends = ["env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
 description = 'Run packaged jar with PostgreSQL - one-shot. Set $env:GOAL="..." (rebuild with: mise run build:pg first)'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2382,7 +2388,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # =============================================================================
 
 [tasks."dev:fs"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode with filesystem persistence backend (no database needed)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -2416,7 +2422,7 @@ try {
 """
 
 [tasks."dev:fs:chat"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode with filesystem backend - interactive REPL"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -2450,6 +2456,7 @@ try {
 """
 
 [tasks."build:fs"]
+depends = ["dev:kill", "env:recover"]
 description = "Build quarkus-run.jar for filesystem persistence backend"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2464,7 +2471,7 @@ Write-Host '✅  Filesystem JAR ready.'
 """
 
 [tasks."jar:fs"]
-depends = ["env:recover", "build:fs"]
+depends = ["dev:kill", "env:recover", "build:fs"]
 usage = 'arg "[cmd]" help="Command to run: serve|chat|ask (default: serve)"'
 description = "Build & run packaged jar with filesystem persistence backend (no database needed)"
 dir = "{{config_root}}"
@@ -2491,7 +2498,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:fs:chat"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Run packaged jar with filesystem backend - interactive REPL"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2516,7 +2523,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:fs:ask"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = 'Run packaged jar with filesystem backend - one-shot. Set $env:GOAL="..."'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"

@@ -1,6 +1,9 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
+import { consume } from '@lit/context';
+import { arcContext, ArcAppContext } from '../context/arc-context';
+
 
 const PROVIDERS = [
   { id:'groq',        name:'Groq',        tag:'Fast inference',  icon:'G',  color:'#f55036' },
@@ -18,7 +21,10 @@ const PROVIDERS = [
 
 @customElement('arc-settings')
 export class ArcSettings extends LitElement {
-  @property() apiKey = '';
+  @consume({ context: arcContext, subscribe: true })
+  @state()
+  private _appContext!: ArcAppContext;
+
 
   @state() private _activeTab = 'provider';
   
@@ -29,7 +35,9 @@ export class ArcSettings extends LitElement {
   @state() private _appVersion = '';
   @state() private _hasApiKey = false;
   
-  private _client!: ArcClient;
+  private get _client(): ArcClient {
+    return new ArcClient('/api/v1', this._appContext?.apiKey || '');
+  }
   @state() private _loading = false;
   @state() private _error = '';
   @state() private _success = '';
@@ -40,6 +48,7 @@ export class ArcSettings extends LitElement {
       padding: var(--space-6);
       max-width: 800px;
       margin: 0 auto;
+      box-sizing: border-box;
     }
     .tabs {
       display: flex; gap: var(--space-4); margin-bottom: var(--space-6);
@@ -106,7 +115,6 @@ export class ArcSettings extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    this._client = new ArcClient('/api/v1', this.apiKey);
     await this._loadSettings();
   }
 
@@ -157,7 +165,6 @@ export class ArcSettings extends LitElement {
     try {
       this._loading = true; this._error = ''; this._success = '';
       await this._client.resetOnboarding();
-      localStorage.removeItem('arc-api-key');
       window.location.hash = '#/onboarding';
       window.location.reload();
     } catch (e: any) {

@@ -11,6 +11,7 @@ import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -50,31 +51,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext requestContext) {
         long startTime = System.currentTimeMillis();
-        String path = uriInfo.getPath();
-        // Normalize path: ensure leading slash and handle optional /api/v1 prefix
-        String normalizedPath = (path == null) ? "/" : (path.startsWith("/") ? path : "/" + path);
-        if (normalizedPath.startsWith("/api/v1/")) {
-            normalizedPath = normalizedPath.substring(7);
-        } else if (normalizedPath.equals("/api/v1")) {
-            normalizedPath = "/";
-        }
-        if (!normalizedPath.startsWith("/")) {
-            normalizedPath = "/" + normalizedPath;
-        }
-
-        final String finalPath = normalizedPath;
+        String finalPath = getNormalizedPath(uriInfo.getPath());
 
         if (finalPath.startsWith("/info") || finalPath.startsWith("/onboarding")) {
             return;
         }
 
-        // Header first; fall back to query param for SSE/EventSource
-        // (browsers cannot set custom headers on EventSource).
-        // Accepts both "apiKey" (current frontend) and legacy "key" param.
-        String apiKey = requestContext.getHeaderString(HttpConstants.X_ARCCLAW_API_KEY);
-        if (apiKey == null || apiKey.isBlank()) {
-            apiKey = uriInfo.getQueryParameters().getFirst("apiKey");
-        }
+        String apiKey = resolveApiKey(requestContext);
 
         String safeKey = apiKey != null
             ? apiKey.substring(0, Math.min(4, apiKey.length())) + "****"
@@ -83,26 +66,12 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         String method = requestContext.getMethod();
 
         if (apiKey == null || apiKey.isBlank()) {
-            logAudit(safeKey, finalPath, method, "REJECTED_NO_KEY", ip, System.currentTimeMillis() - startTime);
-            auditService.record("auth-filter", "anonymous", "system",
-                    SecurityEventType.AUTH_REJECTED,
-                    "reason=NO_KEY endpoint=" + finalPath + " method=" + method + " ip=" + ip);
-            requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
-                    .type(MediaType.APPLICATION_JSON)
-                    .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
-                    .build());
+            abortUnauthorized(requestContext, safeKey, finalPath, method, ip, "NO_KEY", startTime);
             return;
         }
 
         if (!apiKeyRegistry.isValidKey(apiKey)) {
-            logAudit(safeKey, finalPath, method, "REJECTED_INVALID_KEY", ip, System.currentTimeMillis() - startTime);
-            auditService.record("auth-filter", "anonymous", "system",
-                    SecurityEventType.AUTH_REJECTED,
-                    "reason=INVALID_KEY key=" + safeKey + " endpoint=" + finalPath + " method=" + method + " ip=" + ip);
-            requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
-                    .type(MediaType.APPLICATION_JSON)
-                    .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
-                    .build());
+            abortUnauthorized(requestContext, safeKey, finalPath, method, ip, "INVALID_KEY", startTime);
             return;
         }
 
@@ -144,6 +113,45 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         logAudit(safeKey, finalPath, method, "ACCEPTED", ip, System.currentTimeMillis() - startTime);
+    }
+
+    private String getNormalizedPath(String path) {
+        String normalizedPath = (path == null) ? "/" : (path.startsWith("/") ? path : "/" + path);
+        if (normalizedPath.startsWith("/api/v1/")) {
+            normalizedPath = normalizedPath.substring(7);
+        } else if (normalizedPath.equals("/api/v1")) {
+            normalizedPath = "/";
+        }
+        if (!normalizedPath.startsWith("/")) {
+            normalizedPath = "/" + normalizedPath;
+        }
+        return normalizedPath;
+    }
+
+    private String resolveApiKey(ContainerRequestContext requestContext) {
+        String apiKey = requestContext.getHeaderString(HttpConstants.X_ARCCLAW_API_KEY);
+        if (apiKey == null || apiKey.isBlank()) {
+            Cookie apiCookie = requestContext.getCookies().get(HttpConstants.COOKIE_ARCCLAW_API_KEY);
+            if (apiCookie != null) {
+                apiKey = apiCookie.getValue();
+            }
+        }
+        if (apiKey == null || apiKey.isBlank()) {
+            apiKey = uriInfo.getQueryParameters().getFirst("apiKey");
+        }
+        return apiKey;
+    }
+
+    private void abortUnauthorized(ContainerRequestContext requestContext, String safeKey, String finalPath,
+            String method, String ip, String reason, long startTime) {
+        logAudit(safeKey, finalPath, method, "REJECTED_" + reason, ip, System.currentTimeMillis() - startTime);
+        auditService.record("auth-filter", "anonymous", "system",
+                SecurityEventType.AUTH_REJECTED,
+                "reason=" + reason + " key=" + safeKey + " endpoint=" + finalPath + " method=" + method + " ip=" + ip);
+        requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
+                .type(MediaType.APPLICATION_JSON)
+                .entity(new AuthErrorResponse("UNAUTHORIZED", "Missing or invalid API key", clock.instant().toString()))
+                .build());
     }
 
     private static final Set<String> POLL_LIKE_PATHS = Set.of(

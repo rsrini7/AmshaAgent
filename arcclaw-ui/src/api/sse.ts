@@ -19,6 +19,7 @@ export class SseManager {
     
     try {
       const response = await fetch(this.url, {
+        credentials: 'include',
         headers: { 
           'Accept': 'text/event-stream',
           'X-ARCCLAW-API-KEY': this.apiKey
