@@ -1,15 +1,3 @@
-### 2. Persistence — Drop JPA for SQLite Paths (jOOQ or JDBI)
-You are already writing native SQL. `em.clear()`, `SqliteRetryTemplate`, and `em.createNativeQuery()` everywhere prove the leaky abstraction. Qwen confirms: JPA is designed for MVCC client-server RDBMS, not a single-writer file-based store.
-
-Refer [JDBI-refactor.md](#JDBI-refactor.md)
-
-**Direction:**
-- Keep `CheckpointStorePort` hexagonal boundary untouched
-- Replace the SQLite adapter implementation with jOOQ or JDBI
-- Eliminates the L1 cache desync bugs and makes `SqliteRetryTemplate` obsolete
-
-***
-
 ### 3. Structured Concurrency (`StructuredTaskScope`) for Parallel Tool Calls
 Yes — if you do **not** want preview features, then do **not** adopt Structured Concurrency yet. Stick with **virtual threads + explicit cancellation** for halt handling; that is GA and already gives you a solid improvement path. [morling](https://www.morling.dev/blog/future-to-completablefuture-with-java-virtual-threads/)
 
