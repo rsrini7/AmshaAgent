@@ -58,6 +58,13 @@ export class ArcShell extends LitElement {
     }
     .content-area { flex: 1; min-height: 0; overflow-y: auto; }
     .content-area[hidden] { display: none !important; }
+    .content-area::-webkit-scrollbar { width: 6px; }
+    .content-area::-webkit-scrollbar-track { background: transparent; }
+    .content-area::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .content-area::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
     .topbar {
       display: flex;
       align-items: center;

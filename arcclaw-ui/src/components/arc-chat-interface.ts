@@ -45,7 +45,9 @@ export class ArcChatInterface extends LitElement {
   private _reconnectTimeoutId: any = null;
   private _wsToken = '';
   private _wsTokenFetchedAt = 0;
-  private static readonly WS_TOKEN_TTL = 30_000; // reuse same token within 30s window
+  private _lastConnectAt = 0;
+  private static readonly WS_TOKEN_TTL = 30_000;
+  private static readonly MIN_CONNECT_INTERVAL = 5000;
 
   static styles = css`
     :host { 
@@ -286,6 +288,9 @@ export class ArcChatInterface extends LitElement {
   }
 
   private async _connect() {
+    const now = Date.now();
+    if (now - this._lastConnectAt < ArcChatInterface.MIN_CONNECT_INTERVAL) return;
+    this._lastConnectAt = now;
     if (this._intentionalClose) return;
     this._connecting = true;
 

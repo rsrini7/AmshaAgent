@@ -13,6 +13,9 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
@@ -52,8 +55,19 @@ public class SettingsResource {
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "dev-key")
     String internalApiKey;
 
+    @Context
+    HttpHeaders httpHeaders;
+
+    private String resolveKey(String headerKey) {
+        if (headerKey != null && !headerKey.isBlank()) return headerKey;
+        Cookie apiCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_ARCCLAW_API_KEY);
+        if (apiCookie != null) return apiCookie.getValue();
+        return null;
+    }
+
     private void checkAuth(String key) {
-        if (key == null || !key.equals(internalApiKey)) {
+        String resolved = resolveKey(key);
+        if (resolved == null || !resolved.equals(internalApiKey)) {
             throw new WebApplicationException(
                 Response.status(Response.Status.UNAUTHORIZED)
                     .entity(new ArcClawErrorResponse("Unauthorized", "Invalid or missing API Key"))
