@@ -47,18 +47,13 @@ export class ArcSettings extends LitElement {
       display: flex;
       flex-direction: column;
       height: 100%;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+    .settings-wrap {
       max-width: 800px;
       margin: 0 auto;
       padding: var(--space-6);
-      box-sizing: border-box;
-      min-height: 0;
-      overflow: hidden !important;
-    }
-    .tab-content {
-      flex: 1;
-      overflow-y: auto;
-      min-height: 0;
-      padding-right: var(--space-2);
     }
     .tabs {
       display: flex; gap: var(--space-4); margin-bottom: var(--space-6);
@@ -186,6 +181,7 @@ export class ArcSettings extends LitElement {
 
   render() {
     return html`
+      <div class="settings-wrap">
       <h2>Settings ${this._appVersion ? html`<span style="font-size:0.5em;color:var(--text-muted)">v${this._appVersion}</span>` : ''}</h2>
       
       <div class="tabs">
@@ -197,10 +193,9 @@ export class ArcSettings extends LitElement {
       ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
       ${this._success ? html`<div class="status-msg success">${this._success}</div>` : ''}
 
-      <div class="tab-content">
-        ${this._activeTab === 'provider' ? this._renderProvider() : ''}
-        ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
-        ${this._activeTab === 'danger' ? this._renderDanger() : ''}
+      ${this._activeTab === 'provider' ? this._renderProvider() : ''}
+      ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
+      ${this._activeTab === 'danger' ? this._renderDanger() : ''}
       </div>
     `;
   }

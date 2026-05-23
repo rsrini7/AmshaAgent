@@ -40,12 +40,14 @@ export class ArcOnboarding extends LitElement {
   static styles = css`
   :host {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    min-height: 100vh;
+    height: 100%;
+    box-sizing: border-box;
     background: var(--bg-base);
     font-family: var(--font-family);
-    padding: var(--space-6) var(--space-4);
+    padding: var(--space-4);
+    overflow-y: auto;
   }
 
   .wizard-card {
