@@ -32,7 +32,7 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 ### 1.2 Core module
 - `arcclaw-core` owns agent runtime, workspace/session lifecycle, governance, persistence, skills, structured output, reflexes, audit, sandbox contracts, and generic pipeline behavior.
 - `arcclaw-core` MUST NOT depend on Telegram-specific behavior or any single channel assumption.
-- **P95 Storage Extraction:** `arcclaw-core` MUST NOT contain direct JPA `EntityManager` or JPQL queries. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`. (Enforced by `ArchitectureBoundaryTest`).
+- **Persistence boundary:** `arcclaw-core` MUST NOT contain JDBI `Handle`/`Jdbi` references or raw SQL strings. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`. (Enforced by `ArchitectureBoundaryTest`).
 
 ### 1.3 App module
 - `arcclaw-app` owns application wiring, REST resources, startup bootstrap, config producers, and current adapter registration.
@@ -245,29 +245,28 @@ inline - use static final Pattern per §9.1.
 - Do not introduce ad hoc migration scripts for normal table changes unless the architecture policy is explicitly changed repository-wide.
 
 ### 5.3 Repository style
-- Core repositories MUST NOT use `EntityManager` directly (§1.2).
+- Core repositories MUST NOT use JDBI `Handle`/`Jdbi` directly (§1.2).
 - All database operations in `arcclaw-core` MUST flow through Port interfaces defined in `arcclaw-persistence-api`.
-- Implementations (Adapters) reside in specialized modules (e.g. `arcclaw-persistence-sqlite`).
+- Implementations (Adapters) reside in specialized modules (e.g. `arcclaw-persistence-sqlite`, `arcclaw-persistence-postgres`).
 
-### 5.4 ORM 7 transaction behavior
-- Be careful with `QuarkusTransaction.requiringNew().run(...)` lambda boundaries.
-- Prefer dedicated `@Transactional(REQUIRES_NEW)` methods **at the outermost write boundary** when proxy binding matters.
-- **MUST NOT** nest a `@Transactional(REQUIRES_NEW)` method inside a call stack that already holds an active `@Transactional(REQUIRED)` or `@Transactional` transaction when using SQLite - see §5.8. The `REQUIRES_NEW` must be the outermost transaction boundary for each write unit, not a nested child inside a longer-lived `REQUIRED` context.
-- Do not assume `em.merge()` is the right fix for already-managed entities.
+### 5.4 JDBI Transaction Behavior (SQLite)
+- JDBI manages its own connections and transactions — do NOT wrap JDBI operations in Jakarta `@Transactional`. Let JDBI handle transaction boundaries via `jdbi.useTransaction()` / `jdbi.inTransaction()`.
+- The adapters in `arcclaw-persistence-sqlite` use `jdbi.useTransaction()` for write operations and obtain handles via `jdbi.withExtension()` / `jdbi.withHandle()`.
+- `@Transactional` annotations in `arcclaw-core` beans (e.g., `AuditEventRecorder`) remain for JTA compliance but are effectively no-ops for JDBI-backed stores — the actual database write is managed by JDBI's own handle lifecycle.
 
 ### 5.5 Read visibility in tests
 - Test writes must be committed before REST assertions that depend on them.
 - Snapshot isolation assumptions in SQLite tests are easy to get wrong; prefer explicit cleanup and committed setup.
 
-### 5.6 Identity / dialect
-- The custom SQLite dialect is mandatory for ORM-generated identity-column DDL correctness.
-- Do not remove or bypass it for entity tables using generated identifiers.
+### 5.6 Identity / schema (JDBI + Flyway — Hibernate removed)
+- All schemas (SQLite and PostgreSQL) are managed via Flyway migrations in their respective adapter modules.
+- The custom Hibernate SQLite dialect (`ArcClawSQLiteDialect`) and all JPA entity classes have been removed.
+- Identity columns use `INTEGER PRIMARY KEY AUTOINCREMENT` (SQLite) or `BIGSERIAL` (PostgreSQL) in DDL.
+- `@Version` optimistic locking is not used — JDBI-based adapters manage concurrency via explicit SQL conditions (e.g., `WHERE status = :expectedStatus` in status transitions).
 
-## 5.7 EncryptedSecret version field ownership
+## 5.7 EncryptedSecret version field ownership (REMOVED — JDBI Migration)
 
-`EncryptedSecret.ormVersion` is Hibernate-managed. Application code MUST NOT read or set it.
-`EncryptedSecret.encryptionKeyVersion` is application-managed. Application code sets ONLY this field.
-Mixing these two fields corrupts encryption version tracking and is undetectable at runtime.
+`EncryptedSecret.ormVersion` was Hibernate-managed and is now **removed**. Both `SqliteSecretStoreAdapter` and `PostgresSecretStoreAdapter` use `SecretJdbiDao` directly via the `SecretDtoRow` record, bypassing all JPA entity classes. The `ormVersion` column no longer exists in the schema — both backends use JDBI exclusively.
 
 ---
 
@@ -296,7 +295,7 @@ This is a database engine constraint, not a configuration choice.
 
 MUST NOT: Annotate any method `@Transactional(REQUIRED)` (or bare `@Transactional`) if that method directly or transitively calls any `@Transactional(REQUIRES_NEW)` method that writes to the SAME database.
 
-MUST NOT: Use `em.merge()` or full-entity `em.persist()` inside the `arcclaw-persistence-sqlite` module for entities that face concurrent overlapping writes (like `AgentCheckpoint`). Use native SQL `UPDATE` instead.
+MUST NOT: Use JPA `EntityManager` operations (`em.merge()`, `em.persist()`, `em.find()`) in any module — Hibernate has been removed. All writes use JDBI SQL statements or DAO methods.
 
 ### 5.8.1 Advisory Lock Isolation Exception (§T5-3)
 
@@ -455,39 +454,42 @@ A pool of 2 starves foreground approval writes whenever both drain threads are a
 
 ---
 
-## 5.14 `SqliteRetryTemplate` Nesting Contract
+## 5.14 `JdbiRetryWrapper` Nesting Contract
 
-`SqliteRetryTemplate.execute()` is designed for one specific pattern:
-a single `@Transactional(REQUIRES_NEW)` CDI proxy self-call, retried N times with
-exponential backoff on `SQLITE_BUSY` errors.
+`JdbiRetryWrapper.withRetry()` replaces the deleted `SqliteRetryTemplate`. It wraps a JDBI
+operation with exponential backoff on `SQLITE_BUSY`/`SQLITE_LOCKED` errors using the same
+`SqliteErrorStrings.isBusy(e)` detection as its predecessor.
 
-MUST NOT call `SqliteRetryTemplate.execute()` from inside an active JTA transaction
-(`REQUIRED` or `MANDATORY`). The retry loop assumes each attempt gets a fresh,
-uncontested write lock - an outer transaction's reserved lock ensures every attempt
-will fail with `SQLITE_BUSY`, consuming all retries uselessly.
+**Key differences from `SqliteRetryTemplate`:**
+- `JdbiRetryWrapper` does NOT assume a `@Transactional(REQUIRES_NEW)` boundary — the caller
+  manages its own transaction context via JDBI handles (`jdbi.useTransaction()`).
+- It retries on `UnableToExecuteStatementException` and `TransactionException` (JDBI's
+  wrappers for SQLite errors) in addition to raw `SQLiteException`.
+- There is no JTA transaction nesting risk: JDBI handles are not enlisted in JTA, so
+  calling `withRetry()` from inside an active `@Transactional` method is safe (though
+  unnecessary — each JDBI handle manages its own transaction).
 
-MUST NOT use `SqliteRetryTemplate` for:
+**MUST NOT use `JdbiRetryWrapper` for:**
 - Non-database operations
-- Read-only queries
-- Any operation that is not a `@Transactional(REQUIRES_NEW)` CDI proxy call
+- Read-only queries where retry is unnecessary
 
-The template inspects `SqliteErrorStrings.isBusy(e)` across the full `getCause()` chain
-because Hibernate wraps `SQLiteException` several layers deep. Do not simplify this check
-to a single `e.getMessage()` string comparison.
+The wrapper inspects `SqliteErrorStrings.isBusy(e)` across the full `getCause()` chain.
+Do not simplify this check to a single `e.getMessage()` string comparison.
 
 ---
 
 ### 5.14.1 Retry Encapsulation After Storage Extraction (P95 Amendment – 2026-04-13)
 
-After the C1 storage port extraction (Wave 3), `SqliteRetryTemplate` MUST be encapsulated **inside** the `arcclaw-persistence-sqlite` adapter module.
+After the C1 storage port extraction, retry logic MUST be encapsulated **inside** the
+`arcclaw-persistence-sqlite` adapter module.
 
 **MUST NOT expose a `PersistenceRetryPort` interface to `arcclaw-core`.**
 
 **Rationale:**
-* Retry-on-BUSY is a SQLite-specific infrastructure concern. Core should call `CheckpointStorePort.save()` and the adapter handles retries transparently.
+* Retry-on-BUSY is a SQLite-specific infrastructure concern. Core should call `CheckpointStorePort.save()` and the adapter handles retries transparently via `JdbiRetryWrapper`.
 * Postgres does not need BUSY retries – it uses MVCC and standard connection-pool retry. Exposing a retry port to Core forces every core class to participate in an infrastructure concern it should not know about.
-* `StatefulAgentStoreImpl` currently wraps every `self.doXxx()` call with `withRetry(() -> self.doXxx(), ...)`. After extraction, the `SqliteCheckpointStoreAdapter` absorbs both the `REQUIRES_NEW` boundary and the retry loop – the `withRetry` wrapper in `StatefulAgentStoreImpl` is deleted.
-* `WorkspaceManager.markCheckpointsFailed()` should delegate to a `CheckpointStorePort.markFailed(sessionId)` method. The SQLite adapter wraps its own retry internally.
+* `StatefulAgentStoreImpl` previously wrapped every `self.doXxx()` call with `withRetry()`. After extraction, the `SqliteCheckpointStoreAdapter` absorbs both the transaction boundary and the retry loop – the `withRetry` wrapper in `StatefulAgentStoreImpl` was deleted.
+* `WorkspaceManager.markCheckpointsFailed()` delegates to `CheckpointStorePort.markFailed(sessionId)`. The SQLite adapter wraps its own retry internally via `JdbiRetryWrapper`.
 
 **Port interface (`arcclaw-persistence-api`) MUST contain only:**
 * `CheckpointStorePort` – checkpoint CRUD + status transitions
@@ -496,7 +498,7 @@ After the C1 storage port extraction (Wave 3), `SqliteRetryTemplate` MUST be enc
 
 **Port interface MUST NOT contain:**
 * `PersistenceRetryPort` or any retry abstraction
-* `SqliteRetryTemplate` or any reference to SQLite error handling
+* `JdbiRetryWrapper` or any reference to SQLite error handling
 
 ---
 
@@ -572,12 +574,11 @@ from the `FAILED` overwrite query. The exclusion set is:
 
 **Why this matters (P84 race condition):**
 `AgentCronScheduler` calls `WorkspaceManager.terminateSession()` immediately after
-`CronResultHandler.markCompleted()`. If the `COMPLETED` finalization `REQUIRES_NEW`
-transaction has not fully flushed to disk before the `terminateSession` query runs
+`CronResultHandler.markCompleted()`. If the `COMPLETED` finalization JDBI transaction
+has not fully committed to disk before the `terminateSession` query runs
 (possible under concurrent load with Agroal pool pressure), the checkpoint may still
-appear as `IN_PROGRESS` in the EntityManager's first-level cache. Without the exclusion,
-it gets incorrectly overwritten to `FAILED`, corruption the audit trail and
-triggering spurious failure notifications.
+appear as `IN_PROGRESS` in the DB. Without the exclusion, it gets incorrectly overwritten
+to `FAILED`, corrupting the audit trail and triggering spurious failure notifications.
 
 MUST NOT add new terminal statuses to `CheckpointStatus` without updating this query.
 
@@ -610,17 +611,16 @@ SecretVault operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST
 
 ---
 
-## 5.21 `InstantToTextConverter` Multi-Backend Safety (§5.21 INVARIANT)
+## 5.21 Instant/Timestamp Conversion (§5.21 INVARIANT)
 
-- `@Converter(autoApply = true)` on `InstantToTextConverter` in `arcclaw-persistence-sqlite` MUST remain SQLite-only.
-- The `arcclaw-persistence-postgres` module MUST NOT add a competing `@Converter(autoApply = true)` for `Instant`.
-- PostgreSQL handles `timestamptz` natively; any PostgreSQL-specific conversion must be explicit or handled by the dialect.
-- Having two auto-apply converters for the same type on the same classpath causes a Hibernate boot failure.
+- **SQLite:** `Instant` ↔ ISO-8601 string conversion is handled by JDBI type mappers registered in `JdbiProducer` (via `InstantArgumentFactory` / `InstantColumnMapper`).
+- **PostgreSQL** handles `timestamptz` natively via its JDBC driver; no special conversion is needed.
+- Use JDBI type mappers for `Instant` — do NOT add any `@Converter` annotation.
 
 ## 5.22 Cross-DB Column Definition Usage (§5.22 INVARIANT)
-No JPA entity in `arcclaw-core` or `arcclaw-persistence-api` may use `@Column(columnDefinition="...")` for integers or booleans.
-All DDL customization for IDENTITY bounds must live in per-adapter Flyway migration scripts or rely on Hibernate's `@ColumnDefault`.
-However, `columnDefinition = "TEXT"` is explicitly permitted and required for large JSON blob fields across all adapters. Removing it causes Hibernate to silently emit `VARCHAR(255)`, truncating payloads. `columnDefinition = "INTEGER"` for ID/identity columns and `columnDefinition = "INTEGER NOT NULL DEFAULT 0"` for booleans are the only prohibited forms.
+No DDL customization for IDENTITY bounds MUST live in per-adapter Flyway migration scripts.
+JPA's `@Column(columnDefinition=...)` is no longer present — Hibernate has been removed from all modules.
+All DDL is expressed in per-adapter Flyway migration SQL files only.
 
 ## 5.23 SessionSchemaEnforcer DDL Isolation (§5.23 INVARIANT)
 All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `arcclaw-core` or `arcclaw-app`. Each persistence adapter module (e.g. `arcclaw-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
@@ -643,12 +643,11 @@ All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-sp
 ### 6.4 Resource loading
 - For generated/augmented resources in multi-module tests, prefer context-classloader resource loading when required by current Quarkus augmentation behavior.
 
-## 6.5 @RunOnVirtualThread enforcement
+## 6.5 @RunOnVirtualThread enforcement (REMOVED — JDBI Migration)
 
-The constraint that JAX-RS resources injecting `EntityManager` MUST have `@RunOnVirtualThread`
-is enforced at **build time** by `RestResourceBuildStep`. Violations fail the build with a
-`ValidationError` - they do NOT surface as runtime `BlockingOperationNotAllowedException`.
-Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
+This rule was specific to Hibernate's `EntityManager` in JAX-RS resources. Since **all modules
+have migrated to JDBI**, there is no `EntityManager` to inject in any REST resource.
+`RestResourceBuildStep` has been removed.
 
 ### 6.6 Static run-time objects
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
@@ -1057,7 +1056,8 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `arcclaw.vault.pepper`: "mock-pepper"
   - `quarkus.langchain4j.openai.timeout`: "30s"
   - `arcclaw.data-dir`: "target/data"
-- Standardize the `hibernate-orm.packages` list to include `com.arcclaw.core.*` entity packages to avoid `UnsatisfiedDependency` for `EntityManager`.
+- The project uses **JDBI**, not Hibernate. Do NOT add `quarkus-hibernate-orm` dependency.
+  Set `quarkus.hibernate-orm.enabled: false` in test config and omit any `hibernate-orm.packages` config.
 
 ### 16.3 CDI Discovery (Jandex)
 - Refer to §15. Every module MUST have `jandex-maven-plugin` and `beans.xml`.
@@ -1147,8 +1147,8 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Is `ApprovalStateMachine.decide()` still NOT_SUPPORTED? (§5.11)
 - [ ] Is `AgentCronScheduler.pollAndDispatch()` still NOT_SUPPORTED with `reclaimStaleCrons` isolated? (§5.12)
 - [ ] Does Agroal config still have `background-validation=true` and `max-size≥3`? (§5.13)
-- [ ] Is `SqliteRetryTemplate` only called from a NOT_SUPPORTED or un-annotated outer frame? (§5.14)
-- [ ] After storage extraction: is `SqliteRetryTemplate` encapsulated inside `arcclaw-persistence-sqlite`? No `PersistenceRetryPort` in core. (§5.14.1)
+- [ ] Is `JdbiRetryWrapper` only called from a non-transactional or JDBI-managed transaction context (§5.14)
+- [ ] After storage extraction: is retry logic encapsulated inside `arcclaw-persistence-sqlite`? No `PersistenceRetryPort` in core. (§5.14.1)
 - [ ] After storage extraction: are `NOT_SUPPORTED` annotations still on `CheckpointApprovalService`, NOT moved to adapters? (§5.10.1)
 - [ ] Does any new `CheckpointStatus` terminal value need to be added to `doMarkCheckpointsFailedRequiresNew`? (§5.18)
 - [ ] Does any new checkpoint query include `ORDER BY c.id DESC`? (§5.19)

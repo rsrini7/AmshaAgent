@@ -3,7 +3,7 @@
 package com.arcclaw.persistence.api;
 
 /**
- * Replaces Consumer<EntityManager> in PersistenceAdapterPort.
+ * A unit-of-work action executed within a persistence context.
  * Decoupled from JPA context types to satisfy Tier 3 invariants.
  */
 @FunctionalInterface

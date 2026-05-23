@@ -29,6 +29,8 @@ import com.arcclaw.core.security.InputSanitizer;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
 import com.arcclaw.core.util.AgentResultFormatter;
+import com.arcclaw.core.util.TimeContextInjector;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -44,6 +46,9 @@ public class AgentDispatchHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AgentDispatchHandler.class);
     private static final Pattern MARKDOWN_LINK_PATTERN = Pattern.compile("\\[([^\\]]+)]\\(([^)]+)\\)");
     private static final int DEFAULT_MAX_ITERATIONS = 5;
+
+    @ConfigProperty(name = "arcclaw.agent.default-timezone", defaultValue = "Asia/Kolkata")
+    String defaultTimezone;
 
     @Inject
     AgentLoop agentLoop;
@@ -125,6 +130,7 @@ public class AgentDispatchHandler implements MessageHandler {
                 log.infof("[AgentDispatch] Continuity detected for session %s - restoring original goal: %s", 
                         sessionId, restoredGoal);
                 goal = normalizeGoal(restoredGoal);
+                TimeContextInjector.inject(context, goal, defaultTimezone);
             } else {
                 log.warnf("[AgentDispatch] Continuity detected for session %s but no suitable original goal found in history.", sessionId);
             }

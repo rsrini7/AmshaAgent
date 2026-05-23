@@ -2,13 +2,12 @@ package com.arcclaw.persistence.postgres;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.persistence.api.PersistenceAction;
 import com.arcclaw.persistence.api.PersistenceAdapterPort;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
+import org.jdbi.v3.core.Jdbi;
 
 /**
  * PostgreSQL implementation of {@link PersistenceAdapterPort}.
@@ -18,20 +17,19 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresPersistenceAdapter implements PersistenceAdapterPort {
 
-    @Inject
-    EntityManager em;
+    private final Jdbi jdbi;
 
     @Inject
-    PostgresPersistenceAdapter self;
+    public PostgresPersistenceAdapter(Jdbi jdbi) {
+        this.jdbi = jdbi;
+    }
+
+    protected PostgresPersistenceAdapter() {
+        this(null);
+    }
 
     @Override
     public void execute(String sessionId, String operationName, PersistenceAction action) {
-        self.persistSynchronously(action);
-    }
-
-    @Transactional(Transactional.TxType.REQUIRED)
-    public void persistSynchronously(PersistenceAction action) {
-        em.clear();
-        action.execute();
+        jdbi.useTransaction(h -> action.execute());
     }
 }

@@ -20,7 +20,7 @@ import picocli.CommandLine.Command;
  * <p>
  * <strong>Data-dir lifecycle:</strong> The static {@code main()} method
  * provisions {@code ARCCLAW_DATA_DIR} <em>before</em> {@code Quarkus.run()}
- * is called, ensuring the directory exists before Hibernate boots.
+ * is called, ensuring the directory exists before Quarkus boots.
  * The raw value is resolved to an absolute, normalised path and written
  * back into {@code System.setProperty} so that every
  * {@code ${ARCCLAW_DATA_DIR:./data}} expression in {@code application.yaml}

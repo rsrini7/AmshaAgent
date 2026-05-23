@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1497_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1494_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
@@ -34,7 +34,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `garuda` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
-- **Reflex system** - 16 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
+- **Reflex system** - 17 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
 - **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation, with namespace and direct-execution fallbacks
 - **Web search tools** - Brave Search and Serper API integration for real-time information retrieval
@@ -602,7 +602,7 @@ arcclaw-core/                 ← Agent runtime kernel
 │   ├── structured/             StructuredOutputEngine, StructuredRetryLoop,
 │   │                           PermissiveJsonExtractor, AgentFunctionRegistry
 │   ├── tools/                  ToolRegistry, AgentTool SPI, ToolResponse, ToolOperation,
-│   │                           ToolCapability, GithubTool, ScheduleTaskTool,
+│   │                           GithubTool, ScheduleTaskTool,
 │   │                           ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
 │   │                           SandboxExecTool, CheckListTool, BraveWebSearchTool,
 │   │                           SerperWebSearchTool, SmartWebFetchTool, AgentTaskTool,
@@ -730,7 +730,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-api` | Allows `arcclaw-core` to reference channel concepts (sender, allowlist) without coupling to Telegram or any concrete adapter. Swapping channels requires zero core changes. |
 | `arcclaw-persistence-api` | Hexagonal architecture port interfaces. Core depends on ports, not implementations. Enables swapping SQLite for Postgres or filesystem without core changes. |
 | `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters. Avoids entity duplication across SQLite, Postgres, and filesystem adapters. |
-| `arcclaw-core` | Independently testable. All ~1454 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
+| `arcclaw-core` | Independently testable. All ~1454 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes (17), and the agent kernel live here. |
 | `arcclaw-persistence-sqlite` | SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, and FTS5 setup. |
 | `arcclaw-persistence-fs` | Filesystem-based persistence adapter for environments without SQLite. |
 | `arcclaw-persistence-postgres` | PostgreSQL adapter for production deployments requiring a server database. |
@@ -784,6 +784,49 @@ The `%cli` profile is forced by `arcclaw-cli.ps1` and silences all Quarkus banne
 | `scripts/windows/mvn-clean-install-skiptests.ps1` | Full build skipping tests |
 
 See [`MISE_SETUP.md`](./MISE_SETUP.md) for the recommended cross-platform task runner setup.
+
+### Persistence Backends (Switching)
+
+ArcClaw supports three persistence backends via the hexagonal port/adapter architecture. All share the same port interfaces — swap without core code changes.
+
+| Backend | Default | Mise Task | Requires | Data stored as |
+|---|---|---|---|---|
+| **SQLite** (WAL + FTS5 + sqlite-vec) | ✅ | `mise run dev` / `mise run jar:serve` | Nothing (embedded) | Single `.db` file in `./data/` |
+| **PostgreSQL** (tsvector + pgvector) | | `mise run dev:pg` / `mise run jar:pg` | Podman (auto-starts PG container) | PostgreSQL server (port 5432) |
+| **Filesystem** (JSON files) | | `mise run dev:fs` / `mise run jar:fs` | Nothing | JSON files on disk in `./data/fs/` |
+
+**Migration between backends:**
+
+```bash
+# SQLite (default)
+mise run dev                          # dev mode
+mise run jar:serve                    # packaged JAR
+
+# PostgreSQL (auto-starts Podman container)
+mise run db:pg:start                  # start PG container
+mise run dev:pg                       # dev mode with PG
+mise run build:pg && mise run jar:pg  # build & run JAR with PG
+mise run db:pg:stop                   # stop PG container
+mise run db:pg:reset                  # wipe PG database
+
+# Filesystem (no database needed)
+mise run dev:fs                       # dev mode with FS
+mise run build:fs && mise run jar:fs  # build & run JAR with FS
+```
+
+**Capabilities by backend:**
+
+| Feature | SQLite | PostgreSQL | Filesystem |
+|---|---|---|---|
+| Full-text search | FTS5 (ranked) | tsvector (ranked) | Basic substring |
+| Vector search | sqlite-vec (RRF) | pgvector (RRF) | Not supported |
+| Session resolution | DB-backed registry | DB-backed registry | UUID v3 fallback |
+| HITL approvals | ✅ | ✅ | Not available |
+| WORM audit enforcement | SQL triggers | PL/pgSQL triggers | Best-effort |
+| Transactions | JDBI-managed | JDBI-managed | Per-file atomic |
+| Zero dependencies | ✅ (embedded DB) | ❌ (needs PG server) | ✅ (just a filesystem) |
+
+The `%postgresql` and `%filesystem` profiles are defined in `arcclaw-app/src/main/resources/application.yaml`. Each backend adapter module (`arcclaw-persistence-sqlite`, `arcclaw-persistence-postgres`, `arcclaw-persistence-fs`) is conditionally activated via `@IfBuildProperty`.
 
 ### Windows Console Support (UTF-8)
 
@@ -869,6 +912,7 @@ This matters for three reasons:
 | `ResetReflex` | `/reset` | 500 | Soft-resets session state (clears ReAct loop + compactions, preserves chat memory) |
 | `McpReflex` | `/mcp` | 500 | Shows MCP server status: exposed internal tools and dynamically connected MCP server tools |
 | `SkillReflex` | `/skills` | 500 | Lists all currently loaded skills with their source (`classpath` or `database`) and trigger pattern count |
+| `ListReflexesReflex` | `/reflex`, `/reflexes`, `/commands`, `/help` | 500 | Lists all registered reflexes with their priority and trigger pattern |
 
 > [!NOTE]
 > The `PiiScanReflex`, `PromptInjectionReflex`, and `IdentityExtractionReflex` run on **every message** via their `sanitize()` hook in `ReflexRegistry.processIfReflex()`, even when no other reflex matches. PII mode is configurable: `REDACT_AND_FORWARD` (default) silently redacts and passes to the LLM; `BLOCK_AND_NOTIFY` rejects the message outright. Override at runtime via `ARCCLAW_PII_MODE` in your `.env`.
@@ -1528,4 +1572,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 16 reflexes · 10 LLM providers · 19 UI components*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 17 reflexes · 10 LLM providers · 19 UI components*

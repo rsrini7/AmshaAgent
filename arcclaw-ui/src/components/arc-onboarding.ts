@@ -42,7 +42,7 @@ export class ArcOnboarding extends LitElement {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
+    min-height: 100%;
     background: var(--bg-base);
     font-family: var(--font-family);
     padding: var(--space-6) var(--space-4);

@@ -179,7 +179,7 @@ public class WorkspaceManager {
      * Root cause of the bug: AgentCronScheduler calls WorkspaceManager.terminateSession()
      * immediately after CronResultHandler marks the job COMPLETED. If the finalize
      * transaction (REQUIRES_NEW) hasn't fully flushed to SQLite before this query runs,
-     * the checkpoint is still visible as IN_PROGRESS in the EntityManager cache and gets
+     * the checkpoint may still appear as IN_PROGRESS due to a read-write race and gets
      * incorrectly overwritten to FAILED - corrupting the audit trail and triggering
      * spurious failure notifications.
      *
@@ -193,9 +193,9 @@ public class WorkspaceManager {
         try {
             checkpointStore.markCheckpointsFailed(sessionId);
         } catch (IllegalStateException e) {
-            // EntityManager already closed - JVM is shutting down, checkpoint
+            // Database connection pool already closed - JVM is shutting down, checkpoint
             // status update is best-effort only. Process is dying anyway.
-            log.debugf("markCheckpointsFailed skipped for session=%s - EntityManager closed (shutdown in progress)", sessionId);
+            log.debugf("markCheckpointsFailed skipped for session=%s - database closed (shutdown in progress)", sessionId);
         } catch (Exception e) {
             log.errorf("Failed to mark checkpoints FAILED for session=%s: %s",
                        sessionId, LogUtil.rootMessage(e));

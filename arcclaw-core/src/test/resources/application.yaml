@@ -36,6 +36,8 @@ arcclaw:
     max-lookback-window: PT999H
 
 quarkus:
+  http:
+    test-port: 0
   arc:
     exclude-types:
       - com.arcclaw.channel.telegram.*
@@ -57,27 +59,11 @@ quarkus:
   otel:
     sdk:
       disabled: true
-  datasource:
-    db-kind: h2
-    jdbc:
-      url: "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1"
   scheduler:
     enabled: false
-  hibernate-orm:
-    database:
-      generation: drop-and-create
-    packages:
-      - com.arcclaw.persistence.common.entity
-      - com.arcclaw.core.domain.model
   log:
     level: INFO
     category:
-      "org.hibernate.SQL":
-        level: WARN
-      "org.hibernate.resource.transaction":
-        level: ERROR
-      "com.arjuna":
-        level: ERROR
       "com.arcclaw.core.agent":
         level: "OFF"
       "com.arcclaw.core.tools":

@@ -1,5 +1,9 @@
 import { LitElement, css, html, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
+import { ArcClient } from '../api/client';
+import { consume } from '@lit/context';
+import { arcContext, ArcAppContext } from '../context/arc-context';
+
 
 interface AuditEvent {
   id: string;
@@ -18,16 +22,12 @@ interface AuditEvent {
   hmacHash: string;
 }
 
-interface AuditListResponse {
-  events: AuditEvent[];
-  total: number;
-  page: number;
-  size: number;
-}
-
 @customElement('arc-audit-panel')
 export class ArcAuditPanel extends LitElement {
-  @property({ type: String }) apiKey = '';
+  @consume({ context: arcContext, subscribe: true })
+  @state()
+  private _appContext!: ArcAppContext;
+
 
   @state() private events: AuditEvent[] = [];
   @state() private total = 0;
@@ -70,7 +70,6 @@ export class ArcAuditPanel extends LitElement {
       display: flex; flex-direction: column;
       height: 100%; padding: var(--space-6);
       box-sizing: border-box; gap: var(--space-4);
-      overflow-y: auto;
     }
     .header {
       display: flex; justify-content: space-between; align-items: center;
@@ -91,14 +90,12 @@ export class ArcAuditPanel extends LitElement {
       flex: 1; overflow-y: auto; overflow-x: auto;
       min-height: 0; max-height: calc(100vh - 200px);
       scrollbar-width: thin;
-      scrollbar-color: var(--text-tertiary) transparent;
+      scrollbar-color: var(--border) transparent;
     }
-    .table-wrap::-webkit-scrollbar { width: 8px; }
+    .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
     .table-wrap::-webkit-scrollbar-track { background: transparent; }
-    .table-wrap::-webkit-scrollbar-thumb {
-      background: var(--text-tertiary); border-radius: 4px;
-    }
-    .table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+    .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+    .table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
     table {
       width: 100%; border-collapse: collapse;
       font-size: 13px;
@@ -162,6 +159,9 @@ export class ArcAuditPanel extends LitElement {
       z-index: 201; overflow-y: auto;
       padding: var(--space-6);
     }
+    .drawer::-webkit-scrollbar { width: 6px; }
+    .drawer::-webkit-scrollbar-track { background: transparent; }
+    .drawer::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
     .drawer h3 { margin: 0 0 var(--space-4); }
     .drawer-field { margin-bottom: var(--space-3); }
     .drawer-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -180,12 +180,25 @@ export class ArcAuditPanel extends LitElement {
     .cost { font-family: monospace; }
   `;
 
-  connectedCallback() {
+  async connectedCallback() {
     super.connectedCallback();
-    this.loadEventTypes();
-    this.loadEvents();
+    if (this._appContext?.apiKey) {
+      this.loadEventTypes();
+      this.loadEvents();
+    }
     this._onKeyDown = this._onKeyDown.bind(this);
     document.addEventListener('keydown', this._onKeyDown);
+  }
+
+  updated(changedProperties: Map<string, any>) {
+    if (changedProperties.has('_appContext') && this._appContext?.apiKey && !this.loading && this.events.length === 0) {
+      this.loadEventTypes();
+      this.loadEvents();
+    }
+  }
+
+  private get _client(): ArcClient {
+    return new ArcClient('/api/v1', this._appContext?.apiKey || '');
   }
 
   disconnectedCallback() {
@@ -210,11 +223,7 @@ export class ArcAuditPanel extends LitElement {
     }
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (this.apiKey) headers['X-ARCCLAW-API-KEY'] = this.apiKey;
-      const r = await fetch('/api/v1/audit/event-types', { headers });
-      if (!r.ok) throw new Error(`${r.status}`);
-      const data = await r.json();
+      const data = await this._client.getAuditEventTypes();
       this.eventTypes = data.eventTypes;
       sessionStorage.setItem(ArcAuditPanel.EVENT_TYPES_CACHE_KEY, JSON.stringify(this.eventTypes));
     } catch {
@@ -226,17 +235,14 @@ export class ArcAuditPanel extends LitElement {
   private async loadEvents() {
     this.loading = true;
     try {
-      const params = new URLSearchParams({ page: String(this.page), size: '50' });
-      if (this.filterSessionId) params.set('sessionId', this.filterSessionId);
-      if (this.filterEventType) params.set('eventType', this.filterEventType);
-      if (this.filterFrom) params.set('from', this.filterFrom);
-      if (this.filterTo) params.set('to', this.filterTo);
-
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (this.apiKey) headers['X-ARCCLAW-API-KEY'] = this.apiKey;
-      const r = await fetch(`/api/v1/audit?${params}`, { headers });
-      if (!r.ok) throw new Error(`Failed to load audit events: ${r.status}`);
-      const data: AuditListResponse = await r.json();
+      const data = await this._client.getAuditEvents({
+        page: this.page,
+        size: 50,
+        sessionId: this.filterSessionId || undefined,
+        eventType: this.filterEventType || undefined,
+        from: this.filterFrom || undefined,
+        to: this.filterTo || undefined
+      });
       this.events = data.events;
       this.total = data.total;
     } catch (e) {

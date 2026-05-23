@@ -1,5 +1,7 @@
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { arcContext, ArcAppContext } from '../context/arc-context';
 import { WsManager } from '../api/websocket';
 import { marked } from 'marked';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -21,8 +23,10 @@ interface ChatMessage {
 
 @customElement('arc-chat-interface')
 export class ArcChatInterface extends LitElement {
-  @property({ type: String }) apiKey = '';
-  @property({ type: String }) sessionId = '';
+  @consume({ context: arcContext, subscribe: true })
+  @state()
+  private _appContext!: ArcAppContext;
+
   @property({ type: String }) platformId = '';
 
   @state() private _messages: ChatMessage[] = [];
@@ -41,11 +45,15 @@ export class ArcChatInterface extends LitElement {
   private _reconnectTimeoutId: any = null;
   private _wsToken = '';
   private _wsTokenFetchedAt = 0;
-  private static readonly WS_TOKEN_TTL = 30_000; // reuse same token within 30s window
+  private _lastConnectAt = 0;
+  private _isReconnecting = false;
+  private static readonly WS_TOKEN_TTL = 30_000;
+  private static readonly MIN_CONNECT_INTERVAL = 5000;
 
   static styles = css`
     :host { 
-      display: flex; flex-direction: column; height: 100%; box-sizing: border-box; 
+      display: flex; flex-direction: column;
+      box-sizing: border-box; 
       background: var(--bg-base);
     }
     
@@ -86,6 +94,10 @@ export class ArcChatInterface extends LitElement {
       position: relative;
       min-height: 0;
     }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+    .messages::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
     
     .msg-group {
       display: flex; flex-direction: column; gap: 2px;
@@ -201,9 +213,16 @@ export class ArcChatInterface extends LitElement {
     }
     
     /* Markdown Styles */
-    .bubble pre { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin: 8px 0; overflow-x: auto; }
+    .bubble pre {
+      background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;
+      margin: 8px 0; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+      max-width: 100%; font-size: 13px; line-height: 1.5;
+    }
+    .bubble pre::-webkit-scrollbar { height: 4px; }
+    .bubble pre::-webkit-scrollbar-track { background: transparent; }
+    .bubble pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
     .bubble code { font-family: 'Fira Code', monospace; font-size: 0.9em; background: rgba(255,255,255,0.05); padding: 2px 4px; border-radius: 4px; }
-    .bubble pre code { background: transparent; padding: 0; }
+    .bubble pre code { background: transparent; padding: 0; font-size: inherit; }
     .bubble p { margin-bottom: 4px; }
     .bubble p:last-child { margin-bottom: 0; }
 
@@ -231,20 +250,24 @@ export class ArcChatInterface extends LitElement {
   `;
 
   updated(changedProperties: Map<string, unknown>) {
-    const relevant = changedProperties.has('apiKey') || changedProperties.has('platformId');
-    if (relevant && this.apiKey && this.platformId && !this._ws && !this._connecting && !this._intentionalClose) {
+    const relevant = changedProperties.has('_appContext') || changedProperties.has('platformId');
+    if (relevant && (this._appContext?.platformId || this.platformId) && !this._ws && !this._connecting && !this._intentionalClose) {
       this._connecting = true;
       this._connect();
     }
   }
 
   private async _loadHistory() {
-    if (!this.sessionId) return;
+    const sid = this._appContext?.sessionId;
+    if (!sid) return;
     try {
-      const res = await fetch(`/api/v1/chat/stream/history/${this.sessionId}`, {
-        headers: {
-          'X-ArcClaw-API-Key': this.apiKey
-        }
+      const headers: Record<string, string> = {};
+      if (this._appContext?.apiKey && this._appContext.apiKey !== 'authenticated') {
+        headers['X-ArcClaw-API-Key'] = this._appContext.apiKey;
+      }
+      const res = await fetch(`/api/v1/chat/stream/history/${sid}`, {
+        credentials: 'include',
+        headers
       });
       if (!res.ok) return;
       const msgs = await res.json();
@@ -268,20 +291,36 @@ export class ArcChatInterface extends LitElement {
   
   disconnectedCallback() {
     super.disconnectedCallback();
+    if (this._reconnectTimeoutId) {
+      clearTimeout(this._reconnectTimeoutId);
+      this._reconnectTimeoutId = null;
+    }
+    this._markdownCache.clear();
     this._ws?.disconnect();
   }
 
   private async _connect() {
+    const now = Date.now();
+    if (!this._isReconnecting && now - this._lastConnectAt < ArcChatInterface.MIN_CONNECT_INTERVAL) return;
+    this._isReconnecting = false;
+    this._lastConnectAt = now;
     if (this._intentionalClose) return;
     this._connecting = true;
 
     let token = this._wsToken && Date.now() - this._wsTokenFetchedAt < ArcChatInterface.WS_TOKEN_TTL
       ? this._wsToken : '';
-    if (!token && this.apiKey) {
+    if (!token && this._appContext?.apiKey) {
       try {
+        const wsHeaders: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        if (this._appContext.apiKey !== 'authenticated') {
+          wsHeaders['X-ArcClaw-API-Key'] = this._appContext.apiKey;
+        }
         const res = await fetch('/api/v1/chat/ws-token', {
           method: 'POST',
-          headers: { 'X-ArcClaw-API-Key': this.apiKey, 'Content-Type': 'application/json' }
+          credentials: 'include',
+          headers: wsHeaders
         });
         if (res.ok) {
           const data = await res.json();
@@ -296,16 +335,15 @@ export class ArcChatInterface extends LitElement {
 
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host;
-    const wsUrl = `${proto}://${host}/ws/chat?sessionId=${encodeURIComponent(this.platformId)}`;
-    this._ws = new WsManager(
+    const wsUrl = `${proto}://${host}/ws/chat?sessionId=${encodeURIComponent(this.platformId || this._appContext?.platformId || '')}`;
+    const manager = new WsManager(
       wsUrl,
       (frame) => this._handleFrame(frame),
       (status) => {
+        if (this._ws !== manager) return; // stale connection
         this._wsStatus = status;
-        this.dispatchEvent(new CustomEvent('ws-status-change', {
-          detail: { status },
-          bubbles: true,
-          composed: true
+        window.dispatchEvent(new CustomEvent('ws-status-change', {
+          detail: { status }
         }));
         if (status === 'open') {
           if (token) this._ws?.send({ type: 'AUTH', token });
@@ -324,6 +362,7 @@ export class ArcChatInterface extends LitElement {
         }
       }
     );
+    this._ws = manager;
     this._connecting = false;
     this._ws.connect();
   }
@@ -349,6 +388,7 @@ export class ArcChatInterface extends LitElement {
     this._reconnectTimeoutId = setTimeout(() => {
         this._reconnectTimeoutId = null;
         if (this._connecting || this._ws) return;
+        this._isReconnecting = true;
         this._connect();
     }, finalDelay);
   }
@@ -361,17 +401,22 @@ export class ArcChatInterface extends LitElement {
       
       // We now have the server-assigned internal session ID
       if (frame.sessionId) {
-        if (frame.sessionId !== this.sessionId) {
-          this.sessionId = frame.sessionId;
+        if (frame.sessionId !== (this._appContext?.sessionId || '')) {
           // Dispatch to parent shell to update SSE subscriptions
-          this.dispatchEvent(new CustomEvent('session-ready', { detail: { sessionId: frame.sessionId } }));
+          window.dispatchEvent(new CustomEvent('session-ready', {
+            detail: { sessionId: frame.sessionId }
+          }));
         }
         // Always reload history on connect/reconnect (handles page refresh)
         this._loadHistory();
       }
     } else if (frame.type === 'session_terminated') {
+      if (this._intentionalClose) return;
       this._intentionalClose = true;
-      this._ws?.disconnect();
+      if (this._ws) {
+        this._ws.disconnect();
+        this._ws = null;
+      }
       this._wsStatus = 'closed';
     } else if (frame.type === 'message' && frame.role === 'assistant') {
       this._isTyping = false;
@@ -452,7 +497,10 @@ export class ArcChatInterface extends LitElement {
     }
 
     const rawHtml = marked.parse(text, { breaks: true }) as string;
-    const cleanHtml = DOMPurify.sanitize(rawHtml);
+    const cleanHtml = DOMPurify.sanitize(rawHtml, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span'],
+      ALLOWED_ATTR: ['href', 'title', 'target', 'class'],
+    });
     
     // Update cache (limit size to 200 items)
     if (this._markdownCache.size > 200) {
@@ -469,13 +517,18 @@ export class ArcChatInterface extends LitElement {
   }
 
   public reconnect() {
+    if (this._connecting) return;
     if (this._reconnectTimeoutId) {
       clearTimeout(this._reconnectTimeoutId);
       this._reconnectTimeoutId = null;
     }
     this._reconnectAttempts = 0;
-    this._ws = null; 
-    this._intentionalClose = false; 
+    this._intentionalClose = false;
+    if (this._ws) {
+      this._ws.disconnect();
+      this._ws = null;
+    }
+    this._isReconnecting = true;
     this._connecting = true;
     this._connect();
   }
@@ -506,7 +559,7 @@ export class ArcChatInterface extends LitElement {
       
       <div class="input-wrapper">
         <div class="input-area">
-          <div class="attach-btn">📎</div>
+          <div class="attach-btn" aria-label="Attach file" role="button" tabindex="0">📎</div>
           <textarea
             aria-label="Message ArcClaw"
             placeholder="Ask ArcClaw anything…"

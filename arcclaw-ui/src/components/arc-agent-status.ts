@@ -21,7 +21,7 @@ export class ArcAgentStatus extends LitElement {
   @property({ type: Array }) agents: AgentStatusDto[] = [];
 
   static styles = css`
-    :host { display: block; padding: var(--space-8); overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
+    :host { display: block; padding: var(--space-8); box-sizing: border-box; background: var(--bg-base); }
     h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
     .grid {
       display: grid;

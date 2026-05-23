@@ -24,7 +24,7 @@ public final class SqliteErrorStrings {
     /**
      * Returns true if the given exception chain contains an SQLite "busy" or "locked" error.
      * 
-     * Traverses the full exception cause chain because Hibernate wraps SQLiteException
+     * Traverses the full exception cause chain because SQL exceptions may be wrapped
      * several layers deep (e.g., PersistenceException -> SQLException -> SQLiteException).
      * 
      * Also detects transaction conflict patterns like lock acquisition failures,
@@ -34,7 +34,7 @@ public final class SqliteErrorStrings {
         for (Throwable t = e; t != null; t = t.getCause()) {
             String canonicalName = t.getClass().getName();
             
-            // 1. Explicit Lock/Optimistic exceptions from JPA/Hibernate
+            // 1. Explicit Lock/Optimistic exceptions from JPA
             if (canonicalName.contains(LOCK_ACQUISITION_EXCEPTION) ||
                 canonicalName.contains(OPTIMISTIC_LOCK_EXCEPTION)) {
                 return true;

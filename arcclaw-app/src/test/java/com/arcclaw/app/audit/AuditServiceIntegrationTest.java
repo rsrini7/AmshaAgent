@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
@@ -40,9 +39,6 @@ public class AuditServiceIntegrationTest {
     @Inject
     ToolRegistry toolRegistry;
 
-    @Inject
-    EntityManager em;
-
     private String sessionId;
 
     @BeforeEach
@@ -65,7 +61,6 @@ public class AuditServiceIntegrationTest {
 
             // Wait for async persistence
             auditService.waitForIdle();
-            em.clear();
 
             List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertTrue(events.stream().anyMatch(e -> SecurityEventType.VAULT_STORE.name().equals(e.eventType())),
@@ -89,7 +84,6 @@ public class AuditServiceIntegrationTest {
 
             // Wait for async persistence
             auditService.waitForIdle();
-            em.clear();
 
             List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertTrue(events.stream().anyMatch(e -> SecurityEventType.VAULT_RETRIEVE_MISS.name().equals(e.eventType())),
@@ -113,7 +107,6 @@ public class AuditServiceIntegrationTest {
 
             // Wait for async persistence
             auditService.waitForIdle();
-            em.clear();
 
             List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertEquals(1, events.size());
@@ -133,7 +126,6 @@ public class AuditServiceIntegrationTest {
 
             // Wait for async persistence
             auditService.waitForIdle();
-            em.clear();
 
             List<AuditEventDto> events = auditStore.findBySessionId(sessionId);
             assertEquals(1, events.size(), "Direct audit record failed to persist");

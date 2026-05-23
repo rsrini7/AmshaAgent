@@ -1,46 +1,76 @@
 package com.arcclaw.app.session;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
+import java.util.Optional;
 import java.util.stream.IntStream;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
-
+import org.jdbi.v3.core.Handle;
+import org.jdbi.v3.core.HandleCallback;
+import org.jdbi.v3.core.HandleConsumer;
+import org.jdbi.v3.core.Jdbi;
+import org.jdbi.v3.core.result.ResultIterable;
+import org.jdbi.v3.core.statement.Query;
+import org.jdbi.v3.core.statement.Update;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SessionRegistryTest {
 
     private SessionRegistry registry;
-    private EntityManager em;
+    private Jdbi jdbi;
+    private Handle handle;
+    private Query query;
+    private Update update;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
-        registry = new SessionRegistry();
-        em = mock(EntityManager.class);
-        registry.em = em;
+        jdbi = mock(Jdbi.class);
+        handle = mock(Handle.class);
+        query = mock(Query.class);
+        update = mock(Update.class);
 
-        TypedQuery<String> query = mock(TypedQuery.class);
-        when(em.createQuery(any(String.class), eq(String.class))).thenReturn(query);
-        when(query.setParameter(any(String.class), any())).thenReturn(query);
+        registry = new SessionRegistry(jdbi);
+
+        // Stub withHandle
+        when(jdbi.withHandle(any())).thenAnswer(invocation -> {
+            HandleCallback<?, Exception> callback = invocation.getArgument(0);
+            return callback.withHandle(handle);
+        });
+
+        // Stub useHandle
+        doAnswer(invocation -> {
+            HandleConsumer<Exception> consumer = invocation.getArgument(0);
+            consumer.useHandle(handle);
+            return null;
+        }).when(jdbi).useHandle(any());
+
+        // Stub query and update builders
+        when(handle.createQuery(anyString())).thenReturn(query);
+        when(query.bind(anyString(), any(Object.class))).thenReturn(query);
+        when(query.bind(anyString(), anyString())).thenReturn(query);
+
+        ResultIterable<String> resultIterable = mock(
+                ResultIterable.class);
+        when(query.mapTo(String.class)).thenReturn(resultIterable);
+        when(resultIterable.findFirst()).thenReturn(Optional.empty());
+
+        when(handle.createUpdate(anyString())).thenReturn(update);
+        when(update.bind(anyString(), any(Object.class))).thenReturn(update);
+        when(update.bind(anyString(), anyString())).thenReturn(update);
+        when(update.execute()).thenReturn(1);
     }
 
     @Test
     void testFloodSessions_NoOom() {
-        // We can't easily verify the internal Caffeine cache size without reflection,
-        // but we can verify that the registry remains functional under load.
         IntStream.range(0, 1000).parallel().forEach(i -> {
             registry.resolveOrCreate("test", "chan-" + i, "user-" + i);
         });
-        
-        // At least verify we persisted things
-        verify(em, times(1000)).persist(any(SessionRegistryEntry.class));
+
+        // Verify we performed the inserts via Update execution
+        verify(update, times(1000)).execute();
     }
 }

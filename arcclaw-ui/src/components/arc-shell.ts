@@ -4,6 +4,10 @@ import { AgentStatusDto, AgentEvent } from '../api/generated/models';
 import { PendingApprovalDto } from '../api/types';
 import { ArcClient } from '../api/client';
 import { SseManager } from '../api/sse';
+import { provide } from '@lit/context';
+import { arcContext, ArcAppContext } from '../context/arc-context';
+import { ROUTES } from '../routes';
+
 
 import './arc-onboarding';
 import './arc-nav';
@@ -18,18 +22,29 @@ import './arc-theme-toggle';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
-  @state() private _apiKey = localStorage.getItem('arc-api-key') || '';
+  @provide({ context: arcContext })
+  @state()
+  // @ts-ignore - Used by Lit @provide decorator to supply context to children
+  private _appContext: ArcAppContext = {
+    apiKey: '',
+    sessionId: '',
+    platformId: '',
+    sseStatus: 'disconnected'
+  };
+
+  @state() private _apiKey = '';
   @state() private _sessionId = sessionStorage.getItem('arcclaw-chat-session') || '';
   @state() private _platformId = ''; // Stable ID for WebSocket
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = window.location.hash || (localStorage.getItem('arc-api-key') ? '#/chat' : '#/onboarding');
+  @state() private _route = window.location.hash || '#/onboarding';
   @state() private _isNavOpen = false;
   @state() private _chatWsStatus: string = 'closed';
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
+  private _boundSessionReady = ((e: Event) => this._onSessionReady(e as CustomEvent)) as EventListener;
 
   static styles = css`
     :host { 
@@ -41,7 +56,15 @@ export class ArcShell extends LitElement {
       flex: 1; overflow: hidden; display: flex; flex-direction: column; 
       position: relative; 
     }
-    .content-area { flex: 1; min-height: 0; }
+    .content-area { flex: 1; min-height: 0; overflow-y: auto; }
+    .content-area[hidden] { display: none !important; }
+    .content-area::-webkit-scrollbar { width: 6px; }
+    .content-area::-webkit-scrollbar-track { background: transparent; }
+    .content-area::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .content-area::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
     .topbar {
       display: flex;
       align-items: center;
@@ -104,47 +127,53 @@ export class ArcShell extends LitElement {
     }
   `;
 
+  private _updateContext() {
+    this._appContext = {
+      apiKey: this._apiKey,
+      sessionId: this._sessionId,
+      platformId: this._platformId,
+      sseStatus: this._sseStatus
+    };
+  }
+
   constructor() {
     super();
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
-    this.addEventListener('session-ready', this._onSessionReady as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
-    this.addEventListener('ws-status-change', ((e: CustomEvent) => this._chatWsStatus = e.detail.status) as EventListener);
-    window.addEventListener('hashchange', () => {
-      this._route = window.location.hash || '#/onboarding';
-      this._isNavOpen = false; // Close nav on route change
-      if (!this._apiKey && this._route !== '#/onboarding') {
-        window.location.hash = '#/onboarding';
-        return;
-      }
+    window.addEventListener('ws-status-change', ((e: CustomEvent) => this._chatWsStatus = e.detail.status) as EventListener);
+    window.addEventListener('session-ready', this._boundSessionReady);
 
-      // Proactively refresh when navigating if not connected
-      if (this._apiKey) {
-        if (this._sseStatus !== 'connected') {
-          this._sseManager?.connect();
-        }
-        if (this._route === '#/chat' && this._chatWsStatus !== 'open') {
-          this._chatWsStatus = 'connecting';
-          (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect();
-        }
-        this._fetchAgents();
-        this._fetchApprovals();
-      }
-    });
-
-    const storedKey = localStorage.getItem('arc-api-key');
-    if (storedKey) {
-      this._apiKey = storedKey;
-      this._client = new ArcClient('/api/v1', storedKey);
-      this._platformId = this._resolvePlatformId();
-      // _sessionId is already loaded from sessionStorage in @state()
-      this.updateComplete.then(() => {
-        this._fetchAgents();
-        this._fetchApprovals();
-        this._startSse();
-      });
-    }
+    this._platformId = this._resolvePlatformId();
+    this._client = new ArcClient('/api/v1', '');
+    this._updateContext();
   }
+
+  private _boundHashChange = () => {
+    this._route = window.location.hash || '#/onboarding';
+    this._isNavOpen = false; // Close nav on route change
+    if (!this._apiKey && this._route !== '#/onboarding') {
+      window.location.hash = '#/onboarding';
+      return;
+    }
+    if (this._apiKey && this._route === '#/onboarding') {
+      this._route = '#/chat';
+      window.location.hash = '#/chat';
+      return;
+    }
+
+    // Proactively refresh when navigating if not connected
+    if (this._apiKey) {
+      if (this._sseStatus !== 'connected') {
+        this._sseManager?.connect();
+      }
+      if (this._route === '#/chat' && this._chatWsStatus !== 'open') {
+        this._chatWsStatus = 'connecting';
+        (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect();
+      }
+      this._fetchAgents();
+      this._fetchApprovals();
+    }
+  };
 
   private _resolvePlatformId() {
     let id = sessionStorage.getItem('arcclaw-platform-id');
@@ -155,8 +184,42 @@ export class ArcShell extends LitElement {
     return id;
   }
 
+  async connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('hashchange', this._boundHashChange);
+
+    try {
+      const status = await this._client!.onboardingStatus();
+      if (status.step === 6) { // COMPLETE
+        this._apiKey = 'authenticated';
+        this._client = new ArcClient('/api/v1', this._apiKey);
+        this._updateContext();
+
+        const targetRoute = window.location.hash || '#/chat';
+        this._route = targetRoute === '#/onboarding' ? '#/chat' : targetRoute;
+        if (window.location.hash !== this._route) {
+          window.location.hash = this._route;
+        }
+
+        this._fetchAgents();
+        this._fetchApprovals();
+        this._startSse();
+      } else {
+        this._apiKey = '';
+        this._updateContext();
+        window.location.hash = '#/onboarding';
+      }
+    } catch (err) {
+      this._apiKey = '';
+      this._updateContext();
+      window.location.hash = '#/onboarding';
+    }
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
+    window.removeEventListener('hashchange', this._boundHashChange);
+    window.removeEventListener('session-ready', this._boundSessionReady);
     this._sseManager?.disconnect();
   }
 
@@ -167,25 +230,28 @@ export class ArcShell extends LitElement {
   // ─── Lifecycle / Auth ────────────────────────────────────────────────────
 
   private _onApiKeySet(e: CustomEvent<{ key: string }>) {
-    const key = e.detail.key;
-    this._apiKey = key;
-    localStorage.setItem('arc-api-key', key);
+    this._apiKey = e.detail.key ? 'authenticated' : '';
     this._client = new ArcClient('/api/v1', this._apiKey);
+    this._updateContext();
 
     // Close stale SSE connections bound to the previous key.
     // They will be re-opened with the new key once session-ready fires.
     this._sseManager?.disconnect();
 
-    window.location.hash = '#/chat';
-    this._fetchAgents();
-    this._fetchApprovals();
-    this._startSse();
+    if (this._apiKey) {
+      window.location.hash = '#/chat';
+      this._fetchAgents();
+      this._fetchApprovals();
+      this._startSse();
+    } else {
+      window.location.hash = '#/onboarding';
+    }
   }
 
   private _handleUnauthorized() {
     console.warn('[ArcClaw] Stale API key detected (401). Redirecting to onboarding...');
     this._apiKey = '';
-    localStorage.removeItem('arc-api-key');
+    this._updateContext();
     window.location.hash = '#/onboarding';
   }
 
@@ -194,6 +260,7 @@ export class ArcShell extends LitElement {
     if (this._sessionId !== e.detail.sessionId) {
         this._sessionId = e.detail.sessionId;
         sessionStorage.setItem('arcclaw-chat-session', this._sessionId);
+        this._updateContext();
     }
 
     if (!this._sessionId) return;
@@ -294,6 +361,7 @@ export class ArcShell extends LitElement {
 
   private _startSse() {
     this._sseManager?.disconnect();
+    if (!this._sessionId) return;
     this._sseManager = new SseManager(
       `/api/v1/chat/stream?sessionId=${encodeURIComponent(this._sessionId)}`,
       this._apiKey,
@@ -304,14 +372,15 @@ export class ArcShell extends LitElement {
         }
         this._handleSseEvent(event);
       },
-      (status) => {
-        const wasDown = this._sseStatus !== 'connected';
-        this._sseStatus = status;
-        if (wasDown && status === 'connected') {
-          this._fetchAgents();
-          this._fetchApprovals();
+        (status) => {
+          const wasDown = this._sseStatus !== 'connected';
+          this._sseStatus = status;
+          this._updateContext();
+          if (wasDown && status === 'connected') {
+            this._fetchAgents();
+            this._fetchApprovals();
+          }
         }
-      }
     );
     this._sseManager.connect();
   }
@@ -327,36 +396,24 @@ export class ArcShell extends LitElement {
     }
 
     return html`
-      <arc-chat-interface
-        class="content-area"
-        style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"
-        .apiKey="${this._apiKey}"
-        .sessionId="${this._sessionId}"
-        .platformId="${this._platformId}"
-      ></arc-chat-interface>
-
+      <arc-chat-interface class="content-area" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"></arc-chat-interface>
       ${this._route === '#/agents' ? html`
         <arc-agent-status class="content-area" .agents="${this._agents}"></arc-agent-status>
       ` : nothing}
-
       ${this._route === '#/hitl' ? html`
-        <arc-hitl-panel class="content-area" .apiKey="${this._apiKey}" .approvals="${this._pendingApprovals}"></arc-hitl-panel>
+        <arc-hitl-panel class="content-area" .approvals="${this._pendingApprovals}"></arc-hitl-panel>
       ` : nothing}
-
       ${this._route === '#/skills' ? html`
-        <arc-skills-panel class="content-area" .apiKey="${this._apiKey}"></arc-skills-panel>
+        <arc-skills-panel class="content-area"></arc-skills-panel>
       ` : nothing}
-
       ${this._route === '#/scheduler' ? html`
-        <arc-scheduler-panel class="content-area" .apiKey="${this._apiKey}"></arc-scheduler-panel>
+        <arc-scheduler-panel class="content-area"></arc-scheduler-panel>
       ` : nothing}
-
       ${this._route === '#/audit' ? html`
-        <arc-audit-panel class="content-area" .apiKey="${this._apiKey}"></arc-audit-panel>
+        <arc-audit-panel class="content-area"></arc-audit-panel>
       ` : nothing}
-
       ${this._route === '#/settings' ? html`
-        <arc-settings class="content-area" .apiKey="${this._apiKey}"></arc-settings>
+        <arc-settings class="content-area"></arc-settings>
       ` : nothing}
     `;
   }
@@ -367,7 +424,7 @@ export class ArcShell extends LitElement {
     return html`
       ${this._apiKey
         ? html`
-            <arc-nav .route="${this._route}" .sseStatus="${this._sseStatus}" ?open="${this._isNavOpen}"></arc-nav>
+            <arc-nav .route="${this._route}" ?open="${this._isNavOpen}"></arc-nav>
             ${this._isNavOpen ? html`<div class="nav-overlay" @click="${() => this._isNavOpen = false}"></div>` : ''}
           `
         : ''}
@@ -377,28 +434,20 @@ export class ArcShell extends LitElement {
               <header class="topbar">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                    <button class="menu-toggle" aria-label="Toggle menu" @click="${() => this._isNavOpen = !this._isNavOpen}">☰</button>
-                   <div style="font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
-                     ${this._route === '#/chat'
-                       ? html`
-                         Chat Session 
-                         <span class="status-badge status-${this._chatWsStatus}" style="font-size: 10px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">${this._chatWsStatus}</span>
-                         ${this._chatWsStatus === 'error' || this._chatWsStatus === 'closed' ? html`
-                            <button @click="${() => (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect()}" 
-                                    style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;">
-                              Reconnect
-                            </button>
-                         ` : nothing}
-                       `
-                       : this._route === '#/agents'
-                       ? 'Agent Status'
-                       : this._route === '#/hitl'
-                       ? 'Approvals'
-                       : this._route === '#/skills'
-                       ? 'Skills'
-                       : this._route === '#/settings'
-                       ? 'Settings'
-                       : ''}
-                   </div>
+                    <div style="font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                      ${this._route === '#/chat'
+                        ? html`
+                          Chat Session 
+                          <span class="status-badge status-${this._chatWsStatus}" style="font-size: 10px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">${this._chatWsStatus}</span>
+                          ${this._chatWsStatus === 'error' || this._chatWsStatus === 'closed' ? html`
+                             <button @click="${() => (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect()}" 
+                                     style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;">
+                               Reconnect
+                             </button>
+                          ` : nothing}
+                        `
+                        : ROUTES.find(r => r.hash === this._route)?.label || ''}
+                    </div>
                 </div>
                 <div class="topbar-right">
                   <div class="connection-pill">

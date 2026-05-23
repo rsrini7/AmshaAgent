@@ -125,7 +125,11 @@ public class SkillResource {
                            .build();
         }
 
-        skillStore.deleteById(existing.get().id());
+        if (!skillStore.deleteById(existing.get().id())) {
+            return Response.status(Response.Status.NOT_FOUND)
+                .entity(new ArcClawErrorResponse("Skill was already deleted", "id: " + existing.get().id()))
+                .build();
+        }
         skillLoader.reloadAll(false);
 
         auditService.recordMandatory("skills", "admin", "system",

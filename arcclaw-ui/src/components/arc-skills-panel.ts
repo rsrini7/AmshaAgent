@@ -1,13 +1,19 @@
 import { LitElement, css, html } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { SkillDto } from '../api/generated/models/SkillDto';
 import { ToolDto } from '../api/types';
 import { ArcClient } from '../api/client';
+import { consume } from '@lit/context';
+import { arcContext, ArcAppContext } from '../context/arc-context';
+
 
 
 @customElement('arc-skills-panel')
 export class ArcSkillsPanel extends LitElement {
-  @property({ type: String }) apiKey = '';
+  @consume({ context: arcContext, subscribe: true })
+  @state()
+  private _appContext!: ArcAppContext;
+
 
   @state() private _skills: SkillDto[] = [];
   @state() private _tools: ToolDto[] = [];
@@ -16,7 +22,7 @@ export class ArcSkillsPanel extends LitElement {
 
 
   static styles = css`
-    :host { display: block; padding: var(--space-8); overflow-y: auto; height: 100%; box-sizing: border-box; background: var(--bg-base); }
+    :host { display: block; padding: var(--space-8); box-sizing: border-box; background: var(--bg-base); }
     h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
     h3.section-title {
       color: var(--text-primary); font-size: 15px; font-weight: 600;
@@ -65,13 +71,13 @@ export class ArcSkillsPanel extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    if (this.apiKey) {
+    if (this._appContext?.apiKey) {
       this._loadData();
     }
   }
 
   updated(changedProperties: Map<string, any>) {
-    if (changedProperties.has('apiKey') && this.apiKey && !this._loading
+    if (changedProperties.has('_appContext') && this._appContext?.apiKey && !this._loading
         && this._skills.length === 0 && this._tools.length === 0) {
       this._loadData();
     }
@@ -82,7 +88,7 @@ export class ArcSkillsPanel extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      const client = new ArcClient('/api/v1', this.apiKey);
+      const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
       const [skills, tools] = await Promise.all([
         client.getSkills(),
         client.getTools()

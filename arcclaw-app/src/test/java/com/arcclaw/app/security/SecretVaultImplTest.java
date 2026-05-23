@@ -18,7 +18,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import com.arcclaw.core.audit.AuditService;
@@ -28,9 +27,10 @@ import com.arcclaw.core.security.AesGcmSivCipher;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.security.SecretVaultImpl;
 import com.arcclaw.core.security.VaultKey;
+import com.arcclaw.persistence.api.AuditEventDto;
+import com.arcclaw.persistence.api.AuditEventStorePort;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SecretStorePort;
-import com.arcclaw.persistence.common.entity.AuditEventEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -50,7 +50,7 @@ public class SecretVaultImplTest {
     AuditService auditService;
 
     @Inject
-    EntityManager entityManager;
+    AuditEventStorePort auditStorePort;
 
     private static final String TEST_SESSION_ID = "test-session-auth";
     private static final String API_KEY_NAME = "OPENAI_API_KEY";
@@ -102,8 +102,7 @@ public class SecretVaultImplTest {
             byte[] ct = dto.ciphertext();
             ct[ct.length - 1] ^= 1;
             secretStore.save(new SecretDto(
-                dto.sessionId(), dto.keyName(), dto.encryptionKeyVersion(), ct, dto.nonce()
-            ));
+                    dto.sessionId(), dto.keyName(), dto.encryptionKeyVersion(), ct, dto.nonce()));
 
             // 3. Retrieve - Expect SecurityException (AEAD failure)
             assertThrows(SecurityException.class, () -> vault.get(API_KEY_NAME));
@@ -161,11 +160,11 @@ public class SecretVaultImplTest {
         // Since @Version was removed to support 'last write wins' and avoid noisy
         // OptimisticLockExceptions, this test confirms no exception is thrown
         // even during race conditions.
-        
+
         String key = "CONCURRENT_KEY";
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch doneLatch = new CountDownLatch(2);
-        
+
         // Ensure entity is clean
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             cleanDb();
@@ -190,12 +189,11 @@ public class SecretVaultImplTest {
 
         startLatch.countDown();
         assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should finish");
-        
+
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             assertNotNull(secretStore.find(TEST_SESSION_ID, key).orElse(null));
         });
     }
-
 
     @Test
     void testSystemKeyLifeCycle() {
@@ -219,16 +217,18 @@ public class SecretVaultImplTest {
             assertArrayEquals(payload, key.get(), "System key payload must match");
         }
     }
+
     @Test
     void testVaultWriteDuringToolExecution() {
         // Enclosing transaction simulates tool execution
-        // We Use manual transaction to avoid REQUIRED -> REQUIRES_NEW deadlock on SQLite
+        // We Use manual transaction to avoid REQUIRED -> REQUIRES_NEW deadlock on
+        // SQLite
         deleteSession(TEST_SESSION_ID);
-        
+
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             vault.store(API_KEY_NAME, SECRET_PAYLOAD);
         });
-        
+
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             assertNotNull(secretStore.find(TEST_SESSION_ID, API_KEY_NAME).orElse(null));
         });
@@ -239,7 +239,7 @@ public class SecretVaultImplTest {
         String key = "CONCURRENT_BENCHMARK";
         int threadCount = 10;
         CountDownLatch latch = new CountDownLatch(threadCount);
-        
+
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             cleanDb();
         });
@@ -255,33 +255,33 @@ public class SecretVaultImplTest {
                 }
             });
         }
-        
+
         assertTrue(latch.await(15, TimeUnit.SECONDS), "All threads should finish without deadlock");
-        
+
         WorkspaceContext.runWithFullAutonomy(TEST_SESSION_ID, "test-user", "test-chat", "test-role", () -> {
             assertNotNull(secretStore.find(TEST_SESSION_ID, key).orElse(null));
         });
     }
+
     @Test
     void testVaultAuditOnVirtualThread() throws Exception {
         String testUserId = "test-user-123";
         String testSessionId = "test-session-456";
 
         cleanDb();
-        
+
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             try {
                 WorkspaceContext.run(
-                    testSessionId,
-                    testUserId,
-                    "test-chat",
-                    AutonomyLevel.FULL,
-                    "test-role",
-                    () -> {
-                        vault.store("test-key", SECRET_PAYLOAD);
-                        return null;
-                    }
-                );
+                        testSessionId,
+                        testUserId,
+                        "test-chat",
+                        AutonomyLevel.FULL,
+                        "test-role",
+                        () -> {
+                            vault.store("test-key", SECRET_PAYLOAD);
+                            return null;
+                        });
             } catch (Exception e) {
                 throw new CompletionException(e);
             }
@@ -292,13 +292,11 @@ public class SecretVaultImplTest {
 
         // Verify audit record has correct user ID
         WorkspaceContext.runWithFullAutonomy(testSessionId, testUserId, "test-chat", "test-role", () -> {
-            List<AuditEventEntity> events = entityManager.createQuery("SELECT a FROM AuditEvent a WHERE a.sessionId = :sid AND a.eventType = :type", AuditEventEntity.class)
-                    .setParameter("sid", testSessionId)
-                    .setParameter("type", SecurityEventType.VAULT_STORE)
-                    .getResultList();
-            
+            List<AuditEventDto> events = auditStorePort.findAll(
+                    testSessionId, SecurityEventType.VAULT_STORE.name(), null, null, 0, 10);
+
             assertFalse(events.isEmpty(), "Audit event should be recorded");
-            assertEquals(testUserId, events.get(0).getUserId());
+            assertEquals(testUserId, events.get(0).userId());
         });
 
         // Cleanup on test thread with transaction

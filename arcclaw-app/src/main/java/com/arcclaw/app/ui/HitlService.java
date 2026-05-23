@@ -8,30 +8,35 @@ import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import com.arcclaw.core.agent.hitl.CheckpointApprovalService;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
+import com.arcclaw.core.domain.model.CheckpointRecord;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.util.BatchDecisionUtil;
-import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
+import com.arcclaw.persistence.api.CheckpointDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
+import io.quarkus.arc.properties.IfBuildProperty;
+import org.jdbi.v3.core.Jdbi;
+import org.jdbi.v3.core.mapper.reflect.ConstructorMapper;
 
 /**
  * Service to manage Human-In-The-Loop approvals for the UI.
+ * Inactive when no database backend is available (e.g., filesystem mode).
  */
 @ApplicationScoped
+@IfBuildProperty(name = "quarkus.flyway.enabled", stringValue = "true", enableIfMissing = true)
 public class HitlService {
 
-    @Inject EntityManager em;
+    @Inject Jdbi jdbi;
     @Inject ObjectMapper objectMapper;
     @Inject CheckpointApprovalService checkpointApprovalService;
     @Inject AgentOtelContext otelContext;
@@ -51,7 +56,6 @@ public class HitlService {
      * @param limit   max results to return (capped at {@value #MAX_LIMIT})
      * @param offset  number of results to skip for pagination
      */
-    @Transactional
     public Map<String, PendingApproval> getPendingApprovals(String userId, int limit, int offset) {
         if (userId == null || userId.isBlank()) {
             return Map.of();
@@ -69,17 +73,54 @@ public class HitlService {
             return Map.of();
         }
 
-        return em.createQuery(
-                "SELECT c FROM AgentCheckpoint c WHERE c.status = :status " +
-                "AND c.sessionId IN (:sessionIds) " +
-                "ORDER BY c.id DESC",
-                AgentCheckpointEntity.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("sessionIds", visibleSessionIds)
-                .setFirstResult(effectiveOffset)
-                .setMaxResults(effectiveLimit)
-                .getResultList()
-                .stream()
+        List<CheckpointDto> list = jdbi.withHandle(handle ->
+            handle.createQuery(
+                "SELECT " +
+                "  checkpoint_id AS \"id\", " +
+                "  session_id AS \"sessionId\", " +
+                "  agent_role AS \"agentRole\", " +
+                "  status, " +
+                "  autonomy_level AS \"autonomyLevel\", " +
+                "  state_json AS \"stateJson\", " +
+                "  channel_platform_id AS \"channelPlatformId\", " +
+                "  channel_type AS \"channelType\", " +
+                "  original_goal AS \"originalGoal\", " +
+                "  failed_at AS \"failedAt\", " +
+                "  completed_at AS \"completedAt\", " +
+                "  fail_reason AS \"failReason\", " +
+                "  pending_tool_name AS \"pendingToolName\", " +
+                "  batch_tool_decisions AS \"batchToolDecisions\", " +
+                "  pending_tool_parameters AS \"pendingToolParametersJson\", " +
+                "  pre_executed_results AS \"preExecutedResults\", " +
+                "  max_iterations AS \"maxIterations\", " +
+                "  iterations_used AS \"iterationsUsed\", " +
+                "  retry_after_ms AS \"retryAfterMs\", " +
+                "  system_note AS \"systemNote\", " +
+                "  context_data AS \"contextDataJson\", " +
+                "  error_code AS \"errorCode\", " +
+                "  trace_id AS \"traceId\", " +
+                "  root_cause_class AS \"rootCauseClass\", " +
+                "  parent_checkpoint_id AS \"parentCheckpointId\", " +
+                "  depth, " +
+                "  created_at AS \"createdAt\", " +
+                "  updated_at AS \"updatedAt\" " +
+                "FROM agent_checkpoint " +
+                "WHERE status = :status " +
+                "  AND session_id IN (<sessionIds>) " +
+                "ORDER BY checkpoint_id DESC " +
+                "LIMIT :limit OFFSET :offset"
+            )
+            .bind("status", CheckpointStatus.AWAITING_APPROVAL.name())
+            .bindList("sessionIds", visibleSessionIds)
+            .bind("limit", effectiveLimit)
+            .bind("offset", effectiveOffset)
+            .registerRowMapper(ConstructorMapper.factory(CheckpointDto.class))
+            .mapTo(CheckpointDto.class)
+            .list()
+        );
+
+        return list.stream()
+                .map(CheckpointRecord::fromDto)
                 .map(this::mapToPending)
                 .collect(Collectors.toMap(PendingApproval::taskId, p -> p));
     }
@@ -87,7 +128,6 @@ public class HitlService {
     /**
      * Returns total count of pending approvals for the given userId.
      */
-    @Transactional
     public long countPendingApprovals(String userId) {
         if (userId == null || userId.isBlank()) {
             return 0L;
@@ -103,13 +143,17 @@ public class HitlService {
             return 0L;
         }
 
-        return em.createQuery(
-                "SELECT COUNT(c) FROM AgentCheckpoint c WHERE c.status = :status " +
-                "AND c.sessionId IN (:sessionIds)",
-                Long.class)
-                .setParameter("status", CheckpointStatus.AWAITING_APPROVAL)
-                .setParameter("sessionIds", visibleSessionIds)
-                .getSingleResult();
+        return jdbi.withHandle(handle ->
+            handle.createQuery(
+                "SELECT COUNT(*) FROM agent_checkpoint " +
+                "WHERE status = :status " +
+                "  AND session_id IN (<sessionIds>)"
+            )
+            .bind("status", CheckpointStatus.AWAITING_APPROVAL.name())
+            .bindList("sessionIds", visibleSessionIds)
+            .mapTo(Long.class)
+            .one()
+        );
     }
 
     private PendingApproval mapToPending(AgentCheckpoint cp) {
@@ -131,13 +175,55 @@ public class HitlService {
         );
     }
 
-    @Transactional(TxType.NOT_SUPPORTED)   // ← was @Transactional
+    @Transactional(TxType.NOT_SUPPORTED)
     public void resolve(String taskId, String toolName, boolean approved, String reason) {
         Long id = Long.valueOf(taskId);
-        AgentCheckpoint cp = em.find(AgentCheckpointEntity.class, id);
-        if (cp == null) {
+        CheckpointDto dto = jdbi.withHandle(handle ->
+            handle.createQuery(
+                "SELECT " +
+                "  checkpoint_id AS \"id\", " +
+                "  session_id AS \"sessionId\", " +
+                "  agent_role AS \"agentRole\", " +
+                "  status, " +
+                "  autonomy_level AS \"autonomyLevel\", " +
+                "  state_json AS \"stateJson\", " +
+                "  channel_platform_id AS \"channelPlatformId\", " +
+                "  channel_type AS \"channelType\", " +
+                "  original_goal AS \"originalGoal\", " +
+                "  failed_at AS \"failedAt\", " +
+                "  completed_at AS \"completedAt\", " +
+                "  fail_reason AS \"failReason\", " +
+                "  pending_tool_name AS \"pendingToolName\", " +
+                "  batch_tool_decisions AS \"batchToolDecisions\", " +
+                "  pending_tool_parameters AS \"pendingToolParametersJson\", " +
+                "  pre_executed_results AS \"preExecutedResults\", " +
+                "  max_iterations AS \"maxIterations\", " +
+                "  iterations_used AS \"iterationsUsed\", " +
+                "  retry_after_ms AS \"retryAfterMs\", " +
+                "  system_note AS \"systemNote\", " +
+                "  context_data AS \"contextDataJson\", " +
+                "  error_code AS \"errorCode\", " +
+                "  trace_id AS \"traceId\", " +
+                "  root_cause_class AS \"rootCauseClass\", " +
+                "  parent_checkpoint_id AS \"parentCheckpointId\", " +
+                "  depth, " +
+                "  created_at AS \"createdAt\", " +
+                "  updated_at AS \"updatedAt\" " +
+                "FROM agent_checkpoint " +
+                "WHERE checkpoint_id = :id"
+            )
+            .bind("id", id)
+            .registerRowMapper(ConstructorMapper.factory(CheckpointDto.class))
+            .mapTo(CheckpointDto.class)
+            .findOne()
+            .orElse(null)
+        );
+
+        if (dto == null) {
             throw new IllegalArgumentException("No pending approval found for ID: " + taskId);
         }
+
+        AgentCheckpoint cp = CheckpointRecord.fromDto(dto);
         if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
             throw new IllegalStateException("Already resolved for ID: " + taskId);
         }
@@ -150,33 +236,11 @@ public class HitlService {
                 span.setAttribute(AgentOTelConstants.ATTR_HITL_APPROVED, approved);
             }
 
-        AgentCheckpoint resolvedCp;
-        if (approved) {
-            if (toolName != null && !toolName.isBlank())
-                resolvedCp = checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
-            else {
-                List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-                if (pending.size() == 1)
-                    resolvedCp = checkpointApprovalService.approveTool(cp.getSessionId(), pending.get(0), reason);
-                else
-                    resolvedCp = checkpointApprovalService.approveAll(cp.getSessionId(), reason);
-            }
-        } else {
-            if (toolName != null && !toolName.isBlank())
-                resolvedCp = checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
-            else {
-                List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-                if (pending.size() == 1)
-                    resolvedCp = checkpointApprovalService.denyTool(cp.getSessionId(), pending.get(0), reason);
-                else
-                    resolvedCp = checkpointApprovalService.denyAll(cp.getSessionId(), reason);
-            }
-        }
+            AgentCheckpoint resolvedCp = executeResolveDecision(cp, approved, toolName, reason);
 
-        // mirrors DenyReflex/ApproveReflex - triggers AgentLoop resume/denial path
-        if (resolvedCp != null) {
-            checkpointApprovalService.triggerResume(resolvedCp);
-        }
+            if (resolvedCp != null) {
+                checkpointApprovalService.triggerResume(resolvedCp);
+            }
 
             if (span != null) span.setStatus(StatusCode.OK);
         } catch (Exception e) {
@@ -187,6 +251,28 @@ public class HitlService {
             throw e;
         } finally {
             if (span != null) span.end();
+        }
+    }
+
+    private AgentCheckpoint executeResolveDecision(AgentCheckpoint cp, boolean approved, String toolName, String reason) {
+        if (approved) {
+            if (toolName != null && !toolName.isBlank()) {
+                return checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
+            }
+            List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
+            if (pending.size() == 1) {
+                return checkpointApprovalService.approveTool(cp.getSessionId(), pending.get(0), reason);
+            }
+            return checkpointApprovalService.approveAll(cp.getSessionId(), reason);
+        } else {
+            if (toolName != null && !toolName.isBlank()) {
+                return checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
+            }
+            List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
+            if (pending.size() == 1) {
+                return checkpointApprovalService.denyTool(cp.getSessionId(), pending.get(0), reason);
+            }
+            return checkpointApprovalService.denyAll(cp.getSessionId(), reason);
         }
     }
 

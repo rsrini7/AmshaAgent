@@ -7,14 +7,10 @@ import java.time.Instant;
 import java.util.Map;
 
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
-import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
-import com.arcclaw.core.state.CheckpointStatus;
-import com.arcclaw.persistence.common.entity.AgentCheckpointEntity;
 import io.quarkus.test.junit.QuarkusTest;
+import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,13 +20,12 @@ public class HitlServiceTest {
 
     @Inject HitlService hitlService;
     @Inject SessionHeartbeatTracker heartbeatTracker;
-    @Inject EntityManager em;
+    @Inject Jdbi jdbi;
 
     private Long cpUserA_Id;
     private Long cpUserB_Id;
 
     @BeforeEach
-    @Transactional
     public void setup() {
         heartbeatTracker.clearAll();
 
@@ -44,39 +39,40 @@ public class HitlServiceTest {
         heartbeatTracker.recordHeartbeat(sessionB);
         heartbeatTracker.tryBindOwner(sessionB, "userB");
 
-        // Checkpoint for userA
-        AgentCheckpoint cpA = new AgentCheckpointEntity();
-        cpA.setSessionId(sessionA);
-        cpA.setAgentRole("default");
-        cpA.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cpA.setPendingToolName("toolA");
-        cpA.setUpdatedAt(Instant.now());
-        em.persist(cpA);
-        cpUserA_Id = cpA.getId();
+        jdbi.useHandle(handle -> {
+            handle.createUpdate("DELETE FROM agent_checkpoint WHERE session_id IN ('session-userA', 'session-userB')").execute();
 
-        // Checkpoint for userB
-        AgentCheckpoint cpB = new AgentCheckpointEntity();
-        cpB.setSessionId(sessionB);
-        cpB.setAgentRole("default");
-        cpB.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        cpB.setPendingToolName("toolB");
-        cpB.setUpdatedAt(Instant.now());
-        em.persist(cpB);
-        cpUserB_Id = cpB.getId();
-        
-        em.flush();
+            cpUserA_Id = handle.createUpdate(
+                "INSERT INTO agent_checkpoint (version, session_id, agent_role, status, pending_tool_name, updated_at, created_at, depth, iterations_used) " +
+                "VALUES (0, 'session-userA', 'default', 'AWAITING_APPROVAL', 'toolA', :updatedAt, :createdAt, 0, 0)"
+            )
+            .bind("updatedAt", Instant.now())
+            .bind("createdAt", Instant.now())
+            .executeAndReturnGeneratedKeys("checkpoint_id")
+            .mapTo(Long.class)
+            .one();
+
+            cpUserB_Id = handle.createUpdate(
+                "INSERT INTO agent_checkpoint (version, session_id, agent_role, status, pending_tool_name, updated_at, created_at, depth, iterations_used) " +
+                "VALUES (0, 'session-userB', 'default', 'AWAITING_APPROVAL', 'toolB', :updatedAt, :createdAt, 0, 0)"
+            )
+            .bind("updatedAt", Instant.now())
+            .bind("createdAt", Instant.now())
+            .executeAndReturnGeneratedKeys("checkpoint_id")
+            .mapTo(Long.class)
+            .one();
+        });
     }
 
     @AfterEach
-    @Transactional
     public void teardown() {
-        if (cpUserA_Id != null) {
-            AgentCheckpoint cp = em.find(AgentCheckpointEntity.class, cpUserA_Id);
-            if (cp != null) em.remove(cp);
-        }
-        if (cpUserB_Id != null) {
-            AgentCheckpoint cp = em.find(AgentCheckpointEntity.class, cpUserB_Id);
-            if (cp != null) em.remove(cp);
+        if (cpUserA_Id != null || cpUserB_Id != null) {
+            jdbi.useHandle(handle -> {
+                handle.createUpdate("DELETE FROM agent_checkpoint WHERE checkpoint_id IN (:idA, :idB)")
+                    .bind("idA", cpUserA_Id != null ? cpUserA_Id : -1L)
+                    .bind("idB", cpUserB_Id != null ? cpUserB_Id : -1L)
+                    .execute();
+            });
         }
         heartbeatTracker.clearAll();
     }

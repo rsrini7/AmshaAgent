@@ -25,6 +25,7 @@ import com.arcclaw.core.agent.loop.AgentLoop;
 import com.arcclaw.core.agent.reasoning.ReasoningEngine;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.channel.ChannelPluginRegistry;
+import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.pipeline.MessageContext;
 import com.arcclaw.core.pipeline.SessionContext;
@@ -32,6 +33,7 @@ import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.skill.SkillRegistry;
 import com.arcclaw.core.state.StatefulAgentStore;
+import com.arcclaw.core.util.TimeContextInjector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,9 +73,10 @@ class AgentDispatchHandlerTest {
     @BeforeEach
     void setup() {
         mockedContext = mockStatic(WorkspaceContext.class);
-        when(intentClassifier.isContinuityCommand(anyString())).thenReturn(false);
+        lenient().when(intentClassifier.isContinuityCommand(anyString())).thenReturn(false);
         lenient().when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.empty());
         lenient().when(agentStore.markResuming(anyString())).thenReturn(true);
+        handler.defaultTimezone = "Asia/Kolkata";
     }
 
     @AfterEach
@@ -164,6 +167,38 @@ class AgentDispatchHandlerTest {
                 eq(reasoningEngine),
                 eq(5),
                 eq(context));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testTimeContextInjectorCalledOnGoalRestoration() throws Exception {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        context.setGoal(null);
+
+        lenient().when(intentClassifier.isContinuityCommand("test")).thenReturn(true);
+        lenient().when(intentClassifier.isContinuityCommand("schedule a search every minute")).thenReturn(false);
+
+        AgentCheckpoint mockCheckpoint = Mockito.mock(AgentCheckpoint.class);
+        when(mockCheckpoint.getOriginalGoal()).thenReturn("schedule a search every minute");
+        when(agentStore.findLatestNonArchivedCheckpoint("sess123")).thenReturn(Optional.of(mockCheckpoint));
+
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.of(plugin));
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any(MessageContext.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
+
+        mockedContext.when(() -> WorkspaceContext.run(
+                anyString(), anyString(), anyString(), any(AutonomyLevel.class), anyString(), anyString(), anyString(), any(Callable.class)))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(7)).call());
+
+        try (MockedStatic<TimeContextInjector> mockedTimeInjector = mockStatic(TimeContextInjector.class)) {
+            handler.handle(context);
+
+            mockedTimeInjector.verify(() -> TimeContextInjector.inject(
+                    eq(context), eq("schedule a search every minute"), eq("Asia/Kolkata")));
+        }
     }
 
     private MessageContext createTestContext(AutonomyLevel level) {

@@ -68,23 +68,12 @@ quarkus:
       max-size: 4
       initial-size: 1
       acquisition-timeout: 10s
-  hibernate-orm:
-    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
-    schema-management:
-      strategy: drop-and-create
-    log:
-      sql: false
-    packages:
-      - com.arcclaw.persistence.common.entity
-      - com.arcclaw.persistence.sqlite.entity
-      - com.arcclaw.core.domain.model
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/sqlite
   log:
     level: INFO
     category:
-      "org.hibernate.SQL":
-        level: WARN
-      "org.hibernate.resource.transaction":
-        level: ERROR
       "com.arjuna":
         level: ERROR
       "org.jboss.threads.errors":

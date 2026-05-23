@@ -56,21 +56,9 @@ quarkus:
       initial-size: 1
       acquisition-timeout: 10s
 
-  hibernate-orm:
-    schema-management:
-      # strategy: update — NOT none. SQLite tests have no Flyway/import.sql;
-      # Hibernate must auto-create tables (encrypted_secrets, advisory_lock, etc.)
-      # for @QuarkusTest integration tests. Test DB is ephemeral, so `update` is safe.
-      strategy: update
-    dialect: com.arcclaw.persistence.sqlite.ArcClawSQLiteDialect
-    log:
-      sql: false
-    jdbc:
-      timezone: UTC
-    packages:
-      - com.arcclaw.persistence.common.entity
-      - com.arcclaw.persistence.sqlite.entity
-      - com.arcclaw.core.domain.model
+  flyway:
+    migrate-at-start: true
+    locations: classpath:db/migration/sqlite
 
   langchain4j:
     openai:
@@ -83,8 +71,6 @@ quarkus:
   log:
     level: INFO
     category:
-      "org.hibernate.SQL":
-        level: WARN
       "com.arcclaw.core.agent":
         level: "OFF"
       "com.arcclaw.core.tools":

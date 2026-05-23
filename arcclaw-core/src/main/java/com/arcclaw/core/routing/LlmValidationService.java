@@ -41,6 +41,8 @@ public class LlmValidationService implements LlmValidationGateway {
                 case "cerebras"  -> "https://api.cerebras.ai/v1";
                 case "ollama"    -> "http://localhost:11434";
                 case "nvidia"    -> "https://integrate.api.nvidia.com/v1";
+                case "omlx"      -> "http://127.0.0.1:8000/v1";
+                case "llamacpp"  -> "http://127.0.0.1:9000/v1";
                 default          -> "";
             };
 

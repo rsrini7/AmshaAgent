@@ -31,7 +31,7 @@ public class AgentSkillEntity implements AgentSkill {
     private Instant updatedAt;
 
     protected AgentSkillEntity() {
-        // Required by Hibernate
+        // Required by JPA framework
     }
 
     public AgentSkillEntity(String id, String name, String definitionYaml, Instant createdAt, Instant updatedAt) {

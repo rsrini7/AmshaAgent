@@ -42,10 +42,16 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
 
-        <!-- Hibernate ORM -->
+        <!-- JDBI — thin SQL wrapper for SQLite -->
+        <dependency>
+          <groupId>io.quarkiverse.jdbi</groupId>
+          <artifactId>quarkus-jdbi</artifactId>
+        </dependency>
+
+        <!-- Flyway for schema migration in tests -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-hibernate-orm</artifactId>
+            <artifactId>quarkus-flyway</artifactId>
         </dependency>
 
         <dependency>

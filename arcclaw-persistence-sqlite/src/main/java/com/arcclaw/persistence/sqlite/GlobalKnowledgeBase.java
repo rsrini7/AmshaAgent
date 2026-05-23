@@ -7,17 +7,15 @@ import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.persistence.api.MemoryChunkDto;
-import com.arcclaw.persistence.common.entity.RagChunkEntity;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.quarkus.arc.properties.IfBuildProperty;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.jdbi.v3.core.Jdbi;
 
 @ApplicationScoped
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
@@ -25,14 +23,13 @@ public class GlobalKnowledgeBase {
 
     private static final Logger log = Logger.getLogger(GlobalKnowledgeBase.class);
 
-    @Inject EntityManager em;
+    @Inject Jdbi jdbi;
     @Inject EmbeddingModel embeddingModel;
     @Inject FtsConnectionInterceptor ftsInterceptor;
 
     @ConfigProperty(name = "arcclaw.rag.embed-dimensions", defaultValue = "768")
     int embedDimensions;
 
-    @Transactional
     public String ingest(String text) {
         if (!ftsInterceptor.isVectorSearchEnabled()) {
             log.debugf("GlobalKnowledgeBase: vec0 not available, skipping ingest.");
@@ -43,19 +40,21 @@ public class GlobalKnowledgeBase {
             Embedding embedding = embeddingModel.embed(text).content();
             float[] vector = embedding.vector();
 
-            em.createNativeQuery(
-                "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?1, ?2)")
-                .setParameter(1, chunkId)
-                .setParameter(2, floatArrayToJson(vector))
-                .executeUpdate();
+            jdbi.useTransaction(handle -> {
+                handle.createUpdate(
+                    "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?, ?)")
+                    .bind(0, chunkId)
+                    .bind(1, floatArrayToJson(vector))
+                    .execute();
 
-            // Persist raw text for hydration at search time.
-            var ragChunk = new RagChunkEntity();
-            ragChunk.chunkId = chunkId;
-            ragChunk.text = text;
-            ragChunk.source = "System"; // Example default source
-            ragChunk.createdAt = Instant.now();
-            em.persist(ragChunk);
+                handle.createUpdate(
+                    "INSERT OR REPLACE INTO rag_chunk(chunk_id, text, source, created_at) VALUES (?, ?, ?, ?)")
+                    .bind(0, chunkId)
+                    .bind(1, text)
+                    .bind(2, "System")
+                    .bind(3, Instant.now().toString())
+                    .execute();
+            });
 
             return chunkId;
         } catch (Exception e) {
@@ -64,7 +63,6 @@ public class GlobalKnowledgeBase {
         }
     }
 
-    @Transactional
     public List<MemoryChunkDto> search(String query, int topN) {
         if (!ftsInterceptor.isVectorSearchEnabled()) {
             return List.of();
@@ -73,25 +71,33 @@ public class GlobalKnowledgeBase {
             Embedding queryEmbedding = embeddingModel.embed(query).content();
             float[] vector = queryEmbedding.vector();
 
-            @SuppressWarnings("unchecked")
-            List<Object[]> rows = em.createNativeQuery(
-                "SELECT chunk_id, vec_distance_cosine(embedding, ?1) AS distance " +
-                "FROM fts.vec_global " +
-                "ORDER BY distance ASC " +
-                "LIMIT ?2")
-                .setParameter(1, floatArrayToJson(vector))
-                .setParameter(2, topN)
-                .getResultList();
+            return jdbi.withHandle(handle -> {
+                List<Object[]> rows = handle.createQuery(
+                    "SELECT chunk_id, vec_distance_cosine(embedding, ?1) AS distance " +
+                    "FROM fts.vec_global " +
+                    "ORDER BY distance ASC " +
+                    "LIMIT ?2")
+                    .bind(0, floatArrayToJson(vector))
+                    .bind(1, topN)
+                    .map((rs, ctx) -> new Object[]{rs.getString("chunk_id"), rs.getDouble("distance")})
+                    .list();
 
-            List<MemoryChunkDto> results = new ArrayList<>();
-            for (Object[] row : rows) {
-                String chunkId = (String) row[0];
-                double score = 1.0 - ((Number) row[1]).doubleValue(); // cosine distance → similarity
-                RagChunkEntity chunkEntity = em.find(RagChunkEntity.class, chunkId);
-                String text = chunkEntity != null ? chunkEntity.text : "";
-                results.add(new MemoryChunkDto(chunkId, text, score));
-            }
-            return results;
+                List<MemoryChunkDto> results = new ArrayList<>();
+                for (Object[] row : rows) {
+                    String chunkId = (String) row[0];
+                    double score = 1.0 - ((Number) row[1]).doubleValue();
+
+                    String text = handle.createQuery(
+                        "SELECT text FROM rag_chunk WHERE chunk_id = ?")
+                        .bind(0, chunkId)
+                        .mapTo(String.class)
+                        .findOne()
+                        .orElse("");
+
+                    results.add(new MemoryChunkDto(chunkId, text, score));
+                }
+                return results;
+            });
         } catch (Exception e) {
             log.warnf("GlobalKnowledgeBase search failed: %s", LogUtil.rootMessage(e));
             return List.of();
@@ -110,4 +116,3 @@ public class GlobalKnowledgeBase {
         return sb.toString();
     }
 }
-

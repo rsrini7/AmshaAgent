@@ -39,6 +39,16 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   * Concrete handlers should parse raw payloads, resolve the `chatId` and `text`, and build standard `ChannelUser` and `ChannelMessage` representations.
   * Delegate execution by calling `processInboundMessage(chatId, text, user, channelMessage)`.
 
+### 2.3 Prompt Template Engine (Hardcoded Switch Pattern)
+
+* **Structure**: Role-specific system prompt rendering is handled by [PromptTemplateEngine.java](./arcclaw-core/src/main/java/com/arcclaw/core/agent/reasoning/PromptTemplateEngine.java).
+* **Pattern**: Uses a hardcoded `switch` statement in `templateFor()` to map `role.id()` → Qute template.
+* **Extending**: When adding a new persona:
+  1. Create the template file at `templates/prompts/role-<name>.txt`
+  2. Add `@Inject @Location("prompts/role-<name>") Template <name>Template` field
+  3. Add the corresponding `case "<name>"` entry in `templateFor()`
+  * **No compile-time safety** — the switch is a runtime `IllegalStateException` if missing. Always verify.
+
 ---
 
 ## 3. Generic Coding Principles
@@ -108,21 +118,22 @@ When adding a new persona (e.g., Garuda, Indra, etc.), update ALL of the followi
 ### 6.3 CDI & Wiring
 5. **`AgentProducer.java`** — Add `@Produces @ApplicationScoped @AgentRole(ID)` method
 6. **`CoordinatorPromptSection.java`** — Add to Trimurti/Tridevi architecture block
+7. **`PromptTemplateEngine.java`** — Add `@Inject @Location("prompts/role-<name>") Template <name>Template` field and corresponding `case "<name>"` entry in the `templateFor()` switch
 
 ### 6.4 Delegation (CRITICAL - Static Lists, No Compile Safety)
-7. **`DelegateToAgentTool.java`** — Add role ID to `defaultRoles` in `@ToolMetadata` annotation
-8. **`templates/prompts/delegate-to-agent-rules.txt`** — Add to "Available Specialists" list
+8. **`DelegateToAgentTool.java`** — Add role ID to `defaultRoles` in `@ToolMetadata` annotation
+9. **`templates/prompts/delegate-to-agent-rules.txt`** — Add to "Available Specialists" list
 
 ### 6.5 Escalation & Routing
-9. **`PersonaEscalationService.java`** — Add escalation paths in `determineNewPersonaEscalation()`
-10. **`PromptInstructionLibrary.java`** — Add to system capabilities list
+10. **`PersonaEscalationService.java`** — Add escalation paths in `determineNewPersonaEscalation()`
+11. **`PromptInstructionLibrary.java`** — Add to system capabilities list
 
 ### 6.6 Configuration
-11. **`application.yaml`** — Add role entry under `arcclaw.agents.roles`
+12. **`application.yaml`** — Add role entry under `arcclaw.agents.roles`
 
 ### 6.7 Verification
-12. Compile: `./mvnw compile -DskipTests -q`
-13. Run tests: `./mvnw test -pl arcclaw-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"`
-14. Update `telegram-test-arcclaw.txt` with test cases for new persona
+13. Compile: `./mvnw compile -DskipTests -q`
+14. Run tests: `./mvnw test -pl arcclaw-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"`
+15. Update `telegram-test-arcclaw.txt` with test cases for new persona
 
-**WARNING**: Items 7 and 8 are static lists in annotations/templates. The compiler will NOT catch missing updates. Always verify manually.
+**WARNING**: Items 8 and 9 are static lists in annotations/templates. Item 7 (`PromptTemplateEngine.java`) is a hardcoded switch — none of these have compile-time safety. Always verify manually.

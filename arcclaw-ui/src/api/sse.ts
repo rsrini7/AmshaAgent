@@ -18,11 +18,15 @@ export class SseManager {
     this._controller = new AbortController();
     
     try {
+      const headers: Record<string, string> = {
+        'Accept': 'text/event-stream',
+      };
+      if (this.apiKey && this.apiKey !== 'authenticated') {
+        headers['X-ARCCLAW-API-KEY'] = this.apiKey;
+      }
       const response = await fetch(this.url, {
-        headers: { 
-          'Accept': 'text/event-stream',
-          'X-ARCCLAW-API-KEY': this.apiKey
-        },
+        credentials: 'include',
+        headers,
         signal: this._controller.signal
       });
 
@@ -80,7 +84,7 @@ export class SseManager {
     const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
     const delay = Math.max(1000, baseDelay + jitter);
 
-    console.warn(`[SseManager] ${status}. Reconnecting in ${Math.round(delay)}ms (attempt ${this._retryCount + 1})`);
+    console.debug(`[SseManager] ${status}. Reconnecting in ${Math.round(delay)}ms (attempt ${this._retryCount + 1})`);
     
     this._retryCount++;
     this._retryTimeout = window.setTimeout(() => {

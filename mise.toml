@@ -871,7 +871,7 @@ Write-Host '✅  Build artifacts cleaned.'
 # =============================================================================
 
 [tasks.dev]
-depends = ["env:recover", "build:ui-copy"]
+depends = ["dev:kill", "env:recover", "build:ui-copy"]
 description = "Dev mode - serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -935,7 +935,7 @@ try {
 """
 
 [tasks."dev:chat"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode - interactive REPL with hot reload (strategy: NONE)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -998,7 +998,7 @@ try {
 """
 
 [tasks."dev:attach"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode - Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -1066,7 +1066,7 @@ try {
 """
 
 [tasks."dev:ask"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = 'Dev mode - one-shot task. Set $env:GOAL="your goal" then: mise run dev:ask'
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -1138,7 +1138,7 @@ try {
 """
 
 [tasks."dev:no-ui"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Dev mode - serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
 dir = "{{config_root}}/arcclaw-app"
 shell = "pwsh -NonInteractive -Command"
@@ -1246,7 +1246,7 @@ Write-Host '──────────────────────�
 # =============================================================================
 
 [tasks."jar:serve"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover", "build:app"]
 description = "Run packaged jar - REST daemon on :8080 (CLI profile)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1303,7 +1303,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:attach"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = "Run packaged jar - Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1332,7 +1332,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:ask"]
-depends = ["env:recover"]
+depends = ["dev:kill", "env:recover"]
 description = 'Run packaged jar - one-shot task. Set $env:GOAL="..." then: mise run jar:ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1430,6 +1430,7 @@ exit $code
 # =============================================================================
 
 [tasks."native:serve"]
+depends = ["dev:kill", "env:recover"]
 description = "Run native binary - REST daemon on :8080"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1449,6 +1450,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:chat"]
+depends = ["dev:kill", "env:recover"]
 description = "Run native binary - interactive REPL"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1468,6 +1470,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:attach"]
+depends = ["dev:kill", "env:recover"]
 description = "Run native binary - Telegram daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -1488,6 +1491,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."native:ask"]
+depends = ["dev:kill", "env:recover"]
 description = 'Run native binary - one-shot task. Set $env:GOAL="..." then: mise run native:ask'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2077,4 +2081,472 @@ description = "List all available mise tasks with descriptions"
 dir = "{{config_root}}"
 run = ["mise tasks"]
 
+# =============================================================================
+# PERSISTENCE BACKEND TASKS
+# =============================================================================
+# Three backends: sqlite (default), postgresql, filesystem.
+# Switch by activating the appropriate profile:
+#   mise run dev:pg       # Dev mode with PostgreSQL
+#   mise run dev           # Dev mode with SQLite (default)
+#
+# When using PostgreSQL, the Podman container is auto-started.
+# =============================================================================
+
+[tasks."db:pg:start"]
+description = "Start PostgreSQL 16 container via Podman (for dev/postgresql profile)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$container = 'arcclaw-pg'
+$existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
+if ($existing) {
+    $status = podman ps --filter name=$container --no-trunc 2>&1 | Select-String $container
+    if ($status) {
+        Write-Host "✅  PostgreSQL container '$container' is already running."
+        exit 0
+    }
+    Write-Host "ℹ️   Container '$container' exists but stopped — starting..."
+    podman start $container
+    if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to start container."; exit 1 }
+    Write-Host "✅  Container started."
+    exit 0
+}
+Write-Host "▶   Creating PostgreSQL container '$container'..."
+podman run -d --name $container `
+    -e POSTGRES_DB=arcclaw `
+    -e POSTGRES_USER=arcclaw `
+    -e POSTGRES_PASSWORD=changeme `
+    -p 5432:5432 `
+    --health-cmd='pg_isready -U arcclaw' `
+    --health-interval=3s `
+    --health-timeout=2s `
+    --health-retries=5 `
+    pgvector/pgvector:0.8.0-pg16
+if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to create container. Try: podman pull pgvector/pgvector:0.8.0-pg16"; exit 1 }
+if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to create container."; exit 1 }
+Write-Host "⏳  Waiting for PostgreSQL to become healthy..."
+$ready = $false
+for ($i = 0; $i -lt 15; $i++) {
+    $status = podman inspect $container | ConvertFrom-Json | Select-Object -ExpandProperty State | Select-Object -ExpandProperty Health | Select-Object -ExpandProperty Status
+    if ($status -eq 'healthy') { $ready = $true; break }
+    Start-Sleep -Seconds 1
+}
+if (-not $ready) {
+    Write-Host "⚠️   Health check did not become healthy — container may still be starting."
+    podman logs -n 5 $container 2>&1 | ForEach-Object { Write-Host "  $_" }
+} else {
+    Write-Host "✅  PostgreSQL 16 is ready on port 5432."
+}
+"""
+
+[tasks."db:pg:stop"]
+description = "Stop and remove PostgreSQL container"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$container = 'arcclaw-pg'
+$existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
+if (-not $existing) {
+    Write-Host "ℹ️   No PostgreSQL container found."
+    exit 0
+}
+Write-Host "▶   Stopping container '$container'..."
+podman stop $container 2>&1 | Out-Null
+podman rm $container 2>&1 | Out-Null
+Write-Host "✅  PostgreSQL container stopped and removed."
+"""
+
+[tasks."db:pg:status"]
+description = "Check PostgreSQL container health"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$container = 'arcclaw-pg'
+$existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
+if (-not $existing) {
+    Write-Host '❌  PostgreSQL container not found. Run: mise run db:pg:start'
+    exit 1
+}
+$state = podman inspect $container | ConvertFrom-Json | Select-Object -ExpandProperty State
+$status = $state.Status
+$health = $state.Health.Status
+Write-Host "✅  Container status: $status | Health: $health"
+$ports = podman port $container 2>&1
+if ($ports) { $ports | ForEach-Object { Write-Host "  $_" } }
+"""
+
+[tasks."db:pg:reset"]
+description = "Drop and recreate the arcclaw database (wipes all data)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$container = 'arcclaw-pg'
+$existing = podman ps --filter name=$container --no-trunc 2>&1 | Select-String $container
+if (-not $existing) {
+    Write-Host "❌  PostgreSQL container is not running. Run: mise run db:pg:start"
+    exit 1
+}
+Write-Host "⚠️   WARNING: This will permanently delete all PostgreSQL data."
+Write-Host "      Creating a new database requires Flyway clean + migrate."
+$confirm = Read-Host "Type 'reset' to confirm"
+if ($confirm -ne 'reset') { Write-Host "Aborted."; exit 1 }
+podman exec $container psql -U arcclaw -d postgres -c "DROP DATABASE IF EXISTS arcclaw WITH (FORCE);" 2>&1 | Out-Null
+podman exec $container psql -U arcclaw -d postgres -c "CREATE DATABASE arcclaw;" 2>&1 | Out-Null
+Write-Host "✅  Database 'arcclaw' recreated. Run 'mise run jar:pg' to apply Flyway migrations."
+"""
+
+# ── Dev mode with PostgreSQL ────────────────────────────────────────────────
+
+[tasks."dev:pg"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
+description = "Dev mode with PostgreSQL backend (auto-starts Podman container)"
+dir = "{{config_root}}/arcclaw-app"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:pg] Copied ../.env -> arcclaw-app/.env for this session'
+    }
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8'
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=serve' `
+        '-Dquarkus.profile=dev,postgresql' `
+        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    if ($envCopied) { Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue }
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
+}
+"""
+
+[tasks."dev:pg:chat"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
+description = "Dev mode with PostgreSQL backend - interactive REPL"
+dir = "{{config_root}}/arcclaw-app"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:pg:chat] Copied ../.env -> arcclaw-app/.env'
+    }
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8'
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=chat' `
+        '-Dquarkus.profile=dev,postgresql' `
+        '-Darcclaw.rag.vec-extension-path=../lib/vec0' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    if ($envCopied) { Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue }
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
+}
+"""
+
+# ── JAR mode with PostgreSQL ─────────────────────────────────────────────────
+
+[tasks."build:app"]
+depends = ["dev:kill", "env:recover"]
+description = "Build quarkus-run.jar for SQLite backend (default)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+Write-Host '▶   Building quarkus-run.jar for SQLite backend...'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+& $mvnw 'package' '-pl' 'arcclaw-app' '-am' '-DskipTests' '-q'
+if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
+Write-Host '✅  SQLite JAR ready.'
+"""
+
+[tasks."build:pg"]
+depends = ["dev:kill", "env:recover"]
+description = "Build quarkus-run.jar for PostgreSQL backend"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+Write-Host '▶   Building quarkus-run.jar for PostgreSQL backend...'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+& $mvnw 'package' '-pl' 'arcclaw-app' '-am' '-DskipTests' '-Dquarkus.profile=postgresql' '-q'
+if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
+Write-Host '✅  PostgreSQL JAR ready.'
+"""
+
+[tasks."jar:pg"]
+depends = ["dev:kill", "env:recover", "db:pg:start", "build:pg"]
+usage = 'arg "[cmd]" help="Command to run: serve|chat|ask (default: serve)"'
+description = "Build & run packaged jar with PostgreSQL backend (auto-starts Podman container, builds PG-specific JAR)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:pg'; exit 1 }
+$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=postgresql',
+    '-Darcclaw.data-dir=./data'
+)
+& java @jvmArgs -jar $jar $cmd
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
+
+[tasks."jar:pg:chat"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
+description = "Run packaged jar with PostgreSQL backend - interactive REPL (rebuild with: mise run build:pg first)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:pg'; exit 1 }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=postgresql',
+    '-Darcclaw.data-dir=./data'
+)
+& java @jvmArgs -jar $jar chat
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
+
+[tasks."jar:pg:ask"]
+depends = ["dev:kill", "env:recover", "db:pg:start"]
+description = 'Run packaged jar with PostgreSQL - one-shot. Set $env:GOAL="..." (rebuild with: mise run build:pg first)'
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$goal = if ($env:GOAL) { $env:GOAL } else { '' }
+if (-not $goal) { Write-Host 'Usage: $env:GOAL="..."; mise run jar:pg:ask'; exit 1 }
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:pg'; exit 1 }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=postgresql',
+    '-Darcclaw.data-dir=./data'
+)
+$cmdArgs = @('ask', $goal)
+if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }
+& java @jvmArgs -jar $jar @cmdArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
+
 # end of file
+
+# =============================================================================
+# FILESYSTEM BACKEND TASKS  (no container needed — pure JSON files on disk)
+# =============================================================================
+
+[tasks."dev:fs"]
+depends = ["dev:kill", "env:recover"]
+description = "Dev mode with filesystem persistence backend (no database needed)"
+dir = "{{config_root}}/arcclaw-app"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:fs] Copied ../.env -> arcclaw-app/.env'
+    }
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8'
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=serve' `
+        '-Dquarkus.profile=dev,filesystem' `
+        '-Dquarkus.datasource.enabled=false' `
+        '-Dquarkus.flyway.enabled=false' `
+        '-Darcclaw.persistence.backend=fs' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    if ($envCopied) { Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue }
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
+}
+"""
+
+[tasks."dev:fs:chat"]
+depends = ["dev:kill", "env:recover"]
+description = "Dev mode with filesystem backend - interactive REPL"
+dir = "{{config_root}}/arcclaw-app"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$envCopied = $false
+try {
+    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
+        Copy-Item -Path '../.env' -Destination '.env'
+        $envCopied = $true
+        Write-Host '[dev:fs:chat] Copied ../.env -> arcclaw-app/.env'
+    }
+    $mvnw    = if ($IsWindows) { '..\\mvnw.cmd' } else { '../mvnw' }
+    $jvmArgs = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8'
+    & $mvnw quarkus:dev `
+        '--no-transfer-progress' `
+        "-Djvm.args=$jvmArgs" `
+        '-Dquarkus.args=chat' `
+        '-Dquarkus.profile=dev,filesystem' `
+        '-Dquarkus.datasource.enabled=false' `
+        '-Dquarkus.flyway.enabled=false' `
+        '-Darcclaw.persistence.backend=fs' `
+        '-Darcclaw.data-dir=../data' `
+        '-Ddebug=false'
+    $script:exitCode = $LASTEXITCODE
+} finally {
+    if ($envCopied) { Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue }
+    if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }
+}
+"""
+
+[tasks."build:fs"]
+depends = ["dev:kill", "env:recover"]
+description = "Build quarkus-run.jar for filesystem persistence backend"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+Write-Host '▶   Building quarkus-run.jar for filesystem backend...'
+$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+& $mvnw 'package' '-pl' 'arcclaw-app' '-am' '-DskipTests' '-Dquarkus.profile=filesystem' '-q'
+if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
+Write-Host '✅  Filesystem JAR ready.'
+"""
+
+[tasks."jar:fs"]
+depends = ["dev:kill", "env:recover", "build:fs"]
+usage = 'arg "[cmd]" help="Command to run: serve|chat|ask (default: serve)"'
+description = "Build & run packaged jar with filesystem persistence backend (no database needed)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:fs'; exit 1 }
+$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=filesystem',
+    '-Darcclaw.data-dir=./data'
+)
+& java @jvmArgs -jar $jar $cmd
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
+
+[tasks."jar:fs:chat"]
+depends = ["dev:kill", "env:recover"]
+description = "Run packaged jar with filesystem backend - interactive REPL"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:fs'; exit 1 }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=filesystem',
+    '-Darcclaw.data-dir=./data'
+)
+& java @jvmArgs -jar $jar chat
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""
+
+[tasks."jar:fs:ask"]
+depends = ["dev:kill", "env:recover"]
+description = 'Run packaged jar with filesystem backend - one-shot. Set $env:GOAL="..."'
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+$goal = if ($env:GOAL) { $env:GOAL } else { '' }
+if (-not $goal) { Write-Host 'Usage: $env:GOAL="..."; mise run jar:fs:ask'; exit 1 }
+$jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
+if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build:fs'; exit 1 }
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$jvmArgs = @(
+    '--add-opens=java.base/java.nio=ALL-UNNAMED',
+    '--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED',
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--enable-native-access=ALL-UNNAMED',
+    '-Dsun.misc.unsafe.memory.access=allow',
+    '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
+    '-Dquarkus.profile=filesystem',
+    '-Darcclaw.data-dir=./data'
+)
+$cmdArgs = @('ask', $goal)
+if ($env:ROLE) { $cmdArgs += '--role', $env:ROLE }
+& java @jvmArgs -jar $jar @cmdArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+"""

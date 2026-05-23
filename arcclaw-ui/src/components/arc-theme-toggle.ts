@@ -38,9 +38,30 @@ export class ArcThemeToggle extends LitElement {
     svg { pointer-events: none; }
   `;
 
+  private _mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+  private _boundThemeChange = (e: MediaQueryListEvent) => {
+    if (!sessionStorage.getItem('arc-theme')) {
+      this._theme = e.matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', this._theme);
+    }
+  };
+
   connectedCallback() {
     super.connectedCallback();
-    this._theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const storedTheme = sessionStorage.getItem('arc-theme');
+    if (storedTheme) {
+      this._theme = storedTheme;
+    } else {
+      this._theme = this._mediaQuery.matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', this._theme);
+    this._mediaQuery.addEventListener('change', this._boundThemeChange);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._mediaQuery.removeEventListener('change', this._boundThemeChange);
   }
 
   private _toggle() {

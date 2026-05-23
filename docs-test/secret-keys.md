@@ -81,7 +81,7 @@ Here is the exact timeline of what happens the millisecond you run `arcclaw.exe`
 1. You run `arcclaw.exe`.
 2. Java hits `public static void main()`.
 3. `AppBootstrap.bootstrap()` runs immediately.
-   * **At this exact moment, there is no database.** Hibernate has not started. Dependency Injection (CDI) does not exist. The application doesn't even know what folder the SQLite database is stored in!
+   * **At this exact moment, there is no database.** The database connection has not been established. Dependency Injection (CDI) does not exist. The application doesn't even know what folder the SQLite database is stored in!
    * If we tried to call `SecretVaultImpl` right now, the app would instantly crash because `SecretVault` needs a live database connection to read/write its encrypted tables.
 4. **This is why `.env` must exist.** `AppBootstrap` reads the `.env` file to inject the foundational configuration (like `ARCCLAW_DATA_DIR` to find the database, and `ARCCLAW_VAULT_PEPPER` to know how to decrypt the vault) into the system properties so Quarkus can see them.
 

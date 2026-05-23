@@ -1,12 +1,18 @@
 import { LitElement, css, html, nothing } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
+import { consume } from '@lit/context';
+import { arcContext, ArcAppContext } from '../context/arc-context';
+import { ROUTES } from '../routes';
 import './arc-connection-badge';
 
 @customElement('arc-nav')
 export class ArcNav extends LitElement {
   @property({ type: String }) route = '#/chat';
-  @property({ type: String }) sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
   @property({ type: Boolean, reflect: true }) open = false;
+
+  @consume({ context: arcContext, subscribe: true })
+  @state()
+  private _appContext!: ArcAppContext;
 
   static styles = css`
     :host {
@@ -101,30 +107,14 @@ export class ArcNav extends LitElement {
         <span class="logo-text">ArcClaw</span>
       </div>
       <div class="links">
-        <a href="#/chat" class="${this.route === '#/chat' ? 'active' : ''}" aria-current="${this.route === '#/chat' ? 'page' : nothing}">
-          <span class="icon">💬</span> Chat
-        </a>
-        <a href="#/agents" class="${this.route === '#/agents' ? 'active' : ''}" aria-current="${this.route === '#/agents' ? 'page' : nothing}">
-          <span class="icon">🤖</span> Agents
-        </a>
-        <a href="#/hitl" class="${this.route === '#/hitl' ? 'active' : ''}" aria-current="${this.route === '#/hitl' ? 'page' : nothing}">
-          <span class="icon">✋</span> Approvals
-        </a>
-        <a href="#/skills" class="${this.route === '#/skills' ? 'active' : ''}" aria-current="${this.route === '#/skills' ? 'page' : nothing}">
-          <span class="icon">🔧</span> Skills
-        </a>
-        <a href="#/scheduler" class="${this.route === '#/scheduler' ? 'active' : ''}" aria-current="${this.route === '#/scheduler' ? 'page' : nothing}">
-          <span class="icon">⏰</span> Scheduler
-        </a>
-        <a href="#/audit" class="${this.route === '#/audit' ? 'active' : ''}" aria-current="${this.route === '#/audit' ? 'page' : nothing}">
-          <span class="icon">📋</span> Audit
-        </a>
-        <a href="#/settings" class="${this.route === '#/settings' ? 'active' : ''}" aria-current="${this.route === '#/settings' ? 'page' : nothing}">
-          <span class="icon">⚙</span> Settings
-        </a>
+        ${ROUTES.map(r => html`
+          <a href="${r.hash}" class="${this.route === r.hash ? 'active' : ''}" aria-current="${this.route === r.hash ? 'page' : nothing}">
+            <span class="icon">${r.icon}</span> ${r.label}
+          </a>
+        `)}
       </div>
       <div class="footer">
-        <arc-connection-badge .status="${this.sseStatus}"></arc-connection-badge>
+        <arc-connection-badge .status="${this._appContext?.sseStatus || 'disconnected'}"></arc-connection-badge>
         <div class="version">v1.0</div>
       </div>
     `;

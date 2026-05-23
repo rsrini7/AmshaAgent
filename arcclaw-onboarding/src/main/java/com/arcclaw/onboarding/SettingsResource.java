@@ -13,7 +13,11 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.core.api.dto.ArcClawErrorResponse;
@@ -26,6 +30,7 @@ import com.arcclaw.core.llm.LlmValidationGateway;
 import com.arcclaw.core.security.SecretVault;
 import com.arcclaw.core.security.VaultConstants;
 import com.arcclaw.core.security.VaultKey;
+import com.arcclaw.core.util.HttpConstants;
 import com.arcclaw.onboarding.dto.PromptUpdateRequest;
 import com.arcclaw.onboarding.dto.ProviderUpdateRequest;
 import com.arcclaw.onboarding.dto.SettingsDto;
@@ -50,8 +55,19 @@ public class SettingsResource {
     @ConfigProperty(name = "arcclaw.api.keys.internal", defaultValue = "dev-key")
     String internalApiKey;
 
+    @Context
+    HttpHeaders httpHeaders;
+
+    private String resolveKey(String headerKey) {
+        if (headerKey != null && !headerKey.isBlank()) return headerKey;
+        Cookie apiCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_ARCCLAW_API_KEY);
+        if (apiCookie != null) return apiCookie.getValue();
+        return null;
+    }
+
     private void checkAuth(String key) {
-        if (key == null || !key.equals(internalApiKey)) {
+        String resolved = resolveKey(key);
+        if (resolved == null || !resolved.equals(internalApiKey)) {
             throw new WebApplicationException(
                 Response.status(Response.Status.UNAUTHORIZED)
                     .entity(new ArcClawErrorResponse("Unauthorized", "Invalid or missing API Key"))
@@ -180,7 +196,15 @@ public class SettingsResource {
         vault.removeSystemKey(VaultConstants.SYSTEM_PROMPT_KEY);
 
         return Response.ok(Map.of("reset", true,
-            "message", "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard.")).build();
+            "message", "Onboarding sessions cleared. Cache cleared. Refresh to re-run the wizard."))
+            .cookie(new NewCookie.Builder(HttpConstants.COOKIE_ARCCLAW_API_KEY)
+                .value("")
+                .path("/")
+                .maxAge(0)
+                .httpOnly(true)
+                .sameSite(NewCookie.SameSite.STRICT)
+                .build())
+            .build();
     }
 
     private String readVaultString(String key, String fallback) {
