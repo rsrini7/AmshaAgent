@@ -128,18 +128,16 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
             jdbi.inTransaction(handle -> {
                 var dao = handle.attach(CheckpointJdbiDao.class);
                 Instant now = Instant.now();
-                Optional<CheckpointDto> existing = dao.findAnyBySessionAndRole(sessionId, agentRole);
-                String autonomy = existing.map(CheckpointDto::autonomyLevel).orElse(null);
-                int iterationsUsed = existing.map(CheckpointDto::iterationsUsed).orElse(0);
+                CheckpointDto existing = dao.findAnyBySessionAndRole(sessionId, agentRole).orElse(null);
+                String autonomy = existing != null ? existing.autonomyLevel() : null;
                 CheckpointDto dto = new CheckpointDto(
                     null, sessionId, agentRole, finalStatus, autonomy, stateJson,
                     null, null, originalGoal, null, null, null, null, null, null, null,
-                    null, iterationsUsed, null, null, contextDataJson, null, null, null,
+                    null, existing != null ? existing.iterationsUsed() : 0, null, null, contextDataJson, null, null, null,
                     null, 0, now, now
                 );
                 dao.upsertCheckpoint(dto);
                 CheckpointDto saved = dao.findAnyBySessionAndRole(sessionId, agentRole).orElseThrow();
-                // Replace steps
                 dao.deleteSteps(saved.id());
                 if (steps != null && !steps.isEmpty()) {
                     insertSteps(handle, saved.id(), steps);
@@ -293,7 +291,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     // ── Steps ──────────────────────────────────────────────────────────────
-
     @Override
     public void saveSteps(Long checkpointId, List<ReasoningStepDto> steps) {
         log.infof("[CheckpointAdapter] Saving %d steps for checkpoint=%d", steps.size(), checkpointId);
@@ -320,7 +317,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     // ── Batch Operations ───────────────────────────────────────────────────
-
     @Override
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole,
             String toolName, String decision) {
@@ -368,7 +364,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     // ── Cleanup ────────────────────────────────────────────────────────────
-
     @Override
     public List<CheckpointDto> findInProgressZombies(Instant cutoff) {
         String cutoffStr = TemporalUtils.formatIsoLex(cutoff);
