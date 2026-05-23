@@ -2346,7 +2346,9 @@ $jvmArgs = @(
     '--enable-native-access=ALL-UNNAMED',
     '-Dsun.misc.unsafe.memory.access=allow',
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
-    '-Dquarkus.profile=postgresql',
+    '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
+    '-Dquarkus.profile=cli,postgresql',
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
 & java @jvmArgs -jar $jar chat @args
@@ -2517,7 +2519,9 @@ $jvmArgs = @(
     '--enable-native-access=ALL-UNNAMED',
     '-Dsun.misc.unsafe.memory.access=allow',
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
-    '-Dquarkus.profile=filesystem',
+    '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
+    '-Dquarkus.profile=cli,filesystem',
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
 & java @jvmArgs -jar $jar chat @args
