@@ -813,7 +813,7 @@ mp:
         url: "jdbc:postgresql://${ARCCLAW_PG_HOST:localhost}:${ARCCLAW_PG_PORT:5432}/${ARCCLAW_PG_DB:arcclaw}"
         min-size: 2
         max-size: 10
-        transactions: enabled
+        transactions: disabled
         background-validation-interval: PT30S
         validation-query-sql: "SELECT 1"
         acquisition-timeout: 30
