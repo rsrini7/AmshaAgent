@@ -203,6 +203,12 @@
       <version>3.0.11</version>
     </dependency>
 
+    <!-- PostgreSQL JDBC driver (for %postgresql profile) -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jdbc-postgresql</artifactId>
+    </dependency>
+
     <!-- Flyway schema migration -->
     <dependency>
       <groupId>io.quarkus</groupId>

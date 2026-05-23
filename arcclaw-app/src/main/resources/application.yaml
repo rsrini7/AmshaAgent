@@ -790,18 +790,20 @@ mp:
 # =============================================================================
 # ALTERNATIVE PERSISTENCE BACKENDS
 # =============================================================================
-# To switch persistence backends (both use JDBI — no Hibernate):
-#   1. Replace the `arcclaw-persistence-sqlite` dependency in arcclaw-app/pom.xml
-#      with the desired adapter: `arcclaw-persistence-postgres` (or `arcclaw-persistence-fs`).
-#   2. Also replace `quarkus-jdbc-sqlite` with `quarkus-jdbc-postgresql`.
-#   3. Activate the profile: `-Dquarkus.profile=postgresql`.
-#   4. Flyway migrations are dialect-specific (owned by adapter modules):
-#      - arcclaw-persistence-sqlite/   → db/migration/sqlite/     (SQLite, default)
-#      - arcclaw-persistence-postgres/ → db/migration/postgresql/ (PostgreSQL, %postgresql profile)
+# Default is SQLite (no profile switch needed).
+# For PostgreSQL: mise run dev:pg  (auto-starts Podman container)
+# Or manually:    mise run db:pg:start && mvn quarkus:dev -Dquarkus.profile=postgresql
+#
+# Flyway migrations are dialect-specific (owned by adapter modules):
+#   arcclaw-persistence-sqlite/   → db/migration/sqlite/     (SQLite, default)
+#   arcclaw-persistence-postgres/ → db/migration/postgresql/ (PostgreSQL, %postgresql profile)
 # Only ONE persistence adapter should be on the classpath at a time to avoid CDI ambiguity.
 # ---------------------------------------------------------------------------
 
 "%postgresql":
+  arcclaw:
+    persistence:
+      backend: postgres
   quarkus:
     datasource:
       db-kind: postgresql
