@@ -898,7 +898,7 @@ A 6-step REST wizard at `/onboarding`:
 
 | Table | Entity | Purpose |
 |---|---|---|
-| `session_registry` | `SessionRegistryEntry` | `(channelType, channelId, userId)` → `sessionId` mapping |
+| `session_registry` | `SessionRegistry` (JDBI, no entity) | `(channelType, channelId, userId)` → `sessionId` mapping |
 | `agent_checkpoint` | `AgentCheckpointEntity` | Checkpoint state machine; `ReasoningStep[]` JSON; batch tool decisions |
 | `agent_cron` | `AgentCronEntity` | Cron job definitions, fire times, delivery IDs, status |
 | `agent_cron_run` | `CronRunEntity` | Cron execution history with delivery tracking |
