@@ -820,9 +820,18 @@ mp:
     flyway:
       migrate-at-start: true
       baseline-on-migrate: true
-      # PostgreSQL-specific migrations under db/migration/postgresql/
       locations: db/migration/postgresql
-      clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}   # set to false to keep existing data across restarts
+      clean-at-start: ${ARCCLAW_FLYWAY_CLEAN_AT_START:true}
+    log:
+      level: INFO
+      file:
+        enabled: true
+        path: "./arcclaw-pg.log"
+        level: DEBUG
+        format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
+        rotation:
+          max-file-size: 20M
+          max-backup-index: 3
 
 #"%filesystem":
 #  # File-based persistence — no JDBC datasource or Hibernate required.
