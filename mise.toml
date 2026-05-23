@@ -2300,7 +2300,6 @@ $jvmArgs = @(
     '-Dsun.misc.unsafe.memory.access=allow',
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
     '-Dquarkus.profile=postgresql',
-    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
 & java @jvmArgs -jar $jar $cmd
