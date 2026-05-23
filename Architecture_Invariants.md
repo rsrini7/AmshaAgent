@@ -32,7 +32,7 @@ If a rule here is violated, the code is considered incorrect even if tests appea
 ### 1.2 Core module
 - `arcclaw-core` owns agent runtime, workspace/session lifecycle, governance, persistence, skills, structured output, reflexes, audit, sandbox contracts, and generic pipeline behavior.
 - `arcclaw-core` MUST NOT depend on Telegram-specific behavior or any single channel assumption.
-- **P95 Storage Extraction:** `arcclaw-core` MUST NOT contain direct JPA `EntityManager` or JPQL queries. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`. (Enforced by `ArchitectureBoundaryTest`).
+- **Persistence boundary:** `arcclaw-core` MUST NOT contain JDBI `Handle`/`Jdbi` references or raw SQL strings. All database access MUST be delegated to pure Port interfaces defined in `arcclaw-persistence-api`. (Enforced by `ArchitectureBoundaryTest`).
 
 ### 1.3 App module
 - `arcclaw-app` owns application wiring, REST resources, startup bootstrap, config producers, and current adapter registration.
@@ -245,33 +245,28 @@ inline - use static final Pattern per §9.1.
 - Do not introduce ad hoc migration scripts for normal table changes unless the architecture policy is explicitly changed repository-wide.
 
 ### 5.3 Repository style
-- Core repositories MUST NOT use `EntityManager` directly (§1.2).
+- Core repositories MUST NOT use JDBI `Handle`/`Jdbi` directly (§1.2).
 - All database operations in `arcclaw-core` MUST flow through Port interfaces defined in `arcclaw-persistence-api`.
-- Implementations (Adapters) reside in specialized modules (e.g. `arcclaw-persistence-sqlite`).
+- Implementations (Adapters) reside in specialized modules (e.g. `arcclaw-persistence-sqlite`, `arcclaw-persistence-postgres`).
 
 ### 5.4 JDBI Transaction Behavior (SQLite)
 - JDBI manages its own connections and transactions — do NOT wrap JDBI operations in Jakarta `@Transactional`. Let JDBI handle transaction boundaries via `jdbi.useTransaction()` / `jdbi.inTransaction()`.
 - The adapters in `arcclaw-persistence-sqlite` use `jdbi.useTransaction()` for write operations and obtain handles via `jdbi.withExtension()` / `jdbi.withHandle()`.
 - `@Transactional` annotations in `arcclaw-core` beans (e.g., `AuditEventRecorder`) remain for JTA compliance but are effectively no-ops for JDBI-backed stores — the actual database write is managed by JDBI's own handle lifecycle.
-- Do not assume `em.merge()` is the right fix for already-managed entities (LEGACY — `EntityManager` is no longer used in the SQLite module).
 
 ### 5.5 Read visibility in tests
 - Test writes must be committed before REST assertions that depend on them.
 - Snapshot isolation assumptions in SQLite tests are easy to get wrong; prefer explicit cleanup and committed setup.
 
-### 5.6 Identity / schema (SQLite → JDBI + Flyway)
-- SQLite schema is managed via Flyway migrations in `arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/`.
-- The custom Hibernate SQLite dialect (`ArcClawSQLiteDialect`) has been removed — the SQLite module no longer uses Hibernate.
-- Identity columns use `INTEGER PRIMARY KEY AUTOINCREMENT` in DDL (via migration scripts), not Hibernate-generated identity.
+### 5.6 Identity / schema (JDBI + Flyway — Hibernate removed)
+- All schemas (SQLite and PostgreSQL) are managed via Flyway migrations in their respective adapter modules.
+- The custom Hibernate SQLite dialect (`ArcClawSQLiteDialect`) and all JPA entity classes have been removed.
+- Identity columns use `INTEGER PRIMARY KEY AUTOINCREMENT` (SQLite) or `BIGSERIAL` (PostgreSQL) in DDL.
 - `@Version` optimistic locking is not used — JDBI-based adapters manage concurrency via explicit SQL conditions (e.g., `WHERE status = :expectedStatus` in status transitions).
 
-## 5.7 EncryptedSecret version field ownership
+## 5.7 EncryptedSecret version field ownership (REMOVED — JDBI Migration)
 
-`EncryptedSecret.ormVersion` is Hibernate-managed. Application code MUST NOT read or set it.
-`EncryptedSecret.encryptionKeyVersion` is application-managed. Application code sets ONLY this field.
-Mixing these two fields corrupts encryption version tracking and is undetectable at runtime.
-
-**SQLite migration note:** The JDBI-based `SqliteSecretStoreAdapter` reads/writes the `encrypted_secrets` table directly via `SecretJdbiDao` (using `SecretDtoRow` record), bypassing the `EncryptedSecretEntity` JPA class entirely. The `ormVersion` column is never read or written by the SQLite adapter — it exists only for the Postgres Hibernate-based adapter.
+`EncryptedSecret.ormVersion` was Hibernate-managed and is now **removed**. Both `SqliteSecretStoreAdapter` and `PostgresSecretStoreAdapter` use `SecretJdbiDao` directly via the `SecretDtoRow` record, bypassing all JPA entity classes. The `ormVersion` column no longer exists in the schema — both backends use JDBI exclusively.
 
 ---
 
@@ -300,7 +295,7 @@ This is a database engine constraint, not a configuration choice.
 
 MUST NOT: Annotate any method `@Transactional(REQUIRED)` (or bare `@Transactional`) if that method directly or transitively calls any `@Transactional(REQUIRES_NEW)` method that writes to the SAME database.
 
-MUST NOT: Use `em.merge()` or full-entity `em.persist()` inside the `arcclaw-persistence-sqlite` module for entities that face concurrent overlapping writes (like `AgentCheckpoint`). Use native SQL `UPDATE` instead.
+MUST NOT: Use JPA `EntityManager` operations (`em.merge()`, `em.persist()`, `em.find()`) in any module — Hibernate has been removed. All writes use JDBI SQL statements or DAO methods.
 
 ### 5.8.1 Advisory Lock Isolation Exception (§T5-3)
 
@@ -618,14 +613,14 @@ SecretVault operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST
 
 ## 5.21 Instant/Timestamp Conversion (§5.21 INVARIANT)
 
-- **SQLite:** `Instant` ↔ ISO-8601 string conversion is handled by JDBI type mappers registered in `JdbiProducer` (via `InstantArgumentFactory` / `InstantColumnMapper`). This replaces the Hibernate `@Converter(autoApply = true)` pattern.
+- **SQLite:** `Instant` ↔ ISO-8601 string conversion is handled by JDBI type mappers registered in `JdbiProducer` (via `InstantArgumentFactory` / `InstantColumnMapper`).
 - **PostgreSQL** handles `timestamptz` natively via its JDBC driver; no special conversion is needed.
-- The old `InstantToTextConverter` (`@Converter(autoApply = true)`) has been deleted from the SQLite module. Do NOT reintroduce a Hibernate `@Converter` for `Instant` — use JDBI type mappers instead.
+- Use JDBI type mappers for `Instant` — do NOT add any `@Converter` annotation.
 
 ## 5.22 Cross-DB Column Definition Usage (§5.22 INVARIANT)
-No JPA entity in `arcclaw-core` or `arcclaw-persistence-api` may use `@Column(columnDefinition="...")` for integers or booleans.
-All DDL customization for IDENTITY bounds must live in per-adapter Flyway migration scripts or rely on Hibernate's `@ColumnDefault`.
-However, `columnDefinition = "TEXT"` is explicitly permitted and required for large JSON blob fields across all adapters. Removing it causes Hibernate to silently emit `VARCHAR(255)`, truncating payloads. `columnDefinition = "INTEGER"` for ID/identity columns and `columnDefinition = "INTEGER NOT NULL DEFAULT 0"` for booleans are the only prohibited forms.
+No DDL customization for IDENTITY bounds MUST live in per-adapter Flyway migration scripts.
+JPA's `@Column(columnDefinition=...)` is no longer present — Hibernate has been removed from all modules.
+All DDL is expressed in per-adapter Flyway migration SQL files only.
 
 ## 5.23 SessionSchemaEnforcer DDL Isolation (§5.23 INVARIANT)
 All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `arcclaw-core` or `arcclaw-app`. Each persistence adapter module (e.g. `arcclaw-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
@@ -648,15 +643,11 @@ All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-sp
 ### 6.4 Resource loading
 - For generated/augmented resources in multi-module tests, prefer context-classloader resource loading when required by current Quarkus augmentation behavior.
 
-## 6.5 @RunOnVirtualThread enforcement (Postgres/Hibernate only)
+## 6.5 @RunOnVirtualThread enforcement (REMOVED — JDBI Migration)
 
-The constraint that JAX-RS resources injecting `EntityManager` MUST have `@RunOnVirtualThread`
-is enforced at **build time** by `RestResourceBuildStep`. Violations fail the build with a
-`ValidationError` — they do NOT surface as runtime `BlockingOperationNotAllowedException`.
-Do not remove `RestResourceBuildStep` thinking it is optional infrastructure.
-
-**Note:** The SQLite module no longer uses `EntityManager` (migrated to JDBI). This rule applies
-only to modules still using Hibernate/EntityManager (e.g., Postgres-backed endpoints).
+This rule was specific to Hibernate's `EntityManager` in JAX-RS resources. Since **all modules
+have migrated to JDBI**, there is no `EntityManager` to inject in any REST resource.
+`RestResourceBuildStep` has been removed.
 
 ### 6.6 Static run-time objects
 - MUST NOT store JDK or library objects that require run-time initialization (e.g. `java.net.http.HttpClient`, `java.lang.Thread`, or descriptors) in `static` or `static final` fields when building for native-image.
@@ -1065,7 +1056,8 @@ This applies to every `arcclaw-channel-*` module added in P67 and beyond.
   - `arcclaw.vault.pepper`: "mock-pepper"
   - `quarkus.langchain4j.openai.timeout`: "30s"
   - `arcclaw.data-dir`: "target/data"
-- If the module uses Hibernate (`quarkus-hibernate-orm`), standardize the `hibernate-orm.packages` list to include `com.arcclaw.core.*` entity packages to avoid `UnsatisfiedDependency` for `EntityManager`. If the module does NOT use Hibernate (e.g., SQLite-only modules using JDBI), set `quarkus.hibernate-orm.enabled: false` and omit the `hibernate-orm.packages` config.
+- The project uses **JDBI**, not Hibernate. Do NOT add `quarkus-hibernate-orm` dependency.
+  Set `quarkus.hibernate-orm.enabled: false` in test config and omit any `hibernate-orm.packages` config.
 
 ### 16.3 CDI Discovery (Jandex)
 - Refer to §15. Every module MUST have `jandex-maven-plugin` and `beans.xml`.
