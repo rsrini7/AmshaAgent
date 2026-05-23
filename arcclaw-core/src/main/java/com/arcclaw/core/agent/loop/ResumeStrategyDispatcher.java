@@ -14,6 +14,7 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.domain.model.AgentCheckpoint;
 import com.arcclaw.core.pipeline.MessageContext;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.state.CheckpointStatus;
 import com.arcclaw.core.state.StatefulAgentStore;
@@ -150,6 +151,10 @@ class ResumeStrategyDispatcher {
         int maxRetries = 2;
         
         while (true) {
+            if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(sessionId)) {
+                log.warnf("[ResumeStrategy] session %s: halted during tool resume", sessionId);
+                throw new RuntimeException("Session " + sessionId + " halted during resume");
+            }
             try {
                 ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                         sessionId, context.userId(), context.chatId(), effectiveRole,

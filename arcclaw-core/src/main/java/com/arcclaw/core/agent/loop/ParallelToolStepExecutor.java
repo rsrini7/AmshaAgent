@@ -22,6 +22,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.reasoning.ParallelToolCall;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceStrategy;
@@ -264,6 +265,11 @@ public class ParallelToolStepExecutor {
             .toList();
 
         for (int i = 0; i < futures.size(); i++) {
+            if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(context.sessionId())) {
+                log.warnf("[PARALLEL] session %s: halted, cancelling %d pending futures", context.sessionId(), futures.size() - i);
+                futures.subList(i, futures.size()).forEach(f -> f.cancel(true));
+                break;
+            }
             CompletableFuture<ParallelToolCall> future = futures.get(i);
             try {
                 allowedCompleted.add(future.get(toolTimeoutSeconds, TimeUnit.SECONDS));
