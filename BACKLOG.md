@@ -30,6 +30,48 @@ Your OTel covers infrastructure. It cannot tell you *why* the LLM hallucinated a
 - Trace the full `Prompt → LLM Response → Tool Call → Observation → Next Prompt` chain
 - Enables LLM-as-a-Judge automated evaluations and prompt effectiveness measurement
 
+but we have to put in docker compose file.
+podman run -d -p 6006:6006 -p 4317:4317 -p 4318:4318 --name phoenix arize-ai/phoenix:latest
+
+<!-- Standard OpenTelemetry Exporter -->
+<dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-exporter-otlp</artifactId>
+</dependency>
+
+or 
+
+<dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-exporter-otlp</artifactId>
+    <version>1.44.0</version> <!-- Align version with your active OTel BOM -->
+</dependency>
+
+
+<dependency>
+    <groupId>com.arize</groupId>
+    <artifactId>openinference-instrumentation-langchain4j</artifactId>
+    <version>0.1.8</version> 
+</dependency>
+
+(or)
+
+<!-- Source: https://mvnrepository.com/artifact/com.arize/openinference-instrumentation -->
+<dependency>
+    <groupId>com.arize</groupId>
+    <artifactId>openinference-instrumentation</artifactId>
+    <version>0.1.9</version>
+    <scope>compile</scope>
+</dependency>
+
+OtlpHttpSpanExporter exporter = OtlpHttpSpanExporter.builder()
+    .setEndpoint("http://localhost:4318/v1/traces") // Points directly to Podman container
+    .build();
+
+SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+    .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
+    .build();
+
 ***
 
 ## P3 — Strategic Upgrades
@@ -61,6 +103,7 @@ Current `CompactionService` summarization destroys exact details (code snippets,
 ### 9. Security Guardrails — Move Off Regex
 Regex-based `PromptInjectionReflex` and `PiiScanReflex` are trivially bypassed (base64, synonyms, payload splitting).
 
+Refer #[Guardrails](Ideas-Pending/LangchainGuardrails.md)
 **Direction:**
 - **PII:** Microsoft Presidio via lightweight sidecar or Python MCP server — context-aware NER
 - **Prompt Injection:** DeBERTa-v3-base fine-tuned classifier or Lakera Guard — run as pre-flight before text reaches LLM context
