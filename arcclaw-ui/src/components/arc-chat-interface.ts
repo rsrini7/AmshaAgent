@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { WsManager } from '../api/websocket';
@@ -27,6 +27,8 @@ export class ArcChatInterface extends LitElement {
   @state()
   private _appContext!: ArcAppContext;
 
+  @property({ type: String }) platformId = '';
+
   @state() private _messages: ChatMessage[] = [];
   @state() private _input = '';
   @state() private _wsStatus: 'connecting' | 'open' | 'closed' | 'error' = 'closed';
@@ -47,7 +49,8 @@ export class ArcChatInterface extends LitElement {
 
   static styles = css`
     :host { 
-      display: flex; flex-direction: column; height: 100%; box-sizing: border-box; 
+      display: flex; flex-direction: column;
+      box-sizing: border-box; 
       background: var(--bg-base);
     }
     
@@ -233,8 +236,8 @@ export class ArcChatInterface extends LitElement {
   `;
 
   updated(changedProperties: Map<string, unknown>) {
-    const relevant = changedProperties.has('_appContext');
-    if (relevant && this._appContext?.sessionId && this._appContext?.platformId && !this._ws && !this._connecting && !this._intentionalClose) {
+    const relevant = changedProperties.has('_appContext') || changedProperties.has('platformId');
+    if (relevant && (this._appContext?.platformId || this.platformId) && !this._ws && !this._connecting && !this._intentionalClose) {
       this._connecting = true;
       this._connect();
     }
@@ -314,16 +317,15 @@ export class ArcChatInterface extends LitElement {
 
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host;
-    const wsUrl = `${proto}://${host}/ws/chat?sessionId=${encodeURIComponent(this._appContext?.platformId || '')}`;
-    this._ws = new WsManager(
+    const wsUrl = `${proto}://${host}/ws/chat?sessionId=${encodeURIComponent(this.platformId || this._appContext?.platformId || '')}`;
+    const manager = new WsManager(
       wsUrl,
       (frame) => this._handleFrame(frame),
       (status) => {
+        if (this._ws !== manager) return; // stale connection
         this._wsStatus = status;
-        this.dispatchEvent(new CustomEvent('ws-status-change', {
-          detail: { status },
-          bubbles: true,
-          composed: true
+        window.dispatchEvent(new CustomEvent('ws-status-change', {
+          detail: { status }
         }));
         if (status === 'open') {
           if (token) this._ws?.send({ type: 'AUTH', token });
@@ -342,6 +344,7 @@ export class ArcChatInterface extends LitElement {
         }
       }
     );
+    this._ws = manager;
     this._connecting = false;
     this._ws.connect();
   }
@@ -381,10 +384,8 @@ export class ArcChatInterface extends LitElement {
       if (frame.sessionId) {
         if (frame.sessionId !== (this._appContext?.sessionId || '')) {
           // Dispatch to parent shell to update SSE subscriptions
-          this.dispatchEvent(new CustomEvent('session-ready', {
-            detail: { sessionId: frame.sessionId },
-            bubbles: true,
-            composed: true
+          window.dispatchEvent(new CustomEvent('session-ready', {
+            detail: { sessionId: frame.sessionId }
           }));
         }
         // Always reload history on connect/reconnect (handles page refresh)
@@ -493,6 +494,7 @@ export class ArcChatInterface extends LitElement {
   }
 
   public reconnect() {
+    if (this._connecting) return;
     if (this._reconnectTimeoutId) {
       clearTimeout(this._reconnectTimeoutId);
       this._reconnectTimeoutId = null;

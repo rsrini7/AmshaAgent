@@ -44,6 +44,7 @@ export class ArcShell extends LitElement {
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
+  private _boundSessionReady = ((e: Event) => this._onSessionReady(e as CustomEvent)) as EventListener;
 
   static styles = css`
     :host { 
@@ -131,9 +132,9 @@ export class ArcShell extends LitElement {
   constructor() {
     super();
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
-    this.addEventListener('session-ready', this._onSessionReady as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
-    this.addEventListener('ws-status-change', ((e: CustomEvent) => this._chatWsStatus = e.detail.status) as EventListener);
+    window.addEventListener('ws-status-change', ((e: CustomEvent) => this._chatWsStatus = e.detail.status) as EventListener);
+    window.addEventListener('session-ready', this._boundSessionReady);
 
     this._platformId = this._resolvePlatformId();
     this._client = new ArcClient('/api/v1', '');
@@ -189,7 +190,9 @@ export class ArcShell extends LitElement {
 
         const targetRoute = window.location.hash || '#/chat';
         this._route = targetRoute === '#/onboarding' ? '#/chat' : targetRoute;
-        window.location.hash = this._route;
+        if (window.location.hash !== this._route) {
+          window.location.hash = this._route;
+        }
 
         this._fetchAgents();
         this._fetchApprovals();
@@ -209,6 +212,7 @@ export class ArcShell extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener('hashchange', this._boundHashChange);
+    window.removeEventListener('session-ready', this._boundSessionReady);
     this._sseManager?.disconnect();
   }
 
@@ -384,21 +388,28 @@ export class ArcShell extends LitElement {
       return html`<arc-onboarding class="content-area"></arc-onboarding>`;
     }
 
-    const validRoute = ROUTES.find(r => r.hash === this._route);
-    if (!validRoute) {
-      window.setTimeout(() => (window.location.hash = '#/chat'), 0);
-      return html`<arc-chat-interface class="content-area"></arc-chat-interface>`;
-    }
-
     return html`
-      ${ROUTES.map(route => html`
-        <${route.component}
-          class="content-area"
-          ?hidden="${this._route !== route.hash}"
-          ${route.hash === '#/agents' ? html`.agents=${this._agents}` : nothing}
-          ${route.hash === '#/hitl' ? html`.approvals=${this._pendingApprovals}` : nothing}
-        ></${route.component}>
-      `)}
+      ${this._route === '#/chat' ? html`
+        <arc-chat-interface class="content-area"></arc-chat-interface>
+      ` : nothing}
+      ${this._route === '#/agents' ? html`
+        <arc-agent-status class="content-area" .agents="${this._agents}"></arc-agent-status>
+      ` : nothing}
+      ${this._route === '#/hitl' ? html`
+        <arc-hitl-panel class="content-area" .approvals="${this._pendingApprovals}"></arc-hitl-panel>
+      ` : nothing}
+      ${this._route === '#/skills' ? html`
+        <arc-skills-panel class="content-area"></arc-skills-panel>
+      ` : nothing}
+      ${this._route === '#/scheduler' ? html`
+        <arc-scheduler-panel class="content-area"></arc-scheduler-panel>
+      ` : nothing}
+      ${this._route === '#/audit' ? html`
+        <arc-audit-panel class="content-area"></arc-audit-panel>
+      ` : nothing}
+      ${this._route === '#/settings' ? html`
+        <arc-settings class="content-area"></arc-settings>
+      ` : nothing}
     `;
   }
 
