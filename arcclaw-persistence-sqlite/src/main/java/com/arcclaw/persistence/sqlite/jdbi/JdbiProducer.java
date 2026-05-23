@@ -1,17 +1,19 @@
 package com.arcclaw.persistence.sqlite.jdbi;
 
+import java.nio.ByteBuffer;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
-import com.arcclaw.core.util.TemporalUtils;
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.util.TemporalUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agroal.api.AgroalDataSource;
@@ -41,7 +43,9 @@ public class JdbiProducer {
             .registerArgument(new InstantArgumentFactory())
             .registerColumnMapper(Instant.class, new InstantColumnMapper())
             .registerArgument(new JsonArgumentFactory(objectMapper))
-            .registerColumnMapper(new JsonColumnMapper(objectMapper));
+            .registerColumnMapper(new JsonColumnMapper(objectMapper))
+            .registerArgument(new UuidArgumentFactory())
+            .registerColumnMapper(UUID.class, new UuidColumnMapper());
     }
 
     static class InstantArgumentFactory extends AbstractArgumentFactory<Instant> {
@@ -106,6 +110,33 @@ public class JdbiProducer {
                 log.warnf("Failed to parse JSON column: %s", LogUtil.rootMessage(e));
                 throw new RuntimeException("Failed to parse JSON column", e);
             }
+        }
+    }
+
+    static class UuidArgumentFactory extends AbstractArgumentFactory<UUID> {
+        UuidArgumentFactory() {
+            super(Types.BLOB);
+        }
+
+        @Override
+        protected Argument build(UUID value, ConfigRegistry config) {
+            return (pos, stmt, ctx) -> {
+                byte[] bytes = new byte[16];
+                ByteBuffer bb = ByteBuffer.wrap(bytes);
+                bb.putLong(value.getMostSignificantBits());
+                bb.putLong(value.getLeastSignificantBits());
+                stmt.setBytes(pos, bytes);
+            };
+        }
+    }
+
+    static class UuidColumnMapper implements ColumnMapper<UUID> {
+        @Override
+        public UUID map(ResultSet rs, int columnNumber, StatementContext ctx) throws SQLException {
+            byte[] bytes = rs.getBytes(columnNumber);
+            if (bytes == null) return null;
+            ByteBuffer bb = ByteBuffer.wrap(bytes);
+            return new UUID(bb.getLong(), bb.getLong());
         }
     }
 }

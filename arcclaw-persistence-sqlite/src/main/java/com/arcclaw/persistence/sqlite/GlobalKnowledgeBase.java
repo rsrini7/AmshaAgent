@@ -40,7 +40,7 @@ public class GlobalKnowledgeBase {
             Embedding embedding = embeddingModel.embed(text).content();
             float[] vector = embedding.vector();
 
-            jdbi.withHandle(handle -> {
+            jdbi.useTransaction(handle -> {
                 handle.createUpdate(
                     "INSERT OR REPLACE INTO fts.vec_global(chunk_id, embedding) VALUES (?, ?)")
                     .bind(0, chunkId)
@@ -54,8 +54,6 @@ public class GlobalKnowledgeBase {
                     .bind(2, "System")
                     .bind(3, Instant.now().toString())
                     .execute();
-
-                return null;
             });
 
             return chunkId;

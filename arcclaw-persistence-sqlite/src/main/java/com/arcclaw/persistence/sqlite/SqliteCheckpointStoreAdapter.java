@@ -58,8 +58,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         this(null, null, null, 2);
     }
 
-    // ── Core Save ──────────────────────────────────────────────────────────
-
     @Override
     public CheckpointDto save(CheckpointDto checkpointDto) {
         log.infof("[CheckpointAdapter] Saving checkpoint session=%s role=%s",
@@ -84,8 +82,11 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         );
     }
 
-    // ── Upsert with Steps ──────────────────────────────────────────────────
-
+    /**
+     * Upserts checkpoint state only — does NOT persist reasoning steps despite
+     * the legacy method name. Steps are persisted by {@link #upsertAndFinalize}
+     * or {@link #saveCheckpointWithSteps}.
+     */
     @Override
     public CheckpointUpsertResult upsertWithSteps(String sessionId, String agentRole,
             String stateJson, String autonomy, int iterationsUsed, String originalGoal, String contextDataJson) {
@@ -159,8 +160,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         );
     }
 
-    // ── Reads ──────────────────────────────────────────────────────────────
-
     @Override
     public Optional<CheckpointDto> findById(Long id) {
         return jdbi.withExtension(CheckpointJdbiDao.class, dao -> dao.findById(id));
@@ -220,8 +219,6 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     public boolean hasPendingApprovalForChat(String chatId) {
         return jdbi.withExtension(CheckpointJdbiDao.class, dao -> dao.hasPendingApprovalForChat(chatId));
     }
-
-    // ── Status Transitions ─────────────────────────────────────────────────
 
     @Override
     public void transitionStatus(Long id, String newStatus) {
@@ -450,7 +447,24 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
      * decisions made in a concurrent update turn (A16 stale join guard).
      */
     private CheckpointDto mergeBatchDecisions(CheckpointDto managed, CheckpointDto incoming) {
-        if (incoming.batchToolDecisions() == null) return incoming;
+        if (incoming.batchToolDecisions() == null) {
+            if (managed.batchToolDecisions() != null) {
+                return new CheckpointDto(
+                    incoming.id(), incoming.sessionId(), incoming.agentRole(),
+                    incoming.status(), incoming.autonomyLevel(), incoming.stateJson(),
+                    incoming.channelPlatformId(), incoming.channelType(),
+                    incoming.originalGoal(), incoming.failedAt(), incoming.completedAt(),
+                    incoming.failReason(), incoming.pendingToolName(), managed.batchToolDecisions(),
+                    incoming.pendingToolParametersJson(), incoming.preExecutedResults(),
+                    incoming.maxIterations(), incoming.iterationsUsed(),
+                    incoming.retryAfterMs(), incoming.systemNote(),
+                    incoming.contextDataJson(), incoming.errorCode(),
+                    incoming.traceId(), incoming.rootCauseClass(),
+                    incoming.parentCheckpointId(), incoming.depth(),
+                    incoming.createdAt(), incoming.updatedAt());
+            }
+            return incoming;
+        }
         if (managed.batchToolDecisions() == null) return incoming;
         try {
             Map<String, ToolDecision> managedMap = objectMapper.readValue(
