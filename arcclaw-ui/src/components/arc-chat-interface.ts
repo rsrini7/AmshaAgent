@@ -46,6 +46,7 @@ export class ArcChatInterface extends LitElement {
   private _wsToken = '';
   private _wsTokenFetchedAt = 0;
   private _lastConnectAt = 0;
+  private _isReconnecting = false;
   private static readonly WS_TOKEN_TTL = 30_000;
   private static readonly MIN_CONNECT_INTERVAL = 5000;
 
@@ -289,7 +290,8 @@ export class ArcChatInterface extends LitElement {
 
   private async _connect() {
     const now = Date.now();
-    if (now - this._lastConnectAt < ArcChatInterface.MIN_CONNECT_INTERVAL) return;
+    if (!this._isReconnecting && now - this._lastConnectAt < ArcChatInterface.MIN_CONNECT_INTERVAL) return;
+    this._isReconnecting = false;
     this._lastConnectAt = now;
     if (this._intentionalClose) return;
     this._connecting = true;
@@ -375,6 +377,7 @@ export class ArcChatInterface extends LitElement {
     this._reconnectTimeoutId = setTimeout(() => {
         this._reconnectTimeoutId = null;
         if (this._connecting || this._ws) return;
+        this._isReconnecting = true;
         this._connect();
     }, finalDelay);
   }
@@ -507,6 +510,7 @@ export class ArcChatInterface extends LitElement {
     this._reconnectAttempts = 0;
     this._ws = null; 
     this._intentionalClose = false; 
+    this._isReconnecting = true;
     this._connecting = true;
     this._connect();
   }

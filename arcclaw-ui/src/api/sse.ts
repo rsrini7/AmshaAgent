@@ -84,7 +84,7 @@ export class SseManager {
     const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
     const delay = Math.max(1000, baseDelay + jitter);
 
-    console.warn(`[SseManager] ${status}. Reconnecting in ${Math.round(delay)}ms (attempt ${this._retryCount + 1})`);
+    console.debug(`[SseManager] ${status}. Reconnecting in ${Math.round(delay)}ms (attempt ${this._retryCount + 1})`);
     
     this._retryCount++;
     this._retryTimeout = window.setTimeout(() => {
