@@ -34,7 +34,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `garuda` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
-- **Reflex system** - 16 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
+- **Reflex system** - 17 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
 - **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation, with namespace and direct-execution fallbacks
 - **Web search tools** - Brave Search and Serper API integration for real-time information retrieval
@@ -602,7 +602,7 @@ arcclaw-core/                 ← Agent runtime kernel
 │   ├── structured/             StructuredOutputEngine, StructuredRetryLoop,
 │   │                           PermissiveJsonExtractor, AgentFunctionRegistry
 │   ├── tools/                  ToolRegistry, AgentTool SPI, ToolResponse, ToolOperation,
-│   │                           ToolCapability, GithubTool, ScheduleTaskTool,
+│   │                           GithubTool, ScheduleTaskTool,
 │   │                           ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
 │   │                           SandboxExecTool, CheckListTool, BraveWebSearchTool,
 │   │                           SerperWebSearchTool, SmartWebFetchTool, AgentTaskTool,
@@ -730,7 +730,7 @@ arcclaw-app/                  ← Application entrypoint and wiring
 | `arcclaw-channel-api` | Allows `arcclaw-core` to reference channel concepts (sender, allowlist) without coupling to Telegram or any concrete adapter. Swapping channels requires zero core changes. |
 | `arcclaw-persistence-api` | Hexagonal architecture port interfaces. Core depends on ports, not implementations. Enables swapping SQLite for Postgres or filesystem without core changes. |
 | `arcclaw-persistence-common` | Shared JPA entities used by all persistence adapters. Avoids entity duplication across SQLite, Postgres, and filesystem adapters. |
-| `arcclaw-core` | Independently testable. All ~1454 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes, and the agent kernel live here. |
+| `arcclaw-core` | Independently testable. All ~1454 tests run without any HTTP container. Business rules, governance, tools, sandbox, reflexes (17), and the agent kernel live here. |
 | `arcclaw-persistence-sqlite` | SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, and FTS5 setup. |
 | `arcclaw-persistence-fs` | Filesystem-based persistence adapter for environments without SQLite. |
 | `arcclaw-persistence-postgres` | PostgreSQL adapter for production deployments requiring a server database. |
@@ -869,6 +869,7 @@ This matters for three reasons:
 | `ResetReflex` | `/reset` | 500 | Soft-resets session state (clears ReAct loop + compactions, preserves chat memory) |
 | `McpReflex` | `/mcp` | 500 | Shows MCP server status: exposed internal tools and dynamically connected MCP server tools |
 | `SkillReflex` | `/skills` | 500 | Lists all currently loaded skills with their source (`classpath` or `database`) and trigger pattern count |
+| `ListReflexesReflex` | `/reflex`, `/reflexes`, `/commands`, `/help` | 500 | Lists all registered reflexes with their priority and trigger pattern |
 
 > [!NOTE]
 > The `PiiScanReflex`, `PromptInjectionReflex`, and `IdentityExtractionReflex` run on **every message** via their `sanitize()` hook in `ReflexRegistry.processIfReflex()`, even when no other reflex matches. PII mode is configurable: `REDACT_AND_FORWARD` (default) silently redacts and passes to the LLM; `BLOCK_AND_NOTIFY` rejects the message outright. Override at runtime via `ARCCLAW_PII_MODE` in your `.env`.
@@ -1528,4 +1529,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 16 reflexes · 10 LLM providers · 19 UI components*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 17 reflexes · 10 LLM providers · 19 UI components*
