@@ -20,6 +20,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.enterprise.inject.Instance;
 import jakarta.ws.rs.core.SecurityContext;
 
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
@@ -33,19 +34,17 @@ import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.lifecycle.SessionHeartbeatTracker;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.quarkus.arc.properties.IfBuildProperty;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 @ApplicationScoped
-@IfBuildProperty(name = "quarkus.flyway.enabled", stringValue = "true", enableIfMissing = true)
 @Path("hitl")
 @Produces(MediaType.APPLICATION_JSON)
 public class HitlResource {
 
-    @Inject HitlService hitlService;
+    @Inject Instance<HitlService> hitlService;
     @Inject AgentSseService agentSseService;
     @Inject SessionHeartbeatTracker heartbeatTracker;
     @Inject AuditService auditService;
@@ -106,21 +105,24 @@ public class HitlResource {
         int effectiveSize = Math.min(Math.max(1, size), 50);
         int offset = page * effectiveSize;
 
-        long totalCount = hitlService.countPendingApprovals(userId);
-        List<PendingApprovalDto> items = hitlService.getPendingApprovals(userId, effectiveSize, offset)
-            .values().stream()
-            .map(pending -> new PendingApprovalDto(
-                pending.taskId(),
-                pending.sessionId(),
-                pending.toolName(),
-                pending.params(),
-                pending.requestedAt(),
-                pending.agentRole()
-            ))
-            .collect(Collectors.toList());
-
-        PageDto<PendingApprovalDto> pageResult = PageDto.of(items, page, effectiveSize, totalCount);
-        return Response.ok(pageResult).build();
+        if (!hitlService.isUnsatisfied()) {
+            long totalCount = hitlService.get().countPendingApprovals(userId);
+            List<PendingApprovalDto> items = hitlService.get().getPendingApprovals(userId, effectiveSize, offset)
+                .values().stream()
+                .map(pending -> new PendingApprovalDto(
+                    pending.taskId(),
+                    pending.sessionId(),
+                    pending.toolName(),
+                    pending.params(),
+                    pending.requestedAt(),
+                    pending.agentRole()
+                ))
+                .collect(Collectors.toList());
+            PageDto<PendingApprovalDto> pageResult = PageDto.of(items, page, effectiveSize, totalCount);
+            return Response.ok(pageResult).build();
+        }
+        // No database backend — HITL not available
+        return Response.ok(PageDto.of(List.of(), page, effectiveSize, 0)).build();
     }
 
     @POST
@@ -138,8 +140,13 @@ public class HitlResource {
         }
         String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null) ? request.reason() : "Approved via REST";
+        if (hitlService.isUnsatisfied()) {
+            return Response.status(Response.Status.NOT_IMPLEMENTED)
+                .entity(new ArcClawErrorResponse("HITL not available", "No database backend"))
+                .build();
+        }
         try {
-            hitlService.resolve(taskId, toolName, true, reason);
+            hitlService.get().resolve(taskId, toolName, true, reason);
             String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
                 ? securityContext.getUserPrincipal().getName() : "anonymous";
             auditService.recordMandatory("hitl-" + taskId, userId, "coordinator",
@@ -171,8 +178,13 @@ public class HitlResource {
         String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null && request.reason() != null && !request.reason().isBlank()) 
             ? request.reason() : "Rejected by user";
+        if (hitlService.isUnsatisfied()) {
+            return Response.status(Response.Status.NOT_IMPLEMENTED)
+                .entity(new ArcClawErrorResponse("HITL not available", "No database backend"))
+                .build();
+        }
         try {
-            hitlService.resolve(taskId, toolName, false, reason);
+            hitlService.get().resolve(taskId, toolName, false, reason);
             String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
                 ? securityContext.getUserPrincipal().getName() : "anonymous";
             auditService.recordMandatory("hitl-" + taskId, userId, "coordinator",

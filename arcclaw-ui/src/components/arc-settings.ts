@@ -44,11 +44,21 @@ export class ArcSettings extends LitElement {
 
   static styles = css`
     :host {
-      display: block;
-      padding: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
       max-width: 800px;
       margin: 0 auto;
+      padding: var(--space-6);
       box-sizing: border-box;
+      min-height: 0;
+      overflow: hidden !important;
+    }
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+      padding-right: var(--space-2);
     }
     .tabs {
       display: flex; gap: var(--space-4); margin-bottom: var(--space-6);
@@ -187,9 +197,11 @@ export class ArcSettings extends LitElement {
       ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
       ${this._success ? html`<div class="status-msg success">${this._success}</div>` : ''}
 
-      ${this._activeTab === 'provider' ? this._renderProvider() : ''}
-      ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
-      ${this._activeTab === 'danger' ? this._renderDanger() : ''}
+      <div class="tab-content">
+        ${this._activeTab === 'provider' ? this._renderProvider() : ''}
+        ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
+        ${this._activeTab === 'danger' ? this._renderDanger() : ''}
+      </div>
     `;
   }
 
