@@ -400,8 +400,12 @@ export class ArcChatInterface extends LitElement {
         this._loadHistory();
       }
     } else if (frame.type === 'session_terminated') {
+      if (this._intentionalClose) return;
       this._intentionalClose = true;
-      this._ws?.disconnect();
+      if (this._ws) {
+        this._ws.disconnect();
+        this._ws = null;
+      }
       this._wsStatus = 'closed';
     } else if (frame.type === 'message' && frame.role === 'assistant') {
       this._isTyping = false;
@@ -508,8 +512,11 @@ export class ArcChatInterface extends LitElement {
       this._reconnectTimeoutId = null;
     }
     this._reconnectAttempts = 0;
-    this._ws = null; 
-    this._intentionalClose = false; 
+    this._intentionalClose = false;
+    if (this._ws) {
+      this._ws.disconnect();
+      this._ws = null;
+    }
     this._isReconnecting = true;
     this._connecting = true;
     this._connect();

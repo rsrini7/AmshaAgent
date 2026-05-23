@@ -396,9 +396,7 @@ export class ArcShell extends LitElement {
     }
 
     return html`
-      ${this._route === '#/chat' ? html`
-        <arc-chat-interface class="content-area"></arc-chat-interface>
-      ` : nothing}
+      <arc-chat-interface class="content-area" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"></arc-chat-interface>
       ${this._route === '#/agents' ? html`
         <arc-agent-status class="content-area" .agents="${this._agents}"></arc-agent-status>
       ` : nothing}
