@@ -797,6 +797,7 @@ mp:
 # Flyway migrations are dialect-specific (owned by adapter modules):
 #   arcclaw-persistence-sqlite/   → db/migration/sqlite/     (SQLite, default)
 #   arcclaw-persistence-postgres/ → db/migration/postgresql/ (PostgreSQL, %postgresql profile)
+# PostgreSQL vector search requires the pgvector extension on the server (installed via V2 migration).
 # Only ONE persistence adapter should be on the classpath at a time to avoid CDI ambiguity.
 # ---------------------------------------------------------------------------
 

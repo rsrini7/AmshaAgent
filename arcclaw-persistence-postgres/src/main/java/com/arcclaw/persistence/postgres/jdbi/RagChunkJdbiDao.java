@@ -22,4 +22,13 @@ public interface RagChunkJdbiDao {
     @SqlQuery("SELECT chunk_id AS \"chunkId\", text, ts_rank(to_tsvector('english', text), plainto_tsquery('english', :query)) AS score FROM rag_chunk WHERE to_tsvector('english', text) @@ plainto_tsquery('english', :query) ORDER BY score DESC LIMIT :limit")
     @RegisterConstructorMapper(MemoryChunkDto.class)
     List<MemoryChunkDto> search(@Bind("query") String query, @Bind("limit") int limit);
+
+    @SqlUpdate("INSERT INTO rag_chunk_embedding (chunk_id, embedding) VALUES (:chunkId, CAST(:embedding AS vector)) ON CONFLICT (chunk_id) DO UPDATE SET embedding = CAST(:embedding AS vector)")
+    void upsertEmbedding(@Bind("chunkId") String chunkId, @Bind("embedding") String embeddingJson);
+
+    @SqlQuery("SELECT rc.chunk_id AS \"chunkId\", rc.text, (1 - (e.embedding <-> CAST(:query AS vector))) AS score " +
+              "FROM rag_chunk_embedding e JOIN rag_chunk rc ON rc.chunk_id = e.chunk_id " +
+              "ORDER BY e.embedding <-> CAST(:query AS vector) LIMIT :limit")
+    @RegisterConstructorMapper(MemoryChunkDto.class)
+    List<MemoryChunkDto> searchVector(@Bind("query") String queryEmbeddingJson, @Bind("limit") int limit);
 }

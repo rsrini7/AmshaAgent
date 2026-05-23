@@ -2119,7 +2119,8 @@ podman run -d --name $container `
     --health-interval=3s `
     --health-timeout=2s `
     --health-retries=5 `
-    postgres:16-alpine
+    pgvector/pgvector:0.8.0-pg16
+if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to create container. Try: podman pull pgvector/pgvector:0.8.0-pg16"; exit 1 }
 if ($LASTEXITCODE -ne 0) { Write-Host "❌  Failed to create container."; exit 1 }
 Write-Host "⏳  Waiting for PostgreSQL to become healthy..."
 $ready = $false
