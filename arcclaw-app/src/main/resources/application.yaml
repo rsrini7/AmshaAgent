@@ -513,6 +513,11 @@ arcclaw:
     approval-timeout-minutes: 60 # must be >> gc-interval converted to minutes
     rate-limit-backoff-seconds: 30
 
+  observability:
+    phoenix:
+      enabled: "${ARCCLAW_PHOENIX_ENABLED:true}"
+      endpoint: "${ARCCLAW_PHOENIX_ENDPOINT:http://localhost:4318/v1/traces}"
+
   sandbox:
     enabled: "${ARCCLAW_SANDBOX_ENABLED:true}"
     strategy: "${ARCCLAW_SANDBOX_STRATEGY:PODMAN}"

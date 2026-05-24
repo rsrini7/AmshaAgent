@@ -70,6 +70,22 @@ public final class AgentOTelConstants {
     public static final AttributeKey<String> ATTR_CONTAINER_NAME   = AttributeKey.stringKey("arcclaw.sandbox.name");
     public static final AttributeKey<String> ATTR_SANDBOX_STRATEGY = AttributeKey.stringKey("arcclaw.sandbox.strategy");
 
+    // ── OpenInference / Phoenix semantic conventions ─────────────────────
+    public static final AttributeKey<String> ATTR_OI_SPAN_KIND      = AttributeKey.stringKey("openinference.span.kind");
+    public static final AttributeKey<String> ATTR_LLM_MODEL_NAME    = AttributeKey.stringKey("llm.model_name");
+    public static final AttributeKey<String> ATTR_LLM_INVOCATION_PARAMS = AttributeKey.stringKey("llm.invocation_parameters");
+    public static final AttributeKey<String> ATTR_LLM_INPUT_MESSAGES = AttributeKey.stringKey("llm.input_messages");
+    public static final AttributeKey<String> ATTR_LLM_OUTPUT_MESSAGES = AttributeKey.stringKey("llm.output_messages");
+    public static final AttributeKey<String> ATTR_TOOL_CALL_NAME    = AttributeKey.stringKey("llm.tool_call.name");
+    public static final AttributeKey<String> ATTR_TOOL_CALL_ARGS    = AttributeKey.stringKey("llm.tool_call.arguments");
+
+    // ── OpenInference span kind values ─────────────────────────────────
+    public static final String OI_KIND_AGENT  = "AGENT";
+    public static final String OI_KIND_CHAIN  = "CHAIN";
+    public static final String OI_KIND_TOOL   = "TOOL";
+    public static final String OI_KIND_LLM    = "LLM";
+    public static final String OI_KIND_RETRIEVER = "RETRIEVER";
+
     // ── Backward-compatible token attribute keys ────────────────────────
     public static final AttributeKey<Long> ATTR_INPUT_TOKENS  = AttributeKey.longKey("llm.usage.prompt_tokens");
     public static final AttributeKey<Long> ATTR_OUTPUT_TOKENS = AttributeKey.longKey("llm.usage.completion_tokens");

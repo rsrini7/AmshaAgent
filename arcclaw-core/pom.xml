@@ -206,6 +206,8 @@
       <artifactId>quarkus-opentelemetry</artifactId>
     </dependency>
 
+
+
     <!-- Context propagation (CDI across ManagedExecutor threads) -->
     <dependency>
       <groupId>io.quarkus</groupId>
