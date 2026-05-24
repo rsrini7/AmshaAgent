@@ -290,3 +290,41 @@ For native-image verification:
 ```bash
 mise build:native-local                   # Full native build
 ```
+
+### 7.5 Native-Image Runtime Initialization (`native-image.properties`)
+
+Some libraries use Foreign Function & Memory (FFM) API, `MethodHandle`, or native access that GraalVM can't analyze at build time. These must be deferred to runtime via `--initialize-at-run-time`.
+
+**Config file:** `arcclaw-app/src/main/resources/META-INF/native-image/com.arcclaw/arcclaw-app/native-image.properties`
+
+**When to add a class:**
+- GraalVM error: `should not reach here: unexpected input could not be handled: linkToNative` → class uses FFM API
+- GraalVM error: `An object of type X was found in the image heap. This type is marked for initialization at run time` → class is instantiated at build time but needs to be runtime-only
+- GraalVM error: `Fatal error: com.oracle.graal.pointsto.util.AnalysisError$ParsingError` on native methods → class uses native/FFM intrinsics
+
+**Critical rule — mark the ENTIRE package, not individual classes:**
+GraalVM embeds static fields from build-time classes into the image heap. If you mark `ClassA` for run-time init but `ClassB` (build-time) has a static `ClassA` field, GraalVM errors. You'd need to also mark `ClassB`, then its dependents, endlessly. **Always mark the root package** to break the chain:
+
+```properties
+# ✅ CORRECT — marks entire package + sub-packages
+--initialize-at-run-time=org.apache.lucene
+
+# ❌ WRONG — triggers whack-a-mole (each class's static deps cause new errors)
+--initialize-at-run-time=org.apache.lucene.store.PosixNativeAccess
+--initialize-at-run-time=org.apache.lucene.store.MemorySegmentIndexInputProvider
+```
+
+**Also mark your own classes that trigger the library at build time:**
+CDI `@PostConstruct` methods run at build time in native-image. If your bean initializes a library in `@PostConstruct`, mark the bean for run-time init too:
+
+```properties
+--initialize-at-run-time=com.arcclaw.persistence.fs.FsMemoryRetrievalAdapter,com.arcclaw.persistence.fs.lucene.LuceneIndexManager
+```
+
+**Do NOT put `--initialize-at-run-time` in `pom.xml` `additional-build-args`:**
+Quarkus splits that property on commas. If the arg value contains commas (e.g., `--initialize-at-run-time=A,B`), it gets split into two broken args. Use `native-image.properties` instead — GraalVM reads it directly with no comma splitting.
+
+**Verification:**
+```bash
+mise build:native-local    # Must complete without heap/init errors
+```
