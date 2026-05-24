@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
+import com.arcclaw.core.tools.ToolCategory;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
@@ -38,6 +39,18 @@ public interface AgentTool {
      * Human-readable description surfaced to LLM agents for tool selection.
      */
     String description();
+
+    /**
+     * The execution category for thread-pool bulkhead isolation.
+     * <p>
+     * Tools should override this if they belong to a category other than INTERNAL.
+     * Built-in tools are mapped via {@link com.arcclaw.core.agent.role.ToolCapability#category()}
+     * — this method is the contract for dynamically discovered tools (MCP, plugins)
+     * that don't have a ToolCapability entry.
+     */
+    default ToolCategory category() {
+        return ToolCategory.INTERNAL;
+    }
 
     /**
      * The operation category for autonomy governance checks.

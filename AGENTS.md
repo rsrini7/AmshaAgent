@@ -65,6 +65,19 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   5. NO changes needed to `PromptTemplateEngine.java` hardcoded switch — the registry is tried first, then falls back to `@Location` templates
 * **Admin API**: `PUT /admin/prompts/{id}` and `POST /admin/prompts` for runtime edits. Changes with version>1 or non-ACTIVE status are preserved across deployments.
 
+### 2.5 Configuration Property Sync Rule
+
+* **Rule**: When adding or updating any `@ConfigProperty` in a Java source file, you MUST update ALL of the following:
+  1. **`application.yaml`** (`arcclaw-app/src/main/resources/application.yaml`) — add the property under the appropriate `arcclaw.*` section with `${ENV_VAR:default}` format
+  2. **`.env.example`** (project root) — add the environment variable with a comment describing its purpose
+  3. **Module README** (if one exists) — update the configuration table in the module's own `README.md` (e.g. `arcclaw-tool-playwright/README.md`)
+* **Reason**: Config properties are documented in three places. Missing any one causes confusion for operators, failing CI builds, or runtime misconfiguration.
+* **Verification**: After adding a new config property, run:
+  ```bash
+  grep "MY_NEW_PROP" .env.example arcclaw-app/src/main/resources/application.yaml
+  ```
+  to confirm it appears in both files.
+
 ---
 
 ## 3. Generic Coding Principles

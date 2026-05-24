@@ -426,6 +426,10 @@ arcclaw:
       enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
       timeout-ms: 30000
       headless: "${ARCCLAW_TOOLS_PLAYWRIGHT_HEADLESS:true}"
+      # MCP Server mode — uses official @playwright/mcp via STDIO, falls back to CLI
+      mcp-enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ENABLED:false}"
+      mcp-command: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_COMMAND:npx}"
+      mcp-args: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ARGS:@playwright/mcp}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names

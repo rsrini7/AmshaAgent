@@ -32,6 +32,14 @@ by shelling out to the official @playwright/cli daemon (Node.js 20+ required).</
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-opentelemetry</artifactId>
     </dependency>
+
+    <!-- MCP transport for Playwright MCP Server (optional — falls back to CLI) -->
+    <dependency>
+      <groupId>com.arcclaw</groupId>
+      <artifactId>arcclaw-mcp</artifactId>
+      <version>${project.version}</version>
+      <optional>true</optional>
+    </dependency>
     <!-- Test -->
     <dependency>
         <groupId>io.quarkus</groupId>
