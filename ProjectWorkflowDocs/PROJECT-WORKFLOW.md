@@ -241,7 +241,7 @@ Fires `AgentStateChangedEvent(active, goal)` for SSE broadcast. Saves goal to `C
 ### Step A: EngineStepHandler - LLM Call
 
 **System prompt construction** (`SystemPromptBuilder`):
-1. Selects the role-specific Qute template from `/templates/personas/` (e.g., `coordinator.txt`, `coder.txt`).
+1. Loads persona identity and role template from `PromptRegistry` (multi-backend: SQLite/PostgreSQL/Filesystem). Falls back to classpath `/templates/personas/` and `/templates/prompts/` if no backend is available. Auto-seeds DB on first startup with SHA-256 drift detection for upgrades.
 2. Injects the compaction summary from `CompactionSummaryCache` (`@WorkspaceScoped`) - blocks via `CompactionEventBridge.awaitIfInFlight(sessionId)` on first access to prevent stale-null race.
 3. Runs all `ContextEnricher` CDI implementations. `RagContextEnricher` (in `arcclaw-rag`) searches both memory tiers, scores chunks by cosine similarity, and injects a `Retrieved Context` block.
 4. Appends `SystemEnvironmentContextEnricher` metadata.

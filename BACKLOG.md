@@ -2,13 +2,11 @@
 
 Schedule after P1 is stable.
 
-### 4. Prompt System — Externalize to `PromptRegistry`
-Current static `final String` constants have zero versioning, zero A/B testing, require recompile to change.
+### 4. ✅ Prompt System — Externalize to `PromptRegistry`
 
-**Direction:**
-- `PromptRegistry` backed by DB/YAML/Git
-- Add fields: `version`, `status`, `rolloutPercentage`, `auditMetadata`
-- Runtime swap without redeployment
+**Status**: Complete (Phase A) — multi-backend PromptRegistry with versioning, drift detection, rollout, and admin API.
+
+**Remaining**: `PromptSectionBuilder` and `CoordinatorPromptSection` still use inline static strings — these can be migrated to registry lookups in a follow-up if needed.
 
 ***
 
@@ -128,7 +126,7 @@ Current `PlaywrightCliTool` shells out to Node.js — brittle IPC, schema drift 
 | 1 | State Pattern for AgentStateMachineRunner | **P1** | Refactor |
 | 2 | Drop JPA for SQLite → jOOQ/JDBI | **P1** | Refactor |
 | 3 | Concurrency handling for parallel tools | **P1** | Modernize |
-| 4 | Externalize prompts to PromptRegistry | **P2** | Feature |
+| 4 | ✅ Externalize prompts to PromptRegistry | **P2** | Complete |
 | 5 | Tool bulkheads per category | **P2** | Resilience |
 | 6 | Semantic LLMOps tracing (Langfuse/Arize) | **P2** | Observability |
 | 7 | Graph-based agent orchestration (DAG) | **P3** | Evolution |

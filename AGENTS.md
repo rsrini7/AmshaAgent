@@ -51,6 +51,22 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 
 ---
 
+### 2.4 Prompt Registry (Multi-Backend Hexagonal Port)
+
+* **Structure**: All system prompt content blocks (persona identities, role templates, security rules, shared snippets) are stored in a backend-agnostic `PromptRegistry` rather than `static final String` constants or classpath Qute `@Location` templates.
+* **Backends**: SQLite, PostgreSQL, or Filesystem — selected via `arcclaw.persistence.backend` config property. Each implements `PromptStorePort` from `arcclaw-persistence-api`.
+* **Seed on startup**: `PromptRegistry.onStart(@Observes StartupEvent)` runs after Flyway migration, reads classpath `templates/personas/*.txt` and `templates/prompts/*.txt`, and writes them to the backend if missing. SHA-256 drift detection auto-updates rows on classpath changes but respects admin edits (version>1 or status≠ACTIVE).
+* **Graceful degradation**: If no `PromptStorePort` implementation is available (e.g. in unit tests), `get()` falls back to the classpath cache. All DB operations become no-ops.
+* **Extending**: When adding a new persona:
+  1. Create template file at `templates/prompts/role-<name>.txt`
+  2. Create persona identity at `templates/personas/<name>.txt`
+  3. Add role ID to `ALL_ROLES` array in `PromptRegistry.java` static block
+  4. The registry automatically seeds/detects drift on next startup
+  5. NO changes needed to `PromptTemplateEngine.java` hardcoded switch — the registry is tried first, then falls back to `@Location` templates
+* **Admin API**: `PUT /admin/prompts/{id}` and `POST /admin/prompts` for runtime edits. Changes with version>1 or non-ACTIVE status are preserved across deployments.
+
+---
+
 ## 3. Generic Coding Principles
 
 ### 3.1 No Hardcoded Tool Name Strings
@@ -79,6 +95,28 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 * **Method Length**: Maximum **80 lines** per method.
 * **Enforcement**: Checkstyle runs during `compile` phase. Violations fail the build.
 * **Refactoring**: If a method exceeds 80 lines, extract logical blocks into private helper methods. If a file exceeds 500 lines, split into separate classes (e.g., extract inner classes, constants, or utility methods into companion files).
+
+### 4.2 PostgreSQL Local Service Conflict
+
+* **Problem**: A native PostgreSQL installed via `brew`, `apt`, `dnf`, `choco`, or the official installer binds to `127.0.0.1:5432`, intercepting connections intended for the Podman container's PostgreSQL. This causes `FATAL: role "arcclaw" does not exist` errors because the native instance doesn't have the ArcClaw user.
+* **Detection**: Run `lsof -i :5432`. If you see both `gvproxy` (Podman gateway) and `postgres` (native), you have a conflict.
+* **Fix (macOS/Homebrew)**:
+  ```bash
+  brew services stop postgresql@16
+  brew uninstall postgresql@16
+  rm -rf /opt/homebrew/var/postgresql@16
+  ```
+* **Fix (Linux/apt)**:
+  ```bash
+  sudo systemctl stop postgresql
+  sudo apt remove postgresql
+  ```
+* **Fix (Windows)**:
+  ```powershell
+  net stop postgresql-x64-16
+  # Or uninstall via "Add or Remove Programs"
+  ```
+* **Verification**: Run `mise run jar:pg -- serve` and check `psql -h 127.0.0.1 -U arcclaw -d arcclaw -c "SELECT 1;"` succeeds.
 
 ## 5. Adding a New LLM Provider
 

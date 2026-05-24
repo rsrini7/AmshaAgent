@@ -118,9 +118,7 @@ public class SystemPromptBuilder {
 
         String strictBinding = buildStrictBinding(context, roleEnum, agentRole, isCompact, goal, isSimpleChitchat);
 
-        String securityPrompt = (isCompact || isSimpleChitchat) 
-                ? PromptInstructionLibrary.COMPACT_SECURITY_RULES_PROMPT 
-                : PromptInstructionLibrary.SECURITY_RULES_PROMPT;
+        String securityPrompt = instructionLibrary.getSecurityRules(isCompact || isSimpleChitchat);
         
         if (isCompact && !isSimpleChitchat) {
             List<String> toolNames = sharedSectionBuilder.getAvailableToolNames(context, roleEnum);

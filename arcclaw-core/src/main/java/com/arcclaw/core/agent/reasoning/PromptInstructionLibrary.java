@@ -3,6 +3,10 @@ package com.arcclaw.core.agent.reasoning;
 import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+import com.arcclaw.core.agent.reasoning.prompt.PromptConstants;
+import com.arcclaw.core.agent.reasoning.prompt.PromptRegistry;
 
 /**
  * Repository of large system prompt instruction blocks.
@@ -10,6 +14,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class PromptInstructionLibrary {
 
+    @Inject
+    PromptRegistry promptRegistry;
+
+    @Deprecated
     public static final String SECURITY_RULES_PROMPT = """
             MEMORY STATE AWARENESS:
             If a user asks whether "compaction is done" or "was memory compacted",
@@ -339,6 +347,7 @@ public class PromptInstructionLibrary {
               are NOT tool names; they are values for the 'agent' parameter.
             """;
 
+    @Deprecated
     public static final String COMPACT_SECURITY_RULES_PROMPT = """
         CRITICAL OPERATIONAL RULES:
         1. NO reasoning narration. Respond with tool call OR final answer text only. NEVER output raw tool-call JSON inside text.
@@ -402,5 +411,11 @@ public class PromptInstructionLibrary {
         sb.append("    - DO NOT delegate to 'saraswati' when execution is part of the goal. Researcher cannot execute code.\n");
         sb.append("    Example: \"Find feature X, write demo, execute it\" -> delegate to brahma for full chain.\n");
         return sb.toString();
+    }
+
+    public String getSecurityRules(boolean compact) {
+        String key = compact ? PromptConstants.KEY_COMPACT_SECURITY_RULES : PromptConstants.KEY_SECURITY_RULES;
+        String fallback = compact ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
+        return promptRegistry.get(PromptConstants.ROLE_CORE, key, fallback);
     }
 }

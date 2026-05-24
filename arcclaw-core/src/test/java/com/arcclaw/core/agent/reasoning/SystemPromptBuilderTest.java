@@ -18,6 +18,7 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.agent.IntentClassificationService;
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
 import com.arcclaw.core.agent.persona.AgentPersonaRegistry;
+import com.arcclaw.core.agent.reasoning.prompt.PromptRegistry;
 import com.arcclaw.core.agent.role.CapabilityRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
@@ -58,11 +59,18 @@ class SystemPromptBuilderTest {
 
     SystemPromptBuilder builder;
 
+    PromptRegistry promptRegistry;
+
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
+        promptRegistry = new PromptRegistry() {
+            @Override public String get(String r, String s) { return null; }
+            @Override public String get(String r, String s, String f) { return f; }
+        };
         sharedSectionBuilder = new PromptSectionBuilder(toolRegistry, capabilityRegistry);
         instructionLibrary = new PromptInstructionLibrary();
+        setField(instructionLibrary, "promptRegistry", promptRegistry);
 
         builder = new SystemPromptBuilder(128000, false, null, rolePromptSections,
                 sharedSectionBuilder, instructionLibrary, agentPersonaRegistry,

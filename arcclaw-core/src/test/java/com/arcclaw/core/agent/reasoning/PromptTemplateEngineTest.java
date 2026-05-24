@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Optional;
 
+import com.arcclaw.core.agent.reasoning.prompt.PromptRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -26,6 +27,11 @@ class PromptTemplateEngineTest {
         engine = new PromptTemplateEngine();
         engine.toolRegistry = mock(ToolRegistry.class);
         when(engine.toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
+        engine.promptRegistry = new PromptRegistry() {
+            @Override public String get(String roleId, String sectionKey) { return null; }
+            @Override public String get(String roleId, String sectionKey, String fallback) { return fallback; }
+        };
+        engine.engine = Engine.builder().addDefaults().build();
         // Standalone Qute engine with defaults (which includes Map and Reflection resolvers)
         quteEngine = Engine.builder()
             .addDefaults()

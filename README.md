@@ -30,12 +30,12 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 ### Key Capabilities
 
 - **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, OMLX, or local Ollama models
-- **Twelve specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
+- **Twelve specialist agent personas** with per-role tool schemas, Qute-rendered system prompts (backed by versioned multi-database `PromptRegistry` with runtime admin API), and iteration caps
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `garuda` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
 - **Reflex system** - 17 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
-- **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
+- **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes. System prompts, agent skills, cron schedules, and audit events all use this pattern.
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation, with namespace and direct-execution fallbacks
 - **Web search tools** - Brave Search and Serper API integration for real-time information retrieval
 - **Code execution** - `sandbox_exec` tool for running Python, Java, Node.js, and Go in isolated containers, with auto-heal: sandbox failures are automatically routed to Shiva (debugger) for self-correction before surfacing errors

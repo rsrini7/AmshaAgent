@@ -174,7 +174,7 @@ warning is forever suppressed. The ordering is: check → log → CAS, never CAS
 - Internal role identity is the role name, not deity display text.
 - Alias handling belongs in parsing/resolution code, not scattered across business logic.
 - Template selection over roles must remain exhaustive.
-- **P82 Data-Driven Personas:** Agent personas are collapsed into the `DefaultAgent` implementation. System prompts MUST be loaded from `src/main/resources/templates/personas/{role}.txt` via Qute. Class-per-persona inheritance is FORBIDDEN.
+- **P82 Data-Driven Personas:** Agent personas are collapsed into the `DefaultAgent` implementation. System prompts are loaded from the multi-backend `PromptRegistry` (SQLite/PostgreSQL/Filesystem), which auto-seeds from `src/main/resources/templates/` on first startup and supports runtime edits via `PUT /admin/prompts/{id}`. Class-per-persona inheritance is FORBIDDEN.
 
 
 ### 4.5 Channel plugin contract
