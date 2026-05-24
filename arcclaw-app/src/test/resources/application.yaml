@@ -117,3 +117,6 @@ quarkus:
 "%test":
   arcclaw:
     data-dir: "target/"
+    memory:
+      compaction:
+        api-key: "test-compaction-key-not-real"
