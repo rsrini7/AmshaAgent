@@ -640,6 +640,15 @@ arcclaw-persistence-sqlite/   ← SQLite adapter implementing all persistence po
 │   └── SessionKnowledgeBase    @WorkspaceScoped per-session embedding store
 │
 arcclaw-persistence-fs/       ← Filesystem-based persistence adapter (alternative to SQLite; missing AdvisoryLockPort)
+│   ├── FsMemoryRetrievalAdapter  Lucene BM25 + optional vector hybrid search (RRF)
+│   ├── lucene/
+│   │   └── LuceneIndexManager    Disk-based MMapDirectory index with BM25, kNN, RRF
+│   ├── FsChatMemoryStoreAdapter, FsCheckpointStoreAdapter, FsCronStoreAdapter,
+│   │   FsSecretStoreAdapter, FsSkillStoreAdapter, FsAuditEventStoreAdapter,
+│   │   FsCompactionStoreAdapter, FsPersistenceAdapter, FsLockManager
+│   └── FilesystemFileStore       JSON read/write/list helper with Jackson ObjectMapper
+│   + Config: arcclaw.fs.data-dir, arcclaw.fs.lucene-index-dir, arcclaw.fs.vector-dimension
+│   NOTE: Missing AdvisoryLockPort, no user-scoped isolation (userId ignored)
 │
 arcclaw-persistence-postgres/ ← PostgreSQL persistence adapter (PARTIAL: checkpoint, cron, audit only)
 │   ├── PostgresCheckpointStoreAdapter, PostgresCronStoreAdapter,
@@ -835,9 +844,9 @@ mise run build:fs && mise run jar:fs  # build & run JAR with FS
 **Capabilities by backend:**
 
 | Feature | SQLite | PostgreSQL | Filesystem |
-|---|---|---|---|
-| Full-text search | FTS5 (ranked) | tsvector (ranked) | Basic substring |
-| Vector search | sqlite-vec (RRF) | pgvector (RRF) | Not supported |
+|---|---|---|---|---|
+| Full-text search | FTS5 (ranked) | tsvector (ranked) | Lucene BM25 (ranked) |
+| Vector search | sqlite-vec (RRF) | pgvector (RRF) | Optional — Lucene kNN + EmbeddingModel (RRF) |
 | Session resolution | DB-backed registry | DB-backed registry | UUID v3 fallback |
 | HITL approvals | ✅ | ✅ | Not available |
 | WORM audit enforcement | SQL triggers | PL/pgSQL triggers | Best-effort |

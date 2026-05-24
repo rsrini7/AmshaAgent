@@ -90,9 +90,38 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   5. Verify the resolved object has the expected methods via `getMethod()` before using
 * **Verification**: Run the app and grep the log for `[MCP] BeanManager returned N beans total`. If `N` is < 10, bean resolution is broken.
 
----
+### 2.7 Filesystem Backend + Lucene Memory Retrieval
 
-## 3. Generic Coding Principles
+* **Structure**: The filesystem persistence backend (`arcclaw-persistence-fs`) replaces `MemoryRetrievalPort`'s naive `HashMap` + `String.contains()` with a disk-based Lucene index (`LuceneIndexManager`) for BM25 full-text and optional vector kNN search.
+* **Architecture**:
+  * JSON files remain the **source of truth** under `{dataDir}/memory-index/*.json`
+  * Lucene index under `{dataDir}/lucene-index/` is a **derived index**, rebuilt from JSON on startup via `rebuildFromJson()`
+  * Vector search is optional — governed by `Instance<EmbeddingModel>` availability. If the `EmbeddingModel` CDI bean is unsatisfied or dimension mismatches, FS degrades to BM25-only.
+  * Hybrid search merges BM25 + vector results via Reciprocal Rank Fusion (RRF, k=60).
+* **Lucene Document Schema**:
+  * `id` (`StringField`, stored) — unique document ID
+  * `content` (`TextField`, stored + indexed) — BM25 search body
+  * `metadata_json` (`StoredField`) — JSON-serialized metadata (retrievable, not indexed)
+  * `timestamp` (`LongPoint` + `StoredField`) — time-based filtering
+  * `embedding` (`KnnFloatVectorField`, COSINE) — optional vector for kNN search
+* **Configuration** (`arcclaw.fs.*`):
+  * `data-dir` — root data directory (default: `./arcclaw-data`)
+  * `lucene-index-dir` — Lucene index subdirectory (default: `lucene-index`; absolute paths supported)
+  * `vector-dimension` — expected embedding dimension (default: `768`; validated at runtime)
+* **Lifecycle**: `@PostConstruct init()` creates `LuceneIndexManager` + rebuilds from JSON; `@PreDestroy destroy()` closes the Lucene `IndexWriter` and `MMapDirectory`.
+* **Extending**: To change indexing behavior:
+  1. Modify `LuceneIndexManager.index()` for document schema changes
+  2. Modify `LuceneIndexManager.searchBM25()` / `searchVector()` for ranking changes
+  3. All retrieval operations go through `MemoryRetrievalPort` — the adapter pattern is unchanged
+
+### 2.8 ToolSearchIndex (Dynamic Tool Discovery)
+
+* **Structure**: `ToolSearchIndex` (`arcclaw-core/.../tools/search/`) is an in-memory Lucene index (`ByteBuffersDirectory`) over all registered agent tools. It indexes tool `name` (StringField) and `description` (TextField) for BM25 relevance matching.
+* **Integration**: Wired into `ReasoningMessageAssembler.resolveTools()` to **reorder** (not filter) `ToolSpecification` objects by relevance to the user's goal. All permitted tools remain available — relevant ones are listed first.
+* **Query Safety**: On `ParseException` (e.g., `[ref:...]` brackets in goal text), falls back to `QueryParser.escape()` before retrying. Returns empty on total parse failure.
+* **Lifecycle**: Rebuilt on startup via `@PostConstruct`. Can be hot-reloaded via public `rebuild()` method.
+
+---
 
 ### 3.1 No Hardcoded Tool Name Strings
 * **Rule**: Never use hardcoded strings like `"sandbox_exec"`, `"github"`, `"schedule_task"`, etc. in Java code logic. Always reference the canonical name via `ToolCapability.ENUM.toolName()`.
