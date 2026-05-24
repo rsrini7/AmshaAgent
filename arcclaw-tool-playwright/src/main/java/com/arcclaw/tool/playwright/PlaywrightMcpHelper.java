@@ -3,10 +3,11 @@ package com.arcclaw.tool.playwright;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Any;
-import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
@@ -23,8 +24,8 @@ public class PlaywrightMcpHelper {
 
     private static final String MCP_SERVER_NAME = "playwright";
 
-    @Inject @Any
-    Instance<Object> allBeans;
+    @Inject
+    BeanManager beanManager;
 
     @Inject
     ObjectMapper objectMapper;
@@ -46,42 +47,59 @@ public class PlaywrightMcpHelper {
         return mcpEnabled && connected;
     }
 
+    @SuppressWarnings("unchecked")
     private Object resolveService() {
         if (mcpService != null) return mcpService;
-        for (Object bean : allBeans) {
-            try {
-                bean.getClass().getMethod("connectStdio", String.class, String.class, List.class, Map.class);
-                mcpService = bean;
-                return bean;
-            } catch (NoSuchMethodException e) {
-                // not the MCP service — skip
+        Set<Bean<?>> beans = beanManager.getBeans(Object.class);
+        log.infof("[MCP] BeanManager returned %d beans total", beans.size());
+        for (Bean<?> bean : beans) {
+            String className = bean.getBeanClass().getName();
+            if (className.contains("McpClientService")) {
+                log.infof("[MCP] Found bean by class name: %s", className);
+                try {
+                    Bean<Object> typed = (Bean<Object>) bean;
+                    Object ref = beanManager.getReference(typed, typed.getBeanClass(),
+                            beanManager.createCreationalContext(typed));
+                    ref.getClass().getMethod("connectStdio", String.class, String.class, List.class, Map.class);
+                    mcpService = ref;
+                    log.infof("[MCP] Resolved McpClientService via BeanManager: %s", className);
+                    return ref;
+                } catch (NoSuchMethodException e) {
+                    log.warnf("[MCP] Bean %s matched name but has no connectStdio method", className);
+                } catch (Exception e) {
+                    log.warnf("[MCP] Error resolving McpClientService: %s", LogUtil.rootMessage(e));
+                }
             }
         }
+        log.infof("[MCP] McpClientService not found in %d beans", beans.size());
         return null;
     }
 
     public void ensureConnected() {
         if (!mcpEnabled || attempted) return;
         attempted = true;
+        log.infof("[MCP] mcpEnabled=%s, command=%s, args=%s", mcpEnabled, mcpCommand, mcpArgsRaw);
         Object service = resolveService();
         if (service == null) {
-            log.debug("McpClientService not found — MCP disabled");
+            log.info("[MCP] McpClientService not available — MCP path unavailable, will use CLI");
             return;
         }
+        log.infof("[MCP] Connecting to Playwright MCP Server: %s %s", mcpCommand, parseArgs(mcpArgsRaw));
         try {
             var method = service.getClass().getMethod("connectStdio",
                     String.class, String.class, List.class, Map.class);
             method.invoke(service, MCP_SERVER_NAME, mcpCommand, parseArgs(mcpArgsRaw), Map.of());
             connected = true;
-            log.info("Playwright MCP Server connected");
+            log.info("[MCP] Playwright MCP Server connected successfully");
         } catch (Exception e) {
-            log.warnf("MCP connection failed, will use CLI: %s", LogUtil.rootMessage(e));
+            log.warnf("[MCP] Connection to Playwright MCP Server failed, will use CLI: %s", LogUtil.rootMessage(e));
         }
     }
 
     public ToolResponse invoke(ToolExecutionContext ctx, Map<String, Object> params) {
         Object service = resolveService();
         if (service == null) {
+            log.warn("[MCP] invoke() called but McpClientService not available");
             throw new RuntimeException("McpClientService not available");
         }
         try {
@@ -90,19 +108,26 @@ public class PlaywrightMcpHelper {
             if (mcpTool == null) {
                 return ToolResponse.failure(400, "Unsupported action for MCP: " + action);
             }
+            log.infof("[MCP] Invoking tool: %s → MCP %s", action, mcpTool);
             var invoke = service.getClass().getMethod("invoke", String.class, String.class, String.class);
             String paramsJson = objectMapper.writeValueAsString(params);
             String result = (String) invoke.invoke(service, MCP_SERVER_NAME, mcpTool, paramsJson);
+            log.infof("[MCP] Tool %s succeeded (%d chars)", mcpTool, result != null ? result.length() : 0);
             return ToolResponse.success(result);
         } catch (Exception e) {
+            log.warnf("[MCP] Tool invocation failed: %s", LogUtil.rootMessage(e));
             throw new RuntimeException("MCP invocation failed", e);
         }
     }
 
+    /**
+     * Maps ArcClaw action names to official Playwright MCP tool names.
+     * extract_text maps to browser_navigate which returns page text content,
+     * not browser_snapshot (which returns a minimal accessibility tree).
+     */
     private static String toMcpToolName(String action) {
         return switch (action) {
-            case "navigate" -> "browser_navigate";
-            case "extract_text" -> "browser_snapshot";
+            case "navigate", "extract_text" -> "browser_navigate";
             case "screenshot" -> "browser_take_screenshot";
             case "click" -> "browser_click";
             case "fill" -> "browser_type";
