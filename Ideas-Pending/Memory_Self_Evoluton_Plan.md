@@ -15,14 +15,13 @@
 4. [Tiered Memory Design (MemGPT-Style)](#4-tiered-memory-design-memgpt-style)
 5. [Self-Evolution Design (Hermes-Style)](#5-self-evolution-design-hermes-style)
 6. [Pluggable Backend SPI](#6-pluggable-backend-spi)
-7. [Migration Strategy](#7-migration-strategy)
-8. [Agent-Facing Memory Tools](#8-agent-facing-memory-tools)
-9. [Integration Points with Existing Code](#9-integration-points-with-existing-code)
-10. [Implementation Phases](#10-implementation-phases)
-11. [Data Flow & Lifecycle](#11-data-flow--lifecycle)
-12. [Configuration](#12-configuration)
-13. [Risks & Mitigations](#13-risks--mitigations)
-14. [Verification Plan](#14-verification-plan)
+7. [Agent-Facing Memory Tools](#7-agent-facing-memory-tools)
+8. [Integration Points with Existing Code](#8-integration-points-with-existing-code)
+9. [Implementation Phases](#9-implementation-phases)
+10. [Data Flow & Lifecycle](#10-data-flow--lifecycle)
+11. [Configuration](#11-configuration)
+12. [Risks & Mitigations](#12-risks--mitigations)
+13. [Verification Plan](#13-verification-plan)
 
 ---
 
@@ -631,57 +630,9 @@ The existing `MemoryRetrievalPort` is designed for generic text/vector search. T
 
 ---
 
-## 7. Migration Strategy
+## 7. Agent-Facing Memory Tools
 
-### 7.1 Existing Data Migration
-
-When enabling Recall Memory for the first time:
-
-| Existing Data | Migration Action | Notes |
-|---|---|---|
-| `compaction_summary` table rows | Import as `COMPACTION_SUMMARY` records in Recall | Preserves historical summaries |
-| `PersistentChatMemoryStore` JSON blobs | No migration possible | Raw messages already destroyed; only current rolling window remains |
-| `MemoryRetrievalPort` indexed chunks | Re-index as `ArchivalChunk` with typed schema | Automated migration script updates schema |
-
-**Limitation:** Historical raw messages (pre-Recall enablement) are permanently lost. Only compaction summaries survive. This is acceptable because the pain point is *future* data loss, not historical recovery.
-
-### 7.2 Feature Flag Rollout
-
-```yaml
-# Phase 0: Core Memory only
-arcclaw.memory.tiered.core-memory.enabled: true
-arcclaw.memory.tiered.recall.enabled: false
-arcclaw.memory.tiered.archival.enabled: false
-arcclaw.self-evolve.enabled: false
-
-# Phase 1: Enable Recall (after testing)
-arcclaw.memory.tiered.recall.enabled: true
-
-# Phase 2: Enable Archival
-arcclaw.memory.tiered.archival.enabled: true
-
-# Phase 3: Enable Self-Evolution
-arcclaw.self-evolve.enabled: true
-```
-
-Each tier is independently toggleable. Disabling a tier falls back to the previous behavior:
-- Recall disabled → compaction destroys messages (current behavior)
-- Archival disabled → `MemoryRetrievalPort` continues working as before
-- Self-evolve disabled → no event buffering or directive synthesis
-
-### 7.3 Rollback Plan
-
-If a tier causes issues:
-
-1. **Immediate rollback:** Set `enabled: false` in config and restart. No data loss.
-2. **Data preservation:** Disabled tiers retain their data; re-enabling restores functionality.
-3. **Partial rollback:** Individual tiers can be disabled without affecting others.
-
----
-
-## 8. Agent-Facing Memory Tools
-
-### 8.1 Tool Catalog
+### 7.1 Tool Catalog
 
 | Tool Name | Tier | Roles | Description |
 |---|---|---|---|
@@ -693,7 +644,7 @@ If a tier causes issues:
 | `archival_memory_insert` | Archival | coordinator, synthesizer | Insert an explicit chunk into archival. Controlled; requires approval for non-coordinator roles. |
 | `self_evolve_reflect` | Self-Evolve | coordinator, architect | Trigger synthesis of behavioral directives from recent traces. Heavy operation. |
 
-### 8.2 Tool Implementation Pattern
+### 7.2 Tool Implementation Pattern
 
 Each tool follows existing ArcClaw patterns:
 ```java
@@ -707,7 +658,7 @@ public class RecallMemorySearchTool implements AgentTool {
 }
 ```
 
-### 8.3 Write Governance
+### 7.3 Write Governance
 
 Following the MemGPT-Style.md advice, writes are tightly controlled:
 
@@ -725,9 +676,9 @@ Following the MemGPT-Style.md advice, writes are tightly controlled:
 
 ---
 
-## 9. Integration Points with Existing Code
+## 8. Integration Points with Existing Code
 
-### 9.1 CompactionService → Recall Memory Bridge
+### 8.1 CompactionService → Recall Memory Bridge
 
 **Change:** Before compaction destroys messages, persist them all to Recall Memory.
 
@@ -745,7 +696,7 @@ for (ChatMessage msg : toCompact) {
 
 **Result:** Compaction still reduces context window size (toKeep messages), but the destroyed messages are now retrievable via `recall_memory_search`.
 
-### 9.2 ChatHistoryAssembler → Core Memory Injection
+### 8.2 ChatHistoryAssembler → Core Memory Injection
 
 **Change:** `ChatHistoryAssembler.assemble()` prepends Core Memory block to the conversation.
 
@@ -774,7 +725,7 @@ if (!directives.stableDirectives().isEmpty()) {
 messages.addAll(historyMessages);
 ```
 
-### 9.3 ReasoningMessageAssembler → Directives & Memory Context
+### 8.3 ReasoningMessageAssembler → Directives & Memory Context
 
 **Change:** The assembler filters/processes the directives and memory blocks added by ChatHistoryAssembler.
 
@@ -782,7 +733,7 @@ messages.addAll(historyMessages);
 - Core Memory block: passed through (it's informational context, not instructions).
 - Behavioral directives: filtered for relevance to current goal using `ToolSearchIndex`-style keyword matching.
 
-### 9.4 PersistentChatMemoryStore → Recall Memory Dual-Write
+### 8.4 PersistentChatMemoryStore → Recall Memory Dual-Write
 
 **Change:** `PersistentChatMemoryStore.updateMessages()` also writes to Recall Memory.
 
@@ -798,7 +749,7 @@ public void updateMessages(Object memoryId, List<ChatMessage> messages) {
 }
 ```
 
-### 9.5 AgentDispatchHandler → Self-Evolution Event Emission
+### 8.5 AgentDispatchHandler → Self-Evolution Event Emission
 
 **Change:** After each agent reasoning step and tool execution, emit an `EvolutionEvent` into the `ConversationBuffer`.
 
@@ -812,7 +763,7 @@ selfEvolveService.append(new EvolutionEvent(
 ));
 ```
 
-### 9.6 Existing MemorySearchTool → Refactored
+### 8.6 Existing MemorySearchTool → Refactored
 
 **Change:** Split `MemorySearchTool` into `RecallMemorySearchTool` and `ArchivalMemorySearchTool`.
 
@@ -822,9 +773,9 @@ selfEvolveService.append(new EvolutionEvent(
 
 ---
 
-## 10. Implementation Phases
+## 9. Implementation Phases
 
-### 10.1 Phase 0: SPI Foundation (Week 1-2)
+### 9.1 Phase 0: SPI Foundation (Week 1-2)
 
 **Goal:** TieredMemoryStore interface + SQLite backend + Core Memory service.
 
@@ -839,7 +790,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **No agent tools yet.** Validation: Core Memory is persisted and can be read via service call.
 
-### 10.2 Phase 1: Recall Memory (Week 2-3)
+### 9.2 Phase 1: Recall Memory (Week 2-3)
 
 **Goal:** FTS5-backed exact message persistence + search.
 
@@ -855,7 +806,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **Rollback plan:** Feature-gated behind `arcclaw.memory.tiered.recall-enabled` (default `false`). Disabling restores current compaction-only behavior.
 
-### 10.3 Phase 2: Archival Memory (Week 3-5)
+### 9.3 Phase 2: Archival Memory (Week 3-5)
 
 **Goal:** Semantic + BM25 hybrid search with typed chunk storage.
 
@@ -870,7 +821,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **Reuse:** The existing Lucene/sqlite-vec/pgvector pipelines from `MemoryRetrievalPort` implementations are leveraged directly. This phase adds typed schemas and promotion logic on top.
 
-### 10.4 Phase 3: Self-Evolution (Week 5-8)
+### 9.4 Phase 3: Self-Evolution (Week 5-8)
 
 **Goal:** Closed-loop agent improvement from execution traces.
 
@@ -888,7 +839,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **Feature gate:** `arcclaw.self-evolve.enabled` (default `false`). Entire pipeline is opt-in.
 
-### 10.5 Phase 4: Postgres & FS Backends (Week 8-9)
+### 9.5 Phase 4: Postgres & FS Backends (Week 8-9)
 
 **Goal:** Parity across all three persistence backends.
 
@@ -896,10 +847,9 @@ selfEvolveService.append(new EvolutionEvent(
 1. `PostgresTieredMemoryStore` — Core (JDBI), Recall (tsvector/GIN), Archival (pgvector).
 2. `FsTieredMemoryStore` — Core (JSON), Recall (Lucene BM25), Archival (Lucene + embeddings).
 3. Backend selector: `@IfBuildProfile` or CDI producer selecting one active backend.
-4. Migration path: existing SQLite/PG/FS users continue with their current backend.
-5. Backend-specific integration tests.
+4. Backend-specific integration tests.
 
-### 10.6 Phase 5: Polish & Hardening (Week 10-12)
+### 9.6 Phase 5: Polish & Hardening (Week 10-12)
 
 **Deliverables:**
 1. Performance benchmarking: FTS5 search latency under 100K messages.
@@ -912,9 +862,9 @@ selfEvolveService.append(new EvolutionEvent(
 
 ---
 
-## 11. Data Flow & Lifecycle
+## 10. Data Flow & Lifecycle
 
-### 11.1 Complete Request Flow (with Tiered Memory)
+### 10.1 Complete Request Flow (with Tiered Memory)
 
 ```
 1. User sends message
@@ -954,7 +904,7 @@ selfEvolveService.append(new EvolutionEvent(
         └─ MemoryExtractorLite.extract() → upsert to Archival
 ```
 
-### 11.2 Compaction Summary Lifecycle (Transition)
+### 10.2 Compaction Summary Lifecycle (Transition)
 
 ```
 BEFORE (Current):
@@ -969,7 +919,7 @@ AFTER (New):
   (Original messages searchable via FTS5; summary available as curated record)
 ```
 
-### 11.3 Self-Evolution Directive Lifecycle
+### 10.3 Self-Evolution Directive Lifecycle
 
 ```
 1. [During Session] EvolutionEvents accumulate in ConversationBuffer
@@ -983,9 +933,9 @@ AFTER (New):
 
 ---
 
-## 12. Configuration
+## 11. Configuration
 
-### 12.1 application.yaml
+### 11.1 application.yaml
 
 ```yaml
 arcclaw:
@@ -1022,7 +972,7 @@ arcclaw:
       idle-ms: ${ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS:300000}
 ```
 
-### 12.2 .env.example (New Entries)
+### 11.2 .env.example (New Entries)
 
 ```bash
 # ── Tiered Memory ───────────────────────────────────────
@@ -1044,7 +994,7 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 
 ---
 
-## 13. Risks & Mitigations
+## 12. Risks & Mitigations
 
 | Risk | Severity | Mitigation |
 |---|---|---|
@@ -1059,9 +1009,9 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 
 ---
 
-## 14. Verification Plan
+## 13. Verification Plan
 
-### 14.1 Phase 0 — Core Memory
+### 13.1 Phase 0 — Core Memory
 
 ```bash
 # Unit tests
@@ -1073,7 +1023,7 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 3. Verify system message contains [USER CONTEXT] with block content
 ```
 
-### 14.2 Phase 1 — Recall Memory
+### 13.2 Phase 1 — Recall Memory
 
 ```bash
 # Unit tests
@@ -1092,7 +1042,7 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 3. Verify has_code/has_error filtering works correctly
 ```
 
-### 14.3 Phase 2 — Archival Memory
+### 13.3 Phase 2 — Archival Memory
 
 ```bash
 # Verify hybrid search returns relevant chunks
@@ -1109,7 +1059,7 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 3. Verify RRF fusion produces better results than BM25-only or vector-only
 ```
 
-### 14.4 Phase 3 — Self-Evolution
+### 13.4 Phase 3 — Self-Evolution
 
 ```bash
 # Unit tests
@@ -1128,7 +1078,7 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 2. Measure DEEP (LLM) synthesis latency (expect 2-5s, acceptable for offline operation)
 ```
 
-### 14.5 Cross-Cutting
+### 13.5 Cross-Cutting
 
 ```bash
 # Full project compilation
@@ -1179,7 +1129,7 @@ arcclaw-self-evolve does NOT depend on:
 
 3. **Should the self-evolution pipeline use the same LLM as the agent or a cheaper model?** Current design: uses compaction LLM provider (configurable separately). Can be a cheaper/faster model since directive synthesis is a batch operation.
 
-4. **What happens to existing compaction summaries when Recall Memory is enabled?** Migration: existing compaction summaries are imported as `COMPACTION_SUMMARY` records into Recall. Historical raw messages are lost (pre-existing condition, no recovery possible).
+4. **What happens to existing compaction summaries when Recall Memory is enabled?** No migration required — ArcClaw is still in development. Existing stores (SQLite, PostgreSQL, or Filesystem) can be deleted and recreated with new schemas. This is a greenfield enhancement, not a migration.
 
 5. **Should Archival Memory support cross-user sharing?** Current design: no. All tiers are user-scoped with tenant isolation. Cross-user sharing (team knowledge base) is a future enhancement.
 
@@ -1191,6 +1141,6 @@ arcclaw-self-evolve does NOT depend on:
 
 ---
 
-**Document Version:** 1.1-revised
-**Changes from 1.0:** Added P1/P2 distinction clarification, real-time search architecture details, Migration Strategy section, SelfEvolveStore vs TieredMemoryStore clarification, performance benchmarks in verification plan, and 3 new open questions.
+**Document Version:** 1.2-no-migration
+**Changes from 1.1:** Removed Migration Strategy section entirely (Section 7 deleted). ArcClaw is still in development — no migration needed. All existing stores (SQLite/PostgreSQL/Filesystem) can be deleted and recreated with new schemas. Renumbered all subsequent sections (now 13 total). Updated open question #4 to reflect no-migration approach.
 **Next Step:** Review with team, resolve open questions, begin Phase 0 implementation.
