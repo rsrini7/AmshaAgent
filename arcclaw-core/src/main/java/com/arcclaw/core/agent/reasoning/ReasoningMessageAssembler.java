@@ -1,6 +1,7 @@
 package com.arcclaw.core.agent.reasoning;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -15,6 +16,7 @@ import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
+import com.arcclaw.core.tools.search.ToolSearchIndex;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -32,8 +34,13 @@ public class ReasoningMessageAssembler {
 
     private static final Logger log = Logger.getLogger(ReasoningMessageAssembler.class);
 
+    private static final int TOOL_SEARCH_TOP_K = 12;
+
     private final ChatHistoryAssembler historyAssembler;
     private final ToolRegistry toolRegistry;
+
+    @Inject
+    ToolSearchIndex toolSearchIndex;
 
     @Inject
     public ReasoningMessageAssembler(ChatHistoryAssembler historyAssembler,
@@ -101,7 +108,7 @@ public class ReasoningMessageAssembler {
             context.autonomyLevel() == AutonomyLevel.BACKGROUND
             || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
  
-        List<ToolSpecification> toolSpecifications = resolveTools(allowedTools, isSimpleChitchat, context.isForceFinishRetry(), isBackgroundSession);
+        List<ToolSpecification> toolSpecifications = resolveTools(allowedTools, isSimpleChitchat, context.isForceFinishRetry(), isBackgroundSession, goal);
 
         log.debugf("[ReasoningAssembler] Assembled %d messages and %d tools for session %s",
                 messages.size(), toolSpecifications.size(), sessionId);
@@ -146,12 +153,25 @@ public class ReasoningMessageAssembler {
         return filteredAssembled;
     }
 
-    private List<ToolSpecification> resolveTools(Set<String> allowedTools, boolean isSimpleChitchat, boolean isForceFinishRetry, boolean isBackgroundSession) {
+    private List<ToolSpecification> resolveTools(Set<String> allowedTools, boolean isSimpleChitchat, boolean isForceFinishRetry, boolean isBackgroundSession, String goal) {
         if (isSimpleChitchat || isForceFinishRetry) {
             return List.of();
         }
+
+        Set<String> relevantTools = allowedTools;
+        if (toolSearchIndex != null && goal != null && !goal.isBlank()) {
+            List<String> searchResults = toolSearchIndex.search(goal, TOOL_SEARCH_TOP_K);
+            if (!searchResults.isEmpty()) {
+                Set<String> filtered = new HashSet<>(searchResults);
+                filtered.retainAll(allowedTools);
+                if (!filtered.isEmpty()) {
+                    relevantTools = filtered;
+                }
+            }
+        }
+
         return toolRegistry.listTools().stream()
-                .filter(allowedTools::contains)
+                .filter(relevantTools::contains)
                 .filter(name -> !isBackgroundSession || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
                         && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
