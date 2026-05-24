@@ -100,7 +100,14 @@ public class ToolSearchIndex {
             var parser = new MultiFieldQueryParser(fields, analyzer, Map.of());
             parser.setDefaultOperator(QueryParser.Operator.OR);
 
-            Query luceneQuery = parser.parse(query);
+            String text = query;
+            Query luceneQuery;
+            try {
+                luceneQuery = parser.parse(text);
+            } catch (ParseException e) {
+                text = QueryParser.escape(query);
+                luceneQuery = parser.parse(text);
+            }
             ScoreDoc[] hits = searcher.search(luceneQuery, maxResults).scoreDocs;
 
             List<String> results = new ArrayList<>(hits.length);
