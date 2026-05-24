@@ -243,6 +243,8 @@ smallrye:
         level: INFO
       "io.quarkus.opentelemetry.runtime.exporter.otlp":
         level: ERROR      # suppress connection-refused noise when collector is down
+      "io.quarkus.opentelemetry.runtime.exporter.otlp.sender":
+        level: ERROR      # suppress VertxGrpcSender warnings
       "ja.la.ProcessBuilder":
         level: INFO
       "java.lang.ProcessBuilder":
