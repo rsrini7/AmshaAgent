@@ -323,6 +323,19 @@ public class PlaywrightCliTool implements AgentTool {
     }
 
     private String execWithSession(String session, String command, String... args) {
+        try {
+            return execWithSessionOnce(session, command, args);
+        } catch (Exception e) {
+            // Session may have expired (HITL pause, GC, etc.) — close stale session and retry once
+            if (session != null) {
+                log.debugf("playwright-cli first attempt failed, closing stale session: %s", LogUtil.rootMessage(e));
+                try { execWithSessionOnce(null, "close-session", session); } catch (Exception _) { }
+            }
+            return execWithSessionOnce(session, command, args);
+        }
+    }
+
+    private String execWithSessionOnce(String session, String command, String... args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("playwright-cli");
         if (session != null) {
@@ -338,7 +351,6 @@ public class PlaywrightCliTool implements AgentTool {
             String output = new String(process.getInputStream().readAllBytes());
             int exit = process.waitFor();
             if (exit != 0) {
-                // Trim long daemon stacktraces — first line has the useful error info
                 String firstLine = output.lines().findFirst().orElse(output.trim());
                 throw new RuntimeException("playwright-cli exit " + exit + ": " + firstLine);
             }
