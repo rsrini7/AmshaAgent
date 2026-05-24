@@ -12,7 +12,9 @@ public class ParseabilityOutputGuard implements PostLlmGuard {
     @Override
     public GuardDecision validate(String sessionId, String userId, String userMessage, String llmResponse) {
         if (llmResponse == null || llmResponse.isBlank()) {
-            return new GuardDecision.Retry("LLM returned empty response", null);
+            // Tool-only responses (AiMessage with toolExecutionRequests but no text)
+            // arrive as null/blank — these are valid, not empty failures.
+            return new GuardDecision.Allow();
         }
 
         if (llmResponse.length() > MAX_RESPONSE_LENGTH) {
