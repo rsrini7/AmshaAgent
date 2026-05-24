@@ -16,6 +16,7 @@ After the GoF State pattern is in place (P1), the next evolution is a full direc
 ### 8. Memory — MemGPT-Style Tiered Context
 
 Refer [Ideas-Pending/MemGPT-Style.md](MemGPT-Style.md)
+Refer [Ideas-Pending/Self-Evolution.md](Self-Evolution.md)
 
 Current `CompactionService` summarization destroys exact details (code snippets, error traces). This is the "Lost in the Middle" problem.
 
