@@ -1,11 +1,9 @@
 # Memory Tiered Architecture & Self-Evolution — Phased Implementation Plan
 
-> **Status:** Revised Implementation Plan (v2.2-implemented)
+> **Status:** v2.2-implemented — Phase 0 ✅ complete (20 files, 3 ISP ports, CDI producer, GraalVM reflection)
 > **Backlog Ref:** `Ideas-Pending/BACKLOG.md` Item #8
 > **Input Docs:** `MemGPT-Style.md`, `Self-Evolution.md`, `Memory_Self_Evoluton_Plan.md` (v1.2), `Memory_self_Review.md`
 > **Date:** 2026-05-24
-> **Key Change:** Clean-build phased approach — no migration, zero-risk progression, workflow preservation
-> **Phase 0 Status:** ✅ COMPLETE — 20 files created, 2 removed, `./mvnw clean compile` passes
 
 ---
 
@@ -15,13 +13,13 @@ Five architecture decisions added to v2.0 based on implementation review:
 
 | # | Decision | Affected Phases | Rationale |
 |---|----------|----------------|-----------|
-| 1 | **Recall dedupe is DB-enforced**, not app-check-based | Phase 2, 15.1 | Application-level checks are race-prone; unique constraints + `INSERT OR IGNORE` guarantee correctness |
-| 2 | **Recall exact search excludes compaction summaries by default** | Phase 3, 5.4 | Summary records pollute exact code/error retrieval; separate `include_summaries` mode for overview queries |
-| 3 | **Archival is tool-first, never unconditional** | Phase 4, 6, 2.3 | `ChatHistoryAssembler` must remain O(1); passive injection only via pre-fetched cache with strict latency bounds |
-| 4 | **SQLite vector writes are serialized** | Phase 5, 13.2 | sqlite-vec is not thread-safe for concurrent writes; serialize ingestion, allow concurrent reads |
-| 5 | **Synthesized directives use shadow lifecycle** | Phase 10, 12.3 | New directives start as `SHADOW`, evaluated without behavior change; promotion to `ACTIVE` requires measurable success |
+| 1 | **Recall dedupe is DB-enforced**, not app-check-based | Phase 2, §16.1 | Application-level checks are race-prone; unique constraints + `INSERT OR IGNORE` guarantee correctness |
+| 2 | **Recall exact search excludes compaction summaries by default** | Phase 3 | Summary records pollute exact code/error retrieval; separate `include_summaries` mode for overview queries |
+| 3 | **Archival is tool-first, never unconditional** | Phases 4, 6 | `ChatHistoryAssembler` must remain O(1); passive injection only via pre-fetched cache with strict latency bounds |
+| 4 | **SQLite vector writes are serialized** | Phase 5, §14.2 | sqlite-vec is not thread-safe for concurrent writes; serialize ingestion, allow concurrent reads |
+| 5 | **Synthesized directives use shadow lifecycle** | Phase 10, §13.3 | New directives start as `SHADOW`, evaluated without behavior change; promotion to `ACTIVE` requires measurable success |
 
-These corrections prevent race conditions, search pollution, prompt bloat, database corruption, and premature directive activation. See [Section 18: v2.1 Tactical Corrections](#18-v21-tactical-corrections) for detailed summary.
+These corrections prevent race conditions, search pollution, prompt bloat, database corruption, and premature directive activation. See [Section 19: v2.1 Tactical Corrections](#19-v21-tactical-corrections) for detailed summary.
 
 ### v2.2 Phase 0 Implementation Refinements
 
@@ -131,7 +129,7 @@ PersistentChatMemoryStore.updateMessages()
     └─ [NEW PHASE 2] RecallMemoryService.insertAsync(...)
 ```
 
-**Idempotency Warning:** Must prevent dual-writing same message from both normal flow and compaction flow. See Section 15.1.
+**Idempotency Warning:** Must prevent dual-writing same message from both normal flow and compaction flow. See Section 16.1.
 
 ### 2.3 Prompt Assembly Flow (Memory Injection)
 
@@ -1181,7 +1179,7 @@ public class SqliteTieredMemoryStore implements CoreMemoryStorePort, RecallMemor
 | Nested Transactions | ⚠️ Limited | ✅ Full | ❌ Not available |
 | Concurrent Vector Writes | ❌ **Must serialize** | ✅ Thread-safe | ⚠️ **Must serialize** |
 
-**v2.1 Note:** SQLite vector writes must be serialized (see Phase 5, Section 7.4). Filesystem backend also requires serialization for embedding writes.
+**v2.1 Note:** SQLite vector writes must be serialized (see Phase 5, Section 8.4). Filesystem backend also requires serialization for embedding writes.
 
 ### 14.3 Degraded Mode Tests
 
@@ -1552,7 +1550,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ### 19.1 Recall Dedupe is DB-Enforced (Not App-Check-Based)
 
-**Affected Phases:** Phase 2, Section 15.1
+**Affected Phases:** Phase 2, Section 16.1
 
 **Change:** Replace application-level `exists(dedupeKey)` checks with database-level unique constraints + `INSERT OR IGNORE` semantics.
 
@@ -1565,7 +1563,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ### 19.2 Recall Exact Search Excludes Compaction Summaries by Default
 
-**Affected Phases:** Phase 3, Section 15.2
+**Affected Phases:** Phase 3, Section 16.2
 
 **Change:** Default `recall_memory_search` queries filter out `message_type = 'COMPACTION_SUMMARY'` records.
 
@@ -1578,7 +1576,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ### 19.3 Archival is Tool-First, Never Unconditional
 
-**Affected Phases:** Phase 4, Phase 6, Section 15.3
+**Affected Phases:** Phase 4, Phase 6, Section 16.3
 
 **Change:** `ChatHistoryAssembler` must not synchronously trigger archival retrieval I/O. Archival results consumed from pre-fetched cache only.
 
@@ -1592,7 +1590,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ### 19.4 SQLite Vector Writes are Serialized
 
-**Affected Phases:** Phase 5, Phase 11, Section 15.4
+**Affected Phases:** Phase 5, Phase 11, Section 16.4
 
 **Change:** Serialize sqlite-vec ingestion via `VectorIngestionService` with semaphore-based write queue.
 
@@ -1606,7 +1604,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ### 19.5 Synthesized Directives Use Shadow Lifecycle
 
-**Affected Phases:** Phase 10, Section 15.5
+**Affected Phases:** Phase 10, Section 16.5
 
 **Change:** New directives start as `CANDIDATE`/`SHADOW`, never directly `ACTIVE`. Shadow directives evaluated with explicit labeling before promotion.
 
