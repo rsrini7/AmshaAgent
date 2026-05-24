@@ -53,7 +53,8 @@ public class EnvConfigInitializer {
                         }
                     }
 
-                    if (System.getenv(key) == null && System.getProperty(key) == null) {
+                    // Last wins — later values override earlier ones (handles duplicate keys)
+                    if (System.getenv(key) == null) {
                         System.setProperty(key, value);
                     }
                 }
