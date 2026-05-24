@@ -1800,8 +1800,61 @@ Get-ChildItem $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/
 # DOCKER COMPOSE TASKS
 # =============================================================================
 
+[tasks."obs:up"]
+description = "Start observability stack: OTel + Jaeger + Phoenix + Prometheus via compose"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+$ErrorActionPreference = 'Stop'
+podman compose up -d otel-collector jaeger phoenix prometheus
+Write-Host '✅  Observability stack started:'
+Write-Host '    Jaeger UI  -> http://localhost:16686'
+Write-Host '    Phoenix UI -> http://localhost:6006'
+Write-Host '    Prometheus -> http://localhost:9090'
+"""
+
+[tasks."obs:jaeger"]
+description = "Start only Jaeger + OTel collector"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose up -d jaeger otel-collector
+Write-Host '✅  Jaeger + OTel collector started. UI: http://localhost:16686'
+"""
+
+[tasks."obs:phoenix"]
+description = "Start only Phoenix + OTel collector (span routing via collector)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose up -d phoenix otel-collector
+Write-Host '✅  Phoenix + OTel collector started. UI: http://localhost:6006'
+"""
+
+[tasks."obs:down"]
+description = "Stop observability stack: OTel + Jaeger + Phoenix + Prometheus"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose down otel-collector jaeger phoenix prometheus
+Write-Host '✅  Observability stack stopped.'
+"""
+
+[tasks."obs:status"]
+description = "Check observability services status"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose ps otel-collector jaeger phoenix prometheus 2>&1
+"""
+
 [tasks."compose:up"]
-description = "Start full observability stack: ArcClaw native + Ollama + OTel + Jaeger + Prometheus"
+description = "Start full stack: ArcClaw native + Ollama + OTel + Jaeger + Phoenix + Prometheus"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1812,11 +1865,12 @@ $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
-docker compose up -d
+podman compose up -d
 Write-Host ''
 Write-Host '✅  Stack started:'
 Write-Host '    ArcClaw REST  -> http://localhost:8080'
 Write-Host '    Jaeger UI     -> http://localhost:16686'
+Write-Host '    Phoenix UI    -> http://localhost:6006'
 Write-Host '    Prometheus    -> http://localhost:9090'
 Write-Host '    Ollama        -> http://localhost:11434'
 """
@@ -1828,7 +1882,7 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-docker compose down
+podman compose down
 Write-Host '✅  Stack stopped. Data volumes preserved.'
 """
 
@@ -1842,7 +1896,7 @@ $ErrorActionPreference = 'Stop'
 Write-Host '⚠️   WARNING: This will permanently delete all data volumes.'
 $confirm = Read-Host 'Type YES to confirm'
 if ($confirm -eq 'YES') {
-    docker compose down -v
+    podman compose down -v
     Write-Host '✅  Stack and volumes removed.'
 } else {
     Write-Host 'Aborted.'
@@ -1854,7 +1908,7 @@ if ($confirm -eq 'YES') {
 description = "Follow live arcclaw container logs (Ctrl+C to stop)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
-run = "docker compose logs -f arcclaw"
+run = "podman compose logs -f arcclaw"
 
 [tasks."compose:restart"]
 description = "Restart only the arcclaw service (observability stack stays up)"
@@ -1863,7 +1917,7 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-docker compose restart arcclaw
+podman compose restart arcclaw
 Write-Host '✅  arcclaw service restarted.'
 """
 
