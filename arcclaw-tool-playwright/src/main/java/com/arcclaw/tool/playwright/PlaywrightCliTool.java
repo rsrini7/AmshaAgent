@@ -16,7 +16,6 @@ import java.util.regex.Pattern;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
@@ -29,7 +28,6 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -73,23 +71,7 @@ public class PlaywrightCliTool implements AgentTool {
     AuditService auditService;
 
     @Inject
-    ObjectMapper objectMapper;
-
-    @Inject
-    Instance<Object> mcpClientService;  // optional — only available when arcclaw-mcp is on classpath
-
-    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-enabled", defaultValue = "false")
-    boolean mcpEnabled;
-
-    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-command", defaultValue = "npx")
-    String mcpCommand;
-
-    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-args", defaultValue = "@playwright/mcp")
-    String mcpArgsRaw;
-
-    private static final String MCP_SERVER_NAME = "playwright";
-    private volatile boolean mcpConnected = false;
-    private volatile boolean mcpAttempted = false;
+    PlaywrightMcpHelper mcpHelper;
 
     private final Set<String> activeSessions = ConcurrentHashMap.newKeySet();
 
@@ -219,15 +201,13 @@ public class PlaywrightCliTool implements AgentTool {
             return ToolResponse.failure(400, "Parameter 'script' is required for action 'eval'.");
         }
 
-        // Try MCP first if enabled
-        if (mcpEnabled) {
-            ensureMcpConnected();
-            if (mcpConnected) {
-                try {
-                    return invokeViaMcp(ctx, params);
-                } catch (Exception e) {
-                    log.warnf("MCP execution failed, falling back to CLI: %s", LogUtil.rootMessage(e));
-                }
+        // Try MCP first if enabled and connected
+        mcpHelper.ensureConnected();
+        if (mcpHelper.isAvailable()) {
+            try {
+                return mcpHelper.invoke(ctx, params);
+            } catch (Exception e) {
+                log.warnf("MCP execution failed, falling back to CLI: %s", LogUtil.rootMessage(e));
             }
         }
 
@@ -444,91 +424,6 @@ public class PlaywrightCliTool implements AgentTool {
             Math.max(sub.lastIndexOf('!'), sub.lastIndexOf('?'))
         );
         return lastSentence > maxLen / 2 ? sub.substring(0, lastSentence + 1) : sub;
-    }
-
-    // ── MCP Server support (optional, requires arcclaw-mcp on classpath) ──────
-    // NOTE: This uses reflection to invoke the MCP transport service, which is not
-    // GraalVM native-image safe without explicit reflection registration.
-    // The MCP transport path is JVM-only unless reflection config is added.
-
-    private void ensureMcpConnected() {
-        if (mcpAttempted) return;
-        mcpAttempted = true;
-        if (!mcpClientService.isResolvable()) {
-            log.debug("McpClientService not available — skipping MCP connection");
-            return;
-        }
-        try {
-            Object service = mcpClientService.get();
-            var connectStdio = service.getClass().getMethod("connectStdio", String.class, String.class, List.class, Map.class);
-            connectStdio.invoke(service, MCP_SERVER_NAME, mcpCommand, parseArgs(mcpArgsRaw), Map.of());
-            mcpConnected = true;
-            log.info("Playwright MCP Server connected successfully");
-        } catch (Exception e) {
-            log.warnf("Failed to connect Playwright MCP Server, will use CLI: %s", LogUtil.rootMessage(e));
-        }
-    }
-
-    private ToolResponse invokeViaMcp(ToolExecutionContext ctx, Map<String, Object> params) {
-        if (!mcpClientService.isResolvable()) {
-            throw new RuntimeException("McpClientService not available");
-        }
-        try {
-            String action = params.getOrDefault("action", "extract_text").toString();
-            String mcpToolName = toMcpToolName(action);
-            if (mcpToolName == null) {
-                return ToolResponse.failure(400, "Unsupported action for MCP: " + action);
-            }
-            Object service = mcpClientService.get();
-            var invoke = service.getClass().getMethod("invoke", String.class, String.class, String.class);
-            String paramsJson = objectMapper.writeValueAsString(params);
-            String result = (String) invoke.invoke(service, MCP_SERVER_NAME, mcpToolName, paramsJson);
-            return ToolResponse.success(result);
-        } catch (Exception e) {
-            throw new RuntimeException("MCP invocation failed", e);
-        }
-    }
-
-    /**
-     * Maps ArcClaw action names to official Playwright MCP tool names.
-     * <p>
-     * Note: extract_text maps to browser_snapshot (structured accessibility
-     * snapshot), not raw DOM innerText. The snapshot is richer but structurally
-     * different — the CLI fallback handles cases where raw text is required.
-     */
-    private static String toMcpToolName(String action) {
-        return switch (action) {
-            case "navigate" -> "browser_navigate";
-            case "extract_text" -> "browser_snapshot";
-            case "screenshot" -> "browser_take_screenshot";
-            case "click" -> "browser_click";
-            case "fill" -> "browser_type";
-            case "wait" -> "browser_wait_for";
-            case "eval" -> "browser_evaluate";
-            default -> null;
-        };
-    }
-
-    private static List<String> parseArgs(String raw) {
-        List<String> args = new ArrayList<>();
-        if (raw == null || raw.isBlank()) return args;
-        boolean inQuote = false;
-        StringBuilder current = new StringBuilder();
-        for (int i = 0; i < raw.length(); i++) {
-            char c = raw.charAt(i);
-            if (c == '"' || c == '\'') {
-                inQuote = !inQuote;
-            } else if (c == ' ' && !inQuote) {
-                if (!current.isEmpty()) {
-                    args.add(current.toString());
-                    current = new StringBuilder();
-                }
-            } else {
-                current.append(c);
-            }
-        }
-        if (!current.isEmpty()) args.add(current.toString());
-        return args;
     }
 
     @PreDestroy
