@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
@@ -15,13 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-/**
- * Optional MCP transport helper for PlaywrightCliTool.
- * <p>
- * Uses reflection to invoke McpClientService so the arcclaw-mcp dependency
- * remains optional. This path is JVM-only — GraalVM native-image requires
- * explicit reflection registration for the MCP transport service methods.
- */
 @ApplicationScoped
 public class PlaywrightMcpHelper {
 
@@ -29,8 +23,8 @@ public class PlaywrightMcpHelper {
 
     private static final String MCP_SERVER_NAME = "playwright";
 
-    @Inject
-    Instance<Object> mcpClientService;
+    @Inject @Any
+    Instance<Object> allBeans;
 
     @Inject
     ObjectMapper objectMapper;
@@ -46,20 +40,35 @@ public class PlaywrightMcpHelper {
 
     private volatile boolean connected = false;
     private volatile boolean attempted = false;
+    private Object mcpService = null;
 
     public boolean isAvailable() {
         return mcpEnabled && connected;
     }
 
+    private Object resolveService() {
+        if (mcpService != null) return mcpService;
+        for (Object bean : allBeans) {
+            try {
+                bean.getClass().getMethod("connectStdio", String.class, String.class, List.class, Map.class);
+                mcpService = bean;
+                return bean;
+            } catch (NoSuchMethodException e) {
+                // not the MCP service — skip
+            }
+        }
+        return null;
+    }
+
     public void ensureConnected() {
         if (!mcpEnabled || attempted) return;
         attempted = true;
-        if (!mcpClientService.isResolvable()) {
-            log.debug("McpClientService not available — MCP disabled");
+        Object service = resolveService();
+        if (service == null) {
+            log.debug("McpClientService not found — MCP disabled");
             return;
         }
         try {
-            Object service = mcpClientService.get();
             var method = service.getClass().getMethod("connectStdio",
                     String.class, String.class, List.class, Map.class);
             method.invoke(service, MCP_SERVER_NAME, mcpCommand, parseArgs(mcpArgsRaw), Map.of());
@@ -71,7 +80,8 @@ public class PlaywrightMcpHelper {
     }
 
     public ToolResponse invoke(ToolExecutionContext ctx, Map<String, Object> params) {
-        if (!mcpClientService.isResolvable()) {
+        Object service = resolveService();
+        if (service == null) {
             throw new RuntimeException("McpClientService not available");
         }
         try {
@@ -80,7 +90,6 @@ public class PlaywrightMcpHelper {
             if (mcpTool == null) {
                 return ToolResponse.failure(400, "Unsupported action for MCP: " + action);
             }
-            Object service = mcpClientService.get();
             var invoke = service.getClass().getMethod("invoke", String.class, String.class, String.class);
             String paramsJson = objectMapper.writeValueAsString(params);
             String result = (String) invoke.invoke(service, MCP_SERVER_NAME, mcpTool, paramsJson);
@@ -90,11 +99,6 @@ public class PlaywrightMcpHelper {
         }
     }
 
-    /**
-     * Maps ArcClaw action names to official Playwright MCP tool names.
-     * extract_text maps to browser_snapshot (structured accessibility snapshot),
-     * not raw DOM innerText — the CLI fallback handles raw text cases.
-     */
     private static String toMcpToolName(String action) {
         return switch (action) {
             case "navigate" -> "browser_navigate";
