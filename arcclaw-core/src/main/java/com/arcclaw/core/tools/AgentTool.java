@@ -7,7 +7,6 @@ import java.util.Map;
 
 import com.arcclaw.core.security.RequiresSecret;
 import com.arcclaw.core.security.ToolOperation;
-import com.arcclaw.core.tools.ToolCategory;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**

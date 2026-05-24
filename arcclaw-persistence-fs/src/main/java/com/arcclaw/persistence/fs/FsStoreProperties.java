@@ -15,4 +15,10 @@ public interface FsStoreProperties {
 
     @WithDefault("5")
     int lockTimeoutSeconds();
+
+    @WithDefault("lucene-index")
+    String luceneIndexDir();
+
+    @WithDefault("768")
+    int vectorDimension();
 }
