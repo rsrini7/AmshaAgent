@@ -454,7 +454,7 @@ paths: {}</echo>
         <quarkus.native.builder-image>
           quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-25
         </quarkus.native.builder-image>
-        <quarkus.native.additional-build-args>-H:+ReportExceptionStackTraces,--initialize-at-run-time=org.apache.lucene.store.PosixNativeAccess,org.apache.lucene.store.MemorySegmentIndexInputProvider</quarkus.native.additional-build-args>
+        <quarkus.native.additional-build-args>-H:+ReportExceptionStackTraces</quarkus.native.additional-build-args>
         <quarkus.native.resources.includes>
           native/vec0/*,
           templates/**,
