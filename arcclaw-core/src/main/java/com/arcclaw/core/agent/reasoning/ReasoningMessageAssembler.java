@@ -1,7 +1,6 @@
 package com.arcclaw.core.agent.reasoning;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -33,8 +32,6 @@ import org.jboss.logging.Logger;
 public class ReasoningMessageAssembler {
 
     private static final Logger log = Logger.getLogger(ReasoningMessageAssembler.class);
-
-    private static final int TOOL_SEARCH_TOP_K = 12;
 
     private final ChatHistoryAssembler historyAssembler;
     private final ToolRegistry toolRegistry;
@@ -158,20 +155,22 @@ public class ReasoningMessageAssembler {
             return List.of();
         }
 
-        Set<String> relevantTools = allowedTools;
+        List<String> ranked = new ArrayList<>();
         if (toolSearchIndex != null && goal != null && !goal.isBlank()) {
-            List<String> searchResults = toolSearchIndex.search(goal, TOOL_SEARCH_TOP_K);
-            if (!searchResults.isEmpty()) {
-                Set<String> filtered = new HashSet<>(searchResults);
-                filtered.retainAll(allowedTools);
-                if (!filtered.isEmpty()) {
-                    relevantTools = filtered;
+            List<String> searchResults = toolSearchIndex.search(goal, allowedTools.size());
+            for (String name : searchResults) {
+                if (allowedTools.contains(name)) {
+                    ranked.add(name);
                 }
             }
         }
+        for (String name : allowedTools) {
+            if (!ranked.contains(name)) {
+                ranked.add(name);
+            }
+        }
 
-        return toolRegistry.listTools().stream()
-                .filter(relevantTools::contains)
+        return ranked.stream()
                 .filter(name -> !isBackgroundSession || (!name.equals(ToolCapability.SCHEDULE_TASK.toolName())
                         && !name.equals(ToolCapability.MANAGE_SCHEDULE.toolName())))
                 .map(name -> toolRegistry.findTool(name).orElseThrow())
