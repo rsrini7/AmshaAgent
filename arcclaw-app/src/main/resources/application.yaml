@@ -144,8 +144,7 @@ quarkus:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
         protocol: grpc
     resource:
-      attributes:
-        - deployment.environment: "${ARCCLAW_ENV:development}"
+      attributes: "deployment.environment=${ARCCLAW_ENV:development},service.name=arcclaw"
     traces:
       enabled: true
       sampler: always_on
