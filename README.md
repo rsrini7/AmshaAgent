@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1494_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1541_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
