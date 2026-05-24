@@ -624,6 +624,16 @@ if (Test-Path '.env') {
 
 if ($strategy -eq 'container') {
     Write-Host 'ℹ️   Container build: host GraalVM not needed - skipping JDK switch.'
+
+    # ── Podman VM memory preflight ──────────────────────────────────────────
+    $vmMemMB = [int]((podman machine inspect podman-machine-default 2>&1 | Select-String '"Memory":\s*(\d+)').Matches[0].Groups[1].Value)
+    if ($vmMemMB -lt 4096) {
+        Write-Host "❌  Podman VM has only ${vmMemMB} MB RAM — native-image needs at least 4 GB (6 GB recommended)."
+        Write-Host '    Fix: podman machine stop; podman machine set podman-machine-default --memory 6144; podman machine start'
+        exit 1
+    }
+    Write-Host "✅  Podman VM memory: ${vmMemMB} MB (OK)"
+
     try {
         # ── Memory Scaling ──────────────────────────────────────────────────
         if ($IsMacOS) {
@@ -635,8 +645,8 @@ if ($strategy -eq 'container') {
         } else {
             $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
         }
-        $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
-        Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
+        $targetGB = 4  # Hard cap for 6 GB Podman VM (4 GB heap + 2 GB OS/GraalVM overhead)
+        Write-Host "🧠 Allocating ${targetGB}G for native-image (capped for 6 GB Podman VM)..."
 
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
