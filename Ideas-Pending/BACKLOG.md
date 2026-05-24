@@ -24,16 +24,6 @@ Current `CompactionService` summarization destroys exact details (code snippets,
 
 ***
 
-### 9. Security Guardrails — Move Off Regex
-Regex-based `PromptInjectionReflex` and `PiiScanReflex` are trivially bypassed (base64, synonyms, payload splitting).
-
-Refer #[Guardrails](Ideas-Pending/LangchainGuardrails.md)
-**Direction:**
-- **PII:** Microsoft Presidio via lightweight sidecar or Python MCP server — context-aware NER
-- **Prompt Injection:** DeBERTa-v3-base fine-tuned classifier or Lakera Guard — run as pre-flight before text reaches LLM context
-
-***
-
 ### 10. Playwright → Official MCP Server
 Current `PlaywrightCliTool` shells out to Node.js — brittle IPC, schema drift risk.
 
@@ -42,20 +32,28 @@ Current `PlaywrightCliTool` shells out to Node.js — brittle IPC, schema drift 
 - Connect via existing `McpClientService` to the official Playwright MCP Server
 - Standardizes schema, removes Node.js IPC fragility
 
-***
+---
 
-## Full Priority Summary
+## Backlog note
 
-| # | Item | Priority | Type |
-|---|------|----------|------|
-| — | Null-safe constructor, renderer fallback, CDI lazy parse | **P0** | In-flight |
-| 1 | State Pattern for AgentStateMachineRunner | **P1** | Refactor |
-| 2 | Drop JPA for SQLite → jOOQ/JDBI | **P1** | Refactor |
-| 3 | Concurrency handling for parallel tools | **P1** | Modernize |
-| 4 | ✅ Externalize prompts to PromptRegistry | **P2** | Complete |
-| 5 | Tool bulkheads per category | **P2** | Resilience |
-| 6 | Semantic LLMOps tracing (Langfuse/Arize) | **P2** | Observability |
-| 7 | Graph-based agent orchestration (DAG) | **P3** | Evolution |
-| 8 | MemGPT tiered memory | **P3** | Evolution |
-| 9 | Presidio/DeBERTa security guardrails | **P3** | Security |
-| 10 | Playwright → MCP Server | **P3** | Modernize |
+You can write it like this:
+
+**Backlog item:** Move tool execution category from `ToolCapability` fallback logic to the tool contract itself (`AgentTool.category()` or `ToolMetadata`) so dynamically discovered MCP tools can declare `NETWORK`, `COMPUTE`, or `DATABASE` explicitly instead of defaulting to `INTERNAL`. 
+
+## Suggested scope
+
+This backlog item should cover:
+- Static built-in tools continue to map from `ToolCapability.category()`.
+- Dynamic MCP tools expose category through discovery metadata.
+- `ToolCategoryMapper` becomes a compatibility shim or is removed.
+- Executor selection uses the tool’s declared category end-to-end. 
+
+## Why this is the right backlog
+
+That framing keeps the current implementation honest: it is good enough today, but it is not the final extensible shape. It also prevents future readers from assuming the fallback-to-internal behavior is an architectural choice rather than a temporary bridge. 
+
+## Short ADR text
+
+**Decision:** Keep `ToolCapability` as the canonical category source for built-in tools only.  
+**Reason:** Dynamic MCP tools currently bypass the enum and safely default to `INTERNAL`.  
+**Consequence:** No starvation risk now, but category metadata must move to the runtime tool contract when dynamic tools become a larger share of the system. 
