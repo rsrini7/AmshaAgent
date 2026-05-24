@@ -125,7 +125,10 @@ public class DelegateToAgentTool implements AgentTool {
         }
 
         if (isSelfDelegation(normalized, currentRoleName)) {
-            return ToolResponse.failure(400, delegationSelfGuard(normalized, delegatableList));
+            // return ToolResponse.failure(400, delegationSelfGuard(normalized, delegatableList));
+            log.infof("[REDIRECT] %s tried to delegate to itself — auto-redirecting to coordinator", currentRoleName);
+            normalized = AgentRoleEnum.COORDINATOR.id();
+            agentName = normalized;
         }
 
         if (isCoderDelegatingToResearcher(normalized, currentRoleName)) {

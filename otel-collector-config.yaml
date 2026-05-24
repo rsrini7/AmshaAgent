@@ -15,7 +15,7 @@ exporters:
     tls:
       insecure: true
   otlphttp/phoenix:
-    endpoint: http://phoenix:4318/v1/traces
+    endpoint: http://phoenix:6006
 
 service:
   pipelines:
