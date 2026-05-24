@@ -169,6 +169,31 @@ Any handler can return `HandleResult.STOP` to short-circuit the chain (e.g., `Al
 
 ---
 
+## Security Architecture — 10 Guard Layers
+
+| # | Layer | Component | What | Where |
+|---|-------|-----------|------|-------|
+| 1 | **Channel gate** | `AllowlistHandler` | Channel user allowlist (Telegram numeric ID check) | Pipeline handler, priority 10 |
+| 2 | **Injection match** | `PromptInjectionReflex` | 25 regex patterns across 5 categories (governance bypass, exfiltration, identity hijacking, direct override, context wipe) | Reflex, priority 10 |
+| 3 | **PII detection** | `PiiScanReflex` | 12 PII types (JWT, email, credit card, Aadhaar, SSN, PAN, PHONE, etc.) — blocks or redacts | Reflex, priority 20 |
+| 4 | **Destructive ops** | `DestructiveVocabularyFilter` | Routes destructive-language inputs to reduced autonomy | Intent handler, priority 50 |
+| 5 | **Goal sanitize** | `AgentDispatchHandler` PII re-sanitizer | Applies `piiSanitizer.sanitize()` to goal before agent dispatch | Pipeline handler, priority 70 |
+| 6 | **HITL boundary** | `CheckpointResumeCoordinator` / `ToolInvocationGuard` | Approval frames, autonomy policy, delegated approval | Agent loop + per-tool |
+| 7 | **LLM boundary** | `GuardrailCoordinator` + `PreLlmGuard`/`PostLlmGuard` | Injection check (`InjectionInputGuard`), PII sanitize (`PiiInputGuard`), response validation (`ParseabilityOutputGuard`) — runs before/after LLM call | `LangChainReasoningEngine` |
+| 8 | **Tool boundary** | `ToolInvocationGuard` | Dedup, unknown-tool block, HITL approval, GitHub-specific intent guard | Per tool call |
+| 9 | **Tool interceptor** | `GithubToolGuardInterceptor` | Cross-loop dedup for GitHub, intent validation | Tool interceptor |
+| 10 | **Session isolation** | `AgentSessionService` per-key access | Async approve/deny, session-scoped API keys | REST API layer |
+
+**Key principles:**
+- Layers 1–6 are **reflex/deterministic** (zero LLM tokens, zero latency).
+- Layer 7 is the **LLM boundary** — runs before and after every model call via `GuardrailCoordinator`, with OTel spans + audit events per decision.
+- Layer 8–9 are **tool-level** — validate runtime tool calls, not message content.
+- Layer 10 is **API-level** — session ownership and key scoping.
+
+**Layering guarantee:** Each layer assumes the layer below it has already passed. A blocked message at Layer 2 never reaches Layer 7. The Layer 7 guard (LC4J boundary) is a **secondary safety net**, not the sole protection.
+
+---
+
 ## Phase 5: Reflex Layer (Zero-LLM Fast Commands)
 
 `ReflexRegistry` holds `AgentReflex` implementations checked in `IntentClassificationHandler` before any LLM call. If a reflex matches, its `CommandResponse` is sent directly through the channel sender.

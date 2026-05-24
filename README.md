@@ -168,6 +168,23 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 11. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
 12. **Answer Quality Guard:** Before returning a final answer, `AnswerQualityGuard` validates it against multiple checks: system instruction echo detection, naked tool call injection, compaction context leaks, and minimum quality thresholds. Failed answers trigger automatic retry with corrective hints.
 
+### Security Architecture — 10 Guard Layers
+
+| # | Layer | Component | What |
+|---|-------|-----------|------|
+| 1 | **Channel gate** | `AllowlistHandler` | Channel user allowlist (Telegram numeric ID check) |
+| 2 | **Injection match** | `PromptInjectionReflex` | 25 regex patterns (governance bypass, exfiltration, identity hijacking, direct override, context wipe) |
+| 3 | **PII detection** | `PiiScanReflex` | 12 PII types — blocks or redacts before LLM |
+| 4 | **Destructive ops** | `DestructiveVocabularyFilter` | Routes destructive-language inputs to reduced autonomy |
+| 5 | **Goal sanitize** | `AgentDispatchHandler` PII re-sanitizer | Applies a second PII pass on the goal before agent dispatch |
+| 6 | **HITL boundary** | `CheckpointResumeCoordinator` / `ToolInvocationGuard` | Approval frames, autonomy policy, delegated approval |
+| 7 | **LLM boundary** | `GuardrailCoordinator` + `PreLlmGuard`/`PostLlmGuard` | Injection check, PII sanitize, response validation — runs before and after every LLM call |
+| 8 | **Tool boundary** | `ToolInvocationGuard` | Dedup, unknown-tool block, HITL approval |
+| 9 | **Tool interceptor** | `GithubToolGuardInterceptor` | Cross-loop dedup + intent validation for GitHub |
+| 10 | **Session isolation** | `AgentSessionService` per-key access | Async approve/deny, session-scoped API keys |
+
+Layers 1–6 are deterministic (zero LLM tokens). Layer 7 is the LLM boundary — runs before and after every model call with OTel span + audit per decision. Each layer assumes the layer below has already passed.
+
 > [!NOTE]
 > **Sandbox Degradation Details**: The `ProcessIsolationExecutor` operates in three tiers:
 > - **All profiles except `%test`** (`%dev`, `%prod`): `strategy: PODMAN` - attempts full Podman rootless container isolation with a circuit breaker (3-failure trip to fallback). This applies to **both dev and prod**.

@@ -17,6 +17,7 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.RoleRegistry;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.guardrail.GuardrailCoordinator;
 import com.arcclaw.core.observability.AgentOTelConstants;
 import com.arcclaw.core.observability.AgentOtelContext;
 import com.arcclaw.core.scope.WorkspaceContext;
@@ -49,6 +50,7 @@ public class LangChainReasoningEngine implements ReasoningEngine {
     private final RecoveryProcessor recoveryProcessor;
     private final StructuredOutputProcessor structuredOutputProcessor;
     private final ReasoningValidator validator;
+    private final GuardrailCoordinator guardrailCoordinator;
 
     @Inject
     AgentOtelContext otelContext;
@@ -66,7 +68,8 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             ReasoningMessageAssembler messageAssembler,
             RecoveryProcessor recoveryProcessor,
             StructuredOutputProcessor structuredOutputProcessor,
-            ReasoningValidator validator) {
+            ReasoningValidator validator,
+            GuardrailCoordinator guardrailCoordinator) {
         this.llmProviderPort = llmProviderPort;
         this.roleRegistry = roleRegistry;
         this.promptBuilder = promptBuilder;
@@ -79,10 +82,11 @@ public class LangChainReasoningEngine implements ReasoningEngine {
         this.recoveryProcessor = recoveryProcessor;
         this.structuredOutputProcessor = structuredOutputProcessor;
         this.validator = validator;
+        this.guardrailCoordinator = guardrailCoordinator;
     }
 
     protected LangChainReasoningEngine() {
-        this(null, null, null, null, null, null, null, null, null, null, null, null);
+        this(null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
@@ -105,6 +109,24 @@ public class LangChainReasoningEngine implements ReasoningEngine {
 
         boolean isTruncationRecovery = context.getTruncationRetryCount() > 0;
         String systemPrompt = promptBuilder.build(context, agentRole, sessionId, goal, isTruncationRecovery);
+
+        // ── Input guardrails (Layer 7) ──
+        // The goal is already PII-sanitized by the reflex pipeline (Layer 3).
+        // This guard checks injection on the goal and applies extra PII sanitization
+        // to the system prompt as a secondary safety net.
+        if (guardrailCoordinator != null) {
+            String userId = WorkspaceContext.getUserIdOrUnknown();
+            GuardrailCoordinator.InputResult result = guardrailCoordinator.runInputGuards(
+                    sessionId, userId, goal, systemPrompt);
+            if (!result.allowed()) {
+                return ReasoningStep.pending("Blocked by input guard: " + result.blockReason(),
+                        ReasoningStep.OBSERVE, Map.of(), 0, 0)
+                        .withObservation(result.blockReason());
+            }
+            if (result.sanitizedPrompt() != null) {
+                systemPrompt = result.sanitizedPrompt();
+            }
+        }
 
         String finalGoal = buildFinalGoal(context, agentRole, goal, cappedHistory);
 
@@ -130,6 +152,25 @@ public class LangChainReasoningEngine implements ReasoningEngine {
             response = executeLlmStep(isSimpleChitchat, context, isWriteIntent, request);
         } catch (Exception e) {
             return handleLlmException(e, history, sessionId, targetLanguage, context, goal, isWriteIntent, agentRole);
+        }
+
+        // ── Output guardrails (Layer 7) ─────────────────────────────────
+        if (guardrailCoordinator != null) {
+            String userId = WorkspaceContext.getUserIdOrUnknown();
+            String rawText = response.aiMessage() != null ? response.aiMessage().text() : "";
+            GuardrailCoordinator.OutputResult outputResult = guardrailCoordinator.runOutputGuards(
+                    sessionId, userId, goal, rawText);
+            if (!outputResult.allowed()) {
+                if (outputResult.retryable() && outputResult.retryResponse() != null) {
+                    log.infof("[GUARD] Output guard retry for session %s", sessionId);
+                    return ReasoningStep.pending("Output guard triggered retry",
+                            ReasoningStep.OBSERVE, Map.of(), 0, 0)
+                            .withObservation(outputResult.blockReason());
+                }
+                return ReasoningStep.pending("Blocked by output guard: " + outputResult.blockReason(),
+                        ReasoningStep.OBSERVE, Map.of(), 0, 0)
+                        .withObservation(outputResult.blockReason());
+            }
         }
 
         return parseAndValidateStep(response, sessionId, agentRole, history, context, isWriteIntent, targetLanguage);

@@ -901,7 +901,41 @@ Tools requiring API keys use one of two patterns:
 
 Both patterns are valid. Tools that check `vault.systemKeyExists()` for `isEnabled()` while falling back to config properties are acceptable for optional tools that degrade gracefully when the key is absent.
 
-### 8.7 Browser automation (PlaywrightCliTool)
+### 8.7 LLM Guardrail Layer (Layer 7 — PreLlmGuard / PostLlmGuard)
+
+The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via `ReflexRegistry`) and the LLM provider call. It uses ArcClaw-native guard interfaces — NOT LangChain4j's experimental `InputGuardrail`/`OutputGuardrail` — to avoid coupling to an evolving framework API.
+
+**Architecture rules:**
+
+1. **PreLlmGuard** MUST validate input before it reaches the LLM. Implementations include:
+   - `InjectionInputGuard` (`@Priority(100)`) — delegates to `PromptInjectionReflex.matches()`, returns `Block` on match.
+   - `PiiInputGuard` (`@Priority(200)`) — delegates to `PiiScanReflex.sanitize()`, returns `Sanitize` if redaction occurred.
+
+2. **PostLlmGuard** MUST validate output after the LLM responds. Implementations include:
+   - `ParseabilityOutputGuard` (`@Priority(100)`) — validates non-empty response and length limits.
+
+3. **GuardrailCoordinator** MUST:
+   - Discover all `PreLlmGuard` and `PostLlmGuard` beans via CDI `Instance<>`.
+   - Sort by `@Priority` (lower = runs first).
+   - Emit an OTel span for every guard decision.
+   - Emit an `AuditService` event for every guard decision.
+   - Run guards sequentially — each guard receives the (possibly sanitized) output of the prior guard.
+
+4. **GuardDecision** sealed interface defines exactly four outcomes:
+   - `Allow` — proceed unchanged.
+   - `Block(String reason, String detail)` — stop processing, surface the reason.
+   - `Retry(String reason, String correctedInput)` — signal the caller to retry with corrected input.
+   - `Sanitize(String sanitizedInput)` — continue with modified input.
+
+5. **Existing reflexes MUST NOT be replaced.** The guardrail adapters (e.g., `InjectionInputGuard`) reuse reflex logic at the LLM boundary without removing the reflexes from the earlier pipeline layers. Both layers remain active.
+
+6. **MUST NOT exceed one retry** per output guard invocation. Multiple retries are the responsibility of the calling `LangChainReasoningEngine`, not the guard layer.
+
+7. **Streamed responses** MUST be fully accumulated before `PostLlmGuard` runs. The guard layer operates on the complete response, not partial chunks.
+
+8. **Dependency rule:** `arcclaw-core` MUST NOT depend on `dev.langchain4j:langchain4j-guardrails`. The LC4J guardrails module is optional and may be added as a separate adapter only if built-in guardrail implementations (e.g., `MessageModeratorInputGuardrail`) are needed later.
+
+### 8.8 Browser automation (PlaywrightCliTool)
 
 - `PlaywrightCliTool` MUST validate URLs against `SAFE_URL_PATTERN` (`^https?://.*`) before navigation. File://, javascript:, and data: URLs are FORBIDDEN.
 - Content extraction MUST be capped at `MAX_CONTENT_CHARS` (9092).
