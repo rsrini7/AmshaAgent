@@ -1,10 +1,26 @@
 # Memory Tiered Architecture & Self-Evolution — Phased Implementation Plan
 
-> **Status:** Revised Implementation Plan (v2.0)
+> **Status:** Revised Implementation Plan (v2.1-phased)
 > **Backlog Ref:** `Ideas-Pending/BACKLOG.md` Item #8
 > **Input Docs:** `MemGPT-Style.md`, `Self-Evolution.md`, `Memory_Self_Evoluton_Plan.md` (v1.2), `Memory_self_Review.md`
 > **Date:** 2026-05-24
 > **Key Change:** Clean-build phased approach — no migration, zero-risk progression, workflow preservation
+
+---
+
+## What Changed in v2.1
+
+Five architecture decisions added to v2.0 based on implementation review:
+
+| # | Decision | Affected Phases | Rationale |
+|---|----------|----------------|-----------|
+| 1 | **Recall dedupe is DB-enforced**, not app-check-based | Phase 2, 15.1 | Application-level checks are race-prone; unique constraints + `INSERT OR IGNORE` guarantee correctness |
+| 2 | **Recall exact search excludes compaction summaries by default** | Phase 3, 5.4 | Summary records pollute exact code/error retrieval; separate `include_summaries` mode for overview queries |
+| 3 | **Archival is tool-first, never unconditional** | Phase 4, 6, 2.3 | `ChatHistoryAssembler` must remain O(1); passive injection only via pre-fetched cache with strict latency bounds |
+| 4 | **SQLite vector writes are serialized** | Phase 5, 13.2 | sqlite-vec is not thread-safe for concurrent writes; serialize ingestion, allow concurrent reads |
+| 5 | **Synthesized directives use shadow lifecycle** | Phase 10, 12.3 | New directives start as `SHADOW`, evaluated without behavior change; promotion to `ACTIVE` requires measurable success |
+
+These corrections prevent race conditions, search pollution, prompt bloat, database corruption, and premature directive activation. See [Section 18: v2.1 Tactical Corrections](#18-v21-tactical-corrections) for detailed summary.
 
 ---
 
@@ -25,22 +41,23 @@ This document replaces the original 5-phase plan with a **13-phase (0-12) increm
 
 1. [Architecture Context](#1-architecture-context)
 2. [Current Codebase Seams](#2-current-codebase-seams)
-3. [Phase 0: Contracts & Config (Inert Foundation)](#2-phase-0-contracts--config-inert-foundation)
-4. [Phase 1: Core Memory Only](#3-phase-1-core-memory-only)
-5. [Phase 2: Recall Persistence (No Search Yet)](#4-phase-2-recall-persistence-no-search-yet)
-6. [Phase 3: Recall Search + Tool Split](#5-phase-3-recall-search--tool-split)
-7. [Phase 4: Prompt Budget Hardening](#6-phase-4-prompt-budget-hardening)
-8. [Phase 5: Archival Storage Model](#7-phase-5-archival-storage-model)
-9. [Phase 6: Archival Tools + Selective Use](#8-phase-6-archival-tools--selective-use)
-10. [Phase 7: Controlled Write Paths](#9-phase-7-controlled-write-paths)
-11. [Phase 8: Self-Evolve Trace Capture](#10-phase-8-self-evolve-trace-capture)
-12. [Phase 9: Rule-Based Extraction](#11-phase-9-rule-based-extraction)
-13. [Phase 10: Directive Synthesis](#12-phase-10-directive-synthesis)
-14. [Phase 11: Backend Parity](#13-phase-11-backend-parity)
-15. [Phase 12: Hardening & Cleanup](#14-phase-12-hardening--cleanup)
-16. [Critical Implementation Warnings](#15-critical-implementation-warnings)
-17. [Module Mapping](#16-module-mapping)
-18. [Verification Summary](#17-verification-summary)
+3. [Phase 0: Contracts & Config (Inert Foundation)](#3-phase-0-contracts--config-inert-foundation)
+4. [Phase 1: Core Memory Only](#4-phase-1-core-memory-only)
+5. [Phase 2: Recall Persistence (No Search Yet)](#5-phase-2-recall-persistence-no-search-yet)
+6. [Phase 3: Recall Search + Tool Split](#6-phase-3-recall-search--tool-split)
+7. [Phase 4: Prompt Budget Hardening](#7-phase-4-prompt-budget-hardening)
+8. [Phase 5: Archival Storage Model](#8-phase-5-archival-storage-model)
+9. [Phase 6: Archival Tools + Selective Use](#9-phase-6-archival-tools--selective-use)
+10. [Phase 7: Controlled Write Paths](#10-phase-7-controlled-write-paths)
+11. [Phase 8: Self-Evolve Trace Capture](#11-phase-8-self-evolve-trace-capture)
+12. [Phase 9: Rule-Based Extraction](#12-phase-9-rule-based-extraction)
+13. [Phase 10: Directive Synthesis](#13-phase-10-directive-synthesis)
+14. [Phase 11: Backend Parity](#14-phase-11-backend-parity)
+15. [Phase 12: Hardening & Cleanup](#15-phase-12-hardening--cleanup)
+16. [Critical Implementation Warnings](#16-critical-implementation-warnings)
+17. [Module Mapping](#17-module-mapping)
+18. [Verification Summary](#18-verification-summary)
+19. [v2.1 Tactical Corrections](#19-v21-tactical-corrections)
 
 ---
 
@@ -109,12 +126,14 @@ ReasoningMessageAssembler.assemble()
     └─ ChatHistoryAssembler.assemble()
         ├─ [PHASE 1] CoreMemoryService.renderForPrompt() → [USER CONTEXT]
         ├─ CompactionSummaryCache.getSummary() → [CONTEXT FROM PRIOR SESSION]
-        ├─ [PHASE 6] ArchivalMemoryService.search() → [RELEVANT KNOWLEDGE] (on-demand)
-        ├─ [PHASE 10] SelfEvolveService.buildDirectives() → [BEHAVIORAL DIRECTIVES]
+        ├─ [PHASE 6] Pre-fetched archival context (if available, O(1) lookup) → [RELEVANT KNOWLEDGE]
+        ├─ [PHASE 10] SelfEvolveService.buildDirectives() → [BEHAVIORAL DIRECTIVES] (SHADOW-mode evaluation)
         └─ PersistentChatMemoryStore.getMessages() → recent turns
 ```
 
 **Phase 4 Critical:** Explicit budget ordering prevents memory bloat and section conflicts.
+
+**v2.1 Correction:** `ChatHistoryAssembler` does **not** trigger archival retrieval I/O. Archival results must be pre-fetched via `archival_memory_search` tool or session-context gateway before prompt assembly begins.
 
 ### 2.4 Existing Memory Search (To Be Split)
 
@@ -276,23 +295,47 @@ messages.addAll(historyMessages);
 | `CompactionService.compact()` | Persist `toCompact` messages to Recall BEFORE summarizing |
 | `CompactionEventBridge.java` | Ensure Recall writes complete before async compaction fires |
 
-### 4.3 Idempotency Strategy
+### 4.3 Idempotency Strategy (DB-Enforced)
+
+**v2.1 Correction:** Idempotency is enforced **primarily at the database layer**, not via application-level existence checks.
+
+```sql
+-- recall_messages table with unique constraint
+CREATE TABLE recall_messages (
+    message_id      TEXT PRIMARY KEY,
+    session_id      TEXT NOT NULL,
+    user_id         TEXT NOT NULL,
+    turn_number     INTEGER NOT NULL,
+    content_hash    TEXT NOT NULL,  -- SHA-256 of content
+    role            TEXT NOT NULL,
+    message_type    TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    -- ... other columns ...
+    UNIQUE(session_id, turn_number, content_hash)  -- DB-enforced dedupe
+);
+```
 
 ```java
-// Prevent dual-write from normal flow + compaction flow
+// Application-level dedupe helpers are advisory only and must not be relied on for correctness
 public void insertRecallMessage(RecallMessage msg) {
+    // Compute dedupe key
     String dedupeKey = String.format("%s:%d:%s",
         msg.sessionId(), msg.turnNumber(), hash(msg.content()));
     
+    // Advisory check only (logs warning if duplicate, does not prevent)
     if (seenDedupeKey(dedupeKey)) {
-        return; // Already persisted
+        log.warn("Duplicate recall insert attempted: {}", dedupeKey);
     }
     
-    // Insert and mark as seen
-    store.insert(msg);
-    markDedupeKeySeen(dedupeKey);
+    // DB-enforced idempotency via INSERT OR IGNORE
+    store.insertOrIgnore(msg);  // SQLite: INSERT OR IGNORE, Postgres: ON CONFLICT DO NOTHING
 }
 ```
+
+**Backend-specific upsert-ignore semantics:**
+- **SQLite:** `INSERT OR IGNORE INTO recall_messages (...) VALUES (...)`
+- **PostgreSQL:** `INSERT INTO recall_messages (...) VALUES (...) ON CONFLICT (session_id, turn_number, content_hash) DO NOTHING`
+- **Filesystem:** File existence check + atomic write (append-only log with dedupe key in filename)
 
 ### 4.4 Compaction Flow Change
 
@@ -311,11 +354,16 @@ public void insertRecallMessage(RecallMessage msg) {
 ### 4.5 Tests
 
 ```bash
-# Idempotency/dedupe tests
-./mvnw test -pl arcclaw-core -Dtest="RecallMemoryIdempotencyTest"
+# DB uniqueness / insert-ignore test
+./mvnw test -pl arcclaw-persistence-sqlite -Dtest="RecallInsertOrIgnoreTest"
+
+# Concurrent dual-write race test
+./mvnw test -pl arcclaw-core -Dtest="RecallConcurrentDualWriteRaceTest"
+
 # Integration: compacted text preserved in Recall
 ./mvnw test -pl arcclaw-core -Dtest="CompactionRecallPreservationTest"
-# Dual-write prevention test
+
+# Dual-write prevention test (DB-enforced, not app-level)
 ./mvnw test -pl arcclaw-core -Dtest="RecallDualWritePreventionTest"
 ```
 
@@ -324,7 +372,8 @@ public void insertRecallMessage(RecallMessage msg) {
 - [ ] Compaction still reduces active window (existing behavior)
 - [ ] Exact raw messages survive compaction in Recall storage
 - [ ] **No search exposed yet** (data preserved but not queryable by agents)
-- [ ] Idempotency prevents duplicate inserts
+- [ ] **Idempotency enforced at DB layer** via unique constraint + INSERT OR IGNORE
+- [ ] Application-level dedupe is advisory only (logs warnings, does not prevent)
 
 ---
 
@@ -358,27 +407,62 @@ public void insertRecallMessage(RecallMessage msg) {
 
 ### 5.4 Search Query Examples
 
+**v2.1 Correction:** Default exact-history queries **exclude `COMPACTION_SUMMARY` records**. Summary records are stored in Recall but only included via explicit `include_summaries` mode.
+
 ```sql
--- Session-scoped (default)
+-- Session-scoped (default, excludes summaries)
 SELECT m.* FROM recall_messages m
 JOIN recall_messages_fts fts ON m.rowid = fts.rowid
-WHERE m.session_id = ? AND fts.content MATCH ?
+WHERE m.session_id = ? 
+  AND m.message_type != 'COMPACTION_SUMMARY'  -- Exclude summaries by default
+  AND fts.content MATCH ?
 ORDER BY rank LIMIT ?
 
--- Cross-session (requires explicit flag)
+-- Cross-session (default, excludes summaries)
 SELECT m.* FROM recall_messages m
 JOIN recall_messages_fts fts ON m.rowid = fts.rowid
-WHERE m.user_id = ? AND fts.content MATCH ?
+WHERE m.user_id = ? 
+  AND m.message_type != 'COMPACTION_SUMMARY'  -- Exclude summaries by default
+  AND fts.content MATCH ?
 ORDER BY m.created_at DESC LIMIT ?
+
+-- Include summaries mode (for overview/history-summary use cases)
+SELECT m.* FROM recall_messages m
+JOIN recall_messages_fts fts ON m.rowid = fts.rowid
+WHERE m.session_id = ? 
+  AND fts.content MATCH ?
+  -- No message_type filter → includes COMPACTION_SUMMARY
+ORDER BY 
+  CASE WHEN m.message_type = 'COMPACTION_SUMMARY' THEN 1 ELSE 0 END,  -- Summaries rank lower
+  rank
+LIMIT ?
+```
+
+**Message type enum:**
+```java
+public enum RecallMessageType {
+    USER_MESSAGE,
+    AGENT_MESSAGE,
+    TOOL_CALL,
+    TOOL_RESULT,
+    TOOL_ERROR,
+    COMPACTION_SUMMARY,  // Stored in Recall but excluded from default search
+    SYSTEM_NOTE
+}
 ```
 
 ### 5.5 Tests
 
 ```bash
-# Search exact code snippets after compaction
-./mvnw test -pl arcclaw-core -Dtest="RecallSearchCodeSnippetTest"
-# Search exact error messages by session
-./mvnw test -pl arcclaw-core -Dtest="RecallSearchErrorTraceTest"
+# Search exact code snippets after compaction (excludes summaries)
+./mvnw test -pl arcclaw-core -Dtest="RecallSearchCodeSnippetNoSummaryPollutionTest"
+
+# Search exact error messages by session (excludes summaries)
+./mvnw test -pl arcclaw-core -Dtest="RecallSearchErrorTraceNoSummaryPollutionTest"
+
+# Optional include-summaries mode test
+./mvnw test -pl arcclaw-core -Dtest="RecallSearchIncludeSummariesModeTest"
+
 # Tenant/user scoping tests
 ./mvnw test -pl arcclaw-core -Dtest="RecallSearchTenantIsolationTest"
 ```
@@ -389,6 +473,9 @@ ORDER BY m.created_at DESC LIMIT ?
 - [ ] Tool descriptions clearly distinguish Recall from semantic Archival
 - [ ] Session-scoped search works (<10ms latency target)
 - [ ] Cross-session search gated/configurable
+- [ ] **Default search excludes `COMPACTION_SUMMARY` records**
+- [ ] Optional `include_summaries` mode available for overview queries
+- [ ] Exact code/error retrieval tests confirm summaries do not outrank exact content
 
 ---
 
@@ -417,9 +504,11 @@ ORDER BY m.created_at DESC LIMIT ?
 1. [USER CONTEXT]          (Core Memory, Phase 1)        — max 800 tokens
 2. [CONTEXT FROM PRIOR]    (Compaction Summary, existing) — max 1200 tokens
 3. [RECENT TURNS]          (Rolling window, existing)     — last 20 messages
-4. [RELEVANT KNOWLEDGE]    (Archival, Phase 6, on-demand) — max 3 results
-5. [BEHAVIORAL DIRECTIVES] (Self-Evolve, Phase 10)        — max 5 directives
+4. [RELEVANT KNOWLEDGE]    (Archival, Phase 6, **pre-fetched only**) — max 3 results
+5. [BEHAVIORAL DIRECTIVES] (Self-Evolve, Phase 10)        — max 5 directives (SHADOW-mode evaluation)
 ```
+
+**v2.1 Correction:** `[RELEVANT KNOWLEDGE]` section is populated **only if archival results were pre-fetched** via `archival_memory_search` tool or session-context gateway. `ChatHistoryAssembler` does **not** trigger archival retrieval I/O synchronously.
 
 ### 6.4 Budget Config
 
@@ -429,20 +518,30 @@ arcclaw:
     prompt-budget:
       max-core-memory-tokens: 800
       max-compaction-summary-tokens: 1200
-      max-archival-results: 3
+      max-prefetched-archival-results: 3  # v2.1: Budget slot reserved but empty by default
       max-directives: 5
       total-non-conversation-tokens: 2500  # Hard ceiling
 ```
+
+**v2.1 Note:** `max-prefetched-archival-results` is a **budget cap**, not a trigger. The slot remains empty unless archival results were already retrieved via tool call or session-context gateway. `ChatHistoryAssembler` consumes only pre-fetched/cached archival context and remains O(1) with no mandatory I/O.
 
 ### 6.5 Tests
 
 ```bash
 # Prompt section ordering tests
 ./mvnw test -pl arcclaw-core -Dtest="PromptSectionOrderingTest"
+
 # Overflow clipping tests
 ./mvnw test -pl arcclaw-core -Dtest="MemoryPromptOverflowTest"
+
 # Regression: compaction sentinel still works
 ./mvnw test -pl arcclaw-core -Dtest="CompactionSentinelRegressionTest"
+
+# v2.1: ChatHistoryAssembler does not trigger archival retrieval I/O
+./mvnw test -pl arcclaw-core -Dtest="ChatHistoryAssemblerNoArchivalIoTest"
+
+# v2.1: Prompt budget consumes only pre-fetched archival context
+./mvnw test -pl arcclaw-core -Dtest="PromptBudgetPrefetchedArchivalOnlyTest"
 ```
 
 ### 6.6 Exit Criteria
@@ -466,6 +565,7 @@ arcclaw:
 | `ArchivalChunk` DTO | `arcclaw-persistence-api` | Typed chunks with provenance |
 | Schema enrichment | `arcclaw-persistence-*` | `chunk_type`, `confidence`, `access_count` fields |
 | Backend degradation | `arcclaw-persistence-*` | Fallback when vector unavailable |
+| **`VectorIngestionService`** | `arcclaw-persistence-sqlite` | **v2.1: Serialized ingestion queue for SQLite vector writes** |
 
 ### 7.2 Change Points
 
@@ -502,15 +602,50 @@ public record ArchivalChunk(
 | PostgreSQL | BM25 (tsvector/GIN) + pgvector | BM25-only if pgvector not installed |
 | Filesystem | BM25 (Lucene) + optional embeddings | BM25-only if `EmbeddingModel` bean unavailable |
 
+**v2.1: SQLite Vector Write Serialization**
+
+sqlite-vec is not thread-safe for concurrent writes. SQLite archival must serialize vector ingestion:
+
+```java
+@ApplicationScoped
+public class VectorIngestionService {
+    private final Semaphore writePermit = new Semaphore(1);
+    
+    public void ingestWithVector(ArchivalChunk chunk) throws InterruptedException {
+        writePermit.acquire();  // Serialize writes
+        try {
+            sqliteStore.insertWithEmbedding(chunk);
+        } finally {
+            writePermit.release();
+        }
+    }
+    
+    // Reads remain concurrent
+    public List<ArchivalChunk> search(VectorQuery query) {
+        return sqliteStore.search(query);  // No serialization needed
+    }
+}
+```
+
+**Rationale:** Prevents `SQLITE_BUSY` errors and index corruption during concurrent archival writes. Reads may remain fully concurrent.
+
 ### 7.5 Tests
 
 ```bash
 # Manual insert/search tests
 ./mvnw test -pl arcclaw-core -Dtest="ArchivalManualInsertSearchTest"
+
 # Vector-unavailable fallback tests
 ./mvnw test -pl arcclaw-persistence-sqlite -Dtest="SqliteArchivalFallbackTest"
+
 # Provenance persistence tests
-./mvwon test -pl arcclaw-core -Dtest="ArchivalProvenanceTest"
+./mvnw test -pl arcclaw-core -Dtest="ArchivalProvenanceTest"
+
+# v2.1: Serialized sqlite-vec ingestion test
+./mvnw test -pl arcclaw-persistence-sqlite -Dtest="VectorIngestionSerializationTest"
+
+# v2.1: Concurrent ingestion safety test (no corruption, no SQLITE_BUSY)
+./mvnw test -pl arcclaw-persistence-sqlite -Dtest="VectorIngestionConcurrentSafetyTest"
 ```
 
 ### 7.6 Exit Criteria
@@ -543,18 +678,36 @@ public record ArchivalChunk(
 
 ### 8.3 Injection Rules (Prevent Spam)
 
+**v2.1 Correction:** Archival is **tool-first, never unconditional**. `ChatHistoryAssembler` must not synchronously trigger BM25/vector/hybrid retrieval on every request.
+
 ```java
 // In ChatHistoryAssembler.assemble():
-if (archivalSearchEnabled && goal != null) {
-    List<ArchivalChunk> results = archivalMemoryService.search(
-        userId, goal, limit = 3, minConfidence = 0.6);
-    
-    if (!results.isEmpty()) {
-        String knowledgeText = formatArchivalResults(results);
-        messages.add(new SystemMessage("[RELEVANT KNOWLEDGE]\n" + knowledgeText));
-    }
+// v2.1: Only consume pre-fetched/cached archival context
+ArchivalContext context = archivalContextCache.get(sessionId);  // O(1) cache lookup
+
+if (context != null && !context.results().isEmpty()) {
+    // Pre-fetched results available → inject
+    String knowledgeText = formatArchivalResults(context.results());
+    messages.add(new SystemMessage("[RELEVANT KNOWLEDGE]\n" + knowledgeText));
 }
-// If empty or low-confidence → nothing injected
+// If no pre-fetched context → nothing injected (do not trigger I/O)
+```
+
+**Passive injection policy (optional, advanced):**
+- Allowed only through **pre-fetched session context gateway/cache**
+- Cache populated by `archival_memory_search` tool call or narrow retrieval policy
+- Strict latency bounds: cache lookup must complete in <5ms or skip injection
+- Lexical-first fallback: if vector search times out, use BM25-only cached results
+
+**Tool-first primary path:**
+```java
+// Agent explicitly calls archival_memory_search tool
+@Tool(name = "archival_memory_search")
+public String search(String query) {
+    List<ArchivalChunk> results = archivalMemoryService.search(query, limit = 3);
+    archivalContextCache.put(sessionId, results);  // Cache for prompt assembly
+    return formatResults(results);
+}
 ```
 
 ### 8.4 Tests
@@ -562,10 +715,18 @@ if (archivalSearchEnabled && goal != null) {
 ```bash
 # Goal-matching tests
 ./mvnw test -pl arcclaw-core -Dtest="ArchivalGoalMatchingTest"
+
 # Confidence threshold tests
 ./mvnw test -pl arcclaw-core -Dtest="ArchivalConfidenceThresholdTest"
+
 # Injection sparsity tests (no prompt spam)
 ./mvnw test -pl arcclaw-core -Dtest="ArchivalInjectionSparsityTest"
+
+# v2.1: Tool-first path test (archival_memory_search populates cache)
+./mvnw test -pl arcclaw-core -Dtest="ArchivalToolFirstPathTest"
+
+# v2.1: ChatHistoryAssembler O(1) cache lookup test (no I/O)
+./mvnw test -pl arcclaw-core -Dtest="ArchivalCacheLookupNoIoTest"
 ```
 
 ### 8.5 Exit Criteria
@@ -574,6 +735,9 @@ if (archivalSearchEnabled && goal != null) {
 - [ ] Confidence-filtered (min 0.6 default)
 - [ ] Never injected if empty or low-confidence
 - [ ] Goal-matched (not random knowledge dump)
+- [ ] **v2.1: `ChatHistoryAssembler` does not trigger archival retrieval I/O**
+- [ ] **v2.1: Archival results consumed from pre-fetched cache only (O(1) lookup)**
+- [ ] **v2.1: Tool-first path is primary retrieval mechanism**
 
 ---
 
@@ -790,9 +954,10 @@ if (event.type == RESOLUTION && priorToolSuccess) {
 | Component | Location | Description |
 |---|---|---|
 | `InteractionPolicySynthesizer` | `arcclaw-self-evolve/policy` | LLM-driven directive generation |
-| `DirectiveBundle` | `arcclaw-self-evolve/api` | Synthesized directives |
+| `DirectiveBundle` | `arcclaw-self-evolve/api` | Synthesized directives with lifecycle state |
 | `SelfEvolveReflectTool` | `arcclaw-self-evolve` | On-demand synthesis trigger |
-| Directive storage | `arcclaw-self-evolve/store` | As `DIRECTIVE` archival chunks |
+| Directive storage | `arcclaw-self-evolve/store` | As `DIRECTIVE` archival chunks or typed records |
+| **Lifecycle manager** | `arcclaw-self-evolve/policy` | **v2.1: CANDIDATE → SHADOW → ACTIVE → DISABLED state machine** |
 
 ### 12.2 Change Points
 
@@ -810,6 +975,40 @@ if (event.type == RESOLUTION && priorToolSuccess) {
 | **Max directives** | 5 per prompt | Prevent prompt bloat |
 | **Max directive length** | 600 chars each | Keep prompts readable |
 | **Admin override** | `DELETE /admin/memory/directive/{id}` | Manual disable path |
+| **v2.1: Lifecycle states** | `CANDIDATE` → `SHADOW` → `ACTIVE` → `DISABLED` | New directives never go directly to ACTIVE |
+
+**Directive Lifecycle (v2.1):**
+
+```java
+public enum DirectiveState {
+    CANDIDATE,   // Newly synthesized, not yet evaluated
+    SHADOW,      // Injected with evaluation labeling, no behavior change
+    ACTIVE,      // Fully authoritative, standard injection
+    DISABLED     // Admin-disabled or auto-faulted
+}
+
+// State transitions:
+// CANDIDATE → SHADOW: Auto on synthesis (requires no approval)
+// SHADOW → ACTIVE: Requires measurable success criteria (e.g. 3 sessions with positive outcomes)
+// SHADOW → DISABLED: Auto on negative feedback or admin action
+// ACTIVE → DISABLED: Admin action or auto-fault detection
+```
+
+**Shadow-mode injection:**
+```java
+// In ChatHistoryAssembler.assemble():
+List<Directive> shadowDirectives = directives.stream()
+    .filter(d -> d.state() == DirectiveState.SHADOW)
+    .limit(2)  // Max 2 shadow directives in evaluation
+    .toList();
+
+if (!shadowDirectives.isEmpty()) {
+    String shadowText = shadowDirectives.stream()
+        .map(d -> "- [EVAL] " + d.text())  // Explicit evaluation labeling
+        .collect(joining("\n"));
+    messages.add(new SystemMessage("[BEHAVIORAL DIRECTIVES - EVALUATION]\n" + shadowText));
+}
+```
 
 ### 12.4 Directive Injection Example
 
@@ -836,12 +1035,27 @@ if (directivesEnabled) {
 ```bash
 # Confidence threshold tests
 ./mvnw test -pl arcclaw-self-evolve -Dtest="DirectiveConfidenceThresholdTest"
+
 # Low-confidence suppression tests
 ./mvnw test -pl arcclaw-self-evolve -Dtest="LowConfidenceDirectiveSuppressionTest"
+
 # Admin delete/disable tests
 ./mvnw test -pl arcclaw-app -Dtest="DirectiveAdminDisableTest"
+
 # Prompt injection cap tests
 ./mvnw test -pl arcclaw-core -Dtest="DirectiveInjectionCapTest"
+
+# v2.1: New directives start in SHADOW or CANDIDATE
+./mvnw test -pl arcclaw-self-evolve -Dtest="DirectiveShadowLifecycleStartTest"
+
+# v2.1: Shadow directives injected with evaluation labeling only
+./mvnw test -pl arcclaw-core -Dtest="ShadowDirectiveEvaluationLabelingTest"
+
+# v2.1: Promotion criteria test (SHADOW → ACTIVE)
+./mvnw test -pl arcclaw-self-evolve -Dtest="DirectivePromotionCriteriaTest"
+
+# v2.1: Faulty directive quarantine/disable test
+./mvnw test -pl arcclaw-self-evolve -Dtest="FaultyDirectiveQuarantineTest"
 ```
 
 ### 12.6 Exit Criteria
@@ -850,6 +1064,10 @@ if (directivesEnabled) {
 - [ ] No synthesis runs in live turn path by default
 - [ ] Admin can delete/disable directives
 - [ ] Prompt injection bounded (max 5, 600 chars each)
+- [ ] **v2.1: New directives start as `CANDIDATE` or `SHADOW`, never directly `ACTIVE`**
+- [ ] **v2.1: `SHADOW` directives evaluated without changing actual behavior**
+- [ ] **v2.1: Promotion to `ACTIVE` requires measurable success criteria**
+- [ ] **v2.1: Auto-disable or admin disable paths exist**
 
 ---
 
@@ -872,10 +1090,13 @@ if (directivesEnabled) {
 |---|---|---|---|
 | Core Memory | ✅ JDBI | ✅ JDBI | ✅ JSON files |
 | Recall FTS5 | ✅ FTS5 virtual table | ✅ tsvector/GIN | ✅ Lucene BM25 |
-| Archival Vector | ⚠️ sqlite-vec (optional) | ⚠️ pgvector (optional) | ⚠️ Embeddings (optional) |
+| Archival Vector | ⚠️ sqlite-vec (optional, **writes serialized**) | ⚠️ pgvector (optional) | ⚠️ Embeddings (optional) |
 | Self-Evolve Store | ✅ JDBI | ✅ JDBI | ✅ JSON files |
 | Advisory Locks | ❌ Not available | ✅ pg_advisory_lock | ❌ Not available |
 | Nested Transactions | ⚠️ Limited | ✅ Full | ❌ Not available |
+| Concurrent Vector Writes | ❌ **Must serialize** | ✅ Thread-safe | ⚠️ **Must serialize** |
+
+**v2.1 Note:** SQLite vector writes must be serialized (see Phase 5, Section 7.4). Filesystem backend also requires serialization for embedding writes.
 
 ### 13.3 Degraded Mode Tests
 
@@ -967,34 +1188,115 @@ DistributionSummary archivalResultConfidence = DistributionSummary.builder("memo
 
 ## 15. Critical Implementation Warnings
 
-### 15.1 Do Not Dual-Write Recall Twice
+1. [DB Uniqueness is Mandatory for Recall Correctness](#151-db-uniqueness-is-mandatory-for-recall-correctness)
+2. [Summary Records Must Not Pollute Exact-History Recall Search](#152-summary-records-must-not-pollute-exact-history-recall-search)
+3. [ChatHistoryAssembler Must Not Perform Unconditional Archival Retrieval](#153-charthistoryassembler-must-not-perform-unconditional-archival-retrieval)
+4. [SQLite Vector Writes Must Be Serialized](#154-sqlite-vector-writes-must-be-serialized)
+5. [Self-Evolve Directives Must Not Go Directly from Synthesis to Active Prompt Authority](#155-self-evolve-directives-must-not-go-directly-from-synthesis-to-active-prompt-authority)
+6. [Tool Taxonomy Must Change](#156-tool-taxonomy-must-change)
+7. [Write Governance Needs Central Enforcement](#157-write-governance-needs-central-enforcement)
+8. [Cross-Session Search Must Stay Tenant-Scoped](#158-cross-session-search-must-stay-tenant-scoped)
+9. [Backend Capability Drift](#159-backend-capability-drift)
+10. [Self-Evolve Must Stay Offline By Default](#1510-self-evolve-must-stay-offline-by-default)
+
+### 15.1 DB Uniqueness is Mandatory for Recall Correctness
 
 **Risk:** `PersistentChatMemoryStore.updateMessages()` and `CompactionService.compact()` both persist messages → duplicates.
 
-**Mitigation:**
-```java
-// Use idempotency keys
-String dedupeKey = sessionId + ":" + turnNumber + ":" + contentHash;
+**v2.1 Mitigation:** Idempotency enforced at **database layer** via unique constraint + `INSERT OR IGNORE`:
 
-// Check before insert
-if (recallStore.exists(dedupeKey)) {
-    return; // Already persisted
+```sql
+-- DB-enforced uniqueness
+CREATE UNIQUE INDEX idx_recall_dedupe 
+ON recall_messages(session_id, turn_number, content_hash);
+
+-- Application uses INSERT OR IGNORE (SQLite) or ON CONFLICT DO NOTHING (Postgres)
+INSERT OR IGNORE INTO recall_messages (...) VALUES (...);
+```
+
+**Application-level dedupe helpers are advisory only and must not be relied on for correctness.** They may log warnings but must not be the primary dedupe mechanism.
+
+### 15.2 Summary Records Must Not Pollute Exact-History Recall Search
+
+**Risk:** `COMPACTION_SUMMARY` records stored in Recall pollute exact code/error retrieval results.
+
+**v2.1 Mitigation:** Default `recall_memory_search` queries **exclude** `message_type = 'COMPACTION_SUMMARY'`:
+
+```sql
+-- Default search excludes summaries
+WHERE m.message_type != 'COMPACTION_SUMMARY'
+
+-- Optional include_summaries mode for overview queries
+-- (summaries rank lower via CASE ordering)
+```
+
+Tests must confirm summaries do not outrank exact content in default search mode.
+
+### 15.3 ChatHistoryAssembler Must Not Perform Unconditional Archival Retrieval
+
+**Risk:** `ChatHistoryAssembler` triggers BM25/vector/hybrid retrieval on every request → latency spike, prompt bloat.
+
+**v2.1 Mitigation:** **Tool-first, never unconditional** policy:
+
+```java
+// v2.1: Only consume pre-fetched/cached archival context (O(1) lookup)
+ArchivalContext context = archivalContextCache.get(sessionId);
+if (context != null && !context.results().isEmpty()) {
+    // Inject pre-fetched results
+}
+// If no pre-fetched context → nothing injected (do not trigger I/O)
+```
+
+Passive injection allowed only through pre-fetched session context gateway/cache with strict latency bounds (<5ms lookup).
+
+### 15.4 SQLite Vector Writes Must Be Serialized
+
+**Risk:** sqlite-vec is not thread-safe for concurrent writes → `SQLITE_BUSY` errors, index corruption.
+
+**v2.1 Mitigation:** Serialize vector ingestion via `VectorIngestionService`:
+
+```java
+@ApplicationScoped
+public class VectorIngestionService {
+    private final Semaphore writePermit = new Semaphore(1);
+    
+    public void ingestWithVector(ArchivalChunk chunk) throws InterruptedException {
+        writePermit.acquire();  // Serialize writes
+        try {
+            sqliteStore.insertWithEmbedding(chunk);
+        } finally {
+            writePermit.release();
+        }
+    }
+    
+    // Reads remain concurrent
+    public List<ArchivalChunk> search(VectorQuery query) {
+        return sqliteStore.search(query);  // No serialization needed
+    }
 }
 ```
 
-### 15.2 Prompt Ordering Must Be Explicit
+Tests must cover concurrent write safety, no corruption, no `SQLITE_BUSY` regression.
 
-**Risk:** Core Memory, compaction summary, directives appended ad hoc → merged into wrong sections.
+### 15.5 Self-Evolve Directives Must Not Go Directly from Synthesis to Active Prompt Authority
 
-**Mitigation:**
+**Risk:** Newly synthesized directives injected as authoritative → agent behavior changes before evaluation.
+
+**v2.1 Mitigation:** **Shadow lifecycle** (`CANDIDATE` → `SHADOW` → `ACTIVE` → `DISABLED`):
+
 ```java
-// Explicit section markers in ChatHistoryAssembler
-messages.add(new SystemMessage("[USER CONTEXT]\n" + coreText));  // Phase 1
-messages.add(new SystemMessage("[CONTEXT FROM PRIOR SESSION]\n" + summary));  // Existing
-messages.add(new SystemMessage("[BEHAVIORAL DIRECTIVES]\n" + dirText));  // Phase 10
+// New directives start as SHADOW, never ACTIVE
+Directive directive = synthesize(...);
+directive.setState(DirectiveState.SHADOW);  // Not ACTIVE
+
+// Shadow-mode injection with evaluation labeling
+messages.add(new SystemMessage("[BEHAVIORAL DIRECTIVES - EVALUATION]\n" +
+    "- [EVAL] " + directive.text()));
 ```
 
-### 15.3 Tool Taxonomy Must Change
+Promotion to `ACTIVE` requires measurable success criteria (e.g., 3 sessions with positive outcomes). Tests must verify shadow lifecycle start, evaluation labeling, promotion criteria, and faulty directive quarantine.
+
+### 15.6 Tool Taxonomy Must Change
 
 **Risk:** Old `memory_search` semantics no longer match new tiers → confusion.
 
@@ -1003,7 +1305,7 @@ messages.add(new SystemMessage("[BEHAVIORAL DIRECTIVES]\n" + dirText));  // Phas
 - Phase 3: New tools explicitly named `recall_memory_search`, `archival_memory_search`
 - Update tool descriptions to clarify boundaries
 
-### 15.4 Write Governance Needs Central Enforcement
+### 15.7 Write Governance Needs Central Enforcement
 
 **Risk:** Rate limits described in tool docs but not enforced → memory pollution.
 
@@ -1023,7 +1325,7 @@ public class MemoryWriteGovernance {
 }
 ```
 
-### 15.5 Cross-Session Search Must Stay Tenant-Scoped
+### 15.8 Cross-Session Search Must Stay Tenant-Scoped
 
 **Risk:** Agent in one conversation searches another user's sessions → privacy violation.
 
@@ -1036,7 +1338,7 @@ public List<RecallMessage> search(String userId, String query, boolean crossSess
 }
 ```
 
-### 15.6 Backend Capability Drift
+### 15.9 Backend Capability Drift
 
 **Risk:** SQLite gets new feature, Postgres/FS not updated → inconsistent behavior.
 
@@ -1045,7 +1347,7 @@ public List<RecallMessage> search(String userId, String query, boolean crossSess
 - Explicit degraded mode tests for each backend
 - Feature flags per capability (e.g., `supportsVectorSearch`)
 
-### 15.7 Self-Evolve Must Stay Offline By Default
+### 15.10 Self-Evolve Must Stay Offline By Default
 
 **Risk:** Synthesis triggers inside live request path → latency spike.
 
@@ -1118,15 +1420,15 @@ arcclaw-self-evolve/
 |---|---|
 | 0 | App boots with flags disabled, zero behavior change |
 | 1 | Core Memory persists + renders, no tools yet |
-| 2 | Recall preserves messages before compaction, idempotent |
-| 3 | Recall search works, tool split complete |
-| 4 | Prompt ordering deterministic, overflow handled |
-| 5 | Archival storage works, no auto-promotion |
-| 6 | Archival tools exposed, injection sparse |
+| 2 | Recall preserves messages before compaction, **DB-enforced idempotency** |
+| 3 | Recall search works, tool split complete, **summaries excluded by default** |
+| 4 | Prompt ordering deterministic, overflow handled, **no archival I/O in assembler** |
+| 5 | Archival storage works, no auto-promotion, **vector writes serialized** |
+| 6 | Archival tools exposed, **tool-first policy**, injection sparse |
 | 7 | Write tools gated, audited, rate-limited |
 | 8 | Self-evolve traces captured, no synthesis |
 | 9 | Rule-based extraction works, no LLM yet |
-| 10 | Directive synthesis offline, high-confidence only |
+| 10 | Directive synthesis offline, **shadow lifecycle**, high-confidence only |
 | 11 | Backend parity achieved, degraded modes documented |
 | 12 | Observability complete, old tools deprecated |
 
@@ -1159,8 +1461,82 @@ grep "ARCCLAW_SELF_EVOLVE_" .env.example arcclaw-app/src/main/resources/applicat
 
 ---
 
-**Document Version:** 2.0-phased
-**Previous Version:** 1.2-no-migration
-**Key Change:** 13 granular phases (0-12) with explicit exit criteria, workflow preservation, and zero-risk progression
+## 19. v2.1 Tactical Corrections
+
+This section summarizes the five architecture decisions added in v2.1 and their affected phases.
+
+### 19.1 Recall Dedupe is DB-Enforced (Not App-Check-Based)
+
+**Affected Phases:** Phase 2, Section 15.1
+
+**Change:** Replace application-level `exists(dedupeKey)` checks with database-level unique constraints + `INSERT OR IGNORE` semantics.
+
+**Rationale:** Application-level checks are race-prone under concurrent dual-write scenarios (normal flow + compaction flow). DB-enforced uniqueness guarantees correctness.
+
+**Implementation:**
+- Add `UNIQUE(session_id, turn_number, content_hash)` constraint to `recall_messages` table
+- Use `INSERT OR IGNORE` (SQLite) or `ON CONFLICT DO NOTHING` (Postgres)
+- Application-level dedupe becomes advisory only (logs warnings, does not prevent)
+
+### 19.2 Recall Exact Search Excludes Compaction Summaries by Default
+
+**Affected Phases:** Phase 3, Section 15.2
+
+**Change:** Default `recall_memory_search` queries filter out `message_type = 'COMPACTION_SUMMARY'` records.
+
+**Rationale:** Summary records pollute exact code/error retrieval results. Users searching for "NullPointerException line 42" want the exact error trace, not a summary mentioning it.
+
+**Implementation:**
+- Add `message_type` column to `recall_messages` schema
+- Default queries include `WHERE message_type != 'COMPACTION_SUMMARY'`
+- Optional `include_summaries` mode for overview/history-summary use cases (summaries rank lower)
+
+### 19.3 Archival is Tool-First, Never Unconditional
+
+**Affected Phases:** Phase 4, Phase 6, Section 15.3
+
+**Change:** `ChatHistoryAssembler` must not synchronously trigger archival retrieval I/O. Archival results consumed from pre-fetched cache only.
+
+**Rationale:** Unconditional archival search on every prompt assembly causes latency spikes and prompt bloat. Tool-first policy ensures archival retrieval is intentional and bounded.
+
+**Implementation:**
+- `ChatHistoryAssembler` performs O(1) cache lookup only (`archivalContextCache.get(sessionId)`)
+- Cache populated by `archival_memory_search` tool call or session-context gateway
+- Passive injection allowed only with strict latency bounds (<5ms lookup, lexical-first fallback)
+- Budget config renamed to `max-prefetched-archival-results` (slot reserved but empty by default)
+
+### 19.4 SQLite Vector Writes are Serialized
+
+**Affected Phases:** Phase 5, Phase 11, Section 15.4
+
+**Change:** Serialize sqlite-vec ingestion via `VectorIngestionService` with semaphore-based write queue.
+
+**Rationale:** sqlite-vec is not thread-safe for concurrent writes. Concurrent writes cause `SQLITE_BUSY` errors and potential index corruption.
+
+**Implementation:**
+- `VectorIngestionService` with `Semaphore(1)` for write serialization
+- Writes: `writePermit.acquire()` → insert → `writePermit.release()`
+- Reads: remain fully concurrent (no serialization needed)
+- Tests: concurrent ingestion safety, no corruption, no `SQLITE_BUSY` regression
+
+### 19.5 Synthesized Directives Use Shadow Lifecycle
+
+**Affected Phases:** Phase 10, Section 15.5
+
+**Change:** New directives start as `CANDIDATE`/`SHADOW`, never directly `ACTIVE`. Shadow directives evaluated with explicit labeling before promotion.
+
+**Rationale:** Premature directive activation changes agent behavior before effectiveness is measured. Shadow lifecycle allows evaluation without commitment.
+
+**Implementation:**
+- Directive lifecycle states: `CANDIDATE` → `SHADOW` → `ACTIVE` → `DISABLED`
+- Shadow-mode injection: `"- [EVAL] " + directive.text()`
+- Promotion to `ACTIVE` requires measurable success criteria (e.g., 3 sessions with positive outcomes)
+- Auto-disable on negative feedback or admin action
+
+---
+
+**Document Version:** 2.1-phased
+**Previous Version:** 2.0-phased
+**Key Changes:** Five architecture corrections (DB-enforced dedupe, summary exclusion, tool-first archival, serialized vector writes, shadow directive lifecycle)
 **Next Step:** Begin Phase 0 implementation — contracts, DTOs, config, backend selector
 **Review Status:** Pending team review

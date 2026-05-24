@@ -11,21 +11,6 @@ After the GoF State pattern is in place (P1), the next evolution is a full direc
 - Agent-specific sub-graphs (Researcher loops between `Search → Reflect` until confidence threshold; Coder goes straight to `Sandbox`)
 - Declarative, visualizable, dynamically configurable without touching core loop
 
-***
-
-### 8. Memory — MemGPT-Style Tiered Context
-
-Refer [Ideas-Pending/MemGPT-Style.md](MemGPT-Style.md)
-Refer [Ideas-Pending/Self-Evolution.md](Self-Evolution.md)
-
-Current `CompactionService` summarization destroys exact details (code snippets, error traces). This is the "Lost in the Middle" problem.
-
-**Direction:**
-- **Core Memory** — always in system prompt (user profile, current goal, active tool state)
-- **Recall Memory** — searchable conversation history (SQLite FTS5)
-- **Archival Memory** — semantic search via `sqlite-vec`
-- Expose explicit agent tools: `core_memory_append`, `archival_memory_search` — let the LLM manage its own context rather than relying on background summarization
-
 ---
 
 ## Backlog note
