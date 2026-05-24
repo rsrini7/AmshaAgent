@@ -100,7 +100,9 @@ public class IngestDocumentTool implements AgentTool {
         if (text == null) text = (String) params.get("data");
         
         if (text == null || text.isBlank()) {
-            return ToolResponse.failure(400, "text parameter is required.");
+            return ToolResponse.failure(400,
+                "ingest_document failed: the required 'text' parameter was missing or empty. " +
+                "Provide the 'text' parameter as a string containing the document content to ingest.");
         }
 
         // 🟢 Fix Bug 2: Resolve [REDACTED-*] placeholders from RAW_USER_GOAL
