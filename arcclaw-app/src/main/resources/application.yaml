@@ -386,6 +386,33 @@ arcclaw:
       structured-output-mode: ${ARCCLAW_COMPACTION_STRUCTURED_OUTPUT_MODE:NATIVE}
       max-retries: ${ARCCLAW_COMPACTION_MAX_RETRIES:3}
       max-backoff-ms: ${ARCCLAW_MEMORY_COMPACTION_MAX_BACKOFF_MS:60000}
+    tiered:
+      enabled: ${ARCCLAW_MEMORY_TIERED_ENABLED:false}
+      backend: ${ARCCLAW_MEMORY_TIERED_BACKEND:sqlite}
+      core-memory:
+        enabled: ${ARCCLAW_MEMORY_CORE_ENABLED:false}
+        max-blocks-per-user: ${ARCCLAW_MEMORY_CORE_MAX_BLOCKS_PER_USER:20}
+        max-chars-per-block: ${ARCCLAW_MEMORY_CORE_MAX_CHARS_PER_BLOCK:2000}
+      recall:
+        enabled: ${ARCCLAW_MEMORY_RECALL_ENABLED:false}
+        retention-days: ${ARCCLAW_MEMORY_RECALL_RETENTION_DAYS:90}
+        max-search-results: ${ARCCLAW_MEMORY_RECALL_MAX_SEARCH_RESULTS:10}
+        cross-session-search: ${ARCCLAW_MEMORY_RECALL_CROSS_SESSION:true}
+      archival:
+        enabled: ${ARCCLAW_MEMORY_ARCHIVAL_ENABLED:false}
+        max-search-results: ${ARCCLAW_MEMORY_ARCHIVAL_MAX_SEARCH_RESULTS:8}
+        hybrid-search-k: ${ARCCLAW_MEMORY_ARCHIVAL_HYBRID_K:60}
+        eviction:
+          low-confidence-days: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_DAYS:60}
+          low-confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_THRESHOLD:0.5}
+          lru-min-access-count: ${ARCCLAW_MEMORY_ARCHIVAL_LRU_MIN_ACCESS_COUNT:1}
+          lru-max-age-days: ${ARCCLAW_MEMORY_ARCHIVAL_LRU_MAX_AGE_DAYS:90}
+    prompt-budget:
+      max-core-memory-tokens: ${ARCCLAW_MEMORY_PROMPT_BUDGET_CORE_TOKENS:800}
+      max-compaction-summary-tokens: ${ARCCLAW_MEMORY_PROMPT_BUDGET_COMPACTION_TOKENS:1200}
+      max-prefetched-archival-results: ${ARCCLAW_MEMORY_PROMPT_BUDGET_ARCHIVAL_RESULTS:3}
+      max-directives: ${ARCCLAW_MEMORY_PROMPT_BUDGET_DIRECTIVES:5}
+      total-non-conversation-tokens: ${ARCCLAW_MEMORY_PROMPT_BUDGET_TOTAL_TOKENS:2500}
   chat:
     default-observation-max-length: 2000
     tool-specific-limits:
@@ -395,6 +422,16 @@ arcclaw:
   chat-memory:
     max-messages: ${ARCCLAW_CHAT_MEMORY_MAX_MESSAGES:20}
     retention-days: ${ARCCLAW_CHAT_MEMORY_RETENTION_DAYS:30}
+  self-evolve:
+    enabled: ${ARCCLAW_SELF_EVOLVE_ENABLED:false}
+    backend: ${ARCCLAW_SELF_EVOLVE_BACKEND:sqlite}
+    buffer-size: ${ARCCLAW_SELF_EVOLVE_BUFFER_SIZE:50}
+    default-search-limit: ${ARCCLAW_SELF_EVOLVE_DEFAULT_SEARCH_LIMIT:8}
+    directives-enabled: ${ARCCLAW_SELF_EVOLVE_DIRECTIVES_ENABLED:true}
+    synthesis-trigger: "${ARCCLAW_SELF_EVOLVE_SYNTHESIS_TRIGGER:manual}"
+    flush:
+      max-events: ${ARCCLAW_SELF_EVOLVE_FLUSH_MAX_EVENTS:12}
+      idle-ms: ${ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS:300000}
   api:
     keys:
       internal: "${ARCCLAW_API_KEYS_INTERNAL:key-internal-changeme}"
