@@ -43,7 +43,8 @@
       "Bash(mvn test-compile:*)",
       "Bash(ollama list:*)",
       "Bash(bash autotest-full.sh)",
-      "Bash(javac:*)"
+      "Bash(javac:*)",
+      "Bash(./mvnw dependency:tree -pl *)"
     ]
   }
 }

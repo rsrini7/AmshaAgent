@@ -11,9 +11,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         FsAuditEventStoreAdapter.class,
         FsAuditSchemaEnforcer.class,
         FsCronStoreAdapter.class,
+        FsCronRunStoreAdapter.class,
         FsCheckpointStoreAdapter.class,
+        FsCheckpointHelper.class,
         FsMemoryRetrievalAdapter.class,
         FsPersistenceAdapter.class,
+        FsPromptStoreAdapter.class,
         FsLockManager.class,
         FilesystemFileStore.class
     }

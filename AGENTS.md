@@ -229,3 +229,64 @@ When adding a new persona (e.g., Garuda, Indra, etc.), update ALL of the followi
 15. Update `telegram-test-arcclaw.txt` with test cases for new persona
 
 **WARNING**: Items 8 and 9 are static lists in annotations/templates. Item 7 (`PromptTemplateEngine.java`) is a hardcoded switch — none of these have compile-time safety. Always verify manually.
+
+---
+
+## 7. GraalVM Native-Image Reflection Registration
+
+When adding new Java files, you MUST evaluate whether they need `@RegisterForReflection`. JVM-mode success does NOT prove native-image safety.
+
+### 7.1 What Needs `@RegisterForReflection`
+
+| Class Type | Needs Registration? | Why |
+|---|---|---|
+| **`record` (DTOs)** | **YES** | JDBI `@RegisterConstructorMapper` and Jackson deserialize via reflection |
+| **JDBI DAO interfaces** | **YES** | JDBI creates proxy instances via reflection |
+| **JDBI inner `*DtoRow` classes** | **YES** | Row mapping uses reflection |
+| **CDI beans (`@ApplicationScoped`)** | **Only in persistence modules** | Quarkus ArC auto-handles CDI beans in most modules; persistence adapters need explicit registration because JDBI reflection bypasses ArC |
+| **Enums** | **NO** | Quarkus automatically registers enums used in CDI/config |
+| **`@ConfigMapping` interfaces** | **NO** | Quarkus config extension handles these |
+| **Classes only used via CDI injection** | **NO** (except persistence) | ArC generates the necessary metadata |
+| **`@Qualifier` annotations** | **NO** | Processed at build time |
+| **`AnnotationLiteral` classes** | **NO** | Used programmatically, not reflectively |
+| **Static utility classes** | **NO** | No reflection involved |
+
+### 7.2 Where to Add Registration
+
+Each module has a `*ReflectionConfig.java` in its main package:
+
+| Module | Config File |
+|---|---|
+| `arcclaw-persistence-api` | `TieredMemoryReflectionConfig.java` |
+| `arcclaw-persistence-sqlite` | `SqlitePersistenceReflectionConfig.java` |
+| `arcclaw-persistence-postgres` | `PostgresPersistenceReflectionConfig.java` |
+| `arcclaw-persistence-fs` | `FsReflectionConfig.java` |
+| `arcclaw-core` | `CoreReflectionConfig.java` |
+| `arcclaw-app` | `AppReflectionConfig.java`, `ChannelReflectionConfig.java` |
+| `arcclaw-channel-telegram` | `TelegramReflectionConfig.java` |
+| `arcclaw-onboarding` | `OnboardingReflectionConfig.java` |
+| `arcclaw-mcp` | `McpReflectionConfig.java` |
+| `arcclaw-rag` | `RagReflectionConfig.java` |
+
+### 7.3 Checklist for New Files
+
+When adding a new Java file, ask:
+
+1. **Is it a `record` used in JSON serialization or JDBI mapping?** → Add to the module's `*ReflectionConfig.java`
+2. **Is it a JDBI DAO interface (annotated with `@SqlQuery`, `@SqlUpdate`)?** → Add to the module's `*ReflectionConfig.java`
+3. **Is it a persistence adapter (`@ApplicationScoped` in `arcclaw-persistence-*`)?** → Add to the module's `*ReflectionConfig.java`
+4. **Is it a CDI bean in a non-persistence module?** → No registration needed (ArC handles it)
+5. **Is it an enum, config mapping, or qualifier?** → No registration needed
+
+### 7.4 Verification
+
+After adding a new class to a reflection config, run:
+```bash
+python3 ./fix_fqns.py                    # Align imports
+./mvnw compile -DskipTests -q             # Compilation passes
+```
+
+For native-image verification:
+```bash
+mise build:native-local                   # Full native build
+```
