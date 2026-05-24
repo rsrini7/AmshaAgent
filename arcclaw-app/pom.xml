@@ -81,12 +81,7 @@
       <version>${quarkus.version}</version>
       <scope>test</scope>
     </dependency>
-    <!-- Resolves DevMode Jupiter ClassNotFoundException for org.junit.internal.AssumptionViolatedException -->
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
+    <!-- JUnit 4 removed — all tests use JUnit 5 Jupiter. Re-add if DevMode ClassNotFoundException returns. -->
     <!-- Force local deployment module onto test classpath -->
     <dependency>
       <groupId>com.arcclaw</groupId>
