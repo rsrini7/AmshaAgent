@@ -36,7 +36,7 @@ public class PlaywrightMcpHelper {
     @ConfigProperty(name = "arcclaw.tools.playwright.mcp-command", defaultValue = "npx")
     String mcpCommand;
 
-    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-args", defaultValue = "@playwright/mcp")
+    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-args", defaultValue = "@playwright/mcp --headless")
     String mcpArgsRaw;
 
     private volatile boolean connected = false;
