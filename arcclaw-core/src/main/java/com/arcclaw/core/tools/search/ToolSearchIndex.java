@@ -90,7 +90,7 @@ public class ToolSearchIndex {
      * @return Ordered list of matching tool names, most relevant first.
      */
     public List<String> search(String query, int maxResults) {
-        if (query == null || query.isBlank()) return List.of();
+        if (query == null || query.isBlank() || maxResults <= 0) return List.of();
 
         try {
             var reader = DirectoryReader.open(directory);
