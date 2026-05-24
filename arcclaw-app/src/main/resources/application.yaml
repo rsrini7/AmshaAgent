@@ -403,6 +403,20 @@ arcclaw:
       mutation-per-minute: 10
   
   tools:
+    # Per-category thread pool isolation to prevent cross-category starvation
+    bulkhead:
+      network:
+        max-async: 8
+        max-queued: 20
+      compute:
+        max-async: 4
+        max-queued: 10
+      database:
+        max-async: 6
+        max-queued: 20
+      internal:
+        max-async: 20
+        max-queued: 100
     brave:
       api-key: "${ARCCLAW_TOOLS_BRAVE_API_KEY:none}"
     serper:
