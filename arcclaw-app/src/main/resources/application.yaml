@@ -652,7 +652,7 @@ mp:
       enabled: false
     otel:
       sdk:
-        disabled: true
+        disabled: "${OTEL_SDK_DISABLED:false}"
     langchain4j:
       ollama:
         chat-model:
