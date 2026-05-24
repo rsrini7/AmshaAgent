@@ -89,7 +89,7 @@ class LangChainReasoningEnginePersonaTest {
             mockLlmProviderPort, mockRoleRegistry, mockPromptBuilder,
             mockRateLimitTracker, mockIntentDetector,
             mockMeterRegistry, new TextPatternUtils(),
-            mockStepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator
+            mockStepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator, null
         );
 
         // 5. Inject otelContext via reflection (field injection, not constructor)

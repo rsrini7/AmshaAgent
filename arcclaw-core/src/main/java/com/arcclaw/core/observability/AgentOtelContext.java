@@ -45,7 +45,8 @@ public class AgentOtelContext implements AgentObserver {
         if (sessionId == null)
             return null;
         var builder = tracer.spanBuilder(AgentOTelConstants.SPAN_SESSION)
-                .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
+                .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
+                .setAttribute(AgentOTelConstants.ATTR_OI_SPAN_KIND, AgentOTelConstants.OI_KIND_AGENT);
         if (userId != null) builder.setAttribute(AgentOTelConstants.ATTR_USER_ID, userId);
         if (agentRole != null) builder.setAttribute(AgentOTelConstants.ATTR_AGENT_ROLE, agentRole);
         Span span = builder.startSpan();
@@ -112,6 +113,13 @@ public class AgentOtelContext implements AgentObserver {
     }
 
     /**
+     * Returns the root span for a session, or null if none exists.
+     */
+    public Span getRootSpan(String sessionId) {
+        return sessionId != null ? rootSpans.get(sessionId) : null;
+    }
+
+    /**
      * Starts a child span for one agent reasoning iteration.
      * Must be ended via span.end() in a finally block by the caller.
      *
@@ -152,6 +160,7 @@ public class AgentOtelContext implements AgentObserver {
                 .setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId)
                 .setAttribute(AgentOTelConstants.ATTR_TOOL_NAME, toolName)
                 .setAttribute(AgentOTelConstants.ATTR_TOOL_OPERATION, toolOperation)
+                .setAttribute(AgentOTelConstants.ATTR_OI_SPAN_KIND, AgentOTelConstants.OI_KIND_TOOL)
                 .startSpan();
     }
 }

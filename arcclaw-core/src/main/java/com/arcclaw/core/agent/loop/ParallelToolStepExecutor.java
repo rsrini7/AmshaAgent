@@ -16,7 +16,6 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
@@ -26,9 +25,12 @@ import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.GovernanceStrategy;
 import com.arcclaw.core.governance.RateLimitTracker;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.observability.AgentObserver;
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.ToolCategory;
+import com.arcclaw.core.tools.ToolCategoryMapper;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.core.util.AgentErrorMessageUtil;
 import com.arcclaw.core.util.MdcCleaner;
@@ -38,6 +40,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.context.Context;
+import io.smallrye.common.annotation.Identifier;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
@@ -62,9 +65,9 @@ public class ParallelToolStepExecutor {
     private final SequentialToolExecutor sequentialToolExecutor;
     private final Instance<ManagedExecutor> managedExecutors;
     private final Optional<List<String>> preExecutableTools;
-    private final List<String> externalTools;
     private final long toolTimeoutSeconds;
     private final BatchResultAggregator batchResultAggregator;
+    private final ToolCategoryMapper categoryMapper;
 
     @Inject
     public ParallelToolStepExecutor(
@@ -77,8 +80,8 @@ public class ParallelToolStepExecutor {
             MeterRegistry meterRegistry,
             SequentialToolExecutor sequentialToolExecutor,
             Instance<ManagedExecutor> managedExecutors,
+            ToolCategoryMapper categoryMapper,
             @ConfigProperty(name = "arcclaw.hitl.pre-executable-tools", defaultValue = "") Optional<List<String>> preExecutableTools,
-            @ConfigProperty(name = "arcclaw.tools.external-tools", defaultValue = "browser_navigate,web_search") List<String> externalTools,
             @ConfigProperty(name = "arcclaw.parallel.tool-timeout-seconds", defaultValue = "60") long toolTimeoutSeconds) {
         this.objectMapper = objectMapper;
         this.guard = guard;
@@ -89,24 +92,18 @@ public class ParallelToolStepExecutor {
         this.meterRegistry = meterRegistry;
         this.sequentialToolExecutor = sequentialToolExecutor;
         this.managedExecutors = managedExecutors;
+        this.categoryMapper = categoryMapper;
         this.preExecutableTools = preExecutableTools;
-        this.externalTools = externalTools;
         this.toolTimeoutSeconds = toolTimeoutSeconds;
         this.batchResultAggregator = new BatchResultAggregator(objectMapper, this.observers);
     }
 
     protected ParallelToolStepExecutor() {
-        this(null, null, null, null, null, null, null, null, null, Optional.empty(), List.of(), 60);
+        this(null, null, null, null, null, null, null, null, null, null, Optional.empty(), 60);
     }
 
-    private ManagedExecutor getInternalExecutor() {
-        return managedExecutors.select(NamedLiteral.of("internal-tool-executor"))
-                .stream().findFirst()
-                .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
-    }
-
-    private ManagedExecutor getExternalExecutor() {
-        return managedExecutors.select(NamedLiteral.of("external-tool-executor"))
+    private ManagedExecutor executorFor(ToolCategory category) {
+        return managedExecutors.select(Identifier.Literal.of(category.executorName()))
                 .stream().findFirst()
                 .orElseGet(() -> managedExecutors.select(Default.Literal.INSTANCE).get());
     }
@@ -256,7 +253,7 @@ public class ParallelToolStepExecutor {
         List<ParallelToolCall> allowedCompleted = new ArrayList<>();
         List<CompletableFuture<ParallelToolCall>> futures = allowedCalls.stream()
             .map(call -> {
-                ManagedExecutor executor = isExternalTool(call.toolName()) ? getExternalExecutor() : getInternalExecutor();
+                ManagedExecutor executor = executorFor(categoryMapper.categoryFor(call.toolName()));
                 return CompletableFuture.supplyAsync(() -> 
                     sequentialToolExecutor.execute(context, call, otelContext), 
                     executor);
@@ -264,6 +261,11 @@ public class ParallelToolStepExecutor {
             .toList();
 
         for (int i = 0; i < futures.size(); i++) {
+            if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(context.sessionId())) {
+                log.warnf("[PARALLEL] session %s: halted, cancelling %d pending futures", context.sessionId(), futures.size() - i);
+                futures.subList(i, futures.size()).forEach(f -> f.cancel(true));
+                break;
+            }
             CompletableFuture<ParallelToolCall> future = futures.get(i);
             try {
                 allowedCompleted.add(future.get(toolTimeoutSeconds, TimeUnit.SECONDS));
@@ -342,12 +344,6 @@ public class ParallelToolStepExecutor {
             checkpointManager.persistBatchWithPreExecuted(
                 context, calls, preResults, historyAtPause,
                 context.channelType(), context.channelPlatformId()));
-    }
-
-    private boolean isExternalTool(String toolName) {
-        if (toolName == null) return false;
-        String baseName = toolName.contains(":") ? toolName.split(":")[1] : toolName;
-        return externalTools.contains(toolName) || externalTools.contains(baseName);
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {

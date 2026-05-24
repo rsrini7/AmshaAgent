@@ -1425,6 +1425,19 @@ if ($code -eq 130 -or $code -eq 143) { exit 0 }
 exit $code
 """
 
+[tasks."mcp:playwright"]
+description = "Start the official Playwright MCP Server (requires Node.js 20+)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+Write-Host '▶   Starting Playwright MCP Server on stdio...'
+Write-Host '    (Keep this terminal open — the server runs in the foreground)'
+Write-Host '    Then in another terminal: mise run jar:serve -Darcclaw.tools.playwright.mcp-enabled=true'
+Write-Host ''
+PLAYWRIGHT_MCP_HEADLESS=1 npx @playwright/mcp
+"""
+
 # =============================================================================
 # NATIVE BINARY TASKS
 # =============================================================================
@@ -1800,8 +1813,85 @@ Get-ChildItem $out | Format-Table Name, @{L='Size';E={'{0:N0} KB' -f ($_.Length/
 # DOCKER COMPOSE TASKS
 # =============================================================================
 
+[tasks."obs:up"]
+description = "Start observability stack: OTel + Jaeger + Phoenix + Prometheus via compose"
+dir = "{{config_root}}"
+shell = "pwsh -Command"
+quiet = false
+run = """
+$ErrorActionPreference = 'Stop'
+# Podman machine check: try a simple command; if it fails, ask user before starting
+$test = podman ps --noheading 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host '⚠️   Podman is not running.'
+    $confirm = Read-Host 'Start Podman machine now? [Y/n]'
+    if ($confirm -eq '' -or $confirm -eq 'y' -or $confirm -eq 'Y') {
+        $startResult = podman machine start 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            if ($startResult -match 'already running') {
+                Write-Host '⚠️   Podman machine reported "already running" but connection failed — forcing restart...'
+                podman machine stop 2>&1 | Out-Null; Start-Sleep -Seconds 2
+                podman machine start 2>&1
+                if ($LASTEXITCODE -ne 0) { Write-Host '❌  Podman machine failed to restart'; exit 1 }
+            } else {
+                Write-Host '❌  Podman machine failed to start'; exit 1
+            }
+        }
+        Start-Sleep -Seconds 3
+    } else {
+        Write-Host '❌  Podman is required for the observability stack.'
+        exit 1
+    }
+}
+podman compose up -d otel-collector jaeger phoenix prometheus
+if ($LASTEXITCODE -ne 0) { Write-Host '❌  Failed to start observability stack'; exit 1 }
+Write-Host '✅  Observability stack started:'
+Write-Host '    Jaeger UI  -> http://localhost:16686'
+Write-Host '    Phoenix UI -> http://localhost:6006'
+Write-Host '    Prometheus -> http://localhost:9090'
+"""
+
+[tasks."obs:jaeger"]
+description = "Start only Jaeger + OTel collector"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose up -d jaeger otel-collector
+Write-Host '✅  Jaeger + OTel collector started. UI: http://localhost:16686'
+"""
+
+[tasks."obs:phoenix"]
+description = "Start only Phoenix + OTel collector (span routing via collector)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose up -d phoenix otel-collector
+Write-Host '✅  Phoenix + OTel collector started. UI: http://localhost:6006'
+"""
+
+[tasks."obs:down"]
+description = "Stop observability stack: OTel + Jaeger + Phoenix + Prometheus"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose down otel-collector jaeger phoenix prometheus
+Write-Host '✅  Observability stack stopped.'
+"""
+
+[tasks."obs:status"]
+description = "Check observability services status"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+podman compose ps otel-collector jaeger phoenix prometheus 2>&1
+"""
+
 [tasks."compose:up"]
-description = "Start full observability stack: ArcClaw native + Ollama + OTel + Jaeger + Prometheus"
+description = "Start full stack: ArcClaw native + Ollama + OTel + Jaeger + Phoenix + Prometheus"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -1812,11 +1902,12 @@ $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
     Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
 }
-docker compose up -d
+podman compose up -d
 Write-Host ''
 Write-Host '✅  Stack started:'
 Write-Host '    ArcClaw REST  -> http://localhost:8080'
 Write-Host '    Jaeger UI     -> http://localhost:16686'
+Write-Host '    Phoenix UI    -> http://localhost:6006'
 Write-Host '    Prometheus    -> http://localhost:9090'
 Write-Host '    Ollama        -> http://localhost:11434'
 """
@@ -1828,7 +1919,7 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-docker compose down
+podman compose down
 Write-Host '✅  Stack stopped. Data volumes preserved.'
 """
 
@@ -1842,7 +1933,7 @@ $ErrorActionPreference = 'Stop'
 Write-Host '⚠️   WARNING: This will permanently delete all data volumes.'
 $confirm = Read-Host 'Type YES to confirm'
 if ($confirm -eq 'YES') {
-    docker compose down -v
+    podman compose down -v
     Write-Host '✅  Stack and volumes removed.'
 } else {
     Write-Host 'Aborted.'
@@ -1854,7 +1945,7 @@ if ($confirm -eq 'YES') {
 description = "Follow live arcclaw container logs (Ctrl+C to stop)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
-run = "docker compose logs -f arcclaw"
+run = "podman compose logs -f arcclaw"
 
 [tasks."compose:restart"]
 description = "Restart only the arcclaw service (observability stack stays up)"
@@ -1863,7 +1954,7 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-docker compose restart arcclaw
+podman compose restart arcclaw
 Write-Host '✅  arcclaw service restarted.'
 """
 
@@ -2095,10 +2186,36 @@ run = ["mise tasks"]
 [tasks."db:pg:start"]
 description = "Start PostgreSQL 16 container via Podman (for dev/postgresql profile)"
 dir = "{{config_root}}"
-shell = "pwsh -NonInteractive -Command"
-quiet = true
+shell = "pwsh -Command"
+quiet = false
 run = """
 $ErrorActionPreference = 'Stop'
+
+# Ensure Podman machine is running before container operations
+$test = podman ps --noheading 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host '⚠️   Podman is not running.'
+    $confirm = Read-Host 'Start Podman machine now? [Y/n]'
+    if ($confirm -eq '' -or $confirm -eq 'y' -or $confirm -eq 'Y') {
+        $startResult = podman machine start 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            if ($startResult -match 'already running') {
+                Write-Host '⚠️   Podman machine reported "already running" but connection failed — forcing restart...'
+                podman machine stop 2>&1 | Out-Null; Start-Sleep -Seconds 2
+                podman machine start 2>&1
+                if ($LASTEXITCODE -ne 0) { Write-Host "❌  Podman machine failed to restart. Run: podman machine init"; exit 1 }
+            } else {
+                Write-Host "❌  Podman machine failed to start. Run: podman machine init"; exit 1
+            }
+        }
+        Write-Host "✅  Podman machine started."
+        Start-Sleep -Seconds 3
+    } else {
+        Write-Host "❌  Podman is required for PostgreSQL."
+        exit 1
+    }
+}
+
 $container = 'arcclaw-pg'
 $existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container
 if ($existing) {
@@ -2286,18 +2403,52 @@ Write-Host '✅  SQLite JAR ready.'
 """
 
 [tasks."build:pg"]
-depends = ["dev:kill", "env:recover"]
-description = "Build quarkus-run.jar for PostgreSQL backend"
+depends = ["env:recover"]
+description = "Clean install all modules with PostgreSQL backend"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-Write-Host '▶   Building quarkus-run.jar for PostgreSQL backend...'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-& $mvnw 'package' '-pl' 'arcclaw-app' '-am' '-DskipTests' '-Dquarkus.profile=postgresql' '-q'
-if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
-Write-Host '✅  PostgreSQL JAR ready.'
+$mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+
+# --- Auto-tune: detect available RAM & CPUs ---
+if ($IsMacOS) {
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+    if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    $cpu = [int](sysctl -n hw.ncpu)
+} elseif ($IsWindows) {
+    $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    $cpu = [int]$env:NUMBER_OF_PROCESSORS
+} else {
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    $cpu = [int](nproc)
+}
+$jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
+$threads = [Math]::Max(2, [Math]::Min([Math]::Floor($cpu / 2), 8))
+Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, parallel threads:${threads}"
+
+# --- Shield .env (secrets) from the build ---
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into build.'
+}
+
+try {
+    $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
+    & $mvnw clean install -am -DskipTests '-Dquarkus.profile=postgresql' --no-transfer-progress -T $threads
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host '✅  PostgreSQL build complete.'
+} finally {
+    if ($envBackup -and (Test-Path '.env.build-backup')) {
+        Rename-Item '.env.build-backup' '.env'
+        Write-Host 'ℹ️   .env restored.'
+    }
+}
 """
 
 [tasks."jar:pg"]
@@ -2328,7 +2479,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:pg:chat"]
-depends = ["dev:kill", "env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start", "build:pg"]
+usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar with PostgreSQL backend - interactive REPL (rebuild with: mise run build:pg first)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2345,15 +2497,17 @@ $jvmArgs = @(
     '--enable-native-access=ALL-UNNAMED',
     '-Dsun.misc.unsafe.memory.access=allow',
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
-    '-Dquarkus.profile=postgresql',
+    '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
+    '-Dquarkus.profile=cli,postgresql',
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
-& java @jvmArgs -jar $jar chat
+& java @jvmArgs -jar $jar chat @args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:pg:ask"]
-depends = ["dev:kill", "env:recover", "db:pg:start"]
+depends = ["dev:kill", "env:recover", "db:pg:start", "build:pg"]
 description = 'Run packaged jar with PostgreSQL - one-shot. Set $env:GOAL="..." (rebuild with: mise run build:pg first)'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2456,18 +2610,52 @@ try {
 """
 
 [tasks."build:fs"]
-depends = ["dev:kill", "env:recover"]
-description = "Build quarkus-run.jar for filesystem persistence backend"
+depends = ["env:recover"]
+description = "Clean install all modules with filesystem persistence backend"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-Write-Host '▶   Building quarkus-run.jar for filesystem backend...'
 $mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-& $mvnw 'package' '-pl' 'arcclaw-app' '-am' '-DskipTests' '-Dquarkus.profile=filesystem' '-q'
-if ($LASTEXITCODE -ne 0) { Write-Host "❌  Build failed."; exit $LASTEXITCODE }
-Write-Host '✅  Filesystem JAR ready.'
+$mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
+
+# --- Auto-tune: detect available RAM & CPUs ---
+if ($IsMacOS) {
+    $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+    $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+    if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    $cpu = [int](sysctl -n hw.ncpu)
+} elseif ($IsWindows) {
+    $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    $cpu = [int]$env:NUMBER_OF_PROCESSORS
+} else {
+    $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    $cpu = [int](nproc)
+}
+$jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
+$threads = [Math]::Max(2, [Math]::Min([Math]::Floor($cpu / 2), 8))
+Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, parallel threads:${threads}"
+
+# --- Shield .env (secrets) from the build ---
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into build.'
+}
+
+try {
+    $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
+    & $mvnw clean install -am -DskipTests '-Dquarkus.profile=filesystem' --no-transfer-progress -T $threads
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host '✅  Filesystem build complete.'
+} finally {
+    if ($envBackup -and (Test-Path '.env.build-backup')) {
+        Rename-Item '.env.build-backup' '.env'
+        Write-Host 'ℹ️   .env restored.'
+    }
+}
 """
 
 [tasks."jar:fs"]
@@ -2498,7 +2686,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:fs:chat"]
-depends = ["dev:kill", "env:recover"]
+depends = ["dev:kill", "env:recover", "build:fs"]
+usage = 'arg "[args]..." help="Arguments to pass to the chat command"'
 description = "Run packaged jar with filesystem backend - interactive REPL"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
@@ -2515,15 +2704,17 @@ $jvmArgs = @(
     '--enable-native-access=ALL-UNNAMED',
     '-Dsun.misc.unsafe.memory.access=allow',
     '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8',
-    '-Dquarkus.profile=filesystem',
+    '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8',
+    '-Dquarkus.profile=cli,filesystem',
+    '-Darcclaw.rag.vec-extension-path=./lib/vec0',
     '-Darcclaw.data-dir=./data'
 )
-& java @jvmArgs -jar $jar chat
+& java @jvmArgs -jar $jar chat @args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 """
 
 [tasks."jar:fs:ask"]
-depends = ["dev:kill", "env:recover"]
+depends = ["dev:kill", "env:recover", "build:fs"]
 description = 'Run packaged jar with filesystem backend - one-shot. Set $env:GOAL="..."'
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"

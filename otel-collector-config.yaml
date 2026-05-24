@@ -14,10 +14,12 @@ exporters:
     endpoint: jaeger:4317
     tls:
       insecure: true
+  otlphttp/phoenix:
+    endpoint: http://phoenix:6006
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp]
+      exporters: [otlp, otlphttp/phoenix]

@@ -51,7 +51,77 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 
 ---
 
-## 3. Generic Coding Principles
+### 2.4 Prompt Registry (Multi-Backend Hexagonal Port)
+
+* **Structure**: All system prompt content blocks (persona identities, role templates, security rules, shared snippets) are stored in a backend-agnostic `PromptRegistry` rather than `static final String` constants or classpath Qute `@Location` templates.
+* **Backends**: SQLite, PostgreSQL, or Filesystem — selected via `arcclaw.persistence.backend` config property. Each implements `PromptStorePort` from `arcclaw-persistence-api`.
+* **Seed on startup**: `PromptRegistry.onStart(@Observes StartupEvent)` runs after Flyway migration, reads classpath `templates/personas/*.txt` and `templates/prompts/*.txt`, and writes them to the backend if missing. SHA-256 drift detection auto-updates rows on classpath changes but respects admin edits (version>1 or status≠ACTIVE).
+* **Graceful degradation**: If no `PromptStorePort` implementation is available (e.g. in unit tests), `get()` falls back to the classpath cache. All DB operations become no-ops.
+* **Extending**: When adding a new persona:
+  1. Create template file at `templates/prompts/role-<name>.txt`
+  2. Create persona identity at `templates/personas/<name>.txt`
+  3. Add role ID to `ALL_ROLES` array in `PromptRegistry.java` static block
+  4. The registry automatically seeds/detects drift on next startup
+  5. NO changes needed to `PromptTemplateEngine.java` hardcoded switch — the registry is tried first, then falls back to `@Location` templates
+* **Admin API**: `PUT /admin/prompts/{id}` and `POST /admin/prompts` for runtime edits. Changes with version>1 or non-ACTIVE status are preserved across deployments.
+
+### 2.5 Configuration Property Sync Rule
+
+* **Rule**: When adding or updating any `@ConfigProperty` in a Java source file, you MUST update ALL of the following:
+  1. **`application.yaml`** (`arcclaw-app/src/main/resources/application.yaml`) — add the property under the appropriate `arcclaw.*` section with `${ENV_VAR:default}` format
+  2. **`.env.example`** (project root) — add the environment variable with a comment describing its purpose
+  3. **Module README** (if one exists) — update the configuration table in the module's own `README.md` (e.g. `arcclaw-tool-playwright/README.md`)
+* **Reason**: Config properties are documented in three places. Missing any one causes confusion for operators, failing CI builds, or runtime misconfiguration.
+* **Verification**: After adding a new config property, run:
+  ```bash
+  grep "MY_NEW_PROP" .env.example arcclaw-app/src/main/resources/application.yaml
+  ```
+  to confirm it appears in both files.
+
+### 2.6 Optional Bean Resolution via BeanManager (Reflection Pattern)
+
+* **Rule**: When a bean from an optional Maven dependency (`<optional>true</optional>`) must be accessed reflectively at runtime, use `BeanManager` — NOT `Instance<Object>` or `@Any Instance<Object>`.
+* **Reason**: `Instance<Object>` in Quarkus/ArC does not resolve all beans as expected. `@Any Instance<Object>` returns only beans explicitly annotated with `@Any`, not all beans. `BeanManager.getBeans(Object.class)` returns every CDI bean regardless of qualifiers.
+* **Pattern** (see `PlaywrightMcpHelper.java` for a working example):
+  1. `@Inject BeanManager beanManager`
+  2. `beanManager.getBeans(Object.class)` — returns `Set<Bean<?>>` of all beans
+  3. Iterate set, check `bean.getBeanClass().getName()` for the target class name
+  4. Resolve via `beanManager.getReference(typed, typed.getBeanClass(), creationalContext)`
+  5. Verify the resolved object has the expected methods via `getMethod()` before using
+* **Verification**: Run the app and grep the log for `[MCP] BeanManager returned N beans total`. If `N` is < 10, bean resolution is broken.
+
+### 2.7 Filesystem Backend + Lucene Memory Retrieval
+
+* **Structure**: The filesystem persistence backend (`arcclaw-persistence-fs`) replaces `MemoryRetrievalPort`'s naive `HashMap` + `String.contains()` with a disk-based Lucene index (`LuceneIndexManager`) for BM25 full-text and optional vector kNN search.
+* **Architecture**:
+  * JSON files remain the **source of truth** under `{dataDir}/memory-index/*.json`
+  * Lucene index under `{dataDir}/lucene-index/` is a **derived index**, rebuilt from JSON on startup via `rebuildFromJson()`
+  * Vector search is optional — governed by `Instance<EmbeddingModel>` availability. If the `EmbeddingModel` CDI bean is unsatisfied or dimension mismatches, FS degrades to BM25-only.
+  * Hybrid search merges BM25 + vector results via Reciprocal Rank Fusion (RRF, k=60).
+* **Lucene Document Schema**:
+  * `id` (`StringField`, stored) — unique document ID
+  * `content` (`TextField`, stored + indexed) — BM25 search body
+  * `metadata_json` (`StoredField`) — JSON-serialized metadata (retrievable, not indexed)
+  * `timestamp` (`LongPoint` + `StoredField`) — time-based filtering
+  * `embedding` (`KnnFloatVectorField`, COSINE) — optional vector for kNN search
+* **Configuration** (`arcclaw.fs.*`):
+  * `data-dir` — root data directory (default: `./arcclaw-data`)
+  * `lucene-index-dir` — Lucene index subdirectory (default: `lucene-index`; absolute paths supported)
+  * `vector-dimension` — expected embedding dimension (default: `768`; validated at runtime)
+* **Lifecycle**: `@PostConstruct init()` creates `LuceneIndexManager` + rebuilds from JSON; `@PreDestroy destroy()` closes the Lucene `IndexWriter` and `MMapDirectory`.
+* **Extending**: To change indexing behavior:
+  1. Modify `LuceneIndexManager.index()` for document schema changes
+  2. Modify `LuceneIndexManager.searchBM25()` / `searchVector()` for ranking changes
+  3. All retrieval operations go through `MemoryRetrievalPort` — the adapter pattern is unchanged
+
+### 2.8 ToolSearchIndex (Dynamic Tool Discovery)
+
+* **Structure**: `ToolSearchIndex` (`arcclaw-core/.../tools/search/`) is an in-memory Lucene index (`ByteBuffersDirectory`) over all registered agent tools. It indexes tool `name` (StringField) and `description` (TextField) for BM25 relevance matching.
+* **Integration**: Wired into `ReasoningMessageAssembler.resolveTools()` to **reorder** (not filter) `ToolSpecification` objects by relevance to the user's goal. All permitted tools remain available — relevant ones are listed first.
+* **Query Safety**: On `ParseException` (e.g., `[ref:...]` brackets in goal text), falls back to `QueryParser.escape()` before retrying. Returns empty on total parse failure.
+* **Lifecycle**: Rebuilt on startup via `@PostConstruct`. Can be hot-reloaded via public `rebuild()` method.
+
+---
 
 ### 3.1 No Hardcoded Tool Name Strings
 * **Rule**: Never use hardcoded strings like `"sandbox_exec"`, `"github"`, `"schedule_task"`, etc. in Java code logic. Always reference the canonical name via `ToolCapability.ENUM.toolName()`.
@@ -79,6 +149,28 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 * **Method Length**: Maximum **80 lines** per method.
 * **Enforcement**: Checkstyle runs during `compile` phase. Violations fail the build.
 * **Refactoring**: If a method exceeds 80 lines, extract logical blocks into private helper methods. If a file exceeds 500 lines, split into separate classes (e.g., extract inner classes, constants, or utility methods into companion files).
+
+### 4.2 PostgreSQL Local Service Conflict
+
+* **Problem**: A native PostgreSQL installed via `brew`, `apt`, `dnf`, `choco`, or the official installer binds to `127.0.0.1:5432`, intercepting connections intended for the Podman container's PostgreSQL. This causes `FATAL: role "arcclaw" does not exist` errors because the native instance doesn't have the ArcClaw user.
+* **Detection**: Run `lsof -i :5432`. If you see both `gvproxy` (Podman gateway) and `postgres` (native), you have a conflict.
+* **Fix (macOS/Homebrew)**:
+  ```bash
+  brew services stop postgresql@16
+  brew uninstall postgresql@16
+  rm -rf /opt/homebrew/var/postgresql@16
+  ```
+* **Fix (Linux/apt)**:
+  ```bash
+  sudo systemctl stop postgresql
+  sudo apt remove postgresql
+  ```
+* **Fix (Windows)**:
+  ```powershell
+  net stop postgresql-x64-16
+  # Or uninstall via "Add or Remove Programs"
+  ```
+* **Verification**: Run `mise run jar:pg -- serve` and check `psql -h 127.0.0.1 -U arcclaw -d arcclaw -c "SELECT 1;"` succeeds.
 
 ## 5. Adding a New LLM Provider
 

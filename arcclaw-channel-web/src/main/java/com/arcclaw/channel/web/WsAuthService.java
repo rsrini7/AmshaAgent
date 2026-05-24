@@ -14,12 +14,13 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import com.arcclaw.channel.api.ChannelServices;
-import com.arcclaw.core.util.HttpConstants;
 
 @Path("/chat/ws-token")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class WsAuthService {
+
+    private static final String COOKIE_API_KEY = "ARCCLAW_API_KEY";
 
     @Inject
     ChannelServices channelServices;
@@ -34,7 +35,7 @@ public class WsAuthService {
     public WsTokenResponse issueToken(@HeaderParam("X-ArcClaw-API-Key") String apiKey) {
         String resolvedKey = apiKey;
         if (resolvedKey == null || resolvedKey.isBlank()) {
-            Cookie apiCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_ARCCLAW_API_KEY);
+            Cookie apiCookie = httpHeaders.getCookies().get(COOKIE_API_KEY);
             if (apiCookie != null) {
                 resolvedKey = apiCookie.getValue();
             }

@@ -1,5 +1,9 @@
 package com.arcclaw.core.agent.reasoning;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Any;
@@ -7,6 +11,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 
+import com.arcclaw.core.routing.ChatModelFactory;
+import com.arcclaw.core.security.SecretVault;
+import com.arcclaw.core.security.VaultConstants;
+import com.arcclaw.core.security.VaultKey;
 import dev.langchain4j.model.chat.ChatModel;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
@@ -18,20 +26,79 @@ import org.jboss.logging.Logger;
 public class ChatModelProducer {
 
     private static final Logger log = Logger.getLogger(ChatModelProducer.class);
+    private static final Map<String, String> PROVIDER_BASE_URLS = Map.ofEntries(
+        Map.entry("groq",      "https://api.groq.com/openai/v1"),
+        Map.entry("openai",    "https://api.openai.com/v1"),
+        Map.entry("openrouter","https://openrouter.ai/api/v1"),
+        Map.entry("cerebras",  "https://api.cerebras.ai/v1"),
+        Map.entry("nvidia",    "https://integrate.api.nvidia.com/v1"),
+        Map.entry("ollama",    "http://localhost:11434"),
+        Map.entry("omlx",      "http://127.0.0.1:8000/v1"),
+        Map.entry("llamacpp",  "http://127.0.0.1:8080/v1"),
+        Map.entry("gemini",    "https://generativelanguage.googleapis.com/v1beta")
+    );
 
     @ConfigProperty(name = "arcclaw.llm.provider", defaultValue = "groq")
     String provider;
+
+    @ConfigProperty(name = "arcclaw.llm.vault-priority", defaultValue = "false")
+    boolean vaultPriority;
 
     @Inject
     @Any
     Instance<AgentChatModelProvider> providers;
 
+    @Inject
+    SecretVault vault;
+
+    @Inject
+    AgentLlmConfig agentConfig;
+
     @Produces
     @ApplicationScoped
     public ChatModel chatModel() {
-        AgentChatModelProvider providerFactory = findProvider();
-        log.debugf("ChatModelProducer: using provider=%s", provider);
+        String effectiveProvider = provider;
+        String effectiveKey = null;
+        String effectiveModel = null;
+
+        if (vaultPriority) {
+            Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+            if (vaultProvider.isPresent()) {
+                String p = new String(vaultProvider.get().get(), StandardCharsets.UTF_8);
+                if (!p.isBlank()) {
+                    effectiveProvider = p;
+                    Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_API_KEY);
+                    Optional<VaultKey> vaultModel = vault.retrieveSystemKey(VaultConstants.LLM_MODEL_KEY);
+                    effectiveKey = vaultKey.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
+                    effectiveModel = vaultModel.map(k -> new String(k.get(), StandardCharsets.UTF_8)).orElse(null);
+                    log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProvider, effectiveModel);
+                }
+            }
+        }
+
+        AgentChatModelProvider providerFactory = findProvider(effectiveProvider);
+        if (effectiveKey != null && effectiveModel != null) {
+            String baseUrl = PROVIDER_BASE_URLS.getOrDefault(effectiveProvider, "");
+            if (!baseUrl.isBlank()) {
+                log.infof("ChatModelProducer: building model from vault values (provider=%s baseUrl=%s)", effectiveProvider, baseUrl);
+                return ChatModelFactory.createOpenAi(
+                    baseUrl, effectiveKey, effectiveModel,
+                    agentConfig.maxTokens(), agentConfig.timeout(), agentConfig.maxRetries(),
+                    agentConfig.temperature(), agentConfig.logHttp());
+            }
+        }
         return providerFactory.create();
+    }
+
+    private String resolveProvider() {
+        if (vaultPriority) {
+            Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
+            if (vaultKey.isPresent()) {
+                String p = new String(vaultKey.get().get(), StandardCharsets.UTF_8);
+                if (!p.isBlank()) return p;
+            }
+        }
+        return provider != null ? provider : "groq";
     }
 
     @Produces
@@ -39,11 +106,11 @@ public class ChatModelProducer {
     @Dependent
     @Unremovable
     public StructuredOutputMode structuredOutputMode() {
-        return findProvider().structuredOutputMode();
+        return findProvider(resolveProvider()).structuredOutputMode();
     }
 
-    private AgentChatModelProvider findProvider() {
-        String cleanProvider = clean(provider != null ? provider : "groq");
+    private AgentChatModelProvider findProvider(String providerName) {
+        String cleanProvider = clean(providerName != null ? providerName : "groq");
         for (AgentChatModelProvider p : providers) {
             if (p.providerName().equalsIgnoreCase(cleanProvider)) {
                 return p;

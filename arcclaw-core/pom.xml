@@ -206,6 +206,23 @@
       <artifactId>quarkus-opentelemetry</artifactId>
     </dependency>
 
+    <!-- OpenInference / Arize Phoenix: direct HTTP OTLP exporter for LLM semantic traces -->
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-exporter-otlp</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.arize</groupId>
+      <artifactId>openinference-instrumentation-langchain4j</artifactId>
+      <version>0.1.8</version>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-exporter-otlp</artifactId>
+    </dependency>
+
+
+
     <!-- Context propagation (CDI across ManagedExecutor threads) -->
     <dependency>
       <groupId>io.quarkus</groupId>

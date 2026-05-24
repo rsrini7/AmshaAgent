@@ -70,6 +70,9 @@ public class PlaywrightCliTool implements AgentTool {
     @Inject
     AuditService auditService;
 
+    @Inject
+    PlaywrightMcpHelper mcpHelper;
+
     private final Set<String> activeSessions = ConcurrentHashMap.newKeySet();
 
     @Override
@@ -198,6 +201,16 @@ public class PlaywrightCliTool implements AgentTool {
             return ToolResponse.failure(400, "Parameter 'script' is required for action 'eval'.");
         }
 
+        // Try MCP first if enabled and connected
+        mcpHelper.ensureConnected();
+        if (mcpHelper.isAvailable()) {
+            try {
+                return mcpHelper.invoke(ctx, params);
+            } catch (Exception e) {
+                log.warnf("MCP execution failed, falling back to CLI: %s", LogUtil.rootMessage(e));
+            }
+        }
+
         try {
             activeSessions.add(session);
 
@@ -310,6 +323,19 @@ public class PlaywrightCliTool implements AgentTool {
     }
 
     private String execWithSession(String session, String command, String... args) {
+        try {
+            return execWithSessionOnce(session, command, args);
+        } catch (Exception e) {
+            // Session may have expired (HITL pause, GC, etc.) — close stale session and retry once
+            if (session != null) {
+                log.debugf("playwright-cli first attempt failed, closing stale session: %s", LogUtil.rootMessage(e));
+                try { execWithSessionOnce(null, "close-session", session); } catch (Exception _) { }
+            }
+            return execWithSessionOnce(session, command, args);
+        }
+    }
+
+    private String execWithSessionOnce(String session, String command, String... args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("playwright-cli");
         if (session != null) {
@@ -325,8 +351,13 @@ public class PlaywrightCliTool implements AgentTool {
             String output = new String(process.getInputStream().readAllBytes());
             int exit = process.waitFor();
             if (exit != 0) {
-                // Trim long daemon stacktraces — first line has the useful error info
                 String firstLine = output.lines().findFirst().orElse(output.trim());
+                if (firstLine.contains("session.js:") || firstLine.contains("playwright-core")) {
+                    throw new RuntimeException(
+                        "Browser tool failed — Playwright CLI has a stale/crashed session. " +
+                        "Run: npm uninstall -g @playwright/cli && npm install -g @playwright/cli && playwright-cli install-browser chromium\n" +
+                        "Error: " + firstLine);
+                }
                 throw new RuntimeException("playwright-cli exit " + exit + ": " + firstLine);
             }
             return output;

@@ -144,8 +144,7 @@ quarkus:
         endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}"
         protocol: grpc
     resource:
-      attributes:
-        - deployment.environment: "${ARCCLAW_ENV:development}"
+      attributes: "deployment.environment=${ARCCLAW_ENV:development},service.name=arcclaw"
     traces:
       enabled: true
       sampler: always_on
@@ -242,6 +241,8 @@ smallrye:
         level: INFO
       "io.sm.op.ru.util":
         level: INFO
+      "io.quarkus.opentelemetry.runtime.exporter.otlp":
+        level: ERROR      # suppress connection-refused noise when collector is down
       "ja.la.ProcessBuilder":
         level: INFO
       "java.lang.ProcessBuilder":
@@ -310,6 +311,7 @@ arcclaw:
     max-depth: ${ARCCLAW_DELEGATION_MAX_DEPTH:3}
   llm:
     provider: ${ARCCLAW_LLM_PROVIDER:groq}
+    vault-priority: ${ARCCLAW_LLM_VAULT_PRIORITY:false}
     log-http: ${ARCCLAW_LLM_LOG_HTTP:false}
     max-retries: ${ARCCLAW_LLM_MAX_RETRIES:3}
     max-output-tokens: ${ARCCLAW_LLM_MAX_OUTPUT_TOKENS:8192}
@@ -402,6 +404,20 @@ arcclaw:
       mutation-per-minute: 10
   
   tools:
+    # Per-category thread pool isolation to prevent cross-category starvation
+    bulkhead:
+      network:
+        max-async: 8
+        max-queued: 20
+      compute:
+        max-async: 4
+        max-queued: 10
+      database:
+        max-async: 6
+        max-queued: 20
+      internal:
+        max-async: 20
+        max-queued: 100
     brave:
       api-key: "${ARCCLAW_TOOLS_BRAVE_API_KEY:none}"
     serper:
@@ -412,6 +428,11 @@ arcclaw:
       enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED:false}"
       timeout-ms: 30000
       headless: "${ARCCLAW_TOOLS_PLAYWRIGHT_HEADLESS:true}"
+      # MCP Server mode — uses official @playwright/mcp via STDIO, falls back to CLI
+      mcp-enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ENABLED:false}"
+      mcp-headless: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_HEADLESS:true}"
+      mcp-command: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_COMMAND:npx}"
+      mcp-args: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ARGS:@playwright/mcp}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
@@ -473,7 +494,7 @@ arcclaw:
 
   resumption:
     stale-mark-seconds: ${ARCCLAW_RESUMPTION_STALE_MARK_SECONDS:60}
-    playwright-stale-mark-seconds: ${ARCCLAW_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS:300}
+    playwright-stale-mark-seconds: ${ARCCLAW_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS:300}
 
   checkpoint:
     stale-claim-minutes: ${ARCCLAW_CHECKPOINT_STALE_CLAIM_MINUTES:2}
@@ -497,6 +518,11 @@ arcclaw:
     price-per-1k-output: 0.015
     approval-timeout-minutes: 60 # must be >> gc-interval converted to minutes
     rate-limit-backoff-seconds: 30
+
+  observability:
+    phoenix:
+      enabled: "${ARCCLAW_PHOENIX_ENABLED:true}"
+      endpoint: "${ARCCLAW_PHOENIX_ENDPOINT:http://localhost:4318/v1/traces}"
 
   sandbox:
     enabled: "${ARCCLAW_SANDBOX_ENABLED:true}"
@@ -632,7 +658,7 @@ mp:
       enabled: false
     otel:
       sdk:
-        disabled: true
+        disabled: "${OTEL_SDK_DISABLED:false}"
     langchain4j:
       ollama:
         chat-model:
@@ -847,6 +873,8 @@ mp:
     fs:
       data-dir: "${ARCCLAW_FS_DATA_DIR:./data/fs}"
       lock-timeout-seconds: 30
+      lucene-index-dir: "${ARCCLAW_FS_LUCENE_INDEX_DIR:lucene-index}"
+      vector-dimension: "${ARCCLAW_FS_VECTOR_DIMENSION:768}"
   quarkus:
     datasource:
       enabled: false

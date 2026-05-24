@@ -174,7 +174,7 @@ warning is forever suppressed. The ordering is: check → log → CAS, never CAS
 - Internal role identity is the role name, not deity display text.
 - Alias handling belongs in parsing/resolution code, not scattered across business logic.
 - Template selection over roles must remain exhaustive.
-- **P82 Data-Driven Personas:** Agent personas are collapsed into the `DefaultAgent` implementation. System prompts MUST be loaded from `src/main/resources/templates/personas/{role}.txt` via Qute. Class-per-persona inheritance is FORBIDDEN.
+- **P82 Data-Driven Personas:** Agent personas are collapsed into the `DefaultAgent` implementation. System prompts are loaded from the multi-backend `PromptRegistry` (SQLite/PostgreSQL/Filesystem), which auto-seeds from `src/main/resources/templates/` on first startup and supports runtime edits via `PUT /admin/prompts/{id}`. Class-per-persona inheritance is FORBIDDEN.
 
 
 ### 4.5 Channel plugin contract
@@ -603,11 +603,12 @@ MUST NOT use `getFirstResult()` or `stream().findFirst()` without an explicit OR
 
 ## 5.20 SecretVault Transaction Contract
 
-SecretVault operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST use `@Transactional(REQUIRES_NEW)` to prevent nesting with active tool or checkpoint transactions.
+SecretVault **mutation** operations (`store()`, `storeSystemKey()`, `removeSystemKey()`) MUST use `@Transactional(REQUIRES_NEW)` to prevent nesting with active tool or checkpoint transactions.
 
 - Caller transactions MUST NOT rely on vault writes rolling back with their transaction. Vault writes are committed immediately.
 - Calling `vault.store(...)` from within a `REQUIRED` transaction suspends the outer transaction and gets its own write lock, preventing `SQLITE_BUSY` errors during concurrent tool execution or onboarding initialization.
 - This explicit boundary satisfies the anti-nesting requirements described in §5.8.
+- **Read methods** (`get()`, `retrieveSystemKey()`, `systemKeyExists()`) do NOT need `@Transactional` — they are read-only and do not contend for write locks. Adding `SUPPORTS` is acceptable but unnecessary.
 
 ---
 
@@ -900,14 +901,48 @@ Tools requiring API keys use one of two patterns:
 
 Both patterns are valid. Tools that check `vault.systemKeyExists()` for `isEnabled()` while falling back to config properties are acceptable for optional tools that degrade gracefully when the key is absent.
 
-### 8.7 Browser automation (PlaywrightCliTool)
+### 8.7 LLM Guardrail Layer (Layer 7 — PreLlmGuard / PostLlmGuard)
+
+The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via `ReflexRegistry`) and the LLM provider call. It uses ArcClaw-native guard interfaces — NOT LangChain4j's experimental `InputGuardrail`/`OutputGuardrail` — to avoid coupling to an evolving framework API.
+
+**Architecture rules:**
+
+1. **PreLlmGuard** MUST validate input before it reaches the LLM. Implementations include:
+   - `InjectionInputGuard` (`@Priority(100)`) — delegates to `PromptInjectionReflex.matches()`, returns `Block` on match.
+   - `PiiInputGuard` (`@Priority(200)`) — delegates to `PiiScanReflex.sanitize()`, returns `Sanitize` if redaction occurred.
+
+2. **PostLlmGuard** MUST validate output after the LLM responds. Implementations include:
+   - `ParseabilityOutputGuard` (`@Priority(100)`) — validates non-empty response and length limits.
+
+3. **GuardrailCoordinator** MUST:
+   - Discover all `PreLlmGuard` and `PostLlmGuard` beans via CDI `Instance<>`.
+   - Sort by `@Priority` (lower = runs first).
+   - Emit an OTel span for every guard decision.
+   - Emit an `AuditService` event for every guard decision.
+   - Run guards sequentially — each guard receives the (possibly sanitized) output of the prior guard.
+
+4. **GuardDecision** sealed interface defines exactly four outcomes:
+   - `Allow` — proceed unchanged.
+   - `Block(String reason, String detail)` — stop processing, surface the reason.
+   - `Retry(String reason, String correctedInput)` — signal the caller to retry with corrected input.
+   - `Sanitize(String sanitizedInput)` — continue with modified input.
+
+5. **Existing reflexes MUST NOT be replaced.** The guardrail adapters (e.g., `InjectionInputGuard`) reuse reflex logic at the LLM boundary without removing the reflexes from the earlier pipeline layers. Both layers remain active.
+
+6. **MUST NOT exceed one retry** per output guard invocation. Multiple retries are the responsibility of the calling `LangChainReasoningEngine`, not the guard layer.
+
+7. **Streamed responses** MUST be fully accumulated before `PostLlmGuard` runs. The guard layer operates on the complete response, not partial chunks.
+
+8. **Dependency rule:** `arcclaw-core` MUST NOT depend on `dev.langchain4j:langchain4j-guardrails`. The LC4J guardrails module is optional and may be added as a separate adapter only if built-in guardrail implementations (e.g., `MessageModeratorInputGuardrail`) are needed later.
+
+### 8.8 Browser automation (PlaywrightCliTool)
 
 - `PlaywrightCliTool` MUST validate URLs against `SAFE_URL_PATTERN` (`^https?://.*`) before navigation. File://, javascript:, and data: URLs are FORBIDDEN.
 - Content extraction MUST be capped at `MAX_CONTENT_CHARS` (9092).
 - The tool MUST be disabled by default (`arcclaw.tools.playwright.enabled=false`).
 - Browser automation MUST NOT execute in `READONLY` autonomy level.
 
-## 8.8 Sandbox tool exception contract
+## 8.9 Sandbox tool exception contract
 
 `SandboxExecTool.execute()` MUST follow this exception contract:
 - `BudgetExceededException` - MUST propagate (not catch); `AgentStateMachineRunner` handles it.
@@ -1231,4 +1266,153 @@ FORBIDDEN - preview or unfinalized:
 Do NOT add `--enable-preview` to any `pom.xml` compiler or surefire configuration.
 `StructuredTaskScope` is FORBIDDEN. Use `ManagedExecutor` + virtual threads instead.
 Every new or modified class MUST compile cleanly under JDK 25 standard without preview flags.
+
+---
+
+## 11. Frontend (Lit/Web Component) Invariants
+
+### 11.1 Shadow DOM Event Boundary
+
+Custom events dispatched from inside a Lit component's Shadow DOM MUST use `window.dispatchEvent()`. Events with `bubbles: true; composed: true` do NOT reliably cross the Shadow DOM boundary in all cases (observed with Chrome + Lit 3.x). This affects any event the shell needs to receive from child components.
+
+**Pattern:**
+```typescript
+// CORRECT - always works
+window.dispatchEvent(new CustomEvent('session-ready', {
+  detail: { sessionId }
+}));
+
+// WRONG - may be trapped in Shadow DOM
+this.dispatchEvent(new CustomEvent('session-ready', {
+  detail: { sessionId },
+  bubbles: true,
+  composed: true
+}));
+```
+
+Affected events (MUST use `window.dispatchEvent`):
+- `session-ready` (chat → shell, sessionId handoff)
+- `ws-status-change` (WsManager → shell, WebSocket status updates)
+
+### 11.2 CSS Height Resolution in Flex Layouts
+
+Percentage height (`height: 100%`) on a child element does NOT resolve reliably when the parent is a flex item with `overflow-y: auto`. The flex item's computed height is not considered "definite" for percentage resolution in all browsers. This manifests as blank content areas.
+
+**Fix:**
+```css
+/* Parent (flex item with scroll): */
+.content-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Child component: use flex: 1 instead of height: 100% */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;          /* ← NOT height: 100% */
+  min-height: 0;
+}
+```
+
+### 11.3 Scrollbar Styles in Shadow DOM
+
+`::-webkit-scrollbar` pseudo-element styles defined in the document's `<style>` block do NOT apply to scrollable elements inside Shadow DOMs. Each component with a scrollable container MUST define its own scrollbar styles.
+
+```css
+.scrollable-container::-webkit-scrollbar { width: 6px; }
+.scrollable-container::-webkit-scrollbar-track { background: transparent; }
+.scrollable-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+```
+
+Components with internal scrollable containers that need explicit scrollbar styles:
+- `arc-chat-interface.ts`: `.messages`
+- `arc-audit-panel.ts`: `.table-wrap`, `.drawer`
+- `arc-scheduler-panel.ts`: `.drawer`
+
+### 11.4 Dynamic Tag Names in Templates
+
+Using `<${route.component}>` syntax (dynamic tag names from array iteration) can silently fail if the component is not yet registered as a custom element at render time. This produces a blank page with no console error.
+
+**Fix:** Use explicit conditional rendering instead:
+```typescript
+// CORRECT
+${this._route === '#/chat' ? html`<arc-chat-interface class="content-area"></arc-chat-interface>` : nothing}
+
+// WRONG - may fail silently
+${ROUTES.map(r => html`<${r.component} class="content-area"></${r.component}>`)}
+```
+
+### 11.5 `updated()` Lifecycle Guard for Async Connections
+
+When a Lit component's `updated()` lifecycle triggers an async connection (e.g., WebSocket), the guard condition MUST check for a property that is available on the **first render**, not a property that is only set after a subsequent async operation.
+
+**Pattern:**
+```typescript
+// CORRECT - platformId is available immediately
+updated(changedProperties) {
+  if (this._appContext?.platformId && !this._ws && !this._connecting) {
+    this._connect();
+  }
+}
+
+// WRONG - sessionId is empty on first render (set later by WebSocket handshake)
+updated(changedProperties) {
+  if (this._appContext?.sessionId && ...) {  // never true on initial load
+    this._connect();
+  }
+}
+```
+
+### 11.6 WebSocket Stale Connection Guard
+
+When reconnecting a WebSocket, the old connection's `onclose` handler may fire AFTER the new connection is established. This handler must check that it is still the current manager before reacting.
+
+```typescript
+const manager = new WsManager(url, onFrame, (status) => {
+  if (this._ws !== manager) return;  // stale connection - ignore
+  if (status === 'closed') {
+    this._ws = null;
+    this._scheduleReconnect();
+  }
+});
+this._ws = manager;
+this._ws.connect();
+```
+
+Always call `this._ws.disconnect()` before nullifying the old connection in `reconnect()`. Otherwise the old WebSocket stays alive and its `session_terminated` frame may disconnect the new connection.
+
+---
+
+## 12. Threading & Concurrency Invariants
+
+### 12.1 Virtual Threads + `synchronized` on JDK 25
+
+JDK 25 has resolved the virtual-thread pinning issue with `synchronized` blocks. You do NOT need to migrate `synchronized` to `ReentrantLock` for Loom compatibility. Keep `synchronized` where it is semantically correct.
+
+The existing `ReentrantLock` usages in `VaultKeyCache` and `SecretVaultImpl` are there for CDI proxy correctness (`synchronized (this)` on a proxied bean locks the proxy, not the instance), NOT for virtual thread pinning. Keep these as-is.
+
+**Rule:**
+- `synchronized` blocks → safe on JDK 25, prefer for simplicity
+- `ReentrantLock` → only when CDI proxying requires it (field-level lock on `@ApplicationScoped` beans)
+
+### 12.2 Halt/Cancellation Interruption Checks
+
+Tool execution loops MUST check `Thread.currentThread().isInterrupted()` and `WorkspaceManager.isSessionHalted(sessionId)` at loop boundaries. These are GA APIs (no preview features) and are the primary halt propagation mechanism.
+
+Required check points (checked at loop top before each iteration):
+- `StepDecisionRouter.route()` - `while (true)` routing loop
+- `ResumeStrategyDispatcher.resumeToolExecution()` - `while (true)` retry loop
+- `ParallelToolStepExecutor.executeParallel()` - before each `future.get()` in the for loop
+
+```java
+if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(sessionId)) {
+    log.warnf("session %s: halted during %s", sessionId, "operation");
+    // exit cleanly or cancel remaining futures
+}
+```
 

@@ -89,7 +89,7 @@ class AgentLoopTest {
                     model, roleRegistry, promptBuilder,
                     rateLimitTracker, intentClassifier,
                     mock(MeterRegistry.class), new TextPatternUtils(),
-                    stepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator
+                    stepParser, messageAssembler, recoveryProcessor, structuredOutputProcessor, reasoningValidator, null
                 );
 
                 // Inject otelContext via reflection (field injection, not constructor)

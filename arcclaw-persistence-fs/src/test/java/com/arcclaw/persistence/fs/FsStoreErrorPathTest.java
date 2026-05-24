@@ -28,6 +28,8 @@ class FsStoreErrorPathTest {
         FsStoreProperties props = new FsStoreProperties() {
             @Override public String dataDir() { return tempDir.toString(); }
             @Override public int lockTimeoutSeconds() { return 5; }
+            @Override public String luceneIndexDir() { return "lucene-index"; }
+            @Override public int vectorDimension() { return 768; }
         };
         FilesystemFileStore fileStore = new FilesystemFileStore(props);
         fileStore.ensureDataDir();

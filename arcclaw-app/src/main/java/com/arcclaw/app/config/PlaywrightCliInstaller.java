@@ -41,10 +41,10 @@ public class PlaywrightCliInstaller {
     public static void ensureBrowsersInstalled() {
         if (!isPlaywrightCliAvailable()) return;
 
-        String skipInstall = System.getProperty("ARCCLAW_PLAYWRIGHT_SKIP_INSTALL",
-                System.getenv("ARCCLAW_PLAYWRIGHT_SKIP_INSTALL"));
+        String skipInstall = System.getProperty("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL",
+                System.getenv("ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL"));
         if ("true".equalsIgnoreCase(skipInstall)) {
-            log.info("Playwright browser install skipped (ARCCLAW_PLAYWRIGHT_SKIP_INSTALL=true)");
+            log.info("Playwright browser install skipped (ARCCLAW_TOOLS_PLAYWRIGHT_SKIP_INSTALL=true)");
             return;
         }
 

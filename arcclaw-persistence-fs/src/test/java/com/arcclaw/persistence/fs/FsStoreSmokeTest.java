@@ -38,6 +38,8 @@ class FsStoreSmokeTest {
         FsStoreProperties props = new FsStoreProperties() {
             @Override public String dataDir() { return tempDir.toString(); }
             @Override public int lockTimeoutSeconds() { return 5; }
+            @Override public String luceneIndexDir() { return "lucene-index"; }
+            @Override public int vectorDimension() { return 768; }
         };
         fileStore = new FilesystemFileStore(props);
         fileStore.ensureDataDir();
@@ -72,6 +74,8 @@ class FsStoreSmokeTest {
 
         memoryStore = new FsMemoryRetrievalAdapter();
         setField(memoryStore, "store", fileStore);
+        setField(memoryStore, "properties", props);
+        setField(memoryStore, "objectMapper", fileStore.objectMapper());
     }
 
     @AfterEach
@@ -309,12 +313,14 @@ class FsStoreSmokeTest {
 
     @Test
     void testMemoryRetrieval() {
-        memoryStore.loadExistingIndex();
+        memoryStore.init();
         IngestResult result = memoryStore.index(new MemoryEntryDto("mem1", "hello world", Map.of()));
         assertNotNull(result.id());
         assertEquals(1, memoryStore.search("hello", 10, null).size());
         assertEquals(0, memoryStore.search("goodbye", 10, null).size());
     }
+
+
 
     // ─── PersistenceAdapter ────────────────────────────────────
 

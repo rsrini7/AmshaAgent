@@ -16,7 +16,7 @@ Fixes over v2.0:
   4. Post-/halt SKIP     — session_halted flag set IMMEDIATELY after /halt completes,
                            not after detecting the next prompt's timeout.
 """
-import sys, os, re, time, queue, threading, argparse, json, textwrap, uuid
+import sys, os, re, time, queue, threading, argparse, json, textwrap, uuid, pathlib
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
@@ -682,9 +682,12 @@ def main():
     if args.autonomy == "full":
         cmd += ["--autonomy", "FULL"]
 
+    # Resolve project root (directory containing mise.toml)
+    script_dir = pathlib.Path(__file__).resolve().parent
+    project_root = script_dir.parent if (script_dir.parent / "mise.toml").exists() else script_dir
     proc = subprocess.Popen(
         cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, text=True, bufsize=1)
+        stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=str(project_root))
 
     q: queue.Queue = queue.Queue()
 

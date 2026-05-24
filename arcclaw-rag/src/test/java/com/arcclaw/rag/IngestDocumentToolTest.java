@@ -104,6 +104,7 @@ class IngestDocumentToolTest {
         ToolResponse response = tool.execute(context, params);
 
         assertEquals(400, response.exitCode());
-        assertEquals("text parameter is required.", response.output());
+        assertTrue(response.output().contains("text' parameter was missing"),
+                "Expected helpful error message, got: " + response.output());
     }
 }

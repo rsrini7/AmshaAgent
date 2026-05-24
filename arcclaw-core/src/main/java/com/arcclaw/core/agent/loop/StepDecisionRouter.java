@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import com.arcclaw.core.agent.reasoning.ReasoningStep;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.lifecycle.WorkspaceManager;
 import com.arcclaw.core.skill.CompiledSkillEntry;
 import com.arcclaw.core.state.CheckpointStatus;
 import org.jboss.logging.Logger;
@@ -74,6 +75,10 @@ public class StepDecisionRouter {
         ReasoningStep currentStep = step;
 
         while (true) {
+            if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(context.sessionId())) {
+                log.warnf("[StepRouter] session %s: halted during routing", context.sessionId());
+                return RoutingOutcome.proceedToNextTurn(consecutiveFailures);
+            }
             if (currentStep == null) {
                 log.warnf("[StepRouter] session %s: reached routing logic with null step.", context.sessionId());
                 return RoutingOutcome.proceedToNextTurn(consecutiveFailures);

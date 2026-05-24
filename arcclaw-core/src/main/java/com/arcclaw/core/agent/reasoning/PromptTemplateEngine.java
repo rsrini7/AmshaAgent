@@ -9,11 +9,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import com.arcclaw.core.agent.loop.AgentExecutionContext;
+import com.arcclaw.core.agent.reasoning.prompt.PromptConstants;
+import com.arcclaw.core.agent.reasoning.prompt.PromptRegistry;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.security.AutonomyLevel;
 import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.ToolRegistry;
+import io.quarkus.qute.Engine;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import org.jboss.logging.Logger;
@@ -84,6 +87,12 @@ public class PromptTemplateEngine {
 
     @Inject
     ToolRegistry toolRegistry;
+
+    @Inject
+    PromptRegistry promptRegistry;
+
+    @Inject
+    Engine engine;
 
     /**
      * Renders the system prompt section for the given role.
@@ -161,6 +170,10 @@ public class PromptTemplateEngine {
     }
 
     private Template templateFor(AgentRoleEnum role) {
+        String templateText = promptRegistry.get(role.id(), PromptConstants.KEY_ROLE_TEMPLATE);
+        if (templateText != null) {
+            return engine.parse(templateText);
+        }
         return switch (role.id()) {
             case "coordinator" -> coordinatorTemplate;
             case "researcher"  -> researcherTemplate;

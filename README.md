@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1494_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1541_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
@@ -30,12 +30,13 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 ### Key Capabilities
 
 - **ReAct agent loop** (Reason → Act → Observe) over Groq, OpenAI, OpenRouter, OMLX, or local Ollama models
-- **Twelve specialist agent personas** with per-role tool schemas, Qute-rendered system prompts, and iteration caps
+- **Twelve specialist agent personas** with per-role tool schemas, Qute-rendered system prompts (backed by versioned multi-database `PromptRegistry` with runtime admin API), and iteration caps
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `garuda` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
+- **Tool bulkheads** - per-category thread pool isolation (`NETWORK`, `COMPUTE`, `DATABASE`, `INTERNAL`) prevents slow tools from starving other categories; each tool declares its category via `AgentTool.category()` or `ToolCapability`
 - **Reflex system** - 17 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
-- **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes
+- **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes. System prompts, agent skills, cron schedules, and audit events all use this pattern.
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation, with namespace and direct-execution fallbacks
 - **Web search tools** - Brave Search and Serper API integration for real-time information retrieval
 - **Code execution** - `sandbox_exec` tool for running Python, Java, Node.js, and Go in isolated containers, with auto-heal: sandbox failures are automatically routed to Shiva (debugger) for self-correction before surfacing errors
@@ -48,7 +49,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **Custom Skills system** - zero-LLM-token skill routing; skills defined as YAML-frontmatter Markdown documents, stored in SQLite, matched by trigger patterns before intent classification
 - **Structured Output engine** - typed LLM extraction with retry loops and lenient JSON parsing
 - **Multi-channel** - REST API, interactive CLI REPL, Telegram bot (via Apache Camel), WebSocket web channel, onboarding wizard, one-shot `ask` mode for CI/CD
-- **Playwright browser automation** - headless browser tool for web scraping and interaction
+- **Playwright browser automation** - headless browser tool via `@playwright/cli` CLI daemon or the official Playwright MCP Server (`@playwright/mcp` via STDIO) with automatic fallback
 
 ---
 
@@ -167,6 +168,23 @@ When a REST call hits the kernel, the execution sequence is rigorously defined:
 10. **SQLite Checkpointing:** After each tick, the entire Thought trajectory is serialized into a SQLite WAL-enabled checkpoint, making the agent deeply resilient to JVM crashes.
 11. **Async Persistence Engine:** A single-writer `AsyncPersistenceEngine` serializes all SQLite writes through a `LinkedBlockingQueue`, preventing WAL contention across virtual threads.
 12. **Answer Quality Guard:** Before returning a final answer, `AnswerQualityGuard` validates it against multiple checks: system instruction echo detection, naked tool call injection, compaction context leaks, and minimum quality thresholds. Failed answers trigger automatic retry with corrective hints.
+
+### Security Architecture — 10 Guard Layers
+
+| # | Layer | Component | What |
+|---|-------|-----------|------|
+| 1 | **Channel gate** | `AllowlistHandler` | Channel user allowlist (Telegram numeric ID check) |
+| 2 | **Injection match** | `PromptInjectionReflex` | 25 regex patterns (governance bypass, exfiltration, identity hijacking, direct override, context wipe) |
+| 3 | **PII detection** | `PiiScanReflex` | 12 PII types — blocks or redacts before LLM |
+| 4 | **Destructive ops** | `DestructiveVocabularyFilter` | Routes destructive-language inputs to reduced autonomy |
+| 5 | **Goal sanitize** | `AgentDispatchHandler` PII re-sanitizer | Applies a second PII pass on the goal before agent dispatch |
+| 6 | **HITL boundary** | `CheckpointResumeCoordinator` / `ToolInvocationGuard` | Approval frames, autonomy policy, delegated approval |
+| 7 | **LLM boundary** | `GuardrailCoordinator` + `PreLlmGuard`/`PostLlmGuard` | Injection check, PII sanitize, response validation — runs before and after every LLM call |
+| 8 | **Tool boundary** | `ToolInvocationGuard` | Dedup, unknown-tool block, HITL approval |
+| 9 | **Tool interceptor** | `GithubToolGuardInterceptor` | Cross-loop dedup + intent validation for GitHub |
+| 10 | **Session isolation** | `AgentSessionService` per-key access | Async approve/deny, session-scoped API keys |
+
+Layers 1–6 are deterministic (zero LLM tokens). Layer 7 is the LLM boundary — runs before and after every model call with OTel span + audit per decision. Each layer assumes the layer below has already passed.
 
 > [!NOTE]
 > **Sandbox Degradation Details**: The `ProcessIsolationExecutor` operates in three tiers:
@@ -622,6 +640,15 @@ arcclaw-persistence-sqlite/   ← SQLite adapter implementing all persistence po
 │   └── SessionKnowledgeBase    @WorkspaceScoped per-session embedding store
 │
 arcclaw-persistence-fs/       ← Filesystem-based persistence adapter (alternative to SQLite; missing AdvisoryLockPort)
+│   ├── FsMemoryRetrievalAdapter  Lucene BM25 + optional vector hybrid search (RRF)
+│   ├── lucene/
+│   │   └── LuceneIndexManager    Disk-based MMapDirectory index with BM25, kNN, RRF
+│   ├── FsChatMemoryStoreAdapter, FsCheckpointStoreAdapter, FsCronStoreAdapter,
+│   │   FsSecretStoreAdapter, FsSkillStoreAdapter, FsAuditEventStoreAdapter,
+│   │   FsCompactionStoreAdapter, FsPersistenceAdapter, FsLockManager
+│   └── FilesystemFileStore       JSON read/write/list helper with Jackson ObjectMapper
+│   + Config: arcclaw.fs.data-dir, arcclaw.fs.lucene-index-dir, arcclaw.fs.vector-dimension
+│   NOTE: Missing AdvisoryLockPort, no user-scoped isolation (userId ignored)
 │
 arcclaw-persistence-postgres/ ← PostgreSQL persistence adapter (PARTIAL: checkpoint, cron, audit only)
 │   ├── PostgresCheckpointStoreAdapter, PostgresCronStoreAdapter,
@@ -817,9 +844,9 @@ mise run build:fs && mise run jar:fs  # build & run JAR with FS
 **Capabilities by backend:**
 
 | Feature | SQLite | PostgreSQL | Filesystem |
-|---|---|---|---|
-| Full-text search | FTS5 (ranked) | tsvector (ranked) | Basic substring |
-| Vector search | sqlite-vec (RRF) | pgvector (RRF) | Not supported |
+|---|---|---|---|---|
+| Full-text search | FTS5 (ranked) | tsvector (ranked) | Lucene BM25 (ranked) |
+| Vector search | sqlite-vec (RRF) | pgvector (RRF) | Optional — Lucene kNN + EmbeddingModel (RRF) |
 | Session resolution | DB-backed registry | DB-backed registry | UUID v3 fallback |
 | HITL approvals | ✅ | ✅ | Not available |
 | WORM audit enforcement | SQL triggers | PL/pgSQL triggers | Best-effort |
@@ -1529,6 +1556,15 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_API_RATE_LIMIT_REQUESTS_PER_MINUTE` | no | `20` | Max API requests per minute per API key |
 | `ARCCLAW_API_RATE_LIMIT_MUTATION_PER_MINUTE` | no | `10` | Max mutation API requests per minute per API key |
 
+### Tool Bulkheads
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_TOOLS_BULKHEAD_NETWORK_MAX_ASYNC` | no | `8` | Max parallel network tool executions (browser, web search, fetch) |
+| `ARCCLAW_TOOLS_BULKHEAD_COMPUTE_MAX_ASYNC` | no | `4` | Max parallel compute tool executions (sandbox) |
+| `ARCCLAW_TOOLS_BULKHEAD_DATABASE_MAX_ASYNC` | no | `6` | Max parallel database tool executions (memory, ingest) |
+| `ARCCLAW_TOOLS_BULKHEAD_INTERNAL_MAX_ASYNC` | no | `20` | Max parallel internal tool executions (github, schedule, delegation) |
+
 ### Parallel Tool Execution
 
 | Variable | Required | Default | Description |
@@ -1541,8 +1577,24 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_RESUMPTION_STALE_MARK_SECONDS` | no | `60` | Seconds before a resumption mark is considered stale |
-| `ARCCLAW_RESUMPTION_PLAYWRIGHT_STALE_MARK_SECONDS` | no | `300` | Seconds before a Playwright resumption mark is considered stale |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | no | `300` | Seconds before a Playwright resumption mark is considered stale |
 | `ARCCLAW_RESUME_LOCK_DB_ADVISORY` | no | `false` | Use database advisory locks for resume coordination |
+
+### Playwright MCP
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ENABLED` | no | `false` | Enable Playwright MCP Server mode (uses @playwright/mcp via STDIO) |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_HEADLESS` | no | `true` | Run MCP browser in headless mode |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_COMMAND` | no | `npx` | Command to launch the Playwright MCP Server |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ARGS` | no | `@playwright/mcp` | Arguments for the MCP Server command |
+
+### Observability — Arize Phoenix
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_PHOENIX_ENABLED` | no | `true` | Enable OTel trace export to Arize Phoenix via collector |
+| `ARCCLAW_PHOENIX_ENDPOINT` | no | `http://localhost:4318/v1/traces` | Phoenix OTLP HTTP endpoint |
 
 ### Notification
 
@@ -1572,4 +1624,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 17 reflexes · 10 LLM providers · 19 UI components*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 957+ tests passing · 18 modules · 14 tools · 17 reflexes · 10 LLM providers · 19 UI components*
