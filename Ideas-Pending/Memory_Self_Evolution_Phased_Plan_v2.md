@@ -1,6 +1,6 @@
 # Memory Tiered Architecture & Self-Evolution — Phased Implementation Plan
 
-> **Status:** v2.2-implemented — Phase 0 ✅ complete (20 files, 3 ISP ports, CDI producer, GraalVM reflection)
+> **Status:** v2.2-implemented — Phase 0 ✅ complete (24 files, 3 ISP ports, CDI producer, GraalVM reflection)
 > **Backlog Ref:** `Ideas-Pending/BACKLOG.md` Item #8
 > **Input Docs:** `MemGPT-Style.md`, `Self-Evolution.md`, `Memory_Self_Evoluton_Plan.md` (v1.2), `Memory_self_Review.md`
 > **Date:** 2026-05-24
@@ -36,9 +36,7 @@ These corrections prevent race conditions, search pollution, prompt bloat, datab
 
 This document replaces the original 5-phase plan with a **13-phase (0-12) incremental implementation** based on detailed codebase review. The critical insight: **ArcClaw already has the right seams** (`CompactionService`, `CompactionEventBridge`, `PersistentChatMemoryStore`, `ChatHistoryAssembler`, `ReasoningMessageAssembler`, `MemorySearchTool`, `MemoryRetrievalPort`) — we refactor rather than rewrite.
 
-**Phase 0 Status:** ✅ COMPLETE (20 files, 3 ISP-compliant ports, CDI `@Produces`, GraalVM reflection, 22 config keys all defaulting to `false`). See §3 for full implementation details.
-
-**Phase 0 Status:** ✅ COMPLETE (20 files, 3 ISP-compliant ports, CDI `@Produces`, GraalVM reflection). See Section 3 for full implementation details.
+**Phase 0 Status:** ✅ COMPLETE (24 files, 3 ISP-compliant ports, CDI `@Produces`, GraalVM reflection, 22 config keys all defaulting to `false`). See §3 for full implementation details.
 
 **Core Principles:**
 1. **No migration required** — ArcClaw is in development; storage can be dropped/recreated
@@ -234,8 +232,12 @@ arcclaw:
       recall:
         enabled: ${ARCCLAW_MEMORY_RECALL_ENABLED:false}
         retention-days: ${ARCCLAW_MEMORY_RECALL_RETENTION_DAYS:90}
+        max-search-results: ${ARCCLAW_MEMORY_RECALL_MAX_SEARCH_RESULTS:10}
+        cross-session-search: ${ARCCLAW_MEMORY_RECALL_CROSS_SESSION:true}
       archival:
         enabled: ${ARCCLAW_MEMORY_ARCHIVAL_ENABLED:false}
+        max-search-results: ${ARCCLAW_MEMORY_ARCHIVAL_MAX_SEARCH_RESULTS:8}
+        hybrid-search-k: ${ARCCLAW_MEMORY_ARCHIVAL_HYBRID_K:60}
         eviction:
           low-confidence-days: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_DAYS:60}
           low-confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_THRESHOLD:0.5}
@@ -251,6 +253,7 @@ arcclaw:
     enabled: ${ARCCLAW_SELF_EVOLVE_ENABLED:false}
     backend: ${ARCCLAW_SELF_EVOLVE_BACKEND:sqlite}
     buffer-size: ${ARCCLAW_SELF_EVOLVE_BUFFER_SIZE:50}
+    default-search-limit: ${ARCCLAW_SELF_EVOLVE_DEFAULT_SEARCH_LIMIT:8}
     directives-enabled: ${ARCCLAW_SELF_EVOLVE_DIRECTIVES_ENABLED:true}
     synthesis-trigger: "${ARCCLAW_SELF_EVOLVE_SYNTHESIS_TRIGGER:manual}"
     flush:
@@ -279,7 +282,7 @@ arcclaw:
 ### 3.8 Exit Criteria
 
 - [x] App compiles with all new flags **disabled** — `./mvnw clean compile` passes
-- [x] 20 new files created, 2 removed, 0 compilation errors
+- [x] 24 new files created, 0 removed, 0 compilation errors
 - [x] Backend selection is deterministic — CDI `@TieredBackend` qualifier + `TieredBackendLiteral`
 - [x] Zero behavior change when disabled — all ports return `NoOp*` implementations
 - [x] GraalVM reflection registered — `TieredMemoryReflectionConfig` in persistence-api module
