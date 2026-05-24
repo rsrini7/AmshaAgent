@@ -352,6 +352,12 @@ public class PlaywrightCliTool implements AgentTool {
             int exit = process.waitFor();
             if (exit != 0) {
                 String firstLine = output.lines().findFirst().orElse(output.trim());
+                if (firstLine.contains("session.js:") || firstLine.contains("playwright-core")) {
+                    throw new RuntimeException(
+                        "Browser tool failed — Playwright CLI has a stale/crashed session. " +
+                        "Run: npm uninstall -g @playwright/cli && npm install -g @playwright/cli && playwright-cli install-browser chromium\n" +
+                        "Error: " + firstLine);
+                }
                 throw new RuntimeException("playwright-cli exit " + exit + ": " + firstLine);
             }
             return output;

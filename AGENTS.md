@@ -78,6 +78,18 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   ```
   to confirm it appears in both files.
 
+### 2.6 Optional Bean Resolution via BeanManager (Reflection Pattern)
+
+* **Rule**: When a bean from an optional Maven dependency (`<optional>true</optional>`) must be accessed reflectively at runtime, use `BeanManager` — NOT `Instance<Object>` or `@Any Instance<Object>`.
+* **Reason**: `Instance<Object>` in Quarkus/ArC does not resolve all beans as expected. `@Any Instance<Object>` returns only beans explicitly annotated with `@Any`, not all beans. `BeanManager.getBeans(Object.class)` returns every CDI bean regardless of qualifiers.
+* **Pattern** (see `PlaywrightMcpHelper.java` for a working example):
+  1. `@Inject BeanManager beanManager`
+  2. `beanManager.getBeans(Object.class)` — returns `Set<Bean<?>>` of all beans
+  3. Iterate set, check `bean.getBeanClass().getName()` for the target class name
+  4. Resolve via `beanManager.getReference(typed, typed.getBeanClass(), creationalContext)`
+  5. Verify the resolved object has the expected methods via `getMethod()` before using
+* **Verification**: Run the app and grep the log for `[MCP] BeanManager returned N beans total`. If `N` is < 10, bean resolution is broken.
+
 ---
 
 ## 3. Generic Coding Principles
