@@ -70,3 +70,4 @@ arcclaw-source.7z
 # Test artifacts
 tool-contracts.json
 results*.json
+autotest/logs/
