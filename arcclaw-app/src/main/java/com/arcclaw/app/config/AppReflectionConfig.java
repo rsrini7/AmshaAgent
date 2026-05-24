@@ -9,6 +9,8 @@ import com.arcclaw.app.ui.dto.AgentStatusDto;
 import com.arcclaw.app.ui.dto.ChatRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalRequest;
 import com.arcclaw.app.ui.dto.CheckpointApprovalResponse;
+import com.arcclaw.app.ui.dto.ChatMessageDto;
+import com.arcclaw.app.ui.dto.PageDto;
 import com.arcclaw.app.ui.dto.PendingApprovalDto;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -28,6 +30,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         CheckpointApprovalRequest.class,
         CheckpointApprovalResponse.class,
         PendingApprovalDto.class,
+        PageDto.class,
+        ChatMessageDto.class,
     }
 )
 public class AppReflectionConfig {
