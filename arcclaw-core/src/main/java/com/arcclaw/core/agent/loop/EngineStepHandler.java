@@ -27,6 +27,7 @@ import com.arcclaw.core.agent.reasoning.error.LlmRateLimitException;
 import com.arcclaw.core.agent.reasoning.error.LlmToolCallException;
 import com.arcclaw.core.agent.result.AgentResult;
 import com.arcclaw.core.agent.role.AgentRoleEnum;
+import com.arcclaw.core.agent.role.ToolCapability;
 import com.arcclaw.core.governance.BudgetExceededException;
 import com.arcclaw.core.governance.BudgetWarningException;
 import com.arcclaw.core.governance.GovernanceStrategy;
@@ -204,7 +205,12 @@ public class EngineStepHandler {
                     String answer = exceptionRouter.extractFinishAnswer(exceptionRouter.extractFailedGeneration(rawError));
                     if (answer != null && !answer.isBlank()) return StepDecision.terminal(AgentResult.finished(answer, List.copyOf(history)));       
                 }
-                return StepDecision.terminal(AgentResult.finished("Tool not available in this role.", List.copyOf(history)));
+                // Tool not available in current role — tell LLM to use garuda to delegate
+                String delegateTarget = suggestDelegationRole(unavailableTool);
+                String hint = "The tool '" + unavailableTool + "' is not available in your role. "
+                    + "Use `garuda(agent=" + delegateTarget + ")` to delegate this task "
+                    + "to the appropriate specialist. Do NOT call tools outside your PERMITTED TOOLS list.";
+                return StepDecision.retryEngine(hint, llmSchemaErrorCount);
             }
 
             if (rawError.contains("tool_use_failed")) {
@@ -257,5 +263,23 @@ public class EngineStepHandler {
             ctx.setLastCheckpointStatus(cp.getStatus());
             return cp.getStatus();
         });
+    }
+
+    /**
+     * Maps a tool name to the correct agent role for delegation via garuda.
+     * When the LLM tries to call a tool not in its current role, this suggests
+     * which role to delegate to.
+     */
+    private static String suggestDelegationRole(String toolName) {
+        if (toolName == null) return AgentRoleEnum.COORDINATOR.id();
+        if (toolName.equals(ToolCapability.SANDBOX_EXEC.toolName())) return AgentRoleEnum.CODER.id();
+        if (toolName.equals(ToolCapability.BROWSER_NAVIGATE.toolName())
+                || toolName.equals(ToolCapability.WEB_SEARCH_BRAVE.toolName())
+                || toolName.equals(ToolCapability.WEB_SEARCH_SERPER.toolName())
+                || toolName.equals(ToolCapability.WEB_FETCH.toolName())
+                || toolName.equals(ToolCapability.GITHUB.toolName())) {
+            return AgentRoleEnum.RESEARCHER.id();
+        }
+        return AgentRoleEnum.COORDINATOR.id();
     }
 }
