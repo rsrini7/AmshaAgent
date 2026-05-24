@@ -428,8 +428,9 @@ arcclaw:
       headless: "${ARCCLAW_TOOLS_PLAYWRIGHT_HEADLESS:true}"
       # MCP Server mode — uses official @playwright/mcp via STDIO, falls back to CLI
       mcp-enabled: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ENABLED:false}"
+      mcp-headless: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_HEADLESS:true}"
       mcp-command: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_COMMAND:npx}"
-      mcp-args: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ARGS:@playwright/mcp --headless}"
+      mcp-args: "${ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ARGS:@playwright/mcp}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
@@ -491,7 +492,7 @@ arcclaw:
 
   resumption:
     stale-mark-seconds: ${ARCCLAW_RESUMPTION_STALE_MARK_SECONDS:60}
-    playwright-stale-mark-seconds: ${ARCCLAW_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS:300}
+    playwright-stale-mark-seconds: ${ARCCLAW_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS:300}
 
   checkpoint:
     stale-claim-minutes: ${ARCCLAW_CHECKPOINT_STALE_CLAIM_MINUTES:2}

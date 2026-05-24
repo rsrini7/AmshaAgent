@@ -1435,7 +1435,7 @@ Write-Host '▶   Starting Playwright MCP Server on stdio...'
 Write-Host '    (Keep this terminal open — the server runs in the foreground)'
 Write-Host '    Then in another terminal: mise run jar:serve -Darcclaw.tools.playwright.mcp-enabled=true'
 Write-Host ''
-npx @playwright/mcp --headless
+PLAYWRIGHT_MCP_HEADLESS=1 npx @playwright/mcp
 """
 
 # =============================================================================

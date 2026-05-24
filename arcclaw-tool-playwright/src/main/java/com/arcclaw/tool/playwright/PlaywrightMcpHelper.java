@@ -33,10 +33,13 @@ public class PlaywrightMcpHelper {
     @ConfigProperty(name = "arcclaw.tools.playwright.mcp-enabled", defaultValue = "false")
     boolean mcpEnabled;
 
+    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-headless", defaultValue = "true")
+    boolean mcpHeadless;
+
     @ConfigProperty(name = "arcclaw.tools.playwright.mcp-command", defaultValue = "npx")
     String mcpCommand;
 
-    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-args", defaultValue = "@playwright/mcp --headless")
+    @ConfigProperty(name = "arcclaw.tools.playwright.mcp-args", defaultValue = "@playwright/mcp")
     String mcpArgsRaw;
 
     private volatile boolean connected = false;
@@ -88,7 +91,10 @@ public class PlaywrightMcpHelper {
         try {
             var method = service.getClass().getMethod("connectStdio",
                     String.class, String.class, List.class, Map.class);
-            method.invoke(service, MCP_SERVER_NAME, mcpCommand, parseArgs(mcpArgsRaw), Map.of());
+            Map<String, String> env = mcpCommand.contains("npx") && mcpHeadless
+                    ? Map.of("PLAYWRIGHT_MCP_HEADLESS", "1")
+                    : Map.of();
+            method.invoke(service, MCP_SERVER_NAME, mcpCommand, parseArgs(mcpArgsRaw), env);
             connected = true;
             log.info("[MCP] Playwright MCP Server connected successfully");
         } catch (Exception e) {

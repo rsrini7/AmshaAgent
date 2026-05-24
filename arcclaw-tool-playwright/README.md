@@ -53,6 +53,7 @@ export ARCCLAW_TOOLS_PLAYWRIGHT_ENABLED=true
 | `arcclaw.tools.playwright.headless` | `true` | Headless mode (false for debug) |
 | `arcclaw.tools.playwright.timeout-ms` | `30000` | Navigation timeout in ms |
 | `arcclaw.tools.playwright.mcp-enabled` | `false` | Enable Playwright MCP Server mode (uses @playwright/mcp via STDIO) |
+| `arcclaw.tools.playwright.mcp-headless` | `true` | Set to false to show browser window (`PLAYWRIGHT_MCP_HEADLESS` env var) |
 | `arcclaw.tools.playwright.mcp-command` | `npx` | Command to launch the Playwright MCP Server |
 | `arcclaw.tools.playwright.mcp-args` | `@playwright/mcp` | Arguments for the MCP Server command |
 
