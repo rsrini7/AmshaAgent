@@ -44,6 +44,20 @@
     <archunit.version>1.4.1</archunit.version>
     <camel.quarkus.version>3.27.3</camel.quarkus.version>
     <quarkus-jdbi.version>1.9.0</quarkus-jdbi.version>
+    <quarkus-mcp.version>1.10.3</quarkus-mcp.version>
+    <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
+    <lucene.version>10.4.0</lucene.version>
+    <commonmark.version>0.24.0</commonmark.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <commons-text.version>1.15.0</commons-text.version>
+    <cron-utils.version>9.2.1</cron-utils.version>
+    <owasp-sanitizer.version>20260313.1</owasp-sanitizer.version>
+    <openinference-langchain4j.version>0.1.8</openinference-langchain4j.version>
+    <embedded-postgres.version>2.2.2</embedded-postgres.version>
+    <bucket4j.version>8.16.1</bucket4j.version>
+    <wiremock.version>3.9.2</wiremock.version>
+    <junit4.version>4.13.2</junit4.version>
+    <jboss-logmanager.version>3.0.6.Final</jboss-logmanager.version>
     <maven.surefire.argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED</maven.surefire.argLine>
   </properties>
  
@@ -139,15 +153,104 @@
         <artifactId>quarkus-jdbi</artifactId>
         <version>${quarkus-jdbi.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.mcp</groupId>
+        <artifactId>quarkus-mcp-server-stdio</artifactId>
+        <version>${quarkus-mcp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.mcp</groupId>
+        <artifactId>quarkus-mcp-server-http</artifactId>
+        <version>${quarkus-mcp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.jdbc</groupId>
+        <artifactId>quarkus-jdbc-sqlite</artifactId>
+        <version>${quarkus-jdbc-sqlite.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.lucene</groupId>
+        <artifactId>lucene-core</artifactId>
+        <version>${lucene.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.lucene</groupId>
+        <artifactId>lucene-queryparser</artifactId>
+        <version>${lucene.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.lucene</groupId>
+        <artifactId>lucene-analysis-common</artifactId>
+        <version>${lucene.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.commonmark</groupId>
+        <artifactId>commonmark</artifactId>
+        <version>${commonmark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.commonmark</groupId>
+        <artifactId>commonmark-ext-gfm-tables</artifactId>
+        <version>${commonmark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>${commons-lang3.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-text</artifactId>
+        <version>${commons-text.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.cronutils</groupId>
+        <artifactId>cron-utils</artifactId>
+        <version>${cron-utils.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+        <artifactId>owasp-java-html-sanitizer</artifactId>
+        <version>${owasp-sanitizer.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.arize</groupId>
+        <artifactId>openinference-instrumentation-langchain4j</artifactId>
+        <version>${openinference-langchain4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.zonky.test</groupId>
+        <artifactId>embedded-postgres</artifactId>
+        <version>${embedded-postgres.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j_jdk17-core</artifactId>
+        <version>${bucket4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wiremock</groupId>
+        <artifactId>wiremock-standalone</artifactId>
+        <version>${wiremock.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>${junit4.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jboss.logmanager</groupId>
+        <artifactId>jboss-logmanager</artifactId>
+        <version>${jboss-logmanager.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
- 
+
   <!-- Inherited test dependencies for all modules -->
   <dependencies>
     <dependency>
       <groupId>org.jboss.logmanager</groupId>
       <artifactId>jboss-logmanager</artifactId>
-      <version>3.0.6.Final</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

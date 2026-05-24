@@ -48,7 +48,6 @@
         <dependency>
             <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
             <artifactId>owasp-java-html-sanitizer</artifactId>
-            <version>20260313.1</version>
         </dependency>
 
         <!-- Standard Quarkus CDI -->
@@ -80,7 +79,6 @@
         <dependency>
             <groupId>io.quarkiverse.jdbc</groupId>
             <artifactId>quarkus-jdbc-sqlite</artifactId>
-            <version>3.0.11</version>
             <scope>test</scope>
         </dependency>
         <dependency>

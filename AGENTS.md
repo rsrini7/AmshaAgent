@@ -150,7 +150,33 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 * **Enforcement**: Checkstyle runs during `compile` phase. Violations fail the build.
 * **Refactoring**: If a method exceeds 80 lines, extract logical blocks into private helper methods. If a file exceeds 500 lines, split into separate classes (e.g., extract inner classes, constants, or utility methods into companion files).
 
-### 4.2 PostgreSQL Local Service Conflict
+### 4.2 Dependency Version Management
+* **Rule**: All third-party dependency versions MUST be declared in the parent `pom.xml`'s `<dependencyManagement>` section using a `<property>` reference. Module `pom.xml` files MUST NOT contain hardcoded `<version>` tags on `<dependency>` entries.
+* **Reason**: Centralized version management prevents version drift across modules, ensures consistent transitive dependency resolution, and makes upgrades a single-point change.
+* **Pattern**:
+  1. Add a `<property>` in parent `pom.xml` `<properties>`: `<my-lib.version>1.2.3</my-lib.version>`
+  2. Add the dependency to parent `<dependencyManagement>`: `<version>${my-lib.version}</version>`
+  3. Reference in module `pom.xml` WITHOUT `<version>` — it inherits from the parent
+* **Exceptions**:
+  * Plugin versions (`<plugin>` blocks) are managed separately via `<pluginManagement>`
+  * Internal module dependencies use `${project.version}` (already in `<dependencyManagement>`)
+  * BOM imports (`<type>pom</type><scope>import</scope>`) are versioned via their own properties
+* **Verification**: After adding a new dependency, run:
+  ```bash
+  # No hardcoded versions in dependency blocks (only plugin versions are OK)
+  python3 -c "
+  import xml.etree.ElementTree as ET, glob
+  for f in glob.glob('arcclaw-*/pom.xml'):
+      tree = ET.parse(f); root = tree.getroot()
+      ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+      for dep in root.findall('.//m:dependencies/m:dependency', ns):
+          v = dep.find('m:version', ns)
+          if v is not None and v.text and not v.text.startswith('\${'):
+              print(f'{f}: {dep.find(\"m:artifactId\",ns).text}:{v.text}')
+  "
+  ```
+
+### 4.3 PostgreSQL Local Service Conflict
 
 * **Problem**: A native PostgreSQL installed via `brew`, `apt`, `dnf`, `choco`, or the official installer binds to `127.0.0.1:5432`, intercepting connections intended for the Podman container's PostgreSQL. This causes `FATAL: role "arcclaw" does not exist` errors because the native instance doesn't have the ArcClaw user.
 * **Detection**: Run `lsof -i :5432`. If you see both `gvproxy` (Podman gateway) and `postgres` (native), you have a conflict.

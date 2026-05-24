@@ -44,7 +44,9 @@
       "Bash(ollama list:*)",
       "Bash(bash autotest-full.sh)",
       "Bash(javac:*)",
-      "Bash(./mvnw dependency:tree -pl *)"
+      "Bash(./mvnw dependency:tree -pl *)",
+      "Bash(grep -rn *)",
+      "Bash(grep -B2 *)"
     ]
   }
 }
