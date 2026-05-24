@@ -15,13 +15,14 @@
 4. [Tiered Memory Design (MemGPT-Style)](#4-tiered-memory-design-memgpt-style)
 5. [Self-Evolution Design (Hermes-Style)](#5-self-evolution-design-hermes-style)
 6. [Pluggable Backend SPI](#6-pluggable-backend-spi)
-7. [Agent-Facing Memory Tools](#7-agent-facing-memory-tools)
-8. [Integration Points with Existing Code](#8-integration-points-with-existing-code)
-9. [Implementation Phases](#9-implementation-phases)
-10. [Data Flow & Lifecycle](#10-data-flow--lifecycle)
-11. [Configuration](#11-configuration)
-12. [Risks & Mitigations](#12-risks--mitigations)
-13. [Verification Plan](#13-verification-plan)
+7. [Migration Strategy](#7-migration-strategy)
+8. [Agent-Facing Memory Tools](#8-agent-facing-memory-tools)
+9. [Integration Points with Existing Code](#9-integration-points-with-existing-code)
+10. [Implementation Phases](#10-implementation-phases)
+11. [Data Flow & Lifecycle](#11-data-flow--lifecycle)
+12. [Configuration](#12-configuration)
+13. [Risks & Mitigations](#13-risks--mitigations)
+14. [Verification Plan](#14-verification-plan)
 
 ---
 
@@ -29,13 +30,21 @@
 
 ### 1.1 Current Pain Points
 
-| # | Problem | Root Cause |
-|---|---------|------------|
-| P1 | **Exact details lost** — code snippets, stack traces, error messages are destroyed during summarization | `CompactionService` collapses N messages into a single LLM-generated summary blob |
-| P2 | **"Lost in the Middle"** — important context from 8-15 turns ago is unreachable | Rolling window of 20 recent non-system messages; older turns are completely discarded |
-| P3 | **No self-improvement** — agent repeats the same mistakes across sessions | No mechanism to learn from execution traces, failure patterns, or successful resolutions |
-| P4 | **No persistent user model** — agent does not remember user preferences, project context, or past decisions | No curated long-term memory tier; everything is either in the summary or gone |
-| P5 | **Compaction is a black box** — the LLM decides what to keep, with no agent agency or user override | Compaction is purely system-driven; no tools for the agent to manage its own memory |
+| # | Problem | Root Cause | Real-World Impact |
+|---|---------|------------|-------------------|
+| P1 | **Exact details lost** — code snippets, stack traces, error messages are destroyed during summarization | `CompactionService` collapses N messages into a single LLM-generated summary blob | Agent cannot recall the exact error line number or method signature from 10 turns ago; must ask user to re-share |
+| P2 | **"Lost in the Middle"** — important context from 8-15 turns ago is unreachable | Rolling window of 20 recent non-system messages; older turns are completely discarded from `PersistentChatMemoryStore` | User's stated preference from turn 5 is forgotten by turn 25; agent repeats avoided mistakes |
+| P3 | **No self-improvement** — agent repeats the same mistakes across sessions | No mechanism to learn from execution traces, failure patterns, or successful resolutions | Same tool misuse occurs in Session N+1 that failed in Session N; no institutional learning |
+| P4 | **No persistent user model** — agent does not remember user preferences, project context, or past decisions | No curated long-term memory tier; everything is either in the summary or gone | Every session starts "amnesiac"; user must re-explain their tech stack, coding style, project structure |
+| P5 | **Compaction is a black box** — the LLM decides what to keep, with no agent agency or user override | Compaction is purely system-driven; no tools for the agent to manage its own memory | Agent cannot explicitly save a critical decision or user preference; relies on LLM summarization discretion |
+
+### 1.1.1 Why P1 and P2 Are Different Problems
+
+**P1 (Exact Details Lost)** is about **data destruction**: even if a message is within the rolling window, once compaction fires, the original text is replaced with a summary. A code block with 50 lines becomes "the user shared a Java class with methods." The exact content is gone forever.
+
+**P2 (Lost in the Middle)** is about **accessibility window**: messages beyond the 20-message rolling window are inaccessible even if they were never compacted. This is a separate failure mode — the data might still exist in the session blob, but the agent cannot retrieve or search it.
+
+**MemGPT solution**: Recall Memory solves both by (1) never deleting raw messages (preserves exact details) and (2) making all messages FTS5-searchable regardless of age (solves window limitation).
 
 ### 1.2 What MemGPT-Style Memory Solves
 
@@ -75,9 +84,9 @@
 │  ┌────────────────────────▼───────────────────────────────────────────────┐ │
 │  │                    TieredMemoryStore (SPI)                             │ │
 │  │                                                                        │ │
-│  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │ |
-│  │  │ SqliteMemoryStore │  │PostgresMemoryStore│  │ FilesystemMemoryStore │ │
-│  │  └──────────────────┘  └──────────────────┘  └──────────────────────┘  │ |
+│  │  ┌──────────────────┐  ┌───────────────────┐  ┌──────────────────────┐ │ |
+│  │  │SqliteMemoryStore │  │PostgresMemoryStore│  │ FilesystemMemoryStore│ │ |
+│  │  └──────────────────┘  └───────────────────┘  └──────────────────────┘ │ |
 │  └────────────────────────────────────────────────────────────────────────┘ │
 │                                                                             │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
@@ -215,6 +224,36 @@ CREATE VIRTUAL TABLE recall_messages_fts USING fts5(
 -- Triggers to keep FTS in sync (auto-populated)
 ```
 
+**Real-Time Search Architecture:**
+
+Recall Memory supports two search modes for real-time agent use:
+
+1. **Session-Scoped Search (default):** Fast FTS5 query within current session only.
+   ```sql
+   SELECT m.* FROM recall_messages m
+   JOIN recall_messages_fts fts ON m.rowid = fts.rowid
+   WHERE m.session_id = ? AND fts.content MATCH ?
+   ORDER BY rank LIMIT ?
+   ```
+   Latency: <5ms for 10K messages in session.
+
+2. **Cross-Session Search:** FTS5 query across all sessions for a user.
+   ```sql
+   SELECT m.* FROM recall_messages m
+   JOIN recall_messages_fts fts ON m.rowid = fts.rowid
+   WHERE m.user_id = ? AND fts.content MATCH ?
+   ORDER BY m.created_at DESC LIMIT ?
+   ```
+   Latency: <20ms for 100K messages across sessions.
+
+**Optimization:** The `has_code` and `has_error` columns enable targeted filtering:
+```sql
+-- Find all code blocks containing "NullPointerException"
+SELECT m.* FROM recall_messages m
+JOIN recall_messages_fts fts ON m.rowid = fts.rowid
+WHERE m.user_id = ? AND m.has_code = 1 AND fts.content MATCH 'NullPointerException'
+```
+
 **Key Design Decisions:**
 1. **Compaction summary becomes a record, not a replacement.** When compaction fires, a `message_type = COMPACTION_SUMMARY` record is inserted into recall_messages. Raw messages remain searchable.
 2. **`has_code` / `has_error` columns** enable targeted search (e.g. "find all code blocks from the debugging session on Tuesday").
@@ -245,6 +284,39 @@ updated_at      TIMESTAMP,
 confidence      REAL DEFAULT 1.0,    -- 0.0-1.0; auto-extracted = lower, human-reviewed = 1.0
 access_count    INTEGER DEFAULT 0    -- for LRU eviction and relevance ranking
 );
+```
+
+**Real-Time Search Architecture:**
+
+Archival Memory uses hybrid search (BM25 + vector) for optimal relevance:
+
+1. **BM25-First Pipeline:**
+   - Step 1: FTS5/BM25 keyword search → top 50 candidates
+   - Step 2: Re-rank top 50 with vector similarity → final top 8
+   - Latency: ~30ms (BM25 is fast; vector only on small candidate set)
+
+2. **Vector-First Pipeline** (when embeddings are highly reliable):
+   - Step 1: kNN vector search → top 50 candidates
+   - Step 2: Re-rank with BM25 → final top 8
+   - Latency: ~50ms (vector index lookup + BM25 re-scoring)
+
+3. **Hybrid Fusion (RRF - Reciprocal Rank Fusion):**
+   ```
+   RRF_score(doc) = Σ (1 / (k + rank_i)) for each ranking i
+   where k = 60 (default fusion parameter)
+   ```
+   - Merges BM25 and vector rankings without requiring tuning
+   - Used by existing `MemoryRetrievalPort` implementations; reused here
+
+**SQLite-vec Integration:**
+```sql
+-- Vector similarity search (COSINE distance)
+SELECT chunk_id, content,
+       vector_distance_cos(embedding, ?) AS similarity
+FROM archival_chunks
+WHERE user_id = ? AND chunk_type IN (...)
+ORDER BY similarity DESC
+LIMIT 50
 ```
 
 **How It Differs from Existing `MemoryRetrievalPort`:**
@@ -318,6 +390,8 @@ public enum EvolutionEventType {
 }
 ```
 
+**Note:** This differs slightly from `Self-Evolution.md` which uses `ERROR` and `SYSTEM_NOTE`. The expanded set above provides better granularity for pattern extraction (e.g., distinguishing `TOOL_ERROR` from generic `ERROR`).
+
 ### 5.3 MemoryExtractorLite
 
 **Purpose:** Converts a batch of `EvolutionEvent`s into typed `MemoryRecord`s. Can be **rule-based** (fast, no LLM call) or **LLM-driven** (slower, higher quality).
@@ -330,6 +404,28 @@ public enum EvolutionEventType {
   - User provides project details → `PROJECT_CONTEXT`
   - Repeated tool success pattern → `TOOL_HINT`
 - Confidence scoring: rule-based = 0.5-0.7; LLM-extracted = 0.7-0.95
+
+**MemoryRecordType Alignment:** The types below match `Self-Evolution.md` with additions for ArcClaw-specific patterns:
+
+```java
+public enum MemoryRecordType {
+    // From Self-Evolution.md
+    USER_PREFERENCE,
+    USER_PROFILE,
+    ACTIVE_TASK,
+    RESOLUTION_PATTERN,
+    FAILURE_PATTERN,
+    TOOL_HINT,
+    PROJECT_CONTEXT,
+    DIRECTIVE,
+    SUMMARY,
+    FACT,
+    // ArcClaw additions
+    ERROR_CONTEXT,          // specific error + resolution pairing
+    TOOL_MISUSE_PATTERN,    // how NOT to use a tool
+    WORKAROUND              // temporary solution that worked
+}
+```
 
 **LLM-Driven Extraction (v2):**
 - Prompt: "Given these conversation events, extract stable facts about the user, successful resolution patterns, and repeated failure patterns. Output as structured JSON."
@@ -363,6 +459,22 @@ DirectiveBundle {
 }
 ```
 
+**Real-Time Search for Self-Evolution:**
+
+The self-evolution system uses a two-tier retrieval strategy (from `Self-Evolution.md`):
+
+1. **SIMPLE Retrieval (fast, default):**
+   - FTS5 keyword search over `MemoryRecord.text`
+   - No LLM call; pure lexical matching
+   - Latency: <10ms
+   - Used for: real-time agent queries during conversation
+
+2. **DEEP Retrieval (slow, on-demand):**
+   - LLM-powered synthesis: "Given these N memory records, what behavioral patterns emerge?"
+   - Clustering + abstraction over similar records
+   - Latency: 2-5 seconds (LLM call)
+   - Used for: `self_evolve_reflect` tool, periodic synthesis
+
 **Synthesis Frequency:**
 - Triggered by: explicit `self_evolve_reflect` tool call OR periodic cron (daily) OR admin request.
 - NOT triggered automatically mid-conversation (too expensive/latency-heavy).
@@ -394,9 +506,39 @@ ConversationBuffer ──flush──► MemoryExtractorLite             │
      └──────────────────────────────────────────────────────────────► Recall Memory (exact events)
 ```
 
+### 5.6 Real-Time Search Summary
+
+| Tier | Search Type | Index | Latency | Use Case |
+|---|---|---|---|---|
+| **Core** | Point lookup | Primary key (user_id, block_key) | <1ms | Render user context in system prompt |
+| **Recall** | FTS5 keyword | SQLite FTS5 virtual table | <10ms (session), <50ms (cross-session) | Find exact code/error from prior turns |
+| **Archival** | Hybrid (BM25 + vector) | Lucene BM25 + sqlite-vec kNN | <50ms | Semantic search for patterns/facts |
+| **Self-Evolve** | SIMPLE (FTS5) / DEEP (LLM) | FTS5 on MemoryRecord.text | <10ms (SIMPLE), 2-5s (DEEP) | Pattern detection, directive synthesis |
+
+**Key Insight:** All search operations are read-only during agent turns. Writes (Recall insert, Archival promotion, Self-Evolve flush) happen asynchronously or at session boundaries, ensuring real-time search latency is not impacted by write operations.
+
 ---
 
 ## 6. Pluggable Backend SPI
+
+### 6.0 Module Structure Alignment with Self-Evolution.md
+
+The `arcclaw-self-evolve` module follows the package layout from `Self-Evolution.md`:
+
+```
+arcclaw-self-evolve/
+└── src/main/java/com/arcclaw/selfevolve/
+    ├── api/                    # Public facade (SelfEvolveService, DTOs)
+    ├── buffer/                 # ConversationBuffer + InMemoryConversationBuffer
+    ├── extract/                # MemoryExtractorLite + DefaultMemoryExtractorLite
+    ├── retrieve/               # MemoryRetrieverLite + DefaultMemoryRetrieverLite
+    ├── policy/                 # InteractionPolicySynthesizer + DefaultInteractionPolicySynthesizer
+    ├── store/                  # MemoryStore SPI + providers (sqlite, postgres, fs)
+    ├── runtime/                # DefaultSelfEvolveService, SelfEvolveBackendSelector, config
+    └── internal/               # Mappers, utilities (not exposed)
+```
+
+**Key Design Principle:** The self-evolve module has its own SPI (`MemoryStore`) separate from `TieredMemoryStore`. This allows independent evolution and testing. The self-evolve store persists raw `EvolutionEvent` traces and extracted `MemoryRecord`s, while `TieredMemoryStore` manages the three-tier runtime memory (Core/Recall/Archival).
 
 ### 6.1 TieredMemoryStore Interface
 
@@ -435,26 +577,49 @@ public interface TieredMemoryStore {
 }
 ```
 
-### 6.2 Backend Implementations
+### 6.2 SelfEvolveStore vs TieredMemoryStore
 
-| Backend | Core | Recall | Archival | Best For |
-|---|---|---|---|---|
-| **SQLite** | JDBI / JPA | JDBI + FTS5 | Existing `SqliteMemoryRetrievalAdapter` + `sqlite-vec` | Local dev, single-node |
-| **PostgreSQL** | JDBI | JDBI + `tsvector`/GIN | Existing `PostgresMemoryRetrievalAdapter` + `pgvector` | Multi-instance, production |
-| **Filesystem** | JSON files | JSON files + `LuceneIndexManager` (new BM25 index) | Existing `FsMemoryRetrievalAdapter` + Lucene | Minimal, experimental |
+**Question:** Why two separate SPIs?
 
-### 6.3 Backend Selection
+**Answer:** They serve different purposes with different access patterns:
+
+| Dimension | SelfEvolveStore | TieredMemoryStore |
+|---|---|---|
+| **Purpose** | Offline learning from traces | Runtime context management |
+| **Write Pattern** | Batch writes on flush | Real-time writes per message |
+| **Read Pattern** | Bulk retrieval for synthesis | Low-latency search during agent turns |
+| **Data Lifetime** | Permanent (for historical analysis) | TTL-governed (Recall) or LRU-evicted (Archival) |
+| **Query Types** | Aggregation, pattern detection | Point lookup, FTS5, vector similarity |
+| **Backend** | Simple store (SQLite/FS sufficient) | Specialized (FTS5, sqlite-vec, Lucene) |
+
+**Implementation:** `SelfEvolveStore` uses the simpler `MemoryStore` SPI from `Self-Evolution.md`. `TieredMemoryStore` is the richer interface for Core/Recall/Archival tiers. They may share the same physical database (e.g., both on SQLite) but have logically separate schemas and access patterns.
+
+### 6.3 Backend Implementations
+
+| Backend | Core | Recall | Archival | SelfEvolveStore | Best For |
+|---|---|---|---|---|---|
+| **SQLite** | JDBI / JPA | JDBI + FTS5 | Existing `SqliteMemoryRetrievalAdapter` + `sqlite-vec` | JDBI (simple schema) | Local dev, single-node |
+| **PostgreSQL** | JDBI | JDBI + `tsvector`/GIN | Existing `PostgresMemoryRetrievalAdapter` + `pgvector` | JDBI (simple schema) | Multi-instance, production |
+| **Filesystem** | JSON files | JSON files + `LuceneIndexManager` (new BM25 index) | Existing `FsMemoryRetrievalAdapter` + Lucene | JSON files | Minimal, experimental |
+
+**Note:** SelfEvolveStore uses a simpler schema (just event logs and memory records) compared to TieredMemoryStore. All three backends can support both SPIs.
+
+### 6.4 Backend Selection
 
 ```yaml
 arcclaw:
   memory:
     tiered:
-      backend: ${ARCCLAW_MEMORY_BACKEND:sqlite}   # sqlite | postgres | fs
+      backend: ${ARCCLAW_MEMORY_TIERED_BACKEND:sqlite}   # sqlite | postgres | fs
+    self-evolve:
+      backend: ${ARCCLAW_SELF_EVOLVE_BACKEND:sqlite}     # sqlite | postgres | fs (can differ from tiered)
 ```
 
 Single backend selected at startup via `@IfBuildProfile` or CDI `@Produces` with `@LookupIfProperty`. Fails fast if configured backend is unavailable.
 
-### 6.4 Why Not Reuse MemoryRetrievalPort Directly?
+**Note:** The self-evolve backend can be different from the tiered memory backend (e.g., tiered on PostgreSQL for production, self-evolve on SQLite for simplicity). This is allowed but not recommended for operational simplicity.
+
+### 6.5 Why Not Reuse MemoryRetrievalPort Directly?
 
 The existing `MemoryRetrievalPort` is designed for generic text/vector search. The tiered memory store adds:
 1. **Typed schemas** (CoreMemoryBlock, RecallMessage, ArchivalChunk) with domain-specific fields.
@@ -466,9 +631,57 @@ The existing `MemoryRetrievalPort` is designed for generic text/vector search. T
 
 ---
 
-## 7. Agent-Facing Memory Tools
+## 7. Migration Strategy
 
-### 7.1 Tool Catalog
+### 7.1 Existing Data Migration
+
+When enabling Recall Memory for the first time:
+
+| Existing Data | Migration Action | Notes |
+|---|---|---|
+| `compaction_summary` table rows | Import as `COMPACTION_SUMMARY` records in Recall | Preserves historical summaries |
+| `PersistentChatMemoryStore` JSON blobs | No migration possible | Raw messages already destroyed; only current rolling window remains |
+| `MemoryRetrievalPort` indexed chunks | Re-index as `ArchivalChunk` with typed schema | Automated migration script updates schema |
+
+**Limitation:** Historical raw messages (pre-Recall enablement) are permanently lost. Only compaction summaries survive. This is acceptable because the pain point is *future* data loss, not historical recovery.
+
+### 7.2 Feature Flag Rollout
+
+```yaml
+# Phase 0: Core Memory only
+arcclaw.memory.tiered.core-memory.enabled: true
+arcclaw.memory.tiered.recall.enabled: false
+arcclaw.memory.tiered.archival.enabled: false
+arcclaw.self-evolve.enabled: false
+
+# Phase 1: Enable Recall (after testing)
+arcclaw.memory.tiered.recall.enabled: true
+
+# Phase 2: Enable Archival
+arcclaw.memory.tiered.archival.enabled: true
+
+# Phase 3: Enable Self-Evolution
+arcclaw.self-evolve.enabled: true
+```
+
+Each tier is independently toggleable. Disabling a tier falls back to the previous behavior:
+- Recall disabled → compaction destroys messages (current behavior)
+- Archival disabled → `MemoryRetrievalPort` continues working as before
+- Self-evolve disabled → no event buffering or directive synthesis
+
+### 7.3 Rollback Plan
+
+If a tier causes issues:
+
+1. **Immediate rollback:** Set `enabled: false` in config and restart. No data loss.
+2. **Data preservation:** Disabled tiers retain their data; re-enabling restores functionality.
+3. **Partial rollback:** Individual tiers can be disabled without affecting others.
+
+---
+
+## 8. Agent-Facing Memory Tools
+
+### 8.1 Tool Catalog
 
 | Tool Name | Tier | Roles | Description |
 |---|---|---|---|
@@ -480,7 +693,7 @@ The existing `MemoryRetrievalPort` is designed for generic text/vector search. T
 | `archival_memory_insert` | Archival | coordinator, synthesizer | Insert an explicit chunk into archival. Controlled; requires approval for non-coordinator roles. |
 | `self_evolve_reflect` | Self-Evolve | coordinator, architect | Trigger synthesis of behavioral directives from recent traces. Heavy operation. |
 
-### 7.2 Tool Implementation Pattern
+### 8.2 Tool Implementation Pattern
 
 Each tool follows existing ArcClaw patterns:
 ```java
@@ -494,7 +707,7 @@ public class RecallMemorySearchTool implements AgentTool {
 }
 ```
 
-### 7.3 Write Governance
+### 8.3 Write Governance
 
 Following the MemGPT-Style.md advice, writes are tightly controlled:
 
@@ -512,9 +725,9 @@ Following the MemGPT-Style.md advice, writes are tightly controlled:
 
 ---
 
-## 8. Integration Points with Existing Code
+## 9. Integration Points with Existing Code
 
-### 8.1 CompactionService → Recall Memory Bridge
+### 9.1 CompactionService → Recall Memory Bridge
 
 **Change:** Before compaction destroys messages, persist them all to Recall Memory.
 
@@ -532,7 +745,7 @@ for (ChatMessage msg : toCompact) {
 
 **Result:** Compaction still reduces context window size (toKeep messages), but the destroyed messages are now retrievable via `recall_memory_search`.
 
-### 8.2 ChatHistoryAssembler → Core Memory Injection
+### 9.2 ChatHistoryAssembler → Core Memory Injection
 
 **Change:** `ChatHistoryAssembler.assemble()` prepends Core Memory block to the conversation.
 
@@ -561,7 +774,7 @@ if (!directives.stableDirectives().isEmpty()) {
 messages.addAll(historyMessages);
 ```
 
-### 8.3 ReasoningMessageAssembler → Directives & Memory Context
+### 9.3 ReasoningMessageAssembler → Directives & Memory Context
 
 **Change:** The assembler filters/processes the directives and memory blocks added by ChatHistoryAssembler.
 
@@ -569,7 +782,7 @@ messages.addAll(historyMessages);
 - Core Memory block: passed through (it's informational context, not instructions).
 - Behavioral directives: filtered for relevance to current goal using `ToolSearchIndex`-style keyword matching.
 
-### 8.4 PersistentChatMemoryStore → Recall Memory Dual-Write
+### 9.4 PersistentChatMemoryStore → Recall Memory Dual-Write
 
 **Change:** `PersistentChatMemoryStore.updateMessages()` also writes to Recall Memory.
 
@@ -585,7 +798,7 @@ public void updateMessages(Object memoryId, List<ChatMessage> messages) {
 }
 ```
 
-### 8.5 AgentDispatchHandler → Self-Evolution Event Emission
+### 9.5 AgentDispatchHandler → Self-Evolution Event Emission
 
 **Change:** After each agent reasoning step and tool execution, emit an `EvolutionEvent` into the `ConversationBuffer`.
 
@@ -599,7 +812,7 @@ selfEvolveService.append(new EvolutionEvent(
 ));
 ```
 
-### 8.6 Existing MemorySearchTool → Refactored
+### 9.6 Existing MemorySearchTool → Refactored
 
 **Change:** Split `MemorySearchTool` into `RecallMemorySearchTool` and `ArchivalMemorySearchTool`.
 
@@ -609,9 +822,9 @@ selfEvolveService.append(new EvolutionEvent(
 
 ---
 
-## 9. Implementation Phases
+## 10. Implementation Phases
 
-### Phase 0: SPI Foundation (Week 1-2)
+### 10.1 Phase 0: SPI Foundation (Week 1-2)
 
 **Goal:** TieredMemoryStore interface + SQLite backend + Core Memory service.
 
@@ -626,7 +839,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **No agent tools yet.** Validation: Core Memory is persisted and can be read via service call.
 
-### Phase 1: Recall Memory (Week 2-3)
+### 10.2 Phase 1: Recall Memory (Week 2-3)
 
 **Goal:** FTS5-backed exact message persistence + search.
 
@@ -642,7 +855,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **Rollback plan:** Feature-gated behind `arcclaw.memory.tiered.recall-enabled` (default `false`). Disabling restores current compaction-only behavior.
 
-### Phase 2: Archival Memory (Week 3-5)
+### 10.3 Phase 2: Archival Memory (Week 3-5)
 
 **Goal:** Semantic + BM25 hybrid search with typed chunk storage.
 
@@ -657,7 +870,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **Reuse:** The existing Lucene/sqlite-vec/pgvector pipelines from `MemoryRetrievalPort` implementations are leveraged directly. This phase adds typed schemas and promotion logic on top.
 
-### Phase 3: Self-Evolution (Week 5-8)
+### 10.4 Phase 3: Self-Evolution (Week 5-8)
 
 **Goal:** Closed-loop agent improvement from execution traces.
 
@@ -675,7 +888,7 @@ selfEvolveService.append(new EvolutionEvent(
 
 **Feature gate:** `arcclaw.self-evolve.enabled` (default `false`). Entire pipeline is opt-in.
 
-### Phase 4: Postgres & FS Backends (Week 8-9)
+### 10.5 Phase 4: Postgres & FS Backends (Week 8-9)
 
 **Goal:** Parity across all three persistence backends.
 
@@ -686,7 +899,7 @@ selfEvolveService.append(new EvolutionEvent(
 4. Migration path: existing SQLite/PG/FS users continue with their current backend.
 5. Backend-specific integration tests.
 
-### Phase 5: Polish & Hardening (Week 10-12)
+### 10.6 Phase 5: Polish & Hardening (Week 10-12)
 
 **Deliverables:**
 1. Performance benchmarking: FTS5 search latency under 100K messages.
@@ -699,9 +912,9 @@ selfEvolveService.append(new EvolutionEvent(
 
 ---
 
-## 10. Data Flow & Lifecycle
+## 11. Data Flow & Lifecycle
 
-### 10.1 Complete Request Flow (with Tiered Memory)
+### 11.1 Complete Request Flow (with Tiered Memory)
 
 ```
 1. User sends message
@@ -741,7 +954,7 @@ selfEvolveService.append(new EvolutionEvent(
         └─ MemoryExtractorLite.extract() → upsert to Archival
 ```
 
-### 10.2 Compaction Summary Lifecycle (Transition)
+### 11.2 Compaction Summary Lifecycle (Transition)
 
 ```
 BEFORE (Current):
@@ -756,7 +969,7 @@ AFTER (New):
   (Original messages searchable via FTS5; summary available as curated record)
 ```
 
-### 10.3 Self-Evolution Directive Lifecycle
+### 11.3 Self-Evolution Directive Lifecycle
 
 ```
 1. [During Session] EvolutionEvents accumulate in ConversationBuffer
@@ -770,9 +983,9 @@ AFTER (New):
 
 ---
 
-## 11. Configuration
+## 12. Configuration
 
-### 11.1 application.yaml
+### 12.1 application.yaml
 
 ```yaml
 arcclaw:
@@ -809,7 +1022,7 @@ arcclaw:
       idle-ms: ${ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS:300000}
 ```
 
-### 11.2 .env.example (New Entries)
+### 12.2 .env.example (New Entries)
 
 ```bash
 # ── Tiered Memory ───────────────────────────────────────
@@ -831,7 +1044,7 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 
 ---
 
-## 12. Risks & Mitigations
+## 13. Risks & Mitigations
 
 | Risk | Severity | Mitigation |
 |---|---|---|
@@ -846,9 +1059,9 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 
 ---
 
-## 13. Verification Plan
+## 14. Verification Plan
 
-### 13.1 Phase 0 — Core Memory
+### 14.1 Phase 0 — Core Memory
 
 ```bash
 # Unit tests
@@ -860,7 +1073,7 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 3. Verify system message contains [USER CONTEXT] with block content
 ```
 
-### 13.2 Phase 1 — Recall Memory
+### 14.2 Phase 1 — Recall Memory
 
 ```bash
 # Unit tests
@@ -872,9 +1085,14 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 2. Compact session (messages destroyed from rolling window)
 # 3. Call recall_memory_search for the code snippet
 # 4. Verify exact code returned, not summary
+
+# Performance: real-time search latency
+# 1. Insert 10K messages into Recall
+# 2. Measure FTS5 search latency (target: <10ms for session-scoped, <50ms for cross-session)
+# 3. Verify has_code/has_error filtering works correctly
 ```
 
-### 13.3 Phase 2 — Archival Memory
+### 14.3 Phase 2 — Archival Memory
 
 ```bash
 # Verify hybrid search returns relevant chunks
@@ -884,9 +1102,14 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 1. Same fact appears in 3 sessions
 # 2. Verify auto-promoted to Archival
 # 3. Verify searchable via archival_memory_search
+
+# Performance: hybrid search latency
+# 1. Index 10K archival chunks with embeddings
+# 2. Measure BM25-first + vector re-rank latency (target: <50ms)
+# 3. Verify RRF fusion produces better results than BM25-only or vector-only
 ```
 
-### 13.4 Phase 3 — Self-Evolution
+### 14.4 Phase 3 — Self-Evolution
 
 ```bash
 # Unit tests
@@ -899,9 +1122,13 @@ ARCCLAW_SELF_EVOLVE_FLUSH_IDLE_MS=300000               # Auto-flush after N ms i
 # 3. Verify directive generated describing the fix
 # 4. Start new session → verify directive in system prompt
 # 5. Verify agent does NOT repeat the mistake
+
+# Performance: SIMPLE vs DEEP retrieval
+# 1. Measure SIMPLE (FTS5) retrieval latency (target: <10ms)
+# 2. Measure DEEP (LLM) synthesis latency (expect 2-5s, acceptable for offline operation)
 ```
 
-### 13.5 Cross-Cutting
+### 14.5 Cross-Cutting
 
 ```bash
 # Full project compilation
@@ -913,6 +1140,11 @@ python3 ./fix_fqns.py
 # Check all config keys exist in both files
 grep "ARCCLAW_MEMORY_" .env.example arcclaw-app/src/main/resources/application.yaml
 grep "ARCCLAW_SELF_EVOLVE_" .env.example arcclaw-app/src/main/resources/application.yaml
+
+# End-to-end latency benchmark
+# 1. Load test with 100 concurrent agent sessions
+# 2. Measure p95 search latency across all tiers (target: <100ms)
+# 3. Verify no transaction deadlocks under concurrent load
 ```
 
 ---
@@ -951,7 +1183,14 @@ arcclaw-self-evolve does NOT depend on:
 
 5. **Should Archival Memory support cross-user sharing?** Current design: no. All tiers are user-scoped with tenant isolation. Cross-user sharing (team knowledge base) is a future enhancement.
 
+6. **Should Recall Memory FTS5 index be rebuilt on startup?** Current design: FTS5 is updated incrementally via triggers. However, a `rebuildFromJson()` method (like `LuceneIndexManager`) could be useful for index corruption recovery. Decision: add optional rebuild endpoint in admin API.
+
+7. **How to handle embedding dimension mismatches in Archival Memory?** Existing `FsStoreProperties.vectorDimension` (default 768) assumes a specific embedding model. If the model changes, existing embeddings become invalid. Decision: store `embedding_dimension` in database metadata table; reject inserts if dimension mismatches; provide migration tool for re-embedding.
+
+8. **Should self-evolution SIMPLE retrieval use the same FTS5 index as Recall?** Current design: separate `MemoryStore` for self-evolution with its own FTS5 index. Alternative: share Recall's FTS5 index for `MemoryRecord.text`. Decision: separate indices for now (cleaner separation of concerns); can optimize later if needed.
+
 ---
 
-**Document Version:** 1.0-draft
+**Document Version:** 1.1-revised
+**Changes from 1.0:** Added P1/P2 distinction clarification, real-time search architecture details, Migration Strategy section, SelfEvolveStore vs TieredMemoryStore clarification, performance benchmarks in verification plan, and 3 new open questions.
 **Next Step:** Review with team, resolve open questions, begin Phase 0 implementation.
