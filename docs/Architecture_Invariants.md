@@ -942,7 +942,7 @@ The guardrail layer sits between the existing reflex pipeline (Layers 2–3 via 
 - The tool MUST be disabled by default (`arcclaw.tools.playwright.enabled=false`).
 - Browser automation MUST NOT execute in `READONLY` autonomy level.
 
-## 8.8 Sandbox tool exception contract
+## 8.9 Sandbox tool exception contract
 
 `SandboxExecTool.execute()` MUST follow this exception contract:
 - `BudgetExceededException` - MUST propagate (not catch); `AgentStateMachineRunner` handles it.

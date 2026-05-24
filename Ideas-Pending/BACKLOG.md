@@ -14,6 +14,9 @@ After the GoF State pattern is in place (P1), the next evolution is a full direc
 ***
 
 ### 8. Memory — MemGPT-Style Tiered Context
+
+Refer [Ideas-Pending/MemGPT-Style.md](MemGPT-Style.md)
+
 Current `CompactionService` summarization destroys exact details (code snippets, error traces). This is the "Lost in the Middle" problem.
 
 **Direction:**
@@ -21,16 +24,6 @@ Current `CompactionService` summarization destroys exact details (code snippets,
 - **Recall Memory** — searchable conversation history (SQLite FTS5)
 - **Archival Memory** — semantic search via `sqlite-vec`
 - Expose explicit agent tools: `core_memory_append`, `archival_memory_search` — let the LLM manage its own context rather than relying on background summarization
-
-***
-
-### 10. Playwright → Official MCP Server
-Current `PlaywrightCliTool` shells out to Node.js — brittle IPC, schema drift risk.
-
-**Direction:**
-- Fallback `PlaywrightCliTool` to Node.js if MCP server is not available.
-- Connect via existing `McpClientService` to the official Playwright MCP Server
-- Standardizes schema, removes Node.js IPC fragility
 
 ---
 

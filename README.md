@@ -34,6 +34,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **Agent delegation** - agents can delegate sub-tasks to specialist agents via the `garuda` tool using `DelegationRoutingProvider`; non-coordinators are restricted from delegating to roles they lack capabilities for
 - **Persona escalation** - `PersonaEscalationService` detects when a persona hits a capability boundary (unknown API, architecture decision, obscure error) and auto-routes to the right specialist (coder → researcher, debugger → coder, etc.) via isolated `:escalate:` sub-sessions
 - **Parallel tool execution** - the LLM can request multiple tools in a single step; `ParallelToolStepExecutor` runs them concurrently and merges results before the next iteration
+- **Tool bulkheads** - per-category thread pool isolation (`NETWORK`, `COMPUTE`, `DATABASE`, `INTERNAL`) prevents slow tools from starving other categories; each tool declares its category via `AgentTool.category()` or `ToolCapability`
 - **Reflex system** - 17 deterministic zero-token fast-path reflexes for commands, safety guards, PII redaction, identity extraction, and vault operations before the LLM sees any input
 - **Hexagonal persistence** - port/adapter architecture with three backends: SQLite (default), PostgreSQL (production), and filesystem. Swappable without core changes. System prompts, agent skills, cron schedules, and audit events all use this pattern.
 - **Podman rootless sandbox** for executing AI-generated tool calls in full container isolation, with namespace and direct-execution fallbacks
@@ -48,7 +49,7 @@ ArcClaw is a **self-hosted, production-grade agentic AI platform** designed to r
 - **Custom Skills system** - zero-LLM-token skill routing; skills defined as YAML-frontmatter Markdown documents, stored in SQLite, matched by trigger patterns before intent classification
 - **Structured Output engine** - typed LLM extraction with retry loops and lenient JSON parsing
 - **Multi-channel** - REST API, interactive CLI REPL, Telegram bot (via Apache Camel), WebSocket web channel, onboarding wizard, one-shot `ask` mode for CI/CD
-- **Playwright browser automation** - headless browser tool for web scraping and interaction
+- **Playwright browser automation** - headless browser tool via `@playwright/cli` CLI daemon or the official Playwright MCP Server (`@playwright/mcp` via STDIO) with automatic fallback
 
 ---
 
@@ -1546,6 +1547,15 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | `ARCCLAW_API_RATE_LIMIT_REQUESTS_PER_MINUTE` | no | `20` | Max API requests per minute per API key |
 | `ARCCLAW_API_RATE_LIMIT_MUTATION_PER_MINUTE` | no | `10` | Max mutation API requests per minute per API key |
 
+### Tool Bulkheads
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_TOOLS_BULKHEAD_NETWORK_MAX_ASYNC` | no | `8` | Max parallel network tool executions (browser, web search, fetch) |
+| `ARCCLAW_TOOLS_BULKHEAD_COMPUTE_MAX_ASYNC` | no | `4` | Max parallel compute tool executions (sandbox) |
+| `ARCCLAW_TOOLS_BULKHEAD_DATABASE_MAX_ASYNC` | no | `6` | Max parallel database tool executions (memory, ingest) |
+| `ARCCLAW_TOOLS_BULKHEAD_INTERNAL_MAX_ASYNC` | no | `20` | Max parallel internal tool executions (github, schedule, delegation) |
+
 ### Parallel Tool Execution
 
 | Variable | Required | Default | Description |
@@ -1558,8 +1568,24 @@ In `%dev` mode, OTEL export is disabled (`quarkus.otel.sdk.disabled=true`). Obse
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ARCCLAW_RESUMPTION_STALE_MARK_SECONDS` | no | `60` | Seconds before a resumption mark is considered stale |
-| `ARCCLAW_RESUMPTION_PLAYWRIGHT_STALE_MARK_SECONDS` | no | `300` | Seconds before a Playwright resumption mark is considered stale |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | no | `300` | Seconds before a Playwright resumption mark is considered stale |
 | `ARCCLAW_RESUME_LOCK_DB_ADVISORY` | no | `false` | Use database advisory locks for resume coordination |
+
+### Playwright MCP
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ENABLED` | no | `false` | Enable Playwright MCP Server mode (uses @playwright/mcp via STDIO) |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_HEADLESS` | no | `true` | Run MCP browser in headless mode |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_COMMAND` | no | `npx` | Command to launch the Playwright MCP Server |
+| `ARCCLAW_TOOLS_PLAYWRIGHT_MCP_ARGS` | no | `@playwright/mcp` | Arguments for the MCP Server command |
+
+### Observability — Arize Phoenix
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ARCCLAW_PHOENIX_ENABLED` | no | `true` | Enable OTel trace export to Arize Phoenix via collector |
+| `ARCCLAW_PHOENIX_ENDPOINT` | no | `http://localhost:4318/v1/traces` | Phoenix OTLP HTTP endpoint |
 
 ### Notification
 
@@ -1589,4 +1615,4 @@ Generate on Windows: `[Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Ma
 
 ---
 
-*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 1454 tests passing · 17 modules · 15 tools · 17 reflexes · 10 LLM providers · 19 UI components*
+*Last updated: ArcClaw V1.0.0 · Quarkus 3.27.2 · JDK 25 · 957+ tests passing · 18 modules · 14 tools · 17 reflexes · 10 LLM providers · 19 UI components*
