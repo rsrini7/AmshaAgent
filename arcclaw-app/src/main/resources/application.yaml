@@ -241,6 +241,8 @@ smallrye:
         level: INFO
       "io.sm.op.ru.util":
         level: INFO
+      "io.quarkus.opentelemetry.runtime.exporter.otlp":
+        level: ERROR      # suppress connection-refused noise when collector is down
       "ja.la.ProcessBuilder":
         level: INFO
       "java.lang.ProcessBuilder":
