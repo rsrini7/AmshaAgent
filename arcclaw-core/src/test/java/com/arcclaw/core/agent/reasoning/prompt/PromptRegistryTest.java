@@ -4,9 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 
 import jakarta.enterprise.inject.Instance;
 
@@ -72,41 +69,6 @@ class PromptRegistryTest {
     }
 
     @Test
-    void sha256_isDeterministic() {
-        assertEquals(sha256("hello"), sha256("hello"));
-    }
-
-    @Test
-    void sha256_differsForDifferentInput() {
-        assertNotEquals(sha256("hello"), sha256("world"));
-    }
-
-    @Test
-    void sha256_hasExpectedLength() {
-        assertEquals(64, sha256("test content").length());
-    }
-
-    @Test
-    void parseHash_returnsEmpty_whenNull() {
-        assertEquals("", parseHash(null));
-    }
-
-    @Test
-    void parseHash_returnsEmpty_whenBlank() {
-        assertEquals("", parseHash(""));
-    }
-
-    @Test
-    void parseHash_returnsEmpty_whenNoSha256() {
-        assertEquals("", parseHash("{\"source\":\"classpath\"}"));
-    }
-
-    @Test
-    void parseHash_extractsSha256() {
-        assertEquals("abc123def456", parseHash("{\"source\":\"classpath\",\"sha256\":\"abc123def456\"}"));
-    }
-
-    @Test
     void constants_areValid() {
         assertEquals("ACTIVE", PromptConstants.STATUS_ACTIVE);
         assertEquals("DRAFT", PromptConstants.STATUS_DRAFT);
@@ -121,24 +83,5 @@ class PromptRegistryTest {
         assertFalse(PromptConstants.KEY_PERSONA_IDENTITY.isBlank());
         assertFalse(PromptConstants.KEY_ROLE_TEMPLATE.isBlank());
         assertFalse(PromptConstants.KEY_SECURITY_RULES.isBlank());
-    }
-
-    private static String sha256(String content) {
-        try {
-            var md = MessageDigest.getInstance("SHA-256");
-            var digest = md.digest(content.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static String parseHash(String auditMetadata) {
-        if (auditMetadata == null || auditMetadata.isBlank()) return "";
-        int idx = auditMetadata.indexOf("\"sha256\":\"");
-        if (idx < 0) return "";
-        int start = idx + "\"sha256\":\"".length();
-        int end = auditMetadata.indexOf("\"", start);
-        return end > start ? auditMetadata.substring(start, end) : "";
     }
 }

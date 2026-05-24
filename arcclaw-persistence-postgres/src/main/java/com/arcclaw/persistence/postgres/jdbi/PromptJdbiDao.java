@@ -25,7 +25,7 @@ public interface PromptJdbiDao {
     @SqlQuery("SELECT id, role_id AS roleId, section_key AS sectionKey, content, version, status, rollout_percentage AS rolloutPercentage, audit_metadata AS auditMetadata, created_at AS createdAt, updated_at AS updatedAt FROM prompt_registry WHERE id = :id")
     Optional<PromptDto> findById(@Bind("id") String id);
 
-    @SqlQuery("SELECT id, role_id AS roleId, section_key AS sectionKey, content, version, status, rollout_percentage AS rolloutPercentage, audit_metadata AS auditMetadata, created_at AS createdAt, updated_at AS updatedAt FROM prompt_registry WHERE role_id = :roleId AND section_key = :sectionKey ORDER BY version DESC LIMIT 1")
+    @SqlQuery("SELECT id, role_id AS roleId, section_key AS sectionKey, content, version, status, rollout_percentage AS rolloutPercentage, audit_metadata AS auditMetadata, created_at AS createdAt, updated_at AS updatedAt FROM prompt_registry WHERE role_id = :roleId AND section_key = :sectionKey AND status = 'ACTIVE' ORDER BY version DESC LIMIT 1")
     Optional<PromptDto> findActive(@Bind("roleId") String roleId, @Bind("sectionKey") String sectionKey);
 
     @SqlQuery("SELECT id, role_id AS roleId, section_key AS sectionKey, content, version, status, rollout_percentage AS rolloutPercentage, audit_metadata AS auditMetadata, created_at AS createdAt, updated_at AS updatedAt FROM prompt_registry WHERE role_id = :roleId ORDER BY section_key, version DESC")

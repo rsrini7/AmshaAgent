@@ -3,11 +3,7 @@ package com.arcclaw.core.agent.reasoning.prompt;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,10 +16,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
+import com.arcclaw.core.agent.role.AgentRoleEnum;
 import com.arcclaw.persistence.api.PromptDto;
 import com.arcclaw.persistence.api.PromptStorePort;
 import io.quarkus.runtime.StartupEvent;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -33,9 +29,6 @@ public class PromptRegistry {
 
     @Inject
     Instance<PromptStorePort> storeInstance;
-
-    @ConfigProperty(name = "arcclaw.prompt-registry.cache-ttl", defaultValue = "30s")
-    Duration cacheTtl;
 
     private final Map<String, String> classpathCache = new ConcurrentHashMap<>();
 
@@ -85,6 +78,11 @@ public class PromptRegistry {
             log.warnf("Prompt DTO lookup failed for %s/%s: %s", roleId, sectionKey, LogUtil.rootMessage(e));
             return Optional.empty();
         }
+    }
+
+    public Optional<PromptDto> getById(String id) {
+        if (storeInstance.isUnsatisfied()) return Optional.empty();
+        return store().findById(id);
     }
 
     public List<PromptDto> list() {
@@ -154,7 +152,7 @@ public class PromptRegistry {
         String content = readClasspath(classpath);
         if (content == null) return SyncResult.SKIPPED;
 
-        String hash = sha256(content);
+        String hash = PromptHashUtil.sha256(content);
         String metadata = metadataJson(hash);
 
         Optional<PromptDto> existing = Optional.empty();
@@ -184,7 +182,7 @@ public class PromptRegistry {
             return SyncResult.SKIPPED;
         }
 
-        String existingHash = parseHash(dto.auditMetadata());
+        String existingHash = PromptHashUtil.parseHash(dto.auditMetadata());
         if (hash.equals(existingHash)) {
             classpathCache.put(key(roleId, sectionKey), dto.content());
             return SyncResult.SKIPPED;
@@ -210,25 +208,6 @@ public class PromptRegistry {
         return "{\"source\":\"classpath\",\"sha256\":\"" + hash + "\"}";
     }
 
-    private static String parseHash(String auditMetadata) {
-        if (auditMetadata == null || auditMetadata.isBlank()) return "";
-        int idx = auditMetadata.indexOf("\"sha256\":\"");
-        if (idx < 0) return "";
-        int start = idx + "\"sha256\":\"".length();
-        int end = auditMetadata.indexOf("\"", start);
-        return end > start ? auditMetadata.substring(start, end) : "";
-    }
-
-    private static String sha256(String content) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(content.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 not available", e);
-        }
-    }
-
     private String readClasspath(String path) {
         try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(path)) {
             if (is == null) return null;
@@ -245,23 +224,21 @@ public class PromptRegistry {
 
     private record ClasspathEntry(String roleId, String sectionKey, String classpath) {}
 
-    private static final String[] ALL_ROLES = {
-        "coordinator", "researcher", "coder", "debugger", "architect",
-        "synthesizer", "healer", "optimizer", "sentinel", "protector",
-        "purifier", "nurturer"
-    };
+    private static final List<String> ALL_ROLE_IDS = AgentRoleEnum.values().stream()
+        .map(AgentRoleEnum::id)
+        .toList();
 
     private static final List<ClasspathEntry> ALL_PERSONA_ENTRIES;
     private static final List<ClasspathEntry> ALL_ROLE_TEMPLATE_ENTRIES;
     private static final List<ClasspathEntry> ALL_SHARED_ENTRIES;
 
     static {
-        ALL_PERSONA_ENTRIES = List.of(ALL_ROLES).stream()
+        ALL_PERSONA_ENTRIES = ALL_ROLE_IDS.stream()
             .map(r -> new ClasspathEntry(r, PromptConstants.KEY_PERSONA_IDENTITY,
                 "templates/personas/" + r + ".txt"))
             .toList();
 
-        ALL_ROLE_TEMPLATE_ENTRIES = List.of(ALL_ROLES).stream()
+        ALL_ROLE_TEMPLATE_ENTRIES = ALL_ROLE_IDS.stream()
             .map(r -> new ClasspathEntry(r, PromptConstants.KEY_ROLE_TEMPLATE,
                 "templates/prompts/role-" + r + ".txt"))
             .toList();

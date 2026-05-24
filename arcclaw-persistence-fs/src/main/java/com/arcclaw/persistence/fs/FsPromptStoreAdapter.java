@@ -43,7 +43,8 @@ public class FsPromptStoreAdapter implements PromptStorePort {
 
     @Override
     public Optional<PromptDto> findActive(String roleId, String sectionKey) {
-        return store.readOptional(List.of(DOMAIN, BY_ROLE, roleId, sectionKey + ".json"), PromptDto.class);
+        return store.readOptional(List.of(DOMAIN, BY_ROLE, roleId, sectionKey + ".json"), PromptDto.class)
+            .filter(dto -> "ACTIVE".equals(dto.status()));
     }
 
     @Override
