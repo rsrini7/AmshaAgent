@@ -16,6 +16,8 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.core.memory.tiered.CoreMemoryPromptRenderer;
 import com.arcclaw.core.memory.tiered.CoreMemoryService;
+import com.arcclaw.core.memory.tiered.PromptBudgetManager;
+import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -56,6 +58,9 @@ class ChatHistoryAssemblerTest {
     @Mock
     CoreMemoryPromptRenderer coreMemoryRenderer;
 
+    @Mock
+    PromptBudgetManager budgetManager;
+
     @InjectMocks
     ChatHistoryAssembler assembler;
 
@@ -69,6 +74,14 @@ class ChatHistoryAssemblerTest {
 
         lenient().when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
         lenient().when(tieredMemoryConfig.enabled()).thenReturn(false);
+
+        // Default: budget manager returns text as-is (no truncation)
+        lenient().when(budgetManager.enforce(any(), any(), any()))
+            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
+                invocation.getArgument(0),
+                invocation.getArgument(1),
+                invocation.getArgument(2),
+                false, false, false));
     }
 
     @Test
@@ -250,5 +263,124 @@ class ChatHistoryAssemblerTest {
         ToolExecutionRequest req = ai.toolExecutionRequests().get(0);
         assertEquals("myTool", req.name());
         assertEquals("{}", req.arguments());
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Phase 4: Prompt Budget Integration Tests
+    // ──────────────────────────────────────────────────────────────
+
+    @Test
+    void testAssemble_budgetEnforced_coreMemoryTrimmedMarkerAppended() {
+        // Arrange: tiered memory enabled, budget returns truncated core memory
+        String sessionId = "budget-s1";
+        when(tieredMemoryConfig.enabled()).thenReturn(true);
+        when(tieredMemoryConfig.coreMemory()).thenReturn(new TieredMemoryConfig.CoreMemoryConfig() {
+            @Override public boolean enabled() { return true; }
+            @Override public int maxBlocksPerUser() { return 20; }
+            @Override public int maxCharsPerBlock() { return 2000; }
+        });
+        when(coreMemoryService.readAll("default")).thenReturn(List.of(
+            new CoreMemoryBlockDto("id", "default", "user_profile", "Some profile data", 1, null, null)
+        ));
+        when(coreMemoryRenderer.render(any())).thenReturn("User: " + "A".repeat(5000));
+
+        // Budget manager signals truncation
+        when(budgetManager.enforce(any(), any(), any()))
+            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
+                "User: " + "A".repeat(2000),  // truncated
+                null, null,
+                true, false, false));
+
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(List.of());
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(sessionId, null, List.of());
+
+        // Assert: Core Memory SystemMessage should have truncation marker
+        assertTrue(result.stream()
+            .filter(m -> m instanceof SystemMessage)
+            .map(m -> ((SystemMessage) m).text())
+            .anyMatch(t -> t.contains("[USER CONTEXT]") && t.contains("[... truncated to fit prompt budget]")),
+            "Core Memory block should have truncation marker");
+    }
+
+    @Test
+    void testAssemble_budgetEnforced_summaryTrimmedFirst() {
+        // Arrange: both core and summary present, budget trims summary
+        String sessionId = "budget-s2";
+        when(tieredMemoryConfig.enabled()).thenReturn(false); // core memory off
+
+        when(summaryCache.getSummary(sessionId)).thenReturn(
+            Optional.of("This is a very long summary that will be truncated by the budget manager."));
+
+        // Budget returns summary truncated, core as null
+        when(budgetManager.enforce(any(), any(), any()))
+            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
+                null,
+                "This is a very long summary",  // truncated
+                null,
+                false, true, false));
+
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(List.of());
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(sessionId, null, List.of());
+
+        // Assert: Summary SystemMessage should have truncation marker and sentinel
+        assertTrue(result.stream()
+            .filter(m -> m instanceof SystemMessage)
+            .map(m -> ((SystemMessage) m).text())
+            .anyMatch(t -> t.contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL)
+                        && t.contains("[... truncated to fit prompt budget]")),
+            "Summary block should have sentinel + truncation marker");
+    }
+
+    @Test
+    void testAssemble_coreMemoryAbsent_whenTieredMemoryDisabled() {
+        // Arrange: tiered memory disabled, so coreText stays null.
+        // budgetManager.enforce() is still called (passthrough mock) but receives null inputs.
+        String sessionId = "budget-s3";
+        when(tieredMemoryConfig.enabled()).thenReturn(false);
+
+        when(summaryCache.getSummary(sessionId)).thenReturn(Optional.empty());
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(List.of(
+            UserMessage.userMessage("Hello")
+        ));
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(sessionId, null, List.of());
+
+        // Assert: no core memory injected (both sections were null → enforce returned nulls)
+        assertFalse(result.stream()
+            .filter(m -> m instanceof SystemMessage)
+            .map(m -> ((SystemMessage) m).text())
+            .anyMatch(t -> t.contains("[USER CONTEXT]")),
+            "Core Memory should not be injected when tiered memory is disabled");
+    }
+
+    @Test
+    void testAssemble_budgetSummarySentinelPreserved() {
+        // Arrange: summary present, budget does NOT truncate — sentinel should still be intact
+        String sessionId = "budget-s4";
+        when(tieredMemoryConfig.enabled()).thenReturn(false);
+        when(summaryCache.getSummary(sessionId)).thenReturn(
+            Optional.of("Short summary that fits in budget."));
+
+        // Budget returns summary as-is (no truncation)
+        when(budgetManager.enforce(any(), any(), any()))
+            .thenAnswer(invocation -> new PromptBudgetManager.BudgetEnforcedSections(
+                null, invocation.getArgument(1), null, false, false, false));
+
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(List.of());
+
+        // Act
+        List<ChatMessage> result = assembler.assemble(sessionId, null, List.of());
+
+        // Assert: sentinel should be present in one of the SystemMessages
+        assertTrue(result.stream()
+            .filter(m -> m instanceof SystemMessage)
+            .map(m -> ((SystemMessage) m).text())
+            .anyMatch(t -> t.contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL)),
+            "Sentinel should be preserved when budget does not truncate");
     }
 }

@@ -16,6 +16,7 @@ import com.arcclaw.core.agent.AgentSentinels;
 import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.core.memory.tiered.CoreMemoryPromptRenderer;
 import com.arcclaw.core.memory.tiered.CoreMemoryService;
+import com.arcclaw.core.memory.tiered.PromptBudgetManager;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -43,6 +44,7 @@ public class ChatHistoryAssembler {
     @Inject CoreMemoryService coreMemoryService;
     @Inject CoreMemoryPromptRenderer coreMemoryRenderer;
     @Inject TieredMemoryConfig tieredMemoryConfig;
+    @Inject PromptBudgetManager budgetManager;
 
     @ConfigProperty(name = "arcclaw.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -84,27 +86,46 @@ public class ChatHistoryAssembler {
     public List<ChatMessage> assemble(String sessionId, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
 
-        // STEP -1 - inject Core Memory [USER CONTEXT] (Phase 1)
+        // STEP -1: Get raw Core Memory text (Phase 1, no truncation from renderer)
         // TODO(Phase-7): resolve userId from session/auth context instead of literal
+        String coreText = null;
         if (tieredMemoryConfig.enabled() && tieredMemoryConfig.coreMemory().enabled()) {
             List<CoreMemoryBlockDto> blocks = coreMemoryService.readAll("default");
-            String context = coreMemoryRenderer.render(blocks);
-            if (context != null && !context.isBlank()) {
-                messages.add(SystemMessage.systemMessage("[USER CONTEXT]\n" + context));
+            coreText = coreMemoryRenderer.render(blocks);
+        }
+
+        // STEP 0: Get raw compaction summary text
+        String rawSummary = null;
+        if (sessionId != null) {
+            String cached = summaryCache.getSummary(sessionId).orElse(null);
+            if (cached != null && !cached.isBlank()) {
+                rawSummary = cached;
             }
         }
 
-        // STEP 0 - inject compacted summary (§ Resilience / Memory Re-capture)
-        if (sessionId != null) {
-            summaryCache.getSummary(sessionId).ifPresent(summary -> {
-                if (!summary.isBlank()) {
-                    String block = AgentSentinels.COMPACTED_SUMMARY_SENTINEL + "\n" 
-                                 + summary + "\n"
-                                 + "The above is a summary of earlier messages in this session. "
-                                 + "Use it for context and answer directly from it where possible.";
-                    messages.add(SystemMessage.systemMessage(block));
-                }
-            });
+        // STEP 0.5: Budget enforcement (BEFORE any SystemMessage construction)
+        PromptBudgetManager.BudgetEnforcedSections budget =
+            budgetManager.enforce(coreText, rawSummary, null);
+
+        // Build messages from budget-enforced sections
+        if (budget.coreMemory() != null && !budget.coreMemory().isBlank()) {
+            String coreBlock = "[USER CONTEXT]\n" + budget.coreMemory();
+            if (budget.coreWasTruncated()) {
+                coreBlock += "\n[... truncated to fit prompt budget]";
+            }
+            messages.add(SystemMessage.systemMessage(coreBlock));
+        }
+
+        if (budget.compactionSummary() != null && !budget.compactionSummary().isBlank()) {
+            // Sentinel added AFTER budget enforcement — budget manager never sees it
+            String block = AgentSentinels.COMPACTED_SUMMARY_SENTINEL + "\n"
+                         + budget.compactionSummary() + "\n"
+                         + "The above is a summary of earlier messages in this session. "
+                         + "Use it for context and answer directly from it where possible.";
+            if (budget.summaryWasTruncated()) {
+                block += "\n[... truncated to fit prompt budget]";
+            }
+            messages.add(SystemMessage.systemMessage(block));
         }
 
         appendChatHistory(messages, sessionId);

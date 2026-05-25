@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.core.security.AutonomyLevel;
+import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
@@ -87,8 +88,8 @@ class RecallSearchIncludeSummariesModeTest {
         assertTrue(queryCaptor.getValue().includeSummaries(), "Should include summaries when requested");
     }
 
-    private com.arcclaw.core.tools.ToolExecutionContext mockCtx(String sessionId, String userId) {
-        com.arcclaw.core.tools.ToolExecutionContext ctx = mock(com.arcclaw.core.tools.ToolExecutionContext.class);
+    private ToolExecutionContext mockCtx(String sessionId, String userId) {
+        ToolExecutionContext ctx = mock(ToolExecutionContext.class);
         when(ctx.sessionId()).thenReturn(sessionId);
         when(ctx.userId()).thenReturn(userId);
         return ctx;

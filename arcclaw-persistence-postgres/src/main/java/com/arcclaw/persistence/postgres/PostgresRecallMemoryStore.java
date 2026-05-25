@@ -12,8 +12,8 @@ import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.RecallSearchQuery;
 import com.arcclaw.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 import io.quarkus.arc.properties.IfBuildProperty;
-import org.jdbi.v3.core.Jdbi;
 import org.jboss.logging.Logger;
+import org.jdbi.v3.core.Jdbi;
 
 @ApplicationScoped
 @TieredBackend("postgres")
