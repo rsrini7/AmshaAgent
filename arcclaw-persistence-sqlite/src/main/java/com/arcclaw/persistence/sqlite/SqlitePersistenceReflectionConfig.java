@@ -21,6 +21,7 @@ import com.arcclaw.persistence.sqlite.jdbi.CronRunJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.JdbiProducer;
 import com.arcclaw.persistence.sqlite.jdbi.LockJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.PromptJdbiDao;
+import com.arcclaw.persistence.sqlite.jdbi.RecallMemoryJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.SecretJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.SkillJdbiDao;
 import io.quarkus.runtime.annotations.RegisterForReflection;
@@ -51,6 +52,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SkillJdbiDao.class,
         PromptJdbiDao.class,
         CoreMemoryJdbiDao.class,
+        RecallMemoryJdbiDao.class,
         // JDBI infrastructure
         JdbiProducer.class,
         JdbiRetryWrapper.class,
@@ -62,6 +64,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SqliteCheckpointStoreAdapter.class,
         SqliteCompactionStoreAdapter.class,
         SqliteCoreMemoryStore.class,
+        SqliteRecallMemoryStore.class,
         SqliteCronStoreAdapter.class,
         SqliteCronRunStoreAdapter.class,
         SqlitePromptStoreAdapter.class,

@@ -11,8 +11,10 @@ import java.util.List;
 import java.util.Optional;
 
 import com.arcclaw.core.audit.AuditService;
+import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.governance.SessionBudgetTracker;
+import com.arcclaw.core.memory.tiered.RecallMemoryService;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +36,8 @@ class CompactionServiceTest {
     CompactionStorePort mockPort;
     AuditService mockAudit;
     ChatModel mockModel;
+    TieredMemoryConfig mockTieredConfig;
+    RecallMemoryService mockRecallService;
 
     @BeforeEach
     void setup() {
@@ -42,6 +46,10 @@ class CompactionServiceTest {
         mockPort = mock(CompactionStorePort.class);
         mockAudit = mock(AuditService.class);
         mockModel = mock(ChatModel.class);
+        mockTieredConfig = mock(TieredMemoryConfig.class);
+        mockRecallService = mock(RecallMemoryService.class);
+
+        when(mockTieredConfig.enabled()).thenReturn(false);
 
         SessionBudgetTracker budgetTracker = new SessionBudgetTracker();
         setField(budgetTracker, "meterRegistry", new SimpleMeterRegistry());
@@ -52,6 +60,8 @@ class CompactionServiceTest {
         service.auditService = mockAudit;
         service.compactionModel = mockModel;
         service.objectMapper = new ObjectMapper();
+        service.tieredConfig = mockTieredConfig;
+        service.recallService = mockRecallService;
         
         service.enabled = true;
         service.threshold = 10;

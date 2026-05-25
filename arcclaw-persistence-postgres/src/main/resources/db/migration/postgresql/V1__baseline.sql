@@ -267,3 +267,42 @@ CREATE TABLE IF NOT EXISTS core_memory_blocks (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, block_key)
 );
+
+-- Tiered Memory: Recall Memory (Phase 2)
+-- Exact conversation history preservation with full-text search
+CREATE TABLE IF NOT EXISTS recall_messages (
+    message_id     TEXT PRIMARY KEY,
+    session_id     TEXT NOT NULL,
+    user_id        TEXT,
+    turn_number    INTEGER NOT NULL,
+    content_hash   TEXT NOT NULL,
+    role           TEXT NOT NULL,
+    message_type   TEXT NOT NULL,
+    content        TEXT NOT NULL,
+    tool_name      TEXT,
+    tool_call_id   TEXT,
+    has_code       BOOLEAN DEFAULT FALSE,
+    has_error      BOOLEAN DEFAULT FALSE,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata_json  TEXT,
+    UNIQUE(session_id, turn_number, content_hash)
+);
+
+ALTER TABLE recall_messages ADD COLUMN IF NOT EXISTS content_tsv tsvector;
+CREATE INDEX IF NOT EXISTS idx_recall_content_fts ON recall_messages USING GIN(content_tsv);
+
+CREATE OR REPLACE FUNCTION recall_messages_tsv_update() RETURNS TRIGGER AS $$
+BEGIN
+    NEW.content_tsv := to_tsvector('english', NEW.content);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS recall_messages_tsv_trigger ON recall_messages;
+CREATE TRIGGER recall_messages_tsv_trigger
+    BEFORE INSERT OR UPDATE ON recall_messages
+    FOR EACH ROW EXECUTE FUNCTION recall_messages_tsv_update();
+
+CREATE INDEX IF NOT EXISTS idx_recall_session ON recall_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_recall_user ON recall_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_recall_created ON recall_messages(created_at);

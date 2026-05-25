@@ -234,3 +234,46 @@ CREATE TABLE IF NOT EXISTS core_memory_blocks (
     updated_at   TEXT NOT NULL,
     UNIQUE(user_id, block_key)
 );
+
+-- Tiered Memory: Recall Memory (Phase 2)
+-- Exact conversation history preservation with FTS5 searchability
+CREATE TABLE IF NOT EXISTS recall_messages (
+    message_id     TEXT PRIMARY KEY,
+    session_id     TEXT NOT NULL,
+    user_id        TEXT,
+    turn_number    INTEGER NOT NULL,
+    content_hash   TEXT NOT NULL,
+    role           TEXT NOT NULL,
+    message_type   TEXT NOT NULL,
+    content        TEXT NOT NULL,
+    tool_name      TEXT,
+    tool_call_id   TEXT,
+    has_code       BOOLEAN DEFAULT FALSE,
+    has_error      BOOLEAN DEFAULT FALSE,
+    created_at     TEXT NOT NULL,
+    metadata_json  TEXT,
+    UNIQUE(session_id, turn_number, content_hash)
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS recall_messages_fts USING fts5(
+    content,
+    content='recall_messages',
+    content_rowid='rowid'
+);
+
+CREATE TRIGGER IF NOT EXISTS recall_ai AFTER INSERT ON recall_messages BEGIN
+  INSERT INTO recall_messages_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS recall_ad AFTER DELETE ON recall_messages BEGIN
+  INSERT INTO recall_messages_fts(recall_messages_fts, rowid, content) VALUES('delete', old.rowid, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS recall_au AFTER UPDATE ON recall_messages BEGIN
+  INSERT INTO recall_messages_fts(recall_messages_fts, rowid, content) VALUES('delete', old.rowid, old.content);
+  INSERT INTO recall_messages_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE INDEX IF NOT EXISTS idx_recall_session ON recall_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_recall_user ON recall_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_recall_created ON recall_messages(created_at);

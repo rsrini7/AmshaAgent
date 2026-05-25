@@ -16,8 +16,12 @@ import com.arcclaw.core.agent.reasoning.StructuredOutputMode;
 import com.arcclaw.core.audit.AuditService;
 import com.arcclaw.core.audit.SecurityEventType;
 import com.arcclaw.core.compaction.CompactionAbortedException;
+import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.core.governance.RateLimitTracker;
 import com.arcclaw.core.governance.SessionBudgetTracker;
+import com.arcclaw.core.memory.tiered.RecallMemoryService;
+import com.arcclaw.core.memory.tiered.RecallMessageMapper;
+import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.CompactionStorePort;
 import com.arcclaw.persistence.api.CompactionSummaryDto;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -74,6 +78,12 @@ public class CompactionService {
 
     @Inject
     SessionBudgetTracker budgetTracker;
+
+    @Inject
+    TieredMemoryConfig tieredConfig;
+
+    @Inject
+    RecallMemoryService recallService;
 
     @ConfigProperty(name = "arcclaw.memory.compaction.enabled", defaultValue = "true")
     boolean enabled;
@@ -340,10 +350,21 @@ public class CompactionService {
 
     private void finalizeCompaction(String sessionId, String userId, String newSummary,
                                     List<ChatMessage> toCompact, List<ChatMessage> toKeep) {
+        if (tieredConfig.enabled() && tieredConfig.recall().enabled()) {
+            List<RecallMessageDto> dtos = RecallMessageMapper.map(sessionId, userId, toCompact, 0);
+            recallService.insertBatch(dtos);
+        }
+
         String truncatedSummary = truncateSafely(newSummary);
 
         summaryRepository.upsert(new CompactionSummaryDto(
             sessionId, truncatedSummary, Instant.now(), toCompact.size(), userId));
+
+        if (tieredConfig.enabled() && tieredConfig.recall().enabled()) {
+            var dto = RecallMessageMapper.compactionSummary(sessionId, userId,
+                toCompact.size(), truncatedSummary);
+            recallService.insertOrIgnore(dto);
+        }
 
         List<ChatMessage> filteredKeep = toKeep.stream()
                 .filter(m -> !(m instanceof SystemMessage))
