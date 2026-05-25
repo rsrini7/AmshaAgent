@@ -77,7 +77,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         RagSchemaInitializer.class,
         SqliteMemoryRetrievalAdapter.class,
         SqliteWalConfigurer.class,
-        FtsConnectionInterceptor.class
+        FtsConnectionInterceptor.class,
+        FtsCleanCallback.class
     }
 )
 public class SqlitePersistenceReflectionConfig {

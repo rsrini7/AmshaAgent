@@ -46,7 +46,10 @@
       "Bash(javac:*)",
       "Bash(./mvnw dependency:tree -pl *)",
       "Bash(grep -rn *)",
-      "Bash(grep -B2 *)"
+      "Bash(grep -B2 *)",
+      "Read(//private/tmp/**)",
+      "Read(//tmp/**)",
+      "Bash(./mvnw clean:*)"
     ]
   }
 }
