@@ -906,6 +906,8 @@ try {
     Write-Host "✅  PostgreSQL native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/arcclaw-pg...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
+    # Clean up any old -runner files first
+    if (Test-Path "dist/arcclaw-pg-runner$suffix") { Remove-Item "dist/arcclaw-pg-runner$suffix" -Force }
     Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" "dist/arcclaw-pg$suffix" -Force
     Write-Host '✅  PostgreSQL binary: dist/arcclaw-pg'
 } finally {
@@ -972,6 +974,8 @@ try {
     Write-Host "✅  Filesystem native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/arcclaw-fs...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
+    # Clean up any old -runner files first
+    if (Test-Path "dist/arcclaw-fs-runner$suffix") { Remove-Item "dist/arcclaw-fs-runner$suffix" -Force }
     Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" "dist/arcclaw-fs$suffix" -Force
     Write-Host '✅  Filesystem binary: dist/arcclaw-fs'
 } finally {
@@ -1740,7 +1744,7 @@ $ErrorActionPreference = 'Stop'
 $suffix  = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runnerSrc = "arcclaw-app-1.0.0-SNAPSHOT$suffix"
 $src     = "arcclaw-app/target/$runnerSrc"
-$distExe = if ($IsWindows) { "arcclaw.exe" } else { "arcclaw" }
+$distExe = if ($IsWindows) { "arcclaw-sqlite.exe" } else { "arcclaw-sqlite" }
 $distDir = 'dist'
 
 if (-not (Test-Path $src)) {
@@ -1757,6 +1761,9 @@ if (Test-Path "$distDir/.playwright-browsers") {
 }
 if (Test-Path "$distDir/.playwright-driver") { Remove-Item -Recurse -Force "$distDir/.playwright-driver" }
 if (Test-Path "$distDir/data") { Write-Host "ℹ️   Removing existing data/ from $distDir"; Remove-Item -Recurse -Force "$distDir/data" }
+# Clean up old runner files
+if (Test-Path "$distDir/arcclaw-runner$suffix") { Remove-Item "$distDir/arcclaw-runner$suffix" -Force }
+if (Test-Path "$distDir/arcclaw$suffix") { Remove-Item "$distDir/arcclaw$suffix" -Force }
 
 Copy-Item $src "$distDir/$distExe"
 
@@ -1800,6 +1807,11 @@ if (Test-Path "$distDir/.playwright-browsers") {
 }
 if (Test-Path "$distDir/.playwright-driver") { Remove-Item -Recurse -Force "$distDir/.playwright-driver" }
 if (Test-Path "$distDir/data") { Write-Host "ℹ️   Removing existing data/ from $distDir"; Remove-Item -Recurse -Force "$distDir/data" }
+# Clean up old runner files
+if (Test-Path "$distDir/arcclaw-runner$suffix") { Remove-Item "$distDir/arcclaw-runner$suffix" -Force }
+if (Test-Path "$distDir/arcclaw-pg-runner$suffix") { Remove-Item "$distDir/arcclaw-pg-runner$suffix" -Force }
+if (Test-Path "$distDir/arcclaw-fs-runner$suffix") { Remove-Item "$distDir/arcclaw-fs-runner$suffix" -Force }
+if (Test-Path "$distDir/arcclaw$suffix") { Remove-Item "$distDir/arcclaw$suffix" -Force }
 
 # Copy all 3 backend variants
 $backends = @('arcclaw-sqlite', 'arcclaw-pg', 'arcclaw-fs')
