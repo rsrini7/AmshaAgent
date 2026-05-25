@@ -715,7 +715,7 @@ Since `@IfBuildProperty` is baked at build time, each persistence backend requir
 
 | Binary | Backend | Property value | Description |
 |--------|---------|---------------|-------------|
-| `arcclaw` | SQLite | `sqlite` (default) | Zero-config, embedded database |
+| `arcclaw-sqlite` | SQLite | `sqlite` (default) | Zero-config, embedded database |
 | `arcclaw-pg` | PostgreSQL | `postgres` | Requires running PG instance |
 | `arcclaw-fs` | Filesystem | `fs` | Lucene-based, no SQL database |
 
@@ -744,26 +744,26 @@ Each OS-specific release archive contains **all 3 backend variants**:
 
 ```
 arcclaw-1.0.0-linux-x64.tar.gz
-  ├── arcclaw          # SQLite (default)
-  ├── arcclaw-pg       # PostgreSQL
-  └── arcclaw-fs       # Filesystem
+  ├── arcclaw-sqlite     # SQLite (default)
+  ├── arcclaw-pg         # PostgreSQL
+  └── arcclaw-fs         # Filesystem
 
 arcclaw-1.0.0-macos-aarch64.tar.gz
-  ├── arcclaw          # SQLite (default)
-  ├── arcclaw-pg       # PostgreSQL
-  └── arcclaw-fs       # Filesystem
+  ├── arcclaw-sqlite     # SQLite (default)
+  ├── arcclaw-pg         # PostgreSQL
+  └── arcclaw-fs         # Filesystem
 
 arcclaw-1.0.0-windows-x64.zip
-  ├── arcclaw.exe      # SQLite (default)
-  ├── arcclaw-pg.exe   # PostgreSQL
-  └── arcclaw-fs.exe   # Filesystem
+  ├── arcclaw-sqlite.exe # SQLite (default)
+  ├── arcclaw-pg.exe     # PostgreSQL
+  └── arcclaw-fs.exe     # Filesystem
 ```
 
 This is **3 archives × 3 binaries each = 9 binaries total** across all platforms.
 
 **Why all 3 in one archive:** The user downloads one file for their OS and picks the binary matching their database. No separate downloads per backend.
 
-**Default binary (`arcclaw` / `arcclaw.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `arcclaw-pg` or `arcclaw-fs` respectively.
+**Default binary (`arcclaw-sqlite` / `arcclaw-sqlite.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `arcclaw-pg` or `arcclaw-fs` respectively.
 
 **JVM mode is backend-agnostic:** The JAR distribution (`quarkus-run.jar`) includes all 3 backend jars. The user switches via `.env` at runtime — no separate JARs needed.
 
