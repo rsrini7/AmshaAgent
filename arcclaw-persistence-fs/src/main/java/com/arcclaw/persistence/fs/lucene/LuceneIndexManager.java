@@ -31,7 +31,7 @@ import org.apache.lucene.search.KnnFloatVectorQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.store.NIOFSDirectory;
 import org.jboss.logging.Logger;
 
 public class LuceneIndexManager implements Closeable {
@@ -55,7 +55,7 @@ public class LuceneIndexManager implements Closeable {
     public LuceneIndexManager(Path indexDir, int vectorDimension) {
         try {
             Files.createDirectories(indexDir);
-            this.directory = MMapDirectory.open(indexDir);
+            this.directory = new NIOFSDirectory(indexDir);
             this.analyzer = new StandardAnalyzer();
             this.vectorDimension = vectorDimension;
             var config = new IndexWriterConfig(analyzer);
