@@ -765,7 +765,7 @@ if (Test-Path '.env') {
         $env:JAVA_HOME = $graalPath
 
         $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+        & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.build.backend=sqlite" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Native build complete [local]: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Assembling dist/ folder...'
@@ -907,8 +907,10 @@ try {
     Write-Host '▶   Copying to dist/arcclaw-pg...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
     # Clean up any old -runner files first
-    if (Test-Path "dist/arcclaw-pg-runner$suffix") { Remove-Item "dist/arcclaw-pg-runner$suffix" -Force }
-    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" "dist/arcclaw-pg$suffix" -Force
+    $pgRunner = if ($IsWindows) { "dist/arcclaw-pg-runner.exe" } else { "dist/arcclaw-pg-runner" }
+    $pgBinary = if ($IsWindows) { "dist/arcclaw-pg.exe" } else { "dist/arcclaw-pg" }
+    if (Test-Path $pgRunner) { Remove-Item $pgRunner -Force }
+    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" $pgBinary -Force
     Write-Host '✅  PostgreSQL binary: dist/arcclaw-pg'
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
@@ -975,8 +977,10 @@ try {
     Write-Host '▶   Copying to dist/arcclaw-fs...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
     # Clean up any old -runner files first
-    if (Test-Path "dist/arcclaw-fs-runner$suffix") { Remove-Item "dist/arcclaw-fs-runner$suffix" -Force }
-    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" "dist/arcclaw-fs$suffix" -Force
+    $fsRunner = if ($IsWindows) { "dist/arcclaw-fs-runner.exe" } else { "dist/arcclaw-fs-runner" }
+    $fsBinary = if ($IsWindows) { "dist/arcclaw-fs.exe" } else { "dist/arcclaw-fs" }
+    if (Test-Path $fsRunner) { Remove-Item $fsRunner -Force }
+    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" $fsBinary -Force
     Write-Host '✅  Filesystem binary: dist/arcclaw-fs'
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
