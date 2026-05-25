@@ -972,7 +972,7 @@ try {
     $env:JAVA_HOME = $graalPath
 
     $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
-    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.build.backend=fs" "-Darcclaw.persistence.backend=fs" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.build.backend=fs" "-Darcclaw.persistence.backend=fs" "-Dquarkus.profile=prod,filesystem" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "✅  Filesystem native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/arcclaw-fs...'
