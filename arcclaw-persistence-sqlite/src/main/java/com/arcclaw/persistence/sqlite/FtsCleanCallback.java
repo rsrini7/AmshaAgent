@@ -39,6 +39,10 @@ public class FtsCleanCallback implements FlywayConfigurationCustomizer {
         public void handle(Event event, Context context) {
             try (Statement stmt = context.getConnection().createStatement()) {
                 stmt.execute("DROP TABLE IF EXISTS recall_messages_fts");
+                stmt.execute("DROP TABLE IF EXISTS archival_chunks_fts");
+                // vec0 virtual tables create shadow tables (e.g. vec_archival_info)
+                // that Flyway SQLite clean cannot drop directly
+                stmt.execute("DROP TABLE IF EXISTS vec_archival");
             } catch (SQLException e) {
                 log.debugf("FTS5 pre-clean drop skipped: %s", e.getMessage());
             }

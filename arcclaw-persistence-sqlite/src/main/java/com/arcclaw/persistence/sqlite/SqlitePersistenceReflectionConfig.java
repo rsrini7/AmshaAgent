@@ -11,6 +11,7 @@ import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SkillDto;
 import com.arcclaw.persistence.common.SessionKnowledgeBase;
+import com.arcclaw.persistence.sqlite.jdbi.ArchivalMemoryJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.AuditJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.ChatMemoryJdbiDao;
 import com.arcclaw.persistence.sqlite.jdbi.CheckpointJdbiDao;
@@ -53,6 +54,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         PromptJdbiDao.class,
         CoreMemoryJdbiDao.class,
         RecallMemoryJdbiDao.class,
+        ArchivalMemoryJdbiDao.class,
         // JDBI infrastructure
         JdbiProducer.class,
         JdbiRetryWrapper.class,
@@ -65,6 +67,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SqliteCompactionStoreAdapter.class,
         SqliteCoreMemoryStore.class,
         SqliteRecallMemoryStore.class,
+        SqliteArchivalMemoryStore.class,
+        ArchivalVecSchemaInitializer.class,
+        VectorIngestionService.class,
         SqliteCronStoreAdapter.class,
         SqliteCronRunStoreAdapter.class,
         SqlitePromptStoreAdapter.class,

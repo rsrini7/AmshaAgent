@@ -277,3 +277,42 @@ END;
 CREATE INDEX IF NOT EXISTS idx_recall_session ON recall_messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_recall_user ON recall_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_recall_created ON recall_messages(created_at);
+
+-- Tiered Memory: Archival Memory (Phase 5)
+-- Semantic long-term knowledge with typed chunks, provenance, and access tracking
+CREATE TABLE IF NOT EXISTS archival_chunks (
+    chunk_id        TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    chunk_type      TEXT NOT NULL,
+    source_session  TEXT,
+    source_message  TEXT,
+    tags            TEXT,
+    confidence      REAL NOT NULL DEFAULT 0.5,
+    access_count    INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_archival_user ON archival_chunks(user_id);
+CREATE INDEX IF NOT EXISTS idx_archival_type ON archival_chunks(chunk_type);
+CREATE INDEX IF NOT EXISTS idx_archival_created ON archival_chunks(created_at);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS archival_chunks_fts USING fts5(
+    content,
+    content='archival_chunks',
+    content_rowid='rowid'
+);
+
+CREATE TRIGGER IF NOT EXISTS archival_ai AFTER INSERT ON archival_chunks BEGIN
+    INSERT INTO archival_chunks_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS archival_ad AFTER DELETE ON archival_chunks BEGIN
+    INSERT INTO archival_chunks_fts(archival_chunks_fts, rowid, content) VALUES('delete', old.rowid, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS archival_au AFTER UPDATE ON archival_chunks BEGIN
+    INSERT INTO archival_chunks_fts(archival_chunks_fts, rowid, content) VALUES('delete', old.rowid, old.content);
+    INSERT INTO archival_chunks_fts(rowid, content) VALUES (new.rowid, new.content);
+END;

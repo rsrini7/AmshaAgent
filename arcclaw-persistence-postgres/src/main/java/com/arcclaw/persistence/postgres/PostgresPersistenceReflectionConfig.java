@@ -11,6 +11,7 @@ import com.arcclaw.persistence.api.PromptDto;
 import com.arcclaw.persistence.api.ReasoningStepDto;
 import com.arcclaw.persistence.api.SecretDto;
 import com.arcclaw.persistence.api.SkillDto;
+import com.arcclaw.persistence.postgres.jdbi.ArchivalMemoryJdbiDao;
 import com.arcclaw.persistence.postgres.jdbi.AuditJdbiDao;
 import com.arcclaw.persistence.postgres.jdbi.ChatMemoryJdbiDao;
 import com.arcclaw.persistence.postgres.jdbi.CheckpointJdbiDao;
@@ -52,6 +53,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SkillJdbiDao.class,
         PromptJdbiDao.class,
         RagChunkJdbiDao.class,
+        ArchivalMemoryJdbiDao.class,
         // JDBI infrastructure
         JdbiProducer.class,
         // Store adapters (CDI beans)
@@ -64,10 +66,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         PostgresCronStoreAdapter.class,
         PostgresCronRunStoreAdapter.class,
         PostgresMemoryRetrievalAdapter.class,
+        PostgresArchivalMemoryStore.class,
         PostgresPromptStoreAdapter.class,
         PostgresSecretStoreAdapter.class,
         PostgresSkillStoreAdapter.class,
-        PostgresAdvisoryLockAdapter.class
+        PostgresAdvisoryLockAdapter.class,
+        PostgresRecallMemoryStore.class
     }
 )
 public class PostgresPersistenceReflectionConfig {

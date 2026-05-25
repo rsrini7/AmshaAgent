@@ -306,3 +306,38 @@ CREATE TRIGGER recall_messages_tsv_trigger
 CREATE INDEX IF NOT EXISTS idx_recall_session ON recall_messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_recall_user ON recall_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_recall_created ON recall_messages(created_at);
+
+-- Tiered Memory: Archival Memory (Phase 5)
+-- Semantic long-term knowledge with typed chunks, provenance, and access tracking
+CREATE TABLE IF NOT EXISTS archival_chunks (
+    chunk_id        TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    chunk_type      TEXT NOT NULL,
+    source_session  TEXT,
+    source_message  TEXT,
+    tags            TEXT,
+    confidence      DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    access_count    INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_archival_user ON archival_chunks(user_id);
+CREATE INDEX IF NOT EXISTS idx_archival_type ON archival_chunks(chunk_type);
+CREATE INDEX IF NOT EXISTS idx_archival_created ON archival_chunks(created_at);
+
+ALTER TABLE archival_chunks ADD COLUMN IF NOT EXISTS content_tsv tsvector;
+CREATE INDEX IF NOT EXISTS idx_archival_content_fts ON archival_chunks USING GIN(content_tsv);
+
+CREATE OR REPLACE FUNCTION archival_chunks_tsv_update() RETURNS TRIGGER AS $$
+BEGIN
+    NEW.content_tsv := to_tsvector('english', NEW.content);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS archival_chunks_tsv_trigger ON archival_chunks;
+CREATE TRIGGER archival_chunks_tsv_trigger
+    BEFORE INSERT OR UPDATE ON archival_chunks
+    FOR EACH ROW EXECUTE FUNCTION archival_chunks_tsv_update();

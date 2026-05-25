@@ -1631,7 +1631,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ## Appendix A: Implementation Status (v2.4 — 2026-05-25)
 
-> **Status Update:** Phase 0 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅ complete. Phase 1 deferred. Total: ~1,460 tests passing.
+> **Status Update:** Phase 0 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅ complete. Phase 1 deferred. Total: ~1,461 tests passing.
 
 ### A.1 Completed Phases Summary
 
@@ -1642,6 +1642,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 2** | ✅ COMPLETE | 2026-05-25 | 960 tests | Dual-write persistence, turn alignment, DB-enforced idempotency |
 | **Phase 3** | ✅ COMPLETE | 2026-05-25 | 963 tests (+3) | `recall_memory_search` tool, summary exclusion, tenant isolation |
 | **Phase 4** | ✅ COMPLETE | 2026-05-25 | 9 tests (+9) | Prompt budget hardening, hierarchical truncation, Unicode-safe clipping |
+| **Phase 5** | ✅ COMPLETE | 2026-05-25 | 4 tests (+4) | Archival relational + vector tier (BM25 FTS5, vec0, RRF, VectorIngestionService) |
 
 ### A.2 Phase 2: Critical Fixes Applied
 
@@ -1792,6 +1793,52 @@ Skipped:  1
 
 **Test Status:** 960 tests passing (3 Phase 3 tests included)
 
+### A.11 Phase 5/5b: Archival Storage Model (Implementation Details)
+
+#### Relational Tier (Phase 5)
+
+| Component | File | Role |
+|---|---|---|
+| `SqliteArchivalMemoryStore` | `arcclaw-persistence-sqlite` | `@TieredBackend("sqlite")`, FTS5 BM25 search, INSERT OR REPLACE upsert |
+| `PostgresArchivalMemoryStore` | `arcclaw-persistence-postgres` | `@TieredBackend("postgres")`, tsvector/tsquery BM25 search |
+| `ArchivalMemoryJdbiDao` (SQLite) | `arcclaw-persistence-sqlite/jdbi` | JDBI SQL Object with FTS5 MATCH queries |
+| `ArchivalMemoryJdbiDao` (Postgres) | `arcclaw-persistence-postgres/jdbi` | JDBI SQL Object with plainto_tsquery |
+| `ArchivalMemoryService` | `arcclaw-core` | `@ApplicationScoped` thin domain service, delegates to port |
+
+**Schema:**
+- `archival_chunks` table with `UNIQUE(chunk_id)` for INSERT OR REPLACE
+- SQLite: FTS5 virtual table `archival_chunks_fts` with `content='archival_chunks'` + 3 sync triggers
+- PostgreSQL: `content_tsv tsvector` column + GIN index + BEFORE INSERT OR UPDATE trigger
+- Both: indexes on `user_id`, `chunk_type`, `created_at`
+
+#### Vector Tier (Phase 5b)
+
+| Component | File | Role |
+|---|---|---|
+| `ArchivalVecSchemaInitializer` | `arcclaw-persistence-sqlite` | `@Priority(200)`, guards on `isVectorSearchEnabled()`, creates `vec_archival` virtual table |
+| `VectorIngestionService` | `arcclaw-persistence-sqlite` | Platform thread executor, serialized writes, `@PreDestroy` with 5s drain |
+| `FtsCleanCallback` (updated) | `arcclaw-persistence-sqlite` | Drops `vec_archival` before Flyway clean (vec0 shadow tables) |
+
+**Key Decisions:**
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| sqlite-vec version | v0.1.x (bundled native binary, not Maven) | Uses `float[N]` column syntax, `vec0()` virtual table function |
+| Write serialization | `newSingleThreadExecutor(Thread.ofPlatform())` | NOT `Semaphore(1)` — guarantees one specific OS thread for native C state |
+| Startup ordering | `Vec0NativeLibraryInstaller` (10) → `FtsConnectionInterceptor` (per-conn) → `ArchivalVecSchemaInitializer` (200) | vec0 loaded before DDL runs |
+| Hybrid search | RRF k=60, same as `FsMemoryRetrievalAdapter` | Consistent ranking across backends |
+| Float serialization | Reuses `GlobalKnowledgeBase.floatArrayToJson()` | No duplication |
+| Vector search binding | Named params (`:embedding`, `:limit`) | Avoids `?1`/0-based `.bind()` ambiguity |
+
+**Hybrid Search Architecture:**
+```
+useVector=false → BM25-only path (FTS5 MATCH / plainto_tsquery)
+useVector=true  → BM25 + vector, merged via RRF (k=60)
+vec0 absent     → graceful fallback to BM25 with one-time warn log
+```
+
+**Non-atomicity:** Relational `upsert()` and vector `ingestVector()` are independent operations. BM25 degrades gracefully if vector write fails. Documented in `ArchivalMemoryService.upsert()` Javadoc.
+
 ### A.10 Phase 4: Prompt Budget Hardening (Implementation Details)
 
 #### Architecture
@@ -1891,10 +1938,11 @@ static String truncateSafely(String text, int maxChars) {
 ### A.4 Test Suite Status (Updated)
 
 ```
-Total Tests: ~1,460
-  - arcclaw-core:        ~972 tests (963 base + 9 PromptBudgetManagerTest)
+Total Tests: ~1,461
+  - arcclaw-core:        ~977 tests (963 base + 9 PromptBudgetManager + 4 ArchivalMemoryService + 1 skip)
   - arcclaw-app:         145 tests
   - arcclaw-persistence: 343 tests
 Failures: 0
 Errors:   0
+Skipped:  1
 ```
