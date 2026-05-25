@@ -47,7 +47,15 @@ public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
 
     @Override
     public List<RecallMessageDto> search(RecallSearchQuery query) {
-        return List.of();
+        return jdbi.withExtension(RecallMemoryJdbiDao.class, dao -> 
+            dao.search(
+                query.userId(), 
+                query.isCrossSession() ? null : query.sessionId(), 
+                query.query(), 
+                query.includeSummaries(), 
+                query.limit()
+            )
+        );
     }
 
     @Override

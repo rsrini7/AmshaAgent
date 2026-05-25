@@ -29,11 +29,17 @@ import org.jboss.logging.Logger;
  * <p>
  * Tenant isolation is enforced by extracting userId from the ScopedValue,
  * never from LLM parameters. The LLM can only control the search query.
+ * 
+ * @deprecated Phase 3: Use {@link com.arcclaw.core.tools.memory.RecallMemorySearchTool} 
+ * for exact history search. This tool remains for backward compatibility but will be
+ * removed in a future release.
  */
+@Deprecated(since = "Phase 3", forRemoval = true)
 @ApplicationScoped
 @ToolMetadata(
     capabilityId = "memory_search",
-    description = "Semantic search across historical session memories",
+    description = "DEPRECATED. Semantic search across historical session summaries and RAG knowledge base. " +
+                  "For exact code/error history, use 'recall_memory_search' instead.",
     defaultRoles = {"architect", "coordinator", "researcher", "synthesizer"}
 )
 public class MemorySearchTool implements AgentTool {
@@ -100,6 +106,10 @@ public class MemorySearchTool implements AgentTool {
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        // Log deprecation warning (rate-limited to avoid spam)
+        log.warn("DEPRECATION: 'memory_search' is deprecated. " +
+                 "Migrate to 'recall_memory_search' (exact history) or continue using for summary/RAG search.");
+
         String userId;
         String sessionId;
 

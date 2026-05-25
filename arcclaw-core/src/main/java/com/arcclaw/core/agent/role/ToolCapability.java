@@ -19,6 +19,8 @@ public enum ToolCapability {
 
     MEMORY_SEARCH("memory_search", ToolCategory.DATABASE, "Semantic search across historical session memories"),
 
+    RECALL_MEMORY_SEARCH("recall_memory_search", ToolCategory.DATABASE, "Exact search across preserved conversation history (raw messages, code, errors)"),
+
     BROWSER_NAVIGATE("browser_navigate", ToolCategory.NETWORK, "Headless browser navigation (Playwright)"),
 
     SANDBOX_EXEC("sandbox_exec", ToolCategory.COMPUTE,

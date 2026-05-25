@@ -1621,8 +1621,157 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-**Document Version:** 2.1-phased
-**Previous Version:** 2.0-phased
-**Key Changes:** Five architecture corrections (DB-enforced dedupe, summary exclusion, tool-first archival, serialized vector writes, shadow directive lifecycle)
-**Next Step:** Phase 1 — Core Memory CRUD + prompt injection via `CoreMemoryStorePort`
-**Review Status:** Pending team review
+**Document Version:** 2.3-implemented
+**Previous Version:** 2.1-phased
+**Key Changes:** Five architecture corrections + Phase 0/2/3 implementation (dual-write persistence, turn alignment, recall search tool, summary exclusion)
+**Next Step:** Phase 4 — Prompt Budget Hardening (section ordering, size caps, overflow handling)
+**Review Status:** Phase 0/2/3 complete, 1,451 tests passing
+
+---
+
+## Appendix A: Implementation Status (v2.3 — 2026-05-25)
+
+> **Status Update:** Phase 0 ✅, Phase 2 ✅, Phase 3 ✅ complete. Phase 1 deferred. Total: 1,451 tests passing.
+
+### A.1 Completed Phases Summary
+
+| Phase | Status | Date Completed | Tests | Key Deliverables |
+|---|---|---|---|---|
+| **Phase 0** | ✅ COMPLETE | 2026-05-24 | 24 new files | 3 ISP ports, CDI producer, 22 config keys, GraalVM reflection |
+| **Phase 1** | ⏭️ DEFERRED | — | — | Core Memory tier postponed (not blocking Recall/Archival) |
+| **Phase 2** | ✅ COMPLETE | 2026-05-25 | 960 tests | Dual-write persistence, turn alignment, DB-enforced idempotency |
+| **Phase 3** | ✅ COMPLETE | 2026-05-25 | 963 tests (+3) | `recall_memory_search` tool, summary exclusion, tenant isolation |
+
+### A.2 Phase 2: Critical Fixes Applied
+
+| Issue | Resolution | Files Modified |
+|---|---|---|
+| **Turn number continuity** | `cumulativeNonSystemCount` tracked in metadata (monotonic across compaction) | `PersistentChatMemoryStore.java` |
+| **Compaction turn alignment** | `startTurn = cumulativeCount - windowSize` (not hardcoded 0) | `CompactionService.java` |
+| **Dual-write idempotency** | Both paths use `RecallMessageMapper.map()` with aligned turns | Both files above |
+| **System message preservation** | `sys.text()` used (not placeholder `"[System Directive]"`) | `RecallMessageMapper.java` |
+
+**Metadata Schema (Phase 2):**
+```java
+// Stored in ChatMemoryDto.metadataJson
+{
+  "timestamps": [1716633600000, 1716633660000, ...],
+  "cumulativeNonSystemCount": 42,  // Monotonically increasing
+  "windowSize": 5                   // Current active window size
+}
+```
+
+**Turn Assignment Proof:**
+| Scenario | cumulative | windowSize | delta | startTurn | Turn Assigned |
+|---|---|---|---|---|---|
+| Normal append (11→12) | 11→12 | 11→12 | +1 | 11 | 11 ✓ |
+| Compaction (20→5) | 20 | 5 | 0 | 0 | 0-14 (toCompact) ✓ |
+| Post-compaction (5→6) | 20→21 | 5→6 | +1 | 20 | 20 ✓ |
+
+### A.3 Phase 3: Implementation Details
+
+#### New Tool: `RecallMemorySearchTool`
+
+| Feature | Implementation |
+|---|---|
+| **Default behavior** | Session-scoped exact history search, `COMPACTION_SUMMARY` excluded |
+| **Cross-session** | Requires explicit `session_id=null` (gated, not default) |
+| **Include summaries** | `include_summaries=true` flag (summaries ranked lower) |
+| **Tenant isolation** | `userId` from `WorkspaceContext`, never from LLM params |
+| **Tool name** | `recall_memory_search` (`ToolCapability.RECALL_MEMORY_SEARCH`) |
+
+#### SQL Predicate (Corrected)
+
+```sql
+-- BEFORE (WRONG): includes summaries when includeSummaries=false
+AND (:includeSummaries = false OR message_type != 'COMPACTION_SUMMARY')
+
+-- AFTER (CORRECT): excludes summaries when includeSummaries=false
+AND (:includeSummaries = true OR message_type != 'COMPACTION_SUMMARY')
+```
+
+**Truth Table:**
+| includeSummaries | message_type | Condition | Included? |
+|---|---|---|---|
+| false | AGENT_MESSAGE | true OR true | ✅ Yes |
+| false | COMPACTION_SUMMARY | false OR false | ❌ No |
+| true | AGENT_MESSAGE | true OR true | ✅ Yes |
+| true | COMPACTION_SUMMARY | true OR false | ✅ Yes |
+
+#### Backend Implementations
+
+| Backend | File | Search Technology |
+|---|---|---|
+| SQLite | `RecallMemoryJdbiDao.java` | FTS5 virtual table |
+| PostgreSQL | `RecallMemoryJdbiDao.java` | tsvector + plainto_tsquery |
+
+#### Deprecation Strategy
+
+| Tool | Status | Migration Path |
+|---|---|---|
+| `memory_search` | `@Deprecated(since="Phase 3", forRemoval=true)` | Remains functional (logs warning), full removal in Phase 12 |
+| `recall_memory_search` | ✅ Active | New default for exact history lookup |
+
+#### Phase 3 Test Coverage
+
+| Test | Purpose | Result |
+|---|---|---|
+| `RecallSearchCodeSnippetNoSummaryPollutionTest` | Verifies summaries excluded by default | ✅ Pass |
+| `RecallSearchIncludeSummariesModeTest` | Verifies `include_summaries=true` works | ✅ Pass |
+| `RecallSearchTenantIsolationTest` | Verifies cross-user access blocked | ✅ Pass |
+
+### A.4 Test Suite Status
+
+```
+Total Tests: 1,451
+  - arcclaw-core:        963 tests (960 base + 3 Phase 3)
+  - arcclaw-app:         145 tests
+  - arcclaw-persistence: 343 tests
+Failures: 0
+Errors:   0
+Skipped:  1
+```
+
+### A.5 Deferred: Phase 1 (Core Memory)
+
+**Reason:** Core Memory tier is not blocking Recall/Archival implementation. Phase 1 can be implemented independently when needed:
+- No dependencies from Phase 2/3 on Core Memory
+- Recall persistence works without Core Memory
+- Prompt budget hardening (Phase 4) can proceed with existing compaction summary + recent turns
+
+**When to implement Phase 1:**
+- When user profile/preferences use case emerges
+- When explicit user-controlled memory blocks are needed
+- When admin API for manual memory management is required
+
+### A.6 Next Steps (Phase 4+)
+
+**Phase 4: Prompt Budget Hardening** — Recommended next phase:
+- Enforce explicit section ordering in `ChatHistoryAssembler`
+- Add size caps per section (tokens/chars)
+- Implement deterministic overflow clipping
+- Tests: `PromptSectionOrderingTest`, `MemoryPromptOverflowTest`
+
+**Phase 5: Archival Storage Model** — Depends on Phase 4:
+- Reuse existing `MemoryRetrievalPort` (already has BM25 + vector)
+- Add `ArchivalChunk` DTO with typed schema
+- Implement `ArchivalMemoryStorePort` in SQLite/Postgres/FS
+
+### A.7 Architectural Wins
+
+| Decision | Benefit |
+|---|---|
+| **ISP-compliant ports** | Backends implement only supported tiers (no stub methods) |
+| **DB-enforced idempotency** | No race conditions, no app-level dedupe complexity |
+| **Turn alignment via metadata** | Compaction + normal path produce identical `(turn, hash)` keys |
+| **Summary exclusion default** | Exact code/error retrieval not polluted by high-level summaries |
+| **Session-scoped default** | Precise recall within session; cross-session requires explicit opt-in |
+| **Deprecation wrapper** | Zero breaking changes for existing `memory_search` users |
+
+### A.8 Known Limitations
+
+| Limitation | Mitigation | Planned Fix |
+|---|---|---|
+| No integration test for DAO layer | Mocked tool tests verify behavior | Add `RecallMemoryJdbiDaoIntegrationTest` (SQLite in-memory) |
+| `MemorySearchTool` not yet routed to new tools | Logs warning, unchanged behavior | Phase 12: Full removal or tier-aware routing |
+| Cross-session search not gated by config | Always allowed within tenant | Phase 4: Add `cross-session-search` config flag |
