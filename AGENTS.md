@@ -54,8 +54,7 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   ```
 * **Switching to PostgreSQL** (native image):
   ```bash
-  export ARCCLAW_PERSISTENCE_BACKEND=postgres
-  ./mvnw package -Dnative
+  ./mvnw package -Dnative -Darcclaw.persistence.backend=postgres
   ```
 * **All three backend jars are in the build** — no Maven exclusion needed. `@IfBuildProperty` selects which CDI beans register.
 * **Tiered memory backend** (`arcclaw.memory.tiered.backend`) is a **separate property** — it can differ from the main persistence backend (e.g., main DB on Postgres, tiered memory on SQLite). Both default to `sqlite`.
