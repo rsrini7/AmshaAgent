@@ -350,8 +350,13 @@ public class CompactionService {
 
     private void finalizeCompaction(String sessionId, String userId, String newSummary,
                                     List<ChatMessage> toCompact, List<ChatMessage> toKeep) {
+        PersistentChatMemoryStore.SessionMetadata metadata = chatMemoryStore.getSessionMetadata(sessionId);
+        int cumulativeCount = metadata != null ? metadata.cumulativeNonSystemCount() : 0;
+        int windowSize = metadata != null ? metadata.windowSize() : 0;
+        int startTurn = Math.max(0, cumulativeCount - windowSize);
+        
         if (tieredConfig.enabled() && tieredConfig.recall().enabled()) {
-            List<RecallMessageDto> dtos = RecallMessageMapper.map(sessionId, userId, toCompact, 0);
+            List<RecallMessageDto> dtos = RecallMessageMapper.map(sessionId, userId, toCompact, startTurn);
             recallService.insertBatch(dtos);
         }
 

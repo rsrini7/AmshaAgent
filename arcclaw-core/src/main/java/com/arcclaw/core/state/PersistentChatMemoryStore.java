@@ -201,4 +201,17 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         String id = String.valueOf(memoryId);
         memoryStore.deleteById(id);
     }
+
+    /**
+     * Returns session metadata for compaction alignment.
+     * @param sessionId the session ID
+     * @return SessionMetadata with cumulativeNonSystemCount and windowSize
+     */
+    @Transactional
+    public SessionMetadata getSessionMetadata(String sessionId) {
+        ReadMetadata metadata = readMetadata(sessionId);
+        return new SessionMetadata(metadata.cumulativeNonSystemCount, metadata.windowSize);
+    }
+
+    public record SessionMetadata(int cumulativeNonSystemCount, int windowSize) {}
 }
