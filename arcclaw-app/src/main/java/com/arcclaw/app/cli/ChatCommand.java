@@ -163,7 +163,7 @@ public class ChatCommand implements Runnable {
                     input = fallbackReader.readLine();
                 }
                 if (input == null) break;
-                input = input.trim();
+                input = processBackspaces(input).trim();
             } catch (Exception _) {
                 break;
             }
@@ -303,5 +303,18 @@ public class ChatCommand implements Runnable {
         ChannelUser user = new ChannelUser("cli-user", "cli-user", "CLI User", ChannelType.CLI);
         ChannelMessage msg = new ChannelMessage.CliMessage(user, input, sessionId, Instant.now());
         return new MessageContext("cli-chat", user, msg);
+    }
+
+    private static String processBackspaces(String raw) {
+        var sb = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (c == '\u007F' || c == '\b') { // DEL or BS
+                if (!sb.isEmpty()) sb.deleteCharAt(sb.length() - 1);
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }
