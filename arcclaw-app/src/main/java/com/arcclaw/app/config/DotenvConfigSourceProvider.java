@@ -35,7 +35,7 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
 
     private Map<String, String> loadDotenv() {
         Map<String, String> properties = new HashMap<>();
-        Path envPath = Paths.get(".env");
+        Path envPath = resolveEnvPath();
 
         if (!Files.exists(envPath)) {
             return properties; // No .env file found, rely on system/environment variables
@@ -76,6 +76,23 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
         }
 
         return properties;
+    }
+
+    private Path resolveEnvPath() {
+        if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+            String command = ProcessHandle.current().info().command().orElse("");
+            if (!command.isEmpty()) {
+                try {
+                    Path binaryDir = Path.of(command).toAbsolutePath().normalize().getParent();
+                    if (binaryDir != null && Files.exists(binaryDir)) {
+                        return binaryDir.resolve(".env");
+                    }
+                } catch (Exception e) {
+                    // fall through to CWD
+                }
+            }
+        }
+        return Paths.get(".env");
     }
 
     /**
