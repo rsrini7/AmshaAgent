@@ -55,12 +55,11 @@ public class VectorIngestionService {
      */
     public CompletableFuture<Void> ingestVector(String chunkId, float[] embedding) {
         return CompletableFuture.runAsync(() -> {
-            String json = GlobalKnowledgeBase.floatArrayToJson(embedding);
             jdbi.useHandle(handle -> {
                 handle.createUpdate(
                     "INSERT OR REPLACE INTO vec_archival(chunk_id, embedding) VALUES (?, ?)")
                     .bind(0, chunkId)
-                    .bind(1, json)
+                    .bind(1, embedding)
                     .execute();
             });
         }, writerExecutor).exceptionally(ex -> {
@@ -96,14 +95,13 @@ public class VectorIngestionService {
      * @return array of [chunkId, distance] pairs, ordered by distance ASC
      */
     public List<Object[]> searchVector(float[] queryEmbedding, int limit) {
-        String json = GlobalKnowledgeBase.floatArrayToJson(queryEmbedding);
         return jdbi.withHandle(handle ->
             handle.createQuery(
                     "SELECT chunk_id, vec_distance_cosine(embedding, :embedding) AS distance " +
                     "FROM vec_archival " +
                     "ORDER BY distance ASC " +
                     "LIMIT :limit")
-                .bind("embedding", json)
+                .bind("embedding", queryEmbedding)
                 .bind("limit", limit)
                 .map((rs, ctx) -> new Object[]{rs.getString("chunk_id"), rs.getDouble("distance")})
                 .list()

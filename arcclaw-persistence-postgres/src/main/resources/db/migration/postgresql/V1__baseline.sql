@@ -2,6 +2,9 @@
 -- All CREATE TABLE / INDEX statements mirror the JPA entities.
 -- Data folder is deleted on schema changes, so no ALTER / data migration needed.
 
+-- Extensions
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Advisory locks for distributed coordination (§T5-3)
 CREATE TABLE IF NOT EXISTS advisory_lock (
     lock_key   TEXT NOT NULL PRIMARY KEY,
@@ -341,3 +344,9 @@ DROP TRIGGER IF EXISTS archival_chunks_tsv_trigger ON archival_chunks;
 CREATE TRIGGER archival_chunks_tsv_trigger
     BEFORE INSERT OR UPDATE ON archival_chunks
     FOR EACH ROW EXECUTE FUNCTION archival_chunks_tsv_update();
+
+-- pgvector: embedding column for vector similarity search (Phase 5b)
+-- Uses ALTER TABLE to avoid requiring pgvector at table creation time
+ALTER TABLE archival_chunks ADD COLUMN IF NOT EXISTS embedding vector(768);
+CREATE INDEX IF NOT EXISTS idx_archival_embedding ON archival_chunks
+    USING hnsw (embedding vector_cosine_ops);

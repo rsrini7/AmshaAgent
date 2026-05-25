@@ -684,25 +684,46 @@ sqlite-vec is not thread-safe for concurrent writes. SQLite archival must serial
 ```java
 @ApplicationScoped
 public class VectorIngestionService {
-    private final Semaphore writePermit = new Semaphore(1);
-    
-    public void ingestWithVector(ArchivalChunk chunk) throws InterruptedException {
-        writePermit.acquire();  // Serialize writes
-        try {
-            sqliteStore.insertWithEmbedding(chunk);
-        } finally {
-            writePermit.release();
-        }
+    // Platform thread executor — NOT Semaphore(1)
+    // Semaphore serializes logical calls but does NOT guarantee one specific OS thread.
+    // sqlite-vec native C state requires physical thread serialization.
+    private final ExecutorService writerExecutor = Executors.newSingleThreadExecutor(
+        Thread.ofPlatform().name("archival-vec-writer").daemon(true).factory()
+    );
+
+    public CompletableFuture<Void> ingestVector(String chunkId, float[] embedding) {
+        return CompletableFuture.runAsync(() -> {
+            jdbi.useHandle(handle -> {
+                handle.createUpdate("INSERT OR REPLACE INTO vec_archival(chunk_id, embedding) VALUES (?, ?)")
+                    .bind(0, chunkId)
+                    .bind(1, embedding)
+                    .execute();
+            });
+        }, writerExecutor).exceptionally(ex -> {
+            log.errorf("Vector write failed for chunk %s: %s", chunkId, LogUtil.rootMessage(ex));
+            return null;
+        });
     }
-    
+
     // Reads remain concurrent
-    public List<ArchivalChunk> search(VectorQuery query) {
-        return sqliteStore.search(query);  // No serialization needed
+    public List<Object[]> searchVector(float[] queryEmbedding, int limit) { ... }
+
+    @PreDestroy
+    void shutdown() {
+        writerExecutor.shutdown();
+        try {
+            if (!writerExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                writerExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            writerExecutor.shutdownNow();
+        }
     }
 }
 ```
 
-**Rationale:** Prevents `SQLITE_BUSY` errors and index corruption during concurrent archival writes. Reads may remain fully concurrent.
+**Rationale:** `Semaphore(1)` blocks the calling virtual thread while holding the permit — the native sqlite-vec write still happens from whichever carrier thread the virtual thread is scheduled on, which can change. `newSingleThreadExecutor(Thread.ofPlatform()...)` guarantees all writes execute on **one specific OS thread** — the only guarantee that satisfies sqlite-vec's native C state requirements.
 
 ### 8.5 Tests
 
@@ -1339,28 +1360,26 @@ Passive injection allowed only through pre-fetched session context gateway/cache
 
 **Risk:** sqlite-vec is not thread-safe for concurrent writes → `SQLITE_BUSY` errors, index corruption.
 
-**v2.1 Mitigation:** Serialize vector ingestion via `VectorIngestionService`:
+**v2.1 Mitigation:** Serialize vector ingestion via `VectorIngestionService` with a single platform thread executor:
 
 ```java
 @ApplicationScoped
 public class VectorIngestionService {
-    private final Semaphore writePermit = new Semaphore(1);
-    
-    public void ingestWithVector(ArchivalChunk chunk) throws InterruptedException {
-        writePermit.acquire();  // Serialize writes
-        try {
-            sqliteStore.insertWithEmbedding(chunk);
-        } finally {
-            writePermit.release();
-        }
+    private final ExecutorService writerExecutor = Executors.newSingleThreadExecutor(
+        Thread.ofPlatform().name("archival-vec-writer").daemon(true).factory()
+    );
+
+    public CompletableFuture<Void> ingestVector(String chunkId, float[] embedding) {
+        return CompletableFuture.runAsync(() -> {
+            // write on single platform thread — safe for native sqlite-vec C state
+        }, writerExecutor).exceptionally(ex -> { ... });
     }
-    
-    // Reads remain concurrent
-    public List<ArchivalChunk> search(VectorQuery query) {
-        return sqliteStore.search(query);  // No serialization needed
-    }
+
+    @PreDestroy void shutdown() { /* timed drain with awaitTermination(5, SECONDS) */ }
 }
 ```
+
+**Why platform thread, not Semaphore:** `Semaphore(1)` serializes logical calls but does NOT pin execution to one specific OS thread. Under Quarkus virtual threads, the carrier thread can change between `acquire()` and the actual native write. `newSingleThreadExecutor(Thread.ofPlatform())` guarantees all writes execute on **one specific OS thread**.
 
 Tests must cover concurrent write safety, no corruption, no `SQLITE_BUSY` regression.
 
@@ -1595,14 +1614,16 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 **Affected Phases:** Phase 5, Phase 11, Section 16.4
 
-**Change:** Serialize sqlite-vec ingestion via `VectorIngestionService` with semaphore-based write queue.
+**Change:** Serialize sqlite-vec ingestion via `VectorIngestionService` with a single platform thread executor.
 
-**Rationale:** sqlite-vec is not thread-safe for concurrent writes. Concurrent writes cause `SQLITE_BUSY` errors and potential index corruption.
+**Rationale:** sqlite-vec is not thread-safe for concurrent writes. Concurrent writes cause `SQLITE_BUSY` errors and potential index corruption. A `Semaphore(1)` is insufficient because it serializes logical calls but does not pin execution to one specific OS thread — under Quarkus virtual threads, the carrier thread can change between `acquire()` and the actual native write.
 
 **Implementation:**
-- `VectorIngestionService` with `Semaphore(1)` for write serialization
-- Writes: `writePermit.acquire()` → insert → `writePermit.release()`
+- `VectorIngestionService` with `newSingleThreadExecutor(Thread.ofPlatform())` for write serialization
+- Writes: `CompletableFuture.runAsync(..., writerExecutor)` — all writes on one specific OS thread
+- `FloatArrayArgumentFactory` in JDBI for `float[]` → little-endian binary blob (no JSON)
 - Reads: remain fully concurrent (no serialization needed)
+- `@PreDestroy` with `awaitTermination(5, SECONDS)` for graceful drain
 - Tests: concurrent ingestion safety, no corruption, no `SQLITE_BUSY` regression
 
 ### 19.5 Synthesized Directives Use Shadow Lifecycle
@@ -1631,14 +1652,14 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ## Appendix A: Implementation Status (v2.4 — 2026-05-25)
 
-> **Status Update:** Phase 0 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅ complete. Phase 1 deferred. Total: ~1,461 tests passing.
+> **Status Update:** Phase 0 ✅, Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅ complete. Total: ~1,461 tests passing.
 
 ### A.1 Completed Phases Summary
 
 | Phase | Status | Date Completed | Tests | Key Deliverables |
 |---|---|---|---|---|
 | **Phase 0** | ✅ COMPLETE | 2026-05-24 | 24 new files | 3 ISP ports, CDI producer, 22 config keys, GraalVM reflection |
-| **Phase 1** | ⏭️ DEFERRED | — | — | Core Memory tier postponed (not blocking Recall/Archival) |
+| **Phase 1** | ✅ COMPLETE | 2026-05-24 | CoreMemoryService, SQLite store, Admin API | CRUD + CAS versioning, prompt injection, `[USER CONTEXT]` block |
 | **Phase 2** | ✅ COMPLETE | 2026-05-25 | 960 tests | Dual-write persistence, turn alignment, DB-enforced idempotency |
 | **Phase 3** | ✅ COMPLETE | 2026-05-25 | 963 tests (+3) | `recall_memory_search` tool, summary exclusion, tenant isolation |
 | **Phase 4** | ✅ COMPLETE | 2026-05-25 | 9 tests (+9) | Prompt budget hardening, hierarchical truncation, Unicode-safe clipping |
@@ -1734,19 +1755,7 @@ Errors:   0
 Skipped:  1
 ```
 
-### A.5 Deferred: Phase 1 (Core Memory)
-
-**Reason:** Core Memory tier is not blocking Recall/Archival implementation. Phase 1 can be implemented independently when needed:
-- No dependencies from Phase 2/3 on Core Memory
-- Recall persistence works without Core Memory
-- Prompt budget hardening (Phase 4) can proceed with existing compaction summary + recent turns
-
-**When to implement Phase 1:**
-- When user profile/preferences use case emerges
-- When explicit user-controlled memory blocks are needed
-- When admin API for manual memory management is required
-
-### A.6 Next Steps (Phase 4+)
+### A.6 Next Steps (Phase 6+)
 
 **Phase 4: Prompt Budget Hardening** — Recommended next phase:
 - Enforce explicit section ordering in `ChatHistoryAssembler`
