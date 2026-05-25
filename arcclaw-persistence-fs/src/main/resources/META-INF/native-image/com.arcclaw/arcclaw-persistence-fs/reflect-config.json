@@ -3,6 +3,24 @@
     "name": "org.apache.lucene.index.ConcurrentMergeScheduler",
     "allDeclaredConstructors": true,
     "allPublicMethods": true,
-    "reason": "Lucene TestSecrets.<clinit> calls Class.forName() at runtime in native image — without registration, Class.forName fails with ClassNotFoundException"
+    "reason": "Lucene TestSecrets.<clinit> calls Class.forName() at runtime in native image"
+  },
+  {
+    "name": "org.apache.lucene.index.SegmentReader",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true,
+    "reason": "Lucene TestSecrets.<clinit> — same lambda references SegmentReader.class constant"
+  },
+  {
+    "name": "org.apache.lucene.index.IndexWriter",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true,
+    "reason": "Lucene TestSecrets.<clinit> — same lambda references IndexWriter.class constant"
+  },
+  {
+    "name": "org.apache.lucene.store.FilterIndexInput",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true,
+    "reason": "Lucene TestSecrets.<clinit> — same lambda references FilterIndexInput.class constant"
   }
 ]

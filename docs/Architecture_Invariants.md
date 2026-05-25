@@ -748,16 +748,16 @@ Lucene 10.x ships `org.apache.lucene.internal.tests.TestSecrets` in the **produc
 
 ```json
 [
-  {
-    "name": "org.apache.lucene.index.ConcurrentMergeScheduler",
-    "allDeclaredConstructors": true,
-    "allPublicMethods": true,
-    "reason": "Lucene TestSecrets.<clinit> calls Class.forName() at runtime"
-  }
+  { "name": "org.apache.lucene.index.ConcurrentMergeScheduler", "allDeclaredConstructors": true, "allPublicMethods": true },
+  { "name": "org.apache.lucene.index.SegmentReader", "allDeclaredConstructors": true, "allPublicMethods": true },
+  { "name": "org.apache.lucene.index.IndexWriter", "allDeclaredConstructors": true, "allPublicMethods": true },
+  { "name": "org.apache.lucene.store.FilterIndexInput", "allDeclaredConstructors": true, "allPublicMethods": true }
 ]
 ```
 
-**MUST NOT** register `ConcurrentMergeScheduler.MergeThread` or `ConcurrentMergeScheduler.CachedExecutor` as class literals in `@RegisterForReflection` — these inner classes have `protected`/`private` access and will not compile. Use the JSON config approach instead.
+These are the 4 classes referenced by `TestSecrets.<clinit>` via `Consumer.accept()` in a lambda (decompilable from `TestSecrets.class` constant pool). All four MUST be registered — missing any one causes `ExceptionInInitializerError` → crash on startup.
+
+**MUST NOT** register inner classes (e.g., `ConcurrentMergeScheduler.MergeThread`) as class literals in `@RegisterForReflection` — they have `protected`/`private` access and will not compile. Use the JSON config approach instead.
 
 **Detection:** GraalVM native-image build will NOT catch this — the error only manifests at **runtime** when the static initializer fires. Always verify with `mise build:native-local` and a test that boots the full application context.
 
