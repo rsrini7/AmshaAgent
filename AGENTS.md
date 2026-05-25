@@ -38,6 +38,30 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   ```
 * **Reason**: Phase 11 (Backend Parity) requires identical semantics across backends. Migration drift between SQLite and PostgreSQL causes silent schema mismatches that only surface when users switch backends.
 
+### 1.3.1 Persistence Backend Selection (`@IfBuildProperty`)
+
+* **How it works**: Every persistence adapter CDI bean uses `@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite"|"postgres"|"fs")` to conditionally activate. Only one backend's beans register at startup.
+* **Default**: SQLite — the SQLite adapter uses `enableIfMissing = true`, meaning if the property is unset, SQLite activates. This ensures the binary works out of the box with zero configuration.
+* **JVM mode** (`arcclaw serve`): `@IfBuildProperty` is evaluated at **app startup**. Set `ARCCLAW_PERSISTENCE_BACKEND=postgres` in `.env` — **no rebuild needed**.
+* **Native image** (`arcclaw-native`): `@IfBuildProperty` is baked into the binary at **build time**. The user must **rebuild** the native image with the new property set during build.
+* **Switching to PostgreSQL** (JVM mode):
+  ```bash
+  echo "ARCCLAW_PERSISTENCE_BACKEND=postgres" >> .env
+  echo "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/arcclaw" >> .env
+  echo "QUARKUS_DATASOURCE_USERNAME=arcclaw" >> .env
+  echo "QUARKUS_DATASOURCE_PASSWORD=<password>" >> .env
+  arcclaw serve
+  ```
+* **Switching to PostgreSQL** (native image):
+  ```bash
+  export ARCCLAW_PERSISTENCE_BACKEND=postgres
+  ./mvnw package -Dnative
+  ```
+* **All three backend jars are in the build** — no Maven exclusion needed. `@IfBuildProperty` selects which CDI beans register.
+* **Tiered memory backend** (`arcclaw.memory.tiered.backend`) is a **separate property** — it can differ from the main persistence backend (e.g., main DB on Postgres, tiered memory on SQLite). Both default to `sqlite`.
+* **Flyway** runs automatically on startup for whichever backend is active — the user does not manually create tables.
+* **See also**: `docs/Architecture_Invariants.md` §5.24 for the full invariant.
+
 ### 1.4 Admin REST Resource Pattern
 * **Rule**: All new `@Path("/admin/...")` JAX-RS resources in `arcclaw-app` **MUST** follow the existing auth and user-resolution patterns documented below. Do not hardcode userId literals or leave write endpoints unprotected.
 * **UserId Resolution**: Copy the `resolveUserId()` pattern from [CronResource.java](./arcclaw-app/src/main/java/com/arcclaw/app/api/CronResource.java) — uses `SecurityContext.getUserPrincipal()` with `WorkspaceContext.getUserIdOrUnknown()` fallback. Never hardcode `"default"`.

@@ -626,6 +626,89 @@ All DDL is expressed in per-adapter Flyway migration SQL files only.
 ## 5.23 SessionSchemaEnforcer DDL Isolation (§5.23 INVARIANT)
 All raw DDL `CREATE TABLE` and similar schema emission statements are adapter-specific and must never live in `arcclaw-core` or `arcclaw-app`. Each persistence adapter module (e.g. `arcclaw-persistence-sqlite`) owns its specific programmatic DDL (like `AUTOINCREMENT` mapping) completely isolated from core domain code.
 
+## 5.24 Persistence Backend Selection (§5.24 INVARIANT)
+
+The persistence backend is controlled by a single build property: **`arcclaw.persistence.backend`**.
+
+### How It Works
+
+Every persistence adapter bean uses Quarkus `@IfBuildProperty` to conditionally activate:
+
+```java
+// SQLite — DEFAULT (enableIfMissing = true means: if property is unset, SQLite activates)
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+
+// PostgreSQL — opt-in only (no enableIfMissing)
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
+
+// Filesystem — opt-in only
+@IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
+```
+
+### When Backend Selection Happens
+
+| Mode | When `@IfBuildProperty` is evaluated | Switching backend |
+|------|--------------------------------------|-------------------|
+| **JVM** (`arcclaw serve`) | At **app startup** (runtime) | Set `ARCCLAW_PERSISTENCE_BACKEND` in `.env` — **no rebuild needed** |
+| **Native image** (`arcclaw-native`) | At **build time** (GraalVM compile) | Must **rebuild** the native binary with the new property set during build |
+
+### How to Switch Backend (JVM mode)
+
+```bash
+# 1. Set in .env (before starting the app)
+echo "ARCCLAW_PERSISTENCE_BACKEND=postgres" >> .env
+
+# 2. Also set connection details for the target backend:
+echo "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/arcclaw" >> .env
+echo "QUARKUS_DATASOURCE_USERNAME=arcclaw" >> .env
+echo "QUARKUS_DATASOURCE_PASSWORD=<password>" >> .env
+
+# 3. Start the app — no rebuild needed
+arcclaw serve
+```
+
+### How to Switch Backend (Native image)
+
+```bash
+# Must rebuild — @IfBuildProperty is baked into the native image at compile time
+export ARCCLAW_PERSISTENCE_BACKEND=postgres
+./mvnw package -Dnative
+```
+
+### Backend-Specific Configuration
+
+| Backend | `.env` variables needed | Notes |
+|---------|------------------------|-------|
+| **SQLite** (default) | None — zero config | Data stored in `./arcclaw-data/` by default |
+| **PostgreSQL** | `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD` | Flyway auto-creates schema on startup |
+| **Filesystem** | `ARCCLAW_FS_DATA_DIR` (optional, default `./arcclaw-data`) | Uses Lucene index for BM25 search |
+
+### Why SQLite Is the Default
+
+- `enableIfMissing = true` on the SQLite adapter means: if the property is not set at all, SQLite activates.
+- This ensures the binary works out of the box with zero configuration — no database server needed.
+- All three backend jars are included in the build; `@IfBuildProperty` selects which CDI beans register at startup.
+
+### Flyway Migration Parity
+
+Every Flyway migration must exist in both backends with the same version number:
+- SQLite: `arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/V<n>__<name>.sql`
+- PostgreSQL: `arcclaw-persistence-postgres/src/main/resources/db/migration/postgresql/V<n>__<name>.sql`
+
+Flyway runs automatically on startup — the user does not need to manually create tables.
+
+### Tiered Memory Backend
+
+The tiered memory subsystem has its own separate backend selection:
+```yaml
+arcclaw:
+  memory:
+    tiered:
+      backend: ${ARCCLAW_MEMORY_TIERED_BACKEND:sqlite}
+```
+
+This is a **different property** from `arcclaw.persistence.backend`. The tiered memory backend can be different from the main persistence backend (e.g., main DB on Postgres, tiered memory on SQLite). Both default to `sqlite`.
+
 ---
 
 ## 6. Native image and reflection rules
