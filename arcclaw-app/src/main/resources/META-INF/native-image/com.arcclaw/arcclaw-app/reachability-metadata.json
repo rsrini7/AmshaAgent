@@ -1,0 +1,18 @@
+{
+  "foreign": [
+    {
+      "downcalls": [
+        {
+          "name": "posix_madvise",
+          "parameterTypes": ["long", "long", "long", "int"],
+          "returnType": "int"
+        },
+        {
+          "name": "getpagesize",
+          "parameterTypes": [],
+          "returnType": "int"
+        }
+      ]
+    }
+  ]
+}

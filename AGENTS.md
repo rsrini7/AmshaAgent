@@ -423,6 +423,38 @@ CDI `@PostConstruct` methods run at build time in native-image. If your bean ini
 **Do NOT put `--initialize-at-run-time` in `pom.xml` `additional-build-args`:**
 Quarkus splits that property on commas. If the arg value contains commas (e.g., `--initialize-at-run-time=A,B`), it gets split into two broken args. Use `native-image.properties` instead — GraalVM reads it directly with no comma splitting.
 
+### 7.6 Foreign Function Registration (`reachability-metadata.json`)
+
+Libraries that use the FFM API (Foreign Function & Memory) for native downcalls require explicit registration in `reachability-metadata.json`. GraalVM cannot analyze FFM calls at build time and throws `MissingForeignRegistrationError` at runtime.
+
+**Config file:** `arcclaw-app/src/main/resources/META-INF/native-image/com.arcclaw/arcclaw-app/reachability-metadata.json`
+
+**When to add a function:**
+- GraalVM error: `MissingForeignRegistrationError: Cannot perform downcall with leaf type ...` → register the function's native signature
+
+**Current registrations:**
+- `posix_madvise` — Lucene `PosixNativeAccess` calls this via FFM for memory-mapped file advice
+- `getpagesize` — Lucene `PosixNativeAccess` calls this for page size detection
+
+**Format:**
+```json
+{
+  "foreign": [
+    {
+      "downcalls": [
+        {
+          "name": "posix_madvise",
+          "parameterTypes": ["long", "long", "long", "int"],
+          "returnType": "int"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Note:** The leaf type in the error message may not directly match the C function signature — GraalVM decomposes `MemorySegment` parameters into `(address, size)` pairs. Always use the exact leaf type from the error message.
+
 **Verification:**
 ```bash
 mise build:native-local    # Must complete without heap/init errors
