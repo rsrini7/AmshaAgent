@@ -58,14 +58,15 @@ class AppBootstrapTest {
     }
 
     @Test
-    void testLoadDotEnv_doesNotOverwriteExistingEnv(@TempDir Path tempDir) throws IOException {
-        System.setProperty("KEY_A", "original");
+    void testLoadDotEnv_appliesWhenNoOsEnvVar(@TempDir Path tempDir) throws IOException {
+        // In GraalVM native-image, loadDotEnv checks System.getenv() (OS env vars),
+        // not System.getProperty(). When no OS env var exists, .env value is applied.
         Path envFile = tempDir.resolve(".env");
-        Files.write(envFile, List.of("KEY_A=overridden"));
+        Files.write(envFile, List.of("KEY_A=from_dotenv"));
 
         EnvConfigInitializer.loadDotEnv(tempDir);
 
-        assertEquals("original", System.getProperty("KEY_A"));
+        assertEquals("from_dotenv", System.getProperty("KEY_A"));
     }
 
     @Test
