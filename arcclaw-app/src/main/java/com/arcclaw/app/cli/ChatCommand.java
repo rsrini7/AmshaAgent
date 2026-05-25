@@ -1,8 +1,9 @@
 package com.arcclaw.app.cli;
 
+import java.io.BufferedReader;
+import java.io.Console;
+import java.io.InputStreamReader;
 import java.time.Instant;
-import java.util.NoSuchElementException;
-import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -145,19 +146,25 @@ public class ChatCommand implements Runnable {
         }
     }
 
-    @SuppressWarnings("resource")
     private void chatLoop(String sessionId) {
-        Scanner scanner = new Scanner(System.in);
+        Console console = System.console();
+        BufferedReader fallbackReader = (console == null)
+                ? new BufferedReader(new InputStreamReader(System.in))
+                : null;
 
         while (true) {
-            System.out.print("\nYou> ");
-            System.out.flush();
-            if (!scanner.hasNextLine()) break;
-
             String input;
             try {
-                input = scanner.nextLine().trim();
-            } catch (NoSuchElementException _) {
+                if (console != null) {
+                    input = console.readLine("\nYou> ");
+                } else {
+                    System.out.print("\nYou> ");
+                    System.out.flush();
+                    input = fallbackReader.readLine();
+                }
+                if (input == null) break;
+                input = input.trim();
+            } catch (Exception _) {
                 break;
             }
 
