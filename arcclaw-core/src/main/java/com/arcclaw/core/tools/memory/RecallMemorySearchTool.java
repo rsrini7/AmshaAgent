@@ -15,6 +15,7 @@ import com.arcclaw.core.tools.AgentTool;
 import com.arcclaw.core.tools.IdempotencyMode;
 import com.arcclaw.core.tools.ToolExecutionContext;
 import com.arcclaw.core.tools.ToolResponse;
+import com.arcclaw.core.util.Fts5QueryUtil;
 import com.arcclaw.persistence.api.RecallMemoryStorePort;
 import com.arcclaw.persistence.api.RecallMessageDto;
 import com.arcclaw.persistence.api.RecallSearchQuery;
@@ -65,7 +66,9 @@ public class RecallMemorySearchTool implements AgentTool {
     public JsonObjectSchema parametersSchema() {
         return JsonObjectSchema.builder()
             .addStringProperty("query", "Keywords or exact text to search for in conversation history")
-            .addStringProperty("session_id", "Session ID to scope search (default: current session)")
+            .addStringProperty("session_id", 
+                "Session ID to scope search (default: current session). " +
+                "Pass 'all' or '*' to search across all sessions for this user.")
             .addBooleanProperty("include_summaries", "Include compaction summaries in results (default: false)")
             .addIntegerProperty("limit", "Maximum results to return (default: 5)")
             .required("query")
@@ -99,19 +102,32 @@ public class RecallMemorySearchTool implements AgentTool {
             return ToolResponse.failure(403, "tenant context not available");
         }
 
-        // Default to current session (session-scoped exact recall)
-        // Cross-session search requires explicit session_id=null
-        String sessionId = params.containsKey("session_id") 
-            ? (String) params.get("session_id") 
-            : ctx.sessionId();
+        // Handle session_id: missing=current, null/"all"/"*"=cross-session, explicit value=specific session
+        String sessionId;
+        if (!params.containsKey("session_id")) {
+            sessionId = ctx.sessionId();
+        } else {
+            String val = (String) params.get("session_id");
+            if (val == null || "all".equalsIgnoreCase(val) || "*".equals(val)) {
+                sessionId = null;
+            } else {
+                sessionId = val;
+            }
+        }
+        
         boolean includeSummaries = Boolean.TRUE.equals(params.get("include_summaries"));
         int limit = params.containsKey("limit") ? ((Number) params.get("limit")).intValue() : 5;
 
-        log.debugf("Recall search: userId=%s, sessionId=%s, query=%s, includeSummaries=%s, limit=%d",
-                   userId, sessionId, query, includeSummaries, limit);
+        // Sanitize query for FTS5 (SQLite) and plainto_tsquery (Postgres).
+        // toFts5Phrase strips special chars (+, (), :, etc.) to prevent FTS5 syntax errors.
+        // PostgreSQL plainto_tsquery is safe by design, but tool layer doesn't know backend
+        // (abstraction boundary). Punctuation loss on Postgres is acceptable tradeoff.
+        String safeQuery = Fts5QueryUtil.toFts5Phrase(query);
+        log.debugf("Recall search: userId=%s, sessionId=%s, query=%s (sanitized from %s), includeSummaries=%s, limit=%d",
+                   userId, sessionId, safeQuery, query, includeSummaries, limit);
 
         RecallSearchQuery searchQuery = new RecallSearchQuery(
-            userId, query, sessionId, limit, includeSummaries, Set.of()
+            userId, safeQuery, sessionId, limit, includeSummaries, Set.of()
         );
 
         List<RecallMessageDto> results = recallStore.search(searchQuery);

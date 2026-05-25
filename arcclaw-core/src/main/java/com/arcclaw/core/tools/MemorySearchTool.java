@@ -106,10 +106,6 @@ public class MemorySearchTool implements AgentTool {
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
-        // Log deprecation warning (rate-limited to avoid spam)
-        log.warn("DEPRECATION: 'memory_search' is deprecated. " +
-                 "Migrate to 'recall_memory_search' (exact history) or continue using for summary/RAG search.");
-
         String userId;
         String sessionId;
 

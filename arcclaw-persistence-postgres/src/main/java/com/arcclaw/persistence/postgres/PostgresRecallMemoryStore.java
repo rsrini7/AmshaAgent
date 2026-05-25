@@ -13,11 +13,14 @@ import com.arcclaw.persistence.api.RecallSearchQuery;
 import com.arcclaw.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 import io.quarkus.arc.properties.IfBuildProperty;
 import org.jdbi.v3.core.Jdbi;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 @TieredBackend("postgres")
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "postgres")
 public class PostgresRecallMemoryStore implements RecallMemoryStorePort {
+
+    private static final Logger log = Logger.getLogger(PostgresRecallMemoryStore.class);
 
     private final Jdbi jdbi;
 
@@ -65,5 +68,8 @@ public class PostgresRecallMemoryStore implements RecallMemoryStorePort {
 
     @Override
     public void purgeExpired(String userId, int retentionDays) {
+        log.debugf("[PostgresRecallMemoryStore] purgeExpired not yet implemented " +
+                   "for userId=%s, retentionDays=%d — Phase 12 deliverable",
+                   userId, retentionDays);
     }
 }

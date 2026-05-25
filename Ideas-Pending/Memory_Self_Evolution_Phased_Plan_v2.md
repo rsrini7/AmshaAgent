@@ -1621,11 +1621,11 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-**Document Version:** 2.3-implemented
-**Previous Version:** 2.1-phased
-**Key Changes:** Five architecture corrections + Phase 0/2/3 implementation (dual-write persistence, turn alignment, recall search tool, summary exclusion)
+**Document Version:** 2.4-implemented
+**Previous Version:** 2.3-implemented
+**Key Changes:** Phase 0/2/3 implementation + 5 tactical fixes (FTS5 sanitization, cross-session magic strings, deprecation log removal, purgeExpired stub, schema docs)
 **Next Step:** Phase 4 — Prompt Budget Hardening (section ordering, size caps, overflow handling)
-**Review Status:** Phase 0/2/3 complete, 1,451 tests passing
+**Review Status:** Phase 0/2/3 complete, 960 tests passing, all tactical fixes applied
 
 ---
 
@@ -1773,5 +1773,20 @@ Skipped:  1
 | Limitation | Mitigation | Planned Fix |
 |---|---|---|
 | No integration test for DAO layer | Mocked tool tests verify behavior | Add `RecallMemoryJdbiDaoIntegrationTest` (SQLite in-memory) |
-| `MemorySearchTool` not yet routed to new tools | Logs warning, unchanged behavior | Phase 12: Full removal or tier-aware routing |
-| Cross-session search not gated by config | Always allowed within tenant | Phase 4: Add `cross-session-search` config flag |
+| `MemorySearchTool` not yet routed to new tools | `@Deprecated` annotation, description updated | Phase 12: Full removal or tier-aware routing |
+| Cross-session search not gated by config | Allowed via magic strings `"all"`, `"*"` | Phase 4: Add `cross-session-search` config flag |
+| `purgeExpired` not implemented | Debug log stub in place | Phase 12: Retention/eviction jobs |
+
+### A.9 Phase 3 Tactical Fixes (Post-Review)
+
+| Fix | Description | Files Modified |
+|---|---|---|
+| **FTS5 Sanitization** | `Fts5QueryUtil.toFts5Phrase(query)` prevents syntax errors from special chars (`+`, `()`, `:`) | `RecallMemorySearchTool.java` |
+| **Cross-Session Magic Strings** | `"all"`, `"*"`, `null` trigger cross-session search (LLM-friendly) | `RecallMemorySearchTool.java` |
+| **Schema Documentation** | Updated `session_id` description to document magic strings | `RecallMemorySearchTool.java` |
+| **Deprecation Log Spam** | Removed `log.warn` from `MemorySearchTool.execute()` | `MemorySearchTool.java` |
+| **Purge Expired Stub** | Added `log.debugf` to `PostgresRecallMemoryStore.purgeExpired()` | `PostgresRecallMemoryStore.java` |
+
+**PostgreSQL FTS Verification:** ✅ Trigger `recall_messages_tsv_trigger` populates `content_tsv` on INSERT/UPDATE (migration V1__baseline.sql)
+
+**Test Status:** 960 tests passing (3 Phase 3 tests included)
