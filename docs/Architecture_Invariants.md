@@ -709,6 +709,76 @@ arcclaw:
 
 This is a **different property** from `arcclaw.persistence.backend`. The tiered memory backend can be different from the main persistence backend (e.g., main DB on Postgres, tiered memory on SQLite). Both default to `sqlite`.
 
+### Native Image Binary Naming Convention (§5.24.1)
+
+Since `@IfBuildProperty` is baked at build time, each persistence backend requires a **separate native binary**. The naming convention is:
+
+| Binary | Backend | Property value | Description |
+|--------|---------|---------------|-------------|
+| `arcclaw` | SQLite | `sqlite` (default) | Zero-config, embedded database |
+| `arcclaw-pg` | PostgreSQL | `postgres` | Requires running PG instance |
+| `arcclaw-fs` | Filesystem | `fs` | Lucene-based, no SQL database |
+
+**Build approach:** Use `mise run` tasks (recommended) or raw Maven commands:
+
+```bash
+# Recommended: mise tasks (auto-switch JDK, copy to dist/)
+mise run build:native-local      # SQLite (default) → dist/arcclaw
+mise run build:native-pg         # PostgreSQL → dist/arcclaw-pg
+mise run build:native-fs         # Filesystem → dist/arcclaw-fs
+mise run build:native-all        # All 3 variants → dist/arcclaw, dist/arcclaw-pg, dist/arcclaw-fs
+
+# Raw Maven (manual rename needed)
+./mvnw package -Pnative -pl arcclaw-app -am -DskipTests
+# Output: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner → rename to arcclaw
+
+./mvnw package -Pnative -pl arcclaw-app -am -DskipTests \
+  -Darcclaw.persistence.backend=postgres
+# Output: rename to arcclaw-pg
+
+./mvnw package -Pnative -pl arcclaw-app -am -DskipTests \
+  -Darcclaw.persistence.backend=fs
+# Output: rename to arcclaw-fs
+```
+
+**What mise tasks do:**
+1. Auto-switch JDK to GraalVM Community 25 (via `mise use java@graalvm-community-25.0.2`)
+2. Bake `quarkus.arcclaw.build.backend` property into `build-info.properties`
+3. Build native image with memory auto-tuning (85% of available RAM)
+4. Copy final binary to `dist/` with correct name (`arcclaw`, `arcclaw-pg`, `arcclaw-fs`)
+5. Switch JDK back to Temurin 25 after build
+
+**Why use mise tasks:** Raw Maven commands require manual JDK switching, manual binary renaming, and don't auto-tune memory. Mise tasks handle all of this automatically.
+
+### Release Archive Distribution (§5.24.2)
+
+Each OS-specific release archive contains **all 3 backend variants**:
+
+```
+arcclaw-1.0.0-linux-x64.tar.gz
+  ├── arcclaw          # SQLite (default)
+  ├── arcclaw-pg       # PostgreSQL
+  └── arcclaw-fs       # Filesystem
+
+arcclaw-1.0.0-macos-aarch64.tar.gz
+  ├── arcclaw          # SQLite (default)
+  ├── arcclaw-pg       # PostgreSQL
+  └── arcclaw-fs       # Filesystem
+
+arcclaw-1.0.0-windows-x64.zip
+  ├── arcclaw.exe      # SQLite (default)
+  ├── arcclaw-pg.exe   # PostgreSQL
+  └── arcclaw-fs.exe   # Filesystem
+```
+
+This is **3 archives × 3 binaries each = 9 binaries total** across all platforms.
+
+**Why all 3 in one archive:** The user downloads one file for their OS and picks the binary matching their database. No separate downloads per backend.
+
+**Default binary (`arcclaw` / `arcclaw.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `arcclaw-pg` or `arcclaw-fs` respectively.
+
+**JVM mode is backend-agnostic:** The JAR distribution (`quarkus-run.jar`) includes all 3 backend jars. The user switches via `.env` at runtime — no separate JARs needed.
+
 ---
 
 ## 6. Native image and reflection rules

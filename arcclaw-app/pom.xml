@@ -350,6 +350,17 @@
         <version>3.1.0</version>
         <executions>
           <execution>
+            <id>bake-build-backend</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <echo file="${project.build.outputDirectory}/build-info.properties"
+                      message="quarkus.arcclaw.build.backend=${arcclaw.build.backend}${line.separator}"/>
+              </target>
+            </configuration>
+          </execution>
+          <execution>
             <id>sync-env-example</id>
             <phase>generate-resources</phase>
             <goals><goal>run</goal></goals>
