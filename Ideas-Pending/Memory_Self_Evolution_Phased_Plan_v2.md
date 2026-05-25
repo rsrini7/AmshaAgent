@@ -1629,9 +1629,9 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-## Appendix A: Implementation Status (v2.3 — 2026-05-25)
+## Appendix A: Implementation Status (v2.4 — 2026-05-25)
 
-> **Status Update:** Phase 0 ✅, Phase 2 ✅, Phase 3 ✅ complete. Phase 1 deferred. Total: 1,451 tests passing.
+> **Status Update:** Phase 0 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅ complete. Phase 1 deferred. Total: ~1,460 tests passing.
 
 ### A.1 Completed Phases Summary
 
@@ -1641,6 +1641,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 1** | ⏭️ DEFERRED | — | — | Core Memory tier postponed (not blocking Recall/Archival) |
 | **Phase 2** | ✅ COMPLETE | 2026-05-25 | 960 tests | Dual-write persistence, turn alignment, DB-enforced idempotency |
 | **Phase 3** | ✅ COMPLETE | 2026-05-25 | 963 tests (+3) | `recall_memory_search` tool, summary exclusion, tenant isolation |
+| **Phase 4** | ✅ COMPLETE | 2026-05-25 | 9 tests (+9) | Prompt budget hardening, hierarchical truncation, Unicode-safe clipping |
 
 ### A.2 Phase 2: Critical Fixes Applied
 
@@ -1790,3 +1791,110 @@ Skipped:  1
 **PostgreSQL FTS Verification:** ✅ Trigger `recall_messages_tsv_trigger` populates `content_tsv` on INSERT/UPDATE (migration V1__baseline.sql)
 
 **Test Status:** 960 tests passing (3 Phase 3 tests included)
+
+### A.10 Phase 4: Prompt Budget Hardening (Implementation Details)
+
+#### Architecture
+
+| Component | File | Role |
+|---|---|---|
+| `PromptBudgetManager` | `arcclaw-core/.../memory/tiered/PromptBudgetManager.java` | `@ApplicationScoped` CDI bean — two-pass hierarchical enforcement |
+| `BudgetEnforcedSections` | Inner record of `PromptBudgetManager` | Return type with truncation flags |
+| `CoreMemoryPromptRenderer` | Modified — removed truncation logic | Pure formatting only (budget enforcement moved to manager) |
+| `ChatHistoryAssembler` | Modified — wires `PromptBudgetManager` | Raw text → enforce → SystemMessage with conditional markers |
+
+#### Pre-Build Decisions (Locked)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| **Token estimation** | `chars / 4` (named `estimateTokens()`) | Self-documenting approximation |
+| **Safety margin** | 10% on TOKEN budget → `charBudget = (int)(tokenBudget * 0.90) * 4` | Math: 800 tokens → 720 tokens → 2,880 chars |
+| **Truncation** | Hierarchical (Archival → Summary → Core) | Not proportional — preserves most important sections |
+| **Sentinel safety** | Budget manager sees raw text only; sentinel added AFTER | Prevents `[CONTEXT FROM PRIOR SESSION]` from being truncated |
+| **Budget scope** | Memory sections ONLY | System prompt, tool schemas, conversation turns excluded |
+
+#### Two-Pass Enforcement Algorithm
+
+```
+Pass 1 — Individual Caps:
+  coreCharBudget    = (maxCoreMemoryTokens * 0.9) * 4         = 2,880 chars
+  summaryCharBudget = (maxCompactionSummaryTokens * 0.9) * 4  = 4,320 chars
+
+  if core.length > coreCharBudget → truncateSafely(core, coreCharBudget)
+  if summary.length > summaryCharBudget → truncateSafely(summary, summaryCharBudget)
+
+Pass 2 — Total Cap (hierarchical):
+  totalCharBudget = (totalNonConversationTokens * 0.9) * 4 = 9,000 chars
+  currentTotal = len(core) + len(summary) + len(archival)
+
+  if currentTotal > totalCharBudget:
+    excess = currentTotal - totalCharBudget
+    // Drop in priority order: archival first, summary second, core last
+    // Use actualRemoved (not requested trim) to account for word-boundary breaks
+```
+
+#### Unicode-Safe Truncation
+
+```java
+static String truncateSafely(String text, int maxChars) {
+    if (text == null || text.length() <= maxChars) return text;
+    int safeIndex = maxChars;
+    if (safeIndex > 0 && Character.isLowSurrogate(text.charAt(safeIndex))) {
+        safeIndex--;  // Don't split surrogate pairs (emoji, CJK)
+    }
+    int lastSpace = text.lastIndexOf(' ', safeIndex);
+    if (lastSpace > safeIndex * 0.8) safeIndex = lastSpace;  // Word boundary
+    return text.substring(0, safeIndex);
+}
+```
+
+**Key design:** `truncateSafely()` does NOT append markers. The caller (`ChatHistoryAssembler`) appends `"\n[... truncated to fit prompt budget]"` only when `BudgetEnforcedSections.coreWasTruncated()` / `summaryWasTruncated()` returns `true`.
+
+#### ChatHistoryAssembler Integration
+
+```java
+// STEP -1: Core Memory → raw text (no truncation from renderer)
+// STEP 0: Compaction summary → raw text from cache
+// STEP 0.5: budgetManager.enforce(coreText, rawSummary, null)  ← BEFORE any SystemMessage
+// STEP 1: Build SystemMessages with budget-enforced text
+//   Core:    SystemMessage("[USER CONTEXT]\n" + budget.coreMemory())  + marker if truncated
+//   Summary: SystemMessage(sentinel + budget.compactionSummary() + suffix) + marker if truncated
+//           ↑ sentinel added AFTER budget enforcement — never truncated
+```
+
+#### Phase 4 Test Coverage
+
+| Test | Purpose | Result |
+|---|---|---|
+| `PromptBudgetManagerTest.testCoreMemoryAloneExceedsBudget_trimmedWithMarker` | Solo overflow: Core exceeds `maxCoreMemoryTokens` | ✅ Pass |
+| `PromptBudgetManagerTest.testCorePlusSummaryExceedTotal_summaryTrimmedFirstCorePreserved` | Combined overflow: Summary trimmed first | ✅ Pass |
+| `PromptBudgetManagerTest.testAllSectionsWithinBudget_noTruncation` | No-op when within budget | ✅ Pass |
+| `PromptBudgetManagerTest.testUnicodeSafety_emojiTruncatedAtValidBoundary` | Surrogate pair safety | ✅ Pass |
+| `PromptBudgetManagerTest.testNullSections_returnedAsNull` | Null handling | ✅ Pass |
+| `PromptBudgetManagerTest.testEstimateTokens` | Token estimation accuracy | ✅ Pass |
+| `PromptBudgetManagerTest.testCalculateCharBudget_mathIsCorrect` | 10% margin math verification | ✅ Pass |
+| `PromptBudgetManagerTest.testTruncateSafely_shortTextReturnedAsIs` | No-op on short text | ✅ Pass |
+| `PromptBudgetManagerTest.testTruncateSafely_breaksAtWordBoundary` | Word-boundary awareness | ✅ Pass |
+| `ChatHistoryAssemblerTest.testAssemble_budgetEnforced_coreMemoryTrimmedMarkerAppended` | Core Memory truncation integration | ✅ Pass |
+| `ChatHistoryAssemblerTest.testAssemble_budgetEnforced_summaryTrimmedFirst` | Hierarchical trimming integration | ✅ Pass |
+| `ChatHistoryAssemblerTest.testAssemble_coreMemoryAbsent_whenTieredMemoryDisabled` | Disabled mode | ✅ Pass |
+| `ChatHistoryAssemblerTest.testAssemble_budgetSummarySentinelPreserved` | Sentinel integrity | ✅ Pass |
+
+#### Post-Review Fixes Applied
+
+| Fix | Description | Source |
+|---|---|---|
+| **Word-boundary excess accounting** | `excess -= actualRemoved` instead of `excess -= requestedTrim` — `truncateSafely` may break at space, removing more chars than requested | Architect review |
+| **Zero-trim flag guard** | `archivalTruncated` only set when `archivalTrim > 0` (matching summary/core pattern) | Architect review |
+| **Test name accuracy** | Renamed `testAssemble_budgetNotEnforced_whenDisabled` → `testAssemble_coreMemoryAbsent_whenTieredMemoryDisabled` | Claude review |
+
+### A.4 Test Suite Status (Updated)
+
+```
+Total Tests: ~1,460
+  - arcclaw-core:        ~972 tests (963 base + 9 PromptBudgetManagerTest)
+  - arcclaw-app:         145 tests
+  - arcclaw-persistence: 343 tests
+Failures: 0
+Errors:   0
+```
