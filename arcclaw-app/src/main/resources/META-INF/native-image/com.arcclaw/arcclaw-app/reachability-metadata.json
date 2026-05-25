@@ -1,14 +1,1 @@
-{
-  "foreign": {
-    "downcalls": [
-      {
-        "parameterTypes": ["long", "long", "long", "int"],
-        "returnType": "int"
-      },
-      {
-        "parameterTypes": [],
-        "returnType": "int"
-      }
-    ]
-  }
-}
+{}
