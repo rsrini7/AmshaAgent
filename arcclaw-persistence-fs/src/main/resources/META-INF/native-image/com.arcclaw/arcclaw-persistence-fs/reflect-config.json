@@ -1,0 +1,8 @@
+[
+  {
+    "name": "org.apache.lucene.index.ConcurrentMergeScheduler",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true,
+    "reason": "Lucene TestSecrets.<clinit> calls Class.forName() at runtime in native image — without registration, Class.forName fails with ClassNotFoundException"
+  }
+]

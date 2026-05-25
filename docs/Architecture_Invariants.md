@@ -657,6 +657,56 @@ have migrated to JDBI**, there is no `EntityManager` to inject in any REST resou
 - **6.7 Module-specific Reflection Config**: New modules that introduce CDI beans, DTOs (for JSON/REST), or external libraries that use reflection MUST include a dedicated `*ReflectionConfig` class annotated with `@RegisterForReflection` in a `.config` subpackage. This centralizes reachability for GraalVM and prevents dead-code elimination of critical runtime components across module boundaries. JVM-mode success is NOT evidence that these registrations are unnecessary. See [AGENTS.md §7](../AGENTS.md#7-graalvm-native-image-reflection-registration) for the complete checklist of what needs registration (records: YES, enums: NO, CDI beans: only in persistence modules, JDBI DAOs: YES).
 - **6.8 Native-Image Runtime Initialization**: Libraries using Foreign Function & Memory (FFM) API, `MethodHandle`, or native access (e.g., Lucene 10.x `PosixNativeAccess`) MUST be marked for run-time initialization in `arcclaw-app/src/main/resources/META-INF/native-image/com.arcclaw/arcclaw-app/native-image.properties`. Mark the **entire package** (`--initialize-at-run-time=org.apache.lucene`), not individual classes — GraalVM embeds static fields from build-time classes into the image heap, causing whack-a-mole errors when marking classes individually. Also mark any CDI beans with `@PostConstruct` that trigger the library. Do NOT use `pom.xml` `additional-build-args` for this — Quarkus splits on commas, breaking args that contain commas. See [AGENTS.md §7.5](../AGENTS.md#75-native-image-runtime-initialization-native-imageproperties) for detailed guidance.
 
+### 6.9 Lucene `TestSecrets` Class.forName Registration (§6.9 INVARIANT)
+
+Lucene 10.x ships `org.apache.lucene.internal.tests.TestSecrets` in the **production** `lucene-core` jar. Its static initializer calls `Class.forName("org.apache.lucene.index.ConcurrentMergeScheduler")` at runtime. In native-image, GraalVM's static analysis removes `ConcurrentMergeScheduler` because nothing directly references it — but `Class.forName()` is a runtime reflective call that cannot be analyzed at build time, resulting in `ClassNotFoundException` → `ExceptionInInitializerError` → crash on startup.
+
+**Fix:** Add a `reflect-config.json` to the module that depends on `lucene-core` (currently `arcclaw-persistence-fs`):
+
+```json
+[
+  {
+    "name": "org.apache.lucene.index.ConcurrentMergeScheduler",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true,
+    "reason": "Lucene TestSecrets.<clinit> calls Class.forName() at runtime"
+  }
+]
+```
+
+**MUST NOT** register `ConcurrentMergeScheduler.MergeThread` or `ConcurrentMergeScheduler.CachedExecutor` as class literals in `@RegisterForReflection` — these inner classes have `protected`/`private` access and will not compile. Use the JSON config approach instead.
+
+**Detection:** GraalVM native-image build will NOT catch this — the error only manifests at **runtime** when the static initializer fires. Always verify with `mise build:native-local` and a test that boots the full application context.
+
+### 6.10 SQLite/vec0 Virtual Table Shadow Table Cleanup (§6.10 INVARIANT)
+
+FTS5 and vec0 virtual tables create internal **shadow tables** (e.g., `recall_messages_fts_data`, `vec_archival_info`) that Flyway's SQLite `clean` command cannot drop directly — it sees them as regular tables but they're owned by the virtual table module.
+
+**Fix:** `FtsCleanCallback` (a `FlywayConfigurationCustomizer` that fires `BEFORE_CLEAN`) MUST drop all virtual tables before Flyway attempts its own cleanup:
+
+```java
+stmt.execute("DROP TABLE IF EXISTS recall_messages_fts");
+stmt.execute("DROP TABLE IF EXISTS archival_chunks_fts");
+stmt.execute("DROP TABLE IF EXISTS vec_archival");
+```
+
+**MUST:** Add every new FTS5 or vec0 virtual table to `FtsCleanCallback.handle()`. Failure to do so causes `FlywaySqlException: Unable to drop "main"."<shadow_table>"` on test startup with `clean-at-start=true`.
+
+### 6.11 pgvector Graceful Degradation in Flyway (§6.11 INVARIANT)
+
+The `CREATE EXTENSION IF NOT EXISTS vector` statement in `V1__baseline.sql` MUST be wrapped in a `DO $$ EXCEPTION WHEN OTHERS $$` block so Flyway migration completes successfully in environments where pgvector is not installed (e.g., embedded Postgres in tests, CI without pgvector):
+
+```sql
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS vector;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pgvector not available — archival vector search degraded to BM25-only';
+END $$;
+```
+
+The `embedding vector(768)` column and HNSW index MUST be similarly guarded with `IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')`.
+
+**Rationale:** Tests use embedded Postgres (Testcontainers / `io.zonky.test`) which does not have pgvector installed. Unconditional `CREATE EXTENSION vector` fails with `could not open extension control file` and blocks all Postgres tests.
 
 ---
 
