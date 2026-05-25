@@ -233,11 +233,6 @@
         <version>${wiremock.version}</version>
       </dependency>
       <dependency>
-        <groupId>junit</groupId>
-        <artifactId>junit</artifactId>
-        <version>${junit4.version}</version>
-      </dependency>
-      <dependency>
         <groupId>org.jboss.logmanager</groupId>
         <artifactId>jboss-logmanager</artifactId>
         <version>${jboss-logmanager.version}</version>

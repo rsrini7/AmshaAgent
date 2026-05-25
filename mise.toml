@@ -304,6 +304,25 @@ run = """
   Write-Host "✅  UI built and copied to $target"
 """
 
+[tasks."ui:dev"]
+description = "Start UI dev server on :3000 with Vite proxy to backend :8080"
+alias = "uid"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+  $ErrorActionPreference = 'Stop'
+  Push-Location arcclaw-ui
+  try {
+    npm install
+    Write-Host '🖥️  UI dev server starting on http://localhost:3000'
+    Write-Host '    Proxy: /api → http://localhost:8080, /ws → ws://localhost:8080'
+    Write-Host '    Make sure backend is running (arcclaw serve or mise run dev)'
+    npm run dev
+  } finally {
+    Pop-Location
+  }
+"""
+
 [tasks."build:ui-copy-dto"]
 description = "Ensure generated TypeScript DTOs exist (create stubs if missing)"
 alias = "buc-dto"
