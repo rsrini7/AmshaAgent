@@ -912,6 +912,13 @@ try {
     $pgBinary = if ($IsWindows) { "dist/arcclaw-pg.exe" } else { "dist/arcclaw-pg" }
     if (Test-Path $pgRunner) { Remove-Item $pgRunner -Force }
     Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" $pgBinary -Force
+    # Create .env.pg for the PostgreSQL backend (activates %postgresql profile at runtime)
+    $envPg = @"
+# Environment overrides for arcclaw-pg binary.
+# Source this before running:  source .env.pg && ./arcclaw-pg serve
+QUARKUS_PROFILE=prod,postgresql
+"@
+    Set-Content -Path "dist/.env.pg" -Value $envPg -NoNewline
     Write-Host '✅  PostgreSQL binary: dist/arcclaw-pg'
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
@@ -982,6 +989,13 @@ try {
     $fsBinary = if ($IsWindows) { "dist/arcclaw-fs.exe" } else { "dist/arcclaw-fs" }
     if (Test-Path $fsRunner) { Remove-Item $fsRunner -Force }
     Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" $fsBinary -Force
+    # Create .env.fs for the filesystem backend (activates %filesystem profile at runtime)
+    $envFs = @"
+# Environment overrides for arcclaw-fs binary.
+# Source this before running:  source .env.fs && ./arcclaw-fs serve
+QUARKUS_PROFILE=prod,filesystem
+"@
+    Set-Content -Path "dist/.env.fs" -Value $envFs -NoNewline
     Write-Host '✅  Filesystem binary: dist/arcclaw-fs'
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
@@ -1028,15 +1042,6 @@ mise run build:native-local-fs
 if (Test-Path "dist/arcclaw-fs$suffix") {
     Write-Host "✅  Filesystem binary built"
 } else { Write-Host "❌  Filesystem build failed" }
-
-# Create .env.fs for the filesystem backend
-$envFs = @"
-# Environment overrides for arcclaw-fs binary.
-# Source this before running:  source .env.fs && ./arcclaw-fs serve
-QUARKUS_PROFILE=prod,filesystem
-"@
-Set-Content -Path "dist/.env.fs" -Value $envFs -NoNewline
-Write-Host "✅  Created .env.fs"
 
 Write-Host ''
 Write-Host '── dist/ folder contents ──'
