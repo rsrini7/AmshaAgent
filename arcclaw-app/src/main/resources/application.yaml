@@ -6,6 +6,10 @@
 quarkus:
   shutdown:
     timeout: 30S
+  mcp:
+    server:
+      stdio:
+        enabled: false
   vertx:
     prefer-native-transport: true
     use-async-dns: true
