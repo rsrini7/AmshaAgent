@@ -3,7 +3,9 @@ package com.arcclaw.app.cli;
 import java.io.BufferedReader;
 import java.io.Console;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -36,6 +38,14 @@ import com.arcclaw.core.util.TimeContextInjector;
 import io.quarkus.runtime.ShutdownEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+import org.fusesource.jansi.AnsiConsole;
+import org.jline.reader.EndOfFileException;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.UserInterruptException;
+import org.jline.reader.impl.history.DefaultHistory;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "chat", description = "Start an interactive chat session with ArcClaw")
@@ -70,6 +80,9 @@ public class ChatCommand implements Runnable {
      */
     private volatile boolean hitlPending = false;
 
+    /** JLine3 line reader - exposed to HITL virtual thread for printAbove(). */
+    private volatile LineReader lineReader;
+
     @ConfigProperty(name = "arcclaw.agent.max-iterations", defaultValue = "5")
     int maxIterations;
 
@@ -84,6 +97,11 @@ public class ChatCommand implements Runnable {
     public void run() {
         String sessionId = "cli-" + UUID.randomUUID();
         this.currentCliSessionId = sessionId;
+
+        // Install Jansi ANSI support — auto-detects terminal capabilities.
+        // Enables ANSI colors in CliReplyRenderer when connected to a terminal;
+        // disables them for piped output / CI logs.
+        AnsiConsole.systemInstall();
 
         System.out.println("✦ ArcClaw Interactive Terminal");
         System.out.println("   Session : " + sessionId);
@@ -103,6 +121,7 @@ public class ChatCommand implements Runnable {
                 this.currentCliSessionId = null;
                 workspaceManager.terminateSession(sessionId);
             }
+            AnsiConsole.systemUninstall();
         }
 
         System.out.println("\n[Terminated]");
@@ -147,6 +166,88 @@ public class ChatCommand implements Runnable {
     }
 
     private void chatLoop(String sessionId) {
+        try (Terminal terminal = TerminalBuilder.builder()
+                .system(true)
+                .build()) {
+
+            List<String> slashCommands = extractSlashCommands();
+            SlashCommandCompleter completer = new SlashCommandCompleter(slashCommands);
+
+            LineReader reader = LineReaderBuilder.builder()
+                    .terminal(terminal)
+                    .completer(completer)
+                    .history(new DefaultHistory())
+                    .variable(LineReader.HISTORY_FILE,
+                        Path.of(System.getProperty("user.home"), ".arcclaw_history"))
+                    .build();
+
+            this.lineReader = reader;
+
+            chatLoopInner(sessionId, reader, terminal);
+
+        } catch (Exception e) {
+            log.warnf("JLine3 terminal init failed (%s), falling back to raw input", e.getMessage());
+            chatLoopFallback(sessionId);
+        } finally {
+            this.lineReader = null;
+        }
+    }
+
+    private void chatLoopInner(String sessionId, LineReader reader, Terminal terminal) {
+        while (true) {
+            String input;
+            try {
+                input = reader.readLine("\nYou> ");
+                if (input == null) break;
+                input = input.trim();
+            } catch (EndOfFileException _) {
+                break;
+            } catch (UserInterruptException _) {
+                // Ctrl+C during line editing - continue loop
+                continue;
+            }
+
+            if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
+                terminal.writer().println("Goodbye.");
+                break;
+            }
+            if (input.isBlank()) continue;
+
+            if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
+                if (hitlPending) {
+                    cliResultBridge.register(sessionId);
+                    terminal.writer().println("\n▶ ArcClaw> ⏸ Approval pending - type /approve or /deny before sending new messages.");
+                    continue;
+                }
+            }
+
+            heartbeatTracker.recordHeartbeat(sessionId);
+
+            MessageContext context = createCliContext(sessionId, input);
+
+            TimeContextInjector.inject(context, input, defaultTimezone);
+
+            ReflexResult reflexResult = reflexRegistry.processIfReflex(
+                sessionId, "cli-user", "cli-chat", input, context);
+
+            if (reflexResult.commandResponse().isPresent()) {
+                String response = reflexResult.commandResponse().get();
+                if (!response.isBlank()) {
+                    hitlResultPrinted = true;
+                    if (input.startsWith("/approve") || input.startsWith("/deny")) {
+                        hitlPending = false;
+                    }
+                    terminal.writer().println("\n▶ ArcClaw> " + response);
+                }
+                continue;
+            }
+
+            dispatchToAgent(sessionId, reflexResult.sanitizedInput(), context);
+        }
+    }
+
+    /** Fallback for non-TTY environments (CI, piped stdin, Docker without -t). */
+    private void chatLoopFallback(String sessionId) {
         Console console = System.console();
         BufferedReader fallbackReader = (console == null)
                 ? new BufferedReader(new InputStreamReader(System.in))
@@ -163,7 +264,7 @@ public class ChatCommand implements Runnable {
                     input = fallbackReader.readLine();
                 }
                 if (input == null) break;
-                input = processBackspaces(input).trim();
+                input = input.trim();
             } catch (Exception _) {
                 break;
             }
@@ -194,9 +295,6 @@ public class ChatCommand implements Runnable {
             if (reflexResult.commandResponse().isPresent()) {
                 String response = reflexResult.commandResponse().get();
                 if (!response.isBlank()) {
-                    // Set flag BEFORE printing so the HITL virtual thread (if racing)
-                    // sees it and suppresses its own print - avoids double-print when
-                    // user types /approve while a virtual waiter thread is also active.
                     hitlResultPrinted = true;
                     if (input.startsWith("/approve") || input.startsWith("/deny")) {
                         hitlPending = false;
@@ -208,6 +306,15 @@ public class ChatCommand implements Runnable {
 
             dispatchToAgent(sessionId, reflexResult.sanitizedInput(), context);
         }
+    }
+
+    private List<String> extractSlashCommands() {
+        return List.of(
+            "/approve", "/commands", "/crons", "/deletecron",
+            "/deny", "/exit", "/halt", "/help",
+            "/history", "/quit", "/reset", "/retry",
+            "/status", "/store", "/vault"
+        );
     }
 
     private void dispatchToAgent(String sessionId, String input, MessageContext context) {
@@ -262,9 +369,14 @@ public class ChatCommand implements Runnable {
                                     default                                -> null;
                                 };
                                 if (hitlOutput != null) {
-                                    System.out.println("\n▶ ArcClaw> " + hitlOutput);
-                                    System.out.print("\nYou> "); // re-prompt so user sees the cursor
-                                    System.out.flush();
+                                    LineReader lr = lineReader;
+                                    if (lr != null) {
+                                        lr.printAbove("\n▶ ArcClaw> " + hitlOutput);
+                                    } else {
+                                        System.out.println("\n▶ ArcClaw> " + hitlOutput);
+                                        System.out.print("\nYou> ");
+                                        System.out.flush();
+                                    }
                                 }
                             } catch (CancellationException e) {
                                 log.debugf("HITL waiter cancelled for session %s (shutdown or GC)", sessionId);
@@ -305,16 +417,4 @@ public class ChatCommand implements Runnable {
         return new MessageContext("cli-chat", user, msg);
     }
 
-    private static String processBackspaces(String raw) {
-        var sb = new StringBuilder(raw.length());
-        for (int i = 0; i < raw.length(); i++) {
-            char c = raw.charAt(i);
-            if (c == '\u007F' || c == '\b') { // DEL or BS
-                if (!sb.isEmpty()) sb.deleteCharAt(sb.length() - 1);
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
 }

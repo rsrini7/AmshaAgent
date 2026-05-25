@@ -10,11 +10,14 @@ import com.arcclaw.channel.api.ChannelType;
 import com.arcclaw.channel.api.ContentNode;
 import com.arcclaw.channel.api.InteractionNode;
 import com.arcclaw.channel.api.ReplyRenderer;
+import org.fusesource.jansi.Ansi;
+import org.fusesource.jansi.Ansi.Color;
 import org.jboss.logging.Logger;
 
 /**
  * CLI implementation of {@link ReplyRenderer}.
- * Converts ReplyNode trees to plain-text terminal output.
+ * Converts ReplyNode trees to terminal output with optional ANSI color support.
+ * ANSI colors are applied only when Jansi detects a supporting terminal.
  */
 @ApplicationScoped
 public class CliReplyRenderer implements ReplyRenderer {
@@ -48,28 +51,61 @@ public class CliReplyRenderer implements ReplyRenderer {
     private String renderContentNode(ContentNode node) {
         return switch (node) {
             case ContentNode.Text t         -> t.content() + "\n\n";
-            case ContentNode.Heading h      -> h.text() + "\n\n";
-            case ContentNode.CodeBlock cb   -> cb.code() + "\n\n";
-            case ContentNode.InlineCode ic  -> ic.code();
+            case ContentNode.Heading h      -> heading(h.text());
+            case ContentNode.CodeBlock cb   -> code(cb.code());
+            case ContentNode.InlineCode ic  -> codeInline(ic.code());
             case ContentNode.BulletList bl  -> bl.items().stream()
-                    .map(item -> "- " + item)
+                    .map(item -> bullet("- ") + item)
                     .collect(Collectors.joining("\n")) + "\n\n";
             case ContentNode.NumberedList nl -> {
                 StringBuilder lst = new StringBuilder();
                 for (int i = 0; i < nl.items().size(); i++) {
-                    lst.append((i + 1)).append(". ").append(nl.items().get(i)).append("\n");
+                    lst.append(bullet((i + 1) + ". "));
+                    lst.append(nl.items().get(i)).append("\n");
                 }
                 lst.append("\n");
                 yield lst.toString();
             }
-            case ContentNode.KeyValue kv    -> kv.key() + ": " + kv.value() + "\n\n";
+            case ContentNode.KeyValue kv    -> bold(kv.key()) + ": " + kv.value() + "\n\n";
             case ContentNode.Separator _    -> "---\n\n";
-            case ContentNode.ErrorMessage err  -> "[Error] " + err.reason() + "\n\n";
+            case ContentNode.ErrorMessage err  -> error("[Error] ") + err.reason() + "\n\n";
             default -> {
                 log.warnf("Unsupported ContentNode type %s in CLI renderer",
                     node.getClass().getName());
                 yield "[Unsupported content type]";
             }
         };
+    }
+
+    // -- ANSI helpers: apply color only when terminal supports it --
+
+    private static String heading(String text) {
+        if (!Ansi.isEnabled()) return text + "\n\n";
+        return Ansi.ansi().bold().fg(Color.CYAN).a(text).reset().toString() + "\n\n";
+    }
+
+    private static String code(String text) {
+        if (!Ansi.isEnabled()) return text + "\n\n";
+        return Ansi.ansi().fg(Color.YELLOW).a(text).reset().toString() + "\n\n";
+    }
+
+    private static String codeInline(String text) {
+        if (!Ansi.isEnabled()) return text;
+        return Ansi.ansi().fg(Color.YELLOW).a(text).reset().toString();
+    }
+
+    private static String bullet(String marker) {
+        if (!Ansi.isEnabled()) return marker;
+        return Ansi.ansi().fg(Color.GREEN).a(marker).reset().toString();
+    }
+
+    private static String bold(String text) {
+        if (!Ansi.isEnabled()) return text;
+        return Ansi.ansi().bold().a(text).reset().toString();
+    }
+
+    private static String error(String text) {
+        if (!Ansi.isEnabled()) return text;
+        return Ansi.ansi().bold().fg(Color.RED).a(text).reset().toString();
     }
 }
