@@ -37,7 +37,7 @@ public class FsLockManager implements AdvisoryLockPort {
     }
 
     protected FsLockManager() {
-        this.locksDir = Path.of("./arcclaw-data/locks").toAbsolutePath().normalize();
+        this.locksDir = Path.of("./data/fs/locks").toAbsolutePath().normalize();
     }
 
     @PostConstruct

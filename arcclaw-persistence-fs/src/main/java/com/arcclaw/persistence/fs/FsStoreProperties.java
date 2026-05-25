@@ -10,10 +10,10 @@ import io.smallrye.config.WithDefault;
 @IfBuildProperty(name = "arcclaw.persistence.backend", stringValue = "fs")
 public interface FsStoreProperties {
 
-    @WithDefault("./arcclaw-data")
+    @WithDefault("./data/fs")
     String dataDir();
 
-    @WithDefault("5")
+    @WithDefault("30")
     int lockTimeoutSeconds();
 
     @WithDefault("lucene-index")

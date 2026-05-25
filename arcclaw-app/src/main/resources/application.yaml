@@ -309,6 +309,11 @@ smallrye:
 # =============================================================================
 arcclaw:
   data-dir: "${ARCCLAW_DATA_DIR:./data}"
+  fs:
+    data-dir: "${ARCCLAW_FS_DATA_DIR:./data/fs}"
+    lock-timeout-seconds: 30
+    lucene-index-dir: "${ARCCLAW_FS_LUCENE_INDEX_DIR:lucene-index}"
+    vector-dimension: "${ARCCLAW_FS_VECTOR_DIMENSION:768}"
   delegation:
     max-depth: ${ARCCLAW_DELEGATION_MAX_DEPTH:3}
   llm:
@@ -909,11 +914,6 @@ mp:
   arcclaw:
     persistence:
       backend: fs
-    fs:
-      data-dir: "${ARCCLAW_FS_DATA_DIR:./data/fs}"
-      lock-timeout-seconds: 30
-      lucene-index-dir: "${ARCCLAW_FS_LUCENE_INDEX_DIR:lucene-index}"
-      vector-dimension: "${ARCCLAW_FS_VECTOR_DIMENSION:768}"
   quarkus:
     datasource:
       enabled: false

@@ -41,7 +41,7 @@ public class FilesystemFileStore {
     }
 
     protected FilesystemFileStore() {
-        this.dataDir = Path.of("./arcclaw-data").toAbsolutePath().normalize();
+        this.dataDir = Path.of("./data/fs").toAbsolutePath().normalize();
         this.objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

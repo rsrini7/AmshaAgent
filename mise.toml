@@ -1827,6 +1827,15 @@ foreach ($backend in $backends) {
     Write-Host "✅  Copied $backendSuffix"
 }
 
+# Create .env.fs for the filesystem backend (activates %filesystem profile at runtime)
+$envFs = @"
+# Environment overrides for arcclaw-fs binary.
+# Source this before running:  source .env.fs && ./arcclaw-fs serve
+QUARKUS_PROFILE=prod,filesystem
+"@
+Set-Content -Path "$distDir/.env.fs" -Value $envFs -NoNewline
+Write-Host "✅  Created .env.fs (source before running arcclaw-fs)"
+
 Write-Host ''
 Write-Host "✅  dist assembled - all 3 backend variants ready."
 Write-Host "Run dist:pack to create release archives."
