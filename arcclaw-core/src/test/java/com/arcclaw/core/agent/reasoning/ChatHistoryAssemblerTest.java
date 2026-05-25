@@ -13,6 +13,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.config.TieredMemoryConfig;
+import com.arcclaw.core.memory.tiered.CoreMemoryPromptRenderer;
+import com.arcclaw.core.memory.tiered.CoreMemoryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -44,6 +47,15 @@ class ChatHistoryAssemblerTest {
     @Mock
     CompactionSummaryCache summaryCache;
 
+    @Mock
+    TieredMemoryConfig tieredMemoryConfig;
+
+    @Mock
+    CoreMemoryService coreMemoryService;
+
+    @Mock
+    CoreMemoryPromptRenderer coreMemoryRenderer;
+
     @InjectMocks
     ChatHistoryAssembler assembler;
 
@@ -56,6 +68,7 @@ class ChatHistoryAssemblerTest {
         assembler.toolSpecificLimits = Optional.empty();
 
         lenient().when(summaryCache.getSummary(any())).thenReturn(Optional.empty());
+        lenient().when(tieredMemoryConfig.enabled()).thenReturn(false);
     }
 
     @Test
