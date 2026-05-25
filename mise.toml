@@ -850,117 +850,177 @@ try {
 # Each builds a native binary for a specific persistence backend.
 # arcclaw-build.ps1 handles the common logic; these tasks set the backend.
 
-[tasks."build:native-pg"]
+[tasks."build:native-local-pg"]
 depends = ["dev:kill", "env:recover", "build:ui-copy"]
-description = "Native binary for PostgreSQL backend (arcclaw-pg)"
+description = "Native binary for PostgreSQL backend (arcclaw-pg) - local GraalVM, no container"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$env:ARCCLAW_BUILD_BACKEND = 'postgres'
-Write-Host 'ℹ️   Building native binary for PostgreSQL backend...'
-$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
-& $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests `
-    "-Darcclaw.build.backend=postgres" `
-    "-Dquarkus.profile=prod" `
-    $mOpts.Split(' ') 2>&1 | Out-Null
+$mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
-$src = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-$dst = if ($IsWindows) { 'dist/arcclaw-pg.exe' } else { 'dist/arcclaw-pg' }
-if (Test-Path $src) {
-    if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
-    Copy-Item $src $dst -Force
-    Write-Host "✅  PostgreSQL native binary: $dst"
+Write-Host 'ℹ️   build:native-local-pg: PostgreSQL backend, local GraalVM, no Podman container.'
+
+# --- Auto-Heal stranded backups before shielding ---
+if (Test-Path '.env.build-backup') {
+    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup before starting new build.'
+}
+
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into binary.'
+} elseif (Test-Path 'build.env') {
+    Copy-Item 'build.env' '.env'
+    $envBackup = 'build.env'
+    Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
 } else {
-    Write-Host "❌  Build failed — binary not found at $src"
-    exit 1
+    Write-Host 'ℹ️   No .env found - building without config override (good for CI).'
+}
+try {
+    # ── Memory Scaling ──────────────────────────────────────────────────
+    if ($IsMacOS) {
+        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+        if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    } elseif ($IsWindows) {
+        $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    } else {
+        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    }
+    $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
+    Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
+
+    mise use --path mise.toml java@graalvm-community-25.0.2
+    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $env:GRAALVM_HOME = $graalPath
+    $env:JAVA_HOME = $graalPath
+
+    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.build.backend=postgres" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "✅  PostgreSQL native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    Write-Host '▶   Copying to dist/arcclaw-pg...'
+    if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
+    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" "dist/arcclaw-pg$suffix" -Force
+    Write-Host '✅  PostgreSQL binary: dist/arcclaw-pg'
+} finally {
+    if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
+    mise use --path mise.toml java@temurin-25
+    Write-Host '✅  Switched back to Temurin 25.'
 }
 """
 
-[tasks."build:native-fs"]
+[tasks."build:native-local-fs"]
 depends = ["dev:kill", "env:recover", "build:ui-copy"]
-description = "Native binary for Filesystem/Lucene backend (arcclaw-fs)"
+description = "Native binary for Filesystem/Lucene backend (arcclaw-fs) - local GraalVM, no container"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-$env:ARCCLAW_BUILD_BACKEND = 'fs'
-Write-Host 'ℹ️   Building native binary for Filesystem backend...'
-$mvnw = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
-$mOpts = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dquarkus.otel.sdk.disabled=true'
-& $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests `
-    "-Darcclaw.build.backend=fs" `
-    "-Dquarkus.profile=prod" `
-    $mOpts.Split(' ') 2>&1 | Out-Null
+$mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
-$src = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-$dst = if ($IsWindows) { 'dist/arcclaw-fs.exe' } else { 'dist/arcclaw-fs' }
-if (Test-Path $src) {
-    if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
-    Copy-Item $src $dst -Force
-    Write-Host "✅  Filesystem native binary: $dst"
+Write-Host 'ℹ️   build:native-local-fs: Filesystem backend, local GraalVM, no Podman container.'
+
+# --- Auto-Heal stranded backups before shielding ---
+if (Test-Path '.env.build-backup') {
+    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup before starting new build.'
+}
+
+$envBackup = $null
+if (Test-Path '.env') {
+    Rename-Item '.env' '.env.build-backup'
+    $envBackup = $true
+    Write-Host 'ℹ️   .env shielded (.env.build-backup) - secrets will not be baked into binary.'
+} elseif (Test-Path 'build.env') {
+    Copy-Item 'build.env' '.env'
+    $envBackup = 'build.env'
+    Write-Host 'ℹ️   build.env activated for native compilation (no secrets).'
 } else {
-    Write-Host "❌  Build failed — binary not found at $src"
-    exit 1
+    Write-Host 'ℹ️   No .env found - building without config override (good for CI).'
+}
+try {
+    # ── Memory Scaling ──────────────────────────────────────────────────
+    if ($IsMacOS) {
+        $vm = vm_stat; $ps = [int](($vm | Select-String 'page size of (\\d+)').Matches[0].Groups[1].Value)
+        $availGB = [Math]::Floor(([int](($vm | Select-String 'Pages free:').ToString() -replace '.*:\\s+(\\d+)\\.','$1') + [int](($vm | Select-String 'Pages inactive:').ToString() -replace '.*:\\s+(\\d+)\\.','$1')) * $ps / 1GB)
+        if ($availGB -lt 4) { $availGB = [Math]::Floor([int64](sysctl -n hw.memsize) / 1GB) }
+    } elseif ($IsWindows) {
+        $availGB = [Math]::Floor([System.GC]::GetGCMemoryInfo().TotalAvailableMemoryBytes / 1GB)
+    } else {
+        $availGB = [Math]::Floor([int64]((Select-String 'MemAvailable:' /proc/meminfo).ToString() -replace '.*:\\s+(\\d+)\\s+kB','$1') / 1MB)
+    }
+    $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
+    Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
+
+    mise use --path mise.toml java@graalvm-community-25.0.2
+    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $env:GRAALVM_HOME = $graalPath
+    $env:JAVA_HOME = $graalPath
+
+    $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
+    & $mvnw clean package -Pnative -pl arcclaw-app -am -DskipTests "-Darcclaw.build.backend=fs" "-Dquarkus.profile=prod" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "✅  Filesystem native build complete: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
+    Write-Host '▶   Copying to dist/arcclaw-fs...'
+    if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
+    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" "dist/arcclaw-fs$suffix" -Force
+    Write-Host '✅  Filesystem binary: dist/arcclaw-fs'
+} finally {
+    if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
+    mise use --path mise.toml java@temurin-25
+    Write-Host '✅  Switched back to Temurin 25.'
 }
 """
 
-[tasks."build:native-all"]
+[tasks."build:native-local-all"]
 depends = ["dev:kill", "env:recover", "build:ui-copy"]
-description = "Build all 3 backend variants (sqlite, postgres, fs) - each as a separate native binary"
+description = "Build all 3 backend variants (sqlite, postgres, fs) - local GraalVM, no container"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
+$mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
+$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 Write-Host '═══════════════════════════════════════════════════'
-Write-Host '  Building all 3 backend variants...'
+Write-Host '  Building all 3 backend variants (local GraalVM)...'
 Write-Host '═══════════════════════════════════════════════════'
 Write-Host ''
 
 # 1. SQLite (default)
 Write-Host '── [1/3] SQLite (default) ──'
-$env:ARCCLAW_BUILD_BACKEND = 'sqlite'
-$env:ARCCLAW_PERSISTENCE_BACKEND = 'sqlite'
 mise run build:native-local
-$suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
-$src = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
-if (Test-Path $src) {
-    $dst = if ($IsWindows) { 'dist/arcclaw.exe' } else { 'dist/arcclaw' }
-    Copy-Item $src $dst -Force
-    Write-Host "✅  SQLite binary: $dst"
+if (Test-Path "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix") {
+    if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
+    Copy-Item "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix" "dist/arcclaw$suffix" -Force
+    Write-Host "✅  SQLite binary: dist/arcclaw"
 } else { Write-Host "❌  SQLite build failed" }
 
 # 2. PostgreSQL
 Write-Host ''
 Write-Host '── [2/3] PostgreSQL ──'
-$env:ARCCLAW_BUILD_BACKEND = 'postgres'
-$env:ARCCLAW_PERSISTENCE_BACKEND = 'postgres'
-mise run build:native-local
-if (Test-Path $src) {
-    $dst = if ($IsWindows) { 'dist/arcclaw-pg.exe' } else { 'dist/arcclaw-pg' }
-    Copy-Item $src $dst -Force
-    Write-Host "✅  PostgreSQL binary: $dst"
+mise run build:native-local-pg
+if (Test-Path "dist/arcclaw-pg$suffix") {
+    Write-Host "✅  PostgreSQL binary: dist/arcclaw-pg"
 } else { Write-Host "❌  PostgreSQL build failed" }
 
 # 3. Filesystem
 Write-Host ''
 Write-Host '── [3/3] Filesystem ──'
-$env:ARCCLAW_BUILD_BACKEND = 'fs'
-$env:ARCCLAW_PERSISTENCE_BACKEND = 'fs'
-mise run build:native-local
-if (Test-Path $src) {
-    $dst = if ($IsWindows) { 'dist/arcclaw-fs.exe' } else { 'dist/arcclaw-fs' }
-    Copy-Item $src $dst -Force
-    Write-Host "✅  Filesystem binary: $dst"
+mise run build:native-local-fs
+if (Test-Path "dist/arcclaw-fs$suffix") {
+    Write-Host "✅  Filesystem binary: dist/arcclaw-fs"
 } else { Write-Host "❌  Filesystem build failed" }
-
-# Reset
-Remove-Item Env:ARCCLAW_BUILD_BACKEND -ErrorAction SilentlyContinue
-Remove-Item Env:ARCCLAW_PERSISTENCE_BACKEND -ErrorAction SilentlyContinue
 
 Write-Host ''
 Write-Host '═══════════════════════════════════════════════════'

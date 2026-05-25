@@ -723,22 +723,10 @@ Since `@IfBuildProperty` is baked at build time, each persistence backend requir
 
 ```bash
 # Recommended: mise tasks (auto-switch JDK, copy to dist/)
-mise run build:native-local      # SQLite (default) → dist/arcclaw
-mise run build:native-pg         # PostgreSQL → dist/arcclaw-pg
-mise run build:native-fs         # Filesystem → dist/arcclaw-fs
-mise run build:native-all        # All 3 variants → dist/arcclaw, dist/arcclaw-pg, dist/arcclaw-fs
-
-# Raw Maven (manual rename needed)
-./mvnw package -Pnative -pl arcclaw-app -am -DskipTests
-# Output: arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT-runner → rename to arcclaw
-
-./mvnw package -Pnative -pl arcclaw-app -am -DskipTests \
-  -Darcclaw.persistence.backend=postgres
-# Output: rename to arcclaw-pg
-
-./mvnw package -Pnative -pl arcclaw-app -am -DskipTests \
-  -Darcclaw.persistence.backend=fs
-# Output: rename to arcclaw-fs
+mise run build:native-local          # SQLite (default) → dist/arcclaw
+mise run build:native-local-pg       # PostgreSQL → dist/arcclaw-pg
+mise run build:native-local-fs       # Filesystem → dist/arcclaw-fs
+mise run build:native-local-all      # All 3 variants → dist/arcclaw, dist/arcclaw-pg, dist/arcclaw-fs
 ```
 
 **What mise tasks do:**

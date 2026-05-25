@@ -66,7 +66,7 @@ Welcome! This document outlines the critical invariants, conventions, and archit
   | `arcclaw` | SQLite (default) | `./mvnw package -Dnative` |
   | `arcclaw-pg` | PostgreSQL | `./mvnw package -Dnative -Darcclaw.persistence.backend=postgres` |
   | `arcclaw-fs` | Filesystem | `./mvnw package -Dnative -Darcclaw.persistence.backend=fs` |
-* **Mise tasks** (recommended): Use `mise run build:native-local` (auto-switches JDK to GraalVM), `mise run build:native-pg`, `mise run build:native-fs`, or `mise run build:native-all` (builds all 3 variants).
+* **Mise tasks** (recommended): Use `mise run build:native-local` (auto-switches JDK to GraalVM), `mise run build:native-local-pg`, `mise run build:native-local-fs`, or `mise run build:native-local-all` (builds all 3 variants).
 * **Release archives** contain all 3 binaries per OS (e.g., `arcclaw-1.0.0-linux-x64.tar.gz` has `arcclaw`, `arcclaw-pg`, `arcclaw-fs`). The default `arcclaw` is always SQLite.
 * **JVM mode is backend-agnostic**: one JAR, switch via `.env` — no separate builds needed.
 * **See also**: `docs/Architecture_Invariants.md` §5.24 for the full invariant and §5.24.1/§5.24.2 for binary naming and archive distribution.
