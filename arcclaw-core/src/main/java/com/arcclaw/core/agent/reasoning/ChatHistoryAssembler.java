@@ -13,6 +13,10 @@ import jakarta.inject.Inject;
 
 import com.arcclaw.common.util.LogUtil;
 import com.arcclaw.core.agent.AgentSentinels;
+import com.arcclaw.core.config.TieredMemoryConfig;
+import com.arcclaw.core.memory.tiered.CoreMemoryPromptRenderer;
+import com.arcclaw.core.memory.tiered.CoreMemoryService;
+import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +40,9 @@ public class ChatHistoryAssembler {
     @Inject ChatMemoryStore chatMemoryStore;
     @Inject ObjectMapper objectMapper;
     @Inject CompactionSummaryCache summaryCache;
+    @Inject CoreMemoryService coreMemoryService;
+    @Inject CoreMemoryPromptRenderer coreMemoryRenderer;
+    @Inject TieredMemoryConfig tieredMemoryConfig;
 
     @ConfigProperty(name = "arcclaw.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -47,6 +54,10 @@ public class ChatHistoryAssembler {
     void validate() {
         if (chatMemoryStore == null || objectMapper == null || log == null) {
             throw new IllegalStateException("ChatHistoryAssembler required dependencies are null");
+        }
+        if (tieredMemoryConfig.enabled() && tieredMemoryConfig.coreMemory().enabled()) {
+            log.warn("Core Memory is active using shared 'default' user context. "
+                + "Multi-tenant isolation is not enforced until Phase 7.");
         }
     }
 
@@ -72,6 +83,16 @@ public class ChatHistoryAssembler {
 
     public List<ChatMessage> assemble(String sessionId, String goal, List<ReasoningStep> history) {
         List<ChatMessage> messages = new ArrayList<>();
+
+        // STEP -1 - inject Core Memory [USER CONTEXT] (Phase 1)
+        // TODO(Phase-7): resolve userId from session/auth context instead of literal
+        if (tieredMemoryConfig.enabled() && tieredMemoryConfig.coreMemory().enabled()) {
+            List<CoreMemoryBlockDto> blocks = coreMemoryService.readAll("default");
+            String context = coreMemoryRenderer.render(blocks);
+            if (context != null && !context.isBlank()) {
+                messages.add(SystemMessage.systemMessage("[USER CONTEXT]\n" + context));
+            }
+        }
 
         // STEP 0 - inject compacted summary (§ Resilience / Memory Re-capture)
         if (sessionId != null) {

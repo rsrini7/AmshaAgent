@@ -222,3 +222,15 @@ CREATE TABLE IF NOT EXISTS prompt_registry (
 
 CREATE INDEX IF NOT EXISTS idx_prompt_role ON prompt_registry(role_id);
 CREATE INDEX IF NOT EXISTS idx_prompt_status ON prompt_registry(status);
+
+-- Tiered Memory: Core Memory blocks (Phase 1)
+CREATE TABLE IF NOT EXISTS core_memory_blocks (
+    block_id     TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL,
+    block_key    TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    version      INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    UNIQUE(user_id, block_key)
+);

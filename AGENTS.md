@@ -19,6 +19,47 @@ Welcome! This document outlines the critical invariants, conventions, and archit
 ### 1.2 SQLite WAL & Safety Level
 * **Rule**: Do not attempt to alter SQLite safety configurations (such as setting `synchronous=NORMAL`) inside an active transaction. Doing so throws a `SQLiteException` (Safety level may not be changed inside a transaction).
 
+### 1.3 Flyway Migration Parity (SQLite ↔ PostgreSQL)
+* **Rule**: Every Flyway migration added to either backend **MUST** have a matching migration in the other backend with the same version number and table semantics.
+* **Locations**:
+  - SQLite: `arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/V<n>__<name>.sql`
+  - PostgreSQL: `arcclaw-persistence-postgres/src/main/resources/db/migration/postgresql/V<n>__<name>.sql`
+* **Table creation differences**:
+  | Column Type | SQLite | PostgreSQL |
+  |---|---|---|
+  | Auto-increment PK | `INTEGER PRIMARY KEY AUTOINCREMENT` | `BIGSERIAL PRIMARY KEY` |
+  | Timestamps | `TEXT NOT NULL` (ISO-8601) | `TIMESTAMP WITH TIME ZONE NOT NULL` |
+  | Boolean | `BOOLEAN DEFAULT FALSE` | `BOOLEAN NOT NULL DEFAULT FALSE` |
+  | Unique constraint | `UNIQUE(col1, col2)` | `UNIQUE(col1, col2)` (same) |
+* **Verification**: After adding a new migration, confirm both files exist and have identical version numbers:
+  ```bash
+  ls arcclaw-persistence-sqlite/src/main/resources/db/migration/sqlite/V<N>*.sql
+  ls arcclaw-persistence-postgres/src/main/resources/db/migration/postgresql/V<N>*.sql
+  ```
+* **Reason**: Phase 11 (Backend Parity) requires identical semantics across backends. Migration drift between SQLite and PostgreSQL causes silent schema mismatches that only surface when users switch backends.
+
+### 1.4 Admin REST Resource Pattern
+* **Rule**: All new `@Path("/admin/...")` JAX-RS resources in `arcclaw-app` **MUST** follow the existing auth and user-resolution patterns documented below. Do not hardcode userId literals or leave write endpoints unprotected.
+* **UserId Resolution**: Copy the `resolveUserId()` pattern from [CronResource.java](./arcclaw-app/src/main/java/com/arcclaw/app/api/CronResource.java) — uses `SecurityContext.getUserPrincipal()` with `WorkspaceContext.getUserIdOrUnknown()` fallback. Never hardcode `"default"`.
+  ```java
+  @Context SecurityContext securityContext;
+
+  private String resolveUserId() {
+      if (securityContext != null && securityContext.getUserPrincipal() != null) {
+          return securityContext.getUserPrincipal().getName();
+      }
+      return WorkspaceContext.getUserIdOrUnknown();
+  }
+  ```
+* **Write Protection**: All mutation endpoints (PUT, POST, DELETE, PATCH) **MUST** be gated behind `isInternal()`:
+  ```java
+  private boolean isInternal() {
+      return securityContext != null && securityContext.isUserInRole("internal");
+  }
+  ```
+  Reference: [PromptAdminResource.java](./arcclaw-app/src/main/java/com/arcclaw/app/api/PromptAdminResource.java).
+* **Pattern**: Returns `Response.status(FORBIDDEN).entity("...").build()` when `!isInternal()` for mutations. Reads (GET) remain unprotected.
+
 ---
 
 ## 2. Key Framework Components
