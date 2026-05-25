@@ -19,6 +19,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         FsPromptStoreAdapter.class,
         FsLockManager.class,
         FilesystemFileStore.class
+    },
+    classNames = {
+        "org.apache.lucene.search.BoostAttribute",
+        "org.apache.lucene.search.BoostAttributeImpl",
+        "org.apache.lucene.search.MaxNonCompetitiveBoostAttribute",
+        "org.apache.lucene.search.MaxNonCompetitiveBoostAttributeImpl"
     }
 )
 public class FsReflectionConfig {
