@@ -50,7 +50,8 @@
       "Read(//private/tmp/**)",
       "Read(//tmp/**)",
       "Bash(./mvnw clean:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(xargs kill:*)"
     ]
   }
 }

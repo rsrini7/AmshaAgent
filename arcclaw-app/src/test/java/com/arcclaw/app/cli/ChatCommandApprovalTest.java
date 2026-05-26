@@ -32,8 +32,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 @QuarkusTest
+@Timeout(value = 30, unit = java.util.concurrent.TimeUnit.SECONDS)
 public class ChatCommandApprovalTest {
 
     @Inject
