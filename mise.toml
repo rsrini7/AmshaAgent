@@ -575,8 +575,23 @@ END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d\\n", t, f, e, 
 """
 
 [tasks."build:native"]
+description = "Alias: redirects to build:native-linux (container) or build:native-local (macOS/Windows)"
+dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+if ($IsMacOS -or $IsWindows) {
+    $os = if ($IsMacOS) { 'macOS' } else { 'Windows' }
+    Write-Host "❌   build:native produces a Linux ELF binary via Podman — cannot run on $os."
+    Write-Host '    Use: mise run build:native-local'
+    exit 1
+}
+mise run build:native-linux
+"""
+
+[tasks."build:native-linux"]
 depends = ["dev:kill", "env:recover", "build:ui-copy"]
-description = "Native binary - Podman container (default on Linux/macOS) or local GraalVM - auto-detects, auto-switches JDK"
+description = "Native binary for Linux distribution - Podman container (produces Linux ELF, not for macOS/Windows)"
 dir = "{{config_root}}"
 shell = "pwsh -NonInteractive -Command"
 quiet = true
@@ -586,7 +601,13 @@ $mvnw   = if ($IsWindows) { '.\\mvnw.cmd' } else { './mvnw' }
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $mOpts  = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 
-# ── Resolve build strategy ────────────────────────────────────────────────────
+# ── Platform guard ────────────────────────────────────────────────────────────
+Write-Host 'ℹ️   build:native-linux: produces Linux ELF binary via Podman container.'
+if ($IsMacOS -or $IsWindows) {
+    $os = if ($IsMacOS) { 'macOS' } else { 'Windows' }
+    Write-Host "⚠️   $os detected: output will NOT run locally. Use build:native-local instead."
+    Write-Host '    Proceeding anyway (use case: cross-compilation for Linux distribution).'
+}
 $strategy = 'local'
 if ($IsWindows) {
     Write-Host 'ℹ️   Windows: using local GraalVM (container build produces Linux ELF - unusable on Windows).'
@@ -1653,7 +1674,7 @@ $ErrorActionPreference = 'Stop'
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
-    Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
+    Write-Host "❌  Native binary not found. Run: mise run build:native-local (or build:native-linux for Linux)"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $env:ARCCLAW_RAG_VEC_PATH = "./lib/vec0"
@@ -1673,7 +1694,7 @@ $ErrorActionPreference = 'Stop'
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
-    Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
+    Write-Host "❌  Native binary not found. Run: mise run build:native-local (or build:native-linux for Linux)"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $env:ARCCLAW_RAG_VEC_PATH = "./lib/vec0"
@@ -1694,7 +1715,7 @@ if (-not $env:TELEGRAM_BOT_TOKEN) { Write-Host '❌  TELEGRAM_BOT_TOKEN is not s
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
-    Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
+    Write-Host "❌  Native binary not found. Run: mise run build:native-local (or build:native-linux for Linux)"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $env:ARCCLAW_RAG_VEC_PATH = "./lib/vec0"
@@ -1720,7 +1741,7 @@ if (-not $goal) {
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
-    Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
+    Write-Host "❌  Native binary not found. Run: mise run build:native-local (or build:native-linux for Linux)"; exit 1
 }
 if (-not $IsWindows) { $env:LD_PRELOAD = '/lib/x86_64-linux-gnu/libm.so.6' }
 $cmdArgs = @('ask', $goal)
@@ -2204,7 +2225,7 @@ $ErrorActionPreference = 'Stop'
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }
 $runner = "arcclaw-app/target/arcclaw-app-1.0.0-SNAPSHOT$suffix"
 if (-not (Test-Path $runner)) {
-    Write-Host "❌  Native binary not found. Run: mise run build:native"; exit 1
+    Write-Host "❌  Native binary not found. Run: mise run build:native-local (or build:native-linux for Linux)"; exit 1
 }
 podman compose up -d
 Write-Host ''
