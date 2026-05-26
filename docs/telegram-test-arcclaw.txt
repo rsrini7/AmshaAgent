@@ -179,3 +179,35 @@ delegate to coordinator: ask parvati to adjust the tone of this response - "Your
 /cron delete all
 
 /halt
+
+search my archival knowledge for "patterns"
+
+what patterns have we discussed for error handling?
+
+search archival for "Quarkus" with limit 3
+
+search my archival for CODE type chunks
+
+read my core memory
+
+show me my user_profile block
+
+remember that I prefer Java records over Lombok
+
+my active task is implementing tiered memory architecture
+
+update my constraints to: always use CAS for concurrent writes
+
+store something in block invalid_key
+
+remember A. remember B. remember C. remember D. remember E. remember F.
+
+store this in long-term memory: Always use sealed classes for type hierarchies. Type PATTERN
+
+store this in archival memory: ArcClaw uses Quarkus with SQLite WAL mode. Type FACT
+
+store this in archival memory: some fact. Type INVALID_TYPE
+
+what patterns do I prefer for error handling?
+
+read my core memory

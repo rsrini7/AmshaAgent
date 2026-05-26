@@ -1,0 +1,153 @@
+# Tiered Memory Architecture — End-to-End Test Guide
+# Phases 0-7: Manual verification via CLI (arcclaw chat)
+# Copy-paste each line as a message to the agent. Expected outcomes noted as comments.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 0: Foundation — Config + CDI + NoOp Fallback
+# ═══════════════════════════════════════════════════════════════════════════════
+# Verify: Tiered memory boots without errors.
+# Check logs for: "ArchivalVecSchemaInitializer: vec_archival ensured"
+# Check logs for: "ToolDiscoveryService: Indexing complete. Total tools: 19"
+# Config keys in application.yaml under arcclaw.memory.tiered.*
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 1: Core Memory CRUD (admin API + prompt injection)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test 1.1: Read core memory (should be empty initially)
+read my core memory
+
+# Test 1.2: Agent uses core_memory_read tool
+# Expected: tool call core_memory_read → "No core memory blocks found"
+hi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 2: Dual-Write Persistence (compaction + recall)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Verify: After compaction, raw messages survive in recall_messages table.
+# Hard to test manually — rely on unit tests (977+ passing).
+# Check: no SQLITE_BUSY errors in logs during heavy message exchange.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 3: Recall Memory Search
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test 3.1: Search recall for recent messages
+search my conversation history for "core memory"
+
+# Test 3.2: Cross-session search
+search all my sessions for "hello"
+
+# Test 3.3: Verify summaries excluded by default
+# After compaction triggers, search should NOT return COMPACTION_SUMMARY rows
+# unless include_summaries=true is passed.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 4: Prompt Budget Hardening
+# ═══════════════════════════════════════════════════════════════════════════════
+# Verify: Injected [USER CONTEXT] is bounded by totalNonConversationTokens (2500).
+# Hard to test manually — rely on PromptBudgetManagerTest (9 tests passing).
+# Observable: agent responses stay within context window even with large memory.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 5: Archival Storage Tier
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test 5.1: Search archival (should be empty initially)
+search my archival knowledge for "patterns"
+
+# Test 5.2: Verify BM25 works (after inserting content in Phase 7 tests below)
+# search my archival knowledge for "Quarkus"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 6: Archival Search Tool + Prompt Injection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test 6.1: Agent uses archival_memory_search tool
+# Expected: tool call → "No relevant archival knowledge found"
+what patterns do I prefer for error handling?
+
+# Test 6.2: After inserting archival data (Phase 7), search should return results
+# and inject [RELEVANT KNOWLEDGE] into prompt.
+
+# Test 6.3: Confidence filtering — results below 0.6 should be filtered out.
+# Test 6.4: Empty results should NOT appear in [RELEVANT KNOWLEDGE] section.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 7: Controlled Write Paths
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test 7.1: Core Memory Read
+# Expected: core_memory_read tool call → reads all blocks or specific key
+read my core memory
+show me my active_task block
+
+# Test 7.2: Core Memory Append
+# Expected: core_memory_append tool call → appends to block, rate-limited
+remember that I prefer Java records over Lombok
+my active task is implementing tiered memory architecture
+
+# Test 7.3: Core Memory Replace
+# Expected: core_memory_replace tool call → replaces block content entirely
+update my constraints to: always use CAS for concurrent writes
+
+# Test 7.4: Block key validation
+# Expected: tool returns error for unknown block key
+store something in block "invalid_key"
+# Expected: 400 error — "Unknown block key: invalid_key"
+
+# Test 7.5: Oversize append rejection
+# Expected: if block is near 2000 chars, append rejects instead of truncating
+# Manual: fill a block to ~1900 chars, then try to append 200+ chars
+# Expected: "Append would exceed max block size... Use core_memory_replace"
+
+# Test 7.6: Archival Memory Insert (approval-gated)
+# Expected: requires manual approval at SUPERVISED autonomy
+store this in long-term memory: Always use sealed classes for type hierarchies. Type: PATTERN
+# Expected: approval prompt → approve → "Inserted archival chunk"
+
+# Test 7.7: Archival insert content cap
+# Expected: content > 4000 chars → rejected
+store this in archival memory [paste 4001+ chars]: <long text>
+# Expected: "Content exceeds max length of 4000 characters"
+
+# Test 7.8: Archival insert chunk type validation
+# Expected: invalid chunk type → rejected
+store this in archival memory: some fact. Type: INVALID_TYPE
+# Expected: "chunk_type must be one of: CODE, DOC, PATTERN, FACT, PREFERENCE, DIRECTIVE"
+
+# Test 7.9: Rate limiting verification
+# Expected: 6th core write within 1 minute → rate limit error
+remember A. remember B. remember C. remember D. remember E. remember F.
+# Expected: 6th write returns 429 "Rate limit exceeded for core_memory: max 5 per minute"
+
+# Test 7.10: Verify audit logging
+# Check logs for: [AUDIT-PROBE] type=MEMORY_WRITE_MUTATED
+# Every core_memory_append, core_memory_replace, archival_memory_insert should audit-log.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CROSS-PHASE: Integration Flows
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Flow A: Write → Read → Verify
+# 1. remember that I'm building ArcClaw, an AI agent framework
+# 2. read my core memory
+# 3. Expected: "user_profile" or appropriate block contains the fact
+
+# Flow B: Insert → Search → Inject
+# 1. store this in archival memory: ArcClaw uses Quarkus with SQLite WAL mode. Type: FACT
+# 2. (approve the insertion)
+# 3. what database does ArcClaw use?
+# 4. Expected: archival_memory_search finds the chunk → [RELEVANT KNOWLEDGE] injected
+
+# Flow C: Compaction → Recall Search
+# 1. Send 20+ messages to trigger compaction
+# 2. search my conversation history for an early message
+# 3. Expected: exact message found via recall_memory_search
+
+# Flow D: Multi-block core memory
+# 1. my user profile: senior Java developer, prefers Quarkus
+# 2. my constraints: never use mutable shared state
+# 3. my preferences: terse responses, no emojis
+# 4. read my core memory
+# 5. Expected: 3 blocks present with correct content
