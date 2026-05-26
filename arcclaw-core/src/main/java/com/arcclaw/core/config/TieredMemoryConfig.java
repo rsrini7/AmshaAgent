@@ -57,6 +57,9 @@ public interface TieredMemoryConfig {
         @WithDefault("60")
         int hybridSearchK();
 
+        @WithDefault("0.6")
+        double confidenceThreshold();
+
         ArchivalEviction eviction();
     }
 

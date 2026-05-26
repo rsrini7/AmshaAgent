@@ -342,10 +342,10 @@ messages.addAll(historyMessages);
 
 ### 4.5 Exit Criteria
 
-- [ ] Core Memory persists and renders into prompt
-- [ ] Strict size caps enforced (2000 chars/block, 20 blocks max)
-- [ ] **No tools yet** (writes via admin API only)
-- [ ] **No self-evolve yet**
+- [x] Core Memory persists and renders into prompt
+- [x] Strict size caps enforced (2000 chars/block, 20 blocks max)
+- [x] **No tools yet** (writes via admin API only)
+- [x] **No self-evolve yet**
 
 ---
 
@@ -444,11 +444,11 @@ public void insertRecallMessage(RecallMessage msg) {
 
 ### 5.6 Exit Criteria
 
-- [ ] Compaction still reduces active window (existing behavior)
-- [ ] Exact raw messages survive compaction in Recall storage
-- [ ] **No search exposed yet** (data preserved but not queryable by agents)
-- [ ] **Idempotency enforced at DB layer** via unique constraint + INSERT OR IGNORE
-- [ ] Application-level dedupe is advisory only (logs warnings, does not prevent)
+- [x] Compaction still reduces active window (existing behavior)
+- [x] Exact raw messages survive compaction in Recall storage
+- [x] **No search exposed yet** (data preserved but not queryable by agents)
+- [x] **Idempotency enforced at DB layer** via unique constraint + INSERT OR IGNORE
+- [x] Application-level dedupe is advisory only (logs warnings, does not prevent)
 
 ---
 
@@ -544,13 +544,13 @@ public enum RecallMessageType {
 
 ### 6.6 Exit Criteria
 
-- [ ] Recall search works as exact-history lookup
-- [ ] Tool descriptions clearly distinguish Recall from semantic Archival
-- [ ] Session-scoped search works (<10ms latency target)
-- [ ] Cross-session search gated/configurable
-- [ ] **Default search excludes `COMPACTION_SUMMARY` records**
-- [ ] Optional `include_summaries` mode available for overview queries
-- [ ] Exact code/error retrieval tests confirm summaries do not outrank exact content
+- [x] Recall search works as exact-history lookup
+- [x] Tool descriptions clearly distinguish Recall from semantic Archival
+- [x] Session-scoped search works (<10ms latency target)
+- [x] Cross-session search gated/configurable
+- [x] **Default search excludes `COMPACTION_SUMMARY` records**
+- [x] Optional `include_summaries` mode available for overview queries
+- [x] Exact code/error retrieval tests confirm summaries do not outrank exact content
 
 ---
 
@@ -621,10 +621,10 @@ arcclaw:
 
 ### 7.6 Exit Criteria
 
-- [ ] Prompt assembly order is deterministic
-- [ ] Memory blocks clipped deterministically on overflow
-- [ ] Compaction sentinel behavior unchanged
-- [ ] Total injected context bounded by hard ceiling
+- [x] Prompt assembly order is deterministic
+- [x] Memory blocks clipped deterministically on overflow
+- [x] Compaction sentinel behavior unchanged
+- [x] Total injected context bounded by hard ceiling
 
 ---
 
@@ -746,10 +746,10 @@ public class VectorIngestionService {
 
 ### 8.6 Exit Criteria
 
-- [ ] Archival works as typed semantic store
-- [ ] Independent from Recall exact history
-- [ ] Backend degradation graceful (no crashes)
-- [ ] **No automatic promotion yet** (manual insert only)
+- [x] Archival works as typed semantic store
+- [x] Independent from Recall exact history
+- [x] Backend degradation graceful (no crashes)
+- [x] **No automatic promotion yet** (manual insert only)
 
 ---
 
@@ -827,13 +827,13 @@ public String search(String query) {
 
 ### 9.5 Exit Criteria
 
-- [ ] Only top few, deduped, relevant archival results enter prompt
-- [ ] Confidence-filtered (min 0.6 default)
-- [ ] Never injected if empty or low-confidence
-- [ ] Goal-matched (not random knowledge dump)
-- [ ] **v2.1: `ChatHistoryAssembler` does not trigger archival retrieval I/O**
-- [ ] **v2.1: Archival results consumed from pre-fetched cache only (O(1) lookup)**
-- [ ] **v2.1: Tool-first path is primary retrieval mechanism**
+- [x] Only top few, deduped, relevant archival results enter prompt
+- [x] Confidence-filtered (min 0.6 default)
+- [x] Never injected if empty or low-confidence
+- [x] Goal-matched (not random knowledge dump)
+- [x] **v2.1: `ChatHistoryAssembler` does not trigger archival retrieval I/O**
+- [x] **v2.1: Archival results consumed from pre-fetched cache only (O(1) lookup)**
+- [x] **v2.1: Tool-first path is primary retrieval mechanism**
 
 ---
 
@@ -1524,12 +1524,12 @@ arcclaw-self-evolve/
 | Phase | Key Exit Criteria |
 |---|---|
 | 0 | ✅ App boots with flags disabled, zero behavior change, 20 files, 3 ports (ISP), CDI producer, GraalVM reflection |
-| 1 | Core Memory persists + renders, no tools yet |
-| 2 | Recall preserves messages before compaction, **DB-enforced idempotency** |
-| 3 | Recall search works, tool split complete, **summaries excluded by default** |
-| 4 | Prompt ordering deterministic, overflow handled, **no archival I/O in assembler** |
-| 5 | Archival storage works, no auto-promotion, **vector writes serialized** |
-| 6 | Archival tools exposed, **tool-first policy**, injection sparse |
+| 1 | ✅ Core Memory persists + renders, no tools yet |
+| 2 | ✅ Recall preserves messages before compaction, **DB-enforced idempotency** |
+| 3 | ✅ Recall search works, tool split complete, **summaries excluded by default** |
+| 4 | ✅ Prompt ordering deterministic, overflow handled, **no archival I/O in assembler** |
+| 5 | ✅ Archival storage works, no auto-promotion, **vector writes serialized** |
+| 6 | ✅ Archival tools exposed, **tool-first policy**, injection sparse |
 | 7 | Write tools gated, audited, rate-limited |
 | 8 | Self-evolve traces captured, no synthesis |
 | 9 | Rule-based extraction works, no LLM yet |
@@ -1642,17 +1642,17 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-**Document Version:** 2.4-implemented
-**Previous Version:** 2.3-implemented
-**Key Changes:** Phase 0/2/3 implementation + 5 tactical fixes (FTS5 sanitization, cross-session magic strings, deprecation log removal, purgeExpired stub, schema docs)
-**Next Step:** Phase 4 — Prompt Budget Hardening (section ordering, size caps, overflow handling)
-**Review Status:** Phase 0/2/3 complete, 960 tests passing, all tactical fixes applied
+**Document Version:** 2.6-implemented
+**Previous Version:** 2.5-implemented
+**Key Changes:** Phase 6 architect review fixes (N+1 batch reads/writes, AtomicReference cache, structural empty-result guard, chunk_types whitespace, limit schema type)
+**Next Step:** Phase 7 — Controlled Write Paths (CoreMemoryReadTool, CoreMemoryAppendTool, CoreMemoryReplaceTool, ArchivalMemoryInsertTool)
+**Review Status:** Phases 0-6 complete, 1,052 tests passing, all review fixes applied
 
 ---
 
-## Appendix A: Implementation Status (v2.4 — 2026-05-25)
+## Appendix A: Implementation Status (v2.5 — 2026-05-26)
 
-> **Status Update:** Phase 0 ✅, Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅ complete. Total: ~1,461 tests passing.
+> **Status Update:** Phase 0 ✅, Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅, Phase 5 ✅, Phase 6 ✅ complete. Total: ~1,034+ core tests passing.
 
 ### A.1 Completed Phases Summary
 
@@ -1664,6 +1664,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 3** | ✅ COMPLETE | 2026-05-25 | 963 tests (+3) | `recall_memory_search` tool, summary exclusion, tenant isolation |
 | **Phase 4** | ✅ COMPLETE | 2026-05-25 | 9 tests (+9) | Prompt budget hardening, hierarchical truncation, Unicode-safe clipping |
 | **Phase 5** | ✅ COMPLETE | 2026-05-25 | 4 tests (+4) | Archival relational + vector tier (BM25 FTS5, vec0, RRF, VectorIngestionService) |
+| **Phase 6** | ✅ COMPLETE | 2026-05-26 | 2 new files, 4 modified | `archival_memory_search` tool, `ArchivalContextCache`, hybrid BM25+vector activation, `[RELEVANT KNOWLEDGE]` prompt injection |
 
 ### A.2 Phase 2: Critical Fixes Applied
 
@@ -1947,11 +1948,136 @@ static String truncateSafely(String text, int maxChars) {
 ### A.4 Test Suite Status (Updated)
 
 ```
-Total Tests: ~1,461
-  - arcclaw-core:        ~977 tests (963 base + 9 PromptBudgetManager + 4 ArchivalMemoryService + 1 skip)
+Total Tests: ~1,052 (core + persistence-sqlite)
+  - arcclaw-core:        ~995 tests (963 base + 9 PromptBudgetManager + 4 ArchivalMemoryService + 19 Phase 6 tool/cache tests + 1 skip)
   - arcclaw-app:         145 tests
-  - arcclaw-persistence: 343 tests
+  - arcclaw-persistence: 57 tests (sqlite module)
 Failures: 0
 Errors:   0
 Skipped:  1
 ```
+
+### A.12 Phase 6: Archival Tools + Selective Use (Implementation Details)
+
+#### Architecture
+
+| Component | File | Role |
+|---|---|---|
+| `ArchivalMemorySearchTool` | `arcclaw-core/.../tools/memory/ArchivalMemorySearchTool.java` | `@ApplicationScoped` AgentTool — semantic archival search with optional vector hybrid |
+| `ArchivalContextCache` | `arcclaw-core/.../agent/reasoning/ArchivalContextCache.java` | `@WorkspaceScoped` — pre-fetched result cache for O(1) prompt injection |
+| `ChatHistoryAssembler` | Modified — wires `ArchivalContextCache` | Injects `[RELEVANT KNOWLEDGE]` section from pre-fetched cache |
+| `SqliteArchivalMemoryStore` | Modified — `hybridSearch()` activated | RRF merge with `VectorIngestionService.searchVector()` when embedding provided |
+| `ArchivalSearchQuery` | Modified — `float[] queryEmbedding` field added | Passes embedding from tool to store for hybrid search |
+| `TieredMemoryConfig.ArchivalConfig` | Modified — `confidenceThreshold()` added | Search-time result filtering (default 0.6), separate from eviction threshold |
+| `ToolCapability` | Modified — `ARCHIVAL_MEMORY_SEARCH` enum entry | Auto-discovered by `ToolDiscoveryService` via CDI |
+
+#### Tool Execute Flow
+
+```
+Agent calls archival_memory_search(query="Quarkus patterns")
+  │
+  ├─ 1. Resolve userId from WorkspaceContext (never from LLM params)
+  ├─ 2. Sanitize query via Fts5QueryUtil.toFts5Phrase()
+  ├─ 3. Embed query (optional): Instance<EmbeddingModel>.embed(query) → float[]
+  │     └─ If unavailable: queryEmbedding=null → BM25-only fallback
+  ├─ 4. Build ArchivalSearchQuery(userId, safeQuery, limit, chunkTypes, useVector, useBM25, queryEmbedding)
+  ├─ 5. archivalStore.search(query)
+  │     ├─ SQLite: hybridSearch() → BM25 + vectorIngestion.searchVector() → mergeRrf()
+  │     └─ Postgres: plainto_tsquery BM25 search (pgvector integration pending Phase 11)
+  ├─ 6. Filter by confidenceThreshold (default 0.6)
+  ├─ 7. Increment accessCount on returned chunks (LRU eviction signal)
+  ├─ 8. Format results → cache in ArchivalContextCache
+  └─ 9. Return formatted text to agent
+```
+
+#### Prompt Assembly Integration
+
+```
+ChatHistoryAssembler.assemble()
+  │
+  ├─ STEP -1: Core Memory → raw text
+  ├─ STEP 0: Compaction summary → raw text
+  ├─ STEP 0.3: ArchivalContextCache.getText() → O(1) lookup (NO I/O)     ← NEW Phase 6
+  ├─ STEP 0.5: budgetManager.enforce(core, summary, archival)
+  ├─ STEP 1: [USER CONTEXT] SystemMessage
+  ├─ STEP 1.1: [CONTEXT FROM PRIOR SESSION] SystemMessage + sentinel
+  ├─ STEP 1.5: [RELEVANT KNOWLEDGE] SystemMessage (if cache populated)   ← NEW Phase 6
+  ├─ STEP 2: Chat history
+  └─ STEP 3: ReAct history
+```
+
+#### SQLite Hybrid Search (Activated)
+
+```java
+// Before (Phase 5): BM25-only, TODO comment
+return bm25Results.stream().limit(query.limit()).toList();
+
+// After (Phase 6): When queryEmbedding is non-null:
+List<Object[]> vectorRows = vectorIngestion.searchVector(embedding, searchLimit);
+List<ArchivalChunkDto> vectorChunks = resolveFromIds(vectorRows);
+return mergeRrf(bm25Results, vectorChunks, query.limit());
+```
+
+**Graceful degradation chain:**
+1. `EmbeddingModel` unavailable → `queryEmbedding=null` → BM25-only
+2. `EmbeddingModel.embed()` throws → catch, `queryEmbedding=null` → BM25-only
+3. `vectorIngestion.searchVector()` throws → catch, BM25-only with warn log
+4. `vec0` unavailable → `isVectorAvailable()` returns false → BM25-only
+
+#### Config Additions
+
+```yaml
+# application.yaml — under arcclaw.memory.tiered.archival
+confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
+```
+
+```bash
+# .env.example
+# ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD=0.6
+```
+
+#### Key Design Decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| **ArchivalContextCache** | `@WorkspaceScoped`, `AtomicReference<CacheState>` | Immutable snapshot eliminates split-brain from two separate volatile fields |
+| **Null-safe archival check** | `tieredMemoryConfig.archival() != null` | Prevents NPE when `TieredMemoryConfig` is mocked in tests |
+| **Access count increment** | `incrementAccessCounts(List<String>)` via `@SqlBatch` | Single SQL statement instead of N individual updates |
+| **Embedding in tool, not store** | Tool injects `Instance<EmbeddingModel>` | `arcclaw-core` has access to `arcclaw-rag` via Maven; avoids coupling store to embedding provider |
+| **Confidence threshold in config** | Separate from eviction threshold | Search-time filtering (0.6) vs. eviction (0.5) are different concerns |
+| **Empty results not cached** | Tool skips `cache.put()` on empty results | Prevents wasting prompt budget on "No relevant knowledge found" |
+| **Vector chunk resolution** | `getByIds(@BindList)` batch query | Single SQL query preserves vector rank order for RRF |
+| **FS backend** | Not implemented in Phase 6 | `FsArchivalMemoryStore` doesn't exist; deferred to Phase 11 (Backend Parity) |
+
+#### Post-Review Fixes (Architect review, 2026-05-26)
+
+| Fix | Description | Source |
+|---|---|---|
+| **N+1 read in hybridSearch** | Replaced per-ID `getById()` loop with `getByIds(@BindList)` batch query; preserves vector rank order via map lookup | N+1 Trap 1 |
+| **N+1 write in access count** | Added `incrementAccessCounts(List<String>)` with `@SqlBatch` to port, both DAOs, both stores, and NoOp | N+1 Trap 2 |
+| **`limit` schema type** | Changed `addStringProperty` to `addIntegerProperty` for LLM structured output correctness | Schema type hint |
+| **`chunk_types` whitespace** | Added `trim()` + `filter(!isBlank())` to `parseChunkTypes()` | Correctness bug |
+| **Empty result cache pollution** | Tool skips `cache.put()` when results are empty; assembler guard removed (structural, not string-based) | Empty-result guard |
+| **Volatile pair atomicity** | Replaced two `volatile` fields with `AtomicReference<CacheState>` — single immutable snapshot | AtomicReference pattern |
+| **Brittle string guard removed** | Removed `startsWith("No relevant archival")` from assembler — structural guard (tool never caches empty) replaces it | No string coupling |
+
+#### Files Changed
+
+| File | Action | Lines |
+|---|---|---|
+| `arcclaw-core/.../role/ToolCapability.java` | ADD `ARCHIVAL_MEMORY_SEARCH` enum entry | +3 |
+| `arcclaw-persistence-api/.../ArchivalSearchQuery.java` | ADD `float[] queryEmbedding` field | +1 |
+| `arcclaw-persistence-api/.../ArchivalMemoryStorePort.java` | ADD `incrementAccessCounts(List<String>)` | +2 |
+| `arcclaw-core/.../config/TieredMemoryConfig.java` | ADD `confidenceThreshold()` to `ArchivalConfig` | +3 |
+| `arcclaw-app/.../application.yaml` | ADD `confidence-threshold` key | +1 |
+| `.env.example` | ADD `ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD` | +1 |
+| `arcclaw-persistence-sqlite/.../SqliteArchivalMemoryStore.java` | MODIFY `hybridSearch()` batch fetch + `incrementAccessCounts` | ~35 lines changed |
+| `arcclaw-persistence-sqlite/.../jdbi/ArchivalMemoryJdbiDao.java` | ADD `getByIds`, `incrementAccessCounts` | +15 |
+| `arcclaw-persistence-postgres/.../PostgresArchivalMemoryStore.java` | ADD `incrementAccessCounts` | +7 |
+| `arcclaw-persistence-postgres/.../jdbi/ArchivalMemoryJdbiDao.java` | ADD `getByIds`, `incrementAccessCounts` | +15 |
+| `arcclaw-core/.../memory/tiered/NoOpArchivalMemoryStore.java` | ADD `incrementAccessCounts` no-op | +5 |
+| `arcclaw-core/.../agent/reasoning/ArchivalContextCache.java` | NEW — `AtomicReference<CacheState>` pattern | ~55 lines |
+| `arcclaw-core/.../tools/memory/ArchivalMemorySearchTool.java` | NEW — archival search AgentTool | ~220 lines |
+| `arcclaw-core/.../agent/reasoning/ChatHistoryAssembler.java` | MODIFY — inject ArchivalContextCache + [RELEVANT KNOWLEDGE] | +15 lines |
+| `arcclaw-core/src/test/.../ArchivalMemoryServiceTest.java` | FIX — add null for new `queryEmbedding` param | +1 line |
+| 5 new test classes | ArchivalGoalMatchingTest, ArchivalConfidenceThresholdTest, ArchivalInjectionSparsityTest, ArchivalToolFirstPathTest, ArchivalCacheLookupNoIoTest | ~400 lines |

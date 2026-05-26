@@ -6,7 +6,9 @@ import java.util.Optional;
 import com.arcclaw.persistence.api.ArchivalChunkDto;
 import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
+import org.jdbi.v3.sqlobject.customizer.BindList;
 import org.jdbi.v3.sqlobject.customizer.BindMethods;
+import org.jdbi.v3.sqlobject.statement.SqlBatch;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
@@ -57,8 +59,20 @@ public interface ArchivalMemoryJdbiDao {
         """)
     Optional<ArchivalChunkDto> getById(@Bind("chunkId") String chunkId);
 
+    @SqlQuery("""
+        SELECT chunk_id AS "chunkId", user_id AS "userId", content, chunk_type AS "chunkType",
+               source_session AS "sourceSession", source_message AS "sourceMessage",
+               tags, confidence, access_count AS "accessCount",
+               created_at AS "createdAt", updated_at AS "updatedAt"
+        FROM archival_chunks WHERE chunk_id IN (<chunkIds>)
+        """)
+    List<ArchivalChunkDto> getByIds(@BindList("chunkIds") List<String> chunkIds);
+
     @SqlUpdate("UPDATE archival_chunks SET access_count = access_count + 1 WHERE chunk_id = :chunkId")
     void incrementAccessCount(@Bind("chunkId") String chunkId);
+
+    @SqlBatch("UPDATE archival_chunks SET access_count = access_count + 1 WHERE chunk_id = :chunkId")
+    void incrementAccessCounts(@Bind("chunkId") List<String> chunkIds);
 
     @SqlUpdate("DELETE FROM archival_chunks WHERE chunk_id = :chunkId")
     void delete(@Bind("chunkId") String chunkId);

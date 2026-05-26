@@ -413,6 +413,7 @@ arcclaw:
         enabled: ${ARCCLAW_MEMORY_ARCHIVAL_ENABLED:false}
         max-search-results: ${ARCCLAW_MEMORY_ARCHIVAL_MAX_SEARCH_RESULTS:8}
         hybrid-search-k: ${ARCCLAW_MEMORY_ARCHIVAL_HYBRID_K:60}
+        confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
         eviction:
           low-confidence-days: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_DAYS:60}
           low-confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_LOW_CONFIDENCE_THRESHOLD:0.5}

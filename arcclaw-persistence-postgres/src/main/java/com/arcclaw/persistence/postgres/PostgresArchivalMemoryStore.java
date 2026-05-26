@@ -68,6 +68,13 @@ public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
     }
 
     @Override
+    public void incrementAccessCounts(List<String> chunkIds) {
+        if (chunkIds == null || chunkIds.isEmpty()) return;
+        jdbi.useExtension(ArchivalMemoryJdbiDao.class,
+            dao -> dao.incrementAccessCounts(chunkIds));
+    }
+
+    @Override
     public void delete(String chunkId) {
         jdbi.useExtension(ArchivalMemoryJdbiDao.class,
             dao -> dao.delete(chunkId));

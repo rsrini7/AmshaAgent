@@ -45,6 +45,7 @@ public class ChatHistoryAssembler {
     @Inject CoreMemoryPromptRenderer coreMemoryRenderer;
     @Inject TieredMemoryConfig tieredMemoryConfig;
     @Inject PromptBudgetManager budgetManager;
+    @Inject ArchivalContextCache archivalContextCache;
 
     @ConfigProperty(name = "arcclaw.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -103,9 +104,17 @@ public class ChatHistoryAssembler {
             }
         }
 
+        // STEP 0.3: Pre-fetched archival context (Phase 6 — O(1) cache lookup, no I/O)
+        String archivalText = null;
+        if (tieredMemoryConfig.enabled()
+            && tieredMemoryConfig.archival() != null
+            && tieredMemoryConfig.archival().enabled()) {
+            archivalText = archivalContextCache.getText().orElse(null);
+        }
+
         // STEP 0.5: Budget enforcement (BEFORE any SystemMessage construction)
         PromptBudgetManager.BudgetEnforcedSections budget =
-            budgetManager.enforce(coreText, rawSummary, null);
+            budgetManager.enforce(coreText, rawSummary, archivalText);
 
         // Build messages from budget-enforced sections
         if (budget.coreMemory() != null && !budget.coreMemory().isBlank()) {
@@ -123,6 +132,18 @@ public class ChatHistoryAssembler {
                          + "The above is a summary of earlier messages in this session. "
                          + "Use it for context and answer directly from it where possible.";
             if (budget.summaryWasTruncated()) {
+                block += "\n[... truncated to fit prompt budget]";
+            }
+            messages.add(SystemMessage.systemMessage(block));
+        }
+
+        // STEP 1.5: Archival context (Phase 6 — pre-fetched, budget-enforced)
+        // Structural guard: only inject when archival text was cached with actual results.
+        // Empty results are never cached (tool guards against this), so if we get here,
+        // the text always contains real knowledge.
+        if (budget.archivalContext() != null && !budget.archivalContext().isBlank()) {
+            String block = "[RELEVANT KNOWLEDGE]\n" + budget.archivalContext();
+            if (budget.archivalWasTruncated()) {
                 block += "\n[... truncated to fit prompt budget]";
             }
             messages.add(SystemMessage.systemMessage(block));

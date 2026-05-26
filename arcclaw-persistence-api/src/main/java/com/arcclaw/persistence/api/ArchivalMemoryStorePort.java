@@ -17,6 +17,8 @@ public interface ArchivalMemoryStorePort {
 
     void incrementAccessCount(String chunkId);
 
+    void incrementAccessCounts(List<String> chunkIds);
+
     void delete(String chunkId);
 
     void evictLowConfidence(double threshold, int minAgeDays);

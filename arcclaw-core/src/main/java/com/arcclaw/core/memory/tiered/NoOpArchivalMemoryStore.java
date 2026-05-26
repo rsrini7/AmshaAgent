@@ -33,6 +33,11 @@ final class NoOpArchivalMemoryStore implements ArchivalMemoryStorePort {
     }
 
     @Override
+    public void incrementAccessCounts(List<String> chunkIds) {
+        // no-op when disabled
+    }
+
+    @Override
     public void delete(String chunkId) {
         // no-op when disabled
     }

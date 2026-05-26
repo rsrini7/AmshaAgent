@@ -14,5 +14,6 @@ public record ArchivalSearchQuery(
     int limit,
     Set<String> chunkTypes,
     boolean useVector,
-    boolean useBM25
+    boolean useBM25,
+    float[] queryEmbedding
 ) {}

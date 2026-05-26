@@ -47,7 +47,7 @@ class ArchivalMemoryServiceTest {
     @Test
     void testSearch_delegatesToStore() {
         ArchivalSearchQuery query = new ArchivalSearchQuery(
-            "user1", "knowledge query", 5, Set.of(), false, true);
+            "user1", "knowledge query", 5, Set.of(), false, true, null);
         ArchivalChunkDto chunk = new ArchivalChunkDto(
             "c1", "user1", "Some knowledge", "FACT",
             "session1", "msg1", "tag1",

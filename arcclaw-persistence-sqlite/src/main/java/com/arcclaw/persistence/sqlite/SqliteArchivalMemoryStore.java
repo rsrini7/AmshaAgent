@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -76,6 +77,13 @@ public class SqliteArchivalMemoryStore implements ArchivalMemoryStorePort {
     }
 
     @Override
+    public void incrementAccessCounts(List<String> chunkIds) {
+        if (chunkIds == null || chunkIds.isEmpty()) return;
+        jdbi.useExtension(ArchivalMemoryJdbiDao.class,
+            dao -> dao.incrementAccessCounts(chunkIds));
+    }
+
+    @Override
     public void delete(String chunkId) {
         jdbi.useExtension(ArchivalMemoryJdbiDao.class,
             dao -> dao.delete(chunkId));
@@ -97,6 +105,10 @@ public class SqliteArchivalMemoryStore implements ArchivalMemoryStorePort {
      * <p>
      * Runs both searches independently, then merges results by chunk_id.
      * RRF score = sum(1 / (k + rank)) for each result list where the chunk appears.
+     * <p>
+     * When {@code query.queryEmbedding()} is non-null, vector search is performed
+     * via {@link VectorIngestionService#searchVector} and results are merged with BM25.
+     * When null, falls back to BM25-only.
      */
     private List<ArchivalChunkDto> hybridSearch(ArchivalSearchQuery query,
                                                  boolean chunkTypesEmpty, List<String> chunkTypes) {
@@ -106,16 +118,45 @@ public class SqliteArchivalMemoryStore implements ArchivalMemoryStorePort {
         List<ArchivalChunkDto> bm25Results = bm25Search(
             query.userId(), query.query(), searchLimit, chunkTypesEmpty, chunkTypes);
 
-        // Vector results (requires embedding — placeholder for now)
-        // The embedding must be provided by the caller (tool path)
-        // For Phase 5b, we fall back to BM25-only if no embedding is available
-        log.debugf("Hybrid search: BM25 returned %d results (vector scoring requires embedding from tool path)",
-            bm25Results.size());
+        // Vector results (requires embedding from tool path)
+        float[] embedding = query.queryEmbedding();
+        if (embedding == null || !vectorIngestion.isVectorAvailable()) {
+            log.debugf("Hybrid search: no embedding or vec0 unavailable, BM25-only (%d results)",
+                bm25Results.size());
+            return bm25Results.stream().limit(query.limit()).toList();
+        }
 
-        // TODO(Phase 6): When ArchivalMemorySearchTool provides query embedding,
-        // merge with vectorIngestion.searchVector(embedding, searchLimit) via RRF.
-        // For now, return BM25 results as-is.
-        return bm25Results.stream().limit(query.limit()).toList();
+        try {
+            List<Object[]> vectorRows = vectorIngestion.searchVector(embedding, searchLimit);
+            List<String> vectorIds = vectorRows.stream()
+                .map(r -> (String) r[0])
+                .toList();
+
+            if (vectorIds.isEmpty()) {
+                return bm25Results.stream().limit(query.limit()).toList();
+            }
+
+            // Batch fetch in single query (avoids N+1)
+            Map<String, ArchivalChunkDto> chunkMap = jdbi.withExtension(
+                ArchivalMemoryJdbiDao.class, dao -> dao.getByIds(vectorIds))
+                .stream()
+                .collect(Collectors.toMap(ArchivalChunkDto::chunkId, c -> c));
+
+            // Preserve vector rank order for correct RRF scoring
+            List<ArchivalChunkDto> vectorChunks = new ArrayList<>();
+            for (String id : vectorIds) {
+                ArchivalChunkDto chunk = chunkMap.get(id);
+                if (chunk != null) vectorChunks.add(chunk);
+            }
+
+            log.debugf("Hybrid search: BM25=%d, vector=%d → RRF merge",
+                bm25Results.size(), vectorChunks.size());
+            return mergeRrf(bm25Results, vectorChunks, query.limit());
+        } catch (Exception e) {
+            log.warnf("Hybrid search: vector path failed (%s), falling back to BM25-only",
+                e.getMessage());
+            return bm25Results.stream().limit(query.limit()).toList();
+        }
     }
 
     /**
