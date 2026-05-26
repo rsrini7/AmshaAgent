@@ -138,33 +138,34 @@ class CoreMemoryServiceTest {
 
     @Test
     void testAppend_concurrentAppends_noLostUpdates() throws Exception {
-        // Simulate concurrent appends with CAS conflict resolution
-        AtomicInteger callCount = new AtomicInteger(0);
-        AtomicReference<String> accumulated = new AtomicReference<>("");
-        AtomicInteger version = new AtomicInteger(0);
+        // Single immutable snapshot prevents torn reads between version and content
+        record Snapshot(int version, String content) {}
+        AtomicReference<Snapshot> state = new AtomicReference<>(new Snapshot(0, ""));
+        AtomicInteger successCount = new AtomicInteger(0);
 
         when(coreStore.get("user1", "active_task"))
             .thenAnswer(invocation -> {
-                int v = version.get();
-                if (v == 0) return Optional.empty();
+                Snapshot s = state.get();
+                if (s.version() == 0) return Optional.empty();
                 return Optional.of(new CoreMemoryBlockDto(
-                    "id1", "user1", "active_task", accumulated.get(), v, null, null));
+                    "id1", "user1", "active_task", s.content(), s.version(), null, null));
             });
 
         Mockito.doAnswer(invocation -> {
             String content = invocation.getArgument(2, String.class);
             int expected = invocation.getArgument(3, Integer.class);
-            int currentVersion = version.get();
 
-            // Simulate CAS: if expected matches, write succeeds
-            if (expected == currentVersion) {
-                accumulated.set(content);
-                version.incrementAndGet();
-                callCount.incrementAndGet();
-                return null;
+            // Atomic CAS: compareAndSwap on single reference
+            Snapshot current = state.get();
+            if (expected == current.version()) {
+                boolean swapped = state.compareAndSet(current, new Snapshot(current.version() + 1, content));
+                if (swapped) {
+                    successCount.incrementAndGet();
+                    return null;
+                }
             }
-            // Conflict: someone else changed the version
-            throw new VersionConflictException("active_task", expected, currentVersion);
+            // Conflict: someone else changed the state
+            throw new VersionConflictException("active_task", expected, state.get().version());
         }).when(coreStore).upsert(eq("user1"), eq("active_task"), anyString(), anyInt());
 
         when(coreStore.read("user1")).thenReturn(List.of());
@@ -188,7 +189,7 @@ class CoreMemoryServiceTest {
         futures.get(1).get();
 
         // Both facts must be present in the final accumulated content
-        String finalContent = accumulated.get();
+        String finalContent = state.get().content();
         assertTrue(finalContent.contains("fact-A"), "First append must be preserved");
         assertTrue(finalContent.contains("fact-B"), "Second append must be preserved");
 
