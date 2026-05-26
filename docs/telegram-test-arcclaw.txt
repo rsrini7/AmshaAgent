@@ -180,8 +180,6 @@ delegate to coordinator: ask parvati to adjust the tone of this response - "Your
 
 /halt
 
-search my archival knowledge for "patterns"
-
 what patterns have we discussed for error handling?
 
 search archival for "Quarkus" with limit 3
