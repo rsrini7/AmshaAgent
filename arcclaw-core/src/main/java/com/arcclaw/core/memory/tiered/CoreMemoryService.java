@@ -78,8 +78,19 @@ public class CoreMemoryService {
      * Atomically appends content to an existing block (or creates it).
      * Read-modify-write is performed inside the CAS retry loop to prevent lost updates
      * when two concurrent appends race on the same block.
+     * <p>
+     * <b>Scaling Model Boundary:</b> Agent-facing tools ({@code core_memory_append}) are strictly
+     * limited to the 5-key {@link #ALLOWED_BLOCK_KEYS} allowlist. However, the {@code maxBlocksPerUser}
+     * limit is enforced here to govern non-agent creation paths (e.g., Phase 1 Admin API,
+     * Phase 10 Self-Evolve synthesis) that may introduce arbitrary block keys.
+     * <p>
+     * Unlike {@link #upsert}, append rejects content that would exceed the block size limit
+     * rather than silently truncating. This forces the agent to deliberately curate the block
+     * via {@code core_memory_replace} when it grows too large.
      *
      * @return the final content after append
+     * @throws IllegalArgumentException if block key is unknown or combined content exceeds max size
+     * @throws IllegalStateException if block limit reached or CAS retries exhausted
      */
     public String append(String userId, String blockKey, String content) {
         if (!ALLOWED_BLOCK_KEYS.contains(blockKey)) {
@@ -97,13 +108,18 @@ public class CoreMemoryService {
             Optional<CoreMemoryBlockDto> existing = coreStore.get(userId, blockKey);
             int expectedVersion = existing.map(CoreMemoryBlockDto::version).orElse(0);
             String current = existing.map(CoreMemoryBlockDto::content).orElse("");
-            String newContent = current.isEmpty()
-                ? truncate(content, maxCharsPerBlock)
-                : truncate(current + "\n" + content, maxCharsPerBlock);
+            String combined = current.isEmpty() ? content : current + "\n" + content;
+
+            if (combined.length() > maxCharsPerBlock) {
+                throw new IllegalArgumentException(
+                    String.format("Append would exceed max block size (%d chars). Current: %d, Append: %d. " +
+                                  "Use 'core_memory_replace' to curate the block first.",
+                                  maxCharsPerBlock, current.length(), content.length()));
+            }
 
             try {
-                coreStore.upsert(userId, blockKey, newContent, expectedVersion);
-                return newContent;
+                coreStore.upsert(userId, blockKey, combined, expectedVersion);
+                return combined;
             } catch (VersionConflictException e) {
                 log.debugf("CAS conflict on append %s, attempt %d: expected=%d actual=%d",
                     blockKey, attempt + 1, e.expectedVersion(), e.actualVersion());

@@ -139,7 +139,7 @@ public class ArchivalMemoryInsertTool implements AgentTool {
                 ctx.sessionId(),
                 null,  // sourceMessage
                 tags,
-                0.8,   // default confidence
+                1.0,   // explicit insert = verified ground truth
                 0,     // initial access count
                 Instant.now(),
                 Instant.now()

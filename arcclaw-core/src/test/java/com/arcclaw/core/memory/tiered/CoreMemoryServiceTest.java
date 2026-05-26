@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
@@ -104,6 +105,23 @@ class CoreMemoryServiceTest {
     }
 
     @Test
+    void testAppend_oversizeRejection_throws() {
+        // With maxCharsPerBlock=2000, appending content that would exceed should reject
+        String existing = "x".repeat(1900);
+        when(coreStore.get("user1", "user_profile"))
+            .thenReturn(Optional.of(new CoreMemoryBlockDto(
+                "id1", "user1", "user_profile", existing, 1, null, null)));
+
+        // Append 200 chars → combined 2100 > 2000 → should reject, not truncate
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.append("user1", "user_profile", "y".repeat(200)));
+        assertTrue(ex.getMessage().contains("exceed max block size"),
+            "Should reject oversize append, not silently truncate");
+        assertTrue(ex.getMessage().contains("core_memory_replace"),
+            "Should guide agent to use core_memory_replace");
+    }
+
+    @Test
     void testAppend_blockLimitReached_throws() {
         when(coreStore.get("user1", "user_profile")).thenReturn(Optional.empty());
         // 20 blocks already exist (max)
@@ -122,7 +140,7 @@ class CoreMemoryServiceTest {
     void testAppend_concurrentAppends_noLostUpdates() throws Exception {
         // Simulate concurrent appends with CAS conflict resolution
         AtomicInteger callCount = new AtomicInteger(0);
-        StringBuilder accumulated = new StringBuilder();
+        AtomicReference<String> accumulated = new AtomicReference<>("");
         AtomicInteger version = new AtomicInteger(0);
 
         when(coreStore.get("user1", "active_task"))
@@ -130,7 +148,7 @@ class CoreMemoryServiceTest {
                 int v = version.get();
                 if (v == 0) return Optional.empty();
                 return Optional.of(new CoreMemoryBlockDto(
-                    "id1", "user1", "active_task", accumulated.toString(), v, null, null));
+                    "id1", "user1", "active_task", accumulated.get(), v, null, null));
             });
 
         Mockito.doAnswer(invocation -> {
@@ -140,8 +158,7 @@ class CoreMemoryServiceTest {
 
             // Simulate CAS: if expected matches, write succeeds
             if (expected == currentVersion) {
-                accumulated.setLength(0);
-                accumulated.append(content);
+                accumulated.set(content);
                 version.incrementAndGet();
                 callCount.incrementAndGet();
                 return null;
@@ -171,7 +188,7 @@ class CoreMemoryServiceTest {
         futures.get(1).get();
 
         // Both facts must be present in the final accumulated content
-        String finalContent = accumulated.toString();
+        String finalContent = accumulated.get();
         assertTrue(finalContent.contains("fact-A"), "First append must be preserved");
         assertTrue(finalContent.contains("fact-B"), "Second append must be preserved");
 

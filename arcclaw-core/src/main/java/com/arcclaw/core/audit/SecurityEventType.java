@@ -112,7 +112,7 @@ public enum SecurityEventType {
                  CRON_PAUSED, CRON_RESUMED, CRON_FORCE_TRIGGERED,
                  SKILL_CREATED, SKILL_DELETED,
                  MCP_SERVER_CONNECTED, MCP_SERVER_DISCONNECTED,
-                 DELEGATION_DISPATCHED, MEMORY_WRITE_MUTATED -> true;
+                 DELEGATION_DISPATCHED -> true;
             default -> false;
         };
     }
