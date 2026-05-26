@@ -51,7 +51,8 @@
       "Read(//tmp/**)",
       "Bash(./mvnw clean:*)",
       "Bash(echo:*)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "Bash(./mvnw test-compile:*)"
     ]
   }
 }

@@ -74,6 +74,46 @@ public class CoreMemoryService {
             "Failed to upsert Core Memory block '" + blockKey + "' after 3 CAS retries");
     }
 
+    /**
+     * Atomically appends content to an existing block (or creates it).
+     * Read-modify-write is performed inside the CAS retry loop to prevent lost updates
+     * when two concurrent appends race on the same block.
+     *
+     * @return the final content after append
+     */
+    public String append(String userId, String blockKey, String content) {
+        if (!ALLOWED_BLOCK_KEYS.contains(blockKey)) {
+            throw new IllegalArgumentException("Unknown block key: " + blockKey
+                + ". Allowed: " + ALLOWED_BLOCK_KEYS);
+        }
+
+        if (coreStore.get(userId, blockKey).isEmpty()
+            && coreStore.read(userId).size() >= maxBlocksPerUser) {
+            throw new IllegalStateException(
+                "Core Memory block limit reached: " + maxBlocksPerUser);
+        }
+
+        for (int attempt = 0; attempt < 3; attempt++) {
+            Optional<CoreMemoryBlockDto> existing = coreStore.get(userId, blockKey);
+            int expectedVersion = existing.map(CoreMemoryBlockDto::version).orElse(0);
+            String current = existing.map(CoreMemoryBlockDto::content).orElse("");
+            String newContent = current.isEmpty()
+                ? truncate(content, maxCharsPerBlock)
+                : truncate(current + "\n" + content, maxCharsPerBlock);
+
+            try {
+                coreStore.upsert(userId, blockKey, newContent, expectedVersion);
+                return newContent;
+            } catch (VersionConflictException e) {
+                log.debugf("CAS conflict on append %s, attempt %d: expected=%d actual=%d",
+                    blockKey, attempt + 1, e.expectedVersion(), e.actualVersion());
+            }
+        }
+
+        throw new IllegalStateException(
+            "Failed to append to Core Memory block '" + blockKey + "' after 3 CAS retries");
+    }
+
     public void delete(String userId, String blockKey) {
         coreStore.delete(userId, blockKey);
     }

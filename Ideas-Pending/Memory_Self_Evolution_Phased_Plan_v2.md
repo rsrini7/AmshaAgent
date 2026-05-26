@@ -894,10 +894,10 @@ Set<String> ALLOWED_BLOCK_KEYS = Set.of(
 
 ### 10.6 Exit Criteria
 
-- [ ] Agent writes are narrow (allowed block keys only)
-- [ ] Audited (all mutations logged)
-- [ ] Bounded (rate limits + content caps enforced)
-- [ ] CAS versioning prevents corruption
+- [x] Agent writes are narrow (allowed block keys only)
+- [x] Audited (all mutations logged)
+- [x] Bounded (rate limits + content caps enforced)
+- [x] CAS versioning prevents corruption
 
 ---
 
@@ -1530,7 +1530,7 @@ arcclaw-self-evolve/
 | 4 | ✅ Prompt ordering deterministic, overflow handled, **no archival I/O in assembler** |
 | 5 | ✅ Archival storage works, no auto-promotion, **vector writes serialized** |
 | 6 | ✅ Archival tools exposed, **tool-first policy**, injection sparse |
-| 7 | Write tools gated, audited, rate-limited |
+| 7 | ✅ Write tools gated, audited, rate-limited, **CAS atomic append** |
 | 8 | Self-evolve traces captured, no synthesis |
 | 9 | Rule-based extraction works, no LLM yet |
 | 10 | Directive synthesis offline, **shadow lifecycle**, high-confidence only |
@@ -1642,11 +1642,11 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 
 ---
 
-**Document Version:** 2.6-implemented
-**Previous Version:** 2.5-implemented
-**Key Changes:** Phase 6 architect review fixes (N+1 batch reads/writes, AtomicReference cache, structural empty-result guard, chunk_types whitespace, limit schema type)
-**Next Step:** Phase 7 — Controlled Write Paths (CoreMemoryReadTool, CoreMemoryAppendTool, CoreMemoryReplaceTool, ArchivalMemoryInsertTool)
-**Review Status:** Phases 0-6 complete, 1,052 tests passing, all review fixes applied
+**Document Version:** 2.7-implemented
+**Previous Version:** 2.6-implemented
+**Key Changes:** Phase 7 implementation (Controlled Write Paths) + architect review fixes (CAS atomic append, approval gate enforcement, node-local governance docs)
+**Next Step:** Phase 8 — Self-Evolve Trace Capture (EvolutionEvent, ConversationBuffer, SelfEvolveService)
+**Review Status:** Phases 0-7 complete, 1,022 core tests passing, all review fixes applied
 
 ---
 
@@ -1665,6 +1665,7 @@ This section summarizes the five architecture decisions added in v2.1 and their 
 | **Phase 4** | ✅ COMPLETE | 2026-05-25 | 9 tests (+9) | Prompt budget hardening, hierarchical truncation, Unicode-safe clipping |
 | **Phase 5** | ✅ COMPLETE | 2026-05-25 | 4 tests (+4) | Archival relational + vector tier (BM25 FTS5, vec0, RRF, VectorIngestionService) |
 | **Phase 6** | ✅ COMPLETE | 2026-05-26 | 2 new files, 4 modified | `archival_memory_search` tool, `ArchivalContextCache`, hybrid BM25+vector activation, `[RELEVANT KNOWLEDGE]` prompt injection |
+| **Phase 7** | ✅ COMPLETE | 2026-05-26 | 5 new files, 4 modified | 4 write tools, `MemoryWriteGovernance`, CAS atomic append, approval gating, `MEMORY_WRITE_MUTATED` audit |
 
 ### A.2 Phase 2: Critical Fixes Applied
 
@@ -1948,8 +1949,8 @@ static String truncateSafely(String text, int maxChars) {
 ### A.4 Test Suite Status (Updated)
 
 ```
-Total Tests: ~1,052 (core + persistence-sqlite)
-  - arcclaw-core:        ~995 tests (963 base + 9 PromptBudgetManager + 4 ArchivalMemoryService + 19 Phase 6 tool/cache tests + 1 skip)
+Total Tests: ~1,079 (core + persistence-sqlite)
+  - arcclaw-core:        ~1,022 tests (963 base + 9 PromptBudget + 4 ArchivalMemory + 19 Phase 6 + 27 Phase 7 + 1 skip)
   - arcclaw-app:         145 tests
   - arcclaw-persistence: 57 tests (sqlite module)
 Failures: 0
@@ -2081,3 +2082,75 @@ confidence-threshold: ${ARCCLAW_MEMORY_ARCHIVAL_CONFIDENCE_THRESHOLD:0.6}
 | `arcclaw-core/.../agent/reasoning/ChatHistoryAssembler.java` | MODIFY — inject ArchivalContextCache + [RELEVANT KNOWLEDGE] | +15 lines |
 | `arcclaw-core/src/test/.../ArchivalMemoryServiceTest.java` | FIX — add null for new `queryEmbedding` param | +1 line |
 | 5 new test classes | ArchivalGoalMatchingTest, ArchivalConfidenceThresholdTest, ArchivalInjectionSparsityTest, ArchivalToolFirstPathTest, ArchivalCacheLookupNoIoTest | ~400 lines |
+
+### A.13 Phase 7: Controlled Write Paths (Implementation Details)
+
+#### Architecture
+
+| Component | File | Role |
+|---|---|---|
+| `CoreMemoryReadTool` | `arcclaw-core/.../tools/memory/CoreMemoryReadTool.java` | `@ApplicationScoped` — read all or specific block by key |
+| `CoreMemoryAppendTool` | `arcclaw-core/.../tools/memory/CoreMemoryAppendTool.java` | `@ApplicationScoped` — atomic append via `CoreMemoryService.append()` |
+| `CoreMemoryReplaceTool` | `arcclaw-core/.../tools/memory/CoreMemoryReplaceTool.java` | `@ApplicationScoped` — full content replacement via `CoreMemoryService.upsert()` |
+| `ArchivalMemoryInsertTool` | `arcclaw-core/.../tools/memory/ArchivalMemoryInsertTool.java` | `@ApplicationScoped` — `requiresManualApproval()=true`, 4000 char cap |
+| `MemoryWriteGovernance` | `arcclaw-core/.../memory/tiered/MemoryWriteGovernance.java` | `@ApplicationScoped` — token bucket rate limiter (node-local, in-memory) |
+| `CoreMemoryService.append()` | Modified — atomic read-modify-write | CAS retry loop reads fresh content on each attempt |
+| `ToolCapability` | Modified — 4 new enum entries | `CORE_MEMORY_READ`, `CORE_MEMORY_APPEND`, `CORE_MEMORY_REPLACE`, `ARCHIVAL_MEMORY_INSERT` |
+| `SecurityEventType.MEMORY_WRITE_MUTATED` | Modified — new enum constant | Mandatory audit for all memory writes |
+
+#### CAS Atomic Append Pattern
+
+```java
+// Before (racy): read + concatenate + upsert (two concurrent appends lose data)
+String existing = coreMemoryService.get(userId, blockKey).map(b -> b.content()).orElse("");
+coreMemoryService.upsert(userId, blockKey, existing + "\n" + content);
+
+// After (safe): read-modify-write inside CAS retry loop
+coreMemoryService.append(userId, blockKey, content);
+// Each retry reads the FRESH version, concatenates, and CAS-writes
+```
+
+#### Write Governance
+
+```yaml
+# application.yaml — node-local, in-memory token buckets
+arcclaw:
+  memory:
+    governance:
+      core-writes-per-minute: ${ARCCLAW_MEMORY_GOVERNANCE_CORE_WRITES_PER_MINUTE:5}
+      archival-writes-per-hour: ${ARCCLAW_MEMORY_GOVERNANCE_ARCHIVAL_WRITES_PER_HOUR:10}
+```
+
+**Scope:** Node-local, in-memory. Rate limits reset on restart, not cluster-wide. Intentional agent-side guardrail.
+
+#### Approval Gate Enforcement
+
+| Tool | `requiresManualApproval()` | Autonomy Level | Behavior |
+|---|---|---|---|
+| `CoreMemoryReadTool` | `false` (default) | Any | Always allowed |
+| `CoreMemoryAppendTool` | `false` (default) | Any | Always allowed (rate-limited) |
+| `CoreMemoryReplaceTool` | `false` (default) | Any | Always allowed (rate-limited) |
+| `ArchivalMemoryInsertTool` | `true` | SUPERVISED | Pauses for approval |
+| `ArchivalMemoryInsertTool` | `true` | FULL | Bypasses approval |
+
+Verified by 3 tests in `ToolInvocationGuardTest`: approval at SUPERVISED, bypass at FULL, no approval for core append.
+
+#### Files Changed
+
+| File | Action |
+|---|---|
+| `arcclaw-core/.../role/ToolCapability.java` | ADD 4 enum entries |
+| `arcclaw-core/.../audit/SecurityEventType.java` | ADD `MEMORY_WRITE_MUTATED` |
+| `arcclaw-core/.../memory/tiered/MemoryWriteGovernance.java` | NEW — token bucket rate limiter |
+| `arcclaw-core/.../memory/tiered/CoreMemoryService.java` | ADD `append()` atomic method |
+| `arcclaw-core/.../tools/memory/CoreMemoryReadTool.java` | NEW |
+| `arcclaw-core/.../tools/memory/CoreMemoryAppendTool.java` | NEW |
+| `arcclaw-core/.../tools/memory/CoreMemoryReplaceTool.java` | NEW |
+| `arcclaw-core/.../tools/memory/ArchivalMemoryInsertTool.java` | NEW |
+| `arcclaw-app/.../application.yaml` | ADD governance config |
+| `.env.example` | ADD governance env vars |
+| `arcclaw-core/src/test/.../MemoryWriteGovernanceTest.java` | NEW — rate limiter tests |
+| `arcclaw-core/src/test/.../CoreMemoryWriteToolsTest.java` | NEW — read/append/replace tests |
+| `arcclaw-core/src/test/.../ArchivalMemoryInsertToolTest.java` | NEW — insert + approval tests |
+| `arcclaw-core/src/test/.../ToolInvocationGuardTest.java` | ADD 3 approval gate tests |
+| `arcclaw-app/src/test/.../ChatCommandApprovalTest.java` | FIX — `@Disabled` for JLine3 hang |

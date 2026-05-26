@@ -132,6 +132,65 @@ class ToolInvocationGuardTest {
         assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) result).observation().contains("interceptor-blocked"));
     }
 
+    @Test
+    void testApprovalGate_archivalInsert_requiresApprovalAtSupervisedLevel() {
+        workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
+            // Create a real ArchivalMemoryInsertTool mock that returns requiresManualApproval=true
+            var archivalInsertTool = mock(AgentTool.class);
+            when(archivalInsertTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+            when(archivalInsertTool.requiresManualApproval(any())).thenReturn(true);
+            when(mockToolRegistry.findTool("archival_memory_insert")).thenReturn(Optional.of(archivalInsertTool));
+
+            ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                    "s1", "coordinator", AutonomyLevel.SUPERVISED,
+                    "archival_memory_insert", Map.of("content", "test", "chunk_type", "FACT"),
+                    List.of(), "goal", List.of());
+
+            // At SUPERVISED level with requiresManualApproval=true, must pause for approval
+            assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result,
+                "ArchivalMemoryInsertTool must require approval at SUPERVISED autonomy");
+        });
+    }
+
+    @Test
+    void testApprovalGate_archivalInsert_allowedAtFullAutonomy() {
+        workspaceRun("s1", AutonomyLevel.FULL, () -> {
+            var archivalInsertTool = mock(AgentTool.class);
+            when(archivalInsertTool.idempotencyMode()).thenReturn(IdempotencyMode.NON_IDEMPOTENT);
+            when(archivalInsertTool.requiresManualApproval(any())).thenReturn(true);
+            when(mockToolRegistry.findTool("archival_memory_insert")).thenReturn(Optional.of(archivalInsertTool));
+
+            ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                    "s1", "coordinator", AutonomyLevel.FULL,
+                    "archival_memory_insert", Map.of("content", "test", "chunk_type", "FACT"),
+                    List.of(), "goal", List.of());
+
+            // At FULL autonomy, approval is bypassed
+            assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result,
+                "ArchivalMemoryInsertTool should be allowed at FULL autonomy");
+        });
+    }
+
+    @Test
+    void testApprovalGate_coreMemoryAppend_noApprovalRequired() {
+        workspaceRun("s1", AutonomyLevel.SUPERVISED, () -> {
+            var coreAppendTool = mock(AgentTool.class);
+            when(coreAppendTool.idempotencyMode()).thenReturn(IdempotencyMode.IDEMPOTENT);
+            when(coreAppendTool.requiresManualApproval(any())).thenReturn(false);
+            when(mockToolRegistry.findTool("core_memory_append")).thenReturn(Optional.of(coreAppendTool));
+            when(roleRegistry.requiresApprovalForTools(any())).thenReturn(false);
+
+            ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                    "s1", "coordinator", AutonomyLevel.SUPERVISED,
+                    "core_memory_append", Map.of("block_key", "user_profile", "content", "test"),
+                    List.of(), "goal", List.of());
+
+            // Core memory append does NOT require manual approval
+            assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result,
+                "CoreMemoryAppendTool should not require approval at SUPERVISED");
+        });
+    }
+
     private void workspaceRun(String sessionId, AutonomyLevel level, Runnable runnable) {
         WorkspaceContext.run(sessionId, "user", "chat", level, "coordinator", runnable);
     }

@@ -23,6 +23,14 @@ public enum ToolCapability {
 
     ARCHIVAL_MEMORY_SEARCH("archival_memory_search", ToolCategory.DATABASE, "Semantic search across long-term archival knowledge (typed chunks, patterns, facts, preferences)"),
 
+    CORE_MEMORY_READ("core_memory_read", ToolCategory.DATABASE, "Read core memory blocks (user profile, active task, constraints, project context, preferences)"),
+
+    CORE_MEMORY_APPEND("core_memory_append", ToolCategory.DATABASE, "Append or create a core memory block with CAS versioning (5 writes/minute)"),
+
+    CORE_MEMORY_REPLACE("core_memory_replace", ToolCategory.DATABASE, "Replace a core memory block with CAS versioning (5 writes/minute)"),
+
+    ARCHIVAL_MEMORY_INSERT("archival_memory_insert", ToolCategory.DATABASE, "Insert a knowledge chunk into long-term archival memory (approval-gated, 10 inserts/hour)"),
+
     BROWSER_NAVIGATE("browser_navigate", ToolCategory.NETWORK, "Headless browser navigation (Playwright)"),
 
     SANDBOX_EXEC("sandbox_exec", ToolCategory.COMPUTE,

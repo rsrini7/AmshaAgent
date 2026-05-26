@@ -93,7 +93,8 @@ public enum SecurityEventType {
     DELEGATION_DISPATCHED, // coordinator delegated to sub-agent
 
     // RAG and Memory writes
-    MEMORY_INGESTED;       // IngestDocumentTool indexed content
+    MEMORY_INGESTED,       // IngestDocumentTool indexed content
+    MEMORY_WRITE_MUTATED;  // CoreMemoryAppend/Replace/ArchivalInsert wrote a block or chunk
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -111,7 +112,7 @@ public enum SecurityEventType {
                  CRON_PAUSED, CRON_RESUMED, CRON_FORCE_TRIGGERED,
                  SKILL_CREATED, SKILL_DELETED,
                  MCP_SERVER_CONNECTED, MCP_SERVER_DISCONNECTED,
-                 DELEGATION_DISPATCHED -> true;
+                 DELEGATION_DISPATCHED, MEMORY_WRITE_MUTATED -> true;
             default -> false;
         };
     }

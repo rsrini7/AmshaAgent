@@ -425,6 +425,9 @@ arcclaw:
       max-prefetched-archival-results: ${ARCCLAW_MEMORY_PROMPT_BUDGET_ARCHIVAL_RESULTS:3}
       max-directives: ${ARCCLAW_MEMORY_PROMPT_BUDGET_DIRECTIVES:5}
       total-non-conversation-tokens: ${ARCCLAW_MEMORY_PROMPT_BUDGET_TOTAL_TOKENS:2500}
+    governance:
+      core-writes-per-minute: ${ARCCLAW_MEMORY_GOVERNANCE_CORE_WRITES_PER_MINUTE:5}
+      archival-writes-per-hour: ${ARCCLAW_MEMORY_GOVERNANCE_ARCHIVAL_WRITES_PER_HOUR:10}
   chat:
     default-observation-max-length: 2000
     tool-specific-limits:
