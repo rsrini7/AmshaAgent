@@ -47,8 +47,9 @@
     <quarkus-mcp.version>1.10.3</quarkus-mcp.version>
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
     <lucene.version>10.4.0</lucene.version>
-    <!-- Baked into native image via build-info.properties; default = "sqlite" for JVM builds -->
-    <arcclaw.build.backend>sqlite</arcclaw.build.backend>
+    <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
+         Native builds explicitly pass -Darcclaw.build.backend=sqlite|postgres|fs. -->
+    <arcclaw.build.backend>default</arcclaw.build.backend>
     <commonmark.version>0.24.0</commonmark.version>
     <commons-lang3.version>3.18.0</commons-lang3.version>
     <commons-text.version>1.15.0</commons-text.version>
