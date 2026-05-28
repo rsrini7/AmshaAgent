@@ -108,6 +108,8 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class PersonaEscalationService {
 
+    private static final String STR = "\n```\n\n";
+
     private static final Logger log = Logger.getLogger(PersonaEscalationService.class);
 
     @Inject ReasoningEngine reasoningEngine;
@@ -157,65 +159,78 @@ public class PersonaEscalationService {
         String errorLower = errorOutput.toLowerCase();
         String goalLower = originalGoal != null ? originalGoal.toLowerCase() : "";
 
-        // Brahma escalations
-        if (AgentRoleEnum.CODER.toScopedName().equals(sourceRole)) {
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.SANDBOX_FAILURE_PATTERNS)) {
-                return AgentRoleEnum.DEBUGGER.toScopedName();
-            }
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.UNKNOWN_API_PATTERNS)) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.ARCHITECTURE_PATTERNS)) {
-                return AgentRoleEnum.ARCHITECT.toScopedName();
-            }
-        }
+        String target = escalateByRole(sourceRole, errorLower, goalLower);
+        if (target != null) return target;
 
-        // Shiva escalations
-        if (AgentRoleEnum.DEBUGGER.toScopedName().equals(sourceRole)) {
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.RESEARCH_NEEDED_PATTERNS)) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-            if (matchesAny(errorLower, goalLower, EscalationPatterns.REWRITE_NEEDED_PATTERNS)) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-            // Ganesha (son of Shiva) - complex logic analysis
-            if (EscalationPatterns.containsAny(goalLower, "recursive", "complex logic", "algorithm", "obstacle")) {
-                return AgentRoleEnum.OPTIMIZER.toScopedName();
-            }
-            // Kartikeya (son of Shiva) - security analysis
-            if (EscalationPatterns.containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
-                return AgentRoleEnum.SENTINEL.toScopedName();
-            }
-        }
+        target = EscalationPatterns.determineNewPersonaEscalation(sourceRole, goalLower);
+        if (target != null) return target;
 
-        // Brihaspati escalations
-        if (AgentRoleEnum.ARCHITECT.toScopedName().equals(sourceRole)) {
-            if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-            if (EscalationPatterns.containsAny(goalLower, "research", "find information", "look up", "documentation")) {
-                return AgentRoleEnum.RESEARCHER.toScopedName();
-            }
-        }
-
-        // Saraswati escalations
-        if (AgentRoleEnum.RESEARCHER.toScopedName().equals(sourceRole)) {
-            if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "execute", "run")) {
-                return AgentRoleEnum.CODER.toScopedName();
-            }
-        }
-
-        // New persona escalations (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati)
-        String newPersonaTarget = EscalationPatterns.determineNewPersonaEscalation(sourceRole, goalLower);
-        if (newPersonaTarget != null) {
-            return newPersonaTarget;
-        }
-
-        // Sandbox compilation/runtime errors → escalate to Shiva (debugger) for code fix
-        if (errorLower != null && matchesSandboxCodeError(errorLower)) {
+        if (matchesSandboxCodeError(errorLower)) {
             return AgentRoleEnum.DEBUGGER.toScopedName();
         }
 
+        return null;
+    }
+
+    private String escalateByRole(String sourceRole, String errorLower, String goalLower) {
+        if (AgentRoleEnum.CODER.toScopedName().equals(sourceRole)) {
+            return escalateFromCoder(errorLower, goalLower);
+        }
+        if (AgentRoleEnum.DEBUGGER.toScopedName().equals(sourceRole)) {
+            return escalateFromDebugger(errorLower, goalLower);
+        }
+        if (AgentRoleEnum.ARCHITECT.toScopedName().equals(sourceRole)) {
+            return escalateFromArchitect(goalLower);
+        }
+        if (AgentRoleEnum.RESEARCHER.toScopedName().equals(sourceRole)) {
+            return escalateFromResearcher(goalLower);
+        }
+        return null;
+    }
+
+    private String escalateFromCoder(String errorLower, String goalLower) {
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.SANDBOX_FAILURE_PATTERNS)) {
+            return AgentRoleEnum.DEBUGGER.toScopedName();
+        }
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.UNKNOWN_API_PATTERNS)) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        }
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.ARCHITECTURE_PATTERNS)) {
+            return AgentRoleEnum.ARCHITECT.toScopedName();
+        }
+        return null;
+    }
+
+    private String escalateFromDebugger(String errorLower, String goalLower) {
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.RESEARCH_NEEDED_PATTERNS)) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        }
+        if (matchesAny(errorLower, goalLower, EscalationPatterns.REWRITE_NEEDED_PATTERNS)) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+        if (EscalationPatterns.containsAny(goalLower, "recursive", "complex logic", "algorithm", "obstacle")) {
+            return AgentRoleEnum.OPTIMIZER.toScopedName();
+        }
+        if (EscalationPatterns.containsAny(goalLower, "security", "vulnerability", "injection", "malicious")) {
+            return AgentRoleEnum.SENTINEL.toScopedName();
+        }
+        return null;
+    }
+
+    private String escalateFromArchitect(String goalLower) {
+        if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "generate code", "create the")) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
+        if (EscalationPatterns.containsAny(goalLower, "research", "find information", "look up", "documentation")) {
+            return AgentRoleEnum.RESEARCHER.toScopedName();
+        }
+        return null;
+    }
+
+    private String escalateFromResearcher(String goalLower) {
+        if (EscalationPatterns.containsAny(goalLower, "implement", "write code", "execute", "run")) {
+            return AgentRoleEnum.CODER.toScopedName();
+        }
         return null;
     }
 
@@ -285,7 +300,7 @@ public class PersonaEscalationService {
         AgentRoleEnum targetEnum;
         try {
             targetEnum = AgentRoleEnum.fromString(targetRole);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             log.warnf("[PersonaEscalation] Unknown target persona '%s' for session %s", targetRole, outerSessionId);
             return EscalationResult.failure("Unknown target persona: " + targetRole);
         }
@@ -344,18 +359,18 @@ public class PersonaEscalationService {
             .append(targetDisplay).append(", the previous agent could not handle this task.\n\n")
             .append("## ORIGINAL GOAL:\n```\n")
             .append(originalGoal != null && !originalGoal.isBlank() ? originalGoal : "N/A")
-            .append("\n```\n\n");
+            .append(STR);
 
         if (errorOutput != null && !errorOutput.isBlank()) {
             goal.append("## ERROR/OUTPUT FROM ").append(sourceDisplay).append(":\n```\n")
                 .append(truncate(errorOutput, 4000))
-                .append("\n```\n\n");
+                .append(STR);
         }
 
         if (originalCode != null && !originalCode.isBlank()) {
             goal.append("## RELEVANT CODE:\n```").append(language != null ? language : "text").append("\n")
                 .append(originalCode)
-                .append("\n```\n\n");
+                .append(STR);
         }
 
         goal.append("## YOUR TASK:\n")

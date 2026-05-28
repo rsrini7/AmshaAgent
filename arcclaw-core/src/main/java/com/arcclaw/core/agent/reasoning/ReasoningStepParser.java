@@ -126,52 +126,20 @@ public class ReasoningStepParser {
         return stripped;
     }
 
-    /**
-     * Strips model-artifact suffixes like {@code <|channel|>commentary} from tool names.
-     * Some free models (e.g. OpenRouter) append these to function-call names.
-     */
     private static String sanitizeToolName(String name) {
-        if (name == null) return null;
-        // Strip <|channel|> commentary suffix
-        int idx = name.indexOf("<|");
-        if (idx > 0) name = name.substring(0, idx);
-        // Strip trailing colon (e.g., "brahma:" → "brahma")
-        if (name.endsWith(":")) {
-            name = name.substring(0, name.length() - 1);
-        }
-        // Strip agent: prefix (e.g., "brahma:garuda" → "garuda")
-        int colonIdx = name.indexOf(':');
-        if (colonIdx > 0 && colonIdx < name.length() - 1) {
-            String afterColon = name.substring(colonIdx + 1);
-            // Tool names contain underscores; agent names don't
-            if (afterColon.contains("_")) {
-                name = afterColon;
-            }
-        }
-        return name;
+        return ReasoningStepParserUtils.sanitizeToolName(name);
     }
 
     private ReasoningStep handleSingleToolCall(String sessionId, AiMessage aiMessage, ToolExecutionRequest req, int inputTokens, int outputTokens) {
         String rawName = req.name();
         String toolName = sanitizeToolName(rawName);
-        if (!rawName.equals(toolName)) {
+        if (rawName != null && !rawName.equals(toolName)) {
             log.infof("Sanitized tool name: '%s' -> '%s'", rawName, toolName);
         }
         log.infof("LLM is attempting to call tool: '%s' with args: %s", toolName, req.arguments());
 
-        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound() 
-                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-
-        if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName) && !textPatternUtils.goalRequestsExecution(rawGoal)) {
-            String code = recoverCodeForDisplay(req.arguments());
-            if (code != null && !code.isBlank()) {
-                log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
-                String language = textPatternUtils.inferLanguage(code);
-                String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
-                return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH, 
-                        Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
-            }
-        }
+        ReasoningStep intercepted = interceptUnrequestedExecution(toolName, req, aiMessage, inputTokens, outputTokens);
+        if (intercepted != null) return intercepted;
 
         Map<String, Object> actionInput = deserializeParams(sessionId, toolName, req.arguments());
         if (actionInput.containsKey("__error")) {
@@ -182,30 +150,56 @@ public class ReasoningStepParser {
             );
         }
 
-        if (ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
-                || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)) {
-            String query = (String) actionInput.get("query");
-            if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
-                String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
-                        ? WorkspaceContext.RAW_USER_GOAL.get() : null;
-                if (rawGoalUpdated != null && !rawGoalUpdated.isBlank()) {
-                    log.infof("Issue 7: Replacing garbled memory search query '%s' with raw user goal", query);
-                    actionInput.put("query", rawGoalUpdated);
-                    query = rawGoalUpdated;
-                }
-            }
+        ReasoningStep fixed = fixupMemorySearchQuery(toolName, actionInput, sessionId, inputTokens, outputTokens);
+        if (fixed != null) return fixed;
 
-            if (query == null || query.isBlank()) {
-                log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", toolName, sessionId);
-                return ReasoningStep.schemaError(
-                    "System: The 'query' parameter for '" + toolName + "' cannot be blank. " +
-                    "Please provide factual keywords for the search.",
-                    inputTokens, outputTokens
-                );
+        return ReasoningStep.pending(aiMessage.text(), toolName, actionInput, inputTokens, outputTokens);
+    }
+
+    private ReasoningStep interceptUnrequestedExecution(String toolName, ToolExecutionRequest req,
+            AiMessage aiMessage, int inputTokens, int outputTokens) {
+        if (!ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) return null;
+        String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound()
+                ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+        if (textPatternUtils.goalRequestsExecution(rawGoal)) return null;
+
+        String code = recoverCodeForDisplay(req.arguments());
+        if (code == null || code.isBlank()) return null;
+
+        log.infof("Intercepted unrequested execution call; converting to FINISH step with code display.");
+        String language = textPatternUtils.inferLanguage(code);
+        String markdown = String.format("```%s\n%s\n```", language != null ? language : "", code);
+        return ReasoningStep.pending(aiMessage.text(), ReasoningStep.FINISH,
+                Map.of(ReasoningStep.ACTION_INPUT_ANSWER_KEY, markdown), inputTokens, outputTokens);
+    }
+
+    private ReasoningStep fixupMemorySearchQuery(String toolName, Map<String, Object> actionInput,
+            String sessionId, int inputTokens, int outputTokens) {
+        if (!ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+                && !ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)) {
+            return null;
+        }
+
+        String query = (String) actionInput.get("query");
+        if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
+            String rawGoal = WorkspaceContext.RAW_USER_GOAL.isBound()
+                    ? WorkspaceContext.RAW_USER_GOAL.get() : null;
+            if (rawGoal != null && !rawGoal.isBlank()) {
+                log.infof("Issue 7: Replacing garbled memory search query '%s' with raw user goal", query);
+                actionInput.put("query", rawGoal);
+                query = rawGoal;
             }
         }
 
-        return ReasoningStep.pending(aiMessage.text(), toolName, actionInput, inputTokens, outputTokens);
+        if (query == null || query.isBlank()) {
+            log.warnf("LLM emitted %s with blank query for session %s. Forcing correction.", toolName, sessionId);
+            return ReasoningStep.schemaError(
+                "System: The 'query' parameter for '" + toolName + "' cannot be blank. " +
+                "Please provide factual keywords for the search.",
+                inputTokens, outputTokens
+            );
+        }
+        return null;
     }
 
     private ReasoningStep handleMultipleToolCalls(String sessionId, String agentRole, AiMessage aiMessage, List<ToolExecutionRequest> requests, int inputTokens, int outputTokens) {
@@ -332,85 +326,16 @@ public class ReasoningStepParser {
 
     @SuppressWarnings("unchecked")
     private void coerceBooleans(Map<String, Object> map) {
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            Object val = entry.getValue();
-            if (val instanceof String s) {
-                if ("true".equalsIgnoreCase(s)) {
-                    entry.setValue(Boolean.TRUE);
-                } else if ("false".equalsIgnoreCase(s)) {
-                    entry.setValue(Boolean.FALSE);
-                }
-            } else if (val instanceof Map) {
-                coerceBooleans((Map<String, Object>) val);
-            } else if (val instanceof List list) {
-                coerceBooleans(list);
-            }
-        }
+        ReasoningStepParserUtils.coerceBooleans(map);
     }
 
     @SuppressWarnings("unchecked")
     private void coerceBooleans(List<Object> list) {
-        for (int i = 0; i < list.size(); i++) {
-            Object item = list.get(i);
-            if (item instanceof String s) {
-                if ("true".equalsIgnoreCase(s)) {
-                    list.set(i, Boolean.TRUE);
-                } else if ("false".equalsIgnoreCase(s)) {
-                    list.set(i, Boolean.FALSE);
-                }
-            } else if (item instanceof Map) {
-                coerceBooleans((Map<String, Object>) item);
-            } else if (item instanceof List innerList) {
-                coerceBooleans(innerList);
-            }
-        }
+        ReasoningStepParserUtils.coerceBooleans(list);
     }
 
-    /**
-     * Attempts to repair common LLM tool-calling JSON errors:
-     * 1. Unescaped newlines within string values
-     * 2. Unescaped double-quotes within what looks like a code field
-     *
-     * Heuristic for interior-quote detection: when inside a JSON string value
-     * and an unescaped {@code "} is found, look ahead one character. If the
-     * following character is NOT a JSON structural delimiter ({@code ,}]}:) or
-     * whitespace, the quote is likely interior and should be escaped as {@code \"}.
-     */
     private String sanitizeJson(String json) {
-        if (json == null) return null;
-
-        StringBuilder sb = new StringBuilder();
-        boolean inString = false;
-        char prev = 0;
-
-        for (int i = 0; i < json.length(); i++) {
-            char c = json.charAt(i);
-
-            boolean isUnescapedQuote = (c == '"' && prev != '\\');
-            if (isUnescapedQuote && inString) {
-                char next = i + 1 < json.length() ? json.charAt(i + 1) : 0;
-                if (next != ',' && next != '}' && next != ']' && next != ':'
-                        && !Character.isWhitespace(next) && next != 0) {
-                    sb.append('\\');
-                    sb.append(c);
-                    prev = c;
-                    continue;
-                }
-            }
-
-            if (c == '"' && prev != '\\') {
-                inString = !inString;
-            }
-
-            if (inString && (c == '\n' || c == '\r')) {
-                sb.append("\\n");
-            } else {
-                sb.append(c);
-            }
-            prev = c;
-        }
-
-        return sb.toString();
+        return ReasoningStepParserUtils.sanitizeJson(json);
     }
 
     private Map<String, Object> recoverSandboxExecParams(String argsJson) {

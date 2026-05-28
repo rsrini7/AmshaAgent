@@ -177,6 +177,15 @@ public class TmpfsSecretTransport implements SecretTransport {
             log.debugf("TmpfsSecretTransport: %s not present - skipping stale file sweep (non-Linux?)", shmDir);
             return;
         }
+        // Validate directory is not world-writable before listing/operating on it
+        try {
+            var perms = PosixFilePermissions.toString(Files.getPosixFilePermissions(shmDir));
+            if (perms.charAt(6) == 'w' || perms.charAt(8) == 'w') {
+                log.warnf("TmpfsSecretTransport: %s has overly permissive permissions (%s) - skipping sweep", shmDir, perms);
+            }
+        } catch (UnsupportedOperationException | IOException _) {
+            // Non-POSIX (Windows/macOS) — proceed without permission check
+        }
         try (var stream = Files.list(shmDir)) {
             stream
                 .filter(p -> p.getFileName().toString().startsWith("secrets-"))

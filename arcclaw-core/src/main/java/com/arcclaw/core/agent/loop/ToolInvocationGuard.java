@@ -106,41 +106,8 @@ public class ToolInvocationGuard {
                 .orElse(IdempotencyMode.NON_IDEMPOTENT);
 
         if (mode != IdempotencyMode.NON_IDEMPOTENT) {
-            if (sessionDedupeCache.size() >= MAX_DEDUP_SESSIONS && !sessionDedupeCache.containsKey(sessionId)) {
-                String evictKey = sessionOrder.pollFirst();
-                if (evictKey != null) {
-                    sessionDedupeCache.remove(evictKey);
-                }
-            }
-            Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
-                Map<String, String> index = new ConcurrentHashMap<>();
-                sessionOrder.addLast(k);
-                for (ReasoningStep past : List.copyOf(history)) {
-                    if (past.observation() != null && !past.observation().isBlank()) {
-                        index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
-                    }
-                }
-                return index;
-            });
-
-            String currentKey = buildDedupeKey(toolName, params);
-            if (dedupeIndex.containsKey(currentKey)) {
-                String pastObservation = dedupeIndex.get(currentKey);
-                String cachedObs = pastObservation + "\n\n[DEDUP]";
-                return new GuardDecision.Deduplicate(cachedObs);
-            }
-
-            // Fallback: check history directly if not in index (e.g. if recordToolCall was missed or types differed slightly in JSON)
-            int scanLimit = Math.min(history.size(), 10);
-            for (int i = history.size() - 1; i >= history.size() - scanLimit; i--) {
-                ReasoningStep past = history.get(i);
-                if (past.observation() != null && !past.observation().isBlank() 
-                        && toolName.equals(past.action()) && Objects.equals(params, past.actionInput())) {
-                    String pastObs = past.observation();
-                    log.infof("GUARD: Caught duplicate tool call for '%s' in history for session %s", toolName, sessionId);
-                    return new GuardDecision.Deduplicate(pastObs + "\n\n[DEDUP-HISTORY]");
-                }
-            }
+            GuardDecision dedupResult = checkDeduplication(sessionId, toolName, params, history);
+            if (dedupResult != null) return dedupResult;
         }
 
         boolean isInternalTool = toolOpt.isPresent();
@@ -179,6 +146,43 @@ public class ToolInvocationGuard {
             return new GuardDecision.PauseForApproval(frame);
         }
         return new GuardDecision.Allow();
+    }
+
+    private GuardDecision checkDeduplication(String sessionId, String toolName,
+            Map<String, Object> params, List<ReasoningStep> history) {
+        if (sessionDedupeCache.size() >= MAX_DEDUP_SESSIONS && !sessionDedupeCache.containsKey(sessionId)) {
+            String evictKey = sessionOrder.pollFirst();
+            if (evictKey != null) {
+                sessionDedupeCache.remove(evictKey);
+            }
+        }
+        Map<String, String> dedupeIndex = sessionDedupeCache.computeIfAbsent(sessionId, k -> {
+            Map<String, String> index = new ConcurrentHashMap<>();
+            sessionOrder.addLast(k);
+            for (ReasoningStep past : List.copyOf(history)) {
+                if (past.observation() != null && !past.observation().isBlank()) {
+                    index.put(buildDedupeKey(past.action(), past.actionInput()), past.observation());
+                }
+            }
+            return index;
+        });
+
+        String currentKey = buildDedupeKey(toolName, params);
+        if (dedupeIndex.containsKey(currentKey)) {
+            return new GuardDecision.Deduplicate(dedupeIndex.get(currentKey) + "\n\n[DEDUP]");
+        }
+
+        // Fallback: check history directly if not in index
+        int scanLimit = Math.min(history.size(), 10);
+        for (int i = history.size() - 1; i >= history.size() - scanLimit; i--) {
+            ReasoningStep past = history.get(i);
+            if (past.observation() != null && !past.observation().isBlank()
+                    && toolName.equals(past.action()) && Objects.equals(params, past.actionInput())) {
+                log.infof("GUARD: Caught duplicate tool call for '%s' in history for session %s", toolName, sessionId);
+                return new GuardDecision.Deduplicate(past.observation() + "\n\n[DEDUP-HISTORY]");
+            }
+        }
+        return null;
     }
 
     public void recordToolCall(String sessionId, String toolName, Map<String, Object> params, String observation) {

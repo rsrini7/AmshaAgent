@@ -40,12 +40,17 @@ import picocli.CommandLine.Command;
         ChatCommand.class,
         AttachCommand.class
 })
+@SuppressWarnings("java:S106")
 public class ArcClawCli implements Runnable, QuarkusApplication {
 
     @Inject
     CommandLine.IFactory factory;
 
     private static volatile int exitStatus = 0;
+
+    private static void setExitStatus(int code) {
+        exitStatus = code;
+    }
 
     public static void main(String... args) {
 
@@ -93,7 +98,7 @@ public class ArcClawCli implements Runnable, QuarkusApplication {
     @Override
     public int run(String... args) {
         int exitCode = new CommandLine(this, factory).execute(args);
-        exitStatus = exitCode;
+        setExitStatus(exitCode);
         return exitCode;
     }
 
