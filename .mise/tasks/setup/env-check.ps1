@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "Validate .env - warn about missing or placeholder values"
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path '.env')) {
     Write-Host '❌  .env not found. Run: mise run setup'

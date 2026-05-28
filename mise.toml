@@ -78,18 +78,23 @@ run = [
 # =============================================================================
 
 [tasks.setup]
-depends = ["setup:wsl-crlf"]
+depends = ["setup:chmod-tasks", "setup:wsl-crlf"]
 alias = "s"
 
-[tasks."setup:profile"]
-description = "One-time: write mise activate + completion to your shell profile. Run after mise install."
+# setup:profile, setup:env-check, setup:wsl-crlf → .mise/tasks/setup/*.ps1
+# setup:chmod-tasks is inline — chicken-and-egg: the +x granter can't need +x itself
+
+[tasks."setup:chmod-tasks"]
+description = "chmod +x all .ps1 and .sh files under .mise/"
 dir = "{{config_root}}"
-[tasks."setup:env-check"]
-description = "Validate .env - warn about missing or placeholder values"
-dir = "{{config_root}}"
-[tasks."setup:wsl-crlf"]
-description = "WSL2: fix Windows CRLF line endings in mvnw + all .mise bash task scripts"
-dir = "{{config_root}}"
+shell = "pwsh -NonInteractive -Command"
+quiet = true
+run = """
+Get-ChildItem -Path '.mise/' -Recurse -Include '*.ps1','*.sh' | ForEach-Object {
+    chmod +x $_.FullName
+}
+Write-Host '✅  All .mise/*.ps1 and .sh files are now executable.'
+"""
 
 # =============================================================================
 # JDK MANAGEMENT

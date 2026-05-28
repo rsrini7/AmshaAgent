@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "WSL2: fix Windows CRLF line endings in mvnw + all .mise task scripts"
 $ErrorActionPreference = 'Stop'
 if ($IsWindows) {
     Write-Host 'ℹ️   Not needed on native Windows - CRLF fix is for WSL2/Linux only.'

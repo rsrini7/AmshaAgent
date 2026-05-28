@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "SonarQube token setup guide"
 $ErrorActionPreference = 'Stop'
 
 Write-Host '═══════════════════════════════════════════════════════' -ForegroundColor Cyan

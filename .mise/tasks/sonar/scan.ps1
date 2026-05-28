@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "Run SonarQube analysis (requires SONAR_TOKEN in .env)"
 $ErrorActionPreference = 'Stop'
 Write-Host '▶   Running SonarQube analysis...'
 

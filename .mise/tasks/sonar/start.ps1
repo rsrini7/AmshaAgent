@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "Start SonarQube container (web UI on :9000)"
 $ErrorActionPreference = 'Stop'
 Write-Host '▶   Starting SonarQube container...'
 

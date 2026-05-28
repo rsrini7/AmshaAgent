@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "One-time: write mise activate + completion to your shell profile"
 $ErrorActionPreference = 'Stop'
 
 $commentActivate   = '# mise - ArcClaw: activate (added by setup:profile)'

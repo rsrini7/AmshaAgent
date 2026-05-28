@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE description = "Stop SonarQube container"
 $ErrorActionPreference = 'Stop'
 Write-Host '▶   Stopping SonarQube container...'
 podman stop sonarqube 2>&1 | Out-Null
