@@ -83,7 +83,7 @@ class JdbiCheckpointConcurrencyTest {
     }
 
     @Test
-    void atomicUpdateBatchDecisionPreservesNonStaleDecisions() throws Exception {
+    void atomicUpdateBatchDecisionPreservesNonStaleDecisions() {
         CheckpointDto initial = new CheckpointDto(
                 null, sessionId, "coordinator", "AWAITING_APPROVAL", "FULL", "{}",
                 null, null, "test goal", null, null, null, null,
