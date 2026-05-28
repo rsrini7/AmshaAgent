@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Build all 3 backend variants (sqlite, postgres, fs) - local GraalVM, no container"
 $ErrorActionPreference = 'Stop'
 $exeSuffix = if ($IsWindows) { '.exe' } else { '' }

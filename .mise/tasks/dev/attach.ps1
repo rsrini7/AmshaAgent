@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Dev mode - Telegram daemon with hot reload (requires TELEGRAM_BOT_TOKEN in .env)"
+#MISE dir = "{{config_root}}/arcclaw-app"
 $ErrorActionPreference = 'Stop'
 
 if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {

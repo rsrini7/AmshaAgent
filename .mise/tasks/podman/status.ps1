@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Print Podman version, running containers, and tool-runner image status"
 Write-Host '-- Podman version ───────────────────────────────'
 $pv = podman --version 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host "  $pv" } else { Write-Host '  podman not found' }

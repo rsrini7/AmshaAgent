@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Run packaged jar - REST daemon on :8080 (CLI profile)"
 $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'

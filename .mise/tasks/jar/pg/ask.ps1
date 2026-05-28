@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = 'Run packaged jar with PostgreSQL - one-shot. Set $env:GOAL="..."'
 $ErrorActionPreference = 'Stop'
 $goal = if ($env:GOAL) { $env:GOAL } else { '' }

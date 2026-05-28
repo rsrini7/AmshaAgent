@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Stop and remove PostgreSQL container"
 $ErrorActionPreference = 'Stop'
 $container = 'arcclaw-pg'

@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "WSL2/Linux: enable Podman user socket via systemd (run once per WSL2 instance)"
 $ErrorActionPreference = 'Stop'
 if ($IsWindows) {

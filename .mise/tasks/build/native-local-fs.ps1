@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Native binary for Filesystem/Lucene backend (arcclaw-fs) - local GraalVM, no container"
 $ErrorActionPreference = 'Stop'
 $mvnw   = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

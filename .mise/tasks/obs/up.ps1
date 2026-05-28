@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Start observability stack: OTel + Jaeger + Phoenix + Prometheus via compose"
 $ErrorActionPreference = 'Stop'
 # Podman machine check: try a simple command; if it fails, ask user before starting

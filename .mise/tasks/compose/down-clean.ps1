@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Stop the stack and DELETE all data volumes (irreversible - prompts for confirmation)"
 $ErrorActionPreference = 'Stop'
 Write-Host '⚠️   WARNING: This will permanently delete all data volumes.'

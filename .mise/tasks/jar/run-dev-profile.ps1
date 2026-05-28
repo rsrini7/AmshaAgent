@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
 #MISE description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
+#MISE dir = "{{config_root}}"
+#MISE shell = "pwsh -NonInteractive -Command"
 $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }

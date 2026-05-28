@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Run packaged jar - Telegram channel daemon (requires TELEGRAM_BOT_TOKEN in .env)"
 $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'

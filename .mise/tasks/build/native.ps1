@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Alias: redirects to build:native-linux (container) or build:native-local (macOS/Windows)"
 if ($IsMacOS -or $IsWindows) {
     $os = if ($IsMacOS) { 'macOS' } else { 'Windows' }

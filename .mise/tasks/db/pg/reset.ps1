@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Drop and recreate the arcclaw database (wipes all data)"
 $ErrorActionPreference = 'Stop'
 $container = 'arcclaw-pg'

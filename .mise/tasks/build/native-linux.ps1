@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Native binary for Linux distribution - Podman container (produces Linux ELF, not for macOS/Windows)"
 $ErrorActionPreference = 'Stop'
 $mvnw   = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

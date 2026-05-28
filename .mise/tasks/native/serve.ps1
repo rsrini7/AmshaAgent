@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Run native binary - REST daemon on :8080"
 $ErrorActionPreference = 'Stop'
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }

@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Dev mode - serve with Dev UI + console disabled (NPE workaround in Quarkus dev console)"
+#MISE dir = "{{config_root}}/arcclaw-app"
 $ErrorActionPreference = 'Stop'
 
 if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {

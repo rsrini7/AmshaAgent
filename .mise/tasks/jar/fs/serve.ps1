@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Build & run packaged jar with filesystem persistence backend (no database needed)"
 $ErrorActionPreference = 'Stop'
 $jar = 'arcclaw-app/target/quarkus-app/quarkus-run.jar'

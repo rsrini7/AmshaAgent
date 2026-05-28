@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Build the arcclaw-tool-runner Podman image for the sandbox environment"
 $ErrorActionPreference = 'Stop'
 if (-not (Get-Command podman -ErrorAction SilentlyContinue)) {

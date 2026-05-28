@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Start PostgreSQL 16 container via Podman (for dev/postgresql profile)"
 $ErrorActionPreference = 'Stop'
 

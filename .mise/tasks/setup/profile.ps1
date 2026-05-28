@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "One-time: write mise activate + completion to your shell profile"
 $ErrorActionPreference = 'Stop'
 

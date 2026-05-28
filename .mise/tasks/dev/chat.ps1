@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Dev mode - interactive REPL with hot reload (strategy: NONE)"
+#MISE dir = "{{config_root}}/arcclaw-app"
 $ErrorActionPreference = 'Stop'
 
 if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {

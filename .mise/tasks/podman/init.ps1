@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "macOS: initialise and start Podman machine (6 GB RAM, 4 CPUs, 40 GB disk)"
 $ErrorActionPreference = 'Stop'
 if ($IsWindows) {

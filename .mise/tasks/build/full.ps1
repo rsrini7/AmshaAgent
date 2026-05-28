@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Clean install all modules, skip tests"
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

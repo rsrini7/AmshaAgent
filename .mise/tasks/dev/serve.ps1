@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
-#MISE description = "Quarkus dev mode - serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
+#MISE shell = "pwsh -NonInteractive -Command"
+#MISE description = "Dev mode - serve on :8080 with hot reload (strategy: NONE, no Podman needed)"
+#MISE dir = "{{config_root}}/arcclaw-app"
 $ErrorActionPreference = 'Stop'
 
 if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {

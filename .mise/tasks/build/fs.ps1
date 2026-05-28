@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Clean install all modules with filesystem persistence backend"
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

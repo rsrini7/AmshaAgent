@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Build + SonarQube analysis (fresh compile)"
 $ErrorActionPreference = 'Stop'
 Write-Host '▶   Running SonarQube analysis (clean build)...'

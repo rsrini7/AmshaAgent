@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "macOS: start the Podman machine"
 $ErrorActionPreference = 'Stop'
 if ($IsWindows) { Write-Host 'ℹ️   podman:start is macOS-only.'; exit 0 }

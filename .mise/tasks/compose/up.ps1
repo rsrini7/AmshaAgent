@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Start full stack: ArcClaw native + Ollama + OTel + Jaeger + Phoenix + Prometheus"
 $ErrorActionPreference = 'Stop'
 $suffix = if ($IsWindows) { '-runner.exe' } else { '-runner' }

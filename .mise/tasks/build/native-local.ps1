@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Native binary - always local GraalVM, no container (fast, any OS) - auto-switches JDK"
 $ErrorActionPreference = 'Stop'
 $mvnw   = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

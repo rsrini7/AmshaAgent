@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Start the official Playwright MCP Server (requires Node.js 20+)"
 Write-Host '▶   Starting Playwright MCP Server on stdio...'
 Write-Host '    (Keep this terminal open — the server runs in the foreground)'

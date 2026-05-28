@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Build package quarkus-run.jar for SQLite backend (default)"
 $ErrorActionPreference = 'Stop'
 Write-Host '▶   Building quarkus-run.jar for SQLite backend...'

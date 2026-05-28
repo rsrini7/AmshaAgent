@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "SonarQube token setup guide"
 $ErrorActionPreference = 'Stop'
 

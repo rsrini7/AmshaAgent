@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Ensure generated TypeScript DTOs exist (create stubs if missing)"
 $ErrorActionPreference = 'Stop'
 $modelsDir = "arcclaw-ui/src/api/generated/models"

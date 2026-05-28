@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Dev mode with filesystem backend - interactive REPL"
+#MISE dir = "{{config_root}}/arcclaw-app"
 $ErrorActionPreference = 'Stop'
 $envCopied = $false
 try {

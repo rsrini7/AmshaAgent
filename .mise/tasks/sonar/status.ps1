@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Check SonarQube container status"
 $ErrorActionPreference = 'Stop'
 Write-Host '-- SonarQube container status ───────────────────'

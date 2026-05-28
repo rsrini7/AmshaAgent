@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Verify the arcclaw-tool-runner sandbox image exists"
 $ErrorActionPreference = 'Stop'
 $img = (podman images 2>&1) | Select-String 'arcclaw-tool-runner'

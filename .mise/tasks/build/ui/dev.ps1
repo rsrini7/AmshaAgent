@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Start UI dev server on :3000 with Vite proxy to backend :8080"
 $ErrorActionPreference = 'Stop'
 Push-Location arcclaw-ui

@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "JVM build - all modules, skip tests (fast daily driver) - uses temurin-25"
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

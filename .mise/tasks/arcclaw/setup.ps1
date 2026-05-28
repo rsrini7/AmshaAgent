@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description="First-time setup: interactive .env wizard, chmod +x mvnw, install JDKs"
 #MISE quiet=true
 # NOTE: No -NonInteractive flag - Read-Host requires an interactive shell.

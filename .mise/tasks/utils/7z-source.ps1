@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Generate source archive (7z). Usage: ARCCLAW_7Z_PASS=secret mise run utils:7z-source"
 $ErrorActionPreference = 'Stop'
 

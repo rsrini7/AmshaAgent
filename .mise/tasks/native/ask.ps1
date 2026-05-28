@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = 'Run native binary - one-shot task. Set $env:GOAL="..." then: mise run native:ask'
 $ErrorActionPreference = 'Stop'
 $goal = if ($env:GOAL) { $env:GOAL } else { '' }

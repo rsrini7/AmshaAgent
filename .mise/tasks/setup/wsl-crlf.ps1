@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "WSL2: fix Windows CRLF line endings in mvnw + all .mise task scripts"
 $ErrorActionPreference = 'Stop'
 if ($IsWindows) {

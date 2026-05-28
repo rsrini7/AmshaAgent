@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Native binary - local GraalVM, 6 GB heap cap (use when RAM is tight) - auto-switches JDK"
 $ErrorActionPreference = 'Stop'
 $mvnw   = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

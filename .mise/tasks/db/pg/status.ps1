@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Check PostgreSQL container health"
 $container = 'arcclaw-pg'
 $existing = podman ps -a --filter name=$container --no-trunc 2>&1 | Select-String $container

@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = 'Dev mode - one-shot task. Set $env:GOAL="your goal" then: mise run dev:ask'
+#MISE dir = "{{config_root}}/arcclaw-app"
 $ErrorActionPreference = 'Stop'
 
 if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Type) {

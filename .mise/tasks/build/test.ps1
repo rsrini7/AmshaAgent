@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Build and run all tests"
 $ErrorActionPreference = 'Stop'
 $mvnw = if ($IsWindows) { '.\mvnw.cmd' } else { './mvnw' }

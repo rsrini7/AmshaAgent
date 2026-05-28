@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#MISE shell = "pwsh -NonInteractive -Command"
 #MISE description = "Kill any lingering Quarkus dev / quarkus-run.jar background processes"
 $ErrorActionPreference = 'Stop'
 Write-Host '── Scanning for lingering Quarkus processes ─────────────────────'
