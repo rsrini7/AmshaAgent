@@ -55,24 +55,22 @@ final class EscalationPatterns {
      * Determines escalation targets for new personas (Ganesha, Kartikeya, Lakshmi, Durga, Kali, Parvati).
      */
     static String determineNewPersonaEscalation(String sourceRole, String goalLower) {
-        String result;
-        result = escalateIfRole(sourceRole, AgentRoleEnum.OPTIMIZER, () -> escalateFromOptimizer(goalLower));
-        if (result != null) return result;
-        result = escalateIfRole(sourceRole, AgentRoleEnum.SENTINEL, () -> escalateFromSentinel(goalLower));
-        if (result != null) return result;
-        result = escalateIfRole(sourceRole, AgentRoleEnum.HEALER, () -> escalateFromHealer(goalLower));
-        if (result != null) return result;
-        result = escalateIfRole(sourceRole, AgentRoleEnum.PROTECTOR, () -> escalateFromProtector(goalLower));
-        if (result != null) return result;
-        result = escalateIfRole(sourceRole, AgentRoleEnum.PURIFIER, () -> escalateFromPurifier(goalLower));
-        if (result != null) return result;
-        result = escalateIfRole(sourceRole, AgentRoleEnum.NURTURER, () -> escalateFromNurturer(goalLower));
-        return result;
-    }
-
-    private static String escalateIfRole(String sourceRole, AgentRoleEnum role,
-            Supplier<String> escalation) {
-        return role.toScopedName().equals(sourceRole) ? escalation.get() : null;
+        if (sourceRole == null) return null;
+        return switch (sourceRole) {
+            case String s when AgentRoleEnum.OPTIMIZER.toScopedName().equals(s)
+                    -> escalateFromOptimizer(goalLower);
+            case String s when AgentRoleEnum.SENTINEL.toScopedName().equals(s)
+                    -> escalateFromSentinel(goalLower);
+            case String s when AgentRoleEnum.HEALER.toScopedName().equals(s)
+                    -> escalateFromHealer(goalLower);
+            case String s when AgentRoleEnum.PROTECTOR.toScopedName().equals(s)
+                    -> escalateFromProtector(goalLower);
+            case String s when AgentRoleEnum.PURIFIER.toScopedName().equals(s)
+                    -> escalateFromPurifier(goalLower);
+            case String s when AgentRoleEnum.NURTURER.toScopedName().equals(s)
+                    -> escalateFromNurturer(goalLower);
+            default -> null;
+        };
     }
 
     private static String escalateFromOptimizer(String goal) {
