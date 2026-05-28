@@ -5,7 +5,6 @@ import java.util.Map;
 
 /**
  * Pure-static utilities extracted from {@link ReasoningStepParser} to keep it under the
- * 500-line Checkstyle limit. All methods are stateless — no instance fields or CDI injection.
  */
 final class ReasoningStepParserUtils {
 

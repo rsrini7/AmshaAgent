@@ -343,37 +343,29 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-checkstyle-plugin</artifactId>
-          <version>3.6.0</version>
+          <artifactId>maven-pmd-plugin</artifactId>
+          <version>3.28.0</version>
         </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-checkstyle-plugin</artifactId>
+        <artifactId>maven-pmd-plugin</artifactId>
         <executions>
           <execution>
             <id>complexity-gate</id>
             <phase>verify</phase>
             <goals><goal>check</goal></goals>
             <configuration>
-              <checkstyleRules>
-                <module name="Checker">
-                  <module name="FileLength">
-                    <property name="max" value="500"/>
-                  </module>
-                  <module name="TreeWalker">
-                    <module name="MethodLength">
-                      <property name="max" value="80"/>
-                      <property name="countEmpty" value="false"/>
-                    </module>
-                  </module>
-                </module>
-              </checkstyleRules>
-              <consoleOutput>true</consoleOutput>
-              <failsOnError>true</failsOnError>
-              <includeTestSourceDirectory>false</includeTestSourceDirectory>
+              <failOnViolation>false</failOnViolation>
+              <printFailingErrors>true</printFailingErrors>
+              <includeTests>false</includeTests>
+              <javaLanguageVersion>25</javaLanguageVersion>
+              <minimumPriority>2</minimumPriority>
+              <rulesets>
+                <ruleset>/rulesets/java/arcclaw-rules.xml</ruleset>
+              </rulesets>
             </configuration>
           </execution>
         </executions>

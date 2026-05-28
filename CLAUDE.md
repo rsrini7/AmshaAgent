@@ -12,9 +12,10 @@
 * **Import alignment**: After editing Java files, run `python3 ./fix_fqns.py`.
 * **SonarQube check**: Before committing, run `mise run sonar:issues` to find BLOCKER/CRITICAL issues. Fix BLOCKERs before committing.
 
-## 2. Checkstyle Limits
+## 2. PMD Code Quality Gates
 * **File**: max 500 lines per Java source file
-* **Method**: max 80 lines per method
+* **Method**: max 80 lines per method (NCSS count)
+* **Cognitive Complexity**: max 15 per method (SonarQube S3776)
 * If a method exceeds 80 lines, extract into private helper methods.
 
 ## 3. ReplyNode Pattern

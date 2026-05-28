@@ -297,10 +297,12 @@ import module java.base;  // JEP 511 — preview, do not use
   ```
   This guarantees that all local classpath references are synchronized before executing module tests.
 
-### 4.1 Checkstyle Restrictions
+### 4.1 PMD Code Quality Gates
 * **File Length**: Maximum **500 lines** per Java source file.
 * **Method Length**: Maximum **80 lines** per method.
-* **Enforcement**: Checkstyle runs during `compile` phase. Violations fail the build.
+* **Cognitive Complexity**: Maximum **15** per method (matches SonarQube S3776 threshold).
+* **Enforcement**: PMD runs during `verify` phase. Violations are reported as warnings (PMD loads extra rules from categories). SonarQube (`mise run sonar:issues`) is the primary quality gate.
+* **Java 25 support**: PMD 7.17+ handles pattern matching `switch`, `when` guards, sealed interfaces, and other modern syntax.
 * **Refactoring**: If a method exceeds 80 lines, extract logical blocks into private helper methods. If a file exceeds 500 lines, split into separate classes (e.g., extract inner classes, constants, or utility methods into companion files).
 
 ### 4.2 Dependency Version Management

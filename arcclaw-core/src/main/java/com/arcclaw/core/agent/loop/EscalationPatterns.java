@@ -7,7 +7,6 @@ import com.arcclaw.core.agent.role.AgentRoleEnum;
 
 /**
  * Escalation keyword patterns and new-persona routing logic.
- * Extracted from PersonaEscalationService to keep file length within checkstyle limits.
  */
 final class EscalationPatterns {
 
