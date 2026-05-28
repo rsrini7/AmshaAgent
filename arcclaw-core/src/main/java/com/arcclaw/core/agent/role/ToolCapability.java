@@ -17,8 +17,6 @@ public enum ToolCapability {
 
     MANAGE_SCHEDULE("manage_schedule", ToolCategory.INTERNAL, "Manage (list/delete) existing scheduled tasks"),
 
-    MEMORY_SEARCH("memory_search", ToolCategory.DATABASE, "Semantic search across historical session memories"),
-
     RECALL_MEMORY_SEARCH("recall_memory_search", ToolCategory.DATABASE, "Exact search across preserved conversation history (raw messages, code, errors)"),
 
     ARCHIVAL_MEMORY_SEARCH("archival_memory_search", ToolCategory.DATABASE, "Semantic search across long-term archival knowledge (typed chunks, patterns, facts, preferences)"),

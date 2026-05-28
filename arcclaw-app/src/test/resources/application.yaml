@@ -101,8 +101,6 @@ quarkus:
         level: "OFF"
       "com.arcclaw.core.pipeline.MessagePipeline":
         level: "OFF"
-      "com.arcclaw.core.tools.MemorySearchTool":
-        level: "OFF"
       "com.arcclaw.app.scheduler.CronResultHandler":
         level: "OFF"
       "org.jboss.threads.errors":

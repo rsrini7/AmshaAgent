@@ -334,19 +334,19 @@ class LangChainReasoningEngineTest {
 
         // Mock RoleRegistry to return permitted tools for researcher
         when(roleRegistry.permittedTools(AgentRoleEnum.RESEARCHER))
-                .thenReturn(Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
+                .thenReturn(Set.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
 
         // Mock ToolRegistry to return available tools
         AgentTool github = Mockito.mock(AgentTool.class);
         when(github.name()).thenReturn(ToolCapability.GITHUB.toolName());
         when(github.isEnabled()).thenReturn(true);
         AgentTool memorySearch = Mockito.mock(AgentTool.class);
-        when(memorySearch.name()).thenReturn(ToolCapability.MEMORY_SEARCH.toolName());
+        when(memorySearch.name()).thenReturn(ToolCapability.RECALL_MEMORY_SEARCH.toolName());
         when(memorySearch.isEnabled()).thenReturn(true);
         
-        when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()));
+        when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()));
         when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(github));
-        when(toolRegistry.findTool(ToolCapability.MEMORY_SEARCH.toolName())).thenReturn(Optional.of(memorySearch));
+        when(toolRegistry.findTool(ToolCapability.RECALL_MEMORY_SEARCH.toolName())).thenReturn(Optional.of(memorySearch));
 
         // Requires setting up a tool in the instance if not mocked, but the test 
         // will mock the ChatModel anyway. Let's make sure the tool is available.
@@ -363,10 +363,10 @@ class LangChainReasoningEngineTest {
                 .map(ToolSpecification::name)
                 .toList();
                 
-        // Phase 46 Fix: Researcher ONLY has github and memory_search. 
+        // Phase 46 Fix: Researcher ONLY has github and recall_memory_search.
         // Coordinator handles all scheduling to prevent tool hallucinations.
         assertTrue(toolNames.contains(ToolCapability.GITHUB.toolName()),        "researcher must have github");
-        assertTrue(toolNames.contains(ToolCapability.MEMORY_SEARCH.toolName()), "researcher must have memory_search");
+        assertTrue(toolNames.contains(ToolCapability.RECALL_MEMORY_SEARCH.toolName()), "researcher must have recall_memory_search");
         
         // Researcher MUST NOT have scheduling tools
         assertFalse(toolNames.contains(ToolCapability.SCHEDULE_TASK.toolName()),   "researcher must NOT have schedule_task");

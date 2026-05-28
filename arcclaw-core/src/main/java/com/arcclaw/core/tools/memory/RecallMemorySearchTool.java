@@ -58,7 +58,7 @@ public class RecallMemorySearchTool implements AgentTool {
             Use when you need to find exact text that appeared in prior turns — code snippets, error messages,
             specific decisions, or user statements. Session-scoped by default for precise recall.
             Does NOT search session summaries or RAG documents by default (use include_summaries=true).
-            For semantic search across summaries only, use memory_search instead.
+            For semantic search across long-term knowledge, use archival_memory_search instead.
             """;
     }
 

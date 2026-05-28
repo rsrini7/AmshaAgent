@@ -102,8 +102,7 @@ public class ToolInvocationGuard {
         }
 
         var toolOpt = toolRegistry.findTool(toolName);
-        IdempotencyMode mode = toolOpt
-                .map(AgentTool::idempotencyMode)
+        IdempotencyMode mode = toolOpt.map(AgentTool::idempotencyMode)
                 .orElse(IdempotencyMode.NON_IDEMPOTENT);
 
         if (mode != IdempotencyMode.NON_IDEMPOTENT) {
@@ -152,8 +151,7 @@ public class ToolInvocationGuard {
         if (!isInternalTool && !isDynamicAllowed) {
             log.warnf(
                 "GUARD Unknown tool call attempt '%s' in session '%s' - " +
-                "not in ToolRegistry and not allowed by DynamicToolLookup.",
-                toolName, sessionId);
+                "not in ToolRegistry and not allowed by DynamicToolLookup.", toolName, sessionId);
             return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
         }
 
@@ -167,7 +165,8 @@ public class ToolInvocationGuard {
                 .orElse(false);
 
         boolean isExempt = isSchedulingTool || isDelegationTool
-                || (level == AutonomyLevel.BACKGROUND && (ToolCapability.MEMORY_SEARCH.toolName().equals(toolName)
+                || (level == AutonomyLevel.BACKGROUND && (ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+                    || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)
                     || ToolCapability.INGEST_DOCUMENT.toolName().equals(toolName)));
 
         if ((roleRegistry.requiresApprovalForTools(resolvedRole) || toolRequiresApproval)
@@ -179,7 +178,6 @@ public class ToolInvocationGuard {
             ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
             return new GuardDecision.PauseForApproval(frame);
         }
-
         return new GuardDecision.Allow();
     }
 

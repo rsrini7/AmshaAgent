@@ -122,13 +122,13 @@ class McpServerE2ETest {
         String json = raw.startsWith("data:") ? raw.substring(5).trim() : raw;
         assertTrue(json.contains("\"" + ToolCapability.GITHUB.toolName() + "\""),
             "tools/list must contain '" + ToolCapability.GITHUB.toolName() + "'. Got: " + json);
-        assertTrue(json.contains("\"" + ToolCapability.MEMORY_SEARCH.toolName() + "\""),
-            "tools/list must contain '" + ToolCapability.MEMORY_SEARCH.toolName() + "'. Got: " + json);
+        assertTrue(json.contains("\"" + ToolCapability.RECALL_MEMORY_SEARCH.toolName() + "\""),
+            "tools/list must contain '" + ToolCapability.RECALL_MEMORY_SEARCH.toolName() + "'. Got: " + json);
     }
 
     @Test
     @Order(3)
-    void testMcpToolsCallMemorySearch() {
+    void testMcpToolsCallRecallMemorySearch() {
         assertNotNull(mcpSessionId, "Depends on testMcpInitialize running first");
 
         String body = String.format("""
@@ -141,7 +141,7 @@ class McpServerE2ETest {
                 "arguments": {"query": "test query"}
               }
             }
-            """, ToolCapability.MEMORY_SEARCH.toolName());
+            """, ToolCapability.RECALL_MEMORY_SEARCH.toolName());
 
         String raw = RestAssured.given()
             .header("X-ArcClaw-API-Key", "test-key")
@@ -159,6 +159,6 @@ class McpServerE2ETest {
             "tools/call result must contain content. Got: " + json);
 
         Mockito.verify(toolRegistry)
-            .invokeTool(eq(ToolCapability.MEMORY_SEARCH.toolName()), anyString(), eq("mcp-server"));
+            .invokeTool(eq(ToolCapability.RECALL_MEMORY_SEARCH.toolName()), anyString(), eq("mcp-server"));
     }
 }

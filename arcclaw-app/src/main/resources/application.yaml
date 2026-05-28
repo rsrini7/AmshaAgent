@@ -494,7 +494,8 @@ arcclaw:
   mcp:
     exposed-tools:
       - github
-      - memory_search
+      - recall_memory_search
+      - archival_memory_search
     server-enabled: true
 
   retry:

@@ -279,7 +279,7 @@ class ChatHistoryAssemblerTest {
             @Override public int maxBlocksPerUser() { return 20; }
             @Override public int maxCharsPerBlock() { return 2000; }
         });
-        when(coreMemoryService.readAll("default")).thenReturn(List.of(
+        when(coreMemoryService.readAll("unknown")).thenReturn(List.of(
             new CoreMemoryBlockDto("id", "default", "user_profile", "Some profile data", 1, null, null)
         ));
         when(coreMemoryRenderer.render(any())).thenReturn("User: " + "A".repeat(5000));

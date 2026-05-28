@@ -36,7 +36,7 @@ public class RoleDefinitionTest {
         RoleDefinition def = new RoleDefinition("test", "Test", "Desc", 1, false, false, mutableSet, null);
 
         // Modifying original set does not affect record
-        mutableSet.add(ToolCapability.MEMORY_SEARCH);
+        mutableSet.add(ToolCapability.RECALL_MEMORY_SEARCH);
         assertEquals(1, def.capabilities().size());
         assertTrue(def.capabilities().contains(ToolCapability.GITHUB));
 

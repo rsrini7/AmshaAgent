@@ -118,12 +118,12 @@ class AgentStateMachineRunnerRegressionTest {
         TextPatternUtils textPatternUtils = new TextPatternUtils();
 
         ToolRegistry toolRegistryForHandler = mock(ToolRegistry.class);
-        Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of(ToolCapability.SANDBOX_EXEC.toolName(), ToolCapability.WEB_SEARCH_SERPER.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
+        Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of(ToolCapability.SANDBOX_EXEC.toolName(), ToolCapability.WEB_SEARCH_SERPER.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
         RoleRegistry roleRegistryMock = mock(RoleRegistry.class);
         Mockito.lenient().when(roleRegistryMock.permittedTools(any())).thenAnswer(invocation -> {
             AgentRoleEnum r = invocation.getArgument(0);
             if ("coordinator".equals(r.id())) {
-                return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MEMORY_SEARCH.toolName());
+                return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName());
             } else if ("coder".equals(r.id())) {
                 return Set.of(ToolCapability.SANDBOX_EXEC.toolName());
             }

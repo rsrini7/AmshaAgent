@@ -23,7 +23,6 @@ import com.arcclaw.core.skill.SkillFrontmatter;
 import com.arcclaw.core.skill.SkillPromptParams;
 import com.arcclaw.core.tools.GithubTool;
 import com.arcclaw.core.tools.ManageScheduleTool;
-import com.arcclaw.core.tools.MemorySearchTool;
 import com.arcclaw.core.tools.SandboxExecTool;
 import com.arcclaw.core.tools.ScheduleTaskTool;
 import com.arcclaw.core.tools.ToolRegistry;
@@ -59,7 +58,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         AuditOutcome.class,
         SecurityEventType.class,
         GithubTool.class,
-        MemorySearchTool.class,
         SandboxExecTool.class,
         ScheduleTaskTool.class,
         ManageScheduleTool.class,

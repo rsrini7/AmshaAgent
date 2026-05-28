@@ -6,18 +6,18 @@
 ###
 ### Role → Deity        → Tools available
 ### ────────────────────────────────────────────────────────────
-### coordinator → Vishnu      → github, schedule_task, manage_schedule, memory_search, ingest_document, garuda
-### researcher  → Saraswati   → github, memory_search, brave_web_search, serper_web_search, garuda
+### coordinator → Vishnu      → github, schedule_task, manage_schedule, recall_memory_search, archival_memory_search, ingest_document, garuda
+### researcher  → Saraswati   → github, recall_memory_search, archival_memory_search, brave_web_search, serper_web_search, garuda
 ### coder       → Brahma      → sandbox_exec, check_list, add_mcp_server, garuda
 ### debugger    → Shiva       → github, sandbox_exec, check_list, add_mcp_server, garuda
-### architect   → Brihaspati  → github, memory_search, garuda
-### synthesizer → Dattatreya  → github, schedule_task, manage_schedule, memory_search, ingest_document, brave_web_search, serper_web_search, garuda
+### architect   → Brihaspati  → github, recall_memory_search, archival_memory_search, garuda
+### synthesizer → Dattatreya  → github, schedule_task, manage_schedule, recall_memory_search, ingest_document, brave_web_search, serper_web_search, garuda
 ### optimizer   → Ganesha     → github, sandbox_exec, garuda
 ### sentinel    → Kartikeya   → github, sandbox_exec, garuda
-### healer      → Lakshmi     → github, memory_search, garuda
-### protector   → Durga       → github, memory_search, garuda
-### purifier    → Kali        → github, memory_search, garuda
-### nurturer    → Parvati     → github, memory_search, garuda
+### healer      → Lakshmi     → github, recall_memory_search, archival_memory_search, garuda
+### protector   → Durga       → github, recall_memory_search, archival_memory_search, garuda
+### purifier    → Kali        → github, recall_memory_search, garuda
+### nurturer    → Parvati     → github, recall_memory_search, garuda
 ###
 ### IMPORTANT - coder vs debugger tool schema:
 ###   coder:   sandbox_exec + check_list + add_mcp_server + garuda (no github, no network)
@@ -79,7 +79,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # RESEARCHER - Saraswati (facts, knowledge retrieval, no fabrication)
-# Has: github, memory_search. Strict no-hallucination rule.
+# Has: github, recall_memory_search. Strict no-hallucination rule.
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-3] Create session for researcher
@@ -199,7 +199,7 @@ X-ArcClaw-API-Key: {{validKey}}
 # ─────────────────────────────────────────────────────────────────
 # DEBUGGER - Shiva (bug analysis, stack traces, security audits)
 # Contrarian persona - challenges assumptions, surfaces blind spots.
-# Has: github ONLY (not schedule_task, not memory_search).
+# Has: github ONLY (not schedule_task, not recall_memory_search).
 # ─────────────────────────────────────────────────────────────────
 
 ### [ROLE-8] Create session for debugger
@@ -255,7 +255,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 # ─────────────────────────────────────────────────────────────────
 # ARCHITECT - Brihaspati (system design, ADRs, trade-off analysis)
-# Has: github, memory_search. Does NOT have schedule_task.
+# Has: github, recall_memory_search, archival_memory_search. Does NOT have schedule_task.
 # Will NOT write production code - delegates to Brahma.
 # ─────────────────────────────────────────────────────────────────
 

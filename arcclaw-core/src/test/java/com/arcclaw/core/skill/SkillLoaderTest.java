@@ -63,7 +63,8 @@ class SkillLoaderTest {
                   - "review.*code"
                 tool-capabilities:
                   - GITHUB
-                  - MEMORYSEARCH
+                  - RECALL_MEMORY_SEARCH
+                  - ARCHIVAL_MEMORY_SEARCH
                 max-iterations: 3
                 ---
                 Systems Prompt
@@ -83,7 +84,7 @@ class SkillLoaderTest {
             .findFirst();
 
         assertTrue(dynRole.isPresent());
-        assertEquals(2, dynRole.get().capabilities().size());
+        assertEquals(3, dynRole.get().capabilities().size());
     }
 
     @Test

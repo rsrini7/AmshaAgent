@@ -459,7 +459,7 @@ Dynamic MCP tools: none connected
 
 **Expect (after connecting a server):**
 ```
-Dynamic MCP tools (2): github [self, HTTP_SSE], memory_search [self, HTTP_SSE]
+Dynamic MCP tools (2): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE]
 ```
 
 ---
@@ -808,7 +808,7 @@ What topics did we discuss earlier in this session?
 
 ---
 
-### 13.3 Search long-term memory (MemorySearchTool)
+### 13.3 Search long-term memory (RecallMemorySearchTool)
 
 After compaction has run at least once:
 
@@ -816,10 +816,10 @@ After compaction has run at least once:
 Search your memory for any discussions about SQLite or WAL mode.
 ```
 
-**Expect:** Bot uses `memory_search` tool and returns relevant compaction summaries from your
+**Expect:** Bot uses `recall_memory_search` tool and returns relevant compaction summaries from your
 session's history. Available to: coordinator, researcher, architect, synthesizer.
 
-**Log:** `INFO  [ToolInvoker] Invoking tool='memory_search' session=<uuid>`
+**Log:** `INFO  [ToolInvoker] Invoking tool='recall_memory_search' session=<uuid>`
 
 ---
 
@@ -1207,10 +1207,10 @@ After approval: `✅ Document ingested.`
 What do you know about ArcClaw's persistence layer?
 ```
 
-**Expect:** Agent uses `memory_search` and returns information about SQLite WAL mode from the
+**Expect:** Agent uses `recall_memory_search` and returns information about SQLite WAL mode from the
 ingested document.
 
-**Log:** `INFO  [ToolInvoker] Invoking tool='memory_search' session=<uuid>`
+**Log:** `INFO  [ToolInvoker] Invoking tool='recall_memory_search' session=<uuid>`
 
 ---
 

@@ -41,7 +41,7 @@ Export: `all-MiniLM-L6-v2` fine-tuned on your own intent labels (`coder`, `coord
 
 ### Use Case 2 - Local Embeddings for RAG (replaces remote embedding API)
 
-ArcClaw uses SQLite for memory storage. Embeddings currently go through Jina's embedding API - every `memory_search` or `ingest_document` call costs a remote round trip. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
+ArcClaw uses SQLite for memory storage. Embeddings currently go through Jina's embedding API - every `recall_memory_search` or `ingest_document` call costs a remote round trip. [milvus](https://milvus.io/blog/no-python-no-problem-model-inference-with-onnx-in-java-or-any-other-language.md)
 
 ```
 With ONNX: sentence-transformers/all-MiniLM-L6-v2 → .onnx

@@ -418,7 +418,7 @@ On resume after batch approval:
 | `smart_web_fetch` | `SmartWebFetchTool` | Fetches and extracts content from URLs with SSRF protection |
 | `sandbox_exec` | `SandboxExecTool` | Code execution; Podman container when `SANDBOX_STRATEGY=podman` |
 | `github` | `GithubTool` | GitHub API; `GithubToolGuardInterceptor` enforces HITL |
-| `memory_search` | `MemorySearchTool` | Searches RAG session KB + global KB |
+| `recall_memory_search` | `RecallMemorySearchTool` | Searches RAG session KB + global KB |
 | `ingest_document` | `IngestDocumentTool` | Embeds text into vec0 + `rag_chunk`; always requires approval |
 | `schedule_task` | `ScheduleTaskTool` | Creates a new cron job |
 | `manage_schedule` | `ManageScheduleTool` | Lists / updates / deletes cron jobs |
@@ -599,7 +599,8 @@ trigger-patterns:
   - "check.*pr"
 tool-capabilities:
   - GITHUB
-  - MEMORYSEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 5
 ---
 You are a meticulous code reviewer...

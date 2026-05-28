@@ -182,13 +182,14 @@ public class ReasoningStepParser {
             );
         }
 
-        if (ToolCapability.MEMORY_SEARCH.toolName().equals(toolName)) {
+        if (ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+                || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName)) {
             String query = (String) actionInput.get("query");
             if (query == null || query.isBlank() || isUnicodeCorrupted(query)) {
                 String rawGoalUpdated = WorkspaceContext.RAW_USER_GOAL.isBound() 
                         ? WorkspaceContext.RAW_USER_GOAL.get() : null;
                 if (rawGoalUpdated != null && !rawGoalUpdated.isBlank()) {
-                    log.infof("Issue 7: Replacing garbled memory_search query '%s' with raw user goal", query);
+                    log.infof("Issue 7: Replacing garbled memory search query '%s' with raw user goal", query);
                     actionInput.put("query", rawGoalUpdated);
                     query = rawGoalUpdated;
                 }

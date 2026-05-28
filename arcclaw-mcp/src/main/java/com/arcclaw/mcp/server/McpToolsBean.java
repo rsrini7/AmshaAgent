@@ -21,10 +21,10 @@ public class McpToolsBean {
         return bridge.executeTool(req);
     }
 
-    @Tool(name = "memory_search", description = "Search long-term episodic and semantic memory")
-    public String memorySearch(String query) {
+    @Tool(name = "recall_memory_search", description = "Search exact conversation history (messages, code, errors)")
+    public String recallMemorySearch(String query) {
         String params = "{\"query\": \"" + query.replace("\"", "\\\"") + "\"}";
-        McpToolRequest req = new McpToolRequest(ToolCapability.MEMORY_SEARCH.toolName(), params, requestOpt.isResolvable() ? requestOpt.get() : null);
+        McpToolRequest req = new McpToolRequest(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), params, requestOpt.isResolvable() ? requestOpt.get() : null);
         return bridge.executeTool(req);
     }
 }

@@ -20,7 +20,7 @@ class AnswerQualityGuardTest {
     void setUp() {
         toolRegistry = mock(ToolRegistry.class);
         when(toolRegistry.listTools()).thenReturn(List.of(
-            ToolCapability.MEMORY_SEARCH.toolName(), ToolCapability.INGEST_DOCUMENT.toolName(), ToolCapability.GITHUB.toolName(), ToolCapability.SANDBOX_EXEC.toolName(), 
+            ToolCapability.RECALL_MEMORY_SEARCH.toolName(), ToolCapability.INGEST_DOCUMENT.toolName(), ToolCapability.GITHUB.toolName(), ToolCapability.SANDBOX_EXEC.toolName(), 
             ToolCapability.DELEGATE_TO_AGENT.toolName(), ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MANAGE_SCHEDULE.toolName()
         ));
         
@@ -75,10 +75,10 @@ class AnswerQualityGuardTest {
     @Test
     void testNakedFunctionCallLeak() {
         // Suggested case
-        assertTrue(guard.isRawToolCallLeak("memory_search(query=\"test\")"),
+        assertTrue(guard.isRawToolCallLeak("recall_memory_search(query=\"test\")"),
             "Naked function call pattern must match explicitly");
 
-        String leak = "I will check that for you: memory_search(query=\"what srini loves\")";
+        String leak = "I will check that for you: recall_memory_search(query=\"what srini loves\")";
         assertTrue(guard.isRawToolCallLeak(leak), "Should detect naked function call as a leak");
         
         String stripped = guard.stripRawToolJson(leak);

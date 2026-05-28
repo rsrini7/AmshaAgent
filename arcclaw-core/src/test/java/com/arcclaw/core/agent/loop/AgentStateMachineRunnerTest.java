@@ -121,12 +121,12 @@ class AgentStateMachineRunnerTest {
         TextPatternUtils textPatternUtils = new TextPatternUtils();
 
         ToolRegistry toolRegistryForHandler = mock(ToolRegistry.class);
-        Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of(ToolCapability.SANDBOX_EXEC.toolName(), ToolCapability.WEB_SEARCH_SERPER.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
+        Mockito.lenient().when(toolRegistryForHandler.listTools()).thenReturn(List.of(ToolCapability.SANDBOX_EXEC.toolName(), ToolCapability.WEB_SEARCH_SERPER.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
         RoleRegistry roleRegistryMock = mock(RoleRegistry.class);
         Mockito.lenient().when(roleRegistryMock.permittedTools(any())).thenAnswer(invocation -> {
             AgentRoleEnum r = invocation.getArgument(0);
             if ("coordinator".equals(r.id())) {
-                return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.MEMORY_SEARCH.toolName());
+                return Set.of(ToolCapability.SCHEDULE_TASK.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName());
             } else if ("coder".equals(r.id())) {
                 return Set.of(ToolCapability.SANDBOX_EXEC.toolName());
             }
@@ -384,7 +384,7 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(reactStep)
                 .thenReturn(finishStep);
         lenient().when(toolRegistry.findTool("OBSERVE")).thenReturn(Optional.empty());
-        lenient().when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
+        lenient().when(toolRegistry.listTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
                 "s1", "u1", "c1", "coordinator", "goal", AutonomyLevel.FULL, StructuredOutputMode.NATIVE, 5, 0, null, null, null, null);

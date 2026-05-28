@@ -197,8 +197,8 @@ class SystemPromptBuilderTest {
                 "Compact prompt should include cross-tool priority rules for tiny models");
         assertTrue(result.contains("A denied or failed tool call does not block a different valid tool"),
                 "Compact prompt should avoid cross-turn suppression after a denied tool");
-        assertTrue(result.contains("For capability/self-description questions, answer directly without memory_search"),
-                "Compact binding should explicitly protect capability questions from memory_search");
+        assertTrue(result.contains("For capability/self-description questions, answer directly without recall_memory_search"),
+                "Compact binding should explicitly protect capability questions from recall_memory_search");
         assertTrue(result.contains("For explicit owner/repo GitHub requests, prefer `github` over text-only fallback"),
                 "Compact binding should explicitly prefer github for direct repo requests");
         assertTrue(!result.contains("YOUR INTERNAL ARCHITECTURE"),

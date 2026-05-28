@@ -49,7 +49,7 @@ class McpToolBridgeTest {
 
     @Test
     void testGetExposedTools() throws Exception {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.MEMORY_SEARCH.toolName()));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName(), ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         when(mockSchemaProvider.getJsonSchema(ArgumentMatchers.any())).thenReturn("{}");
@@ -57,7 +57,7 @@ class McpToolBridgeTest {
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(2, tools.size());
         assertEquals(ToolCapability.GITHUB.toolName(), tools.get(0).name());
-        assertEquals(ToolCapability.MEMORY_SEARCH.toolName(), tools.get(1).name());
+        assertEquals(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), tools.get(1).name());
     }
 
     @Test
@@ -79,12 +79,12 @@ class McpToolBridgeTest {
 
     @Test
     void testMatchingUsesToolNameNotEnumName() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.MEMORY_SEARCH.toolName()));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
         AgentTool mockTool = mock(AgentTool.class);
         when(mockRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
         List<McpToolDescriptor> tools = bridge.getExposedTools();
         assertEquals(1, tools.size());
-        assertEquals(ToolCapability.MEMORY_SEARCH.toolName(), tools.get(0).name()); // must NOT be "MEMORY_SEARCH"
+        assertEquals(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), tools.get(0).name()); // must NOT be "RECALL_MEMORY_SEARCH"
     }
 
     @Test
@@ -110,7 +110,7 @@ class McpToolBridgeTest {
 
     @Test
     void testInvokeNonAllowlistedTool() {
-        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.MEMORY_SEARCH.toolName()));
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
         
         assertThrows(McpToolNotAllowedException.class, () -> bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null)));
     }

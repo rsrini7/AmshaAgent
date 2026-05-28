@@ -20,7 +20,8 @@ import java.util.UUID;
  *   - "check.*pr"
  * tool-capabilities:
  *   - GITHUB
- *   - MEMORYSEARCH
+ *   - RECALL_MEMORY_SEARCH
+ *   - ARCHIVAL_MEMORY_SEARCH
  * max-iterations: 5
  * ---
  * You are a meticulous code reviewer...
@@ -30,7 +31,7 @@ import java.util.UUID;
  * @param name The canonical name of the skill.
  * @param description A human readable description for the /skills reflex command.
  * @param triggerPatterns List of regex strings used to auto-route user intents to this skill.
- * @param toolCapabilities List of tool capability enum strings (e.g. GITHUB, MEMORYSEARCH).
+ * @param toolCapabilities List of tool capability enum strings (e.g. GITHUB, RECALL_MEMORY_SEARCH, ARCHIVAL_MEMORY_SEARCH).
  * @param maxIterations Maximum allowed execution loops before halting.
  * @param systemPrompt The actual LLM prompt instruction block.
  */

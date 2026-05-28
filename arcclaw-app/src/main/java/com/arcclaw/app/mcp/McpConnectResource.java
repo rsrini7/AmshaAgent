@@ -37,7 +37,7 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
  *
  * Self-connect smoke test (no external server needed):
  *   POST with {"name":"self","url":"http://localhost:8080/mcp"}
- *   ArcClaw connects to itself - github and memory_search appear as dynamic tools.
+ *   ArcClaw connects to itself - github and recall_memory_search appear as dynamic tools.
  *   Then send /mcp in Telegram to confirm the live count.
  */
 @ApplicationScoped

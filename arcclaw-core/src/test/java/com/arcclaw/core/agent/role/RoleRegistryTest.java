@@ -44,7 +44,7 @@ class RoleRegistryTest {
                 5,
                 false,
                 false,
-                Set.of(ToolCapability.GITHUB, ToolCapability.MEMORY_SEARCH),
+                Set.of(ToolCapability.GITHUB, ToolCapability.RECALL_MEMORY_SEARCH),
                 Set.of()
         );
         registry.registerDynamic("reviewer", def);
@@ -52,7 +52,7 @@ class RoleRegistryTest {
         Set<String> tools = registry.permittedToolsForDynamic("skill:reviewer");
         assertEquals(2, tools.size());
         assertTrue(tools.contains(ToolCapability.GITHUB.toolName()));
-        assertTrue(tools.contains(ToolCapability.MEMORY_SEARCH.toolName()));
+        assertTrue(tools.contains(ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
     }
 
     @Test

@@ -29,7 +29,7 @@
 ###   Phase 64-C3: RAG chunks stored in rag_chunk table, not "rag:" prefix in compaction_summary.
 ###   Phase 64-D1: Compaction summary truncation is now codepoint-safe (emoji/CJK safe).
 ###
-### MemorySearchTool (tool name: "memory_search"):
+### RecallMemorySearchTool (tool name: "recall_memory_search"):
 ###   Queries FTS5 using userId scope - tenant-isolated.
 ###   Available to: coordinator, researcher, architect, synthesizer.
 ###   Input: {query: "<search terms>"}
@@ -506,7 +506,7 @@ X-ArcClaw-API-Key: {{validKey}}
 
 ### [MEM-5] Verify pruning happened - oldest messages no longer in window
 # Expect: agent does NOT recall Msg 1 (virtual threading) from its active window.
-# But if compaction has run, the summary may still be retrievable via memory_search.
+# But if compaction has run, the summary may still be retrievable via recall_memory_search.
 POST {{baseUrl}}/api/v1/sessions/{{pruneSession.response.body.sessionId}}/run
 Content-Type: application/json
 X-ArcClaw-API-Key: {{validKey}}

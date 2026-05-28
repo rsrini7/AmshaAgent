@@ -375,7 +375,8 @@ trigger-patterns:
   - "alternate.*pattern"
 tool-capabilities:
   - GITHUB
-  - MEMORY_SEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 7
 ---
 You are a specialist persona. Describe the skill's behaviour in detail here.

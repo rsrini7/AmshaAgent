@@ -33,6 +33,6 @@ class DynamicToolLookupImplTest {
     void testToolInAllowlistButNotInRegistry() {
         // The implementation doesn't check McpToolAllowlist, only DynamicToolCapabilityRegistry
         assertFalse(lookup.isDynamicToolAllowed(ToolCapability.GITHUB.toolName())); 
-        assertFalse(lookup.isDynamicToolAllowed(ToolCapability.MEMORY_SEARCH.toolName()));
+        assertFalse(lookup.isDynamicToolAllowed(ToolCapability.RECALL_MEMORY_SEARCH.toolName()));
     }
 }

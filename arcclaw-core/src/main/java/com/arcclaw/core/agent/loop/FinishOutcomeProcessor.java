@@ -51,7 +51,7 @@ public class FinishOutcomeProcessor {
             Pattern.MULTILINE
     );
 
-    /** Detects knowledge disclaimers when memory_search results should have been synthesized. */
+    /** Detects knowledge disclaimers when recall/archival memory search results should have been synthesized. */
     private static final Pattern KNOWLEDGE_DISCLAIMER = Pattern.compile(
             "(?i)(?:I (?:do(?:n't| not) (?:have|know|possess|store|remember|recall)|(?:have|possess) (?:no|not)) (?:any )?(?:information|data|knowledge|record|detail|identity|name|preference)|(?:no|not? any) (?:information|data|knowledge|record) (?:about|regarding|on|of) (?:you|the user|their))",
             Pattern.MULTILINE
@@ -189,16 +189,16 @@ public class FinishOutcomeProcessor {
             }
         }
 
-        // Detect memory_search synthesis failure: tool returned results but LLM disclaims knowledge
+        // Detect memory search synthesis failure: tool returned results but LLM disclaims knowledge
         if (answer != null && KNOWLEDGE_DISCLAIMER.matcher(answer).find()) {
             String memoryResult = findMemorySearchResult(history);
             if (memoryResult != null) {
                 log.warnf("FINISH-HANDLER: Memory search synthesis failure detected for session %s. " +
-                          "memory_search returned results but answer disclaims knowledge.", sessionId);
+                          "Memory search returned results but answer disclaims knowledge.", sessionId);
 
-                ReasoningStep cleanStep = step.withObservation("Detected memory_search synthesis failure");
+                ReasoningStep cleanStep = step.withObservation("Detected memory search synthesis failure");
                 String hint = "System: STOP. You just searched your memory and found information about this user. " +
-                    "Your memory_search tool returned these results:\n---\n" +
+                    "Your memory search tool returned these results:\n---\n" +
                     memoryResult + "\n---\n" +
                     "You MUST synthesize these results into a natural, conversational answer. " +
                     "Do NOT say 'I don't have information' when your memory search just returned it. " +
@@ -207,7 +207,6 @@ public class FinishOutcomeProcessor {
                 return new FinishActionHandler.FinishOutcome.Correction(cleanStep, hint);
             }
         }
-
         return null;
     }
 
@@ -349,7 +348,6 @@ public class FinishOutcomeProcessor {
 
             return new FinishActionHandler.FinishOutcome.RetryLeak(cleanStep, correctionHint, leakedTool);
         }
-
         return salvage(candidateAnswer, history, sessionId);
     }
 
@@ -413,7 +411,7 @@ public class FinishOutcomeProcessor {
         for (int i = history.size() - 1; i >= 0; i--) {
             ReasoningStep step = history.get(i);
             if (step instanceof ReasoningStep.ToolCallStep tc
-                    && ToolCapability.MEMORY_SEARCH.toolName().equals(tc.action())
+                    && isMemorySearchTool(tc.action())
                     && Boolean.TRUE.equals(tc.success())
                     && tc.observation() != null
                     && !tc.observation().isBlank()) {
@@ -421,6 +419,11 @@ public class FinishOutcomeProcessor {
             }
         }
         return null;
+    }
+
+    private static boolean isMemorySearchTool(String toolName) {
+        return ToolCapability.RECALL_MEMORY_SEARCH.toolName().equals(toolName)
+            || ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName().equals(toolName);
     }
 
     private boolean stepContainsSuccessfulSchedule(ReasoningStep step) {
@@ -491,7 +494,6 @@ public class FinishOutcomeProcessor {
                     "The sandbox_exec tool requires 'language' (e.g. 'java') and 'code' parameters. " +
                     "Do NOT explain. Do NOT research. Write the code NOW and call sandbox_exec immediately.");
         }
-
         return null;
     }
 }

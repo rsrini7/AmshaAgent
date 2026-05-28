@@ -29,17 +29,17 @@ public class PromptInstructionLibrary {
             RECALL PRIORITY (non-negotiable order):
             1. Check the ACTIVE WINDOW (current messages) for any self-introduction or statements of user preferences (e.g. "I like/love/enjoy X").
             2. Check the [CONTEXT FROM PRIOR SESSION] (compacted summary) for the same.
-            3. ONLY call memory_search if the information is genuinely absent from BOTH the active window and the summary.
-            Never call memory_search when the answer is visible in the current conversation.
+            3. ONLY call recall_memory_search if the information is genuinely absent from BOTH the active window and the summary.
+            Never call recall_memory_search when the answer is visible in the current conversation.
 
             IDENTITY RECALL: If the name is absent from both active window and summary,
-            call memory_search with the query parameter set to "user name identity".
+            call recall_memory_search with the query parameter set to "user name identity".
 
             PREFERENCE RECALL: If user preferences are absent from both,
-            call memory_search with the query parameter set to "user preferences likes hobbies".
+            call recall_memory_search with the query parameter set to "user preferences likes hobbies".
 
             IDENTITY & PREFERENCE SYNTHESIS:
-            When memory_search returns results, you MUST SYNTHESIZE them into a natural, conversational response.
+            When recall_memory_search returns results, you MUST SYNTHESIZE them into a natural, conversational response.
             Do NOT narrate your lookup process. Answer directly.
             Never echo raw stored document strings verbatim.
             WRONG: "To find out what you like, I'll check the context... The user enjoys X."
@@ -48,14 +48,20 @@ public class PromptInstructionLibrary {
             RIGHT: "You are Alice."
 
             STRICT RECALL ENFORCEMENT:
-            - If the user said "I am X" or "My name is X" in any prior message in this conversation, you MUST NOT call memory_search. Answer directly using FINISH.
-            - If the user said "I like X" or "I love X" in this conversation, you MUST NOT call memory_search. Answer directly.
+            - If the user said "I am X" or "My name is X" in any prior message in this conversation, you MUST NOT call recall_memory_search. Answer directly using FINISH.
+            - If the user said "I like X" or "I love X" in this conversation, you MUST NOT call recall_memory_search. Answer directly.
+
+            MEMORY TOOL SELECTION:
+            - `recall_memory_search`: Exact text search in conversation history. Use for specific code, error messages, prior decisions, or user statements.
+            - `archival_memory_search`: Semantic search across long-term knowledge. Use for patterns, facts, preferences, project context, or general knowledge.
+            - When the user asks "what do you know about X" or "what patterns have we seen", prefer archival_memory_search.
+            - When the user asks "what did I say about X" or "find the error from earlier", prefer recall_memory_search.
 
             CROSS-DOMAIN HANDOFF:
             If you receive a request you cannot fulfill (e.g. scheduling while in Research mode),
             use `garuda` to hand off the task to the appropriate specialist.
             If you are the 'coordinator', you MUST NOT delegate to 'coordinator'; invoke the
-            required tools (e.g. `schedule_task`, `memory_search`) directly.
+            required tools (e.g. `schedule_task`, `recall_memory_search`) directly.
             Do NOT just refuse the request. When delegating, set the agent parameter
             to the target persona name.
 
@@ -241,9 +247,9 @@ public class PromptInstructionLibrary {
             If the answer can be inferred from the current conversation history or 
             the `[CONTEXT FROM PRIOR SESSION]` block (compacted summary), you MUST 
             answer directly without invoking tools. 
-            Do NOT call `memory_search` for questions about THIS conversation or 
+            Do NOT call `recall_memory_search` for questions about THIS conversation or
             information explicitly mentioned in the context window.
-            Only call `memory_search` or other tools when the information is legitimately 
+            Only call `recall_memory_search` or other tools when the information is legitimately 
             absent from the current context window (e.g. "what did we discuss last week?").
             
             EXCEPTION TO DIRECT ANSWERS: If the user asks for code generation or 
@@ -280,7 +286,7 @@ public class PromptInstructionLibrary {
             When the user asks you to "store", "remember", "save", "ingest", "note down",
             or "call me [name]" - this is ALWAYS a tool call request, NEVER a direct answer.
             You MUST call `ingest_document` IMMEDIATELY with the information to persist.
-            Do NOT call `memory_search` to check if the information exists first.
+            Do NOT call `recall_memory_search` to check if the information exists first.
             If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` 
             with the exact placeholder text. The system will automatically resolve the 
             original value before storage.
@@ -363,9 +369,10 @@ public class PromptInstructionLibrary {
         11. PII/REDACTION: If you see [REDACTED-*] placeholders in a store request, call `ingest_document` with the exact placeholder text. The system will resolve it.
         12. RECALL PRIORITY: 1. Active Window, 2. Summary. If info was mentioned in THIS conversation, you MUST NOT call tools. Answer directly.
         13. DELEGATE: Use `garuda` for out-of-role tasks. Set the agent parameter to the persona name.
-        14. IDENTITY RECALL: For "who am I" questions, check history first. Only call `memory_search` (query="user name identity") if absent.
-        15. PREFERENCE RECALL: For "what i like/love" questions, check history first. Only call `memory_search` (query="user preferences likes hobbies") if absent.
-        16. SYNTHESIS: When memory_search returns results, SYNTHESIZE into a natural answer. Do NOT narrate your lookup. Never echo raw JSON.
+        14. IDENTITY RECALL: For "who am I" questions, check history first. Only call `recall_memory_search` (query="user name identity") if absent.
+        15. PREFERENCE RECALL: For "what i like/love" questions, check history first. Only call `recall_memory_search` (query="user preferences likes hobbies") if absent.
+        16. SYNTHESIS: When recall_memory_search returns results, SYNTHESIZE into a natural answer. Do NOT narrate your lookup. Never echo raw JSON.
+        16b. KNOWLEDGE SEARCH: Use `archival_memory_search` for patterns, facts, preferences, or project context. Use `recall_memory_search` for exact prior conversation text.
         17. NEVER output raw JSON blocks to the user. Always use natural language or markdown lists.
             WRONG: {"status": "done"}
             RIGHT: "The task is complete."
@@ -381,7 +388,7 @@ public class PromptInstructionLibrary {
         sb.append("TOOL PRIORITY RULES:\n");
         sb.append("1. If information can be inferred from conversation, summary, or the CURRENT SYSTEM TIME provided above, answer directly. Do NOT call external tools (like web search) or write code to check the time.\n");
         sb.append("1b. EXCEPTION: If the user asks for code generation or execution in a DIFFERENT language (e.g. \"do same in bash\"), you MUST call the tool (e.g. sandbox_exec). Do NOT answer from memory.\n");
-        sb.append("2. If the user wants to STORE or REMEMBER something (e.g. \"remember me\", \"save my name\", \"call me X\", \"my phone is Y\"): call `ingest_document` IMMEDIATELY. Do NOT call `memory_search` to check if it exists first.\n");
+        sb.append("2. If the user wants to STORE or REMEMBER something (e.g. \"remember me\", \"save my name\", \"call me X\", \"my phone is Y\"): call `ingest_document` IMMEDIATELY. Do NOT call `recall_memory_search` to check if it exists first.\n");
         sb.append("3. If you see [REDACTED-*] placeholders in a storage request, call `ingest_document` with the exact placeholder text. The system will automatically resolve the original value before storage.\n");
         sb.append("4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. \"every minute\" -> \"*/1 * * * *\"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself - store it as the goal text for the cron runner.\n");
         sb.append("4b. For scheduling requests, NEVER batch `schedule_task` with `garuda` or any other tool in the same turn.\n");
@@ -394,7 +401,7 @@ public class PromptInstructionLibrary {
         sb.append("   - If you LACK `sandbox_exec`, delegate to 'brahma' to handle execution.\n");
         sb.append("   - NEVER tell user to \"use another role\". Call `garuda` yourself.\n");
         sb.append("6. For general world knowledge, versions, or comparisons, use `garuda(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.\n");
-        sb.append("7. Use `memory_search` only for past-session recall not in the current conversation or summary.\n");
+        sb.append("7. Use `recall_memory_search` for exact past-session text. Use `archival_memory_search` for semantic knowledge (patterns, facts, preferences).\n");
         if (available.contains("browser_navigate")) {
             sb.append("8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.\n");
         }
@@ -402,7 +409,7 @@ public class PromptInstructionLibrary {
         sb.append("10. ARCHITECTURAL & TECHNICAL QUESTIONS: If the user asks about system architecture, technical trade-offs, or design patterns, you MUST delegate to 'brihaspati' (the Architect) immediately.\n");
         sb.append("11. A denied or failed tool call does not block a different valid tool on the next user message.\n");
         sb.append("12. If you encounter a request you cannot fulfill, use `garuda` (set agent to persona name) to handoff. If you are 'coordinator', do NOT delegate to 'coordinator'; call tools directly.\n");
-        sb.append("13. For capability/self-description questions, answer directly without memory_search.\n");
+        sb.append("13. For capability/self-description questions, answer directly without recall_memory_search.\n");
         sb.append("14. For explicit owner/repo GitHub requests, prefer `github` over text-only fallback.\n");
         sb.append("15. AMBIGUITY: If a request could mean two different things (e.g. \"java 25\" = version or quantity?), ask ONE clarifying question before executing. Never assume the complex interpretation.\n");
         sb.append("16. CODE EXECUTION CHAIN (CRITICAL): If goal contains execute, run, test, compile, sample, demo, sandbox, --enable-preview:\n");

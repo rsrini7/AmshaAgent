@@ -80,7 +80,7 @@ List<Future<AgentResult>> futures = tasks.stream()
   "a2aEndpoint": "https://host/a2a",
   "mcpEndpoint": "https://host/mcp",
   "capabilities": ["code-reviewer", "researcher"],
-  "toolRoster": ["memory_search", "github"],
+  "toolRoster": ["recall_memory_search", "archival_memory_search", "github"],
   "publicKeyJwk": { "kty": "OKP", "crv": "Ed25519", "x": "..." }
 }
 ```

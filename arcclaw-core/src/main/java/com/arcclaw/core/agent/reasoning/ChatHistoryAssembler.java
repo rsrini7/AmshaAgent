@@ -17,6 +17,7 @@ import com.arcclaw.core.config.TieredMemoryConfig;
 import com.arcclaw.core.memory.tiered.CoreMemoryPromptRenderer;
 import com.arcclaw.core.memory.tiered.CoreMemoryService;
 import com.arcclaw.core.memory.tiered.PromptBudgetManager;
+import com.arcclaw.core.scope.WorkspaceContext;
 import com.arcclaw.persistence.api.CoreMemoryBlockDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -59,8 +60,7 @@ public class ChatHistoryAssembler {
             throw new IllegalStateException("ChatHistoryAssembler required dependencies are null");
         }
         if (tieredMemoryConfig.enabled() && tieredMemoryConfig.coreMemory().enabled()) {
-            log.warn("Core Memory is active using shared 'default' user context. "
-                + "Multi-tenant isolation is not enforced until Phase 7.");
+            log.info("Core Memory active — userId resolved from WorkspaceContext.");
         }
     }
 
@@ -88,10 +88,10 @@ public class ChatHistoryAssembler {
         List<ChatMessage> messages = new ArrayList<>();
 
         // STEP -1: Get raw Core Memory text (Phase 1, no truncation from renderer)
-        // TODO(Phase-7): resolve userId from session/auth context instead of literal
         String coreText = null;
         if (tieredMemoryConfig.enabled() && tieredMemoryConfig.coreMemory().enabled()) {
-            List<CoreMemoryBlockDto> blocks = coreMemoryService.readAll("default");
+            String userId = WorkspaceContext.getUserIdOrUnknown();
+            List<CoreMemoryBlockDto> blocks = coreMemoryService.readAll(userId);
             coreText = coreMemoryRenderer.render(blocks);
         }
 

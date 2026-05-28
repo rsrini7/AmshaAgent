@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-1615_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-1608_passing-brightgreen.svg?style=flat)
 </div>
 
 ---
@@ -65,7 +65,7 @@ ArcClaw is not a conceptual prototype; it is an enterprise-grade kernel built wi
 | **Governance** | Human-in-the-Loop (HITL) manual approval for sensitive tool operations; per-tool batch decisions with Telegram inline keyboard |
 | **Observability** | Prometheus Metrics (Micrometer) + OTLP Tracing + Jaeger |
 | **Security** | Argon2id key derivation + AES-256-GCM-SIV authenticated encryption; BouncyCastle 1.78.1 |
-| **Memory** | Hexagonal persistence (3 backends: SQLite WAL, PostgreSQL, filesystem); rolling chat window (20 messages) via `PersistentChatMemoryStore`; LLM-summarized context compaction via `CompactionService`; two-tier RAG (FTS5 keyword + sqlite-vec vector embeddings merged via Reciprocal Rank Fusion k=60); `MemorySearchTool` for cross-session retrieval; `AsyncPersistenceEngine` with critical/telemetry dual-queue; checkpoint state machine with 12 statuses |
+| **Memory** | Hexagonal persistence (3 backends: SQLite WAL, PostgreSQL, filesystem); rolling chat window (20 messages) via `PersistentChatMemoryStore`; LLM-summarized context compaction via `CompactionService`; two-tier RAG (FTS5 keyword + sqlite-vec vector embeddings merged via Reciprocal Rank Fusion k=60); `RecallMemorySearchTool` for cross-session retrieval; `AsyncPersistenceEngine` with critical/telemetry dual-queue; checkpoint state machine with 12 statuses |
 | **Scheduling** | Autonomous cron-based task scheduling with Telegram/CLI notifications |
 | **MCP** | Inbound MCP server (JSON-RPC/HTTP-SSE) + Outbound MCP client (`ExternalMcpToolAdapter`) |
 | **Skills** | Zero-token skill routing via `SkillRegistry`; CRUD via REST; built-in classpath + dynamic DB-tier |
@@ -255,10 +255,10 @@ graph TD
 
     subgraph Tool Schema per Role
         AI -->|agentRole filter| Schema{Schema Filter<br/>RoleDefinition.capabilities}
-        Schema -->|coordinator| CT[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + garuda]
-        Schema -->|researcher| RA[github + memory_search<br/>+ brave_web_search + serper_web_search + garuda]
-        Schema -->|architect| AR[github + memory_search + garuda]
-        Schema -->|synthesizer| SYN[github + schedule_task + manage_schedule<br/>+ memory_search + ingest_document + web_search + garuda]
+        Schema -->|coordinator| CT[github + schedule_task + manage_schedule<br/>+ recall_memory_search + archival_memory_search + ingest_document + garuda]
+        Schema -->|researcher| RA[github + recall_memory_search + archival_memory_search<br/>+ brave_web_search + serper_web_search + garuda]
+        Schema -->|architect| AR[github + recall_memory_search + archival_memory_search + garuda]
+        Schema -->|synthesizer| SYN[github + schedule_task + manage_schedule<br/>+ recall_memory_search + archival_memory_search + ingest_document + web_search + garuda]
         Schema -->|debugger| DB2[github + sandbox_exec + check_list + add_mcp_server]
         Schema -->|coder| COD[sandbox_exec + check_list + add_mcp_server]
         Schema -->|dynamic MCP tools| DynT[ExternalMcpToolAdapter<br/>MCP server tools]
@@ -332,7 +332,7 @@ graph TD
         end
         subgraph Search["Memory Search"]
             direction LR
-            MST[MemorySearchTool<br/>FTS5 + RRF cross-session]
+            MST[RecallMemorySearchTool<br/>FTS5 + RRF cross-session]
             RCE[RagContextEnricher<br/>Prompt injection]
         end
         ChatMem --> Compaction
@@ -379,7 +379,7 @@ sequenceDiagram
 
         loop maxIterations - Thought → Plan → Act → Observe
             AL->>LLM: nextStep(agentRole, goal, history)
-            Note over LLM: Role-filtered tool schema injected<br/>coder → sandbox_exec + checklist<br/>coordinator → all tools + garuda<br/>researcher → github + memory_search + web_search<br/>debugger → github + sandbox_exec<br/>all roles → garuda (restricted)
+            Note over LLM: Role-filtered tool schema injected<br/>coder → sandbox_exec + checklist<br/>coordinator → all tools + garuda<br/>researcher → github + recall_memory_search + archival_memory_search + web_search<br/>debugger → github + sandbox_exec<br/>all roles → garuda (restricted)
             LLM-->>AL: Action (ToolName + Args OR parallel batch) OR FINISH
 
             alt Single tool call
@@ -425,18 +425,18 @@ ArcClaw ships a **twelve-agent roster** inspired by the Hindu Trimurti, Tridevi,
 
 | Role | Deity | Max Iterations | Tools | Description |
 |---|---|---|---|---|
-| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `garuda` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output. Escalates conflicting outputs to Dattatreya |
-| `researcher` | **Saraswati** | 10 | `github`, `memory_search`, `brave_web_search`, `serper_web_search`, `garuda` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code. Escalates to Brahma for implementation, Brihaspati for architecture |
+| `coordinator` | **Vishnu** | 7 | `github`, `schedule_task`, `manage_schedule`, `recall_memory_search`, `archival_memory_search`, `ingest_document`, `garuda` | The Preserver. Primary router: decomposes goals, delegates to specialists, synthesizes final output. Escalates conflicting outputs to Dattatreya |
+| `researcher` | **Saraswati** | 10 | `github`, `recall_memory_search`, `archival_memory_search`, `brave_web_search`, `serper_web_search`, `garuda` | Goddess of Knowledge. Strict fact retrieval; never fabricates or writes code. Escalates to Brahma for implementation, Brihaspati for architecture |
 | `coder` | **Brahma** | 15 | `sandbox_exec`, `check_list`, `add_mcp_server`, `garuda` | The Creator. Pure logic and engineering brain; executes code in isolated sandbox. Escalates unknown APIs to Saraswati, design decisions to Brihaspati, bugs to Shiva |
 | `debugger` | **Shiva** | 15 | `github`, `sandbox_exec`, `check_list`, `add_mcp_server`, `garuda` | The Transformer. Contrarian balance expert; finds blind spots, executes code for verification. Auto-heal target; escalates obscure errors to Saraswati, fundamental flaws to Brahma |
-| `architect` | **Brihaspati** | 7 | `github`, `memory_search`, `garuda` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code. Escalates implementation to Brahma, research to Saraswati |
-| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `garuda` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains. Escalates conflicts to Brihaspati, gaps to Brahma/Saraswati |
+| `architect` | **Brihaspati** | 7 | `github`, `recall_memory_search`, `archival_memory_search`, `garuda` | System Designer & Standards Author. Authors ADRs, evaluates trade-offs; never writes production code. Escalates implementation to Brahma, research to Saraswati |
+| `synthesizer` | **Dattatreya** | 10 | `github`, `schedule_task`, `manage_schedule`, `recall_memory_search`, `archival_memory_search`, `ingest_document`, `brave_web_search`, `serper_web_search`, `garuda` | The Avadhuta (Trinity Incarnate). Cross-domain synthesis when a task spans multiple specialist domains. Escalates conflicts to Brihaspati, gaps to Brahma/Saraswati |
 | `optimizer` | **Ganesha** | 10 | `github`, `sandbox_exec`, `garuda` | The Obstacle Remover. Complex logic analysis, recursive problem-solving, and clever workarounds. Sub-agent of Shiva; escalates to Brahma for implementation, Saraswati for research |
 | `sentinel` | **Kartikeya** | 10 | `github`, `sandbox_exec`, `garuda` | The Sentinel. Security scanning, input validation, and defense against malicious patterns. Sub-agent of Shiva; escalates to Shiva for fixes, Saraswati for CVE research |
-| `healer` | **Lakshmi** | 10 | `github`, `memory_search`, `garuda` | The Healer. Error recovery, self-healing, and token budget optimization. Dual role: healing + resource efficiency; escalates to Shiva for fixes, Saraswati for best practices |
-| `protector` | **Durga** | 10 | `github`, `memory_search`, `garuda` | The Protector. Policy enforcement, guardrails, and autonomy boundary protection. Escalates to Shiva for policy fixes, Saraswati for compliance research |
-| `purifier` | **Kali** | 10 | `github`, `memory_search`, `garuda` | The Purifier. Cleanup, lifecycle management, and resource termination. Escalates to Shiva for cleanup code, Saraswati for lifecycle best practices |
-| `nurturer` | **Parvati** | 10 | `github`, `memory_search`, `garuda` | The Nurturer. Empathy, tone analysis, and user sentiment management. Escalates to Shiva for bug fixes, Saraswati for documentation research |
+| `healer` | **Lakshmi** | 10 | `github`, `recall_memory_search`, `archival_memory_search`, `garuda` | The Healer. Error recovery, self-healing, and token budget optimization. Dual role: healing + resource efficiency; escalates to Shiva for fixes, Saraswati for best practices |
+| `protector` | **Durga** | 10 | `github`, `recall_memory_search`, `archival_memory_search`, `garuda` | The Protector. Policy enforcement, guardrails, and autonomy boundary protection. Escalates to Shiva for policy fixes, Saraswati for compliance research |
+| `purifier` | **Kali** | 10 | `github`, `recall_memory_search`, `archival_memory_search`, `garuda` | The Purifier. Cleanup, lifecycle management, and resource termination. Escalates to Shiva for cleanup code, Saraswati for lifecycle best practices |
+| `nurturer` | **Parvati** | 10 | `github`, `recall_memory_search`, `archival_memory_search`, `garuda` | The Nurturer. Empathy, tone analysis, and user sentiment management. Escalates to Shiva for bug fixes, Saraswati for documentation research |
 
 > [!NOTE]
 > Tool schemas are assembled dynamically at runtime via `@ToolMetadata(defaultRoles=...)` annotations on tool classes. `garuda` is available to all roles, but non-coordinators are restricted from delegating to roles they lack capabilities for. The `coder` role has `add_mcp_server` for dynamically registering MCP servers at runtime. Each role's tools, max iterations, and system prompt template are defined in `AgentRoleEnum` → `RoleDefinition` → `resources/templates/prompts/role-<name>.txt`.
@@ -468,7 +468,8 @@ graph LR
         T1["🐙 github<br/>GH CLI via Podman sandbox<br/>GH_TOKEN injected via tmpfs"]:::tool
         T2["⏰ schedule_task<br/>5-field UNIX cron expression<br/>Fork-bomb + naked-pronoun guard"]:::tool
         T3["📋 manage_schedule<br/>List / Delete cron jobs<br/>Tenant-isolated per userId"]:::tool
-        T4["🔍 memory_search<br/>SQLite FTS5 + sqlite-vec<br/>Past compaction summaries"]:::tool
+        T4["🔍 recall_memory_search<br/>SQLite FTS5 + sqlite-vec<br/>Exact conversation history"]:::tool
+        T4b["🔍 archival_memory_search<br/>BM25 + vector hybrid<br/>Semantic long-term knowledge"]:::tool
         T5["🌐 ExternalMcpTool<br/>Dynamic tools from MCP servers<br/>HTTP_SSE / Podman STDIO transport"]:::tool
         T6["🔀 garuda<br/>all roles<br/>Spawns specialist sub-agent loop"]:::tool
         T7["💻 sandbox_exec<br/>Isolated code execution<br/>Python / Java / Node / Go"]:::tool
@@ -621,7 +622,7 @@ arcclaw-core/                 ← Agent runtime kernel
 │   │                           PermissiveJsonExtractor, AgentFunctionRegistry
 │   ├── tools/                  ToolRegistry, AgentTool SPI, ToolResponse, ToolOperation,
 │   │                           GithubTool, ScheduleTaskTool,
-│   │                           ManageScheduleTool, MemorySearchTool, DelegateToAgentTool,
+│   │                           ManageScheduleTool, RecallMemorySearchTool, DelegateToAgentTool,
 │   │                           SandboxExecTool, CheckListTool, BraveWebSearchTool,
 │   │                           SerperWebSearchTool, SmartWebFetchTool, AgentTaskTool,
 │   │                           DynamicToolLookup SPI, ToolSearchIndex (Lucene),
@@ -957,7 +958,8 @@ All tools are discovered via CDI `Instance<AgentTool>` and registered automatica
 | `GithubTool` | `github` | `NETWORK_OUTBOUND` | ✅ Podman | coordinator, researcher, architect, debugger, synthesizer | GitHub CLI (`gh repo view/list`, `gh gist view/list`) with `GH_TOKEN` secret injection via tmpfs; host-side fallback when sandbox is offline |
 | `ScheduleTaskTool` | `schedule_task` | `SCHEDULE_AUTONOMOUS` | ❌ In-memory | coordinator, synthesizer | Schedule a future autonomous task with a 5-field UNIX cron expression; naked-pronoun guard + fork-bomb exclusion |
 | `ManageScheduleTool` | `manage_schedule` | `READ_FS` | ❌ In-memory | coordinator, synthesizer | List or delete the current user's scheduled cron jobs; tenant-isolated via `WorkspaceScopeHolder.USER_ID` |
-| `MemorySearchTool` | `memory_search` | `READ_FS` | ❌ In-memory | coordinator, researcher, architect, synthesizer | Two-tier RAG: FTS5 full-text + sqlite-vec vector search of past session compaction summaries |
+| `RecallMemorySearchTool` | `recall_memory_search` | `READ_FS` | ❌ In-memory | coordinator, researcher, architect, synthesizer | FTS5 full-text search of exact conversation history (messages, code, errors). Session-scoped by default. |
+| `ArchivalMemorySearchTool` | `archival_memory_search` | `READ_FS` | ❌ In-memory | coordinator, researcher, architect, synthesizer | Hybrid BM25 + sqlite-vec vector search of long-term semantic knowledge (patterns, facts, preferences). |
 | `IngestDocumentTool` | `ingest_document` | `WRITE_MEMORY` | ❌ In-memory | coordinator, synthesizer | Ingest a document into the global or session knowledge base for future vector retrieval |
 | `DelegateToAgentTool` | `garuda` | `DELEGATE_AUTONOMOUS` | ❌ In-process | all 6 roles | Spawns a specialist sub-agent loop; non-coordinators are restricted from delegating to roles they lack |
 | `McpSelfRegisterTool` | `add_mcp_server` | `NETWORK_OUTBOUND` | ❌ In-memory | coder, debugger | Dynamically register a new MCP server at runtime; tools become available immediately |
@@ -1006,7 +1008,8 @@ trigger-patterns:
   - "security.*audit"
 tool-capabilities:
   - GITHUB
-  - MEMORYSEARCH
+  - RECALL_MEMORY_SEARCH
+  - ARCHIVAL_MEMORY_SEARCH
 max-iterations: 7
 ---
 You are a strict security-focused code reviewer. Your job is to identify
@@ -1019,7 +1022,7 @@ Always reference OWASP categories where applicable.
 | `name` | ✅ | Unique skill identifier (used for upsert and delete) |
 | `description` | no | Human-readable summary; displayed by `/skills` command |
 | `trigger-patterns` | no | List of Java regex strings matched case-insensitively against the message |
-| `tool-capabilities` | no | List of `ToolCapability` enum names (e.g. `GITHUB`, `MEMORYSEARCH`, `SCHEDULETASK`) |
+| `tool-capabilities` | no | List of `ToolCapability` enum names (e.g. `GITHUB`, `RECALL_MEMORY_SEARCH`, `ARCHIVAL_MEMORY_SEARCH`, `SCHEDULETASK`) |
 | `max-iterations` | no | Maximum ReAct loop iterations for this skill (default: 5) |
 
 > [!NOTE]
@@ -1053,7 +1056,7 @@ ArcClaw implements the **Model Context Protocol (MCP)** in both directions.
 
 ArcClaw exposes internal tools to external MCP clients over JSON-RPC via HTTP Server-Sent Events (HTTP-SSE):
 
-- **Exposed tools by default**: `github`, `memory_search`
+- **Exposed tools by default**: `github`, `recall_memory_search`
 - **Protocol endpoint**: `/mcp` (HTTP-SSE streaming)
 - **Protocol version**: `2024-11-05`
 - **Session management**: `Mcp-Session-Id` header for stateful sessions
@@ -1061,8 +1064,8 @@ ArcClaw exposes internal tools to external MCP clients over JSON-RPC via HTTP Se
 ```
 MCP-1  POST /mcp  initialize        → 200 + Mcp-Session-Id header
 MCP-2  POST /mcp  initialized       → 202 handshake complete
-MCP-3  POST /mcp  tools/list        → tools array (github, memory_search)
-MCP-4  POST /mcp  tools/call (memory_search) → content block + MCP_TOOL_INVOKED audit
+MCP-3  POST /mcp  tools/list        → tools array (github, recall_memory_search)
+MCP-4  POST /mcp  tools/call (recall_memory_search) → content block + MCP_TOOL_INVOKED audit
 MCP-5  POST /mcp  tools/call (github)        → content (or error if GH_TOKEN missing)
 ```
 
@@ -1094,8 +1097,8 @@ Send `/mcp` in any channel to see the current MCP state (zero LLM tokens):
 
 ```
 🔌 MCP Status
-Exposed internal tools (2): github, memory_search
-Dynamic MCP tools (2): github [self, HTTP_SSE], memory_search [self, HTTP_SSE]
+Exposed internal tools (2): github, recall_memory_search
+Dynamic MCP tools (2): github [self, HTTP_SSE], recall_memory_search [self, HTTP_SSE]
 ```
 
 ---
@@ -1167,9 +1170,9 @@ Long-term memory search merges results from **two** retrieval tiers using **Reci
 
 The `vec0` native extension (sqlite-vec) is required for vector search. ArcClaw **auto-installs** the correct binary for your OS (Linux, macOS, Windows) from internal resources on first boot. The binary is placed at `./lib/vec0` (configurable via `arcclaw.rag.vec-extension-path`). The `FtsConnectionInterceptor` dynamically resolves relative paths by recursively searching up parent directories (up to 4 levels) to support seamless execution inside submodule directories (e.g. during Maven tests).
 
-### Long-Term Memory (`MemorySearchTool`)
+### Long-Term Memory (`RecallMemorySearchTool`)
 
-`MemorySearchTool` queries the two-tier memory service scoped to the current user's `userId`. The LLM can control the search query but **cannot access another user's memories** - tenant isolation is enforced in Java, not in the SQL query.
+`RecallMemorySearchTool` queries the two-tier memory service scoped to the current user's `userId`. The LLM can control the search query but **cannot access another user's memories** - tenant isolation is enforced in Java, not in the SQL query.
 
 ### Soft Reset
 
@@ -1290,7 +1293,7 @@ sequenceDiagram
 
     API->>SQLite: ContextCompactionService (async CDI event)<br/>Summarise oldest msgs · Strips injection artifacts
     SQLite->>FTS: Write compaction_summary_fts<br/>via ATTACH DATABASE (re-attached per pool conn)
-    FTS-->>API: memory_search queries FTS5 + vec<br/>scoped to userId - cross-tenant proof
+    FTS-->>API: recall_memory_search queries FTS5 + vec<br/>scoped to userId - cross-tenant proof
 
     API-->>User: Final reply<br/>Audit verifiable at GET /api/v1/audit/{sessionId}/verify
 ```
