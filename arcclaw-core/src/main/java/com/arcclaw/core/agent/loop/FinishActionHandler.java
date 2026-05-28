@@ -80,9 +80,9 @@ public class FinishActionHandler {
                 codePolicy,
                 rateLimitTracker,
                 correctionStrategy,
-                objectMapper,
                 textPatternUtils,
-                toolRegistry);
+                toolRegistry,
+                new HallucinationDetector(objectMapper));
     }
 
     /**
